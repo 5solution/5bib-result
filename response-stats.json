@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "stats": {
+    "totalEthSpent": 88.50424013869988,
+    "totalEthSpentUsd": 11063.030017337485,
+    "totalBurned": 79398198381195,
+    "onChainVerified": true,
+    "burnPercent": 7.939819838119499,
+    "originalSupply": 1000000000000000,
+    "currentSupply": 930267046091843,
+    "burnedViaBurn": 69732953908157,
+    "burnedViaBurnPercent": 6.973295390815699,
+    "incineratorLocked": 9665244473038,
+    "incineratorPercent": 0.9665244473037999,
+    "incineratorAddress": "1nc1nerator11111111111111111111111111111111",
+    "vaultBalance": 0.00089088,
+    "claimable": 0,
+    "walletBalance": 4.135019789,
+    "tokenBalance": 0,
+    "accumulatedForBuyback": 0.00045940895000000007,
+    "walletAddress": "HYyyNJwUuGKW18oKUdPcTksoGMwyUDSM4yFwetVsLe1P",
+    "tokenMint": "5XFeFezwgZvSdG2N69FPBuz98uFpfBCkFcXQXSiGpump",
+    "lastClaimAttempt": "2025-12-22T07:22:28.401Z",
+    "nextClaimTime": "2025-12-22T07:23:28.401Z",
+    "isProcessing": false,
+    "buybackPercent": 55.00000000000001,
+    "ethPriceUsd": 3010,
+    "dataSource": "on-chain"
+  }
+}
