@@ -83,12 +83,7 @@ export default function FilterPanel({ filters, onFilterChange, totalResults }: F
         </div>
 
         {/* Results Count */}
-        <div className="text-center lg:text-right">
-          <div className="inline-block bg-gradient-to-r from-[#2563EB] to-[#1d4ed8] text-white px-6 md:px-8 py-4 md:py-5 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
-            <div className="text-xs md:text-sm font-black uppercase tracking-widest">Total Athletes</div>
-            <div className="text-3xl md:text-4xl font-black" style={{ fontFamily: 'var(--font-mono)' }}>{totalResults.toLocaleString()}</div>
-          </div>
-        </div>
+
       </div>
     </div>
   );

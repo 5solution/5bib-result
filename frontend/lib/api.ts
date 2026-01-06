@@ -16,6 +16,7 @@ export interface RaceResult {
   Gap: string;
   Nationality: string;
   Nation: string;
+  Certificate: string;
   race_id: number;
   course_id: string;
   distance: string;
@@ -45,7 +46,20 @@ export interface RaceResultsParams {
   sortDirection?: 'ASC' | 'DESC';
 }
 
+export interface RaceDistance {
+  race_id: number;
+  distance: string;
+  course_id: string;
+}
+
 export const raceResultsApi = {
+  async getDistances(): Promise<RaceDistance[]> {
+    const response = await axios.get<RaceDistance[]>(
+      `${API_BASE_URL}/api/race-results/distances`
+    );
+    return response.data;
+  },
+
   async getResults(params: RaceResultsParams = {}): Promise<RaceResultsResponse> {
     const response = await axios.get<RaceResultsResponse>(
       `${API_BASE_URL}/api/race-results`,

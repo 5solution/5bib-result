@@ -6,6 +6,7 @@ import SearchBar from '@/components/SearchBar';
 import FilterPanel from '@/components/FilterPanel';
 import ResultsTable from '@/components/ResultsTable';
 import Pagination from '@/components/Pagination';
+import RaceDistanceTabs from '@/components/RaceDistanceTabs';
 
 export default function Home() {
   const [results, setResults] = useState<RaceResult[]>([]);
@@ -54,6 +55,10 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleDistanceChange = (courseId: string) => {
+    setFilters(prev => ({ ...prev, course_id: courseId, pageNo: 1 }));
+  };
+
   return (
     <main className="min-h-screen bg-[#F8FAFC]">
       {/* Premium Hero Header */}
@@ -83,6 +88,14 @@ export default function Home() {
       </div>
 
       <div className="container mx-auto px-4 md:px-6 py-6 md:py-10">
+        {/* Race Distance Tabs */}
+        <div className="mb-6 md:mb-8">
+          <RaceDistanceTabs
+            selectedDistance={filters.course_id || null}
+            onDistanceChange={handleDistanceChange}
+          />
+        </div>
+
         {/* Search and Filters */}
         <div className="mb-6 md:mb-10 space-y-5">
           <SearchBar onSearch={handleSearch} />

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, ILike } from 'typeorm';
+import { Repository } from 'typeorm';
 import axios from 'axios';
 import { RaceConfig, RaceResult } from '../interfaces/race-result.interface';
 import { RaceResultEntity } from '../entities/race-result.entity';
@@ -53,6 +53,14 @@ export class RaceResultService {
     private readonly raceResultRepo: Repository<RaceResultEntity>,
   ) {}
 
+  async getRaceDistances() {
+    return this.raceConfigs.map(config => ({
+      race_id: config.race_id,
+      distance: config.distance,
+      course_id: config.course_id,
+    }));
+  }
+
   async syncAllRaceResults(): Promise<void> {
     this.logger.log('Starting race results sync...');
 
@@ -69,6 +77,16 @@ export class RaceResultService {
   } {
     const strValue = String(value);
     const numValue = parseInt(strValue, 10);
+
+    // If it's -1 (racing/not finished), convert to a very high number for sorting
+    // This ensures -1 ranks appear at the END when sorting ASC
+    if (numValue === -1) {
+      return {
+        original: strValue,
+        numeric: 999999,
+      };
+    }
+
     return {
       original: strValue,
       numeric: isNaN(numValue) ? null : numValue,
@@ -155,29 +173,6 @@ export class RaceResultService {
   }
 
   async getRaceResults(dto: GetRaceResultsDto) {
-    const where: FindOptionsWhere<RaceResultEntity> = {};
-
-    if (dto.course_id) {
-      where.course_id = dto.course_id;
-    }
-
-    if (dto.gender) {
-      where.gender = dto.gender;
-    }
-
-    if (dto.category) {
-      where.category = dto.category;
-    }
-
-    // Name search with ILIKE (case-insensitive)
-    if (dto.name) {
-      where.name = ILike(`%${dto.name}%`);
-    }
-
-    // Calculate pagination
-    const skip = (dto.pageNo - 1) * dto.pageSize;
-    const take = dto.pageSize;
-
     // Build order
     const sortFieldMap: Record<string, string> = {
       OverallRank: 'overall_rank_numeric',
@@ -192,25 +187,70 @@ export class RaceResultService {
     const orderField = sortFieldMap[dto.sortField] || 'overall_rank_numeric';
     const orderDirection = dto.sortDirection;
 
-    // Execute query
-    const [results, total] = await this.raceResultRepo.findAndCount({
-      where,
-      skip,
-      take,
-      order: {
-        [orderField]: orderDirection,
-      },
-    });
+    // Build query with QueryBuilder (WITHOUT pagination first)
+    const queryBuilder = this.raceResultRepo
+      .createQueryBuilder('race_result');
+
+    // Add WHERE conditions
+    if (dto.course_id) {
+      queryBuilder.andWhere('race_result.course_id = :courseId', { courseId: dto.course_id });
+    }
+
+    if (dto.gender) {
+      queryBuilder.andWhere('race_result.gender = :gender', { gender: dto.gender });
+    }
+
+    if (dto.category) {
+      queryBuilder.andWhere('race_result.category = :category', { category: dto.category });
+    }
+
+    // Name search with ILIKE (case-insensitive)
+    if (dto.name) {
+      queryBuilder.andWhere('race_result.name ILIKE :name', { name: `%${dto.name}%` });
+    }
+
+    // Add ORDER BY
+    // Note: -1 ranks are already converted to 999999 during sync, so they'll naturally appear at the end when sorting ASC
+    queryBuilder.orderBy(`race_result.${orderField}`, orderDirection);
+
+    // Get ALL results first
+    const allResults = await queryBuilder.getMany();
+
+    // Filter out duplicate ranks to avoid confusion with multiple people having same rank
+    // Keep only the first occurrence of each rank
+    const filteredResults = this.filterDuplicateRanks(allResults);
+
+    // NOW apply pagination to the filtered results
+    const skip = (dto.pageNo - 1) * dto.pageSize;
+    const paginatedResults = filteredResults.slice(skip, skip + dto.pageSize);
 
     return {
-      data: results.map((entity) => this.mapEntityToResponse(entity)),
+      data: paginatedResults.map((entity) => this.mapEntityToResponse(entity)),
       pagination: {
         pageNo: dto.pageNo,
         pageSize: dto.pageSize,
-        total,
-        totalPages: Math.ceil(total / dto.pageSize),
+        total: filteredResults.length,
+        totalPages: Math.ceil(filteredResults.length / dto.pageSize),
       },
     };
+  }
+
+  private filterDuplicateRanks(results: RaceResultEntity[]): RaceResultEntity[] {
+    const seenRanks = new Set<string>();
+    return results.filter((result) => {
+      // Always show if rank is -1 (racing/in progress) or invalid
+      if (result.overall_rank === '-1' || result.overall_rank_numeric === null || result.overall_rank_numeric === 999999) {
+        return true;
+      }
+
+      // Filter out duplicate ranks
+      if (seenRanks.has(result.overall_rank)) {
+        return false;
+      }
+
+      seenRanks.add(result.overall_rank);
+      return true;
+    });
   }
 
   private mapEntityToResponse(entity: RaceResultEntity) {

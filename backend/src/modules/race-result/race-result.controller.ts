@@ -8,6 +8,16 @@ import { RaceResultService } from './services/race-result.service';
 export class RaceResultController {
   constructor(private readonly raceResultService: RaceResultService) {}
 
+  @Get('distances')
+  @ApiOperation({ summary: 'Get available race distances/types' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns list of available race distances',
+  })
+  async getRaceDistances() {
+    return this.raceResultService.getRaceDistances();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get race results with filters and pagination' })
   @ApiResponse({

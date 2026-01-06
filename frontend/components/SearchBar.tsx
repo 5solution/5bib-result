@@ -23,9 +23,8 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={`bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 border-2 p-6 md:p-8 ${
-        isFocused ? 'border-[#2563EB] scale-[1.01]' : 'border-gray-200'
-      }`}
+      className={`bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 border-2 p-6 md:p-8 ${isFocused ? 'border-[#2563EB] scale-[1.01]' : 'border-gray-200'
+        }`}
     >
       <div className="flex flex-col gap-5">
         <div className="flex-1">
