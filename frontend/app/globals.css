@@ -3,8 +3,48 @@
 @theme {
   --font-display: Inter, system-ui, sans-serif;
   --font-body: Inter, system-ui, sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
 
-  --color-athletic-red: #FF0000;
-  --color-athletic-blue: #0000FF;
-  --color-athletic-white: #FFFFFF;
+  /* Premium Design System Colors */
+  --color-primary-blue: #2563EB;
+  --color-accent-red: #FF0E65;
+  --color-surface-white: #FFFFFF;
+  --color-surface-grey: #F8FAFC;
+  --color-typography-slate: #1E293B;
+  --color-zebra-stripe: #F1F5F9;
+}
+
+/* Premium Interactive Effects */
+@layer utilities {
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .lift-effect {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .lift-effect:hover {
+    transform: translateX(4px);
+    border-left: 4px solid #FF0E65;
+  }
+
+  .search-glow:focus {
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+  }
+
+  .pulse-live {
+    animation: pulse-live 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-live {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
 }

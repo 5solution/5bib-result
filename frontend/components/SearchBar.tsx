@@ -8,6 +8,7 @@ interface SearchBarProps {
 
 export default function SearchBar({ onSearch }: SearchBarProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,11 +21,16 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-md hover:shadow-xl transition-shadow border border-gray-200 p-4 md:p-6">
-      <div className="flex flex-col gap-4">
+    <form
+      onSubmit={handleSubmit}
+      className={`bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 border-2 p-6 md:p-8 ${
+        isFocused ? 'border-[#2563EB] scale-[1.01]' : 'border-gray-200'
+      }`}
+    >
+      <div className="flex flex-col gap-5">
         <div className="flex-1">
-          <label htmlFor="search" className="block text-xs md:text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">
-            Search by Name or BIB Number
+          <label htmlFor="search" className="block text-sm md:text-base font-black text-[#1E293B] mb-3 uppercase tracking-widest">
+            🔍 BIB Search
           </label>
           <div className="relative">
             <input
@@ -32,11 +38,14 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Enter athlete name or BIB number..."
-              className="w-full px-10 md:px-12 py-2 md:py-3 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#0000FF] transition-colors"
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder="Enter BIB number or athlete name..."
+              className="w-full px-12 md:px-14 py-4 md:py-5 text-base md:text-lg font-semibold border-2 border-gray-300 rounded-lg focus:outline-none search-glow focus:border-[#2563EB] transition-all duration-300"
+              style={{ fontFamily: 'var(--font-mono)' }}
             />
             <svg
-              className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-gray-400"
+              className="absolute left-4 md:left-5 top-1/2 transform -translate-y-1/2 h-5 w-5 md:h-6 md:w-6 text-[#2563EB]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -44,25 +53,25 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
+                strokeWidth={2.5}
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
           </div>
         </div>
 
-        <div className="flex items-end gap-2 flex-wrap">
+        <div className="flex items-end gap-3 flex-wrap">
           <button
             type="submit"
-            className="flex-1 sm:flex-none bg-[#0000FF] hover:bg-blue-700 text-white font-bold py-2 md:py-3 px-4 md:px-6 rounded-lg transition-all transform hover:scale-105 shadow-lg text-sm md:text-base whitespace-nowrap"
+            className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-black py-4 md:py-5 px-6 md:px-8 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl shadow-lg text-sm md:text-base uppercase tracking-wider"
           >
-            🔍 Search
+            Search
           </button>
           {searchTerm && (
             <button
               type="button"
               onClick={handleClear}
-              className="flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-bold text-sm md:text-base"
+              className="flex-1 sm:flex-none px-6 md:px-8 py-4 md:py-5 border-2 border-[#FF0E65] text-[#FF0E65] rounded-lg hover:bg-[#FF0E65] hover:text-white transition-all duration-300 font-black text-sm md:text-base uppercase tracking-wider"
             >
               Clear
             </button>

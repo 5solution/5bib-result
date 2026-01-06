@@ -37,30 +37,30 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
+    <div className="flex flex-wrap items-center justify-center gap-3">
       {/* Previous Button */}
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="px-3 md:px-4 py-2 text-sm md:text-base border-2 border-gray-300 rounded-lg font-bold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className="px-4 md:px-6 py-3 md:py-4 text-sm md:text-base border-2 border-[#2563EB] text-[#2563EB] rounded-lg font-black uppercase tracking-wider hover:bg-[#2563EB] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-xl"
       >
         <span className="hidden sm:inline">« Prev</span>
         <span className="sm:hidden">«</span>
       </button>
 
       {/* Page Numbers */}
-      <div className="flex gap-1 md:gap-2">
+      <div className="flex gap-2">
         {getPageNumbers().map((page, index) => (
           <button
             key={index}
             onClick={() => typeof page === 'number' && onPageChange(page)}
             disabled={page === '...'}
-            className={`w-9 h-9 md:w-12 md:h-12 text-sm md:text-base rounded-lg font-bold transition-all ${
+            className={`w-10 h-10 md:w-14 md:h-14 text-sm md:text-base rounded-lg font-black transition-all duration-300 ${
               page === currentPage
-                ? 'bg-gradient-to-r from-[#0000FF] to-blue-600 text-white shadow-lg scale-110'
+                ? 'bg-gradient-to-r from-[#2563EB] to-[#1d4ed8] text-white shadow-xl scale-110'
                 : page === '...'
-                ? 'cursor-default text-gray-400'
-                : 'border-2 border-gray-300 hover:bg-gray-100'
+                ? 'cursor-default text-gray-400 font-bold'
+                : 'border-2 border-gray-300 text-[#1E293B] hover:bg-[#F8FAFC] hover:border-[#2563EB] hover:scale-105 shadow-md'
             }`}
           >
             {page}
@@ -72,7 +72,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="px-3 md:px-4 py-2 text-sm md:text-base border-2 border-gray-300 rounded-lg font-bold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className="px-4 md:px-6 py-3 md:py-4 text-sm md:text-base border-2 border-[#2563EB] text-[#2563EB] rounded-lg font-black uppercase tracking-wider hover:bg-[#2563EB] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-xl"
       >
         <span className="hidden sm:inline">Next »</span>
         <span className="sm:hidden">»</span>

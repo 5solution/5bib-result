@@ -25,18 +25,18 @@ const GENDERS = [
 
 export default function FilterPanel({ filters, onFilterChange, totalResults }: FilterPanelProps) {
   return (
-    <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-shadow border border-gray-200 p-4 md:p-6">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+    <div className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 border-2 border-gray-200 p-5 md:p-7">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
           {/* Distance Filter */}
           <div>
-            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1 md:mb-2 uppercase tracking-wide">
+            <label className="block text-xs md:text-sm font-black text-[#1E293B] mb-2 md:mb-3 uppercase tracking-widest">
               Distance
             </label>
             <select
               value={filters.course_id || ''}
               onChange={(e) => onFilterChange({ course_id: e.target.value || undefined })}
-              className="w-full px-3 md:px-4 py-2 md:py-3 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#0000FF] transition-colors"
+              className="w-full px-4 md:px-5 py-3 md:py-4 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#2563EB] transition-all duration-300 font-semibold text-[#1E293B] bg-[#F8FAFC] hover:bg-white cursor-pointer"
             >
               {DISTANCES.map((distance) => (
                 <option key={distance.value} value={distance.value}>
@@ -48,13 +48,13 @@ export default function FilterPanel({ filters, onFilterChange, totalResults }: F
 
           {/* Gender Filter */}
           <div>
-            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1 md:mb-2 uppercase tracking-wide">
+            <label className="block text-xs md:text-sm font-black text-[#1E293B] mb-2 md:mb-3 uppercase tracking-widest">
               Gender
             </label>
             <select
               value={filters.gender || ''}
               onChange={(e) => onFilterChange({ gender: e.target.value || undefined })}
-              className="w-full px-3 md:px-4 py-2 md:py-3 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#0000FF] transition-colors"
+              className="w-full px-4 md:px-5 py-3 md:py-4 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#2563EB] transition-all duration-300 font-semibold text-[#1E293B] bg-[#F8FAFC] hover:bg-white cursor-pointer"
             >
               {GENDERS.map((gender) => (
                 <option key={gender.value} value={gender.value}>
@@ -66,13 +66,13 @@ export default function FilterPanel({ filters, onFilterChange, totalResults }: F
 
           {/* Page Size */}
           <div>
-            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1 md:mb-2 uppercase tracking-wide">
+            <label className="block text-xs md:text-sm font-black text-[#1E293B] mb-2 md:mb-3 uppercase tracking-widest">
               Per Page
             </label>
             <select
               value={filters.pageSize || 20}
               onChange={(e) => onFilterChange({ pageSize: Number(e.target.value) })}
-              className="w-full px-3 md:px-4 py-2 md:py-3 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#0000FF] transition-colors"
+              className="w-full px-4 md:px-5 py-3 md:py-4 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#2563EB] transition-all duration-300 font-semibold text-[#1E293B] bg-[#F8FAFC] hover:bg-white cursor-pointer"
             >
               <option value={10}>10 results</option>
               <option value={20}>20 results</option>
@@ -84,9 +84,9 @@ export default function FilterPanel({ filters, onFilterChange, totalResults }: F
 
         {/* Results Count */}
         <div className="text-center lg:text-right">
-          <div className="inline-block bg-gradient-to-r from-[#0000FF] to-blue-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg">
-            <div className="text-xs md:text-sm font-bold uppercase tracking-wide">Total Athletes</div>
-            <div className="text-2xl md:text-3xl font-black">{totalResults.toLocaleString()}</div>
+          <div className="inline-block bg-gradient-to-r from-[#2563EB] to-[#1d4ed8] text-white px-6 md:px-8 py-4 md:py-5 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+            <div className="text-xs md:text-sm font-black uppercase tracking-widest">Total Athletes</div>
+            <div className="text-3xl md:text-4xl font-black" style={{ fontFamily: 'var(--font-mono)' }}>{totalResults.toLocaleString()}</div>
           </div>
         </div>
       </div>

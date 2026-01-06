@@ -1,0 +1,179 @@
+{
+  "success": true,
+  "burnRate": {
+    "burned24h": 12236363568129,
+    "eth24h": 47.50424013869998,
+    "count24h": 802,
+    "burnRatePerHour": 509848482005.375,
+    "burned7d": 12236363568129,
+    "eth7d": 47.50424013869998,
+    "count7d": 802,
+    "burnRatePerDay": 1748051938304.1428
+  },
+  "streak": {
+    "currentStreak": 2,
+    "longestStreak": 2
+  },
+  "dailyStats": [
+    {
+      "date": "2025-12-22T00:00:00.000Z",
+      "burnCount": 396,
+      "ethSpent": 22.624195682150006,
+      "tokensBurned": 3796559029181
+    },
+    {
+      "date": "2025-12-21T00:00:00.000Z",
+      "burnCount": 406,
+      "ethSpent": 24.880044456550003,
+      "tokensBurned": 8439804538948
+    }
+  ],
+  "hourlyStats": [
+    {
+      "hour": "2025-12-22 07:00",
+      "burnCount": 18,
+      "ethSpent": 0.9233853420000001,
+      "tokensBurned": 133451633393
+    },
+    {
+      "hour": "2025-12-22 06:00",
+      "burnCount": 50,
+      "ethSpent": 3.3975452108000006,
+      "tokensBurned": 461940481723
+    },
+    {
+      "hour": "2025-12-22 05:00",
+      "burnCount": 33,
+      "ethSpent": 1.8793758466,
+      "tokensBurned": 229767008495
+    },
+    {
+      "hour": "2025-12-22 04:00",
+      "burnCount": 59,
+      "ethSpent": 1.7304983146500001,
+      "tokensBurned": 248972223389
+    },
+    {
+      "hour": "2025-12-22 03:00",
+      "burnCount": 60,
+      "ethSpent": 3.244383634050001,
+      "tokensBurned": 467355197983
+    },
+    {
+      "hour": "2025-12-22 02:00",
+      "burnCount": 60,
+      "ethSpent": 6.808031401599999,
+      "tokensBurned": 1044773300978
+    },
+    {
+      "hour": "2025-12-22 01:00",
+      "burnCount": 59,
+      "ethSpent": 2.06064096875,
+      "tokensBurned": 555001572225
+    },
+    {
+      "hour": "2025-12-22 00:00",
+      "burnCount": 57,
+      "ethSpent": 2.5803349636999995,
+      "tokensBurned": 655297610995
+    },
+    {
+      "hour": "2025-12-21 23:00",
+      "burnCount": 60,
+      "ethSpent": 4.130986899649999,
+      "tokensBurned": 858310752034
+    },
+    {
+      "hour": "2025-12-21 22:00",
+      "burnCount": 59,
+      "ethSpent": 6.121462170200001,
+      "tokensBurned": 1420427949761
+    },
+    {
+      "hour": "2025-12-21 21:00",
+      "burnCount": 64,
+      "ethSpent": 8.024199849400002,
+      "tokensBurned": 2386707028087
+    },
+    {
+      "hour": "2025-12-21 20:00",
+      "burnCount": 64,
+      "ethSpent": 2.8422875320500003,
+      "tokensBurned": 1073634237302
+    },
+    {
+      "hour": "2025-12-21 19:00",
+      "burnCount": 72,
+      "ethSpent": 1.4010310286999998,
+      "tokensBurned": 978735959210
+    },
+    {
+      "hour": "2025-12-21 18:00",
+      "burnCount": 58,
+      "ethSpent": 1.1993181039000003,
+      "tokensBurned": 976122439052
+    },
+    {
+      "hour": "2025-12-21 17:00",
+      "burnCount": 29,
+      "ethSpent": 1.16075887265,
+      "tokensBurned": 745866173502
+    }
+  ],
+  "biggestBurns": [
+    {
+      "id": 292,
+      "timestamp": "1766339872",
+      "eth_spent": 0.34244767635,
+      "tokens_bought": 256573874744,
+      "tokens_burned": 256573874744,
+      "buy_txid": "2GXWRkP94TvVxaxvhYPRPvaZu71SacxhAWcLSASiK2q9yx3qFxPkJEAn1kQUDsG6EpoS2b7JtXn6EoRuVPvzMSrR",
+      "burn_txid": "3aCeXR4eiMEtFFJNJkW1BJ8bFp5K6UoXHJ8NbHdXLSN2EjhKZvmRuH4A6xCBfE35AA6Xehjs5FKKRqxJZPn53tp8",
+      "created_at": "2025-12-21T17:57:52.932Z"
+    },
+    {
+      "id": 339,
+      "timestamp": "1766343068",
+      "eth_spent": 0.2467540647,
+      "tokens_bought": 194938868037,
+      "tokens_burned": 194938868037,
+      "buy_txid": "61UV15mr4Xs9Fs3THk7JGG5hhZC51XJKEMZ2dRbV9YcdPm1tScwuF1cMacFoALmKpxfp5aUVBzEKLUvLPTi7Ae9c",
+      "burn_txid": "23WtqNrNB2HjttMSj9MUeQYy7h68hdfRynQXumUtzWfFZfpXRqGQXWFva7cXYWtDkMQ5NwJ4Fv599Z1e3U5WaJZn",
+      "created_at": "2025-12-21T18:51:08.737Z"
+    },
+    {
+      "id": 497,
+      "timestamp": "1766351302",
+      "eth_spent": 0.567214635,
+      "tokens_bought": 166726346575,
+      "tokens_burned": 166726346575,
+      "buy_txid": "5E1jQfkH3HJxZFLRNw39pnNLTaVCvMjiPJALEUEaHwbxD4p3nwnhiC8s6JgxQVpQcmw5NDY1tbJi9fNQbg3Xdxpb",
+      "burn_txid": "2TdtYiu8oYvQEBE6SGB8zP1QJN3tXSLVhCKNaCryqas61rMFYcWugi71RYnLkJ1wJFPnnMdawJWVyewwrhHx5NBy",
+      "created_at": "2025-12-21T21:08:22.443Z"
+    },
+    {
+      "id": 384,
+      "timestamp": "1766345276",
+      "eth_spent": 0.21049466425000002,
+      "tokens_bought": 141684149633,
+      "tokens_burned": 141684149633,
+      "buy_txid": "5Lm48v2p1eGFsZpofx5xYKkS6sV2pgimcQskNkd4vNsd5b8KEfHxbH2fkKqduxTQ7Yo24efPQxbRSSXQRNFSxsyh",
+      "burn_txid": "5rnXBmE8KbyS2uxsR3tWCwz6v6xqjeaL9TrW5unf2F6SQWdMmRzowcmiYNL2yVmqqeMy5oZ7zYejVj37jyvYtBew",
+      "created_at": "2025-12-21T19:27:56.820Z"
+    },
+    {
+      "id": 522,
+      "timestamp": "1766352732",
+      "eth_spent": 0.4022993182,
+      "tokens_bought": 125685576173,
+      "tokens_burned": 125685576173,
+      "buy_txid": "5aqUw6NBbckXLmFLCbkgvsFAqH7UVBRtEWChMvoFXstAkR7NX7RCwLdnv5L1KfZc7x6R2LiFNV7fU9ghE4yMykbB",
+      "burn_txid": "22fxYyNr2dszUEmLnyFShkfgCDTvpU6dQvnf5tvLhCs7tKm4fGtTtYbrPwkpbhc8pbrP6kMnZNHgeqdX86yhQjFP",
+      "created_at": "2025-12-21T21:32:12.448Z"
+    }
+  ],
+  "uptime": 50327,
+  "claimInterval": 60000,
+  "nextClaimTime": "2025-12-22T07:24:28.402Z",
+  "ethPriceUsd": 125
+}
