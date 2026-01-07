@@ -7,10 +7,10 @@ import { RaceCourseEntity } from './race-course.entity';
 @Index(['unique_code'], { unique: true })
 @Index(['type_name'])
 export class TicketTypeEntity extends BaseEntity {
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   price: number;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   type_name: string;
 
   @Column({ type: 'varchar', length: 50, unique: true })
@@ -19,22 +19,22 @@ export class TicketTypeEntity extends BaseEntity {
   @Column({ type: 'int' })
   race_course_id: number;
 
-  @Column({ type: 'int', default: 1 })
+  @Column({ type: 'int', default: 1, nullable: true })
   max_participate: number;
 
-  @Column({ type: 'int', default: 1 })
+  @Column({ type: 'int', default: 1, nullable: true })
   max_ticket_per_order: number;
 
-  @Column({ type: 'int', default: 1 })
+  @Column({ type: 'int', default: 1, nullable: true })
   min_ticket_per_order: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', default: 0, nullable: true })
   remained_ticket: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', default: 0, nullable: true })
   sales_count: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', default: 0, nullable: true })
   import_count: number;
 
   @Column({ type: 'text', nullable: true })
@@ -43,7 +43,7 @@ export class TicketTypeEntity extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'varchar', length: 10, default: 'VND' })
+  @Column({ type: 'varchar', length: 10, default: 'VND', nullable: true })
   currency: string;
 
   @Column({ type: 'timestamp', nullable: true })
@@ -55,22 +55,22 @@ export class TicketTypeEntity extends BaseEntity {
   @Column({ type: 'boolean', default: false })
   is_free: boolean;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ type: 'boolean', default: true, nullable: true })
   is_show: boolean;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', default: 0, nullable: true })
   claim_max_per_user: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', default: 0, nullable: true })
   claim_counter: number;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, nullable: true })
   is_5bib: boolean;
 
   @Column({ type: 'text', nullable: true })
   ticket_image_url: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'ORDINARY' })
+  @Column({ type: 'varchar', length: 50, default: 'ORDINARY', nullable: true })
   course_type: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })

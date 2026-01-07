@@ -169,31 +169,49 @@ export class RacesService {
     delete raceFields.race_extenstion;
     delete raceFields.race_virtual_extenstion;
 
+    // Ensure product_id is set correctly (API returns both 'product' and 'product_id')
+    const productId = raceFields.product_id || raceFields.product;
+    if (!productId) {
+      this.logger.error('Race data missing product_id', raceData);
+      throw new Error('Race data missing product_id');
+    }
+
     // Save or update race
     let race = await this.raceRepository.findOne({
-      where: { product_id: raceFields.product },
+      where: { product_id: productId },
     });
 
+    const raceDataToSave = {
+      ...raceFields,
+      product_id: productId,
+      synced_at: new Date(),
+    };
+
     if (race) {
-      Object.assign(race, {
-        ...raceFields,
-        product_id: raceFields.product,
-        synced_at: new Date(),
-      });
-      await this.raceRepository.save(race);
-    } else {
+      // Update existing race
       race = await this.raceRepository.save({
-        ...raceFields,
-        product_id: raceFields.product,
-        synced_at: new Date(),
-      } as any);
+        ...race,
+        ...raceDataToSave,
+      });
+    } else {
+      // Create new race
+      race = await this.raceRepository.save(raceDataToSave as any);
+    }
+
+    // Ensure race has an ID before proceeding
+    if (!race.id) {
+      this.logger.error('Failed to save race - no ID returned', race);
+      throw new Error('Failed to save race - no ID returned');
     }
 
     // Save race courses
     if (race_course_bases && Array.isArray(race_course_bases)) {
       for (const courseData of race_course_bases) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { id, ticket_types, ...courseFields } = courseData;
+        const { ticket_types, ...courseFields } = courseData;
+
+        // Remove source IDs we don't need
+        delete courseFields.id;
+        delete courseFields.race_id;
 
         let raceCourse = await this.raceCourseRepository.findOne({
           where: {
@@ -202,21 +220,32 @@ export class RacesService {
           },
         });
 
+        const courseDataToSave = {
+          ...courseFields,
+          race_id: race.id, // Use our database race ID, not the source API race_id
+        };
+
         if (raceCourse) {
-          Object.assign(raceCourse, courseFields);
-          await this.raceCourseRepository.save(raceCourse);
-        } else {
+          // Update existing course
           raceCourse = await this.raceCourseRepository.save({
-            ...courseFields,
-            race_id: race.id,
-          } as any);
+            ...raceCourse,
+            ...courseDataToSave,
+          });
+        } else {
+          // Create new course
+          raceCourse = await this.raceCourseRepository.save(
+            courseDataToSave as any,
+          );
         }
 
         // Save ticket types
         if (ticket_types && Array.isArray(ticket_types)) {
           for (const ticketData of ticket_types) {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { id, ...ticketFields } = ticketData;
+            const { ...ticketFields } = ticketData;
+
+            // Remove source IDs we don't need
+            delete ticketFields.id;
+            delete ticketFields.race_course_id;
 
             let ticketType = await this.ticketTypeRepository.findOne({
               where: {
@@ -224,17 +253,22 @@ export class RacesService {
               },
             });
 
+            const ticketDataToSave = {
+              ...ticketFields,
+              race_course_id: raceCourse.id, // Use our database race_course ID
+            };
+
             if (ticketType) {
-              Object.assign(ticketType, {
-                ...ticketFields,
-                race_course_id: raceCourse.id,
-              });
-              await this.ticketTypeRepository.save(ticketType);
-            } else {
+              // Update existing ticket type
               ticketType = await this.ticketTypeRepository.save({
-                ...ticketFields,
-                race_course_id: raceCourse.id,
-              } as any);
+                ...ticketType,
+                ...ticketDataToSave,
+              });
+            } else {
+              // Create new ticket type
+              ticketType = await this.ticketTypeRepository.save(
+                ticketDataToSave as any,
+              );
             }
           }
         }

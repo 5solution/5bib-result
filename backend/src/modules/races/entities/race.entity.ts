@@ -195,34 +195,34 @@ export class RaceEntity extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   racekit_location_url: string;
 
-  @Column({ type: 'int', default: 1 })
+  @Column({ type: 'int', default: 1, nullable: true })
   max_code_per_user: number;
 
   @Column({ type: 'boolean', default: false })
   racekit_edit_enable: boolean;
 
-  @Column({ type: 'varchar', length: 50, default: 'DEFAULT' })
+  @Column({ type: 'varchar', length: 50, default: 'DEFAULT', nullable: true })
   bib_strategy: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'DEFAULT' })
+  @Column({ type: 'varchar', length: 50, default: 'DEFAULT', nullable: true })
   race_kit_strategy: string;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, nullable: true })
   send_skip_liability_email: boolean;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, nullable: true })
   allow_transfer_zero_price_code: boolean;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, nullable: true })
   vat_public: boolean;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, nullable: true })
   public_athlete_basic_info: boolean;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, nullable: true })
   required_transfer_fee: boolean;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, nullable: true })
   is_buy_group: boolean;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
