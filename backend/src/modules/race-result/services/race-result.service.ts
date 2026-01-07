@@ -54,7 +54,7 @@ export class RaceResultService {
   ) {}
 
   async getRaceDistances() {
-    return this.raceConfigs.map(config => ({
+    return this.raceConfigs.map((config) => ({
       race_id: config.race_id,
       distance: config.distance,
       course_id: config.course_id,
@@ -188,25 +188,32 @@ export class RaceResultService {
     const orderDirection = dto.sortDirection;
 
     // Build query with QueryBuilder (WITHOUT pagination first)
-    const queryBuilder = this.raceResultRepo
-      .createQueryBuilder('race_result');
+    const queryBuilder = this.raceResultRepo.createQueryBuilder('race_result');
 
     // Add WHERE conditions
     if (dto.course_id) {
-      queryBuilder.andWhere('race_result.course_id = :courseId', { courseId: dto.course_id });
+      queryBuilder.andWhere('race_result.course_id = :courseId', {
+        courseId: dto.course_id,
+      });
     }
 
     if (dto.gender) {
-      queryBuilder.andWhere('race_result.gender = :gender', { gender: dto.gender });
+      queryBuilder.andWhere('race_result.gender = :gender', {
+        gender: dto.gender,
+      });
     }
 
     if (dto.category) {
-      queryBuilder.andWhere('race_result.category = :category', { category: dto.category });
+      queryBuilder.andWhere('race_result.category = :category', {
+        category: dto.category,
+      });
     }
 
     // Name search with ILIKE (case-insensitive)
     if (dto.name) {
-      queryBuilder.andWhere('race_result.name ILIKE :name', { name: `%${dto.name}%` });
+      queryBuilder.andWhere('race_result.name ILIKE :name', {
+        name: `%${dto.name}%`,
+      });
     }
 
     // Add ORDER BY
@@ -235,11 +242,17 @@ export class RaceResultService {
     };
   }
 
-  private filterDuplicateRanks(results: RaceResultEntity[]): RaceResultEntity[] {
+  private filterDuplicateRanks(
+    results: RaceResultEntity[],
+  ): RaceResultEntity[] {
     const seenRanks = new Set<string>();
     return results.filter((result) => {
       // Always show if rank is -1 (racing/in progress) or invalid
-      if (result.overall_rank === '-1' || result.overall_rank_numeric === null || result.overall_rank_numeric === 999999) {
+      if (
+        result.overall_rank === '-1' ||
+        result.overall_rank_numeric === null ||
+        result.overall_rank_numeric === 999999
+      ) {
         return true;
       }
 

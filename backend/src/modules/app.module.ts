@@ -8,6 +8,7 @@ import dataSource from 'src/libs/typeorm.config';
 import { env } from 'src/config';
 import { RaceResultModule } from './race-result/race-result.module';
 //import { BotModule } from './bot/bot.module';
+import { RacesModule } from './races/races.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RaceResultModule } from './race-result/race-result.module';
     }),
     ConfigModule,
     RaceResultModule,
+    RacesModule,
   ],
 })
 export class AppModule {}
