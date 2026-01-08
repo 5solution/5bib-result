@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
+
 interface PaginationProps {
   currentPage: number;
   totalPages: number;
@@ -7,6 +9,7 @@ interface PaginationProps {
 }
 
 export default function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
+  const { t } = useTranslation();
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
     const maxVisible = 7;
@@ -44,7 +47,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
         disabled={currentPage === 1}
         className="px-4 md:px-6 py-3 md:py-4 text-sm md:text-base border-2 border-[#2563EB] text-[#2563EB] rounded-lg font-black uppercase tracking-wider hover:bg-[#2563EB] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-xl"
       >
-        <span className="hidden sm:inline">« Prev</span>
+        <span className="hidden sm:inline">« {t('pagination.previous')}</span>
         <span className="sm:hidden">«</span>
       </button>
 
@@ -74,7 +77,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
         disabled={currentPage === totalPages}
         className="px-4 md:px-6 py-3 md:py-4 text-sm md:text-base border-2 border-[#2563EB] text-[#2563EB] rounded-lg font-black uppercase tracking-wider hover:bg-[#2563EB] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-xl"
       >
-        <span className="hidden sm:inline">Next »</span>
+        <span className="hidden sm:inline">{t('pagination.next')} »</span>
         <span className="sm:hidden">»</span>
       </button>
     </div>

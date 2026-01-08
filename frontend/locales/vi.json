@@ -1,0 +1,80 @@
+{
+  "common": {
+    "loading": "Đang tải...",
+    "error": "Lỗi",
+    "noResults": "Không có kết quả",
+    "search": "Tìm kiếm",
+    "filter": "Lọc",
+    "reset": "Đặt lại",
+    "apply": "Áp dụng",
+    "close": "Đóng",
+    "page": "Trang",
+    "of": "của",
+    "results": "kết quả"
+  },
+  "header": {
+    "title": "KẾT QUẢ GIẢI CHẠY 5BIB",
+    "subtitle": "Bảng xếp hạng trực tiếp · Vận động viên xuất sắc · Cập nhật trực tiếp",
+    "live": "TRỰC TIẾP"
+  },
+  "search": {
+    "placeholder": "Tìm kiếm theo tên, số BIB...",
+    "searchButton": "Tìm kiếm"
+  },
+  "filter": {
+    "title": "Bộ lọc",
+    "gender": "Giới tính",
+    "all": "Tất cả",
+    "male": "Nam",
+    "female": "Nữ",
+    "category": "Hạng mục",
+    "distance": "Cự ly",
+    "sortBy": "Sắp xếp theo",
+    "overallRank": "Thứ hạng chung",
+    "genderRank": "Thứ hạng giới tính",
+    "chipTime": "Thời gian chip",
+    "gunTime": "Thời gian súng",
+    "showingResults": "Hiển thị {{count}} kết quả"
+  },
+  "table": {
+    "rank": "Hạng",
+    "bib": "BIB",
+    "name": "Tên VĐV",
+    "gender": "Giới tính",
+    "category": "Hạng mục",
+    "genderRank": "Hạng GT",
+    "chipTime": "Thời gian Chip",
+    "gunTime": "Thời gian Súng",
+    "pace": "Pace",
+    "certificate": "Chứng chỉ",
+    "viewCertificate": "Xem chứng chỉ",
+    "noCertificate": "Không có"
+  },
+  "pagination": {
+    "previous": "Trước",
+    "next": "Tiếp",
+    "page": "Trang {{current}} / {{total}}"
+  },
+  "distance": {
+    "all": "Tất cả cự ly",
+    "5km": "5KM",
+    "10km": "10KM",
+    "15km": "15KM",
+    "21km": "21KM",
+    "42km": "42KM"
+  },
+  "error": {
+    "loadFailed": "Không thể tải kết quả giải chạy. Vui lòng thử lại.",
+    "tryAgain": "Thử lại",
+    "adjustFilters": "Thử điều chỉnh tìm kiếm hoặc bộ lọc của bạn"
+  },
+  "noResults": {
+    "title": "Không tìm thấy kết quả",
+    "message": "Thử điều chỉnh tìm kiếm hoặc bộ lọc của bạn"
+  },
+  "certificate": {
+    "title": "Chứng chỉ hoàn thành",
+    "download": "Tải xuống",
+    "share": "Chia sẻ"
+  }
+}

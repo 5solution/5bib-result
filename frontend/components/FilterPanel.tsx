@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
 import { RaceResultsParams } from '@/lib/api';
 
 interface FilterPanelProps {
@@ -8,22 +9,23 @@ interface FilterPanelProps {
   totalResults: number;
 }
 
-const DISTANCES = [
-  { value: '', label: 'All Distances' },
-  { value: '100km', label: '100km Ultra' },
-  { value: '70km', label: '70km' },
-  { value: '42km', label: 'Marathon (42km)' },
-  { value: '25km', label: '25km' },
-  { value: '10km', label: '10km' },
-];
-
-const GENDERS = [
-  { value: '', label: 'All Genders' },
-  { value: 'Male', label: 'Male' },
-  { value: 'Female', label: 'Female' },
-];
-
 export default function FilterPanel({ filters, onFilterChange, totalResults }: FilterPanelProps) {
+  const { t } = useTranslation();
+
+  const DISTANCES = [
+    { value: '', label: t('distance.all') },
+    { value: '100km', label: '100KM Ultra' },
+    { value: '70km', label: '70KM' },
+    { value: '42km', label: t('distance.42km') },
+    { value: '25km', label: '25KM' },
+    { value: '10km', label: t('distance.10km') },
+  ];
+
+  const GENDERS = [
+    { value: '', label: t('filter.all') },
+    { value: 'Male', label: t('filter.male') },
+    { value: 'Female', label: t('filter.female') },
+  ];
   return (
     <div className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 border-2 border-gray-200 p-5 md:p-7">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
@@ -31,7 +33,7 @@ export default function FilterPanel({ filters, onFilterChange, totalResults }: F
           {/* Distance Filter */}
           <div>
             <label className="block text-xs md:text-sm font-black text-[#1E293B] mb-2 md:mb-3 uppercase tracking-widest">
-              Distance
+              {t('filter.distance')}
             </label>
             <select
               value={filters.course_id || ''}
@@ -49,7 +51,7 @@ export default function FilterPanel({ filters, onFilterChange, totalResults }: F
           {/* Gender Filter */}
           <div>
             <label className="block text-xs md:text-sm font-black text-[#1E293B] mb-2 md:mb-3 uppercase tracking-widest">
-              Gender
+              {t('filter.gender')}
             </label>
             <select
               value={filters.gender || ''}
@@ -67,23 +69,27 @@ export default function FilterPanel({ filters, onFilterChange, totalResults }: F
           {/* Page Size */}
           <div>
             <label className="block text-xs md:text-sm font-black text-[#1E293B] mb-2 md:mb-3 uppercase tracking-widest">
-              Per Page
+              {t('common.results')}
             </label>
             <select
               value={filters.pageSize || 20}
               onChange={(e) => onFilterChange({ pageSize: Number(e.target.value) })}
               className="w-full px-4 md:px-5 py-3 md:py-4 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#2563EB] transition-all duration-300 font-semibold text-[#1E293B] bg-[#F8FAFC] hover:bg-white cursor-pointer"
             >
-              <option value={10}>10 results</option>
-              <option value={20}>20 results</option>
-              <option value={50}>50 results</option>
-              <option value={100}>100 results</option>
+              <option value={10}>10 {t('common.results')}</option>
+              <option value={20}>20 {t('common.results')}</option>
+              <option value={50}>50 {t('common.results')}</option>
+              <option value={100}>100 {t('common.results')}</option>
             </select>
           </div>
         </div>
 
         {/* Results Count */}
-
+        <div className="text-center lg:text-right">
+          <p className="text-sm md:text-base font-black text-[#1E293B]">
+            {t('filter.showingResults', { count: totalResults })}
+          </p>
+        </div>
       </div>
     </div>
   );

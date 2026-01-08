@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface SearchBarProps {
   onSearch: (searchTerm: string) => void;
 }
 
 export default function SearchBar({ onSearch }: SearchBarProps) {
+  const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
@@ -29,7 +31,7 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
       <div className="flex flex-col gap-5">
         <div className="flex-1">
           <label htmlFor="search" className="block text-sm md:text-base font-black text-[#1E293B] mb-3 uppercase tracking-widest">
-            🔍 BIB Search
+            🔍 {t('search.searchButton')}
           </label>
           <div className="relative">
             <input
@@ -39,7 +41,7 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder="Enter BIB number or athlete name..."
+              placeholder={t('search.placeholder')}
               className="w-full px-12 md:px-14 py-4 md:py-5 text-base md:text-lg font-semibold border-2 border-gray-300 rounded-lg focus:outline-none search-glow focus:border-[#2563EB] transition-all duration-300"
               style={{ fontFamily: 'var(--font-mono)' }}
             />
@@ -64,7 +66,7 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
             type="submit"
             className="flex-1 sm:flex-none bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-black py-4 md:py-5 px-6 md:px-8 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl shadow-lg text-sm md:text-base uppercase tracking-wider"
           >
-            Search
+            {t('search.searchButton')}
           </button>
           {searchTerm && (
             <button
@@ -72,7 +74,7 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
               onClick={handleClear}
               className="flex-1 sm:flex-none px-6 md:px-8 py-4 md:py-5 border-2 border-[#FF0E65] text-[#FF0E65] rounded-lg hover:bg-[#FF0E65] hover:text-white transition-all duration-300 font-black text-sm md:text-base uppercase tracking-wider"
             >
-              Clear
+              {t('common.reset')}
             </button>
           )}
         </div>

@@ -1,0 +1,80 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "noResults": "No results",
+    "search": "Search",
+    "filter": "Filter",
+    "reset": "Reset",
+    "apply": "Apply",
+    "close": "Close",
+    "page": "Page",
+    "of": "of",
+    "results": "results"
+  },
+  "header": {
+    "title": "5BIB RACE RESULTS",
+    "subtitle": "Real-Time Leaderboard · Elite Athletes · Live Updates",
+    "live": "LIVE"
+  },
+  "search": {
+    "placeholder": "Search by name, BIB number...",
+    "searchButton": "Search"
+  },
+  "filter": {
+    "title": "Filters",
+    "gender": "Gender",
+    "all": "All",
+    "male": "Male",
+    "female": "Female",
+    "category": "Category",
+    "distance": "Distance",
+    "sortBy": "Sort by",
+    "overallRank": "Overall Rank",
+    "genderRank": "Gender Rank",
+    "chipTime": "Chip Time",
+    "gunTime": "Gun Time",
+    "showingResults": "Showing {{count}} results"
+  },
+  "table": {
+    "rank": "Rank",
+    "bib": "BIB",
+    "name": "Athlete Name",
+    "gender": "Gender",
+    "category": "Category",
+    "genderRank": "Gender Rank",
+    "chipTime": "Chip Time",
+    "gunTime": "Gun Time",
+    "pace": "Pace",
+    "certificate": "Certificate",
+    "viewCertificate": "View Certificate",
+    "noCertificate": "Not Available"
+  },
+  "pagination": {
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {{current}} of {{total}}"
+  },
+  "distance": {
+    "all": "All Distances",
+    "5km": "5KM",
+    "10km": "10KM",
+    "15km": "15KM",
+    "21km": "21KM",
+    "42km": "42KM"
+  },
+  "error": {
+    "loadFailed": "Failed to load race results. Please try again.",
+    "tryAgain": "Try Again",
+    "adjustFilters": "Try adjusting your search or filters"
+  },
+  "noResults": {
+    "title": "No Results Found",
+    "message": "Try adjusting your search or filters"
+  },
+  "certificate": {
+    "title": "Certificate of Completion",
+    "download": "Download",
+    "share": "Share"
+  }
+}
