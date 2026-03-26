@@ -1,19 +1,17 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { ScheduleModule } from '@nestjs/schedule';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from '@nestjs-modules/ioredis';
-
-import dataSource from 'src/libs/typeorm.config';
+import { ConfigModule } from '@nestjs/config';
 import { env } from 'src/config';
-import { RaceResultModule } from './race-result/race-result.module';
-//import { BotModule } from './bot/bot.module';
 import { RacesModule } from './races/races.module';
+import { RaceResultModule } from './race-result/race-result.module';
+import { AdminModule } from './admin/admin.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot(dataSource.options),
-    TypeOrmModule.forFeature([]),
+    MongooseModule.forRoot(env.mongodb.url, { dbName: env.mongodb.dbName }),
     ScheduleModule.forRoot(),
     ConfigModule.forRoot({ envFilePath: '.env', isGlobal: true }),
     RedisModule.forRoot({
@@ -21,9 +19,10 @@ import { RacesModule } from './races/races.module';
       url: env.redisUrl,
       options: {},
     }),
-    ConfigModule,
-    RaceResultModule,
     RacesModule,
+    RaceResultModule,
+    AdminModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

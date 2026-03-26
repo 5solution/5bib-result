@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import Link from 'next/link';
 import { raceResultsApi, RaceResult, RaceResultsParams } from '@/lib/api';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel from '@/components/FilterPanel';
@@ -75,9 +76,11 @@ export default function Home() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tighter uppercase">
-                  {t('header.title')}
-                </h1>
+                <Link href="/landing">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tighter uppercase hover:text-[#FF0E65] transition-colors duration-300 cursor-pointer">
+                    {t('header.title')}
+                  </h1>
+                </Link>
                 <span className="inline-flex items-center px-2 py-1 bg-[#FF0E65] text-white text-xs font-black uppercase tracking-wider rounded-full pulse-live shadow-lg">
                   {t('header.live')}
                 </span>
@@ -86,7 +89,12 @@ export default function Home() {
                 {t('header.subtitle')}
               </p>
             </div>
-            <div>
+            <div className="flex items-center gap-4">
+              <Link href="/landing">
+                <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all duration-200 font-semibold backdrop-blur-sm border border-white/20 text-sm">
+                  Home
+                </button>
+              </Link>
               <LanguageSwitcher />
             </div>
           </div>

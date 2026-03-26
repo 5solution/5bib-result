@@ -1,12 +1,24 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
+import { HttpModule } from '@nestjs/axios';
+import { RaceResult, RaceResultSchema } from './schemas/race-result.schema';
+import { SyncLog, SyncLogSchema } from './schemas/sync-log.schema';
+import { ResultClaim, ResultClaimSchema } from './schemas/result-claim.schema';
 import { RaceResultController } from './race-result.controller';
-import { RaceResultEntity } from './entities/race-result.entity';
 import { RaceResultService } from './services/race-result.service';
 import { RaceSyncCron } from './services/race-sync.cron';
+import { RacesModule } from '../races/races.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([RaceResultEntity])],
+  imports: [
+    MongooseModule.forFeature([
+      { name: RaceResult.name, schema: RaceResultSchema },
+      { name: SyncLog.name, schema: SyncLogSchema },
+      { name: ResultClaim.name, schema: ResultClaimSchema },
+    ]),
+    HttpModule,
+    RacesModule,
+  ],
   controllers: [RaceResultController],
   providers: [RaceResultService, RaceSyncCron],
   exports: [RaceResultService],

@@ -1,26 +1,146 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, FindOptionsWhere } from 'typeorm';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { RaceEntity } from './entities/race.entity';
-import { RaceCourseEntity } from './entities/race-course.entity';
-import { TicketTypeEntity } from './entities/ticket-type.entity';
+import { Race, RaceDocument } from './schemas/race.schema';
 import { SearchRacesDto } from './dto/search-races.dto';
+import { CreateRaceDto } from './dto/create-race.dto';
+import { UpdateRaceDto } from './dto/update-race.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
+import { AddCourseDto } from './dto/add-course.dto';
+import { UpdateCourseDto } from './dto/update-course.dto';
 
 @Injectable()
 export class RacesService {
   private readonly logger = new Logger(RacesService.name);
 
   constructor(
-    @InjectRepository(RaceEntity)
-    private readonly raceRepository: Repository<RaceEntity>,
-    @InjectRepository(RaceCourseEntity)
-    private readonly raceCourseRepository: Repository<RaceCourseEntity>,
-    @InjectRepository(TicketTypeEntity)
-    private readonly ticketTypeRepository: Repository<TicketTypeEntity>,
+    @InjectModel(Race.name) private readonly raceModel: Model<RaceDocument>,
     private readonly httpService: HttpService,
   ) {}
+
+  // ─── Admin CRUD ──────────────────────────────────────────────
+
+  async createRace(dto: CreateRaceDto) {
+    const slug =
+      dto.slug ||
+      dto.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+
+    const race = await this.raceModel.create({
+      ...dto,
+      slug,
+      startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+      endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+    });
+
+    return { data: race.toObject(), success: true };
+  }
+
+  async updateRace(id: string, dto: UpdateRaceDto) {
+    const update: Record<string, any> = { ...dto };
+    if (dto.startDate) update.startDate = new Date(dto.startDate);
+    if (dto.endDate) update.endDate = new Date(dto.endDate);
+
+    const race = await this.raceModel
+      .findByIdAndUpdate(id, { $set: update }, { new: true })
+      .lean()
+      .exec();
+
+    if (!race) {
+      throw new NotFoundException('Race not found');
+    }
+
+    return { data: race, success: true };
+  }
+
+  async deleteRace(id: string) {
+    const race = await this.raceModel.findByIdAndDelete(id).lean().exec();
+
+    if (!race) {
+      throw new NotFoundException('Race not found');
+    }
+
+    return { data: race, success: true, message: 'Race deleted' };
+  }
+
+  async updateStatus(id: string, dto: UpdateStatusDto) {
+    const race = await this.raceModel
+      .findByIdAndUpdate(id, { $set: { status: dto.status } }, { new: true })
+      .lean()
+      .exec();
+
+    if (!race) {
+      throw new NotFoundException('Race not found');
+    }
+
+    return { data: race, success: true };
+  }
+
+  // ─── Course management ───────────────────────────────────────
+
+  async addCourse(raceId: string, dto: AddCourseDto) {
+    const race = await this.raceModel
+      .findByIdAndUpdate(
+        raceId,
+        { $push: { courses: dto } },
+        { new: true },
+      )
+      .lean()
+      .exec();
+
+    if (!race) {
+      throw new NotFoundException('Race not found');
+    }
+
+    return { data: race, success: true };
+  }
+
+  async updateCourse(raceId: string, courseId: string, dto: UpdateCourseDto) {
+    const setFields: Record<string, any> = {};
+    for (const [key, value] of Object.entries(dto)) {
+      if (value !== undefined) {
+        setFields[`courses.$.${key}`] = value;
+      }
+    }
+
+    const race = await this.raceModel
+      .findOneAndUpdate(
+        { _id: raceId, 'courses.courseId': courseId },
+        { $set: setFields },
+        { new: true },
+      )
+      .lean()
+      .exec();
+
+    if (!race) {
+      throw new NotFoundException('Race or course not found');
+    }
+
+    return { data: race, success: true };
+  }
+
+  async removeCourse(raceId: string, courseId: string) {
+    const race = await this.raceModel
+      .findByIdAndUpdate(
+        raceId,
+        { $pull: { courses: { courseId } } },
+        { new: true },
+      )
+      .lean()
+      .exec();
+
+    if (!race) {
+      throw new NotFoundException('Race not found');
+    }
+
+    return { data: race, success: true, message: 'Course removed' };
+  }
+
+  // ─── Queries ─────────────────────────────────────────────────
 
   async searchRaces(dto: SearchRacesDto) {
     const {
@@ -33,38 +153,38 @@ export class RacesService {
       pageSize = 10,
     } = dto;
 
-    const where: FindOptionsWhere<RaceEntity> = {};
+    const filter: Record<string, any> = {};
 
     if (title) {
-      where.title = Like(`%${title}%`);
+      filter.title = { $regex: title, $options: 'i' };
     }
 
     if (status) {
-      where.status = status;
+      filter.status = status;
     }
 
     if (province) {
-      where.province = province;
+      filter.province = province;
     }
 
     if (season) {
-      where.season = season;
+      filter.season = season;
     }
 
     if (race_type) {
-      where.race_type = race_type;
+      filter.raceType = race_type;
     }
 
-    const [list, totalItems] = await this.raceRepository.findAndCount({
-      where,
-      relations: ['race_courses', 'race_courses.ticket_types'],
-      skip: page * pageSize,
-      take: pageSize,
-      order: {
-        event_start_date: 'DESC',
-        created_at: 'DESC',
-      },
-    });
+    const [list, totalItems] = await Promise.all([
+      this.raceModel
+        .find(filter)
+        .sort({ startDate: -1, created_at: -1 })
+        .skip(page * pageSize)
+        .limit(pageSize)
+        .lean()
+        .exec(),
+      this.raceModel.countDocuments(filter).exec(),
+    ]);
 
     const totalPages = Math.ceil(totalItems / pageSize);
 
@@ -79,11 +199,8 @@ export class RacesService {
     };
   }
 
-  async getRaceById(id: number) {
-    const race = await this.raceRepository.findOne({
-      where: { id },
-      relations: ['race_courses', 'race_courses.ticket_types'],
-    });
+  async getRaceById(id: string) {
+    const race = await this.raceModel.findById(id).lean().exec();
 
     if (!race) {
       return {
@@ -99,11 +216,8 @@ export class RacesService {
     };
   }
 
-  async getRaceByProductId(productId: number) {
-    const race = await this.raceRepository.findOne({
-      where: { product_id: productId },
-      relations: ['race_courses', 'race_courses.ticket_types'],
-    });
+  async getRaceBySlug(slug: string) {
+    const race = await this.raceModel.findOne({ slug }).lean().exec();
 
     if (!race) {
       return {
@@ -117,6 +231,35 @@ export class RacesService {
       data: race,
       success: true,
     };
+  }
+
+  async getRaceByProductId(productId: string) {
+    const race = await this.raceModel
+      .findOne({ productId })
+      .lean()
+      .exec();
+
+    if (!race) {
+      return {
+        data: null,
+        success: false,
+        message: 'Race not found',
+      };
+    }
+
+    return {
+      data: race,
+      success: true,
+    };
+  }
+
+  /**
+   * Get all races that have courses with apiUrl configured (for sync)
+   */
+  async getRacesWithApiUrls(): Promise<RaceDocument[]> {
+    return this.raceModel
+      .find({ 'courses.apiUrl': { $exists: true, $ne: null } })
+      .exec();
   }
 
   async syncRacesFromSource() {
@@ -162,119 +305,62 @@ export class RacesService {
   }
 
   private async saveRaceData(raceData: any) {
-    const { race_course_bases, ...raceFields } = raceData;
-
-    // Remove fields we don't need to save
-    delete raceFields.id;
-    delete raceFields.race_extenstion;
-    delete raceFields.race_virtual_extenstion;
+    const {
+      race_course_bases,
+      id,
+      race_extenstion,
+      race_virtual_extenstion,
+      ...raceFields
+    } = raceData;
 
     // Ensure product_id is set correctly (API returns both 'product' and 'product_id')
-    const productId = raceFields.product_id || raceFields.product;
-    if (!productId) {
+    const productId = String(raceFields.product_id || raceFields.product);
+    if (!productId || productId === 'undefined') {
       this.logger.error('Race data missing product_id', raceData);
       throw new Error('Race data missing product_id');
     }
 
-    // Save or update race
-    let race = await this.raceRepository.findOne({
-      where: { product_id: productId },
-    });
-
-    const raceDataToSave = {
-      ...raceFields,
-      product_id: productId,
-      synced_at: new Date(),
+    // Map source fields to our schema
+    const raceDoc: Partial<Race> = {
+      productId,
+      title: raceFields.title,
+      status: raceFields.status,
+      season: raceFields.season,
+      province: raceFields.province,
+      raceType: raceFields.race_type,
+      description: raceFields.description,
+      imageUrl: raceFields.images,
+      logoUrl: raceFields.logo_url,
+      location: raceFields.location,
+      startDate: raceFields.event_start_date
+        ? new Date(raceFields.event_start_date)
+        : undefined,
+      endDate: raceFields.event_end_date
+        ? new Date(raceFields.event_end_date)
+        : undefined,
+      rawData: raceFields, // preserve all original fields
     };
 
-    if (race) {
-      // Update existing race
-      race = await this.raceRepository.save({
-        ...race,
-        ...raceDataToSave,
-      });
-    } else {
-      // Create new race
-      race = await this.raceRepository.save(raceDataToSave as any);
-    }
-
-    // Ensure race has an ID before proceeding
-    if (!race.id) {
-      this.logger.error('Failed to save race - no ID returned', race);
-      throw new Error('Failed to save race - no ID returned');
-    }
-
-    // Save race courses
+    // Build embedded courses from race_course_bases
     if (race_course_bases && Array.isArray(race_course_bases)) {
-      for (const courseData of race_course_bases) {
-        const { ticket_types, ...courseFields } = courseData;
-
-        // Remove source IDs we don't need
-        delete courseFields.id;
-        delete courseFields.race_id;
-
-        let raceCourse = await this.raceCourseRepository.findOne({
-          where: {
-            race_id: race.id,
-            variant_id: courseFields.variant_id,
-          },
-        });
-
-        const courseDataToSave = {
-          ...courseFields,
-          race_id: race.id, // Use our database race ID, not the source API race_id
-        };
-
-        if (raceCourse) {
-          // Update existing course
-          raceCourse = await this.raceCourseRepository.save({
-            ...raceCourse,
-            ...courseDataToSave,
-          });
-        } else {
-          // Create new course
-          raceCourse = await this.raceCourseRepository.save(
-            courseDataToSave as any,
-          );
-        }
-
-        // Save ticket types
-        if (ticket_types && Array.isArray(ticket_types)) {
-          for (const ticketData of ticket_types) {
-            const { ...ticketFields } = ticketData;
-
-            // Remove source IDs we don't need
-            delete ticketFields.id;
-            delete ticketFields.race_course_id;
-
-            let ticketType = await this.ticketTypeRepository.findOne({
-              where: {
-                unique_code: ticketFields.unique_code,
-              },
-            });
-
-            const ticketDataToSave = {
-              ...ticketFields,
-              race_course_id: raceCourse.id, // Use our database race_course ID
-            };
-
-            if (ticketType) {
-              // Update existing ticket type
-              ticketType = await this.ticketTypeRepository.save({
-                ...ticketType,
-                ...ticketDataToSave,
-              });
-            } else {
-              // Create new ticket type
-              ticketType = await this.ticketTypeRepository.save(
-                ticketDataToSave as any,
-              );
-            }
-          }
-        }
-      }
+      raceDoc.courses = race_course_bases.map((courseData: any) => ({
+        courseId: String(courseData.variant_id || courseData.id),
+        name: courseData.name,
+        distance: courseData.distance,
+        courseType: courseData.course_type,
+        apiUrl: courseData.race_result_url || null,
+        importStatus: courseData.race_result_import_status || 'idle',
+      }));
     }
 
-    this.logger.log(`Synced race: ${race.title} (ID: ${race.id})`);
+    await this.raceModel.findOneAndUpdate(
+      { productId },
+      { $set: raceDoc },
+      { upsert: true, new: true },
+    );
+
+    this.logger.log(
+      `Synced race: ${raceDoc.title} (productId: ${productId})`,
+    );
   }
 }

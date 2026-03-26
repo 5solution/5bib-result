@@ -9,8 +9,10 @@ const envVarsSchema = Joi.object()
       .required(),
     NETWORK: Joi.string().valid('mainnet', 'testnet').required(),
     PORT: Joi.number().default(3000),
-    POSTGRES_URL: Joi.string().required(),
+    MONGODB_URL: Joi.string().required(),
+    MONGODB_DB_NAME: Joi.string().default('5bib_result'),
     REDIS_URL: Joi.string().required(),
+    JWT_SECRET: Joi.string().default('5bib-result-secret'),
   })
   .unknown();
 
@@ -26,11 +28,11 @@ export const env = {
   env: envVars.NODE_ENV,
   network: envVars.NETWORK,
   port: envVars.PORT,
-  postgres: {
-    url: envVars.POSTGRES_URL,
-    testUrl: envVars.POSTGRES_URL + '_test',
-    testDbName: 'test',
+  mongodb: {
+    url: envVars.MONGODB_URL,
+    dbName: envVars.MONGODB_DB_NAME,
   },
   redisUrl: envVars.REDIS_URL,
   privateKey: envVars.PRIVATE_KEY,
+  jwtSecret: envVars.JWT_SECRET as string,
 };
