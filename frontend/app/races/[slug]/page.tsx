@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Search, MapPin, Calendar, ChevronLeft, ChevronRight, ChevronDown, Users, X, Trophy, ArrowRight } from 'lucide-react';
+import { Search, MapPin, Calendar, ChevronLeft, ChevronRight, ChevronDown, Users, X, Trophy, ArrowRight, User } from 'lucide-react';
 
 interface Course {
   id: string;
@@ -148,7 +148,7 @@ export default function RaceDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white pt-[92px] flex items-center justify-center">
+      <div className="min-h-screen bg-white pt-14 flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -156,7 +156,7 @@ export default function RaceDetailPage() {
 
   if (!race) {
     return (
-      <div className="min-h-screen bg-white pt-[92px] flex items-center justify-center">
+      <div className="min-h-screen bg-white pt-14 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-slate-900 mb-4">Không tìm thấy giải đấu</h2>
           <Link href="/calendar" className="text-blue-600 hover:underline">Quay lại lịch sự kiện</Link>
@@ -170,8 +170,46 @@ export default function RaceDetailPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Sub-header — sticky below main header */}
+      <div className="fixed top-14 left-0 right-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-12 gap-4">
+          {/* Race logo + name */}
+          <div className="flex items-center gap-3 shrink-0">
+            {race.logoUrl ? (
+              <img src={race.logoUrl} alt="" className="h-7 w-auto object-contain" />
+            ) : (
+              <div className="w-8 h-8 bg-blue-100 flex items-center justify-center text-blue-700 font-black text-xs rounded">
+                {race.name.charAt(0)}
+              </div>
+            )}
+            <span className="text-sm font-bold text-slate-900 hidden sm:inline truncate max-w-[200px] lg:max-w-[300px]">
+              {race.name}
+            </span>
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Find a runner */}
+          <Link
+            href={`/races/${slug}?search=`}
+            className="hidden md:flex items-center gap-2 text-sm text-slate-600 hover:text-blue-700 transition-colors"
+          >
+            <User className="w-4 h-4" />
+            My Runners
+          </Link>
+          <Link
+            href={`/races/${slug}?search=`}
+            className="hidden md:flex items-center gap-2 text-sm text-slate-600 hover:text-blue-700 transition-colors"
+          >
+            <Search className="w-4 h-4" />
+            Find a runner
+          </Link>
+        </div>
+      </div>
+
       {/* Hero header */}
-      <section className="relative pt-[92px] overflow-hidden">
+      <section className="relative pt-[104px] overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${race.imageUrl || 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=1920&q=80'})` }}
@@ -369,3 +407,4 @@ export default function RaceDetailPage() {
     </div>
   );
 }
+

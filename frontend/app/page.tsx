@@ -226,7 +226,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen">
       {/* Hero + Upcoming Events — same first screen */}
-      <section className="relative pt-[92px] overflow-x-clip overflow-y-visible">
+      <section className="relative pt-14 overflow-x-clip overflow-y-visible">
         {/* Background image */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"

@@ -3,27 +3,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, MapPin, Calendar } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 
 const navLinks = [
   { href: '/', label: 'Trang chủ' },
   { href: '/calendar', label: 'Lịch sự kiện' },
-  { href: '/calendar?search=', label: 'Tìm VĐV' },
 ];
 
 const sponsors = [
-  { name: 'Suunto', logo: 'https://placehold.co/120x40/ffffff/333333?text=SUUNTO' },
-  { name: 'Hoka', logo: 'https://placehold.co/120x40/ffffff/333333?text=HOKA' },
-  { name: 'GU Energy', logo: 'https://placehold.co/120x40/ffffff/333333?text=GU+Energy' },
-  { name: 'Garmin', logo: 'https://placehold.co/120x40/ffffff/333333?text=GARMIN' },
-  { name: 'The North Face', logo: 'https://placehold.co/120x40/ffffff/333333?text=TNF' },
-];
-
-const mockUpcoming = [
-  { name: 'Dalat Ultra Trail 2026', date: '28/03', location: 'Đà Lạt', live: true },
-  { name: 'VnExpress Marathon Hà Nội', date: '12/04', location: 'Hà Nội', live: false },
-  { name: 'Halong Bay Heritage Marathon', date: '26/04', location: 'Quảng Ninh', live: false },
-  { name: 'Vietnam Mountain Marathon', date: '20/09', location: 'Sa Pa', live: false },
+  { name: 'Suunto', logo: 'https://placehold.co/160x50/ffffff/222222?text=SUUNTO&font=roboto' },
+  { name: 'Hoka', logo: 'https://placehold.co/160x50/ffffff/222222?text=HOKA&font=roboto' },
+  { name: 'GU Energy', logo: 'https://placehold.co/160x50/ffffff/222222?text=GU+Energy&font=roboto' },
+  { name: 'Garmin', logo: 'https://placehold.co/160x50/ffffff/222222?text=GARMIN&font=roboto' },
+  { name: 'The North Face', logo: 'https://placehold.co/160x50/ffffff/222222?text=TNF&font=roboto' },
 ];
 
 export default function Header() {
@@ -32,100 +24,58 @@ export default function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
-      {/* Main nav bar */}
-      <div className="bg-blue-700 border-b border-blue-600">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
-            {/* Logo — UTMB style with shine effect */}
-            <Link href="/" className="relative flex items-center gap-2.5 group overflow-hidden px-3 py-1.5 -ml-3 rounded-lg">
-              <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center font-black text-blue-700 text-sm tracking-tighter transition-transform group-hover:scale-105 shadow-sm">
-                5B
-              </div>
-              <div className="flex flex-col leading-none">
-                <span className="text-[17px] font-black tracking-tight text-white">
-                  5BIB
-                </span>
-                <span className="text-[9px] font-semibold text-blue-200/70 tracking-[0.15em] uppercase">
-                  Race Results
-                </span>
-              </div>
-              {/* Shine sweep on hover */}
-              <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/25 to-transparent pointer-events-none" />
-            </Link>
-
-            {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-1">
-              {navLinks.map((link) => {
-                const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href.split('?')[0]);
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                      isActive
-                        ? 'text-white bg-white/20'
-                        : 'text-blue-100 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-blue-100 hover:text-white"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Sponsor trapezoid — right corner, below nav */}
-      <div className="hidden md:block absolute top-14 right-0 z-50">
-        <SponsorCarousel />
-      </div>
-
-      {/* Upcoming events ticker */}
-      <div className="bg-blue-800/90 backdrop-blur-sm border-b border-blue-700/50 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-6 h-9 overflow-x-auto scrollbar-hide">
-            <span className="text-[10px] font-bold text-blue-300 uppercase tracking-wider shrink-0">Sắp diễn ra</span>
-            <div className="flex items-center gap-5">
-              {mockUpcoming.map((event, i) => (
-                <Link
-                  key={i}
-                  href="/calendar"
-                  className="flex items-center gap-2 text-xs text-blue-100 hover:text-white transition-colors shrink-0"
-                >
-                  {event.live && (
-                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500 rounded text-[10px] font-bold text-white uppercase">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                      Live
-                    </span>
-                  )}
-                  <span className="font-semibold">{event.name}</span>
-                  <span className="text-blue-300/70">·</span>
-                  <span className="flex items-center gap-0.5 text-blue-300">
-                    <Calendar className="w-3 h-3" />
-                    {event.date}
-                  </span>
-                  <span className="flex items-center gap-0.5 text-blue-300">
-                    <MapPin className="w-3 h-3" />
-                    {event.location}
-                  </span>
-                  {i < mockUpcoming.length - 1 && (
-                    <span className="text-blue-600 ml-1">|</span>
-                  )}
-                </Link>
-              ))}
+      {/* Single row: Logo left — Nav + Sponsor right */}
+      <div className="bg-blue-700">
+        <div className="flex items-stretch h-14">
+          {/* Logo — flush left */}
+          <Link href="/" className="relative flex items-center gap-2.5 group overflow-hidden px-5 shrink-0">
+            <div className="w-9 h-9 bg-white flex items-center justify-center font-black text-blue-700 text-sm tracking-tighter">
+              5B
             </div>
-          </div>
+            <div className="flex flex-col leading-none">
+              <span className="text-[17px] font-black tracking-tight text-white">5BIB</span>
+              <span className="text-[9px] font-semibold text-blue-200/70 tracking-[0.15em] uppercase">Race Results</span>
+            </div>
+            <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/25 to-transparent pointer-events-none" />
+          </Link>
+
+          {/* Desktop Nav — centered, underline hover */}
+          <nav className="hidden md:flex items-stretch flex-1 justify-center">
+            {navLinks.map((link) => {
+              const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href.split('?')[0]);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`relative flex items-center px-5 text-sm font-semibold transition-colors duration-200 group/nav ${
+                    isActive ? 'text-white' : 'text-blue-200 hover:text-white'
+                  }`}
+                >
+                  {link.label}
+                  <span
+                    className={`absolute bottom-0 left-0 h-[3px] bg-white transition-all duration-300 ${
+                      isActive ? 'w-full' : 'w-0 group-hover/nav:w-full'
+                    }`}
+                  />
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden ml-auto px-4 text-blue-100 hover:text-white"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
+      </div>
+
+      {/* Sponsor trapezoid — absolute, top-right, extends below header */}
+      <div className="hidden md:block absolute top-0 right-0 z-50" style={{ height: 80 }}>
+        <SponsorCarousel />
       </div>
 
       {/* Mobile Nav */}
@@ -139,10 +89,10 @@ export default function Header() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`block px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  className={`block px-4 py-3 text-sm font-semibold transition-all duration-200 ${
                     isActive
-                      ? 'text-white bg-white/20'
-                      : 'text-blue-100 hover:text-white hover:bg-white/10'
+                      ? 'text-white border-l-2 border-white'
+                      : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
                   }`}
                 >
                   {link.label}
@@ -193,21 +143,19 @@ function SponsorCarousel() {
 
   return (
     <div
-      className="relative cursor-grab active:cursor-grabbing select-none"
+      className="h-full cursor-grab active:cursor-grabbing select-none"
       onPointerDown={onDown}
       onPointerUp={onUp}
       onPointerCancel={() => { setIsDragging(false); resume(); }}
       onMouseEnter={pause}
       onMouseLeave={resume}
     >
-      {/* Trapezoid shape: slanted left edge, flat right edge flush to screen */}
       <div
-        className="bg-white shadow-lg flex items-center justify-center"
+        className="bg-white h-full flex items-center justify-center shadow-lg"
         style={{
-          width: 160,
-          height: 52,
-          clipPath: 'polygon(20% 0%, 100% 0%, 100% 100%, 0% 100%)',
-          paddingLeft: 24,
+          width: 220,
+          clipPath: 'polygon(16% 0%, 100% 0%, 100% 100%, 0% 100%)',
+          paddingLeft: 36,
         }}
       >
         <div className="relative w-full h-full overflow-hidden">
@@ -215,15 +163,13 @@ function SponsorCarousel() {
             <div
               key={s.name}
               className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
-                i === current
-                  ? 'opacity-100 scale-100'
-                  : 'opacity-0 scale-90'
+                i === current ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
               }`}
             >
               <img
                 src={s.logo}
                 alt={s.name}
-                className="h-7 w-auto object-contain pointer-events-none"
+                className="h-9 w-auto object-contain pointer-events-none"
                 draggable={false}
               />
             </div>

@@ -47,7 +47,7 @@ type StatusFilter = 'all' | 'live' | 'upcoming' | 'completed';
 export default function CalendarPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-white pt-[92px] flex items-center justify-center">
+      <div className="min-h-screen bg-white pt-14 flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
       </div>
     }>
@@ -145,7 +145,7 @@ function CalendarContent() {
   return (
     <div className="min-h-screen bg-white">
       {/* Hero header — UTMB style */}
-      <section className="relative pt-[92px] overflow-hidden">
+      <section className="relative pt-14 overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1551632811-561732d1e306?w=1920&q=80)' }}
