@@ -1,14 +1,24 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Be_Vietnam_Pro } from 'next/font/google'
+import { Toaster } from 'sonner'
 import './globals.css'
-import I18nProvider from '@/components/I18nProvider'
+import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-display' })
+const inter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-sans',
+})
+
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  variable: '--font-heading',
+})
 
 export const metadata: Metadata = {
-  title: '5BIB Race Results - Live Leaderboard',
-  description: 'Real-time race results and leaderboard for elite athletes',
+  title: '5BIB - Kết quả giải chạy trực tiếp',
+  description: 'Theo dõi kết quả, xếp hạng và thành tích của bạn trên nền tảng 5BIB',
 }
 
 export default function RootLayout({
@@ -17,16 +27,21 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} font-display antialiased`}>
-        <I18nProvider>
-          <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 flex flex-col">
-            <div className="flex-1">
-              {children}
-            </div>
-            <Footer />
-          </div>
-        </I18nProvider>
+    <html lang="vi" className={`${inter.variable} ${beVietnamPro.variable}`}>
+      <body className="font-sans antialiased bg-[var(--5bib-bg)] text-[var(--5bib-text)] min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1">{children}</main>
+        <Footer />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: 'var(--5bib-surface)',
+              color: 'var(--5bib-text)',
+              border: '1px solid var(--5bib-border)',
+            },
+          }}
+        />
       </body>
     </html>
   )

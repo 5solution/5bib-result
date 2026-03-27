@@ -2,9 +2,10 @@ import { IsString, IsOptional, IsNumber } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AddCourseDto {
-  @ApiProperty({ description: 'Course ID', example: '708' })
+  @ApiPropertyOptional({ description: 'Course ID (auto-generated from name if omitted)', example: '42km-full-marathon' })
+  @IsOptional()
   @IsString()
-  courseId: string;
+  courseId?: string;
 
   @ApiProperty({ description: 'Course name', example: '42km Full Marathon' })
   @IsString()

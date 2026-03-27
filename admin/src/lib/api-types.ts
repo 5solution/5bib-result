@@ -554,10 +554,10 @@ export interface components {
         };
         AddCourseDto: {
             /**
-             * @description Course ID
-             * @example 708
+             * @description Course ID (auto-generated from name if omitted)
+             * @example 42km-full-marathon
              */
-            courseId: string;
+            courseId?: string;
             /**
              * @description Course name
              * @example 42km Full Marathon
@@ -586,8 +586,8 @@ export interface components {
         };
         UpdateCourseDto: {
             /**
-             * @description Course ID
-             * @example 708
+             * @description Course ID (auto-generated from name if omitted)
+             * @example 42km-full-marathon
              */
             courseId?: string;
             /**

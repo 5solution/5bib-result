@@ -83,6 +83,13 @@ export class RacesService {
   // ─── Course management ───────────────────────────────────────
 
   async addCourse(raceId: string, dto: AddCourseDto) {
+    if (!dto.courseId) {
+      dto.courseId = dto.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    }
+
     const race = await this.raceModel
       .findByIdAndUpdate(
         raceId,

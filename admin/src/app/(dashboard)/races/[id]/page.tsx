@@ -223,7 +223,6 @@ export default function RaceDetailPage() {
         const { error } = await api.POST("/api/races/{id}/courses", {
           params: { path: { id: raceId } },
           body: {
-            courseId: courseForm.courseId || Date.now().toString(),
             name: courseForm.name,
             distance: courseForm.distance,
             distanceKm: courseForm.distanceKm,
@@ -374,37 +373,59 @@ export default function RaceDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              {/* Status Controls */}
-              <div className="flex flex-col gap-2">
+              {/* Status Controls — Lifecycle Stepper */}
+              <div className="flex flex-col gap-3">
                 <Label>Vòng đời giải đấu</Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={race.status === "pre_race" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleUpdateStatus("pre_race")}
-                    disabled={race.status === "pre_race"}
-                  >
-                    Chuẩn bị
-                  </Button>
-                  <span className="self-center text-muted-foreground">→</span>
-                  <Button
-                    variant={race.status === "live" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleUpdateStatus("live")}
-                    disabled={race.status === "live"}
-                    className={race.status === "live" ? "bg-green-600 hover:bg-green-700" : ""}
-                  >
-                    Đang diễn ra
-                  </Button>
-                  <span className="self-center text-muted-foreground">→</span>
-                  <Button
-                    variant={race.status === "ended" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleUpdateStatus("ended")}
-                    disabled={race.status === "ended"}
-                  >
-                    Đã kết thúc
-                  </Button>
+                <div className="flex items-center gap-0">
+                  {([
+                    { key: "pre_race", label: "Chuẩn bị", icon: "📋", color: "blue" },
+                    { key: "live", label: "Đang diễn ra", icon: "🏃", color: "green" },
+                    { key: "ended", label: "Đã kết thúc", icon: "🏁", color: "zinc" },
+                  ] as const).map((step, i, arr) => {
+                    const isCurrent = race.status === step.key;
+                    const stepIndex = arr.findIndex((s) => s.key === race.status);
+                    const isPast = i < stepIndex;
+
+                    return (
+                      <div key={step.key} className="flex items-center">
+                        <button
+                          onClick={() => !isCurrent && handleUpdateStatus(step.key)}
+                          disabled={isCurrent}
+                          className={`
+                            relative flex flex-col items-center gap-1.5 px-5 py-3 rounded-lg transition-all
+                            ${isCurrent
+                              ? step.color === "green"
+                                ? "bg-green-50 ring-2 ring-green-500 text-green-700"
+                                : step.color === "blue"
+                                  ? "bg-blue-50 ring-2 ring-blue-500 text-blue-700"
+                                  : "bg-zinc-100 ring-2 ring-zinc-400 text-zinc-700"
+                              : isPast
+                                ? "text-muted-foreground opacity-60 hover:opacity-100 hover:bg-muted cursor-pointer"
+                                : "text-muted-foreground hover:bg-muted cursor-pointer"
+                            }
+                          `}
+                        >
+                          <span className={`text-xl ${isCurrent ? "scale-110" : ""}`}>
+                            {step.icon}
+                          </span>
+                          <span className={`text-xs font-medium ${isCurrent ? "font-bold" : ""}`}>
+                            {step.label}
+                          </span>
+                          {isCurrent && (
+                            <span className={`absolute -top-1 -right-1 size-3 rounded-full ${
+                              step.color === "green" ? "bg-green-500 animate-pulse" :
+                              step.color === "blue" ? "bg-blue-500" : "bg-zinc-400"
+                            }`} />
+                          )}
+                        </button>
+                        {i < arr.length - 1 && (
+                          <div className={`w-8 h-0.5 mx-1 ${
+                            isPast ? "bg-primary" : "bg-border"
+                          }`} />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -555,17 +576,6 @@ export default function RaceDetailPage() {
                   </DialogHeader>
                   <div className="flex flex-col gap-4 py-4">
                     <div className="flex flex-col gap-2">
-                      <Label>Course ID *</Label>
-                      <Input
-                        value={courseForm.courseId ?? ""}
-                        onChange={(e) =>
-                          setCourseForm((p) => ({ ...p, courseId: e.target.value }))
-                        }
-                        placeholder="708"
-                        disabled={!!editingCourse}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
                       <Label>Tên cự ly *</Label>
                       <Input
                         value={courseForm.name ?? ""}
@@ -642,7 +652,6 @@ export default function RaceDetailPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
                       <TableHead>Tên</TableHead>
                       <TableHead className="hidden sm:table-cell">Khoảng cách</TableHead>
                       <TableHead className="hidden md:table-cell">Đường dẫn API</TableHead>
@@ -652,9 +661,6 @@ export default function RaceDetailPage() {
                   <TableBody>
                     {race.courses.map((course) => (
                       <TableRow key={course.courseId}>
-                        <TableCell className="font-mono text-xs">
-                          {course.courseId}
-                        </TableCell>
                         <TableCell className="font-medium">
                           {course.name}
                         </TableCell>
