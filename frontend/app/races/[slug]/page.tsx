@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search, MapPin, Calendar, ChevronLeft, ChevronRight, ChevronDown, Users, X, Trophy, ArrowRight, User } from 'lucide-react';
+import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User } from 'lucide-react';
 
 interface Course {
   id: string;
@@ -102,7 +102,6 @@ function generateResults(courseId: string, distance: string): RaceResult[] {
 
 export default function RaceDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const slug = params.slug as string;
 
   const [race, setRace] = useState<RaceInfo | null>(null);
@@ -129,7 +128,6 @@ export default function RaceDetailPage() {
     fetchRace();
   }, [fetchRace]);
 
-  // Generate demo results for each course
   useEffect(() => {
     if (!race) return;
     const results: Record<string, RaceResult[]> = {};
@@ -169,44 +167,10 @@ export default function RaceDetailPage() {
   const topWomen = (results: RaceResult[]) => results.filter(r => r.Gender === 'Female').slice(0, 3);
 
   return (
+    <>
+    <SubHeader race={race} slug={slug} />
+
     <div className="min-h-screen bg-white">
-      {/* Sub-header — sticky below main header */}
-      <div className="fixed top-14 left-0 right-0 z-40 bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-12 gap-4">
-          {/* Race logo + name */}
-          <div className="flex items-center gap-3 shrink-0">
-            {race.logoUrl ? (
-              <img src={race.logoUrl} alt="" className="h-7 w-auto object-contain" />
-            ) : (
-              <div className="w-8 h-8 bg-blue-100 flex items-center justify-center text-blue-700 font-black text-xs rounded">
-                {race.name.charAt(0)}
-              </div>
-            )}
-            <span className="text-sm font-bold text-slate-900 hidden sm:inline truncate max-w-[200px] lg:max-w-[300px]">
-              {race.name}
-            </span>
-          </div>
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Find a runner */}
-          <Link
-            href={`/races/${slug}?search=`}
-            className="hidden md:flex items-center gap-2 text-sm text-slate-600 hover:text-blue-700 transition-colors"
-          >
-            <User className="w-4 h-4" />
-            My Runners
-          </Link>
-          <Link
-            href={`/races/${slug}?search=`}
-            className="hidden md:flex items-center gap-2 text-sm text-slate-600 hover:text-blue-700 transition-colors"
-          >
-            <Search className="w-4 h-4" />
-            Find a runner
-          </Link>
-        </div>
-      </div>
 
       {/* Hero header */}
       <section className="relative pt-[104px] overflow-hidden">
@@ -267,7 +231,7 @@ export default function RaceDetailPage() {
       {/* Races count */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h2 className="text-2xl md:text-3xl font-black text-slate-900 mb-8">
-          {race.courses.length} Races
+          {race.courses.length} Cự ly
         </h2>
 
         {/* Course cards — vertical list */}
@@ -306,7 +270,7 @@ export default function RaceDetailPage() {
                       <div className={`px-4 py-2.5 text-center text-sm font-bold text-white uppercase ${
                         race.status === 'live' ? 'bg-red-600' : race.status === 'completed' ? 'bg-red-700' : 'bg-blue-600'
                       }`}>
-                        {race.status === 'live' ? 'Race In Progress' : race.status === 'completed' ? 'Race Finished' : 'Coming Soon'}
+                        {race.status === 'live' ? 'Đang diễn ra' : race.status === 'completed' ? 'Đã kết thúc' : 'Sắp diễn ra'}
                       </div>
                       {(course.starters || race.status === 'completed') && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">
@@ -332,15 +296,15 @@ export default function RaceDetailPage() {
                       {/* Stats grid */}
                       <div className="grid grid-cols-3 gap-4 mt-4">
                         <div>
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Category</p>
+                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Hạng mục</p>
                           <p className="text-lg font-bold text-slate-900">{course.distance}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Distance</p>
+                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Cự ly</p>
                           <p className="text-lg font-bold text-slate-900">{course.distanceKm || '-'} KM</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Elevation</p>
+                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Leo cao</p>
                           <p className="text-lg font-bold text-slate-900">{course.elevation || '-'}</p>
                         </div>
                       </div>
@@ -349,10 +313,10 @@ export default function RaceDetailPage() {
                     {/* CTA */}
                     <div className="mt-5">
                       <Link
-                        href={`/races/${slug}?course=${course.id}`}
+                        href={`/races/${slug}/ranking/${course.id}`}
                         className="group/cta inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-slate-700 border border-slate-300 rounded-full hover:bg-slate-50 transition-all"
                       >
-                        Ranking and Stats
+                        Xếp hạng & Thống kê
                         <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover/cta:translate-x-1" />
                       </Link>
                     </div>
@@ -362,7 +326,7 @@ export default function RaceDetailPage() {
                   <div className="p-5 md:p-6 border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50">
                     {/* Top 3 Women */}
                     <div className="mb-5">
-                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Top 3 Women</p>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Top 3 Nữ</p>
                       <div className="space-y-2">
                         {women.length > 0 ? women.map((r, i) => (
                           <div key={r.Bib} className="flex items-center gap-2.5">
@@ -381,7 +345,7 @@ export default function RaceDetailPage() {
 
                     {/* Top 3 Men */}
                     <div>
-                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Top 3 Men</p>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Top 3 Nam</p>
                       <div className="space-y-2">
                         {men.length > 0 ? men.map((r, i) => (
                           <div key={r.Bib} className="flex items-center gap-2.5">
@@ -405,6 +369,71 @@ export default function RaceDetailPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
+function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setScrolled(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  return (
+    <div
+      className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${
+        scrolled
+          ? 'bg-white border-b border-slate-200 shadow-sm'
+          : 'bg-transparent border-b border-white/10'
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-12 gap-4">
+        {/* Race logo + name */}
+        <div className="flex items-center gap-3 shrink-0">
+          {race.logoUrl ? (
+            <img src={race.logoUrl} alt="" className="h-7 w-auto object-contain" />
+          ) : (
+            <div className={`w-8 h-8 flex items-center justify-center font-black text-xs rounded transition-colors duration-300 ${
+              scrolled ? 'bg-blue-100 text-blue-700' : 'bg-white/15 text-white'
+            }`}>
+              {race.name.charAt(0)}
+            </div>
+          )}
+          <span className={`text-sm font-bold hidden sm:inline truncate max-w-[200px] lg:max-w-[300px] transition-colors duration-300 ${
+            scrolled ? 'text-slate-900' : 'text-white'
+          }`}>
+            {race.name}
+          </span>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Find a runner */}
+        <Link
+          href={`/races/${slug}?search=`}
+          className={`hidden md:flex items-center gap-2 text-sm transition-colors duration-300 ${
+            scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white'
+          }`}
+        >
+          <User className="w-4 h-4" />
+          VĐV của tôi
+        </Link>
+        <Link
+          href={`/races/${slug}?search=`}
+          className={`hidden md:flex items-center gap-2 text-sm transition-colors duration-300 ${
+            scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white'
+          }`}
+        >
+          <Search className="w-4 h-4" />
+          Tìm VĐV
+        </Link>
+      </div>
+    </div>
+  );
+}

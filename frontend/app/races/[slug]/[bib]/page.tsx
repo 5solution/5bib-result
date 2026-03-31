@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Trophy, Users, Tag, Clock, Share2, Download, Link2, Check } from 'lucide-react';
+import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AthleteResult {
@@ -37,9 +37,9 @@ interface SplitTime {
 
 const DEMO_SPLITS: SplitTime[] = [
   { name: 'Xuất phát', distance: '0K', time: '00:00:00', pace: '-' },
-  { name: 'CP1', distance: '5K', time: '00:27:35', pace: '5:31' },
-  { name: 'CP2', distance: '10K', time: '00:56:12', pace: '5:43' },
-  { name: 'CP3', distance: '15K', time: '01:25:48', pace: '5:55' },
+  { name: 'CP1 - Suối Vàng', distance: '5K', time: '00:27:35', pace: '5:31' },
+  { name: 'CP2 - Đèo Prenn', distance: '10K', time: '00:56:12', pace: '5:43' },
+  { name: 'CP3 - Hồ Tuyền Lâm', distance: '15K', time: '01:25:48', pace: '5:55' },
   { name: 'Về đích', distance: '21K', time: '02:00:15', pace: '5:44' },
 ];
 
@@ -49,13 +49,13 @@ const DEMO_ATHLETE: AthleteResult = {
   OverallRank: '1',
   GenderRank: '1',
   CatRank: '1',
-  Gender: 'M',
+  Gender: 'Male',
   Category: 'M20-29',
   ChipTime: '02:00:15',
   GunTime: '02:01:30',
   Pace: '5:44',
   Gap: '-',
-  Nationality: 'VIE',
+  Nationality: 'Vietnam',
   Nation: '🇻🇳',
   Certificate: '',
   race_id: 2,
@@ -77,13 +77,11 @@ export default function AthleteDetailPage() {
   const fetchAthlete = useCallback(async () => {
     try {
       setLoading(true);
-      // Try to fetch from API
       const res = await fetch(`/api/race-results/athlete/${slug}/${bib}`);
       if (res.ok) {
         const data = await res.json();
         setAthlete(data);
       } else {
-        // Fallback: try race-results endpoint
         const res2 = await fetch(`/api/race-results?name=&pageNo=1&pageSize=1&sortField=OverallRank&sortDirection=ASC`);
         if (res2.ok) {
           const data2 = await res2.json();
@@ -124,19 +122,50 @@ export default function AthleteDetailPage() {
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank', 'width=600,height=400');
   };
 
-  // Calculate pace bar widths for the chart
   const getPaceInSeconds = (paceStr: string): number => {
     if (!paceStr || paceStr === '-') return 0;
     const parts = paceStr.split(':');
     return parseInt(parts[0]) * 60 + parseInt(parts[1] || '0');
   };
 
+  const formatName = (name: string) => {
+    return name
+      .toLowerCase()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  const getInitials = (name: string) => {
+    const words = name.trim().split(/\s+/);
+    if (words.length >= 2) {
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const formatRank = (rank: string) => {
+    const num = parseInt(rank);
+    if (num === 1) return '🥇';
+    if (num === 2) return '🥈';
+    if (num === 3) return '🥉';
+    return `#${rank}`;
+  };
+
+  const getRankMedalColor = (rank: string) => {
+    const num = parseInt(rank);
+    if (num === 1) return 'from-yellow-400 to-amber-500';
+    if (num === 2) return 'from-gray-300 to-gray-400';
+    if (num === 3) return 'from-amber-600 to-amber-700';
+    return 'from-blue-500 to-blue-600';
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--5bib-bg)] pt-16 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[var(--5bib-accent)] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-[var(--5bib-text-muted)]">Đang tải kết quả...</p>
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 font-medium">Đang tải kết quả...</p>
         </div>
       </div>
     );
@@ -144,10 +173,16 @@ export default function AthleteDetailPage() {
 
   if (!athlete) {
     return (
-      <div className="min-h-screen bg-[var(--5bib-bg)] pt-16 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-4">Không tìm thấy vận động viên</h2>
-          <Link href={`/races/${slug}`} className="text-[var(--5bib-accent)] hover:underline">Quay lại kết quả</Link>
+          <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-10 h-10 text-gray-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Không tìm thấy vận động viên</h2>
+          <p className="text-gray-500 mb-6">BIB #{bib} không tồn tại trong cuộc đua này</p>
+          <Link href={`/races/${slug}`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-colors">
+            <ChevronLeft className="w-4 h-4" /> Quay lại kết quả
+          </Link>
         </div>
       </div>
     );
@@ -158,152 +193,287 @@ export default function AthleteDetailPage() {
   const maxPace = Math.max(...paces);
   const minPace = Math.min(...paces);
 
-  const rankItems = [
-    { label: 'Tổng', rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-[var(--5bib-gold)]' },
-    { label: 'Giới tính', rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-[var(--5bib-accent)]' },
-    { label: 'Nhóm tuổi', rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-[var(--5bib-success)]' },
-  ];
+  const genderLabel = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'Nam' : 'Nữ';
+  const genderIcon = athlete.Gender === 'Male' || athlete.Gender === 'M' ? '♂' : '♀';
+  const genderColor = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'bg-blue-600' : 'bg-pink-500';
 
   return (
-    <div className="min-h-screen bg-[var(--5bib-bg)] pt-16">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-[var(--5bib-surface)] via-[var(--5bib-surface-2)] to-[var(--5bib-surface)] border-b border-[var(--5bib-border)] diagonal-lines">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-          <Link href={`/races/${slug}`} className="inline-flex items-center gap-1 text-sm text-[var(--5bib-text-muted)] hover:text-[var(--5bib-accent)] mb-4 transition-colors">
-            <ChevronLeft className="w-4 h-4" /> Kết quả {athlete.distance}
-          </Link>
+    <div className="min-h-screen bg-gray-50">
+      {/* ===== HERO SECTION ===== */}
+      <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 overflow-hidden">
+        {/* Background decorative elements */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-white rounded-full blur-3xl -translate-y-1/2" />
+          <div className="absolute bottom-0 right-1/4 w-72 h-72 bg-blue-300 rounded-full blur-3xl translate-y-1/2" />
+        </div>
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 30px, rgba(255,255,255,0.03) 30px, rgba(255,255,255,0.03) 60px)',
+        }} />
 
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-2xl md:text-3xl font-black text-white">{athlete.Name}</h1>
-                <span className="text-sm text-[var(--5bib-text-muted)]">{athlete.Nation}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--5bib-text-muted)]">
-                <span className="px-2.5 py-1 bg-[var(--5bib-accent)]/10 text-[var(--5bib-accent)] rounded-full font-bold text-xs">BIB {athlete.Bib}</span>
-                <span>{athlete.distance}</span>
-                <span>&middot;</span>
-                <span>{athlete.Gender === 'M' ? 'Nam' : 'Nữ'}</span>
-                <span>&middot;</span>
-                <span>{athlete.Category}</span>
-              </div>
-              {athlete.race_name && (
-                <p className="text-sm text-[var(--5bib-text-muted)] mt-2">{athlete.race_name}</p>
-              )}
-            </div>
-
+        {/* Navigation bar */}
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-4">
+          <div className="flex items-center justify-between">
+            <Link
+              href={`/races/${slug}`}
+              className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors font-medium"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Kết quả {athlete.distance}</span>
+            </Link>
             {/* Share buttons */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleShareFacebook}
-                className="flex items-center gap-2 px-4 py-2 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg text-sm font-semibold transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 Chia sẻ
               </button>
               <button
                 onClick={handleCopyLink}
-                className="flex items-center gap-2 px-4 py-2 bg-[var(--5bib-surface-2)] border border-[var(--5bib-border)] text-white hover:border-[var(--5bib-accent)] rounded-lg text-sm font-semibold transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
-                {linkCopied ? <Check className="w-4 h-4 text-[var(--5bib-success)]" /> : <Link2 className="w-4 h-4" />}
-                {linkCopied ? 'Đã sao chép' : 'Sao chép link'}
+                {linkCopied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
+                {linkCopied ? 'Đã sao chép' : 'Copy link'}
               </button>
             </div>
           </div>
         </div>
+
+        {/* Avatar & athlete info */}
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-28 pt-6 text-center">
+          {/* Avatar */}
+          <div className="relative inline-block mb-5">
+            <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-white/20 backdrop-blur-sm border-4 border-white/40 flex items-center justify-center mx-auto shadow-2xl">
+              <span className="text-4xl md:text-5xl font-black text-white tracking-tight">
+                {getInitials(athlete.Name)}
+              </span>
+            </div>
+            {/* Rank badge overlay */}
+            <div className={`absolute -bottom-2 -right-2 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br ${getRankMedalColor(athlete.OverallRank)} flex items-center justify-center shadow-lg border-3 border-white`}>
+              <span className="text-lg md:text-xl font-black text-white">
+                {parseInt(athlete.OverallRank) <= 3 ? formatRank(athlete.OverallRank) : `#${athlete.OverallRank}`}
+              </span>
+            </div>
+            {/* Gender badge */}
+            <div className={`absolute -bottom-2 -left-2 w-10 h-10 md:w-11 md:h-11 rounded-full ${genderColor} flex items-center justify-center shadow-lg border-2 border-white`}>
+              <span className="text-lg text-white font-bold">{genderIcon}</span>
+            </div>
+          </div>
+
+          {/* Name */}
+          <h1 className="text-3xl md:text-4xl font-black text-white mb-2 tracking-tight">
+            {formatName(athlete.Name)}
+          </h1>
+
+          {/* Tags row */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
+            <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-black border border-white/30 tracking-wide" style={{ fontFamily: 'var(--font-mono)' }}>
+              BIB #{athlete.Bib}
+            </span>
+            <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
+              {athlete.distance}
+            </span>
+            <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
+              {athlete.Category}
+            </span>
+            {athlete.Nationality && (
+              <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
+                {athlete.Nation} {athlete.Nationality}
+              </span>
+            )}
+          </div>
+
+          {/* Race name */}
+          {athlete.race_name && (
+            <p className="text-white/60 text-sm font-medium">{athlete.race_name}</p>
+          )}
+        </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Main time display */}
-        <div className="bg-[var(--5bib-surface)] border border-[var(--5bib-border)] rounded-xl p-6 md:p-8 text-center">
-          <div className="text-xs uppercase tracking-wider text-[var(--5bib-text-muted)] font-bold mb-2">Net Time (Chip Time)</div>
-          <div className="text-5xl md:text-6xl font-black text-[var(--5bib-accent)] font-mono tracking-tight mb-4">
-            {athlete.ChipTime}
-          </div>
-          <div className="flex items-center justify-center gap-6 text-sm text-[var(--5bib-text-muted)]">
-            <span className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4" />
-              Gun Time: <span className="font-mono font-semibold text-white">{athlete.GunTime}</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              Pace: <span className="font-mono font-semibold text-white">{athlete.Pace} /km</span>
-            </span>
+      {/* ===== MAIN CONTENT (overlapping hero) ===== */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10 pb-12 space-y-6">
+
+        {/* === TIME CARD (floating over hero) === */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          {/* Big time display */}
+          <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
+            <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">Chip Time</div>
+            <div className="text-5xl md:text-7xl font-black text-blue-600 tracking-tight mb-3" style={{ fontFamily: 'var(--font-mono)' }}>
+              {athlete.ChipTime}
+            </div>
+            <div className="flex items-center justify-center gap-4 md:gap-8 text-sm text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-gray-400" />
+                Gun: <span className="font-mono font-bold text-gray-700">{athlete.GunTime}</span>
+              </span>
+              <span className="w-px h-4 bg-gray-200" />
+              <span className="flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-gray-400" />
+                Pace: <span className="font-mono font-bold text-gray-700">{athlete.Pace} /km</span>
+              </span>
+              {athlete.Gap && athlete.Gap !== '-' && (
+                <>
+                  <span className="w-px h-4 bg-gray-200 hidden md:block" />
+                  <span className="hidden md:flex items-center gap-1.5">
+                    Gap: <span className="font-mono font-bold text-gray-700">{athlete.Gap}</span>
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Rank badges */}
-          <div className="grid grid-cols-3 gap-4 mt-8">
-            {rankItems.map((item) => (
-              <div key={item.label} className="bg-[var(--5bib-surface-2)] border border-[var(--5bib-border)] rounded-xl p-4">
-                <div className={`flex items-center justify-center gap-1.5 mb-1 ${item.color}`}>
+          {/* Rank badges row */}
+          <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+            {[
+              { label: 'Tổng hạng', rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
+              { label: `Hạng ${genderLabel}`, rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
+              { label: 'Hạng nhóm tuổi', rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+            ].map((item) => (
+              <div key={item.label} className="py-5 md:py-6 text-center group hover:bg-gray-50/50 transition-colors">
+                <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${item.bg} ${item.color} mb-2`}>
                   {item.icon}
                 </div>
-                <div className="text-2xl md:text-3xl font-black text-white">#{item.rank}</div>
-                <div className="text-xs text-[var(--5bib-text-muted)] font-medium">{item.label}</div>
+                <div className="text-2xl md:text-3xl font-black text-gray-900">
+                  {parseInt(item.rank) <= 3 ? formatRank(item.rank) : `#${item.rank}`}
+                </div>
+                <div className="text-xs text-gray-400 font-semibold uppercase tracking-wider mt-1">{item.label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Split Times */}
-        <div className="bg-[var(--5bib-surface)] border border-[var(--5bib-border)] rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--5bib-border)]">
-            <h2 className="text-lg font-bold text-white">Split Times</h2>
+        {/* === SPLIT TIMES === */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
+              <Timer className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Thời gian qua trạm</h2>
+              <p className="text-xs text-gray-400">Split times tại các checkpoint</p>
+            </div>
           </div>
-          <div className="overflow-x-auto">
+
+          {/* Mobile cards */}
+          <div className="block md:hidden">
+            {splits.map((split, i) => {
+              const paceSeconds = getPaceInSeconds(split.pace);
+              const isFastest = split.pace !== '-' && paceSeconds === minPace;
+              const isSlowest = split.pace !== '-' && paceSeconds === maxPace;
+              const isStart = split.pace === '-';
+
+              return (
+                <div
+                  key={i}
+                  className={`px-5 py-4 border-b border-gray-50 ${i % 2 === 1 ? 'bg-gray-50/50' : ''} ${isFastest ? 'bg-emerald-50/50 border-l-4 border-l-emerald-500' : isSlowest ? 'bg-orange-50/50 border-l-4 border-l-orange-400' : ''}`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                      <span className="font-semibold text-gray-900 text-sm">{split.name}</span>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{split.distance}</span>
+                  </div>
+                  <div className="flex items-center justify-between pl-9">
+                    <span className="font-mono font-bold text-blue-600">{split.time}</span>
+                    {!isStart && (
+                      <div className="flex items-center gap-1">
+                        {isFastest && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">FASTEST</span>}
+                        {isSlowest && <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">SLOWEST</span>}
+                        <span className="font-mono text-sm text-gray-500">{split.pace} /km</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--5bib-border)]">
-                  <th className="text-left px-6 py-3 text-xs font-bold text-[var(--5bib-text-muted)] uppercase tracking-wider">Checkpoint</th>
-                  <th className="text-left px-6 py-3 text-xs font-bold text-[var(--5bib-text-muted)] uppercase tracking-wider">Cự ly</th>
-                  <th className="text-right px-6 py-3 text-xs font-bold text-[var(--5bib-text-muted)] uppercase tracking-wider">Thời gian</th>
-                  <th className="text-right px-6 py-3 text-xs font-bold text-[var(--5bib-text-muted)] uppercase tracking-wider">Pace</th>
+                <tr className="bg-gray-50/80">
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-8">#</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Checkpoint</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Cự ly</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Thời gian</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Pace</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-24"></th>
                 </tr>
               </thead>
               <tbody>
-                {splits.map((split, i) => (
-                  <tr key={i} className={`border-b border-[var(--5bib-border)]/50 ${i % 2 === 1 ? 'bg-white/[0.02]' : ''}`}>
-                    <td className="px-6 py-3 font-semibold text-white">{split.name}</td>
-                    <td className="px-6 py-3 text-[var(--5bib-text-muted)]">{split.distance}</td>
-                    <td className="px-6 py-3 text-right font-mono font-bold text-[var(--5bib-accent)]">{split.time}</td>
-                    <td className="px-6 py-3 text-right font-mono text-[var(--5bib-text-muted)]">{split.pace}</td>
-                  </tr>
-                ))}
+                {splits.map((split, i) => {
+                  const paceSeconds = getPaceInSeconds(split.pace);
+                  const isFastest = split.pace !== '-' && paceSeconds === minPace;
+                  const isSlowest = split.pace !== '-' && paceSeconds === maxPace;
+
+                  return (
+                    <tr
+                      key={i}
+                      className={`border-b border-gray-50 transition-colors ${
+                        isFastest ? 'bg-emerald-50/60 hover:bg-emerald-50' : isSlowest ? 'bg-orange-50/60 hover:bg-orange-50' : i % 2 === 1 ? 'bg-gray-50/30 hover:bg-gray-50/60' : 'hover:bg-gray-50/40'
+                      }`}
+                    >
+                      <td className="px-6 py-3.5">
+                        <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                      </td>
+                      <td className="px-6 py-3.5 font-semibold text-gray-900">{split.name}</td>
+                      <td className="px-6 py-3.5 text-gray-500 font-medium">{split.distance}</td>
+                      <td className="px-6 py-3.5 text-right font-mono font-bold text-blue-600">{split.time}</td>
+                      <td className="px-6 py-3.5 text-right font-mono text-gray-600">{split.pace !== '-' ? `${split.pace} /km` : '-'}</td>
+                      <td className="px-6 py-3.5 text-right">
+                        {isFastest && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">FASTEST</span>}
+                        {isSlowest && <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-1 rounded-full">SLOWEST</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Pace Chart */}
-        <div className="bg-[var(--5bib-surface)] border border-[var(--5bib-border)] rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--5bib-border)]">
-            <h2 className="text-lg font-bold text-white">Biểu đồ pace</h2>
+        {/* === PACE CHART === */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Biểu đồ Pace</h2>
+              <p className="text-xs text-gray-400">Phân tích tốc độ qua từng chặng</p>
+            </div>
           </div>
           <div className="p-6">
             <div className="space-y-3">
               {splits.filter((s) => s.pace !== '-').map((split, i) => {
                 const paceSeconds = getPaceInSeconds(split.pace);
-                // Invert: lower pace = wider bar (faster)
                 const range = maxPace - minPace || 1;
-                const percentage = maxPace > 0 ? Math.max(30, 100 - ((paceSeconds - minPace) / range) * 50) : 70;
+                const percentage = maxPace > 0 ? Math.max(35, 100 - ((paceSeconds - minPace) / range) * 45) : 70;
                 const isFastest = paceSeconds === minPace;
                 const isSlowest = paceSeconds === maxPace;
 
                 return (
-                  <div key={i} className="flex items-center gap-4">
-                    <div className="w-16 text-xs font-semibold text-[var(--5bib-text-muted)] text-right shrink-0">{split.name}</div>
+                  <div key={i} className="flex items-center gap-3 group">
+                    <div className="w-28 md:w-36 text-right shrink-0">
+                      <span className="text-xs font-semibold text-gray-500">{split.name}</span>
+                      <div className="text-[10px] text-gray-400">{split.distance}</div>
+                    </div>
                     <div className="flex-1">
-                      <div className="relative h-8 bg-[var(--5bib-surface-2)] rounded-lg overflow-hidden">
+                      <div className="relative h-10 bg-gray-100 rounded-xl overflow-hidden">
                         <div
-                          className={`absolute left-0 top-0 h-full rounded-lg transition-all duration-700 flex items-center px-3 ${
+                          className={`absolute left-0 top-0 h-full rounded-xl transition-all duration-700 ease-out flex items-center justify-end px-4 ${
                             isFastest
-                              ? 'bg-gradient-to-r from-[var(--5bib-accent)] to-[var(--5bib-accent-dim)]'
+                              ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-lg shadow-emerald-200'
                               : isSlowest
-                                ? 'bg-gradient-to-r from-orange-500/80 to-orange-600/80'
-                                : 'bg-gradient-to-r from-[var(--5bib-accent)]/60 to-[var(--5bib-accent-dim)]/60'
+                                ? 'bg-gradient-to-r from-orange-400 to-orange-500 shadow-lg shadow-orange-200'
+                                : 'bg-gradient-to-r from-blue-400 to-blue-500'
                           }`}
                           style={{ width: `${percentage}%` }}
                         >
-                          <span className="text-xs font-bold text-white whitespace-nowrap">{split.pace} /km</span>
+                          <span className="text-xs font-bold text-white whitespace-nowrap drop-shadow-sm">{split.pace} /km</span>
                         </div>
                       </div>
                     </div>
@@ -311,36 +481,58 @@ export default function AthleteDetailPage() {
                 );
               })}
             </div>
-            <div className="flex items-center gap-4 mt-4 text-xs text-[var(--5bib-text-muted)]">
+            {/* Legend */}
+            <div className="flex items-center justify-center gap-6 mt-6 pt-4 border-t border-gray-100 text-xs text-gray-500">
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-[var(--5bib-accent)]" /> Fastest split
+                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500" />
+                Nhanh nhất
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-orange-500/80" /> Slowest split
+                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-500" />
+                Chậm nhất
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-400 to-blue-500" />
+                Bình thường
               </span>
             </div>
           </div>
         </div>
 
-        {/* E-Certificate */}
-        <div className="bg-[var(--5bib-surface)] border border-[var(--5bib-border)] rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--5bib-border)]">
-            <h2 className="text-lg font-bold text-white">Chứng nhận hoàn thành</h2>
+        {/* === CERTIFICATE === */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+              <Award className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Chứng nhận hoàn thành</h2>
+              <p className="text-xs text-gray-400">E-Certificate of Completion</p>
+            </div>
           </div>
-          <div className="p-6">
-            <div className="relative bg-gradient-to-br from-[var(--5bib-surface-2)] to-[var(--5bib-bg)] border-2 border-[var(--5bib-accent)]/20 rounded-xl p-8 text-center">
-              {/* Certificate content */}
-              <div className="border border-[var(--5bib-border)] rounded-lg p-6 md:p-8">
-                <div className="w-12 h-12 mx-auto mb-4 rounded-lg bg-[var(--5bib-accent)]/10 flex items-center justify-center">
-                  <Award className="w-7 h-7 text-[var(--5bib-accent)]" />
-                </div>
-                <div className="text-xs uppercase tracking-[0.2em] text-[var(--5bib-text-muted)] font-bold mb-2">Certificate of Completion</div>
-                <div className="text-xl md:text-2xl font-black text-white mb-1">{athlete.Name}</div>
-                <div className="text-sm text-[var(--5bib-text-muted)] mb-4">BIB {athlete.Bib}</div>
-                <div className="text-3xl font-black text-[var(--5bib-accent)] font-mono mb-2">{athlete.ChipTime}</div>
-                <div className="text-sm text-[var(--5bib-text-muted)]">{athlete.distance} &middot; {athlete.race_name || slug.replace(/-/g, ' ')}</div>
-              </div>
+          <div className="p-6 md:p-8">
+            <div className="relative bg-gradient-to-br from-blue-50 via-white to-indigo-50 border-2 border-blue-100 rounded-2xl p-8 md:p-10 text-center overflow-hidden">
+              {/* Decorative corners */}
+              <div className="absolute top-3 left-3 w-8 h-8 border-t-2 border-l-2 border-blue-300 rounded-tl-lg" />
+              <div className="absolute top-3 right-3 w-8 h-8 border-t-2 border-r-2 border-blue-300 rounded-tr-lg" />
+              <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-blue-300 rounded-bl-lg" />
+              <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-blue-300 rounded-br-lg" />
 
+              <div className="relative">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-lg shadow-amber-200">
+                  <Award className="w-8 h-8 text-white" />
+                </div>
+                <div className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-bold mb-3">Certificate of Completion</div>
+                <div className="text-2xl md:text-3xl font-black text-gray-900 mb-1">{formatName(athlete.Name)}</div>
+                <div className="text-sm text-gray-400 mb-5">BIB #{athlete.Bib}</div>
+                <div className="text-4xl md:text-5xl font-black text-blue-600 mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{athlete.ChipTime}</div>
+                <div className="text-sm text-gray-500 font-medium">
+                  {athlete.distance} &middot; {athlete.race_name || slug.replace(/-/g, ' ')}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center mt-6">
               <button
                 onClick={() => {
                   if (athlete.Certificate) {
@@ -349,7 +541,7 @@ export default function AthleteDetailPage() {
                     toast.info('Chứng nhận chưa sẵn sàng. Vui lòng thử lại sau.');
                   }
                 }}
-                className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-[var(--5bib-accent)] hover:bg-[var(--5bib-accent-dim)] text-[var(--5bib-bg)] font-bold rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-full transition-all duration-300 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transform hover:-translate-y-0.5"
               >
                 <Download className="w-4 h-4" />
                 Tải chứng nhận
@@ -357,16 +549,18 @@ export default function AthleteDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* === BACK NAVIGATION === */}
+        <div className="text-center py-4">
+          <Link
+            href={`/races/${slug}`}
+            className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-blue-600 transition-colors font-medium"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Quay lại bảng xếp hạng
+          </Link>
+        </div>
       </div>
     </div>
-  );
-}
-
-function Award({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="6" />
-      <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
-    </svg>
   );
 }
