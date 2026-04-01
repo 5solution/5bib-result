@@ -163,6 +163,10 @@ export default function RacesPage() {
           raceType: newRace.raceType || "running",
           province: newRace.province,
           cacheTtlSeconds: newRace.cacheTtlSeconds ?? 60,
+          enableEcert: false,
+          enableClaim: false,
+          enableLiveTracking: false,
+          enable5pix: false,
         },
         ...authHeaders(token),
       });

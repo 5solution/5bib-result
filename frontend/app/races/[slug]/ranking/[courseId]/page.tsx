@@ -163,7 +163,6 @@ export default function CourseRankingPage() {
             end_date: r.endDate || r.end_date,
             location: r.province || r.location || '',
             status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
-            distances: r.courses?.map((c: any) => c.distance || c.name) || [],
             courses: (r.courses || []).map((c: any) => ({
               id: c.courseId || c.id,
               distance: c.distance || c.name,
@@ -410,7 +409,7 @@ export default function CourseRankingPage() {
 
             {searchQuery && (
               <p className="text-center text-sm text-slate-500 mb-4">
-                Tìm thấy <strong className="text-slate-700">{filteredResults.length}</strong> kết quả
+                Tìm thấy <strong className="text-slate-700">{results.length}</strong> kết quả
               </p>
             )}
 
