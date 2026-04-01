@@ -359,6 +359,7 @@ export class RacesService {
         courseType: courseData.course_type,
         apiUrl: courseData.race_result_url || null,
         importStatus: courseData.race_result_import_status || 'idle',
+        checkpoints: [],
       }));
     }
 
