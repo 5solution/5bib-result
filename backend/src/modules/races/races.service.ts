@@ -168,6 +168,8 @@ export class RacesService {
 
     if (status) {
       filter.status = status;
+    } else {
+      filter.status = { $ne: 'draft' };
     }
 
     if (province) {

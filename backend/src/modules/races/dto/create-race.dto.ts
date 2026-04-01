@@ -22,11 +22,11 @@ export class CreateRaceDto {
 
   @ApiPropertyOptional({
     description: 'Race status',
-    enum: ['pre_race', 'live', 'ended'],
+    enum: ['draft', 'pre_race', 'live', 'ended'],
     default: 'pre_race',
   })
   @IsOptional()
-  @IsIn(['pre_race', 'live', 'ended'])
+  @IsIn(['draft', 'pre_race', 'live', 'ended'])
   status?: string;
 
   @ApiPropertyOptional({ description: 'Race type', example: 'running' })

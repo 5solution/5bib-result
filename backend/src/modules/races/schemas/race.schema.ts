@@ -33,7 +33,7 @@ export class Race {
   @Prop({ index: true }) productId: string;
   @Prop({ required: true }) title: string;
   @Prop() slug: string;
-  @Prop({ default: 'pre_race' }) status: string; // pre_race | live | ended
+  @Prop({ default: 'pre_race' }) status: string; // draft | pre_race | live | ended
   @Prop() season: string;
   @Prop() province: string;
   @Prop() raceType: string; // running | triathlon | cycling

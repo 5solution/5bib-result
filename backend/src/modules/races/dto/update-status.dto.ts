@@ -4,10 +4,10 @@ import { ApiProperty } from '@nestjs/swagger';
 export class UpdateStatusDto {
   @ApiProperty({
     description: 'New lifecycle status',
-    enum: ['pre_race', 'live', 'ended'],
+    enum: ['draft', 'pre_race', 'live', 'ended'],
     example: 'live',
   })
   @IsString()
-  @IsIn(['pre_race', 'live', 'ended'])
+  @IsIn(['draft', 'pre_race', 'live', 'ended'])
   status: string;
 }
