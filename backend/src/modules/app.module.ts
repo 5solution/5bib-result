@@ -9,6 +9,7 @@ import { RaceResultModule } from './race-result/race-result.module';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { UploadModule } from './upload/upload.module';
+import { SponsorsModule } from './sponsors/sponsors.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { UploadModule } from './upload/upload.module';
     AdminModule,
     AuthModule,
     UploadModule,
+    SponsorsModule,
   ],
 })
 export class AppModule {}

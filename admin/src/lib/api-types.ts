@@ -432,6 +432,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sponsors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all active sponsors (public) */
+        get: operations["SponsorsController_findAllActive"];
+        put?: never;
+        /** Create a new sponsor (admin) */
+        post: operations["SponsorsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sponsors/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all sponsors including inactive (admin) */
+        get: operations["SponsorsController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sponsors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Soft delete a sponsor (admin) */
+        delete: operations["SponsorsController_remove"];
+        options?: never;
+        head?: never;
+        /** Update a sponsor (admin) */
+        patch: operations["SponsorsController_update"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -790,6 +843,72 @@ export interface components {
             email: string;
             /** @example Admin@5bib2026 */
             password: string;
+        };
+        CreateSponsorDto: {
+            /**
+             * @description Sponsor name
+             * @example Adidas
+             */
+            name: string;
+            /**
+             * @description Logo URL (S3)
+             * @example https://s3.amazonaws.com/bucket/logo.png
+             */
+            logoUrl: string;
+            /**
+             * @description Sponsor website
+             * @example https://adidas.com
+             */
+            website?: string;
+            /**
+             * @description Sponsor level
+             * @default silver
+             * @enum {string}
+             */
+            level: "silver" | "gold" | "diamond";
+            /**
+             * @description Display order
+             * @default 0
+             */
+            order: number;
+            /**
+             * @description Active status
+             * @default true
+             */
+            isActive: boolean;
+        };
+        UpdateSponsorDto: {
+            /**
+             * @description Sponsor name
+             * @example Adidas
+             */
+            name?: string;
+            /**
+             * @description Logo URL (S3)
+             * @example https://s3.amazonaws.com/bucket/logo.png
+             */
+            logoUrl?: string;
+            /**
+             * @description Sponsor website
+             * @example https://adidas.com
+             */
+            website?: string;
+            /**
+             * @description Sponsor level
+             * @default silver
+             * @enum {string}
+             */
+            level: "silver" | "gold" | "diamond";
+            /**
+             * @description Display order
+             * @default 0
+             */
+            order: number;
+            /**
+             * @description Active status
+             * @default true
+             */
+            isActive: boolean;
         };
     };
     responses: never;
@@ -1587,6 +1706,122 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SponsorsController_findAllActive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Returns active sponsors sorted by level then order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SponsorsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSponsorDto"];
+            };
+        };
+        responses: {
+            /** @description Sponsor created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SponsorsController_findAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Returns all sponsors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SponsorsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sponsor deactivated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sponsor not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SponsorsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSponsorDto"];
+            };
+        };
+        responses: {
+            /** @description Sponsor updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sponsor not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

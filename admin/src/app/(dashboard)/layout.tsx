@@ -18,6 +18,7 @@ import {
   Trophy,
   RefreshCw,
   FileWarning,
+  Handshake,
   LogOut,
   Menu,
 } from "lucide-react";
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { href: "/races", label: "Giải đấu", icon: Trophy },
+  { href: "/sponsors", label: "Nhà tài trợ", icon: Handshake },
   { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
   { href: "/claims", label: "Khiếu nại", icon: FileWarning },
 ];
