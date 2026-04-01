@@ -3,21 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import {
-  ChevronLeft,
-  Clock,
-  Link2,
-  Check,
-  Timer,
-  TrendingUp,
-  Award,
-  Users,
-  Tag,
-  Trophy,
-  Download,
-  Gauge,
-  ArrowUpDown,
-} from 'lucide-react';
+import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AthleteResult {
@@ -49,6 +35,36 @@ interface SplitTime {
   pace: string;
 }
 
+const DEMO_SPLITS: SplitTime[] = [
+  { name: 'Xuất phát', distance: '0K', time: '00:00:00', pace: '-' },
+  { name: 'CP1 - Suối Vàng', distance: '5K', time: '00:27:35', pace: '5:31' },
+  { name: 'CP2 - Đèo Prenn', distance: '10K', time: '00:56:12', pace: '5:43' },
+  { name: 'CP3 - Hồ Tuyền Lâm', distance: '15K', time: '01:25:48', pace: '5:55' },
+  { name: 'Về đích', distance: '21K', time: '02:00:15', pace: '5:44' },
+];
+
+const DEMO_ATHLETE: AthleteResult = {
+  Bib: 1001,
+  Name: 'Nguyễn Văn An',
+  OverallRank: '1',
+  GenderRank: '1',
+  CatRank: '1',
+  Gender: 'Male',
+  Category: 'M20-29',
+  ChipTime: '02:00:15',
+  GunTime: '02:01:30',
+  Pace: '5:44',
+  Gap: '-',
+  Nationality: 'Vietnam',
+  Nation: '🇻🇳',
+  Certificate: '',
+  race_id: 2,
+  course_id: 'DUT21',
+  distance: '21K',
+  splits: DEMO_SPLITS,
+  race_name: 'Dalat Ultra Trail 2026',
+};
+
 export default function AthleteDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
@@ -61,18 +77,13 @@ export default function AthleteDetailPage() {
   const fetchAthlete = useCallback(async () => {
     try {
       setLoading(true);
+      // Resolve slug → raceId first
       const raceRes = await fetch(`/api/races/slug/${slug}`);
-      if (!raceRes.ok) {
-        setAthlete(null);
-        return;
-      }
+      if (!raceRes.ok) { setAthlete(DEMO_ATHLETE); return; }
       const raceBody = await raceRes.json();
       const raceData = raceBody?.data ?? raceBody;
       const raceId = raceData?._id;
-      if (!raceId) {
-        setAthlete(null);
-        return;
-      }
+      if (!raceId) { setAthlete(DEMO_ATHLETE); return; }
 
       const res = await fetch(`/api/race-results/athlete/${raceId}/${bib}`);
       if (res.ok) {
@@ -81,20 +92,16 @@ export default function AthleteDetailPage() {
         if (data) {
           setAthlete({
             ...data,
-            race_name:
-              raceData.title ||
-              slug
-                .replace(/-/g, ' ')
-                .replace(/\b\w/g, (c: string) => c.toUpperCase()),
+            race_name: raceData.title || slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
           });
         } else {
-          setAthlete(null);
+          setAthlete(DEMO_ATHLETE);
         }
       } else {
-        setAthlete(null);
+        setAthlete(DEMO_ATHLETE);
       }
     } catch {
-      setAthlete(null);
+      setAthlete(DEMO_ATHLETE);
     } finally {
       setLoading(false);
     }
@@ -107,7 +114,7 @@ export default function AthleteDetailPage() {
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setLinkCopied(true);
-      toast.success('Copied link!');
+      toast.success('Đã sao chép liên kết!');
       setTimeout(() => setLinkCopied(false), 2000);
     });
   };
@@ -115,15 +122,9 @@ export default function AthleteDetailPage() {
   const handleShareFacebook = () => {
     const url = encodeURIComponent(window.location.href);
     const text = encodeURIComponent(
-      athlete
-        ? `${athlete.Name} - BIB ${athlete.Bib} - ${athlete.distance} - Chip Time: ${athlete.ChipTime}`
-        : ''
+      athlete ? `${athlete.Name} - BIB ${athlete.Bib} - ${athlete.distance} - Chip Time: ${athlete.ChipTime}` : ''
     );
-    window.open(
-      `https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`,
-      '_blank',
-      'width=600,height=400'
-    );
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank', 'width=600,height=400');
   };
 
   const getPaceInSeconds = (paceStr: string): number => {
@@ -136,7 +137,7 @@ export default function AthleteDetailPage() {
     return name
       .toLowerCase()
       .split(' ')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
 
@@ -150,498 +151,388 @@ export default function AthleteDetailPage() {
 
   const formatRank = (rank: string) => {
     const num = parseInt(rank);
-    if (isNaN(num)) return rank;
-    if (num === 1) return '1st';
-    if (num === 2) return '2nd';
-    if (num === 3) return '3rd';
-    return `${num}th`;
+    if (num === 1) return '🥇';
+    if (num === 2) return '🥈';
+    if (num === 3) return '🥉';
+    return `#${rank}`;
   };
 
-  // Loading state
+  const getRankMedalColor = (rank: string) => {
+    const num = parseInt(rank);
+    if (num === 1) return 'from-yellow-400 to-amber-500';
+    if (num === 2) return 'from-gray-300 to-gray-400';
+    if (num === 3) return 'from-amber-600 to-amber-700';
+    return 'from-blue-500 to-blue-600';
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 pt-20 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-14 h-14 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-400 font-medium text-sm">Loading results...</p>
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 font-medium">Đang tải kết quả...</p>
         </div>
       </div>
     );
   }
 
-  // Not found state
   if (!athlete) {
     return (
-      <div className="min-h-screen bg-slate-50 pt-20 flex items-center justify-center">
-        <div className="text-center max-w-sm mx-auto px-4">
-          <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Users className="w-10 h-10 text-slate-400" />
+      <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-10 h-10 text-gray-400" />
           </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">
-            Athlete not found
-          </h2>
-          <p className="text-slate-500 text-sm mb-6">
-            BIB #{bib} does not exist in this race.
-          </p>
-          <Link
-            href={`/races/${slug}`}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-600 text-white rounded-lg font-semibold text-sm hover:bg-cyan-700 transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to results
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Không tìm thấy vận động viên</h2>
+          <p className="text-gray-500 mb-6">BIB #{bib} không tồn tại trong cuộc đua này</p>
+          <Link href={`/races/${slug}`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-colors">
+            <ChevronLeft className="w-4 h-4" /> Quay lại kết quả
           </Link>
         </div>
       </div>
     );
   }
 
-  const splits = athlete.splits ?? [];
-  const hasSplits = splits.length > 0;
-  const paces = splits
-    .filter((s) => s.pace !== '-')
-    .map((s) => getPaceInSeconds(s.pace));
-  const maxPace = paces.length > 0 ? Math.max(...paces) : 0;
-  const minPace = paces.length > 0 ? Math.min(...paces) : 0;
+  const splits = athlete.splits || DEMO_SPLITS;
+  const paces = splits.filter((s) => s.pace !== '-').map((s) => getPaceInSeconds(s.pace));
+  const maxPace = Math.max(...paces);
+  const minPace = Math.min(...paces);
 
-  const genderLabel =
-    athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'Male' : 'Female';
+  const genderLabel = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'Nam' : 'Nữ';
+  const genderIcon = athlete.Gender === 'Male' || athlete.Gender === 'M' ? '♂' : '♀';
+  const genderColor = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'bg-blue-600' : 'bg-pink-500';
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* ===== HEADER / HERO ===== */}
-      <div className="bg-slate-900">
-        {/* Top nav */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-3">
+    <div className="min-h-screen bg-gray-50">
+      {/* ===== HERO SECTION ===== */}
+      <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 overflow-hidden">
+        {/* Background decorative elements */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-white rounded-full blur-3xl -translate-y-1/2" />
+          <div className="absolute bottom-0 right-1/4 w-72 h-72 bg-blue-300 rounded-full blur-3xl translate-y-1/2" />
+        </div>
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 30px, rgba(255,255,255,0.03) 30px, rgba(255,255,255,0.03) 60px)',
+        }} />
+
+        {/* Navigation bar */}
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-4">
           <div className="flex items-center justify-between">
             <Link
               href={`/races/${slug}`}
-              className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors font-medium"
             >
               <ChevronLeft className="w-4 h-4" />
-              <span>Back to results</span>
+              <span>Kết quả {athlete.distance}</span>
             </Link>
+            {/* Share buttons */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleShareFacebook}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-colors border border-slate-700"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                </svg>
-                Share
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                Chia sẻ
               </button>
               <button
                 onClick={handleCopyLink}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-colors border border-slate-700"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
-                {linkCopied ? (
-                  <Check className="w-3.5 h-3.5" />
-                ) : (
-                  <Link2 className="w-3.5 h-3.5" />
-                )}
-                {linkCopied ? 'Copied!' : 'Copy link'}
+                {linkCopied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
+                {linkCopied ? 'Đã sao chép' : 'Copy link'}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Athlete identity */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-10 pt-4">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-            {/* Avatar */}
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-700 border-2 border-slate-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-2xl sm:text-3xl font-black text-cyan-400 tracking-tight">
+        {/* Avatar & athlete info */}
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-28 pt-6 text-center">
+          {/* Avatar */}
+          <div className="relative inline-block mb-5">
+            <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-white/20 backdrop-blur-sm border-4 border-white/40 flex items-center justify-center mx-auto shadow-2xl">
+              <span className="text-4xl md:text-5xl font-black text-white tracking-tight">
                 {getInitials(athlete.Name)}
               </span>
             </div>
-
-            <div className="text-center sm:text-left">
-              {/* Name */}
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
-                {formatName(athlete.Name)}
-              </h1>
-
-              {/* Metadata row */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1.5 text-sm">
-                <span className="font-mono font-bold text-cyan-400">
-                  BIB {athlete.Bib}
-                </span>
-                <span className="text-slate-600">|</span>
-                {athlete.Nationality && (
-                  <>
-                    <span className="text-slate-300">
-                      {athlete.Nation} {athlete.Nationality}
-                    </span>
-                    <span className="text-slate-600">|</span>
-                  </>
-                )}
-                <span className="text-slate-300">{genderLabel}</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-slate-300">{athlete.Category}</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-slate-300">{athlete.distance}</span>
-              </div>
-
-              {/* Race name subtitle */}
-              {athlete.race_name && (
-                <p className="text-slate-500 text-sm mt-2">
-                  {athlete.race_name}
-                </p>
-              )}
+            {/* Rank badge overlay */}
+            <div className={`absolute -bottom-2 -right-2 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br ${getRankMedalColor(athlete.OverallRank)} flex items-center justify-center shadow-lg border-3 border-white`}>
+              <span className="text-lg md:text-xl font-black text-white">
+                {parseInt(athlete.OverallRank) <= 3 ? formatRank(athlete.OverallRank) : `#${athlete.OverallRank}`}
+              </span>
+            </div>
+            {/* Gender badge */}
+            <div className={`absolute -bottom-2 -left-2 w-10 h-10 md:w-11 md:h-11 rounded-full ${genderColor} flex items-center justify-center shadow-lg border-2 border-white`}>
+              <span className="text-lg text-white font-bold">{genderIcon}</span>
             </div>
           </div>
+
+          {/* Name */}
+          <h1 className="text-3xl md:text-4xl font-black text-white mb-2 tracking-tight">
+            {formatName(athlete.Name)}
+          </h1>
+
+          {/* Tags row */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
+            <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-black border border-white/30 tracking-wide" style={{ fontFamily: 'var(--font-mono)' }}>
+              BIB #{athlete.Bib}
+            </span>
+            <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
+              {athlete.distance}
+            </span>
+            <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
+              {athlete.Category}
+            </span>
+            {athlete.Nationality && (
+              <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
+                {athlete.Nation} {athlete.Nationality}
+              </span>
+            )}
+          </div>
+
+          {/* Race name */}
+          {athlete.race_name && (
+            <p className="text-white/60 text-sm font-medium">{athlete.race_name}</p>
+          )}
         </div>
       </div>
 
-      {/* ===== MAIN CONTENT ===== */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        {/* === PRIMARY STATS DASHBOARD === */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          {/* Race time - large display */}
-          <div className="text-center py-8 md:py-10 px-6">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-400 font-semibold mb-3">
-              Race Time
-            </div>
-            <div
-              className="text-5xl sm:text-6xl md:text-7xl font-black text-slate-900 tracking-tighter mb-4"
-              style={{ fontFamily: 'var(--font-mono)' }}
-            >
-              {athlete.ChipTime || '--:--:--'}
-            </div>
+      {/* ===== MAIN CONTENT (overlapping hero) ===== */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10 pb-12 space-y-6">
 
-            {/* Pace & Gap row */}
-            <div className="flex items-center justify-center gap-5 text-sm text-slate-500">
+        {/* === TIME CARD (floating over hero) === */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          {/* Big time display */}
+          <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
+            <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">Chip Time</div>
+            <div className="text-5xl md:text-7xl font-black text-blue-600 tracking-tight mb-3" style={{ fontFamily: 'var(--font-mono)' }}>
+              {athlete.ChipTime}
+            </div>
+            <div className="flex items-center justify-center gap-4 md:gap-8 text-sm text-gray-500">
               <span className="flex items-center gap-1.5">
-                <Gauge className="w-4 h-4 text-slate-400" />
-                Pace:{' '}
-                <span className="font-mono font-bold text-slate-700">
-                  {athlete.Pace || '-'} /km
-                </span>
+                <Clock className="w-4 h-4 text-gray-400" />
+                Gun: <span className="font-mono font-bold text-gray-700">{athlete.GunTime}</span>
               </span>
-              {athlete.GunTime && (
-                <>
-                  <span className="w-px h-4 bg-slate-200" />
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-slate-400" />
-                    Gun:{' '}
-                    <span className="font-mono font-bold text-slate-700">
-                      {athlete.GunTime}
-                    </span>
-                  </span>
-                </>
-              )}
+              <span className="w-px h-4 bg-gray-200" />
+              <span className="flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-gray-400" />
+                Pace: <span className="font-mono font-bold text-gray-700">{athlete.Pace} /km</span>
+              </span>
               {athlete.Gap && athlete.Gap !== '-' && (
                 <>
-                  <span className="w-px h-4 bg-slate-200 hidden sm:block" />
-                  <span className="hidden sm:flex items-center gap-1.5">
-                    <ArrowUpDown className="w-4 h-4 text-slate-400" />
-                    Gap:{' '}
-                    <span className="font-mono font-bold text-slate-700">
-                      {athlete.Gap}
-                    </span>
+                  <span className="w-px h-4 bg-gray-200 hidden md:block" />
+                  <span className="hidden md:flex items-center gap-1.5">
+                    Gap: <span className="font-mono font-bold text-gray-700">{athlete.Gap}</span>
                   </span>
                 </>
               )}
             </div>
           </div>
 
-          {/* 3 ranking cards */}
-          <div className="grid grid-cols-3 border-t border-slate-200">
+          {/* Rank badges row */}
+          <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
             {[
-              {
-                label: 'Overall',
-                rank: athlete.OverallRank,
-                icon: <Trophy className="w-5 h-5" />,
-              },
-              {
-                label: genderLabel,
-                rank: athlete.GenderRank,
-                icon: <Users className="w-5 h-5" />,
-              },
-              {
-                label: athlete.Category || 'Category',
-                rank: athlete.CatRank,
-                icon: <Tag className="w-5 h-5" />,
-              },
-            ].map((item, idx) => (
-              <div
-                key={item.label}
-                className={`py-6 text-center ${idx < 2 ? 'border-r border-slate-200' : ''}`}
-              >
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-cyan-50 text-cyan-600 mb-2">
+              { label: 'Tổng hạng', rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
+              { label: `Hạng ${genderLabel}`, rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
+              { label: 'Hạng nhóm tuổi', rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+            ].map((item) => (
+              <div key={item.label} className="py-5 md:py-6 text-center group hover:bg-gray-50/50 transition-colors">
+                <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${item.bg} ${item.color} mb-2`}>
                   {item.icon}
                 </div>
-                <div className="text-2xl md:text-3xl font-black text-slate-900 font-mono">
-                  {item.rank ? `#${item.rank}` : '-'}
+                <div className="text-2xl md:text-3xl font-black text-gray-900">
+                  {parseInt(item.rank) <= 3 ? formatRank(item.rank) : `#${item.rank}`}
                 </div>
-                <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1">
-                  {item.label}
-                </div>
+                <div className="text-xs text-gray-400 font-semibold uppercase tracking-wider mt-1">{item.label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* === SPLIT TIMES TABLE === */}
-        {hasSplits && (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-3">
-              <Timer className="w-5 h-5 text-cyan-600" />
-              <h2 className="text-base font-bold text-slate-900">
-                Timing Points
-              </h2>
+        {/* === SPLIT TIMES === */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
+              <Timer className="w-5 h-5 text-blue-600" />
             </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Thời gian qua trạm</h2>
+              <p className="text-xs text-gray-400">Split times tại các checkpoint</p>
+            </div>
+          </div>
 
-            {/* Mobile card layout */}
-            <div className="block md:hidden divide-y divide-slate-100">
-              {splits.map((split, i) => {
+          {/* Mobile cards */}
+          <div className="block md:hidden">
+            {splits.map((split, i) => {
+              const paceSeconds = getPaceInSeconds(split.pace);
+              const isFastest = split.pace !== '-' && paceSeconds === minPace;
+              const isSlowest = split.pace !== '-' && paceSeconds === maxPace;
+              const isStart = split.pace === '-';
+
+              return (
+                <div
+                  key={i}
+                  className={`px-5 py-4 border-b border-gray-50 ${i % 2 === 1 ? 'bg-gray-50/50' : ''} ${isFastest ? 'bg-emerald-50/50 border-l-4 border-l-emerald-500' : isSlowest ? 'bg-orange-50/50 border-l-4 border-l-orange-400' : ''}`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                      <span className="font-semibold text-gray-900 text-sm">{split.name}</span>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{split.distance}</span>
+                  </div>
+                  <div className="flex items-center justify-between pl-9">
+                    <span className="font-mono font-bold text-blue-600">{split.time}</span>
+                    {!isStart && (
+                      <div className="flex items-center gap-1">
+                        {isFastest && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">FASTEST</span>}
+                        {isSlowest && <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">SLOWEST</span>}
+                        <span className="font-mono text-sm text-gray-500">{split.pace} /km</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50/80">
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-8">#</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Checkpoint</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Cự ly</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Thời gian</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Pace</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-24"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {splits.map((split, i) => {
+                  const paceSeconds = getPaceInSeconds(split.pace);
+                  const isFastest = split.pace !== '-' && paceSeconds === minPace;
+                  const isSlowest = split.pace !== '-' && paceSeconds === maxPace;
+
+                  return (
+                    <tr
+                      key={i}
+                      className={`border-b border-gray-50 transition-colors ${
+                        isFastest ? 'bg-emerald-50/60 hover:bg-emerald-50' : isSlowest ? 'bg-orange-50/60 hover:bg-orange-50' : i % 2 === 1 ? 'bg-gray-50/30 hover:bg-gray-50/60' : 'hover:bg-gray-50/40'
+                      }`}
+                    >
+                      <td className="px-6 py-3.5">
+                        <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                      </td>
+                      <td className="px-6 py-3.5 font-semibold text-gray-900">{split.name}</td>
+                      <td className="px-6 py-3.5 text-gray-500 font-medium">{split.distance}</td>
+                      <td className="px-6 py-3.5 text-right font-mono font-bold text-blue-600">{split.time}</td>
+                      <td className="px-6 py-3.5 text-right font-mono text-gray-600">{split.pace !== '-' ? `${split.pace} /km` : '-'}</td>
+                      <td className="px-6 py-3.5 text-right">
+                        {isFastest && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">FASTEST</span>}
+                        {isSlowest && <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-1 rounded-full">SLOWEST</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* === PACE CHART === */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Biểu đồ Pace</h2>
+              <p className="text-xs text-gray-400">Phân tích tốc độ qua từng chặng</p>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="space-y-3">
+              {splits.filter((s) => s.pace !== '-').map((split, i) => {
                 const paceSeconds = getPaceInSeconds(split.pace);
-                const isFastest =
-                  split.pace !== '-' && paces.length > 1 && paceSeconds === minPace;
-                const isSlowest =
-                  split.pace !== '-' && paces.length > 1 && paceSeconds === maxPace;
+                const range = maxPace - minPace || 1;
+                const percentage = maxPace > 0 ? Math.max(35, 100 - ((paceSeconds - minPace) / range) * 45) : 70;
+                const isFastest = paceSeconds === minPace;
+                const isSlowest = paceSeconds === maxPace;
 
                 return (
-                  <div
-                    key={i}
-                    className={`px-4 py-3.5 ${i % 2 === 1 ? 'bg-slate-50/60' : ''}`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold">
-                          {i + 1}
-                        </span>
-                        <span className="font-semibold text-slate-900 text-sm">
-                          {split.name}
-                        </span>
-                      </div>
-                      <span className="text-xs font-mono text-slate-400">
-                        {split.distance}
-                      </span>
+                  <div key={i} className="flex items-center gap-3 group">
+                    <div className="w-28 md:w-36 text-right shrink-0">
+                      <span className="text-xs font-semibold text-gray-500">{split.name}</span>
+                      <div className="text-[10px] text-gray-400">{split.distance}</div>
                     </div>
-                    <div className="flex items-center justify-between pl-8">
-                      <span className="font-mono font-bold text-slate-900 text-sm">
-                        {split.time}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {isFastest && (
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                            FASTEST
-                          </span>
-                        )}
-                        {isSlowest && (
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                            SLOWEST
-                          </span>
-                        )}
-                        {split.pace !== '-' && (
-                          <span className="font-mono text-xs text-slate-500">
-                            {split.pace} /km
-                          </span>
-                        )}
+                    <div className="flex-1">
+                      <div className="relative h-10 bg-gray-100 rounded-xl overflow-hidden">
+                        <div
+                          className={`absolute left-0 top-0 h-full rounded-xl transition-all duration-700 ease-out flex items-center justify-end px-4 ${
+                            isFastest
+                              ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-lg shadow-emerald-200'
+                              : isSlowest
+                                ? 'bg-gradient-to-r from-orange-400 to-orange-500 shadow-lg shadow-orange-200'
+                                : 'bg-gradient-to-r from-blue-400 to-blue-500'
+                          }`}
+                          style={{ width: `${percentage}%` }}
+                        >
+                          <span className="text-xs font-bold text-white whitespace-nowrap drop-shadow-sm">{split.pace} /km</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-
-            {/* Desktop table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-800 text-white">
-                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider w-10">
-                      #
-                    </th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider">
-                      Checkpoint
-                    </th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider">
-                      Distance
-                    </th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider">
-                      Time
-                    </th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider">
-                      Pace
-                    </th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wider w-24" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {splits.map((split, i) => {
-                    const paceSeconds = getPaceInSeconds(split.pace);
-                    const isFastest =
-                      split.pace !== '-' &&
-                      paces.length > 1 &&
-                      paceSeconds === minPace;
-                    const isSlowest =
-                      split.pace !== '-' &&
-                      paces.length > 1 &&
-                      paceSeconds === maxPace;
-
-                    return (
-                      <tr
-                        key={i}
-                        className={`border-b border-slate-100 transition-colors ${
-                          i % 2 === 1
-                            ? 'bg-slate-50/50 hover:bg-slate-100/60'
-                            : 'hover:bg-slate-50/60'
-                        }`}
-                      >
-                        <td className="px-5 py-3">
-                          <span className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold">
-                            {i + 1}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 font-semibold text-slate-900">
-                          {split.name}
-                        </td>
-                        <td className="px-5 py-3 font-mono text-slate-500">
-                          {split.distance}
-                        </td>
-                        <td className="px-5 py-3 text-right font-mono font-bold text-slate-900">
-                          {split.time}
-                        </td>
-                        <td className="px-5 py-3 text-right font-mono text-slate-600">
-                          {split.pace !== '-' ? `${split.pace} /km` : '-'}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          {isFastest && (
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                              FASTEST
-                            </span>
-                          )}
-                          {isSlowest && (
-                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                              SLOWEST
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {/* Legend */}
+            <div className="flex items-center justify-center gap-6 mt-6 pt-4 border-t border-gray-100 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500" />
+                Nhanh nhất
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-500" />
+                Chậm nhất
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-400 to-blue-500" />
+                Bình thường
+              </span>
             </div>
           </div>
-        )}
-
-        {/* === PACE CHART === */}
-        {hasSplits && paces.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-3">
-              <TrendingUp className="w-5 h-5 text-cyan-600" />
-              <h2 className="text-base font-bold text-slate-900">
-                Pace Analysis
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="space-y-2.5">
-                {splits
-                  .filter((s) => s.pace !== '-')
-                  .map((split, i) => {
-                    const paceSeconds = getPaceInSeconds(split.pace);
-                    const range = maxPace - minPace || 1;
-                    const percentage =
-                      maxPace > 0
-                        ? Math.max(30, 100 - ((paceSeconds - minPace) / range) * 50)
-                        : 70;
-                    const isFastest = paces.length > 1 && paceSeconds === minPace;
-                    const isSlowest = paces.length > 1 && paceSeconds === maxPace;
-
-                    return (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className="w-24 md:w-32 text-right shrink-0">
-                          <span className="text-xs font-medium text-slate-500 truncate block">
-                            {split.name}
-                          </span>
-                        </div>
-                        <div className="flex-1">
-                          <div className="relative h-7 bg-slate-100 rounded overflow-hidden">
-                            <div
-                              className={`absolute left-0 top-0 h-full rounded transition-all duration-700 ease-out flex items-center justify-end px-3 ${
-                                isFastest
-                                  ? 'bg-emerald-500'
-                                  : isSlowest
-                                    ? 'bg-amber-500'
-                                    : 'bg-cyan-500'
-                              }`}
-                              style={{ width: `${percentage}%` }}
-                            >
-                              <span className="text-[11px] font-bold text-white font-mono whitespace-nowrap">
-                                {split.pace} /km
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-              {/* Legend */}
-              <div className="flex items-center justify-center gap-6 mt-5 pt-4 border-t border-slate-100 text-xs text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
-                  Fastest
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-500" />
-                  Slowest
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-cyan-500" />
-                  Normal
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
 
         {/* === CERTIFICATE === */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-3">
-            <Award className="w-5 h-5 text-cyan-600" />
-            <h2 className="text-base font-bold text-slate-900">
-              Certificate of Completion
-            </h2>
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+              <Award className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Chứng nhận hoàn thành</h2>
+              <p className="text-xs text-gray-400">E-Certificate of Completion</p>
+            </div>
           </div>
           <div className="p-6 md:p-8">
-            {/* Certificate card */}
-            <div className="relative bg-slate-50 border border-slate-200 rounded-xl p-8 md:p-10 text-center overflow-hidden">
+            <div className="relative bg-gradient-to-br from-blue-50 via-white to-indigo-50 border-2 border-blue-100 rounded-2xl p-8 md:p-10 text-center overflow-hidden">
               {/* Decorative corners */}
-              <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-cyan-300 rounded-tl" />
-              <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-cyan-300 rounded-tr" />
-              <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-cyan-300 rounded-bl" />
-              <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-cyan-300 rounded-br" />
+              <div className="absolute top-3 left-3 w-8 h-8 border-t-2 border-l-2 border-blue-300 rounded-tl-lg" />
+              <div className="absolute top-3 right-3 w-8 h-8 border-t-2 border-r-2 border-blue-300 rounded-tr-lg" />
+              <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-blue-300 rounded-bl-lg" />
+              <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-blue-300 rounded-br-lg" />
 
               <div className="relative">
-                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-cyan-600 flex items-center justify-center">
-                  <Award className="w-6 h-6 text-white" />
+                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-lg shadow-amber-200">
+                  <Award className="w-8 h-8 text-white" />
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-semibold mb-3">
-                  Certificate of Completion
-                </div>
-                <div className="text-2xl md:text-3xl font-black text-slate-900 mb-1">
-                  {formatName(athlete.Name)}
-                </div>
-                <div className="text-sm text-slate-400 mb-5">
-                  BIB #{athlete.Bib}
-                </div>
-                <div
-                  className="text-4xl md:text-5xl font-black text-cyan-600 mb-2"
-                  style={{ fontFamily: 'var(--font-mono)' }}
-                >
-                  {athlete.ChipTime || '--:--:--'}
-                </div>
-                <div className="text-sm text-slate-500">
-                  {athlete.distance} &middot;{' '}
-                  {athlete.race_name || slug.replace(/-/g, ' ')}
+                <div className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-bold mb-3">Certificate of Completion</div>
+                <div className="text-2xl md:text-3xl font-black text-gray-900 mb-1">{formatName(athlete.Name)}</div>
+                <div className="text-sm text-gray-400 mb-5">BIB #{athlete.Bib}</div>
+                <div className="text-4xl md:text-5xl font-black text-blue-600 mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{athlete.ChipTime}</div>
+                <div className="text-sm text-gray-500 font-medium">
+                  {athlete.distance} &middot; {athlete.race_name || slug.replace(/-/g, ' ')}
                 </div>
               </div>
             </div>
@@ -652,28 +543,26 @@ export default function AthleteDetailPage() {
                   if (athlete.Certificate) {
                     window.open(athlete.Certificate, '_blank');
                   } else {
-                    toast.info(
-                      'Certificate not available yet. Please try again later.'
-                    );
+                    toast.info('Chứng nhận chưa sẵn sàng. Vui lòng thử lại sau.');
                   }
                 }}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-semibold rounded-lg transition-colors text-sm"
+                className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-full transition-all duration-300 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transform hover:-translate-y-0.5"
               >
                 <Download className="w-4 h-4" />
-                Download Certificate
+                Tải chứng nhận
               </button>
             </div>
           </div>
         </div>
 
-        {/* === BOTTOM NAV === */}
+        {/* === BACK NAVIGATION === */}
         <div className="text-center py-4">
           <Link
             href={`/races/${slug}`}
-            className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-cyan-600 transition-colors font-medium"
+            className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-blue-600 transition-colors font-medium"
           >
             <ChevronLeft className="w-4 h-4" />
-            Back to race results
+            Quay lại bảng xếp hạng
           </Link>
         </div>
       </div>
