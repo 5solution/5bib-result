@@ -35,13 +35,53 @@ interface SplitTime {
   pace: string;
 }
 
-const DEMO_SPLITS: SplitTime[] = [
-  { name: 'Xuất phát', distance: '0K', time: '00:00:00', pace: '-' },
-  { name: 'CP1 - Suối Vàng', distance: '5K', time: '00:27:35', pace: '5:31' },
-  { name: 'CP2 - Đèo Prenn', distance: '10K', time: '00:56:12', pace: '5:43' },
-  { name: 'CP3 - Hồ Tuyền Lâm', distance: '15K', time: '01:25:48', pace: '5:55' },
-  { name: 'Về đích', distance: '21K', time: '02:00:15', pace: '5:44' },
-];
+interface CheckpointConfig {
+  key: string;
+  name: string;
+  distance?: string;
+}
+
+/** Parse Chiptimes/Paces JSON strings from API into SplitTime[], using checkpoint config for names */
+function parseSplitsFromData(data: Record<string, unknown>, checkpoints?: CheckpointConfig[]): SplitTime[] | null {
+  try {
+    const chiptimesStr = data.Chiptimes as string;
+    const pacesStr = data.Paces as string;
+    if (!chiptimesStr) return null;
+
+    const chiptimes: Record<string, string> = JSON.parse(chiptimesStr);
+    const paces: Record<string, string> = pacesStr ? JSON.parse(pacesStr) : {};
+
+    // Build a lookup map from checkpoint config
+    const cpMap = new Map<string, CheckpointConfig>();
+    if (checkpoints) {
+      for (const cp of checkpoints) {
+        cpMap.set(cp.key, cp);
+      }
+    }
+
+    const keys = Object.keys(chiptimes);
+    if (keys.length === 0) return null;
+
+    const splits: SplitTime[] = keys
+      .filter(key => chiptimes[key] !== '') // skip empty checkpoints
+      .map((key) => {
+        const cp = cpMap.get(key);
+        const name = cp?.name
+          || (key === 'Start' ? 'Xuất phát' : key === 'Finish' ? 'Về đích' : key);
+        const distance = cp?.distance || '';
+        return {
+          name,
+          distance,
+          time: chiptimes[key] || '-',
+          pace: paces[key] || '-',
+        };
+      });
+
+    return splits.length > 0 ? splits : null;
+  } catch {
+    return null;
+  }
+}
 
 const DEMO_ATHLETE: AthleteResult = {
   Bib: 1001,
@@ -61,7 +101,6 @@ const DEMO_ATHLETE: AthleteResult = {
   race_id: 2,
   course_id: 'DUT21',
   distance: '21K',
-  splits: DEMO_SPLITS,
   race_name: 'Dalat Ultra Trail 2026',
 };
 
@@ -90,8 +129,15 @@ export default function AthleteDetailPage() {
         const body = await res.json();
         const data = body?.data ?? body;
         if (data) {
+          // Find checkpoint config for this course from race data
+          const courses = raceData?.courses || [];
+          const courseId = data.course_id;
+          const matchedCourse = courses.find((c: { courseId: string }) => c.courseId === courseId);
+          const checkpoints = matchedCourse?.checkpoints as CheckpointConfig[] | undefined;
+          const splits = parseSplitsFromData(data, checkpoints) || undefined;
           setAthlete({
             ...data,
+            splits,
             race_name: raceData.title || slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
           });
         } else {
@@ -193,10 +239,11 @@ export default function AthleteDetailPage() {
     );
   }
 
-  const splits = athlete.splits || DEMO_SPLITS;
+  const splits = athlete.splits || [];
+  const hasSplits = splits.length > 0;
   const paces = splits.filter((s) => s.pace !== '-').map((s) => getPaceInSeconds(s.pace));
-  const maxPace = Math.max(...paces);
-  const minPace = Math.min(...paces);
+  const maxPace = paces.length > 0 ? Math.max(...paces) : 0;
+  const minPace = paces.length > 0 ? Math.min(...paces) : 0;
 
   const genderLabel = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'Nam' : 'Nữ';
   const genderIcon = athlete.Gender === 'Male' || athlete.Gender === 'M' ? '♂' : '♀';
@@ -349,7 +396,7 @@ export default function AthleteDetailPage() {
         </div>
 
         {/* === SPLIT TIMES === */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+        {hasSplits && <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
               <Timer className="w-5 h-5 text-blue-600" />
@@ -438,10 +485,10 @@ export default function AthleteDetailPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </div>}
 
         {/* === PACE CHART === */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+        {hasSplits && paces.length > 0 && <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-indigo-600" />
@@ -502,7 +549,7 @@ export default function AthleteDetailPage() {
               </span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* === CERTIFICATE === */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">

@@ -56,6 +56,12 @@ import {
 
 type RaceStatus = "pre_race" | "live" | "ended";
 
+interface Checkpoint {
+  key: string;
+  name: string;
+  distance?: string;
+}
+
 interface Course {
   courseId: string;
   name: string;
@@ -69,6 +75,7 @@ interface Course {
   startLocation?: string;
   mapUrl?: string;
   gpxUrl?: string;
+  checkpoints?: Checkpoint[];
 }
 
 interface Race {
@@ -136,6 +143,7 @@ export default function RaceDetailPage() {
     name: "",
     distance: "",
     apiUrl: "",
+    checkpoints: [] as Checkpoint[],
   });
   const [savingCourse, setSavingCourse] = useState(false);
 
@@ -250,6 +258,7 @@ export default function RaceDetailPage() {
             startLocation: courseForm.startLocation,
             mapUrl: courseForm.mapUrl,
             gpxUrl: courseForm.gpxUrl,
+            checkpoints: courseForm.checkpoints?.length ? courseForm.checkpoints : undefined,
           } as any,
           ...authHeaders(token),
         });
@@ -270,6 +279,7 @@ export default function RaceDetailPage() {
             startLocation: courseForm.startLocation,
             mapUrl: courseForm.mapUrl,
             gpxUrl: courseForm.gpxUrl,
+            checkpoints: courseForm.checkpoints?.length ? courseForm.checkpoints : undefined,
           } as any,
           ...authHeaders(token),
         });
@@ -293,7 +303,7 @@ export default function RaceDetailPage() {
       }
       setCourseDialogOpen(false);
       setEditingCourse(null);
-      setCourseForm({ courseId: "", name: "", distance: "", apiUrl: "" });
+      setCourseForm({ courseId: "", name: "", distance: "", apiUrl: "", checkpoints: [] });
       fetchRace();
     } catch {
       toast.error("Lưu cự ly thất bại");
@@ -372,13 +382,14 @@ export default function RaceDetailPage() {
       startLocation: course.startLocation,
       mapUrl: course.mapUrl,
       gpxUrl: course.gpxUrl,
+      checkpoints: course.checkpoints || [],
     });
     setCourseDialogOpen(true);
   }
 
   function openAddCourse() {
     setEditingCourse(null);
-    setCourseForm({ courseId: "", name: "", distance: "", apiUrl: "" });
+    setCourseForm({ courseId: "", name: "", distance: "", apiUrl: "", checkpoints: [] });
     setCourseDialogOpen(true);
   }
 
@@ -823,6 +834,79 @@ export default function RaceDetailPage() {
                           placeholder="URL file GPX"
                         />
                       </div>
+                    </div>
+
+                    <Separator />
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Checkpoints</p>
+
+                    <div className="flex flex-col gap-3">
+                      {(courseForm.checkpoints as Checkpoint[] || []).map(
+                        (cp: Checkpoint, idx: number) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <div className="grid flex-1 grid-cols-3 gap-2">
+                              <Input
+                                value={cp.key}
+                                onChange={(e) => {
+                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                  updated[idx] = { ...updated[idx], key: e.target.value };
+                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                }}
+                                placeholder="Key (VD: TM1)"
+                                className="text-sm"
+                              />
+                              <Input
+                                value={cp.name}
+                                onChange={(e) => {
+                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                  updated[idx] = { ...updated[idx], name: e.target.value };
+                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                }}
+                                placeholder="Tên (VD: CP1 - Suối Vàng)"
+                                className="text-sm"
+                              />
+                              <Input
+                                value={cp.distance ?? ""}
+                                onChange={(e) => {
+                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                  updated[idx] = { ...updated[idx], distance: e.target.value || undefined };
+                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                }}
+                                placeholder="Khoảng cách (VD: 10K)"
+                                className="text-sm"
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => {
+                                const updated = (courseForm.checkpoints as Checkpoint[]).filter(
+                                  (_: Checkpoint, i: number) => i !== idx
+                                );
+                                setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                              }}
+                              title="Xóa checkpoint"
+                            >
+                              <Trash2 className="size-3 text-destructive" />
+                            </Button>
+                          </div>
+                        )
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const updated = [
+                            ...(courseForm.checkpoints as Checkpoint[] || []),
+                            { key: "", name: "", distance: "" },
+                          ];
+                          setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                        }}
+                      >
+                        <Plus className="size-4 mr-1" />
+                        Thêm checkpoint
+                      </Button>
                     </div>
                   </div>
                   <DialogFooter>

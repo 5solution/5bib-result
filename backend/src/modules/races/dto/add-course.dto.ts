@@ -1,5 +1,27 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class CourseCheckpointDto {
+  @ApiProperty({ description: 'Timing point key', example: 'TM1' })
+  @IsString()
+  key: string;
+
+  @ApiProperty({ description: 'Display name', example: 'Trạm 1 - Suối Vàng' })
+  @IsString()
+  name: string;
+
+  @ApiPropertyOptional({ description: 'Distance label', example: '5K' })
+  @IsOptional()
+  @IsString()
+  distance?: string;
+}
 
 export class AddCourseDto {
   @ApiPropertyOptional({ description: 'Course ID (auto-generated from name if omitted)', example: '42km-full-marathon' })
@@ -63,4 +85,14 @@ export class AddCourseDto {
   @IsOptional()
   @IsString()
   gpxUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Course checkpoints (timing points)',
+    type: [CourseCheckpointDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CourseCheckpointDto)
+  checkpoints?: CourseCheckpointDto[];
 }

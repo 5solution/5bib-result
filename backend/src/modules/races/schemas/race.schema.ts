@@ -4,6 +4,16 @@ import { HydratedDocument } from 'mongoose';
 export type RaceDocument = HydratedDocument<Race>;
 
 @Schema({ _id: false })
+export class CourseCheckpoint {
+  @Prop({ required: true }) key: string; // timing point key, e.g. "TM1", "TM2", "Finish"
+  @Prop({ required: true }) name: string; // display name, e.g. "Trạm 1 - Suối Vàng"
+  @Prop() distance?: string; // e.g. "5K"
+}
+
+export const CourseCheckpointSchema =
+  SchemaFactory.createForClass(CourseCheckpoint);
+
+@Schema({ _id: false })
 export class RaceCourse {
   @Prop({ required: true }) courseId: string;
   @Prop({ required: true }) name: string;
@@ -19,6 +29,8 @@ export class RaceCourse {
   @Prop() startLocation?: string; // e.g. "Quảng trường Lâm Viên"
   @Prop() mapUrl?: string; // Course map image URL (S3)
   @Prop() gpxUrl?: string; // GPX file URL (S3)
+  @Prop({ type: [CourseCheckpointSchema], default: [] })
+  checkpoints: CourseCheckpoint[];
 }
 
 export const RaceCourseSchema = SchemaFactory.createForClass(RaceCourse);
