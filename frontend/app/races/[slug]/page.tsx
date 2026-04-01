@@ -110,10 +110,37 @@ export default function RaceDetailPage() {
 
   const fetchRace = useCallback(async () => {
     try {
-      const res = await fetch(`/api/races/${slug}`);
+      const res = await fetch(`/api/races/slug/${slug}`);
       if (res.ok) {
-        const data = await res.json();
-        setRace(data);
+        const body = await res.json();
+        const r = body?.data ?? body;
+        if (r) {
+          setRace({
+            id: r._id || r.id,
+            name: r.title || r.name,
+            slug: r.slug,
+            date: r.startDate || r.date || '',
+            end_date: r.endDate || r.end_date,
+            location: r.province || r.location || '',
+            status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
+            distances: r.courses?.map((c: any) => c.distance || c.name) || [],
+            courses: (r.courses || []).map((c: any, i: number) => ({
+              id: c.courseId || c.id,
+              distance: c.distance || c.name,
+              name: c.name,
+              distanceKm: c.distanceKm,
+              elevation: c.elevationGain ? `${c.elevationGain} M+` : undefined,
+              starters: 0,
+              dnf: 0,
+              finishers: 0,
+              image: c.imageUrl || COURSE_IMAGES[i % COURSE_IMAGES.length],
+            })),
+            logoUrl: r.logoUrl,
+            imageUrl: r.imageUrl,
+          });
+        } else {
+          setRace(DEMO_RACE);
+        }
       } else {
         setRace(DEMO_RACE);
       }
@@ -130,17 +157,34 @@ export default function RaceDetailPage() {
 
   useEffect(() => {
     if (!race) return;
-    const results: Record<string, RaceResult[]> = {};
-    for (const course of race.courses) {
-      results[course.id] = generateResults(course.id, course.distance);
-    }
-    setCourseResults(results);
+    const fetchResults = async () => {
+      const results: Record<string, RaceResult[]> = {};
+      for (const course of race.courses) {
+        try {
+          const res = await fetch(`/api/race-results?race_id=${race.id}&course_id=${course.id}&pageNo=1&pageSize=10&sortField=OverallRank&sortDirection=ASC`);
+          if (res.ok) {
+            const body = await res.json();
+            const list = body?.data ?? body;
+            results[course.id] = Array.isArray(list) ? list : [];
+          } else {
+            results[course.id] = [];
+          }
+        } catch {
+          results[course.id] = [];
+        }
+      }
+      setCourseResults(results);
+    };
+    fetchResults();
   }, [race]);
 
   const formatDateRange = (start: string, end?: string) => {
+    if (!start) return 'Chưa xác định';
     const s = new Date(start);
+    if (isNaN(s.getTime())) return 'Chưa xác định';
     if (!end) return s.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
     const e = new Date(end);
+    if (isNaN(e.getTime())) return s.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
     return `${s.toLocaleDateString('vi-VN', { day: '2-digit' })} - ${e.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' })}`;
   };
 
@@ -402,13 +446,13 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
             <div className={`w-8 h-8 flex items-center justify-center font-black text-xs rounded transition-colors duration-300 ${
               scrolled ? 'bg-blue-100 text-blue-700' : 'bg-white/15 text-white'
             }`}>
-              {race.name.charAt(0)}
+              {(race.name || '?').charAt(0)}
             </div>
           )}
           <span className={`text-sm font-bold hidden sm:inline truncate max-w-[200px] lg:max-w-[300px] transition-colors duration-300 ${
             scrolled ? 'text-slate-900' : 'text-white'
           }`}>
-            {race.name}
+            {race.name || ''}
           </span>
         </div>
 

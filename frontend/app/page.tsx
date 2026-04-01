@@ -36,8 +36,19 @@ export default function HomePage() {
       setLoading(true);
       const res = await fetch('/api/races');
       if (res.ok) {
-        const data = await res.json();
-        const raceList: Race[] = Array.isArray(data) ? data : (data.data || []);
+        const body = await res.json();
+        const apiList = body?.data?.list ?? body?.data ?? [];
+        const raceList: Race[] = apiList.map((r: any) => ({
+          id: r._id || r.id,
+          name: r.title || r.name,
+          slug: r.slug,
+          date: r.startDate || r.date || '',
+          end_date: r.endDate || r.end_date,
+          location: r.province || r.location || '',
+          status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
+          distances: r.courses?.map((c: any) => c.distance || c.name) || r.distances || [],
+          total_results: r.total_results || 0,
+        }));
         setRaces(raceList);
 
         const totalResults = raceList.reduce((sum: number, r: Race) => sum + (r.total_results || 0), 0);
@@ -48,16 +59,8 @@ export default function HomePage() {
         });
       }
     } catch {
-      // Use demo data if API is unavailable
-      setRaces([
-        { id: 1, name: 'VnExpress Marathon Hà Nội 2026', slug: 'vnexpress-marathon-hanoi-2026', date: '2026-04-12', location: 'Hà Nội', status: 'upcoming', distances: ['5K', '10K', '21K', '42K'], total_results: 0 },
-        { id: 2, name: 'Dalat Ultra Trail 2026', slug: 'dalat-ultra-trail-2026', date: '2026-03-28', location: 'Đà Lạt', status: 'live', distances: ['21K', '42K', '55K', '70K'], total_results: 1200 },
-        { id: 3, name: 'Techcombank HCM Marathon 2026', slug: 'techcombank-hcm-marathon-2026', date: '2026-01-15', location: 'TP. Hồ Chí Minh', status: 'completed', distances: ['5K', '10K', '21K', '42K'], total_results: 15000 },
-        { id: 4, name: 'Halong Bay Heritage Marathon 2025', slug: 'halong-bay-heritage-marathon-2025', date: '2025-11-10', location: 'Quảng Ninh', status: 'completed', distances: ['5K', '10K', '21K', '42K'], total_results: 8000 },
-        { id: 5, name: 'Hue Marathon 2026', slug: 'hue-marathon-2026', date: '2026-06-01', location: 'Huế', status: 'upcoming', distances: ['5K', '10K', '21K'], total_results: 0 },
-        { id: 6, name: 'Vietnam Mountain Marathon 2026', slug: 'vietnam-mountain-marathon-2026', date: '2026-09-20', location: 'Sa Pa', status: 'upcoming', distances: ['10K', '21K', '42K', '70K', '100K'], total_results: 0 },
-      ]);
-      setStats({ totalRaces: 6, totalResults: 24200, totalAthletes: 20570 });
+      setRaces([]);
+      setStats({ totalRaces: 0, totalResults: 0, totalAthletes: 0 });
     } finally {
       setLoading(false);
     }
@@ -79,7 +82,7 @@ export default function HomePage() {
     .sort((a, b) => {
       if (a.status === 'live' && b.status !== 'live') return -1;
       if (b.status === 'live' && a.status !== 'live') return 1;
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
+      return (new Date(a.date || 0).getTime() || 0) - (new Date(b.date || 0).getTime() || 0);
     })
     .slice(0, 6);
 
@@ -501,7 +504,10 @@ export default function HomePage() {
 
 function RaceCard({ race }: { race: Race }) {
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('vi-VN', {
+    if (!dateStr) return 'Chưa xác định';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'Chưa xác định';
+    return d.toLocaleDateString('vi-VN', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',

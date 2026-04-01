@@ -13,6 +13,12 @@ export class RaceCourse {
   @Prop() apiUrl?: string; // RaceResult API endpoint for this course
   @Prop({ default: 0 }) splitCount?: number; // auto-detected from API
   @Prop({ default: 'idle' }) importStatus?: string;
+  @Prop() imageUrl?: string; // Course cover image (S3)
+  @Prop({ type: Number }) elevationGain?: number; // Total elevation gain in meters
+  @Prop() startTime?: string; // e.g. "05:00"
+  @Prop() startLocation?: string; // e.g. "Quảng trường Lâm Viên"
+  @Prop() mapUrl?: string; // Course map image URL (S3)
+  @Prop() gpxUrl?: string; // GPX file URL (S3)
 }
 
 export const RaceCourseSchema = SchemaFactory.createForClass(RaceCourse);

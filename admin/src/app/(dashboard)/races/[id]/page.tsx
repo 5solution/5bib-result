@@ -11,6 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import ImageUpload from "@/components/ImageUpload";
+import SponsorBanners from "@/components/SponsorBanners";
 import {
   Card,
   CardContent,
@@ -45,6 +48,10 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Mountain,
+  Clock,
+  MapPin,
+  Image as ImageIcon,
 } from "lucide-react";
 
 type RaceStatus = "pre_race" | "live" | "ended";
@@ -56,6 +63,12 @@ interface Course {
   distanceKm?: number;
   courseType?: string;
   apiUrl?: string;
+  imageUrl?: string;
+  elevationGain?: number;
+  startTime?: string;
+  startLocation?: string;
+  mapUrl?: string;
+  gpxUrl?: string;
 }
 
 interface Race {
@@ -69,9 +82,18 @@ interface Race {
   organizer?: string;
   startDate?: string;
   endDate?: string;
+  description?: string;
+  season?: string;
   imageUrl?: string;
   logoUrl?: string;
+  bannerUrl?: string;
   brandColor?: string;
+  sponsorBanners?: string[];
+  enableEcert?: boolean;
+  enableClaim?: boolean;
+  enableLiveTracking?: boolean;
+  enable5pix?: boolean;
+  pixEventUrl?: string;
   cacheTtlSeconds?: number;
   courses?: Course[];
 }
@@ -104,12 +126,12 @@ export default function RaceDetailPage() {
   const [saving, setSaving] = useState(false);
 
   // Edit form state
-  const [editForm, setEditForm] = useState<Partial<components["schemas"]["UpdateRaceDto"]>>({});
+  const [editForm, setEditForm] = useState<Record<string, any>>({});
 
   // Course dialog
   const [courseDialogOpen, setCourseDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [courseForm, setCourseForm] = useState<Partial<components["schemas"]["AddCourseDto"]>>({
+  const [courseForm, setCourseForm] = useState<Record<string, any>>({
     courseId: "",
     name: "",
     distance: "",
@@ -132,7 +154,8 @@ export default function RaceDetailPage() {
 
       if (!response.ok) throw new Error("Race not found");
 
-      const raceData = data as unknown as Race;
+      const body = data as any;
+      const raceData = (body?.data ?? body) as Race;
       setRace(raceData);
       setEditForm({
         title: raceData.title,
@@ -144,9 +167,18 @@ export default function RaceDetailPage() {
         organizer: raceData.organizer,
         startDate: raceData.startDate,
         endDate: raceData.endDate,
+        description: raceData.description,
+        season: raceData.season,
         imageUrl: raceData.imageUrl,
         logoUrl: raceData.logoUrl,
+        bannerUrl: raceData.bannerUrl,
         brandColor: raceData.brandColor,
+        sponsorBanners: raceData.sponsorBanners || [],
+        enableEcert: raceData.enableEcert ?? false,
+        enableClaim: raceData.enableClaim ?? false,
+        enableLiveTracking: raceData.enableLiveTracking ?? false,
+        enable5pix: raceData.enable5pix ?? false,
+        pixEventUrl: raceData.pixEventUrl,
         cacheTtlSeconds: raceData.cacheTtlSeconds ?? 60,
       });
     } catch {
@@ -170,7 +202,7 @@ export default function RaceDetailPage() {
           ...editForm,
           status: editForm.status || race.status,
           cacheTtlSeconds: editForm.cacheTtlSeconds ?? 60,
-        },
+        } as any,
         ...authHeaders(token),
       });
       if (error) throw error;
@@ -204,7 +236,6 @@ export default function RaceDetailPage() {
     setSavingCourse(true);
     try {
       if (editingCourse) {
-        // Update existing course
         const { error } = await api.PATCH("/api/races/{id}/courses/{courseId}", {
           params: { path: { id: raceId, courseId: editingCourse.courseId } },
           body: {
@@ -213,13 +244,18 @@ export default function RaceDetailPage() {
             distanceKm: courseForm.distanceKm,
             courseType: courseForm.courseType,
             apiUrl: courseForm.apiUrl,
-          },
+            imageUrl: courseForm.imageUrl,
+            elevationGain: courseForm.elevationGain,
+            startTime: courseForm.startTime,
+            startLocation: courseForm.startLocation,
+            mapUrl: courseForm.mapUrl,
+            gpxUrl: courseForm.gpxUrl,
+          } as any,
           ...authHeaders(token),
         });
         if (error) throw error;
         toast.success("Cập nhật cự ly thành công!");
       } else {
-        // Add new course
         const { error } = await api.POST("/api/races/{id}/courses", {
           params: { path: { id: raceId } },
           body: {
@@ -228,11 +264,32 @@ export default function RaceDetailPage() {
             distanceKm: courseForm.distanceKm,
             courseType: courseForm.courseType,
             apiUrl: courseForm.apiUrl,
-          },
+            imageUrl: courseForm.imageUrl,
+            elevationGain: courseForm.elevationGain,
+            startTime: courseForm.startTime,
+            startLocation: courseForm.startLocation,
+            mapUrl: courseForm.mapUrl,
+            gpxUrl: courseForm.gpxUrl,
+          } as any,
           ...authHeaders(token),
         });
         if (error) throw error;
         toast.success("Thêm cự ly thành công!");
+
+        // Auto-sync if apiUrl is provided
+        if (courseForm.apiUrl) {
+          const cid = courseForm.courseId || courseForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          toast.info("Đang đồng bộ dữ liệu...");
+          try {
+            await api.POST("/api/admin/races/{raceId}/courses/{courseId}/force-sync", {
+              params: { path: { raceId: raceId, courseId: cid } },
+              ...authHeaders(token),
+            } as any);
+            toast.success("Đồng bộ dữ liệu thành công!");
+          } catch {
+            toast.warning("Đồng bộ thất bại, sẽ tự động đồng bộ sau 10 phút");
+          }
+        }
       }
       setCourseDialogOpen(false);
       setEditingCourse(null);
@@ -309,6 +366,12 @@ export default function RaceDetailPage() {
       distanceKm: course.distanceKm,
       courseType: course.courseType,
       apiUrl: course.apiUrl,
+      imageUrl: course.imageUrl,
+      elevationGain: course.elevationGain,
+      startTime: course.startTime,
+      startLocation: course.startLocation,
+      mapUrl: course.mapUrl,
+      gpxUrl: course.gpxUrl,
     });
     setCourseDialogOpen(true);
   }
@@ -360,10 +423,11 @@ export default function RaceDetailPage() {
           <TabsTrigger value="courses">
             Cự ly ({race.courses?.length ?? 0})
           </TabsTrigger>
-          <TabsTrigger value="branding">Thương hiệu</TabsTrigger>
+          <TabsTrigger value="branding">Hình ảnh & Thương hiệu</TabsTrigger>
+          <TabsTrigger value="features">Tính năng</TabsTrigger>
         </TabsList>
 
-        {/* Info Tab */}
+        {/* ════════════ Info Tab ════════════ */}
         <TabsContent value="info">
           <Card>
             <CardHeader>
@@ -373,57 +437,70 @@ export default function RaceDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              {/* Status Controls — Lifecycle Stepper */}
+              {/* Status Controls — Clear Lifecycle */}
               <div className="flex flex-col gap-3">
-                <Label>Vòng đời giải đấu</Label>
-                <div className="flex items-center gap-0">
+                <Label>Trạng thái giải đấu</Label>
+                <div className="grid grid-cols-3 gap-3">
                   {([
-                    { key: "pre_race", label: "Chuẩn bị", icon: "📋", color: "blue" },
-                    { key: "live", label: "Đang diễn ra", icon: "🏃", color: "green" },
-                    { key: "ended", label: "Đã kết thúc", icon: "🏁", color: "zinc" },
-                  ] as const).map((step, i, arr) => {
+                    {
+                      key: "pre_race" as RaceStatus,
+                      label: "Chuẩn bị",
+                      desc: "Giải chưa diễn ra",
+                      icon: "📋",
+                      activeClass: "border-blue-500 bg-blue-50 text-blue-800",
+                      dotClass: "bg-blue-500",
+                    },
+                    {
+                      key: "live" as RaceStatus,
+                      label: "Đang diễn ra",
+                      desc: "Giải đang thi đấu",
+                      icon: "🏃",
+                      activeClass: "border-green-500 bg-green-50 text-green-800",
+                      dotClass: "bg-green-500 animate-pulse",
+                    },
+                    {
+                      key: "ended" as RaceStatus,
+                      label: "Đã kết thúc",
+                      desc: "Giải đã hoàn tất",
+                      icon: "🏁",
+                      activeClass: "border-zinc-400 bg-zinc-50 text-zinc-700",
+                      dotClass: "bg-zinc-400",
+                    },
+                  ]).map((step) => {
                     const isCurrent = race.status === step.key;
-                    const stepIndex = arr.findIndex((s) => s.key === race.status);
-                    const isPast = i < stepIndex;
-
                     return (
-                      <div key={step.key} className="flex items-center">
-                        <button
-                          onClick={() => !isCurrent && handleUpdateStatus(step.key)}
-                          disabled={isCurrent}
-                          className={`
-                            relative flex flex-col items-center gap-1.5 px-5 py-3 rounded-lg transition-all
-                            ${isCurrent
-                              ? step.color === "green"
-                                ? "bg-green-50 ring-2 ring-green-500 text-green-700"
-                                : step.color === "blue"
-                                  ? "bg-blue-50 ring-2 ring-blue-500 text-blue-700"
-                                  : "bg-zinc-100 ring-2 ring-zinc-400 text-zinc-700"
-                              : isPast
-                                ? "text-muted-foreground opacity-60 hover:opacity-100 hover:bg-muted cursor-pointer"
-                                : "text-muted-foreground hover:bg-muted cursor-pointer"
-                            }
-                          `}
-                        >
-                          <span className={`text-xl ${isCurrent ? "scale-110" : ""}`}>
-                            {step.icon}
-                          </span>
-                          <span className={`text-xs font-medium ${isCurrent ? "font-bold" : ""}`}>
-                            {step.label}
-                          </span>
-                          {isCurrent && (
-                            <span className={`absolute -top-1 -right-1 size-3 rounded-full ${
-                              step.color === "green" ? "bg-green-500 animate-pulse" :
-                              step.color === "blue" ? "bg-blue-500" : "bg-zinc-400"
-                            }`} />
-                          )}
-                        </button>
-                        {i < arr.length - 1 && (
-                          <div className={`w-8 h-0.5 mx-1 ${
-                            isPast ? "bg-primary" : "bg-border"
-                          }`} />
+                      <button
+                        key={step.key}
+                        onClick={() => {
+                          if (isCurrent) return;
+                          if (confirm(`Chuyển trạng thái giải sang "${step.label}"?`)) {
+                            handleUpdateStatus(step.key);
+                          }
+                        }}
+                        className={`
+                          relative flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all text-center
+                          ${isCurrent
+                            ? step.activeClass
+                            : "border-transparent bg-muted/50 text-muted-foreground hover:bg-muted hover:border-muted-foreground/20 cursor-pointer"
+                          }
+                        `}
+                      >
+                        {isCurrent && (
+                          <span className={`absolute top-2 right-2 size-2.5 rounded-full ${step.dotClass}`} />
                         )}
-                      </div>
+                        <span className="text-2xl">{step.icon}</span>
+                        <span className={`text-sm font-semibold ${isCurrent ? "" : "opacity-70"}`}>
+                          {step.label}
+                        </span>
+                        <span className={`text-[10px] ${isCurrent ? "opacity-70" : "opacity-50"}`}>
+                          {step.desc}
+                        </span>
+                        {isCurrent && (
+                          <span className="mt-1 text-[10px] font-bold uppercase tracking-wider opacity-60">
+                            Hiện tại
+                          </span>
+                        )}
+                      </button>
                     );
                   })}
                 </div>
@@ -438,7 +515,7 @@ export default function RaceDetailPage() {
                     id="edit-title"
                     value={editForm.title ?? ""}
                     onChange={(e) =>
-                      setEditForm((p) => ({ ...p, title: e.target.value }))
+                      setEditForm((p: any) => ({ ...p, title: e.target.value }))
                     }
                   />
                 </div>
@@ -448,7 +525,7 @@ export default function RaceDetailPage() {
                     id="edit-slug"
                     value={editForm.slug ?? ""}
                     onChange={(e) =>
-                      setEditForm((p) => ({ ...p, slug: e.target.value }))
+                      setEditForm((p: any) => ({ ...p, slug: e.target.value }))
                     }
                   />
                 </div>
@@ -458,7 +535,7 @@ export default function RaceDetailPage() {
                     id="edit-type"
                     value={editForm.raceType ?? ""}
                     onChange={(e) =>
-                      setEditForm((p) => ({ ...p, raceType: e.target.value }))
+                      setEditForm((p: any) => ({ ...p, raceType: e.target.value }))
                     }
                   />
                 </div>
@@ -468,7 +545,7 @@ export default function RaceDetailPage() {
                     id="edit-province"
                     value={editForm.province ?? ""}
                     onChange={(e) =>
-                      setEditForm((p) => ({ ...p, province: e.target.value }))
+                      setEditForm((p: any) => ({ ...p, province: e.target.value }))
                     }
                   />
                 </div>
@@ -478,7 +555,7 @@ export default function RaceDetailPage() {
                     id="edit-location"
                     value={editForm.location ?? ""}
                     onChange={(e) =>
-                      setEditForm((p) => ({ ...p, location: e.target.value }))
+                      setEditForm((p: any) => ({ ...p, location: e.target.value }))
                     }
                   />
                 </div>
@@ -488,7 +565,32 @@ export default function RaceDetailPage() {
                     id="edit-organizer"
                     value={editForm.organizer ?? ""}
                     onChange={(e) =>
-                      setEditForm((p) => ({ ...p, organizer: e.target.value }))
+                      setEditForm((p: any) => ({ ...p, organizer: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="edit-season">Mùa giải</Label>
+                  <Input
+                    id="edit-season"
+                    value={editForm.season ?? ""}
+                    onChange={(e) =>
+                      setEditForm((p: any) => ({ ...p, season: e.target.value }))
+                    }
+                    placeholder="2026"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="edit-ttl">Thời gian cache (giây)</Label>
+                  <Input
+                    id="edit-ttl"
+                    type="number"
+                    value={editForm.cacheTtlSeconds ?? 60}
+                    onChange={(e) =>
+                      setEditForm((p: any) => ({
+                        ...p,
+                        cacheTtlSeconds: parseInt(e.target.value) || 60,
+                      }))
                     }
                   />
                 </div>
@@ -499,7 +601,7 @@ export default function RaceDetailPage() {
                     type="datetime-local"
                     value={editForm.startDate?.slice(0, 16) ?? ""}
                     onChange={(e) =>
-                      setEditForm((p) => ({
+                      setEditForm((p: any) => ({
                         ...p,
                         startDate: e.target.value
                           ? new Date(e.target.value).toISOString()
@@ -515,7 +617,7 @@ export default function RaceDetailPage() {
                     type="datetime-local"
                     value={editForm.endDate?.slice(0, 16) ?? ""}
                     onChange={(e) =>
-                      setEditForm((p) => ({
+                      setEditForm((p: any) => ({
                         ...p,
                         endDate: e.target.value
                           ? new Date(e.target.value).toISOString()
@@ -524,20 +626,21 @@ export default function RaceDetailPage() {
                     }
                   />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="edit-ttl">Thời gian cache (giây)</Label>
-                  <Input
-                    id="edit-ttl"
-                    type="number"
-                    value={editForm.cacheTtlSeconds ?? 60}
-                    onChange={(e) =>
-                      setEditForm((p) => ({
-                        ...p,
-                        cacheTtlSeconds: parseInt(e.target.value) || 60,
-                      }))
-                    }
-                  />
-                </div>
+              </div>
+
+              {/* Description (full width) */}
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="edit-desc">Mô tả</Label>
+                <textarea
+                  id="edit-desc"
+                  rows={3}
+                  value={editForm.description ?? ""}
+                  onChange={(e) =>
+                    setEditForm((p: any) => ({ ...p, description: e.target.value }))
+                  }
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Mô tả giải chạy..."
+                />
               </div>
 
               <div className="flex justify-end">
@@ -550,7 +653,7 @@ export default function RaceDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Courses Tab */}
+        {/* ════════════ Courses Tab ════════════ */}
         <TabsContent value="courses">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -565,7 +668,7 @@ export default function RaceDetailPage() {
                   <Plus className="size-4 mr-1" />
                   Thêm
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>
                       {editingCourse ? "Sửa cự ly" : "Thêm cự ly"}
@@ -580,7 +683,7 @@ export default function RaceDetailPage() {
                       <Input
                         value={courseForm.name ?? ""}
                         onChange={(e) =>
-                          setCourseForm((p) => ({ ...p, name: e.target.value }))
+                          setCourseForm((p: any) => ({ ...p, name: e.target.value }))
                         }
                         placeholder="42km Full Marathon"
                       />
@@ -591,7 +694,7 @@ export default function RaceDetailPage() {
                         <Input
                           value={courseForm.distance ?? ""}
                           onChange={(e) =>
-                            setCourseForm((p) => ({ ...p, distance: e.target.value }))
+                            setCourseForm((p: any) => ({ ...p, distance: e.target.value }))
                           }
                           placeholder="42km"
                         />
@@ -602,7 +705,7 @@ export default function RaceDetailPage() {
                           type="number"
                           value={courseForm.distanceKm ?? ""}
                           onChange={(e) =>
-                            setCourseForm((p) => ({
+                            setCourseForm((p: any) => ({
                               ...p,
                               distanceKm: parseFloat(e.target.value) || undefined,
                             }))
@@ -616,9 +719,9 @@ export default function RaceDetailPage() {
                       <Input
                         value={courseForm.courseType ?? ""}
                         onChange={(e) =>
-                          setCourseForm((p) => ({ ...p, courseType: e.target.value }))
+                          setCourseForm((p: any) => ({ ...p, courseType: e.target.value }))
                         }
-                        placeholder="road"
+                        placeholder="road / trail / ultra"
                       />
                     </div>
                     <div className="flex flex-col gap-2">
@@ -626,10 +729,100 @@ export default function RaceDetailPage() {
                       <Input
                         value={courseForm.apiUrl ?? ""}
                         onChange={(e) =>
-                          setCourseForm((p) => ({ ...p, apiUrl: e.target.value }))
+                          setCourseForm((p: any) => ({ ...p, apiUrl: e.target.value }))
                         }
                         placeholder="https://my.raceresult.com/api/results?contest=708"
                       />
+                    </div>
+
+                    <Separator />
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Thông tin bổ sung</p>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label className="flex items-center gap-1.5">
+                          <Mountain className="size-3.5" /> Tổng leo cao (m)
+                        </Label>
+                        <Input
+                          type="number"
+                          value={courseForm.elevationGain ?? ""}
+                          onChange={(e) =>
+                            setCourseForm((p: any) => ({
+                              ...p,
+                              elevationGain: parseInt(e.target.value) || undefined,
+                            }))
+                          }
+                          placeholder="1500"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label className="flex items-center gap-1.5">
+                          <Clock className="size-3.5" /> Giờ xuất phát
+                        </Label>
+                        <Input
+                          value={courseForm.startTime ?? ""}
+                          onChange={(e) =>
+                            setCourseForm((p: any) => ({ ...p, startTime: e.target.value }))
+                          }
+                          placeholder="05:00"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label className="flex items-center gap-1.5">
+                        <MapPin className="size-3.5" /> Địa điểm xuất phát
+                      </Label>
+                      <Input
+                        value={courseForm.startLocation ?? ""}
+                        onChange={(e) =>
+                          setCourseForm((p: any) => ({ ...p, startLocation: e.target.value }))
+                        }
+                        placeholder="Quảng trường Lâm Viên, Đà Lạt"
+                      />
+                    </div>
+
+                    <Separator />
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hình ảnh</p>
+
+                    <div className="flex flex-col gap-2">
+                      <Label className="flex items-center gap-1.5">
+                        <ImageIcon className="size-3.5" /> Ảnh cự ly
+                      </Label>
+                      <ImageUpload
+                        value={courseForm.imageUrl}
+                        onChange={(url) =>
+                          setCourseForm((p: any) => ({ ...p, imageUrl: url }))
+                        }
+                        folder={`races/${raceId}/courses`}
+                        token={token || undefined}
+                        label="Tải ảnh cự ly"
+                        previewHeight="h-28"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label>Bản đồ cự ly</Label>
+                      <ImageUpload
+                        value={courseForm.mapUrl}
+                        onChange={(url) =>
+                          setCourseForm((p: any) => ({ ...p, mapUrl: url }))
+                        }
+                        folder={`races/${raceId}/maps`}
+                        token={token || undefined}
+                        label="Tải bản đồ"
+                        previewHeight="h-28"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label>File GPX</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={courseForm.gpxUrl ?? ""}
+                          onChange={(e) =>
+                            setCourseForm((p: any) => ({ ...p, gpxUrl: e.target.value }))
+                          }
+                          placeholder="URL file GPX"
+                        />
+                      </div>
                     </div>
                   </div>
                   <DialogFooter>
@@ -654,7 +847,8 @@ export default function RaceDetailPage() {
                     <TableRow>
                       <TableHead>Tên</TableHead>
                       <TableHead className="hidden sm:table-cell">Khoảng cách</TableHead>
-                      <TableHead className="hidden md:table-cell">Đường dẫn API</TableHead>
+                      <TableHead className="hidden md:table-cell">Leo cao</TableHead>
+                      <TableHead className="hidden lg:table-cell">Đường dẫn API</TableHead>
                       <TableHead className="text-right">Thao tác</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -662,12 +856,25 @@ export default function RaceDetailPage() {
                     {race.courses.map((course) => (
                       <TableRow key={course.courseId}>
                         <TableCell className="font-medium">
-                          {course.name}
+                          <div className="flex items-center gap-2">
+                            {course.imageUrl && (
+                              <img src={course.imageUrl} alt="" className="size-8 rounded object-cover" />
+                            )}
+                            <div>
+                              <div>{course.name}</div>
+                              {course.startTime && (
+                                <span className="text-xs text-muted-foreground">{course.startTime}</span>
+                              )}
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell text-muted-foreground">
                           {course.distance || "-"}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-muted-foreground max-w-[200px] truncate">
+                        <TableCell className="hidden md:table-cell text-muted-foreground">
+                          {course.elevationGain ? `${course.elevationGain}m` : "-"}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground max-w-[200px] truncate">
                           {course.apiUrl || "-"}
                         </TableCell>
                         <TableCell className="text-right">
@@ -675,26 +882,20 @@ export default function RaceDetailPage() {
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              onClick={() =>
-                                handleForceSync(course.courseId)
-                              }
+                              onClick={() => handleForceSync(course.courseId)}
                               disabled={syncingCourseId === course.courseId}
                               title="Ép đồng bộ"
                             >
                               <RefreshCw
                                 className={`size-3 ${
-                                  syncingCourseId === course.courseId
-                                    ? "animate-spin"
-                                    : ""
+                                  syncingCourseId === course.courseId ? "animate-spin" : ""
                                 }`}
                               />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              onClick={() =>
-                                handleResetData(course.courseId)
-                              }
+                              onClick={() => handleResetData(course.courseId)}
                               disabled={resettingCourseId === course.courseId}
                               title="Xóa dữ liệu"
                             >
@@ -711,9 +912,7 @@ export default function RaceDetailPage() {
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              onClick={() =>
-                                handleRemoveCourse(course.courseId)
-                              }
+                              onClick={() => handleRemoveCourse(course.courseId)}
                               title="Xóa"
                             >
                               <Trash2 className="size-3 text-destructive" />
@@ -726,7 +925,6 @@ export default function RaceDetailPage() {
                 </Table>
               )}
 
-              {/* Add course button (alternative) */}
               <div className="mt-4">
                 <Button variant="outline" size="sm" onClick={openAddCourse}>
                   <Plus className="size-4 mr-1" />
@@ -737,81 +935,205 @@ export default function RaceDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Branding Tab */}
+        {/* ════════════ Branding Tab ════════════ */}
         <TabsContent value="branding">
           <Card>
             <CardHeader>
-              <CardTitle>Thương hiệu</CardTitle>
+              <CardTitle>Hình ảnh & Thương hiệu</CardTitle>
               <CardDescription>
-                Logo, banner, và màu thương hiệu
+                Logo, banner, ảnh đại diện và nhà tài trợ
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+            <CardContent className="flex flex-col gap-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                {/* Logo */}
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="brand-logo">Logo URL</Label>
-                  <Input
-                    id="brand-logo"
-                    value={editForm.logoUrl ?? ""}
-                    onChange={(e) =>
-                      setEditForm((p) => ({ ...p, logoUrl: e.target.value }))
+                  <Label>Logo giải</Label>
+                  <ImageUpload
+                    value={editForm.logoUrl}
+                    onChange={(url) =>
+                      setEditForm((p: any) => ({ ...p, logoUrl: url }))
                     }
-                    placeholder="https://example.com/logo.png"
+                    folder={`races/${raceId}/logos`}
+                    token={token || undefined}
+                    label="Tải logo"
+                    previewHeight="h-24"
                   />
-                  {editForm.logoUrl && (
-                    <img
-                      src={editForm.logoUrl}
-                      alt="Logo preview"
-                      className="mt-2 h-16 w-auto rounded border bg-white object-contain p-1"
-                    />
-                  )}
                 </div>
+
+                {/* Image (cover) */}
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="brand-image">Banner URL</Label>
-                  <Input
-                    id="brand-image"
-                    value={editForm.imageUrl ?? ""}
-                    onChange={(e) =>
-                      setEditForm((p) => ({ ...p, imageUrl: e.target.value }))
+                  <Label>Ảnh đại diện</Label>
+                  <ImageUpload
+                    value={editForm.imageUrl}
+                    onChange={(url) =>
+                      setEditForm((p: any) => ({ ...p, imageUrl: url }))
                     }
-                    placeholder="https://example.com/banner.jpg"
+                    folder={`races/${raceId}/images`}
+                    token={token || undefined}
+                    label="Tải ảnh đại diện"
+                    previewHeight="h-32"
                   />
-                  {editForm.imageUrl && (
-                    <img
-                      src={editForm.imageUrl}
-                      alt="Banner preview"
-                      className="mt-2 h-24 w-auto rounded border object-cover"
-                    />
-                  )}
                 </div>
+
+                {/* Banner */}
+                <div className="flex flex-col gap-2 sm:col-span-2">
+                  <Label>Banner (ảnh bìa trang giải)</Label>
+                  <ImageUpload
+                    value={editForm.bannerUrl}
+                    onChange={(url) =>
+                      setEditForm((p: any) => ({ ...p, bannerUrl: url }))
+                    }
+                    folder={`races/${raceId}/banners`}
+                    token={token || undefined}
+                    label="Tải banner"
+                    previewHeight="h-40"
+                  />
+                </div>
+
+                {/* Brand Color */}
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="brand-color">Màu thương hiệu</Label>
+                  <Label>Màu thương hiệu</Label>
                   <div className="flex items-center gap-2">
                     <input
-                      id="brand-color"
                       type="color"
-                      value={editForm.brandColor || "#FF5722"}
+                      value={editForm.brandColor || "#2563EB"}
                       onChange={(e) =>
-                        setEditForm((p) => ({ ...p, brandColor: e.target.value }))
+                        setEditForm((p: any) => ({ ...p, brandColor: e.target.value }))
                       }
-                      className="h-8 w-12 cursor-pointer rounded border bg-transparent"
+                      className="h-9 w-14 cursor-pointer rounded border bg-transparent"
                     />
                     <Input
                       value={editForm.brandColor ?? ""}
                       onChange={(e) =>
-                        setEditForm((p) => ({ ...p, brandColor: e.target.value }))
+                        setEditForm((p: any) => ({ ...p, brandColor: e.target.value }))
                       }
-                      placeholder="#FF5722"
+                      placeholder="#2563EB"
                       className="flex-1"
                     />
                   </div>
                 </div>
               </div>
 
+              <Separator />
+
+              {/* Sponsor Banners */}
+              <div className="flex flex-col gap-2">
+                <Label>Banner nhà tài trợ</Label>
+                <p className="text-xs text-muted-foreground">
+                  Thêm logo/banner các nhà tài trợ hiển thị ở trang kết quả
+                </p>
+                <SponsorBanners
+                  value={editForm.sponsorBanners || []}
+                  onChange={(urls) =>
+                    setEditForm((p: any) => ({ ...p, sponsorBanners: urls }))
+                  }
+                  folder={`races/${raceId}/sponsors`}
+                  token={token || undefined}
+                />
+              </div>
+
               <div className="flex justify-end">
                 <Button onClick={handleSaveRace} disabled={saving}>
                   <Save className="size-4 mr-2" />
                   {saving ? "Đang lưu..." : "Lưu thương hiệu"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ════════════ Features Tab ════════════ */}
+        <TabsContent value="features">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tính năng</CardTitle>
+              <CardDescription>
+                Bật/tắt các tính năng cho giải
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-6">
+              {/* Feature Toggles */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">E-Certificate</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Cho phép VĐV tải chứng nhận hoàn thành
+                    </p>
+                  </div>
+                  <Switch
+                    checked={editForm.enableEcert ?? false}
+                    onCheckedChange={(checked) =>
+                      setEditForm((p: any) => ({ ...p, enableEcert: checked }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Khiếu nại kết quả</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Cho phép VĐV gửi khiếu nại về kết quả
+                    </p>
+                  </div>
+                  <Switch
+                    checked={editForm.enableClaim ?? false}
+                    onCheckedChange={(checked) =>
+                      setEditForm((p: any) => ({ ...p, enableClaim: checked }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Live Tracking</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Hiển thị kết quả realtime trong giải
+                    </p>
+                  </div>
+                  <Switch
+                    checked={editForm.enableLiveTracking ?? false}
+                    onCheckedChange={(checked) =>
+                      setEditForm((p: any) => ({ ...p, enableLiveTracking: checked }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">5Pix (Ảnh giải chạy)</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Tích hợp tìm ảnh VĐV từ 5Pix
+                    </p>
+                  </div>
+                  <Switch
+                    checked={editForm.enable5pix ?? false}
+                    onCheckedChange={(checked) =>
+                      setEditForm((p: any) => ({ ...p, enable5pix: checked }))
+                    }
+                  />
+                </div>
+
+                {editForm.enable5pix && (
+                  <div className="flex flex-col gap-2 pl-4 border-l-2 border-primary/20">
+                    <Label htmlFor="pix-url">5Pix Event URL</Label>
+                    <Input
+                      id="pix-url"
+                      value={editForm.pixEventUrl ?? ""}
+                      onChange={(e) =>
+                        setEditForm((p: any) => ({ ...p, pixEventUrl: e.target.value }))
+                      }
+                      placeholder="https://5pix.vn/event/..."
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={handleSaveRace} disabled={saving}>
+                  <Save className="size-4 mr-2" />
+                  {saving ? "Đang lưu..." : "Lưu tính năng"}
                 </Button>
               </div>
             </CardContent>

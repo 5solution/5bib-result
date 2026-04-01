@@ -8,6 +8,7 @@ import { RacesModule } from './races/races.module';
 import { RaceResultModule } from './race-result/race-result.module';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
+import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { AuthModule } from './auth/auth.module';
     RaceResultModule,
     AdminModule,
     AuthModule,
+    UploadModule,
   ],
 })
 export class AppModule {}

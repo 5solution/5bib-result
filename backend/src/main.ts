@@ -54,8 +54,8 @@ async function bootstrap() {
 
   if (process.env.NODE_ENV !== 'production') {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('clanker-v2 API')
-      .setDescription('API documentation for nft service')
+      .setTitle('5bib result API')
+      .setDescription('API documentation for 5bib result service')
       .setVersion('1.1')
       .addBearerAuth(
         {

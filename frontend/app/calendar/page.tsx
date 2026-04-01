@@ -70,8 +70,19 @@ function CalendarContent() {
       setLoading(true);
       const res = await fetch('/api/races');
       if (res.ok) {
-        const data = await res.json();
-        setRaces(Array.isArray(data) ? data : (data.data || []));
+        const body = await res.json();
+        const apiList = body?.data?.list ?? body?.data ?? [];
+        setRaces(apiList.map((r: any) => ({
+          id: r._id || r.id,
+          name: r.title || r.name,
+          slug: r.slug,
+          date: r.startDate || r.date || '',
+          end_date: r.endDate || r.end_date,
+          location: r.province || r.location || '',
+          status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
+          distances: r.courses?.map((c: any) => c.distance || c.name) || r.distances || [],
+          total_results: r.total_results || 0,
+        })));
       } else {
         setRaces(DEMO_RACES);
       }
@@ -102,7 +113,10 @@ function CalendarContent() {
   });
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('vi-VN', {
+    if (!dateStr) return 'Chưa xác định';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'Chưa xác định';
+    return d.toLocaleDateString('vi-VN', {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
@@ -110,14 +124,19 @@ function CalendarContent() {
   };
 
   const formatDateRange = (start: string, end?: string) => {
+    if (!start) return 'Chưa xác định';
     const s = new Date(start);
+    if (isNaN(s.getTime())) return 'Chưa xác định';
     if (!end) return formatDate(start);
     const e = new Date(end);
+    if (isNaN(e.getTime())) return formatDate(start);
     return `${s.toLocaleDateString('vi-VN', { day: '2-digit' })} - ${e.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' })}`;
   };
 
   const getCountdown = (dateStr: string) => {
+    if (!dateStr) return null;
     const diff = new Date(dateStr).getTime() - Date.now();
+    if (isNaN(diff)) return null;
     if (diff <= 0) return null;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));

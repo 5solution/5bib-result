@@ -6,7 +6,8 @@
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start -p 3002",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate:api": "openapi-typescript http://localhost:8081/swagger/json -o lib/api-types.ts"
   },
   "packageManager": "pnpm@10.20.0",
   "dependencies": {
@@ -23,6 +24,8 @@
     "i18next-browser-languagedetector": "^8.2.0",
     "lucide-react": "^1.7.0",
     "next": "^16.1.1",
+    "openapi-fetch": "^0.17.0",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

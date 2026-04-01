@@ -145,12 +145,41 @@ export default function CourseRankingPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const rankingRef = useRef<HTMLDivElement>(null);
 
+  const [totalItems, setTotalItems] = useState(0);
+  const [loadingResults, setLoadingResults] = useState(false);
+
   const fetchRace = useCallback(async () => {
     try {
-      const res = await fetch(`/api/races/${slug}`);
+      const res = await fetch(`/api/races/slug/${slug}`);
       if (res.ok) {
-        const data = await res.json();
-        setRace(data);
+        const body = await res.json();
+        const r = body?.data ?? body;
+        if (r) {
+          setRace({
+            id: r._id || r.id,
+            name: r.title || r.name,
+            slug: r.slug,
+            date: r.startDate || r.date || '',
+            end_date: r.endDate || r.end_date,
+            location: r.province || r.location || '',
+            status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
+            distances: r.courses?.map((c: any) => c.distance || c.name) || [],
+            courses: (r.courses || []).map((c: any) => ({
+              id: c.courseId || c.id,
+              distance: c.distance || c.name,
+              name: c.name,
+              distanceKm: c.distanceKm,
+              elevation: c.elevationGain ? `${c.elevationGain} M+` : undefined,
+              starters: 0,
+              dnf: 0,
+              finishers: 0,
+            })),
+            logoUrl: r.logoUrl,
+            imageUrl: r.imageUrl,
+          });
+        } else {
+          setRace(DEMO_RACE);
+        }
       } else {
         setRace(DEMO_RACE);
       }
@@ -167,34 +196,50 @@ export default function CourseRankingPage() {
 
   const course = race?.courses.find((c) => c.id === courseId) || null;
 
+  const fetchResults = useCallback(async () => {
+    if (!courseId) return;
+    setLoadingResults(true);
+    try {
+      const params = new URLSearchParams({
+        course_id: courseId,
+        pageNo: String(currentPage),
+        pageSize: String(ITEMS_PER_PAGE),
+        sortField: 'OverallRank',
+        sortDirection: 'ASC',
+      });
+      if (searchQuery.trim()) params.set('name', searchQuery.trim());
+
+      const res = await fetch(`/api/race-results?${params}`);
+      if (res.ok) {
+        const body = await res.json();
+        setResults(body?.data ?? []);
+        setTotalItems(body?.pagination?.total ?? 0);
+      }
+    } catch {
+      setResults([]);
+    } finally {
+      setLoadingResults(false);
+    }
+  }, [courseId, currentPage, searchQuery]);
+
   useEffect(() => {
-    if (!course) return;
-    const count = course.finishers || 80;
-    setResults(generateResults(course.id, course.distance, Math.min(count, 200)));
-  }, [course]);
+    fetchResults();
+  }, [fetchResults]);
 
-  const filteredResults = useMemo(() => {
-    if (!searchQuery.trim()) return results;
-    const q = searchQuery.toLowerCase().trim();
-    return results.filter(
-      (r) => r.Name.toLowerCase().includes(q) || String(r.Bib).includes(q)
-    );
-  }, [results, searchQuery]);
-
-  const totalPages = Math.ceil(filteredResults.length / ITEMS_PER_PAGE);
-  const paginatedResults = filteredResults.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  const paginatedResults = results;
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
 
   const formatDateRange = (start: string, end?: string) => {
+    if (!start) return 'Chưa xác định';
     const s = new Date(start);
+    if (isNaN(s.getTime())) return 'Chưa xác định';
     if (!end) return s.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
     const e = new Date(end);
+    if (isNaN(e.getTime())) return s.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
     return `${s.toLocaleDateString('vi-VN', { day: '2-digit' })} - ${e.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' })}`;
   };
 
@@ -445,9 +490,11 @@ export default function CourseRankingPage() {
 /* ─── RankingRow — desktop table row ─── */
 
 function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
-  const rank = parseInt(result.OverallRank);
+  const rankNum = parseInt(result.OverallRank);
+  const rank = isNaN(rankNum) ? result.OverallRank : rankNum;
+  const rankDisplay = typeof rank === 'number' ? rank : rank;
 
-  const getMedalColor = (r: number) => {
+  const getMedalColor = (r: number | string) => {
     if (r === 1) return 'bg-amber-400 text-amber-900';
     if (r === 2) return 'bg-slate-300 text-slate-700';
     if (r === 3) return 'bg-orange-300 text-orange-800';
@@ -460,7 +507,7 @@ function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
   return (
     <tr className="group transition-all duration-200 hover:bg-blue-50/60 hover:shadow-[inset_4px_0_0_0_#2563eb] cursor-pointer">
       <td className="px-4 py-3.5">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black ${getMedalColor(rank)}`}>
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
           {rank}
         </div>
       </td>
@@ -509,9 +556,10 @@ function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
 /* ─── MobileRankingCard ─── */
 
 function MobileRankingCard({ result, slug }: { result: RaceResult; slug: string }) {
-  const rank = parseInt(result.OverallRank);
+  const rankNum = parseInt(result.OverallRank);
+  const rank = isNaN(rankNum) ? result.OverallRank : rankNum;
 
-  const getMedalColor = (r: number) => {
+  const getMedalColor = (r: number | string) => {
     if (r === 1) return 'bg-amber-400 text-amber-900';
     if (r === 2) return 'bg-slate-300 text-slate-700';
     if (r === 3) return 'bg-orange-300 text-orange-800';
@@ -524,7 +572,7 @@ function MobileRankingCard({ result, slug }: { result: RaceResult; slug: string 
   return (
     <Link href={`/races/${slug}/${result.Bib}`} className="block">
       <div className="px-4 py-4 flex items-center gap-3 active:bg-blue-50 transition-colors">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black shrink-0 ${getMedalColor(rank)}`}>
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
           {rank}
         </div>
 

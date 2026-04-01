@@ -13,6 +13,11 @@ const envVarsSchema = Joi.object()
     MONGODB_DB_NAME: Joi.string().default('5bib_result'),
     REDIS_URL: Joi.string().required(),
     JWT_SECRET: Joi.string().default('5bib-result-secret'),
+    AWS_REGION: Joi.string().default('ap-southeast-1'),
+    AWS_ACCESS_KEY_ID: Joi.string().optional().allow(''),
+    AWS_SECRET_ACCESS_KEY: Joi.string().optional().allow(''),
+    AWS_S3_BUCKET: Joi.string().default('5bib-assets'),
+    AWS_S3_CDN_URL: Joi.string().optional().allow(''),
   })
   .unknown();
 
@@ -35,4 +40,11 @@ export const env = {
   redisUrl: envVars.REDIS_URL,
   privateKey: envVars.PRIVATE_KEY,
   jwtSecret: envVars.JWT_SECRET as string,
+  s3: {
+    region: envVars.AWS_REGION,
+    accessKeyId: envVars.AWS_ACCESS_KEY_ID,
+    secretAccessKey: envVars.AWS_SECRET_ACCESS_KEY,
+    bucket: envVars.AWS_S3_BUCKET,
+    cdnUrl: envVars.AWS_S3_CDN_URL,
+  },
 };

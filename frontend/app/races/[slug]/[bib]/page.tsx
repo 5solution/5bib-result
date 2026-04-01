@@ -77,23 +77,28 @@ export default function AthleteDetailPage() {
   const fetchAthlete = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/race-results/athlete/${slug}/${bib}`);
+      // Resolve slug → raceId first
+      const raceRes = await fetch(`/api/races/slug/${slug}`);
+      if (!raceRes.ok) { setAthlete(DEMO_ATHLETE); return; }
+      const raceBody = await raceRes.json();
+      const raceData = raceBody?.data ?? raceBody;
+      const raceId = raceData?._id;
+      if (!raceId) { setAthlete(DEMO_ATHLETE); return; }
+
+      const res = await fetch(`/api/race-results/athlete/${raceId}/${bib}`);
       if (res.ok) {
-        const data = await res.json();
-        setAthlete(data);
-      } else {
-        const res2 = await fetch(`/api/race-results?name=&pageNo=1&pageSize=1&sortField=OverallRank&sortDirection=ASC`);
-        if (res2.ok) {
-          const data2 = await res2.json();
-          const found = data2.data?.find((r: AthleteResult) => String(r.Bib) === bib);
-          if (found) {
-            setAthlete({ ...found, splits: DEMO_SPLITS, race_name: slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) });
-          } else {
-            setAthlete(DEMO_ATHLETE);
-          }
+        const body = await res.json();
+        const data = body?.data ?? body;
+        if (data) {
+          setAthlete({
+            ...data,
+            race_name: raceData.title || slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          });
         } else {
           setAthlete(DEMO_ATHLETE);
         }
+      } else {
+        setAthlete(DEMO_ATHLETE);
       }
     } catch {
       setAthlete(DEMO_ATHLETE);

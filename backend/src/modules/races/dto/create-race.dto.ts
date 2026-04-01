@@ -5,6 +5,8 @@ import {
   IsInt,
   Min,
   IsIn,
+  IsBoolean,
+  IsArray,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -71,6 +73,52 @@ export class CreateRaceDto {
   @IsOptional()
   @IsString()
   brandColor?: string;
+
+  @ApiPropertyOptional({ description: 'Banner URL (S3)' })
+  @IsOptional()
+  @IsString()
+  bannerUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Race description' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({ description: 'Race season', example: '2026' })
+  @IsOptional()
+  @IsString()
+  season?: string;
+
+  @ApiPropertyOptional({ description: 'Sponsor banner URLs (S3)', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  sponsorBanners?: string[];
+
+  @ApiPropertyOptional({ description: 'Enable E-Certificate', default: false })
+  @IsOptional()
+  @IsBoolean()
+  enableEcert?: boolean;
+
+  @ApiPropertyOptional({ description: 'Enable result claims', default: false })
+  @IsOptional()
+  @IsBoolean()
+  enableClaim?: boolean;
+
+  @ApiPropertyOptional({ description: 'Enable live tracking', default: false })
+  @IsOptional()
+  @IsBoolean()
+  enableLiveTracking?: boolean;
+
+  @ApiPropertyOptional({ description: 'Enable 5Pix photos', default: false })
+  @IsOptional()
+  @IsBoolean()
+  enable5pix?: boolean;
+
+  @ApiPropertyOptional({ description: '5Pix event URL' })
+  @IsOptional()
+  @IsString()
+  pixEventUrl?: string;
 
   @ApiPropertyOptional({ description: 'Cache TTL in seconds', default: 60 })
   @IsOptional()

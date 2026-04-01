@@ -33,4 +33,34 @@ export class AddCourseDto {
   @IsOptional()
   @IsString()
   apiUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Course cover image URL (S3)' })
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Total elevation gain in meters', example: 1500 })
+  @IsOptional()
+  @IsNumber()
+  elevationGain?: number;
+
+  @ApiPropertyOptional({ description: 'Start time', example: '05:00' })
+  @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @ApiPropertyOptional({ description: 'Start location', example: 'Quảng trường Lâm Viên' })
+  @IsOptional()
+  @IsString()
+  startLocation?: string;
+
+  @ApiPropertyOptional({ description: 'Course map image URL (S3)' })
+  @IsOptional()
+  @IsString()
+  mapUrl?: string;
+
+  @ApiPropertyOptional({ description: 'GPX file URL (S3)' })
+  @IsOptional()
+  @IsString()
+  gpxUrl?: string;
 }

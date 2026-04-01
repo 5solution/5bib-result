@@ -9,7 +9,7 @@ export class RaceSyncCron {
 
   constructor(private readonly raceResultService: RaceResultService) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async handleCron() {
     if (this.isSyncing) {
       this.logger.warn('Previous sync still in progress, skipping...');
