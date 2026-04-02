@@ -33,7 +33,6 @@
 ---
 
 ## In Progress
-- [ ] [NORMAL] Ở races/{slug} nếu mà là sự kiện đang chờ diễn ra nó sẽ không hiển thị bảng thành tích mà sẽ hiển thị thông tin của giải, gồm race đó chạy bao nhiêu. Made it good UI
 - [ ] [NORMAL] Ở race đang diễn ra thêm phần đếm thời gian
 
 ## Todo
@@ -42,4 +41,5 @@
 ## Done
 - [x] [HIGH] Phần khiếu nại của user — form trên trang athlete detail, upload tracklog (GPX/KML/FIT), require SĐT, backend schema updated (phone + attachments), admin hiển thị SĐT + tệp đính kèm
 - [x] [HIGH] Per-race sponsors — backend raceId field, GET /sponsors/race/:raceId, admin tab quản lý NTT per race, frontend ranking page hiển thị to theo level (diamond/gold/silver)
+- [x] [NORMAL] Pre-race event page — upcoming races show course details (start time, COT, elevation, start location) instead of results table, organizer + description info block
 
