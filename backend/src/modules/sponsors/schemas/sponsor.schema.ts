@@ -16,6 +16,7 @@ export class Sponsor {
   @Prop({ required: true, enum: ['silver', 'gold', 'diamond'], default: 'silver' })
   level: string;
   @Prop({ default: 0 }) order: number;
+  @Prop() raceId: string; // Optional: if set, sponsor is race-specific; if null/empty, it's global
   @Prop({ default: true }) isActive: boolean;
 
   created_at: Date;

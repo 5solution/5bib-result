@@ -163,6 +163,23 @@ export default function RaceDetailPage() {
   const [syncingCourseId, setSyncingCourseId] = useState<string | null>(null);
   const [resettingCourseId, setResettingCourseId] = useState<string | null>(null);
 
+  // Race sponsors state
+  interface RaceSponsor {
+    _id: string;
+    name: string;
+    logoUrl: string;
+    website?: string;
+    level: string;
+    order: number;
+    raceId?: string;
+  }
+  const [raceSponsors, setRaceSponsors] = useState<RaceSponsor[]>([]);
+  const [loadingSponsors, setLoadingSponsors] = useState(false);
+  const [sponsorDialogOpen, setSponsorDialogOpen] = useState(false);
+  const [sponsorForm, setSponsorForm] = useState({ name: '', logoUrl: '', website: '', level: 'silver', order: 0 });
+  const [editingSponsor, setEditingSponsor] = useState<RaceSponsor | null>(null);
+  const [savingSponsor, setSavingSponsor] = useState(false);
+
   const fetchRace = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -211,6 +228,85 @@ export default function RaceDetailPage() {
   useEffect(() => {
     fetchRace();
   }, [fetchRace]);
+
+  // ─── Race Sponsors ─────────────────────────────
+  const fetchRaceSponsors = useCallback(async () => {
+    if (!token) return;
+    setLoadingSponsors(true);
+    try {
+      const res = await fetch(`/api/sponsors/race/${raceId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const body = await res.json();
+        setRaceSponsors(body?.data ?? body ?? []);
+      }
+    } catch { /* ignore */ } finally {
+      setLoadingSponsors(false);
+    }
+  }, [token, raceId]);
+
+  useEffect(() => {
+    if (activeTab === 'sponsors') fetchRaceSponsors();
+  }, [activeTab, fetchRaceSponsors]);
+
+  function openAddSponsor() {
+    setEditingSponsor(null);
+    setSponsorForm({ name: '', logoUrl: '', website: '', level: 'silver', order: 0 });
+    setSponsorDialogOpen(true);
+  }
+
+  function openEditSponsor(s: RaceSponsor) {
+    setEditingSponsor(s);
+    setSponsorForm({ name: s.name, logoUrl: s.logoUrl, website: s.website || '', level: s.level, order: s.order });
+    setSponsorDialogOpen(true);
+  }
+
+  async function handleSaveSponsor() {
+    if (!token) return;
+    setSavingSponsor(true);
+    try {
+      const payload = { ...sponsorForm, raceId };
+      if (editingSponsor) {
+        const res = await fetch(`/api/sponsors/${editingSponsor._id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('Update failed');
+        toast.success('Đã cập nhật nhà tài trợ');
+      } else {
+        const res = await fetch('/api/sponsors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('Create failed');
+        toast.success('Đã thêm nhà tài trợ');
+      }
+      setSponsorDialogOpen(false);
+      fetchRaceSponsors();
+    } catch {
+      toast.error('Lưu nhà tài trợ thất bại');
+    } finally {
+      setSavingSponsor(false);
+    }
+  }
+
+  async function handleDeleteSponsor(id: string) {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/sponsors/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      toast.success('Đã xóa nhà tài trợ');
+      fetchRaceSponsors();
+    } catch {
+      toast.error('Xóa nhà tài trợ thất bại');
+    }
+  }
 
   async function handleSaveRace() {
     if (!token || !race) return;
@@ -454,6 +550,7 @@ export default function RaceDetailPage() {
           </TabsTrigger>
           <TabsTrigger value="branding">Hình ảnh & Thương hiệu</TabsTrigger>
           <TabsTrigger value="features">Tính năng</TabsTrigger>
+          <TabsTrigger value="sponsors">Nhà tài trợ</TabsTrigger>
         </TabsList>
 
         {/* ════════════ Info Tab ════════════ */}
@@ -1295,6 +1392,128 @@ export default function RaceDetailPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ════════════ Sponsors Tab ════════════ */}
+        <TabsContent value="sponsors">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Nhà tài trợ giải đấu</CardTitle>
+                <CardDescription>Quản lý nhà tài trợ riêng cho giải này</CardDescription>
+              </div>
+              <Button onClick={openAddSponsor} size="sm">
+                <Plus className="size-4 mr-1" /> Thêm
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {loadingSponsors ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}
+                </div>
+              ) : raceSponsors.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Chưa có nhà tài trợ nào cho giải này
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Logo</TableHead>
+                      <TableHead>Tên</TableHead>
+                      <TableHead>Cấp độ</TableHead>
+                      <TableHead>Thứ tự</TableHead>
+                      <TableHead className="text-right">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {raceSponsors.map(s => (
+                      <TableRow key={s._id}>
+                        <TableCell>
+                          {s.logoUrl ? (
+                            <img src={s.logoUrl} alt={s.name} className="h-8 w-auto max-w-[120px] object-contain" />
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell>
+                          <Badge className={
+                            s.level === 'diamond' ? 'bg-purple-500/20 text-purple-400' :
+                            s.level === 'gold' ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-zinc-500/20 text-zinc-400'
+                          }>
+                            {s.level === 'diamond' ? 'Kim cương' : s.level === 'gold' ? 'Vàng' : 'Bạc'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{s.order}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon-sm" onClick={() => openEditSponsor(s)} title="Sửa">
+                              <Pencil className="size-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteSponsor(s._id)} title="Xóa">
+                              <Trash2 className="size-4 text-red-400" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Sponsor Dialog */}
+          <Dialog open={sponsorDialogOpen} onOpenChange={(open) => { if (!open) setSponsorDialogOpen(false); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{editingSponsor ? 'Sửa nhà tài trợ' : 'Thêm nhà tài trợ'}</DialogTitle>
+                <DialogDescription>Logo sẽ hiển thị ở bảng xếp hạng giải đấu</DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="flex flex-col gap-2">
+                  <Label>Tên nhà tài trợ *</Label>
+                  <Input value={sponsorForm.name} onChange={e => setSponsorForm(f => ({ ...f, name: e.target.value }))} placeholder="VD: Adidas Vietnam" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Logo URL *</Label>
+                  <ImageUpload
+                    value={sponsorForm.logoUrl}
+                    onChange={(url) => setSponsorForm(f => ({ ...f, logoUrl: url }))}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Website</Label>
+                  <Input value={sponsorForm.website} onChange={e => setSponsorForm(f => ({ ...f, website: e.target.value }))} placeholder="https://..." />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>Cấp độ</Label>
+                    <Select value={sponsorForm.level} onValueChange={v => setSponsorForm(f => ({ ...f, level: v || 'silver' }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="diamond">Kim cương</SelectItem>
+                        <SelectItem value="gold">Vàng</SelectItem>
+                        <SelectItem value="silver">Bạc</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Thứ tự</Label>
+                    <Input type="number" value={sponsorForm.order} onChange={e => setSponsorForm(f => ({ ...f, order: parseInt(e.target.value) || 0 }))} />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSponsorDialogOpen(false)}>Hủy</Button>
+                <Button onClick={handleSaveSponsor} disabled={savingSponsor || !sponsorForm.name || !sponsorForm.logoUrl}>
+                  {savingSponsor ? 'Đang lưu...' : 'Lưu'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>

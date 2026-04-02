@@ -28,13 +28,24 @@ export class SponsorsController {
   // ─── Public ──────────────────────────────────────────────────
 
   @Get()
-  @ApiOperation({ summary: 'List all active sponsors (public)' })
+  @ApiOperation({ summary: 'List all active global sponsors (public)' })
   @ApiResponse({
     status: 200,
-    description: 'Returns active sponsors sorted by level then order',
+    description: 'Returns active global sponsors sorted by level then order',
   })
   async findAllActive() {
     return this.sponsorsService.findAllActive();
+  }
+
+  @Get('race/:raceId')
+  @ApiOperation({ summary: 'List active sponsors for a specific race (public)' })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns active race-specific sponsors',
+  })
+  async findByRaceId(@Param('raceId') raceId: string) {
+    return this.sponsorsService.findByRaceId(raceId);
   }
 
   // ─── Admin ───────────────────────────────────────────────────

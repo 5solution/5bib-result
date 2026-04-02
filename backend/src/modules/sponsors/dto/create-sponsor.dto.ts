@@ -29,6 +29,11 @@ export class CreateSponsorDto {
   @IsInt()
   order?: number;
 
+  @ApiPropertyOptional({ description: 'Race ID (if race-specific sponsor)', example: '6651a...' })
+  @IsOptional()
+  @IsString()
+  raceId?: string;
+
   @ApiPropertyOptional({ description: 'Active status', default: true })
   @IsOptional()
   @IsBoolean()

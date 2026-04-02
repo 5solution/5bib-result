@@ -19,12 +19,27 @@ export class SponsorsService {
   // ─── Public ──────────────────────────────────────────────────
 
   async findAllActive() {
+    // Global sponsors only (no raceId)
     const list = await this.sponsorModel
-      .find({ isActive: true })
+      .find({ isActive: true, $or: [{ raceId: null }, { raceId: '' }, { raceId: { $exists: false } }] })
       .lean()
       .exec();
 
-    // Sort by level (diamond first) then by order
+    list.sort((a, b) => {
+      const levelDiff = (LEVEL_ORDER[a.level] ?? 99) - (LEVEL_ORDER[b.level] ?? 99);
+      if (levelDiff !== 0) return levelDiff;
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
+
+    return { data: list, success: true };
+  }
+
+  async findByRaceId(raceId: string) {
+    const list = await this.sponsorModel
+      .find({ isActive: true, raceId })
+      .lean()
+      .exec();
+
     list.sort((a, b) => {
       const levelDiff = (LEVEL_ORDER[a.level] ?? 99) - (LEVEL_ORDER[b.level] ?? 99);
       if (levelDiff !== 0) return levelDiff;

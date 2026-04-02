@@ -214,16 +214,17 @@ export default function CourseRankingPage() {
       .catch(() => {});
   }, [courseId]);
 
-  // Fetch sponsors
+  // Fetch race-specific sponsors
   useEffect(() => {
-    fetch('/api/sponsors')
+    if (!race?.id) return;
+    fetch(`/api/sponsors/race/${race.id}`)
       .then((r) => r.ok ? r.json() : null)
       .then((body) => {
         const list = body?.data ?? body;
         if (Array.isArray(list)) setSponsors(list);
       })
       .catch(() => {});
-  }, []);
+  }, [race?.id]);
 
   const course = race?.courses.find((c) => c.id === courseId) || null;
 
@@ -600,35 +601,72 @@ export default function CourseRankingPage() {
               </div>
             )}
 
-            {/* Sponsors */}
+            {/* Race Sponsors — large display at bottom */}
             {sponsors.length > 0 && (
-              <div className="mt-12 py-8 border-t border-slate-100">
-                <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-5">
+              <div className="mt-16 py-10 border-t-2 border-slate-100">
+                <p className="text-center text-xs font-bold uppercase tracking-[0.25em] text-slate-400 mb-8">
                   Đơn vị tài trợ
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-6">
-                  {sponsors.map((s: any) => (
-                    <a
-                      key={s._id || s.name}
-                      href={s.website || '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      {s.logoUrl ? (
-                        <img
-                          src={s.logoUrl}
-                          alt={s.name}
-                          className={`object-contain ${s.level === 'diamond' ? 'h-16' : s.level === 'gold' ? 'h-12' : 'h-10'}`}
-                        />
-                      ) : (
-                        <div className="w-32 h-14 bg-slate-50 border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-[11px] text-slate-400 font-semibold">
-                          {s.name}
-                        </div>
-                      )}
-                    </a>
-                  ))}
-                </div>
+                {/* Diamond sponsors — extra large */}
+                {sponsors.filter(s => s.level === 'diamond').length > 0 && (
+                  <div className="flex flex-wrap items-center justify-center gap-10 mb-8">
+                    {sponsors.filter(s => s.level === 'diamond').map((s: any) => (
+                      <a
+                        key={s._id || s.name}
+                        href={s.website || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block transition-transform hover:scale-105"
+                      >
+                        {s.logoUrl ? (
+                          <img src={s.logoUrl} alt={s.name} className="h-24 md:h-28 w-auto object-contain" />
+                        ) : (
+                          <div className="px-8 py-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-lg font-bold text-slate-500">{s.name}</div>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {/* Gold sponsors — large */}
+                {sponsors.filter(s => s.level === 'gold').length > 0 && (
+                  <div className="flex flex-wrap items-center justify-center gap-8 mb-6">
+                    {sponsors.filter(s => s.level === 'gold').map((s: any) => (
+                      <a
+                        key={s._id || s.name}
+                        href={s.website || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block transition-transform hover:scale-105"
+                      >
+                        {s.logoUrl ? (
+                          <img src={s.logoUrl} alt={s.name} className="h-16 md:h-20 w-auto object-contain" />
+                        ) : (
+                          <div className="px-6 py-3 bg-slate-50 border border-dashed border-slate-200 rounded-lg text-sm font-semibold text-slate-400">{s.name}</div>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {/* Silver sponsors — medium */}
+                {sponsors.filter(s => s.level === 'silver').length > 0 && (
+                  <div className="flex flex-wrap items-center justify-center gap-6">
+                    {sponsors.filter(s => s.level === 'silver').map((s: any) => (
+                      <a
+                        key={s._id || s.name}
+                        href={s.website || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block transition-transform hover:scale-105"
+                      >
+                        {s.logoUrl ? (
+                          <img src={s.logoUrl} alt={s.name} className="h-10 md:h-14 w-auto object-contain" />
+                        ) : (
+                          <div className="px-4 py-2 bg-slate-50 border border-dashed border-slate-200 rounded text-xs font-semibold text-slate-400">{s.name}</div>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
