@@ -37,7 +37,7 @@ import {
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight } from "lucide-react";
 
-type RaceStatus = "pre_race" | "live" | "ended";
+type RaceStatus = "draft" | "pre_race" | "live" | "ended";
 
 interface Race {
   _id: string;
@@ -53,6 +53,10 @@ interface Race {
 
 function StatusBadge({ status }: { status: RaceStatus }) {
   const config: Record<RaceStatus, { label: string; className: string }> = {
+    draft: {
+      label: "Nháp",
+      className: "bg-yellow-500/20 text-yellow-400",
+    },
     pre_race: {
       label: "Chuẩn bị",
       className: "bg-blue-500/20 text-blue-400",
@@ -93,10 +97,10 @@ export default function RacesPage() {
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newRace, setNewRace] = useState<Partial<components["schemas"]["CreateRaceDto"]>>({
+  const [newRace, setNewRace] = useState<Record<string, any>>({
     title: "",
     slug: "",
-    status: "pre_race",
+    status: "draft",
     raceType: "running",
     cacheTtlSeconds: 60,
   });
@@ -113,7 +117,7 @@ export default function RacesPage() {
         params: {
           query: {
             title: search || undefined,
-            status: statusFilter === "all" ? undefined : statusFilter,
+            status: statusFilter === "all" ? "all" : statusFilter,
             page,
             pageSize: 20,
           },
@@ -159,7 +163,7 @@ export default function RacesPage() {
         body: {
           title: newRace.title,
           slug,
-          status: newRace.status || "pre_race",
+          status: newRace.status || "draft",
           raceType: newRace.raceType || "running",
           province: newRace.province,
           cacheTtlSeconds: newRace.cacheTtlSeconds ?? 60,
@@ -167,7 +171,7 @@ export default function RacesPage() {
           enableClaim: false,
           enableLiveTracking: false,
           enable5pix: false,
-        },
+        } as any,
         ...authHeaders(token),
       });
       if (error) throw error;
@@ -176,7 +180,7 @@ export default function RacesPage() {
       setNewRace({
         title: "",
         slug: "",
-        status: "pre_race",
+        status: "draft",
         raceType: "running",
         cacheTtlSeconds: 60,
       });
@@ -310,6 +314,7 @@ export default function RacesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả</SelectItem>
+            <SelectItem value="draft">Nháp</SelectItem>
             <SelectItem value="pre_race">Chuẩn bị</SelectItem>
             <SelectItem value="live">Đang diễn ra</SelectItem>
             <SelectItem value="ended">Đã kết thúc</SelectItem>

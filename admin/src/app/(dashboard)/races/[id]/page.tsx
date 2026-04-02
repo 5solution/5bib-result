@@ -61,7 +61,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 
-type RaceStatus = "pre_race" | "live" | "ended";
+type RaceStatus = "draft" | "pre_race" | "live" | "ended";
 
 interface Checkpoint {
   key: string;
@@ -116,6 +116,7 @@ interface Race {
 
 function StatusBadge({ status }: { status: RaceStatus }) {
   const config: Record<RaceStatus, { label: string; className: string }> = {
+    draft: { label: "Nháp", className: "bg-yellow-500/20 text-yellow-400" },
     pre_race: { label: "Chuẩn bị", className: "bg-blue-500/20 text-blue-400" },
     live: { label: "Đang diễn ra", className: "bg-green-500/20 text-green-400" },
     ended: { label: "Đã kết thúc", className: "bg-zinc-500/20 text-zinc-400" },
@@ -240,7 +241,7 @@ export default function RaceDetailPage() {
     try {
       const { error } = await api.PATCH("/api/races/{id}/status", {
         params: { path: { id: raceId } },
-        body: { status: newStatus },
+        body: { status: newStatus } as any,
         ...authHeaders(token),
       });
       if (error) throw error;
@@ -469,8 +470,16 @@ export default function RaceDetailPage() {
               {/* Status Controls — Clear Lifecycle */}
               <div className="flex flex-col gap-3">
                 <Label>Trạng thái giải đấu</Label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   {([
+                    {
+                      key: "draft" as RaceStatus,
+                      label: "Nháp",
+                      desc: "Ẩn khỏi trang công khai",
+                      icon: "✏️",
+                      activeClass: "border-yellow-500 bg-yellow-50 text-yellow-800",
+                      dotClass: "bg-yellow-500",
+                    },
                     {
                       key: "pre_race" as RaceStatus,
                       label: "Chuẩn bị",

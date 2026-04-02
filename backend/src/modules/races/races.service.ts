@@ -166,11 +166,12 @@ export class RacesService {
       filter.title = { $regex: title, $options: 'i' };
     }
 
-    if (status) {
+    if (status && status !== 'all') {
       filter.status = status;
-    } else {
+    } else if (!status) {
       filter.status = { $ne: 'draft' };
     }
+    // status === 'all' → no filter, include drafts
 
     if (province) {
       filter.province = province;
