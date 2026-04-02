@@ -35,7 +35,9 @@ interface Claim {
   bib: string;
   name: string;
   email: string;
+  phone?: string;
   description: string;
+  attachments?: string[];
   status: "pending" | "resolved" | "rejected";
   adminNote?: string;
   createdAt: string;
@@ -203,9 +205,12 @@ export default function ClaimsPage() {
                     <TableCell>
                       <div>
                         <p className="font-medium">{claim.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {claim.email}
-                        </p>
+                        {claim.phone && (
+                          <p className="text-xs text-muted-foreground">📱 {claim.phone}</p>
+                        )}
+                        {claim.email && (
+                          <p className="text-xs text-muted-foreground">{claim.email}</p>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell max-w-[200px] truncate text-muted-foreground">
@@ -286,14 +291,35 @@ export default function ClaimsPage() {
             </DialogTitle>
             <DialogDescription>
               {activeClaim && (
-                <>
-                  BIB: <strong>{activeClaim.bib}</strong> - {activeClaim.name}
-                  <br />
-                  {activeClaim.description}
-                </>
+                <>BIB: <strong>{activeClaim.bib}</strong> — {activeClaim.name}</>
               )}
             </DialogDescription>
           </DialogHeader>
+          {activeClaim && (
+            <div className="space-y-2 text-sm px-1">
+              {activeClaim.phone && <p>📱 SĐT: <strong>{activeClaim.phone}</strong></p>}
+              {activeClaim.email && <p>✉️ Email: {activeClaim.email}</p>}
+              <p className="text-muted-foreground">{activeClaim.description}</p>
+              {activeClaim.attachments && activeClaim.attachments.length > 0 && (
+                <div className="pt-1">
+                  <p className="font-medium mb-1">📎 Tệp đính kèm:</p>
+                  <div className="space-y-1">
+                    {activeClaim.attachments.map((url, i) => (
+                      <a
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-blue-500 hover:underline truncate"
+                      >
+                        {url.split('/').pop() || `File ${i + 1}`}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-4 py-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="admin-note">Ghi chú admin</Label>

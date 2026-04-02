@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 
@@ -230,6 +230,86 @@ export default function AthleteDetailPage() {
 
   const [downloading, setDownloading] = useState(false);
   const celebrationAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Claim form state
+  const [showClaimForm, setShowClaimForm] = useState(false);
+  const [claimName, setClaimName] = useState('');
+  const [claimEmail, setClaimEmail] = useState('');
+  const [claimPhone, setClaimPhone] = useState('');
+  const [claimDescription, setClaimDescription] = useState('');
+  const [claimAttachments, setClaimAttachments] = useState<string[]>([]);
+  const [claimUploading, setClaimUploading] = useState(false);
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [claimSubmitted, setClaimSubmitted] = useState(false);
+  const claimFileRef = useRef<HTMLInputElement>(null);
+
+  const handleClaimFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('File quá lớn. Giới hạn 20MB.');
+      return;
+    }
+    setClaimUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/race-results/claims/upload', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Upload failed');
+      }
+      const { url } = await res.json();
+      setClaimAttachments(prev => [...prev, url]);
+      toast.success(`Đã tải lên: ${file.name}`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Tải file thất bại');
+    } finally {
+      setClaimUploading(false);
+      if (claimFileRef.current) claimFileRef.current.value = '';
+    }
+  }, []);
+
+  const handleClaimSubmit = useCallback(async () => {
+    if (!athlete) return;
+    if (!claimName.trim() || !claimPhone.trim() || !claimDescription.trim()) {
+      toast.error('Vui lòng điền đầy đủ: Họ tên, Số điện thoại, và Nội dung khiếu nại.');
+      return;
+    }
+    setClaimSubmitting(true);
+    try {
+      // Resolve raceId from slug
+      const raceRes = await fetch(`/api/races/slug/${slug}`);
+      const raceBody = await raceRes.json();
+      const raceId = raceBody?.data?._id || raceBody?._id;
+      if (!raceId) throw new Error('Không tìm thấy giải đấu');
+
+      const res = await fetch('/api/race-results/claims', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          raceId,
+          courseId: athlete.course_id || '',
+          bib: String(athlete.Bib),
+          name: claimName.trim(),
+          email: claimEmail.trim() || undefined,
+          phone: claimPhone.trim(),
+          description: claimDescription.trim(),
+          attachments: claimAttachments.length > 0 ? claimAttachments : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Submit failed');
+      }
+      setClaimSubmitted(true);
+      toast.success('Khiếu nại đã được gửi thành công! Chúng tôi sẽ liên hệ bạn sớm nhất.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Gửi khiếu nại thất bại');
+    } finally {
+      setClaimSubmitting(false);
+    }
+  }, [athlete, slug, claimName, claimEmail, claimPhone, claimDescription, claimAttachments]);
 
   const fireCelebration = useCallback(() => {
     // Confetti burst
@@ -775,6 +855,169 @@ export default function AthleteDetailPage() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* === CLAIM / APPEAL SECTION === */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Khiếu nại kết quả</h2>
+                <p className="text-xs text-gray-400">Gửi yêu cầu xem xét lại thành tích</p>
+              </div>
+            </div>
+            {!showClaimForm && !claimSubmitted && (
+              <button
+                onClick={() => setShowClaimForm(true)}
+                className="px-4 py-2 text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors"
+              >
+                Gửi khiếu nại
+              </button>
+            )}
+          </div>
+
+          {claimSubmitted ? (
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center">
+                <Check className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Đã gửi khiếu nại</h3>
+              <p className="text-sm text-gray-500 max-w-md mx-auto">
+                Yêu cầu của bạn đã được ghi nhận. Ban tổ chức sẽ xem xét và liên hệ bạn qua số điện thoại đã cung cấp.
+              </p>
+            </div>
+          ) : showClaimForm ? (
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {/* Name */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+                    <User className="w-3.5 h-3.5" /> Họ tên <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={claimName}
+                    onChange={(e) => setClaimName(e.target.value)}
+                    placeholder="Nguyễn Văn A"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                  />
+                </div>
+                {/* Phone */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+                    <Phone className="w-3.5 h-3.5" /> Số điện thoại <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={claimPhone}
+                    onChange={(e) => setClaimPhone(e.target.value)}
+                    placeholder="0912 345 678"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Email (optional) */}
+              <div className="mb-4">
+                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+                  <Mail className="w-3.5 h-3.5" /> Email <span className="text-gray-400 text-xs font-normal">(không bắt buộc)</span>
+                </label>
+                <input
+                  type="email"
+                  value={claimEmail}
+                  onChange={(e) => setClaimEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="mb-4">
+                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+                  <FileText className="w-3.5 h-3.5" /> Nội dung khiếu nại <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={claimDescription}
+                  onChange={(e) => setClaimDescription(e.target.value)}
+                  placeholder="Mô tả chi tiết lý do khiếu nại: thời gian chip không chính xác, thiếu checkpoint, sai cự ly..."
+                  rows={4}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
+                />
+              </div>
+
+              {/* File upload */}
+              <div className="mb-6">
+                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+                  <Upload className="w-3.5 h-3.5" /> Tải lên bằng chứng <span className="text-gray-400 text-xs font-normal">(GPX, KML, FIT, ảnh — tối đa 20MB)</span>
+                </label>
+                <input
+                  ref={claimFileRef}
+                  type="file"
+                  accept=".gpx,.kml,.kmz,.fit,.tcx,.jpg,.jpeg,.png,.webp,.pdf,.zip"
+                  onChange={handleClaimFileUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => claimFileRef.current?.click()}
+                  disabled={claimUploading}
+                  className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-200 hover:border-blue-300 rounded-xl text-sm text-gray-500 hover:text-blue-600 transition-all w-full justify-center"
+                >
+                  {claimUploading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Đang tải lên...</>
+                  ) : (
+                    <><Upload className="w-4 h-4" /> Chọn file (tracklog, ảnh chụp màn hình...)</>
+                  )}
+                </button>
+                {claimAttachments.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {claimAttachments.map((url, i) => {
+                      const fileName = url.split('/').pop() || `File ${i + 1}`;
+                      return (
+                        <div key={i} className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg text-sm">
+                          <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                          <span className="text-blue-700 truncate flex-1">{fileName}</span>
+                          <button
+                            onClick={() => setClaimAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleClaimSubmit}
+                  disabled={claimSubmitting || claimUploading}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-orange-200 hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {claimSubmitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Đang gửi...</>
+                  ) : (
+                    'Gửi khiếu nại'
+                  )}
+                </button>
+                <button
+                  onClick={() => { setShowClaimForm(false); setClaimName(''); setClaimEmail(''); setClaimPhone(''); setClaimDescription(''); setClaimAttachments([]); }}
+                  className="px-6 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Hủy
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="px-6 py-5 text-sm text-gray-500">
+              Nếu bạn cho rằng kết quả có sai sót, bạn có thể gửi yêu cầu khiếu nại kèm theo bằng chứng (tracklog GPS, ảnh chụp đồng hồ...) để ban tổ chức xem xét.
+            </div>
+          )}
         </div>
 
         {/* === BACK NAVIGATION === */}

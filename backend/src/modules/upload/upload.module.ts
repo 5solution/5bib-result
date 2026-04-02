@@ -6,5 +6,6 @@ import { s3ClientProvider } from '../aws.config';
 @Module({
   controllers: [UploadController],
   providers: [UploadService, s3ClientProvider],
+  exports: [UploadService],
 })
 export class UploadModule {}

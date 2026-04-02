@@ -14,7 +14,9 @@ export class ResultClaim {
   @Prop({ required: true }) bib: string;
   @Prop({ required: true }) name: string;
   @Prop({ required: true }) email: string;
+  @Prop({ required: true }) phone: string;
   @Prop({ required: true }) description: string;
+  @Prop({ type: [String], default: [] }) attachments: string[]; // S3 URLs for tracklog files
   @Prop({ default: 'pending' }) status: string; // pending | resolved | rejected
   @Prop() adminNote: string;
   created_at: Date;

@@ -8,6 +8,7 @@ import { RaceResultController } from './race-result.controller';
 import { RaceResultService } from './services/race-result.service';
 import { RaceSyncCron } from './services/race-sync.cron';
 import { RacesModule } from '../races/races.module';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RacesModule } from '../races/races.module';
     ]),
     HttpModule,
     RacesModule,
+    UploadModule,
   ],
   controllers: [RaceResultController],
   providers: [RaceResultService, RaceSyncCron],

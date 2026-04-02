@@ -1,19 +1,37 @@
-import { Controller, Get, Post, Query, Param, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Param,
+  Body,
+  BadRequestException,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import {
   ApiOperation,
   ApiResponse,
   ApiTags,
   ApiParam,
   ApiQuery,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { GetRaceResultsDto } from './dto/get-race-results.dto';
 import { SubmitClaimDto } from './dto/submit-claim.dto';
 import { RaceResultService } from './services/race-result.service';
+import { UploadService } from '../upload/upload.service';
 
 @ApiTags('Race Results')
 @Controller('race-results')
 export class RaceResultController {
-  constructor(private readonly raceResultService: RaceResultService) {}
+  constructor(
+    private readonly raceResultService: RaceResultService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   @Get('distances')
   @ApiOperation({ summary: 'Get available race distances/types' })
@@ -117,6 +135,56 @@ export class RaceResultController {
   async getCourseStats(@Param('courseId') courseId: string) {
     const stats = await this.raceResultService.getCourseStats(courseId);
     return { data: stats, success: true };
+  }
+
+  @Post('claims/upload')
+  @ApiOperation({ summary: 'Upload attachment for a claim (tracklog, screenshot)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'File uploaded, returns URL' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max for tracklog files
+    }),
+  )
+  async uploadClaimAttachment(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    const allowed = [
+      'application/gpx+xml',
+      'application/xml',
+      'text/xml',
+      'application/vnd.google-earth.kml+xml',
+      'application/vnd.google-earth.kmz',
+      'application/octet-stream',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+      'application/zip',
+    ];
+    // Also allow by extension for GPX/KML/FIT files
+    const ext = file.originalname?.split('.').pop()?.toLowerCase() || '';
+    const allowedExts = ['gpx', 'kml', 'kmz', 'fit', 'tcx', 'jpg', 'jpeg', 'png', 'webp', 'pdf', 'zip'];
+    if (!allowed.includes(file.mimetype) && !allowedExts.includes(ext)) {
+      throw new BadRequestException(
+        'File type not allowed. Supported: GPX, KML, KMZ, FIT, TCX, JPG, PNG, PDF, ZIP',
+      );
+    }
+    const url = await this.uploadService.uploadFile(file);
+    if (!url) {
+      throw new BadRequestException('Upload failed');
+    }
+    return { url };
   }
 
   @Post('claims')
