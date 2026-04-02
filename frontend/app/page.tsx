@@ -381,8 +381,18 @@ export default function HomePage() {
                 ? Array.from({ length: 4 }).map((_, i) => (
                     <div
                       key={i}
-                      className="shrink-0 w-[280px] md:w-[300px] h-[400px] md:h-[440px] bg-white/10 animate-pulse rounded-lg"
-                    />
+                      className="shrink-0 w-[280px] md:w-[300px] h-[400px] md:h-[440px] bg-white/10 animate-pulse rounded-lg overflow-hidden"
+                    >
+                      <div className="h-full flex flex-col justify-end p-4 gap-2">
+                        <div className="h-3 w-16 bg-white/10 rounded" />
+                        <div className="h-5 w-3/4 bg-white/10 rounded" />
+                        <div className="h-3 w-1/2 bg-white/10 rounded" />
+                        <div className="h-3 w-2/3 bg-white/10 rounded mt-1" />
+                        <div className="flex gap-1.5 mt-2">
+                          {[1,2,3,4].map(j => <div key={j} className="h-10 w-10 bg-white/10 rounded" />)}
+                        </div>
+                      </div>
+                    </div>
                   ))
                 : liveAndUpcoming.length > 0
                   ? liveAndUpcoming.map((race) => (
@@ -511,8 +521,15 @@ export default function HomePage() {
               ? Array.from({ length: 4 }).map((_, i) => (
                   <div
                     key={i}
-                    className="shrink-0 w-[280px] md:w-[300px] h-[380px] md:h-[420px] bg-slate-200 animate-pulse rounded-lg"
-                  />
+                    className="shrink-0 w-[280px] md:w-[300px] h-[380px] md:h-[420px] bg-slate-100 animate-pulse rounded-lg overflow-hidden"
+                  >
+                    <div className="h-full flex flex-col justify-end p-4 gap-2">
+                      <div className="h-3 w-20 bg-slate-200 rounded" />
+                      <div className="h-5 w-3/4 bg-slate-200 rounded" />
+                      <div className="h-3 w-1/2 bg-slate-200 rounded" />
+                      <div className="h-3 w-2/3 bg-slate-200 rounded mt-1" />
+                    </div>
+                  </div>
                 ))
               : completedRaces.length > 0
                 ? completedRaces.map((race) => (
@@ -554,17 +571,17 @@ function EventCard({ race }: { race: Race }) {
       href={`/races/${race.slug}`}
       className="shrink-0 w-[280px] md:w-[300px] group"
     >
-      <div className="relative h-[400px] md:h-[440px] overflow-hidden rounded-lg">
+      <div className="relative h-[400px] md:h-[440px] overflow-hidden rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-500">
         <div
-          className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+          className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
           style={{ backgroundImage: `url(${image})` }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent group-hover:from-black/90 transition-all duration-500" />
 
         {/* Status badge */}
         <div className="absolute top-3 left-3 z-20">
           {isLive ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-600 rounded text-xs font-bold text-white uppercase tracking-wide">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-600 rounded text-xs font-bold text-white uppercase tracking-wide shadow-lg shadow-red-600/30">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
@@ -579,8 +596,8 @@ function EventCard({ race }: { race: Race }) {
         </div>
 
         {/* Card content */}
-        <div className="absolute bottom-0 left-0 right-0 z-20 p-4 whitespace-normal">
-          <h3 className="text-white font-bold text-sm leading-tight mb-1.5 line-clamp-2 group-hover:underline">
+        <div className="absolute bottom-0 left-0 right-0 z-20 p-4 whitespace-normal translate-y-0 group-hover:-translate-y-1 transition-transform duration-500">
+          <h3 className="text-white font-bold text-sm leading-tight mb-1.5 line-clamp-2">
             {race.name}
           </h3>
 
@@ -653,12 +670,12 @@ function PastEventCard({ race }: { race: Race }) {
       href={`/races/${race.slug}`}
       className="shrink-0 w-[280px] md:w-[300px] group"
     >
-      <div className="relative h-[380px] md:h-[420px] overflow-hidden rounded-lg">
+      <div className="relative h-[380px] md:h-[420px] overflow-hidden rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-500">
         <div
-          className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+          className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
           style={{ backgroundImage: `url(${image})` }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent group-hover:from-black/90 transition-all duration-500" />
 
         <div className="absolute top-3 left-3 z-20">
           <span className="px-3 py-1 bg-slate-700/80 backdrop-blur-sm rounded text-xs font-bold text-white uppercase tracking-wide">
@@ -666,8 +683,8 @@ function PastEventCard({ race }: { race: Race }) {
           </span>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 z-20 p-4 whitespace-normal">
-          <h3 className="text-white font-bold text-sm leading-tight mb-1.5 line-clamp-2 group-hover:underline">
+        <div className="absolute bottom-0 left-0 right-0 z-20 p-4 whitespace-normal translate-y-0 group-hover:-translate-y-1 transition-transform duration-500">
+          <h3 className="text-white font-bold text-sm leading-tight mb-1.5 line-clamp-2">
             {race.name}
           </h3>
 

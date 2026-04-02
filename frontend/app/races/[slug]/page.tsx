@@ -190,8 +190,41 @@ export default function RaceDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white pt-14 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-white pt-14">
+        {/* Hero skeleton */}
+        <div className="relative pt-[104px]">
+          <div className="absolute inset-0 bg-gradient-to-b from-blue-700 to-blue-800 animate-pulse" />
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
+            <div className="h-4 w-32 bg-white/20 rounded mb-6" />
+            <div className="h-10 w-2/3 bg-white/20 rounded mb-3" />
+            <div className="h-4 w-1/3 bg-white/20 rounded" />
+          </div>
+        </div>
+        {/* Course cards skeleton */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="h-8 w-32 bg-slate-200 rounded mb-8 animate-pulse" />
+          <div className="flex flex-col gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="border border-slate-200 rounded-lg overflow-hidden animate-pulse">
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_0.8fr]">
+                  <div className="h-[250px] lg:h-[280px] bg-slate-200" />
+                  <div className="p-6 space-y-3">
+                    <div className="h-6 w-3/4 bg-slate-200 rounded" />
+                    <div className="h-4 w-1/2 bg-slate-100 rounded" />
+                    <div className="grid grid-cols-3 gap-4 mt-4">
+                      {[1,2,3].map(j => <div key={j} className="h-12 bg-slate-100 rounded" />)}
+                    </div>
+                    <div className="h-10 w-40 bg-slate-200 rounded-full mt-4" />
+                  </div>
+                  <div className="p-6 bg-slate-50 space-y-3">
+                    <div className="h-3 w-20 bg-slate-200 rounded" />
+                    {[1,2,3].map(j => <div key={j} className="h-8 bg-slate-200 rounded" />)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -298,13 +331,13 @@ export default function RaceDetailPage() {
             return (
               <div
                 key={course.id}
-                className={`border border-slate-200 ${accent.border} border-b-4 rounded-lg overflow-hidden bg-white shadow-sm transition-all duration-300 hover:shadow-xl ${accent.bg} hover:-translate-y-0.5`}
+                className={`group border border-slate-200 ${accent.border} border-b-4 rounded-lg overflow-hidden bg-white shadow-sm transition-all duration-300 hover:shadow-xl ${accent.bg} hover:-translate-y-0.5`}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_0.8fr]">
                   {/* Part 1: Image + race status */}
-                  <div className="relative h-[250px] lg:h-auto">
+                  <div className="relative h-[250px] lg:h-auto overflow-hidden">
                     <div
-                      className="absolute inset-0 bg-cover bg-center"
+                      className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
                       style={{ backgroundImage: `url(${courseImage})` }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
@@ -338,7 +371,7 @@ export default function RaceDetailPage() {
                       </p>
 
                       {/* Stats grid */}
-                      <div className="grid grid-cols-3 gap-4 mt-4">
+                      <div className={`grid ${course.elevation ? 'grid-cols-3' : 'grid-cols-2'} gap-4 mt-4`}>
                         <div>
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">Hạng mục</p>
                           <p className="text-lg font-bold text-slate-900">{course.distance}</p>
@@ -347,10 +380,12 @@ export default function RaceDetailPage() {
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">Cự ly</p>
                           <p className="text-lg font-bold text-slate-900">{course.distanceKm || '-'} KM</p>
                         </div>
-                        <div>
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Leo cao</p>
-                          <p className="text-lg font-bold text-slate-900">{course.elevation || '-'}</p>
-                        </div>
+                        {course.elevation && (
+                          <div>
+                            <p className="text-[11px] text-slate-400 uppercase tracking-wide">Leo cao</p>
+                            <p className="text-lg font-bold text-slate-900">{course.elevation}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
 

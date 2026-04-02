@@ -229,10 +229,27 @@ export default function AthleteDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 font-medium">Đang tải kết quả...</p>
+      <div className="min-h-screen bg-gray-50 pt-14">
+        {/* Hero skeleton */}
+        <div className="relative bg-gradient-to-br from-blue-600 to-blue-800 animate-pulse">
+          <div className="max-w-4xl mx-auto px-4 py-12 md:py-16">
+            <div className="h-4 w-32 bg-white/20 rounded mb-8" />
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-24 h-24 rounded-full bg-white/20" />
+              <div className="h-7 w-48 bg-white/20 rounded" />
+              <div className="flex gap-2">
+                {[1,2,3].map(i => <div key={i} className="h-6 w-16 bg-white/15 rounded-full" />)}
+              </div>
+              <div className="h-12 w-40 bg-white/20 rounded-lg mt-4" />
+            </div>
+          </div>
+        </div>
+        {/* Content skeleton */}
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+          <div className="grid grid-cols-3 gap-4">
+            {[1,2,3].map(i => <div key={i} className="h-20 bg-white rounded-xl animate-pulse" />)}
+          </div>
+          <div className="h-40 bg-white rounded-xl animate-pulse" />
         </div>
       </div>
     );

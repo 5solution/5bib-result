@@ -224,18 +224,31 @@ function CalendarContent() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="rounded-lg overflow-hidden animate-pulse">
-                <div className="h-[360px] bg-slate-200" />
+              <div key={i} className="rounded-lg overflow-hidden animate-pulse bg-slate-100">
+                <div className="h-[400px] md:h-[420px] flex flex-col justify-end p-5 gap-2.5">
+                  <div className="h-3 w-20 bg-slate-200 rounded" />
+                  <div className="h-5 w-4/5 bg-slate-200 rounded" />
+                  <div className="h-3 w-1/2 bg-slate-200 rounded" />
+                  <div className="h-3 w-2/3 bg-slate-200 rounded" />
+                  <div className="flex gap-1.5 mt-2">
+                    {[1,2,3].map(j => <div key={j} className="h-5 w-12 bg-slate-200 rounded" />)}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         ) : filteredRaces.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-              <Search className="w-8 h-8 text-slate-400" />
+          <div className="text-center py-24">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shadow-inner">
+              <Search className="w-9 h-9 text-slate-300" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Không tìm thấy sự kiện</h3>
-            <p className="text-slate-500 text-sm">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Không tìm thấy sự kiện</h3>
+            <p className="text-slate-500 text-sm max-w-sm mx-auto">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm để tìm giải chạy phù hợp</p>
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="mt-4 px-5 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 transition-colors">
+                Xóa bộ lọc
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -243,14 +256,14 @@ function CalendarContent() {
               const countdown = race.status === 'upcoming' ? getCountdown(race.date) : null;
               return (
                 <Link key={race.id} href={`/races/${race.slug}`}>
-                  <div className="relative h-[400px] md:h-[420px] overflow-hidden rounded-lg group cursor-pointer">
+                  <div className="relative h-[400px] md:h-[420px] overflow-hidden rounded-lg group cursor-pointer shadow-md hover:shadow-2xl transition-all duration-500">
                     {/* Background image */}
                     <div
-                      className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
+                      className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
                       style={{ backgroundImage: `url(${getRaceImage(race, index)})` }}
                     />
                     {/* Gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent group-hover:from-black/90 transition-all duration-500" />
 
                     {/* Status badge */}
                     <div className="absolute top-4 left-4 z-20">
@@ -280,8 +293,8 @@ function CalendarContent() {
                     )}
 
                     {/* Content at bottom */}
-                    <div className="absolute bottom-0 left-0 right-0 z-20 p-5">
-                      <h3 className="text-white font-bold text-base leading-tight mb-1.5 line-clamp-2 group-hover:underline">
+                    <div className="absolute bottom-0 left-0 right-0 z-20 p-5 translate-y-0 group-hover:-translate-y-1 transition-transform duration-500">
+                      <h3 className="text-white font-bold text-base leading-tight mb-1.5 line-clamp-2">
                         {race.name}
                       </h3>
                       <p className="text-white/70 text-sm">{race.location}</p>

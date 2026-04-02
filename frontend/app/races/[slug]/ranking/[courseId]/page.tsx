@@ -282,8 +282,39 @@ export default function CourseRankingPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white pt-14 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-white pt-14">
+        {/* Hero skeleton */}
+        <div className="relative pt-[104px]">
+          <div className="absolute inset-0 bg-gradient-to-b from-blue-700 to-blue-800 animate-pulse" />
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="h-4 w-32 bg-white/20 rounded mb-4" />
+            <div className="h-10 w-2/3 bg-white/20 rounded mb-3" />
+            <div className="flex gap-6 mt-6">
+              {[1,2,3,4].map(i => (
+                <div key={i} className="flex flex-col items-center gap-1.5">
+                  <div className="h-3 w-16 bg-white/15 rounded" />
+                  <div className="h-5 w-20 bg-white/20 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* Table skeleton */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="h-12 w-full max-w-lg mx-auto bg-slate-100 rounded-xl mb-6 animate-pulse" />
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-4 py-4 border-b border-slate-100 last:border-0 animate-pulse">
+                <div className="w-9 h-9 rounded-full bg-slate-200 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-40 bg-slate-200 rounded" />
+                  <div className="h-3 w-24 bg-slate-100 rounded" />
+                </div>
+                <div className="h-4 w-20 bg-slate-200 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -503,6 +534,22 @@ export default function CourseRankingPage() {
 
             {/* Table */}
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              {loadingResults ? (
+                <div className="divide-y divide-slate-100">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 px-4 py-4 animate-pulse">
+                      <div className="w-9 h-9 rounded-full bg-slate-200 shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-40 bg-slate-200 rounded" />
+                        <div className="h-3 w-24 bg-slate-100 rounded" />
+                      </div>
+                      <div className="h-4 w-20 bg-slate-200 rounded" />
+                      <div className="hidden md:block h-4 w-16 bg-slate-100 rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+              <>
               {/* Desktop */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-full">
@@ -529,6 +576,8 @@ export default function CourseRankingPage() {
                   <MobileRankingCard key={result.Bib} result={result} slug={slug} />
                 ))}
               </div>
+              </>
+              )}
 
               {/* Empty */}
               {paginatedResults.length === 0 && (
