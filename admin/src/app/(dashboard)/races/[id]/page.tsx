@@ -38,6 +38,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -68,6 +75,7 @@ interface Course {
   distance?: string;
   distanceKm?: number;
   courseType?: string;
+  apiFormat?: string;
   apiUrl?: string;
   imageUrl?: string;
   elevationGain?: number;
@@ -142,6 +150,8 @@ export default function RaceDetailPage() {
     courseId: "",
     name: "",
     distance: "",
+    courseType: "split",
+    apiFormat: "json",
     apiUrl: "",
     checkpoints: [] as Checkpoint[],
   });
@@ -251,6 +261,7 @@ export default function RaceDetailPage() {
             distance: courseForm.distance,
             distanceKm: courseForm.distanceKm,
             courseType: courseForm.courseType,
+            apiFormat: courseForm.apiFormat,
             apiUrl: courseForm.apiUrl,
             imageUrl: courseForm.imageUrl,
             elevationGain: courseForm.elevationGain,
@@ -272,6 +283,7 @@ export default function RaceDetailPage() {
             distance: courseForm.distance,
             distanceKm: courseForm.distanceKm,
             courseType: courseForm.courseType,
+            apiFormat: courseForm.apiFormat,
             apiUrl: courseForm.apiUrl,
             imageUrl: courseForm.imageUrl,
             elevationGain: courseForm.elevationGain,
@@ -303,7 +315,7 @@ export default function RaceDetailPage() {
       }
       setCourseDialogOpen(false);
       setEditingCourse(null);
-      setCourseForm({ courseId: "", name: "", distance: "", apiUrl: "", checkpoints: [] });
+      setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [] });
       fetchRace();
     } catch {
       toast.error("Lưu cự ly thất bại");
@@ -374,7 +386,8 @@ export default function RaceDetailPage() {
       name: course.name,
       distance: course.distance,
       distanceKm: course.distanceKm,
-      courseType: course.courseType,
+      courseType: course.courseType || "split",
+      apiFormat: course.apiFormat || "json",
       apiUrl: course.apiUrl,
       imageUrl: course.imageUrl,
       elevationGain: course.elevationGain,
@@ -389,7 +402,7 @@ export default function RaceDetailPage() {
 
   function openAddCourse() {
     setEditingCourse(null);
-    setCourseForm({ courseId: "", name: "", distance: "", apiUrl: "", checkpoints: [] });
+    setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [] });
     setCourseDialogOpen(true);
   }
 
@@ -725,15 +738,42 @@ export default function RaceDetailPage() {
                         />
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>Loại cự ly</Label>
-                      <Input
-                        value={courseForm.courseType ?? ""}
-                        onChange={(e) =>
-                          setCourseForm((p: any) => ({ ...p, courseType: e.target.value }))
-                        }
-                        placeholder="road / trail / ultra"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>Loại cự ly</Label>
+                        <Select
+                          value={courseForm.courseType ?? "split"}
+                          onValueChange={(val) =>
+                            setCourseForm((p: any) => ({ ...p, courseType: val }))
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="split">Split Race</SelectItem>
+                            <SelectItem value="lap">Lap Race</SelectItem>
+                            <SelectItem value="team_relay">Team Relay</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Định dạng API</Label>
+                        <Select
+                          value={courseForm.apiFormat ?? "json"}
+                          onValueChange={(val) =>
+                            setCourseForm((p: any) => ({ ...p, apiFormat: val }))
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="json">JSON</SelectItem>
+                            <SelectItem value="csv">CSV</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="flex flex-col gap-2">
                       <Label>API URL</Label>

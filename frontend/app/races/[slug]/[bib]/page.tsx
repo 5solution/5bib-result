@@ -33,6 +33,7 @@ interface SplitTime {
   distance: string;
   time: string;
   pace: string;
+  member?: string;
 }
 
 interface CheckpointConfig {
@@ -50,6 +51,17 @@ function parseSplitsFromData(data: Record<string, unknown>, checkpoints?: Checkp
 
     const chiptimes: Record<string, string> = JSON.parse(chiptimesStr);
     const paces: Record<string, string> = pacesStr ? JSON.parse(pacesStr) : {};
+
+    // Parse Member field if present (for team_relay races)
+    let members: Record<string, string> = {};
+    const memberStr = data.Member as string | undefined;
+    if (memberStr) {
+      try {
+        members = JSON.parse(memberStr);
+      } catch {
+        // ignore invalid Member JSON
+      }
+    }
 
     // Build a lookup map from checkpoint config
     const cpMap = new Map<string, CheckpointConfig>();
@@ -74,6 +86,7 @@ function parseSplitsFromData(data: Record<string, unknown>, checkpoints?: Checkp
           distance,
           time: chiptimes[key] || '-',
           pace: paces[key] || '-',
+          member: members[key] || undefined,
         };
       });
 
@@ -112,6 +125,7 @@ export default function AthleteDetailPage() {
   const [athlete, setAthlete] = useState<AthleteResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [courseType, setCourseType] = useState<string>('split');
 
   const fetchAthlete = useCallback(async () => {
     try {
@@ -134,6 +148,8 @@ export default function AthleteDetailPage() {
           const courseId = data.course_id;
           const matchedCourse = courses.find((c: { courseId: string }) => c.courseId === courseId);
           const checkpoints = matchedCourse?.checkpoints as CheckpointConfig[] | undefined;
+          const detectedCourseType = (matchedCourse?.courseType as string) || 'split';
+          setCourseType(detectedCourseType);
           const splits = parseSplitsFromData(data, checkpoints) || undefined;
           setAthlete({
             ...data,
@@ -402,8 +418,12 @@ export default function AthleteDetailPage() {
               <Timer className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Thời gian qua trạm</h2>
-              <p className="text-xs text-gray-400">Split times tại các checkpoint</p>
+              <h2 className="text-lg font-bold text-gray-900">
+                {courseType === 'team_relay' ? 'Thời gian các vòng (Đội)' : courseType === 'lap' ? 'Thời gian các vòng' : 'Thời gian qua trạm'}
+              </h2>
+              <p className="text-xs text-gray-400">
+                {courseType === 'team_relay' ? 'Lap times theo từng thành viên' : courseType === 'lap' ? 'Lap times qua các vòng' : 'Split times tại các checkpoint'}
+              </p>
             </div>
           </div>
 
@@ -425,8 +445,15 @@ export default function AthleteDetailPage() {
                       <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
                       <span className="font-semibold text-gray-900 text-sm">{split.name}</span>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{split.distance}</span>
+                    {courseType === 'split' && (
+                      <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{split.distance}</span>
+                    )}
                   </div>
+                  {courseType === 'team_relay' && split.member && (
+                    <div className="pl-9 mb-1">
+                      <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{split.member}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between pl-9">
                     <span className="font-mono font-bold text-blue-600">{split.time}</span>
                     {!isStart && (
@@ -448,8 +475,15 @@ export default function AthleteDetailPage() {
               <thead>
                 <tr className="bg-gray-50/80">
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-8">#</th>
-                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Checkpoint</th>
-                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Cự ly</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {courseType === 'lap' || courseType === 'team_relay' ? 'Vòng' : 'Checkpoint'}
+                  </th>
+                  {courseType === 'team_relay' && (
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Thành viên</th>
+                  )}
+                  {courseType === 'split' && (
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Cự ly</th>
+                  )}
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Thời gian</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Pace</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-24"></th>
@@ -472,7 +506,18 @@ export default function AthleteDetailPage() {
                         <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
                       </td>
                       <td className="px-6 py-3.5 font-semibold text-gray-900">{split.name}</td>
-                      <td className="px-6 py-3.5 text-gray-500 font-medium">{split.distance}</td>
+                      {courseType === 'team_relay' && (
+                        <td className="px-6 py-3.5">
+                          {split.member ? (
+                            <span className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">{split.member}</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                      )}
+                      {courseType === 'split' && (
+                        <td className="px-6 py-3.5 text-gray-500 font-medium">{split.distance}</td>
+                      )}
                       <td className="px-6 py-3.5 text-right font-mono font-bold text-blue-600">{split.time}</td>
                       <td className="px-6 py-3.5 text-right font-mono text-gray-600">{split.pace !== '-' ? `${split.pace} /km` : '-'}</td>
                       <td className="px-6 py-3.5 text-right">
@@ -511,7 +556,11 @@ export default function AthleteDetailPage() {
                   <div key={i} className="flex items-center gap-3 group">
                     <div className="w-28 md:w-36 text-right shrink-0">
                       <span className="text-xs font-semibold text-gray-500">{split.name}</span>
-                      <div className="text-[10px] text-gray-400">{split.distance}</div>
+                      {courseType === 'team_relay' && split.member ? (
+                        <div className="text-[10px] text-indigo-500 font-medium">{split.member}</div>
+                      ) : courseType === 'split' ? (
+                        <div className="text-[10px] text-gray-400">{split.distance}</div>
+                      ) : null}
                     </div>
                     <div className="flex-1">
                       <div className="relative h-10 bg-gray-100 rounded-xl overflow-hidden">

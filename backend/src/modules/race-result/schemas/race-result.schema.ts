@@ -64,6 +64,9 @@ export class RaceResult {
   @Prop({ type: [SplitTimeSchema], default: [] })
   splits: SplitTime[];
 
+  // Team relay member mapping (JSON string: lap → member name)
+  @Prop() member: string;
+
   // Raw data from API (flexible)
   @Prop({ type: Object }) rawData: Record<string, any>;
 

@@ -19,8 +19,10 @@ export class RaceCourse {
   @Prop({ required: true }) name: string;
   @Prop() distance?: string;
   @Prop({ type: Number }) distanceKm?: number;
-  @Prop() courseType?: string;
+  @Prop({ enum: ['split', 'lap', 'team_relay', 'point_to_point'] })
+  courseType?: string;
   @Prop() apiUrl?: string; // RaceResult API endpoint for this course
+  @Prop({ default: 'json' }) apiFormat?: string; // 'json' | 'csv' — format of API response
   @Prop({ default: 0 }) splitCount?: number; // auto-detected from API
   @Prop({ default: 'idle' }) importStatus?: string;
   @Prop() imageUrl?: string; // Course cover image (S3)

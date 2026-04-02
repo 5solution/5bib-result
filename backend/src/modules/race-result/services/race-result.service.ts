@@ -40,6 +40,7 @@ interface RaceResultApiItem {
   Gap: string;
   Nationality: string;
   Nation: string;
+  Member?: string;
 }
 
 @Injectable()
@@ -303,6 +304,7 @@ export class RaceResultService {
         gap: result.Gap,
         nationality: result.Nationality,
         nation: result.Nation,
+        member: result.Member || null,
         syncedAt: new Date(),
         rawData: result,
       };
@@ -451,6 +453,7 @@ export class RaceResultService {
       Gap: doc.gap,
       Nationality: doc.nationality,
       Nation: doc.nation,
+      Member: doc.member,
       race_id: doc.raceId,
       course_id: doc.courseId,
       distance: doc.distance,
