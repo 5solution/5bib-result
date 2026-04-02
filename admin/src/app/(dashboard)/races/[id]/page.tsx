@@ -137,6 +137,7 @@ export default function RaceDetailPage() {
   const raceId = params.id as string;
 
   const [race, setRace] = useState<Race | null>(null);
+  const [activeTab, setActiveTab] = useState("info");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -441,7 +442,7 @@ export default function RaceDetailPage() {
         <StatusBadge status={race.status} />
       </div>
 
-      <Tabs defaultValue="info">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="info">Thông tin</TabsTrigger>
           <TabsTrigger value="courses">
