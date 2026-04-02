@@ -33,7 +33,6 @@
 ---
 
 ## In Progress
-- [ ] [NORMAL] Ở race đang diễn ra thêm phần đếm thời gian
 
 ## Todo
 
@@ -42,4 +41,5 @@
 - [x] [HIGH] Phần khiếu nại của user — form trên trang athlete detail, upload tracklog (GPX/KML/FIT), require SĐT, backend schema updated (phone + attachments), admin hiển thị SĐT + tệp đính kèm
 - [x] [HIGH] Per-race sponsors — backend raceId field, GET /sponsors/race/:raceId, admin tab quản lý NTT per race, frontend ranking page hiển thị to theo level (diamond/gold/silver)
 - [x] [NORMAL] Pre-race event page — upcoming races show course details (start time, COT, elevation, start location) instead of results table, organizer + description info block
+- [x] [NORMAL] Live race timer — reusable LiveTimer component shows elapsed time since race start, displayed on race detail hero and ranking page status bar
 

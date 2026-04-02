@@ -7,6 +7,7 @@ import {
   Search, MapPin, Calendar, ChevronLeft, ChevronRight, ChevronDown,
   Users, X, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
+import LiveTimer from '@/components/LiveTimer';
 
 /* ─── Types ─── */
 
@@ -411,6 +412,9 @@ export default function CourseRankingPage() {
                 <span className="text-base md:text-lg font-black uppercase tracking-wide text-white">
                   {statusLabel}
                 </span>
+                {race.status === 'live' && race.date && (
+                  <LiveTimer startDate={race.date} />
+                )}
               </div>
 
               <div className="hidden sm:block w-px h-7 bg-white/30" />

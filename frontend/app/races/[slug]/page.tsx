@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route } from 'lucide-react';
+import LiveTimer from '@/components/LiveTimer';
 
 interface Course {
   id: string;
@@ -309,6 +310,12 @@ export default function RaceDetailPage() {
                   </span>
                 )}
               </div>
+              {/* Live elapsed timer */}
+              {race.status === 'live' && race.date && (
+                <div className="mt-4">
+                  <LiveTimer startDate={race.date} variant="hero" />
+                </div>
+              )}
             </div>
 
             {/* Right: logo placeholder */}
