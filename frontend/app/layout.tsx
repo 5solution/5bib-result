@@ -4,7 +4,6 @@ import { Toaster } from 'sonner'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
-import SponsorSidebar from '@/components/SponsorSidebar'
 
 const inter = Inter({
   subsets: ['latin', 'vietnamese'],
@@ -33,7 +32,6 @@ export default function RootLayout({
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
-        <SponsorSidebar />
         <Toaster
           position="top-right"
           toastOptions={{

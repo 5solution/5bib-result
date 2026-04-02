@@ -10,17 +10,35 @@ const navLinks = [
   { href: '/calendar', label: 'Lịch sự kiện' },
 ];
 
-const sponsors = [
-  { name: 'Suunto', logo: 'https://placehold.co/160x50/ffffff/222222?text=SUUNTO&font=roboto' },
-  { name: 'Hoka', logo: 'https://placehold.co/160x50/ffffff/222222?text=HOKA&font=roboto' },
-  { name: 'GU Energy', logo: 'https://placehold.co/160x50/ffffff/222222?text=GU+Energy&font=roboto' },
-  { name: 'Garmin', logo: 'https://placehold.co/160x50/ffffff/222222?text=GARMIN&font=roboto' },
-  { name: 'The North Face', logo: 'https://placehold.co/160x50/ffffff/222222?text=TNF&font=roboto' },
-];
+interface Sponsor {
+  _id: string;
+  name: string;
+  logoUrl: string;
+  website?: string;
+  level: 'silver' | 'gold' | 'diamond';
+  order: number;
+}
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const pathname = usePathname();
+
+  useEffect(() => {
+    fetch('/api/sponsors')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        const list: Sponsor[] = body?.data ?? body ?? [];
+        if (Array.isArray(list) && list.length > 0) {
+          const priority: Record<string, number> = { diamond: 0, gold: 1, silver: 2 };
+          list.sort(
+            (a, b) => (priority[a.level] ?? 9) - (priority[b.level] ?? 9) || a.order - b.order,
+          );
+          setSponsors(list);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
@@ -74,9 +92,11 @@ export default function Header() {
       </div>
 
       {/* Sponsor trapezoid — absolute, top-right, extends below header */}
-      <div className="hidden md:block absolute top-0 right-0 z-50" style={{ height: 80 }}>
-        <SponsorCarousel />
-      </div>
+      {sponsors.length > 0 && (
+        <div className="hidden md:block absolute top-0 right-0 z-50" style={{ height: 80 }}>
+          <SponsorCarousel sponsors={sponsors} />
+        </div>
+      )}
 
       {/* Mobile Nav */}
       {mobileMenuOpen && (
@@ -106,7 +126,7 @@ export default function Header() {
   );
 }
 
-function SponsorCarousel() {
+function SponsorCarousel({ sponsors }: { sponsors: Sponsor[] }) {
   const [current, setCurrent] = useState(0);
   const [startX, setStartX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -114,11 +134,11 @@ function SponsorCarousel() {
 
   const next = useCallback(() => {
     setCurrent((c) => (c + 1) % sponsors.length);
-  }, []);
+  }, [sponsors.length]);
 
   const prev = useCallback(() => {
     setCurrent((c) => (c - 1 + sponsors.length) % sponsors.length);
-  }, []);
+  }, [sponsors.length]);
 
   useEffect(() => {
     intervalRef.current = setInterval(next, 3000);
@@ -161,17 +181,21 @@ function SponsorCarousel() {
         <div className="relative w-full h-full overflow-hidden">
           {sponsors.map((s, i) => (
             <div
-              key={s.name}
+              key={s._id || s.name}
               className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
                 i === current ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
               }`}
             >
-              <img
-                src={s.logo}
-                alt={s.name}
-                className="h-9 w-auto object-contain pointer-events-none"
-                draggable={false}
-              />
+              {s.logoUrl ? (
+                <img
+                  src={s.logoUrl}
+                  alt={s.name}
+                  className="h-9 w-auto max-w-[140px] object-contain pointer-events-none"
+                  draggable={false}
+                />
+              ) : (
+                <span className="text-xs font-bold text-slate-500 tracking-wide">{s.name}</span>
+              )}
             </div>
           ))}
         </div>
