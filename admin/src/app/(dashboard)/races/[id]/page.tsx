@@ -622,13 +622,13 @@ export default function RaceDetailPage() {
                   <Label htmlFor="edit-start">Ngày bắt đầu</Label>
                   <Input
                     id="edit-start"
-                    type="datetime-local"
-                    value={editForm.startDate?.slice(0, 16) ?? ""}
+                    type="date"
+                    value={editForm.startDate?.slice(0, 10) ?? ""}
                     onChange={(e) =>
                       setEditForm((p: any) => ({
                         ...p,
                         startDate: e.target.value
-                          ? new Date(e.target.value).toISOString()
+                          ? new Date(e.target.value + "T00:00:00").toISOString()
                           : undefined,
                       }))
                     }
@@ -638,13 +638,13 @@ export default function RaceDetailPage() {
                   <Label htmlFor="edit-end">Ngày kết thúc</Label>
                   <Input
                     id="edit-end"
-                    type="datetime-local"
-                    value={editForm.endDate?.slice(0, 16) ?? ""}
+                    type="date"
+                    value={editForm.endDate?.slice(0, 10) ?? ""}
                     onChange={(e) =>
                       setEditForm((p: any) => ({
                         ...p,
                         endDate: e.target.value
-                          ? new Date(e.target.value).toISOString()
+                          ? new Date(e.target.value + "T00:00:00").toISOString()
                           : undefined,
                       }))
                     }
