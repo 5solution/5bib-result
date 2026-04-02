@@ -355,7 +355,13 @@ export class RaceResultService {
     if (dto.course_id) filter.courseId = dto.course_id;
     if (dto.gender) filter.gender = dto.gender;
     if (dto.category) filter.category = dto.category;
-    if (dto.name) filter.name = { $regex: dto.name, $options: 'i' };
+    if (dto.name) {
+      // Search both name and bib
+      filter.$or = [
+        { name: { $regex: dto.name, $options: 'i' } },
+        { bib: dto.name },
+      ];
+    }
 
     // Get ALL results first (for duplicate rank filtering)
     const allResults = await this.resultModel
