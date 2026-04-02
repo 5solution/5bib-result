@@ -229,15 +229,28 @@ export class RaceResultService {
     }
   }
 
-  private normalizeRankValue(value: any): {
+  private normalizeRankValue(
+    value: any,
+    timingPoint?: string,
+  ): {
     original: string;
     numeric: number | null;
   } {
     const strValue = String(value).trim();
     const numValue = parseInt(strValue, 10);
 
-    // -1 or non-numeric values (DSQ, DNF, DNS, etc.) → push to bottom
     if (numValue === -1 || isNaN(numValue)) {
+      // Status-based ranks (DNF, DNS, DSQ, OOC) → 900000 (after normal ranks)
+      const statusValues = ['DNF', 'DNS', 'DSQ', 'OOC'];
+      const upperStr = strValue.toUpperCase();
+      const upperTp = (timingPoint || '').toUpperCase();
+      if (
+        statusValues.includes(upperStr) ||
+        statusValues.includes(upperTp)
+      ) {
+        return { original: strValue, numeric: 900000 };
+      }
+      // Unknown / no status → 999999 (last)
       return { original: strValue, numeric: 999999 };
     }
 
@@ -267,10 +280,10 @@ export class RaceResultService {
     }
 
     const bulkOps = response.data.map((result) => {
-      const overallRank = this.normalizeRankValue(result.OverallRank);
-      const genderRank = this.normalizeRankValue(result.GenderRank);
-      const catRank = this.normalizeRankValue(result.CatRank);
-      const overrankLive = this.normalizeRankValue(result.OverrankLive);
+      const overallRank = this.normalizeRankValue(result.OverallRank, result.TimingPoint);
+      const genderRank = this.normalizeRankValue(result.GenderRank, result.TimingPoint);
+      const catRank = this.normalizeRankValue(result.CatRank, result.TimingPoint);
+      const overrankLive = this.normalizeRankValue(result.OverrankLive, result.TimingPoint);
 
       const doc = {
         raceId,
@@ -415,7 +428,7 @@ export class RaceResultService {
       if (
         result.overallRank === '-1' ||
         result.overallRankNumeric === null ||
-        result.overallRankNumeric === 999999
+        result.overallRankNumeric >= 900000
       ) {
         return true;
       }
@@ -427,13 +440,23 @@ export class RaceResultService {
     });
   }
 
+  private formatRankDisplay(rank: string, timingPoint?: string): string {
+    const statusValues = ['DNF', 'DNS', 'DSQ', 'OOC'];
+    if (rank === '-1') {
+      const tp = (timingPoint || '').toUpperCase();
+      if (statusValues.includes(tp)) return tp;
+      return '';
+    }
+    return rank;
+  }
+
   private mapDocToResponse(doc: any) {
     return {
       Bib: doc.bib,
       Name: doc.name,
-      OverallRank: doc.overallRank,
-      GenderRank: doc.genderRank,
-      CatRank: doc.categoryRank,
+      OverallRank: this.formatRankDisplay(doc.overallRank, doc.timingPoint),
+      GenderRank: this.formatRankDisplay(doc.genderRank, doc.timingPoint),
+      CatRank: this.formatRankDisplay(doc.categoryRank, doc.timingPoint),
       Gender: doc.gender,
       Category: doc.category,
       ChipTime: doc.chipTime,

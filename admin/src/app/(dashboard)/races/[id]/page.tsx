@@ -990,7 +990,7 @@ export default function RaceDetailPage() {
                     <TableRow>
                       <TableHead>Tên</TableHead>
                       <TableHead className="hidden sm:table-cell">Khoảng cách</TableHead>
-                      <TableHead className="hidden md:table-cell">Leo cao</TableHead>
+                      <TableHead className="hidden md:table-cell">Giờ xuất phát</TableHead>
                       <TableHead className="hidden lg:table-cell">Đường dẫn API</TableHead>
                       <TableHead className="text-right">Thao tác</TableHead>
                     </TableRow>
@@ -1015,7 +1015,7 @@ export default function RaceDetailPage() {
                           {course.distance || "-"}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground">
-                          {course.elevationGain ? `${course.elevationGain}m` : "-"}
+                          {course.startTime || "-"}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-muted-foreground max-w-[200px] truncate">
                           {course.apiUrl || "-"}

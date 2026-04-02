@@ -152,6 +152,7 @@ export default function CourseRankingPage() {
 
   const [totalItems, setTotalItems] = useState(0);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [sponsors, setSponsors] = useState<any[]>([]);
 
   const fetchRace = useCallback(async () => {
     try {
@@ -212,6 +213,17 @@ export default function CourseRankingPage() {
       })
       .catch(() => {});
   }, [courseId]);
+
+  // Fetch sponsors
+  useEffect(() => {
+    fetch('/api/sponsors')
+      .then((r) => r.ok ? r.json() : null)
+      .then((body) => {
+        const list = body?.data ?? body;
+        if (Array.isArray(list)) setSponsors(list);
+      })
+      .catch(() => {});
+  }, []);
 
   const course = race?.courses.find((c) => c.id === courseId) || null;
 
@@ -539,22 +551,37 @@ export default function CourseRankingPage() {
               </div>
             )}
 
-            {/* Sponsor placeholder */}
-            <div className="mt-12 py-8 border-t border-slate-100">
-              <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-5">
-                Ban tổ chức & Nhà tài trợ
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-6">
-                {['SUUNTO', 'HOKA', 'GU Energy', 'GARMIN', 'The North Face', 'Compressport'].map((name) => (
-                  <div
-                    key={name}
-                    className="w-32 h-14 bg-slate-50 border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-[11px] text-slate-300 font-semibold"
-                  >
-                    {name}
-                  </div>
-                ))}
+            {/* Sponsors */}
+            {sponsors.length > 0 && (
+              <div className="mt-12 py-8 border-t border-slate-100">
+                <p className="text-center text-[10px] font-bold uppercase tracking-widest text-slate-300 mb-5">
+                  Đơn vị tài trợ
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-6">
+                  {sponsors.map((s: any) => (
+                    <a
+                      key={s._id || s.name}
+                      href={s.website || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      {s.logoUrl ? (
+                        <img
+                          src={s.logoUrl}
+                          alt={s.name}
+                          className={`object-contain ${s.level === 'diamond' ? 'h-16' : s.level === 'gold' ? 'h-12' : 'h-10'}`}
+                        />
+                      ) : (
+                        <div className="w-32 h-14 bg-slate-50 border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-[11px] text-slate-400 font-semibold">
+                          {s.name}
+                        </div>
+                      )}
+                    </a>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -565,14 +592,16 @@ export default function CourseRankingPage() {
 /* ─── RankingRow — desktop table row ─── */
 
 function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
-  const rankNum = parseInt(result.OverallRank);
-  const rank = isNaN(rankNum) ? result.OverallRank : rankNum;
-  const rankDisplay = typeof rank === 'number' ? rank : rank;
+  const rankStr = (result.OverallRank || '').trim();
+  const rankNum = parseInt(rankStr);
+  const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
 
   const getMedalColor = (r: number | string) => {
     if (r === 1) return 'bg-amber-400 text-amber-900';
     if (r === 2) return 'bg-slate-300 text-slate-700';
     if (r === 3) return 'bg-orange-300 text-orange-800';
+    if (typeof r === 'string' && ['DNF', 'DNS', 'DSQ', 'OOC'].includes(r)) return 'bg-red-100 text-red-600';
+    if (r === '') return 'bg-slate-50 text-slate-300';
     return 'bg-slate-100 text-slate-600';
   };
 
@@ -583,7 +612,7 @@ function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
     <tr className="group transition-all duration-200 hover:bg-blue-50/60 hover:shadow-[inset_4px_0_0_0_#2563eb] cursor-pointer">
       <td className="px-4 py-3.5">
         <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
-          {rank}
+          {rank || '-'}
         </div>
       </td>
 
@@ -631,13 +660,16 @@ function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
 /* ─── MobileRankingCard ─── */
 
 function MobileRankingCard({ result, slug }: { result: RaceResult; slug: string }) {
-  const rankNum = parseInt(result.OverallRank);
-  const rank = isNaN(rankNum) ? result.OverallRank : rankNum;
+  const rankStr = (result.OverallRank || '').trim();
+  const rankNum = parseInt(rankStr);
+  const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
 
   const getMedalColor = (r: number | string) => {
     if (r === 1) return 'bg-amber-400 text-amber-900';
     if (r === 2) return 'bg-slate-300 text-slate-700';
     if (r === 3) return 'bg-orange-300 text-orange-800';
+    if (typeof r === 'string' && ['DNF', 'DNS', 'DSQ', 'OOC'].includes(r)) return 'bg-red-100 text-red-600';
+    if (r === '') return 'bg-slate-50 text-slate-300';
     return 'bg-slate-100 text-slate-600';
   };
 
@@ -648,7 +680,7 @@ function MobileRankingCard({ result, slug }: { result: RaceResult; slug: string 
     <Link href={`/races/${slug}/${result.Bib}`} className="block">
       <div className="px-4 py-4 flex items-center gap-3 active:bg-blue-50 transition-colors">
         <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
-          {rank}
+          {rank || '-'}
         </div>
 
         <div className="flex-1 min-w-0">
