@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight } from 'lucide-react';
+import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import confetti from 'canvas-confetti';
 
 interface AthleteResult {
   Bib: number;
@@ -226,6 +227,115 @@ export default function AthleteDetailPage() {
     if (num === 3) return 'from-amber-600 to-amber-700';
     return 'from-blue-500 to-blue-600';
   };
+
+  const [downloading, setDownloading] = useState(false);
+  const celebrationAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const fireCelebration = useCallback(() => {
+    // Confetti burst
+    const duration = 3000;
+    const end = Date.now() + duration;
+    const colors = ['#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
+
+    const frame = () => {
+      confetti({
+        particleCount: 3,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.7 },
+        colors,
+      });
+      confetti({
+        particleCount: 3,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.7 },
+        colors,
+      });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    };
+    frame();
+
+    // Big center burst
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors,
+    });
+
+    // Sound
+    try {
+      if (!celebrationAudioRef.current) {
+        celebrationAudioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2JkpGKgHJmYGZ0g4+WlI6EeW5mZnJ/jJaXk4p/cmZjZ3SAj5qYkoZ7bWNhZ3WDkpqZk4d7bGBdZHSCk5uak4h7a19cYXGAkpyblIp9bWBeYXF/kZyblYp+bmJfY3KAkZuak4p+bmNgZHOAkZqZkoiAcGRjZ3SAj5iXkYd/cWdmaHaAjZWUjoN9cmtqcHuGjZGOiIN+dnFwdXqCiIuKhoJ+endzdnmAhIeGhIF+e3l5en2AgoSEgoB+fXx8fYCBgoKBgH9+fn6AgIGBgYCAf39/f4CAgICAgIB/f39/gICAgICAgICAf3+AgICAgICAgICAf4CAgICAgICAgICAgICAgICAgIA=');
+      }
+      celebrationAudioRef.current.currentTime = 0;
+      celebrationAudioRef.current.volume = 0.3;
+      celebrationAudioRef.current.play().catch(() => {});
+    } catch {}
+  }, []);
+
+  const downloadCertificateAsPng = useCallback(async () => {
+    if (!athlete?.Certificate) {
+      toast.info('Chứng nhận chưa sẵn sàng. Vui lòng thử lại sau.');
+      return;
+    }
+
+    setDownloading(true);
+    toast.loading('Đang tải chứng nhận...', { id: 'cert-download' });
+
+    try {
+      // Dynamically import pdfjs
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
+      // Fetch PDF via proxy to avoid CORS
+      const pdfUrl = athlete.Certificate;
+      const response = await fetch(pdfUrl);
+      const arrayBuffer = await response.arrayBuffer();
+
+      // Load PDF
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+
+      // Render at 3x for high quality
+      const scale = 3;
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d')!;
+
+      await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+
+      // Convert to PNG and download
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error('Không thể tạo ảnh. Thử lại sau.', { id: 'cert-download' });
+          setDownloading(false);
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `certificate-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        toast.success('Tải chứng nhận thành công! 🎉', { id: 'cert-download' });
+        fireCelebration();
+        setDownloading(false);
+      }, 'image/png');
+    } catch (err) {
+      console.error('Certificate download error:', err);
+      // Fallback: open PDF directly
+      window.open(athlete.Certificate, '_blank');
+      toast.dismiss('cert-download');
+      setDownloading(false);
+    }
+  }, [athlete, fireCelebration]);
 
   if (loading) {
     return (
@@ -652,17 +762,16 @@ export default function AthleteDetailPage() {
 
             <div className="text-center mt-6">
               <button
-                onClick={() => {
-                  if (athlete.Certificate) {
-                    window.open(athlete.Certificate, '_blank');
-                  } else {
-                    toast.info('Chứng nhận chưa sẵn sàng. Vui lòng thử lại sau.');
-                  }
-                }}
-                className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-full transition-all duration-300 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transform hover:-translate-y-0.5"
+                onClick={downloadCertificateAsPng}
+                disabled={downloading}
+                className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-full transition-all duration-300 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
               >
-                <Download className="w-4 h-4" />
-                Tải chứng nhận
+                {downloading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                {downloading ? 'Đang xử lý...' : 'Tải chứng nhận (PNG)'}
               </button>
             </div>
           </div>
