@@ -36,7 +36,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -701,11 +700,17 @@ export default function RaceDetailPage() {
                   Quản lý các cự ly của giải
                 </CardDescription>
               </div>
-              <Dialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen}>
-                <DialogTrigger render={<Button size="sm" />}>
-                  <Plus className="size-4 mr-1" />
-                  Thêm
-                </DialogTrigger>
+              <Button size="sm" onClick={openAddCourse}>
+                <Plus className="size-4 mr-1" />
+                Thêm
+              </Button>
+              <Dialog open={courseDialogOpen} onOpenChange={(open) => {
+                setCourseDialogOpen(open);
+                if (!open) {
+                  setEditingCourse(null);
+                  setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [], imageUrl: "", elevationGain: undefined, cutOffTime: "", startTime: "", startLocation: "", mapUrl: "", gpxUrl: "" });
+                }
+              }}>
                 <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>
