@@ -76,6 +76,11 @@ export class AddCourseDto {
   @IsString()
   startLocation?: string;
 
+  @ApiPropertyOptional({ description: 'Cut-off time', example: '12:00:00' })
+  @IsOptional()
+  @IsString()
+  cutOffTime?: string;
+
   @ApiPropertyOptional({ description: 'Course map image URL (S3)' })
   @IsOptional()
   @IsString()

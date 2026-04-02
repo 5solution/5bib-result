@@ -79,6 +79,7 @@ interface Course {
   apiUrl?: string;
   imageUrl?: string;
   elevationGain?: number;
+  cutOffTime?: string;
   startTime?: string;
   startLocation?: string;
   mapUrl?: string;
@@ -266,6 +267,7 @@ export default function RaceDetailPage() {
             apiUrl: courseForm.apiUrl,
             imageUrl: courseForm.imageUrl,
             elevationGain: courseForm.elevationGain,
+            cutOffTime: courseForm.cutOffTime,
             startTime: courseForm.startTime,
             startLocation: courseForm.startLocation,
             mapUrl: courseForm.mapUrl,
@@ -288,6 +290,7 @@ export default function RaceDetailPage() {
             apiUrl: courseForm.apiUrl,
             imageUrl: courseForm.imageUrl,
             elevationGain: courseForm.elevationGain,
+            cutOffTime: courseForm.cutOffTime,
             startTime: courseForm.startTime,
             startLocation: courseForm.startLocation,
             mapUrl: courseForm.mapUrl,
@@ -316,7 +319,7 @@ export default function RaceDetailPage() {
       }
       setCourseDialogOpen(false);
       setEditingCourse(null);
-      setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [] });
+      setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [], imageUrl: "", elevationGain: undefined, cutOffTime: "", startTime: "", startLocation: "", mapUrl: "", gpxUrl: "" });
       fetchRace();
     } catch {
       toast.error("Lưu cự ly thất bại");
@@ -392,6 +395,7 @@ export default function RaceDetailPage() {
       apiUrl: course.apiUrl,
       imageUrl: course.imageUrl,
       elevationGain: course.elevationGain,
+      cutOffTime: course.cutOffTime,
       startTime: course.startTime,
       startLocation: course.startLocation,
       mapUrl: course.mapUrl,
@@ -403,7 +407,7 @@ export default function RaceDetailPage() {
 
   function openAddCourse() {
     setEditingCourse(null);
-    setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [] });
+    setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [], imageUrl: "", elevationGain: undefined, cutOffTime: "", startTime: "", startLocation: "", mapUrl: "", gpxUrl: "" });
     setCourseDialogOpen(true);
   }
 
@@ -820,17 +824,31 @@ export default function RaceDetailPage() {
                         />
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <Label className="flex items-center gap-1.5">
-                        <MapPin className="size-3.5" /> Địa điểm xuất phát
-                      </Label>
-                      <Input
-                        value={courseForm.startLocation ?? ""}
-                        onChange={(e) =>
-                          setCourseForm((p: any) => ({ ...p, startLocation: e.target.value }))
-                        }
-                        placeholder="Quảng trường Lâm Viên, Đà Lạt"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label className="flex items-center gap-1.5">
+                          <MapPin className="size-3.5" /> Địa điểm xuất phát
+                        </Label>
+                        <Input
+                          value={courseForm.startLocation ?? ""}
+                          onChange={(e) =>
+                            setCourseForm((p: any) => ({ ...p, startLocation: e.target.value }))
+                          }
+                          placeholder="Quảng trường Lâm Viên"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label className="flex items-center gap-1.5">
+                          <Clock className="size-3.5" /> Cut-off time (COT)
+                        </Label>
+                        <Input
+                          value={courseForm.cutOffTime ?? ""}
+                          onChange={(e) =>
+                            setCourseForm((p: any) => ({ ...p, cutOffTime: e.target.value }))
+                          }
+                          placeholder="12:00:00"
+                        />
+                      </div>
                     </div>
 
                     <Separator />

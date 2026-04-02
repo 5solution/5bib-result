@@ -16,6 +16,7 @@ interface Course {
   name?: string;
   distanceKm?: number;
   elevation?: string;
+  cutOffTime?: string;
   starters?: number;
   dnf?: number;
   finishers?: number;
@@ -173,6 +174,7 @@ export default function CourseRankingPage() {
               name: c.name,
               distanceKm: c.distanceKm,
               elevation: c.elevationGain ? `${c.elevationGain} M+` : undefined,
+              cutOffTime: c.cutOffTime,
               starters: 0,
               dnf: 0,
               finishers: 0,
@@ -289,10 +291,10 @@ export default function CourseRankingPage() {
 
   const infoItems = [
     { label: 'Địa điểm xuất phát', value: course.startLocation || race.location },
-    { label: 'Ngày thi đấu', value: formatDateRange(race.date) },
     { label: 'Giờ xuất phát', value: course.startTime || '05:00' },
     { label: 'Cự ly', value: `${course.distanceKm || '-'} KM` },
-    { label: 'Tổng leo cao', value: course.elevation || '-' },
+    ...(course.cutOffTime ? [{ label: 'COT', value: course.cutOffTime }] : []),
+    ...(course.elevation ? [{ label: 'Tổng leo cao', value: course.elevation }] : []),
   ];
 
   return (

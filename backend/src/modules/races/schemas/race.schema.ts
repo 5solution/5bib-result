@@ -29,6 +29,7 @@ export class RaceCourse {
   @Prop({ type: Number }) elevationGain?: number; // Total elevation gain in meters
   @Prop() startTime?: string; // e.g. "05:00"
   @Prop() startLocation?: string; // e.g. "Quảng trường Lâm Viên"
+  @Prop() cutOffTime?: string; // Cut-off time e.g. "12:00:00" or "24 giờ"
   @Prop() mapUrl?: string; // Course map image URL (S3)
   @Prop() gpxUrl?: string; // GPX file URL (S3)
   @Prop({ type: [CourseCheckpointSchema], default: [] })
