@@ -142,6 +142,10 @@ export default function CourseRankingPage() {
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState<RaceResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [genderFilter, setGenderFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [availableGenders, setAvailableGenders] = useState<string[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const rankingRef = useRef<HTMLDivElement>(null);
 
@@ -193,6 +197,20 @@ export default function CourseRankingPage() {
     fetchRace();
   }, [fetchRace]);
 
+  // Fetch filter options
+  useEffect(() => {
+    if (!courseId) return;
+    fetch(`/api/race-results/filters/${courseId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((body) => {
+        if (body?.data) {
+          setAvailableGenders(body.data.genders || []);
+          setAvailableCategories(body.data.categories || []);
+        }
+      })
+      .catch(() => {});
+  }, [courseId]);
+
   const course = race?.courses.find((c) => c.id === courseId) || null;
 
   const fetchResults = useCallback(async () => {
@@ -207,6 +225,8 @@ export default function CourseRankingPage() {
         sortDirection: 'ASC',
       });
       if (searchQuery.trim()) params.set('name', searchQuery.trim());
+      if (genderFilter) params.set('gender', genderFilter);
+      if (categoryFilter) params.set('category', categoryFilter);
 
       const res = await fetch(`/api/race-results?${params}`);
       if (res.ok) {
@@ -219,7 +239,7 @@ export default function CourseRankingPage() {
     } finally {
       setLoadingResults(false);
     }
-  }, [courseId, currentPage, searchQuery]);
+  }, [courseId, currentPage, searchQuery, genderFilter, categoryFilter]);
 
   useEffect(() => {
     fetchResults();
@@ -230,7 +250,7 @@ export default function CourseRankingPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, genderFilter, categoryFilter]);
 
   const formatDateRange = (start: string, end?: string) => {
     if (!start) return 'Chưa xác định';
@@ -407,9 +427,63 @@ export default function CourseRankingPage() {
               </div>
             </div>
 
-            {searchQuery && (
+            {/* Filters */}
+            {(availableGenders.length > 0 || availableCategories.length > 0) && (
+              <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+                {availableGenders.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Giới tính</span>
+                    <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                      <button
+                        onClick={() => setGenderFilter('')}
+                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${!genderFilter ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        Tất cả
+                      </button>
+                      {availableGenders.map((g) => (
+                        <button
+                          key={g}
+                          onClick={() => setGenderFilter(g === genderFilter ? '' : g)}
+                          className={`px-3 py-1.5 text-xs font-semibold transition-colors border-l border-slate-200 ${genderFilter === g ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          {g === 'Male' ? 'Nam' : g === 'Female' ? 'Nữ' : g}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {availableCategories.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nhóm tuổi</span>
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 cursor-pointer"
+                    >
+                      <option value="">Tất cả</option>
+                      {availableCategories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {(genderFilter || categoryFilter) && (
+                  <button
+                    onClick={() => { setGenderFilter(''); setCategoryFilter(''); }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Xóa bộ lọc
+                  </button>
+                )}
+              </div>
+            )}
+
+            {(searchQuery || genderFilter || categoryFilter) && (
               <p className="text-center text-sm text-slate-500 mb-4">
-                Tìm thấy <strong className="text-slate-700">{results.length}</strong> kết quả
+                Tìm thấy <strong className="text-slate-700">{totalItems}</strong> kết quả
               </p>
             )}
 

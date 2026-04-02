@@ -98,6 +98,15 @@ export class RaceResultController {
     return { data: results, success: true };
   }
 
+  @Get('filters/:courseId')
+  @ApiOperation({ summary: 'Get available filter options (genders, categories) for a course' })
+  @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
+  @ApiResponse({ status: 200, description: 'Returns distinct genders and categories' })
+  async getFilterOptions(@Param('courseId') courseId: string) {
+    const filters = await this.raceResultService.getFilterOptions(courseId);
+    return { data: filters, success: true };
+  }
+
   @Get('stats/:courseId')
   @ApiOperation({ summary: 'Get aggregated course stats (avg time, finishers, etc.)' })
   @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })

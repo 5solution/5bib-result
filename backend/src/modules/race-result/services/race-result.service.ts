@@ -231,16 +231,17 @@ export class RaceResultService {
     original: string;
     numeric: number | null;
   } {
-    const strValue = String(value);
+    const strValue = String(value).trim();
     const numValue = parseInt(strValue, 10);
 
-    if (numValue === -1) {
+    // -1 or non-numeric values (DSQ, DNF, DNS, etc.) → push to bottom
+    if (numValue === -1 || isNaN(numValue)) {
       return { original: strValue, numeric: 999999 };
     }
 
     return {
       original: strValue,
-      numeric: isNaN(numValue) ? null : numValue,
+      numeric: numValue,
     };
   }
 
@@ -448,6 +449,28 @@ export class RaceResultService {
       distance: doc.distance,
       synced_at: doc.syncedAt,
     };
+  }
+
+  /**
+   * Get available filter options (genders, categories) for a course
+   */
+  async getFilterOptions(courseId: string) {
+    const cacheKey = `filters:${courseId}`;
+    const cached = await this.getFromCache<any>(cacheKey);
+    if (cached) return cached;
+
+    const [genders, categories] = await Promise.all([
+      this.resultModel.distinct('gender', { courseId }).exec(),
+      this.resultModel.distinct('category', { courseId }).exec(),
+    ]);
+
+    const result = {
+      genders: genders.filter(Boolean).sort(),
+      categories: categories.filter(Boolean).sort(),
+    };
+
+    await this.setCache(cacheKey, result, 300); // cache 5 min
+    return result;
   }
 
   /**
