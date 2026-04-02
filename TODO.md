@@ -35,7 +35,17 @@
 ## In Progress
 
 ## Todo
-
+- [ ] [HIGH] Email/SMS thông báo khi admin xử lý khiếu nại
+- [ ] [HIGH] Tìm kiếm BIB/tên trên homepage xuyên suốt tất cả các giải
+- [ ] [HIGH] So sánh thành tích 2+ VDV cùng cự ly
+- [ ] [NORMAL] Admin claim detail page — xem chi tiết khiếu nại, preview tracklog
+- [ ] [NORMAL] Hiển thị bản đồ GPX trên trang course detail (Mapbox/Leaflet)
+- [ ] [NORMAL] Auto-refresh ranking khi race đang live (poll 30s)
+- [ ] [NORMAL] Share result dạng hình ảnh cho social media
+- [ ] [NORMAL] PWA support — xem kết quả offline
+- [ ] [LOW] Dark mode toggle
+- [ ] [LOW] Export kết quả CSV/Excel từ admin
+- [ ] [LOW] Tích hợp gallery ảnh với 5Pix
 
 ## Done
 - [x] [HIGH] Phần khiếu nại của user — form trên trang athlete detail, upload tracklog (GPX/KML/FIT), require SĐT, backend schema updated (phone + attachments), admin hiển thị SĐT + tệp đính kèm
