@@ -66,6 +66,7 @@ export class RaceResultService {
       n: dto.name || '',
       sf: dto.sortField || '',
       sd: dto.sortDirection || '',
+      ps: dto.pageSize || 10,
     };
     return crypto.createHash('md5').update(JSON.stringify(obj)).digest('hex').slice(0, 12);
   }
