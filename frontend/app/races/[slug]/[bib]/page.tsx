@@ -371,8 +371,8 @@ export default function AthleteDetailPage() {
       }
       celebrationAudioRef.current.currentTime = 0;
       celebrationAudioRef.current.volume = 0.3;
-      celebrationAudioRef.current.play().catch(() => {});
-    } catch {}
+      celebrationAudioRef.current.play().catch(() => { });
+    } catch { }
   }, []);
 
   const downloadCertificateAsPng = useCallback(async () => {
@@ -448,7 +448,7 @@ export default function AthleteDetailPage() {
               <div className="w-24 h-24 rounded-full bg-white/20" />
               <div className="h-7 w-48 bg-white/20 rounded" />
               <div className="flex gap-2">
-                {[1,2,3].map(i => <div key={i} className="h-6 w-16 bg-white/15 rounded-full" />)}
+                {[1, 2, 3].map(i => <div key={i} className="h-6 w-16 bg-white/15 rounded-full" />)}
               </div>
               <div className="h-12 w-40 bg-white/20 rounded-lg mt-4" />
             </div>
@@ -457,7 +457,7 @@ export default function AthleteDetailPage() {
         {/* Content skeleton */}
         <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
           <div className="grid grid-cols-3 gap-4">
-            {[1,2,3].map(i => <div key={i} className="h-20 bg-white rounded-xl animate-pulse" />)}
+            {[1, 2, 3].map(i => <div key={i} className="h-20 bg-white rounded-xl animate-pulse" />)}
           </div>
           <div className="h-40 bg-white rounded-xl animate-pulse" />
         </div>
@@ -529,7 +529,7 @@ export default function AthleteDetailPage() {
                 onClick={handleShareFacebook}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
                 Chia sẻ
               </button>
               <button
@@ -654,7 +654,7 @@ export default function AthleteDetailPage() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900">
-                {courseType === 'team_relay' ? 'Thời gian các vòng (Đội)' : courseType === 'lap' ? 'Thời gian các vòng' : 'Thời gian qua trạm'}
+                {courseType === 'team_relay' ? 'Thời gian các vòng (Đội)' : courseType === 'lap' ? 'Thời gian các vòng' : 'Chi tiết cuộc đua'}
               </h2>
               <p className="text-xs text-gray-400">
                 {courseType === 'team_relay' ? 'Lap times theo từng thành viên' : courseType === 'lap' ? 'Lap times qua các vòng' : 'Split times tại các checkpoint'}
@@ -733,9 +733,8 @@ export default function AthleteDetailPage() {
                   return (
                     <tr
                       key={i}
-                      className={`border-b border-gray-50 transition-colors ${
-                        isFastest ? 'bg-emerald-50/60 hover:bg-emerald-50' : isSlowest ? 'bg-orange-50/60 hover:bg-orange-50' : i % 2 === 1 ? 'bg-gray-50/30 hover:bg-gray-50/60' : 'hover:bg-gray-50/40'
-                      }`}
+                      className={`border-b border-gray-50 transition-colors ${isFastest ? 'bg-emerald-50/60 hover:bg-emerald-50' : isSlowest ? 'bg-orange-50/60 hover:bg-orange-50' : i % 2 === 1 ? 'bg-gray-50/30 hover:bg-gray-50/60' : 'hover:bg-gray-50/40'
+                        }`}
                     >
                       <td className="px-6 py-3.5">
                         <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
@@ -800,13 +799,12 @@ export default function AthleteDetailPage() {
                     <div className="flex-1">
                       <div className="relative h-10 bg-gray-100 rounded-xl overflow-hidden">
                         <div
-                          className={`absolute left-0 top-0 h-full rounded-xl transition-all duration-700 ease-out flex items-center justify-end px-4 ${
-                            isFastest
+                          className={`absolute left-0 top-0 h-full rounded-xl transition-all duration-700 ease-out flex items-center justify-end px-4 ${isFastest
                               ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-lg shadow-emerald-200'
                               : isSlowest
                                 ? 'bg-gradient-to-r from-orange-400 to-orange-500 shadow-lg shadow-orange-200'
                                 : 'bg-gradient-to-r from-blue-400 to-blue-500'
-                          }`}
+                            }`}
                           style={{ width: `${percentage}%` }}
                         >
                           <span className="text-xs font-bold text-white whitespace-nowrap drop-shadow-sm">{split.pace} /km</span>
