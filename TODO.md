@@ -45,7 +45,7 @@
 - [x] [NORMAL] Hiển thị nationality ở course card trên races/[slug] — backend trả nationalityCount trong getCourseStats, frontend hiện "🌍 N quốc gia" trên stats banner
 - [x] [NORMAL] Vinh danh Top 3 — hạng 1/2/3 có UI đặc biệt trên ranking page: medal emoji, gradient badge, highlighted row bg, colored left border, bolder name
 - [ ] [LOW] Tích hợp gallery ảnh với 5Pix — cần biết API/endpoint của 5Pix
-- [ ] [NORMAL] Thay placeholder PWA icons (192x192, 512x512) bằng logo 5BIB thật
+- [x] [NORMAL] Thay placeholder PWA icons (192x192, 512x512) bằng logo 5BIB thật — resized từ logo.png
 
 ## Done
 
