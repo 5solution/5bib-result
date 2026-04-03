@@ -130,7 +130,7 @@ function CompareContent() {
 
     return orderedKeys.map(key => {
       const cp = cpMap.get(key);
-      const name = cp?.name || (key === 'Start' ? 'Xuat phat' : key === 'Finish' ? 'Ve dich' : key);
+      const name = cp?.name || (key === 'Start' ? 'Xuất phát' : key === 'Finish' ? 'Về đích' : key);
       return {
         key,
         name,
@@ -177,9 +177,9 @@ function CompareContent() {
       <div className="min-h-screen bg-gray-50 pt-14">
         <div className="max-w-4xl mx-auto px-4 py-16 text-center">
           <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-700 mb-1">Can chon it nhat 2 VDV de so sanh</h3>
+          <h3 className="text-lg font-bold text-gray-700 mb-1">Cần chọn ít nhất 2 VĐV để so sánh</h3>
           <Link href={`/races/${slug}/ranking/${courseId}`} className="text-blue-600 hover:underline text-sm mt-2 inline-block">
-            Quay lai bang xep hang
+            Quay lại bảng xếp hạng
           </Link>
         </div>
       </div>
@@ -192,9 +192,9 @@ function CompareContent() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-5">
           <Link href={`/races/${slug}/ranking/${courseId}`} className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-blue-600 transition-colors mb-3">
-            <ChevronLeft className="w-4 h-4" /> Bang xep hang
+            <ChevronLeft className="w-4 h-4" /> Bảng xếp hạng
           </Link>
-          <h1 className="text-xl font-black text-gray-900">So sanh van dong vien</h1>
+          <h1 className="text-xl font-black text-gray-900">So sánh vận động viên</h1>
           {raceName && <p className="text-sm text-gray-500 mt-1">{raceName} &middot; {athletes[0]?.distance}</p>}
         </div>
       </div>
@@ -210,16 +210,16 @@ function CompareContent() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-gray-900 text-sm truncate">{formatName(a.Name)}</p>
-                  <p className="text-xs text-gray-500">BIB {a.Bib} &middot; {a.Gender === 'Female' ? 'Nu' : 'Nam'}</p>
+                  <p className="text-xs text-gray-500">BIB {a.Bib} &middot; {a.Gender === 'Female' ? 'Nữ' : 'Nam'}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-gray-400 uppercase font-bold">Hang</p>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">Hạng</p>
                   <p className="font-bold text-gray-900 text-sm">#{a.OverallRank}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-gray-400 uppercase font-bold">Thoi gian</p>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">Thời gian</p>
                   <p className="font-mono font-bold text-gray-900 text-sm">{a.ChipTime}</p>
                 </div>
                 <div>
@@ -227,7 +227,7 @@ function CompareContent() {
                   <p className="font-mono text-gray-700 text-sm">{a.Pace}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-gray-400 uppercase font-bold">Category</p>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">Nhóm tuổi</p>
                   <p className="text-gray-700 text-sm">{a.Category}</p>
                 </div>
               </div>
@@ -240,7 +240,7 @@ function CompareContent() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
               <Clock className="w-4 h-4 text-gray-400" />
-              <h2 className="font-bold text-gray-900 text-sm">So sanh theo checkpoint</h2>
+              <h2 className="font-bold text-gray-900 text-sm">So sánh theo checkpoint</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full">
@@ -286,13 +286,13 @@ function CompareContent() {
         <div className="mt-6 bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
             <Trophy className="w-4 h-4 text-gray-400" />
-            <h2 className="font-bold text-gray-900 text-sm">Tong hop</h2>
+            <h2 className="font-bold text-gray-900 text-sm">Tổng hợp</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Chi so</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Chỉ số</th>
                   {athletes.map((a, i) => (
                     <th key={a.Bib} className="px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wider">
                       <span className={textColors[i]}>{formatName(a.Name)}</span>
@@ -302,19 +302,19 @@ function CompareContent() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 <tr>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">Hang tong</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">Hạng tổng</td>
                   {athletes.map((a, i) => (
                     <td key={a.Bib} className="px-4 py-3 text-center font-bold text-sm">#{a.OverallRank}</td>
                   ))}
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">Hang gioi tinh</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">Hạng giới tính</td>
                   {athletes.map(a => (
                     <td key={a.Bib} className="px-4 py-3 text-center text-sm">#{a.GenderRank}</td>
                   ))}
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">Hang nhom tuoi</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">Hạng nhóm tuổi</td>
                   {athletes.map(a => (
                     <td key={a.Bib} className="px-4 py-3 text-center text-sm">#{a.CatRank}</td>
                   ))}

@@ -107,7 +107,7 @@ function SearchContent() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-blue-600 transition-colors mb-4">
-            <ChevronLeft className="w-4 h-4" /> Trang chu
+            <ChevronLeft className="w-4 h-4" /> Trang chủ
           </Link>
 
           <form onSubmit={handleSubmit} className="flex gap-3">
@@ -117,7 +117,7 @@ function SearchContent() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Nhap ten van dong vien hoac so BIB..."
+                placeholder="Nhập tên vận động viên hoặc số BIB..."
                 autoFocus
                 className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
               />
@@ -127,7 +127,7 @@ function SearchContent() {
               disabled={loading}
               className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors disabled:opacity-60"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Tim kiem'}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Tìm kiếm'}
             </button>
           </form>
         </div>
@@ -138,22 +138,22 @@ function SearchContent() {
         {loading && (
           <div className="flex flex-col items-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
-            <p className="text-sm text-gray-400">Dang tim kiem...</p>
+            <p className="text-sm text-gray-400">Đang tìm kiếm...</p>
           </div>
         )}
 
         {!loading && searched && results.length === 0 && (
           <div className="text-center py-16">
             <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-gray-700 mb-1">Khong tim thay ket qua</h3>
-            <p className="text-sm text-gray-400">Thu tim kiem voi ten hoac so BIB khac</p>
+            <h3 className="text-lg font-bold text-gray-700 mb-1">Không tìm thấy kết quả</h3>
+            <p className="text-sm text-gray-400">Thử tìm kiếm với tên hoặc số BIB khác</p>
           </div>
         )}
 
         {!loading && results.length > 0 && (
           <>
             <p className="text-sm text-gray-500 mb-6">
-              Tim thay <strong className="text-gray-900">{results.length}</strong> ket qua cho &ldquo;<strong>{initialQuery}</strong>&rdquo;
+              Tìm thấy <strong className="text-gray-900">{results.length}</strong> kết quả cho &ldquo;<strong>{initialQuery}</strong>&rdquo;
             </p>
 
             <div className="space-y-8">
@@ -192,7 +192,7 @@ function SearchContent() {
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-gray-900 truncate">{formatName(r.Name)}</p>
                           <p className="text-xs text-gray-400">
-                            BIB {r.Bib} &middot; {r.distance} &middot; {r.Gender === 'Female' ? 'Nu' : 'Nam'} &middot; {r.Category}
+                            BIB {r.Bib} &middot; {r.distance} &middot; {r.Gender === 'Female' ? 'Nữ' : 'Nam'} &middot; {r.Category}
                             {r.Nationality && r.Nationality !== 'undefined' ? ` · ${countryToFlag(r.Nationality) || countryToFlag(r.Nation) || r.Nation}` : ''}
                           </p>
                         </div>
@@ -213,8 +213,8 @@ function SearchContent() {
         {!loading && !searched && (
           <div className="text-center py-16">
             <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-gray-700 mb-1">Tim kiem van dong vien</h3>
-            <p className="text-sm text-gray-400">Nhap ten hoac so BIB de tim ket qua thi dau</p>
+            <h3 className="text-lg font-bold text-gray-700 mb-1">Tìm kiếm vận động viên</h3>
+            <p className="text-sm text-gray-400">Nhập tên hoặc số BIB để tìm kết quả thi đấu</p>
           </div>
         )}
       </div>

@@ -707,7 +707,7 @@ export default function CourseRankingPage() {
       {selectedBibs.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4">
           <GitCompareArrows className="w-5 h-5 text-blue-400 shrink-0" />
-          <span className="text-sm font-medium">{selectedBibs.size} VDV</span>
+          <span className="text-sm font-medium">{selectedBibs.size} VĐV</span>
           <button
             onClick={goCompare}
             disabled={selectedBibs.size < 2}
