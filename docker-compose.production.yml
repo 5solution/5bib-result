@@ -1,4 +1,22 @@
 services:
+  mongo:
+    image: mongo:7
+    container_name: 5bib-production-mongo
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=mongo
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PROD_PASSWORD:-Prod5bib2026SecurePassw0rd}
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo_prod_data:/data/db
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
   5bib-result-backend:
     image: ghcr.io/5solution/5bib-result/backend:production
     container_name: 5bib-production-backend
@@ -6,8 +24,8 @@ services:
     env_file: ./backend.env
     ports:
       - "8082:8081"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mongo
     deploy:
       resources:
         limits:
@@ -48,3 +66,7 @@ services:
           memory: 512M
         reservations:
           memory: 128M
+
+volumes:
+  mongo_prod_data:
+    driver: local
