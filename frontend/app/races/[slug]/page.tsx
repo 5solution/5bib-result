@@ -3,8 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route } from 'lucide-react';
 import LiveTimer from '@/components/LiveTimer';
+
+const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
 
 interface Course {
   id: string;
@@ -19,6 +22,7 @@ interface Course {
   dnf?: number;
   finishers?: number;
   image?: string;
+  gpxUrl?: string;
 }
 
 interface RaceInfo {
@@ -143,6 +147,7 @@ export default function RaceDetailPage() {
               dnf: 0,
               finishers: 0,
               image: c.imageUrl || COURSE_IMAGES[i % COURSE_IMAGES.length],
+              gpxUrl: c.gpxUrl,
             })),
             logoUrl: r.logoUrl,
             imageUrl: r.imageUrl,
@@ -425,6 +430,13 @@ export default function RaceDetailPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* GPX Map */}
+                    {course.gpxUrl && (
+                      <div className="mt-4 rounded-lg overflow-hidden border border-slate-200">
+                        <GpxMap gpxUrl={course.gpxUrl} className="h-[200px]" />
+                      </div>
+                    )}
 
                     {/* CTA */}
                     <div className="mt-5">
