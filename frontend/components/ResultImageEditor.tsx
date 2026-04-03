@@ -75,13 +75,16 @@ export default function ResultImageEditor({
     // html2canvas doesn't support aspect-ratio CSS, so we must set explicit dimensions
     const el = cardRef.current;
     const w = el.offsetWidth;
-    const h = el.offsetHeight;
+    // Use max of offsetHeight and scrollHeight to capture all content
+    const h = Math.max(el.offsetHeight, el.scrollHeight);
     const origWidth = el.style.width;
     const origHeight = el.style.height;
     const origAspect = el.style.aspectRatio;
+    const origOverflow = el.style.overflow;
     el.style.width = `${w}px`;
     el.style.height = `${h}px`;
     el.style.aspectRatio = 'unset';
+    el.style.overflow = 'visible';
 
     try {
       const html2canvas = (await import('html2canvas-pro')).default;
@@ -100,6 +103,7 @@ export default function ResultImageEditor({
       el.style.width = origWidth;
       el.style.height = origHeight;
       el.style.aspectRatio = origAspect;
+      el.style.overflow = origOverflow;
     }
   }, []);
 
@@ -225,7 +229,7 @@ export default function ResultImageEditor({
               zIndex: 0,
             }} />
 
-            <div style={{ position: 'relative', zIndex: 1, padding: '32px 24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ position: 'relative', zIndex: 1, padding: '32px 24px 28px', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
               {/* Race name */}
               <div style={{ fontSize: 12, opacity: 0.7, fontWeight: 600 }}>
                 {athlete.race_name || ''}
@@ -284,8 +288,9 @@ export default function ResultImageEditor({
               </div>
 
               {/* Branding */}
-              <div style={{ marginTop: 16, textAlign: 'center', fontSize: 11, opacity: 0.4, fontWeight: 600 }}>
-                5bib.com
+              <div style={{ marginTop: 16, textAlign: 'center' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo_5BIB_white.png" alt="5BIB" style={{ height: 24, opacity: 0.5, display: 'inline-block' }} />
               </div>
             </div>
           </div>
