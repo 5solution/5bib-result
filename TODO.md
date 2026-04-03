@@ -44,8 +44,14 @@
 - [x] [HIGH] Tùy chỉnh ảnh kết quả — ResultImageEditor modal: 5 preset gradient backgrounds + upload ảnh nền tùy chỉnh, preview real-time, tải PNG
 - [x] [NORMAL] Hiển thị nationality ở course card trên races/[slug] — backend trả nationalityCount trong getCourseStats, frontend hiện "🌍 N quốc gia" trên stats banner
 - [x] [NORMAL] Vinh danh Top 3 — hạng 1/2/3 có UI đặc biệt trên ranking page: medal emoji, gradient badge, highlighted row bg, colored left border, bolder name
-- [ ] [LOW] Tích hợp gallery ảnh với 5Pix — cần biết API/endpoint của 5Pix
+- [ ] [LOW] Tích hợp gallery ảnh với 5Pix — cần biết API/endpoint của 5Pix (BLOCKED)
 - [x] [NORMAL] Thay placeholder PWA icons (192x192, 512x512) bằng logo 5BIB thật — resized từ logo.png
+- [ ] [NORMAL] Pace chart trên athlete detail — biểu đồ pace qua các checkpoint
+- [ ] [NORMAL] Dark mode toggle — CSS variables đã setup, cần toggle + dark colors
+- [ ] [NORMAL] Multi-language EN — i18next đã setup, cần translations
+- [ ] [LOW] QR code BIB lookup — scan QR tại event → redirect trang kết quả VĐV
+- [ ] [LOW] Email notification kết quả — gửi email cho VĐV sau khi giải kết thúc
+- [ ] [LOW] Social proof — hiển thị số lượt xem kết quả, số lần chia sẻ
 
 ## Done
 
