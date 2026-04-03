@@ -10,6 +10,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { UploadModule } from './upload/upload.module';
 import { SponsorsModule } from './sponsors/sponsors.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { SponsorsModule } from './sponsors/sponsors.module';
     AuthModule,
     UploadModule,
     SponsorsModule,
+    NotificationModule,
   ],
 })
 export class AppModule {}

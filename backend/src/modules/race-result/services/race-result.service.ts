@@ -13,6 +13,7 @@ import {
 import { GetRaceResultsDto } from '../dto/get-race-results.dto';
 import { SubmitClaimDto } from '../dto/submit-claim.dto';
 import { RacesService } from '../../races/races.service';
+import { TelegramService } from '../../notification/telegram.service';
 import * as crypto from 'crypto';
 
 interface RaceResultApiItem {
@@ -55,6 +56,7 @@ export class RaceResultService {
     @InjectModel(ResultClaim.name)
     private readonly claimModel: Model<ResultClaimDocument>,
     private readonly racesService: RacesService,
+    private readonly telegramService: TelegramService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -686,6 +688,18 @@ export class RaceResultService {
 
   async submitClaim(dto: SubmitClaimDto) {
     const claim = await this.claimModel.create(dto);
+
+    // Send Telegram notification
+    this.telegramService.notifyClaimSubmitted({
+      bib: dto.bib,
+      name: dto.name,
+      phone: dto.phone,
+      email: dto.email,
+      description: dto.description,
+      raceId: dto.raceId,
+      courseId: dto.courseId,
+    }).catch(() => {}); // fire and forget
+
     return { data: claim.toObject(), success: true };
   }
 

@@ -18,9 +18,10 @@ export class SubmitClaimDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ description: 'Claimant email', example: 'runner@example.com' })
+  @ApiPropertyOptional({ description: 'Claimant email', example: 'runner@example.com' })
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
   @ApiProperty({ description: 'Phone number for contact', example: '0912345678' })
   @IsString()

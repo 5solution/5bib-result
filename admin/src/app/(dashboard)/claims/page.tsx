@@ -95,25 +95,18 @@ export default function ClaimsPage() {
       if (error) throw error;
 
       const result = data as unknown as {
-        data?: {
-          list?: Claim[];
-          claims?: Claim[];
+        data?: Claim[];
+        pagination?: {
+          page?: number;
+          pageSize?: number;
+          total?: number;
           totalPages?: number;
-          totalItems?: number;
         };
-        list?: Claim[];
-        claims?: Claim[];
-        totalPages?: number;
       };
 
-      const list =
-        result?.data?.list ||
-        result?.data?.claims ||
-        result?.list ||
-        result?.claims ||
-        [];
+      const list = Array.isArray(result?.data) ? result.data : [];
       setClaims(list);
-      setTotalPages(result?.data?.totalPages ?? result?.totalPages ?? 0);
+      setTotalPages(result?.pagination?.totalPages ?? 0);
     } catch {
       toast.error("Không thể tải danh sách khiếu nại");
     } finally {

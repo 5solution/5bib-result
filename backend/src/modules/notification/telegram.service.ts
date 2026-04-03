@@ -35,6 +35,28 @@ export class TelegramService {
     }
   }
 
+  async notifyClaimSubmitted(claim: {
+    bib: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    description: string;
+    raceId?: string;
+    courseId?: string;
+  }): Promise<void> {
+    const lines = [
+      `🆕 <b>Khiếu nại mới</b>`,
+      '',
+      `👤 <b>${claim.name}</b> (BIB: ${claim.bib})`,
+    ];
+
+    if (claim.phone) lines.push(`📱 ${claim.phone}`);
+    if (claim.email) lines.push(`📧 ${claim.email}`);
+    lines.push(`📝 ${claim.description}`);
+
+    await this.sendMessage(lines.join('\n'));
+  }
+
   async notifyClaimResolved(claim: {
     bib: string;
     name: string;
