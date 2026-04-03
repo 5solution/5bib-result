@@ -191,6 +191,57 @@ export default function AthleteDetailPage() {
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank', 'width=600,height=400');
   };
 
+  const handleShareAsImage = useCallback(async () => {
+    if (!shareCardRef.current || !athlete) return;
+    setSharingImage(true);
+    try {
+      const html2canvas = (await import('html2canvas-pro')).default;
+      const canvas = await html2canvas(shareCardRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#1e40af',
+      });
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          toast.error('Không thể tạo ảnh');
+          setSharingImage(false);
+          return;
+        }
+        const fileName = `result-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
+
+        // Try native share if available
+        if (navigator.share && navigator.canShare) {
+          const file = new File([blob], fileName, { type: 'image/png' });
+          const shareData = { files: [file] };
+          if (navigator.canShare(shareData)) {
+            try {
+              await navigator.share(shareData);
+              setSharingImage(false);
+              return;
+            } catch {
+              // User cancelled or share failed, fall through to download
+            }
+          }
+        }
+
+        // Fallback: download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success('Đã tải ảnh kết quả!');
+        setSharingImage(false);
+      }, 'image/png');
+    } catch {
+      toast.error('Không thể tạo ảnh chia sẻ');
+      setSharingImage(false);
+    }
+  }, [athlete]);
+
   const getPaceInSeconds = (paceStr: string): number => {
     if (!paceStr || paceStr === '-') return 0;
     const parts = paceStr.split(':');
@@ -230,6 +281,8 @@ export default function AthleteDetailPage() {
   };
 
   const [downloading, setDownloading] = useState(false);
+  const [sharingImage, setSharingImage] = useState(false);
+  const shareCardRef = useRef<HTMLDivElement>(null);
   const celebrationAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Claim form state
@@ -498,6 +551,14 @@ export default function AthleteDetailPage() {
             </Link>
             {/* Share buttons */}
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleShareAsImage}
+                disabled={sharingImage}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20 disabled:opacity-50"
+              >
+                {sharingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                Ảnh KQ
+              </button>
               <button
                 onClick={handleShareFacebook}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
@@ -1030,6 +1091,79 @@ export default function AthleteDetailPage() {
             <ChevronLeft className="w-4 h-4" />
             Quay lại bảng xếp hạng
           </Link>
+        </div>
+      </div>
+
+      {/* Hidden share card for image capture */}
+      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+        <div
+          ref={shareCardRef}
+          style={{
+            width: 600,
+            padding: '40px 32px',
+            background: 'linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #3730a3 100%)',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            color: 'white',
+          }}
+        >
+          {/* Race name */}
+          <div style={{ fontSize: 14, opacity: 0.7, marginBottom: 4, fontWeight: 600 }}>
+            {athlete.race_name || ''}
+          </div>
+          <div style={{ fontSize: 13, opacity: 0.5, marginBottom: 24 }}>
+            {athlete.distance}
+          </div>
+
+          {/* Athlete name */}
+          <div style={{ fontSize: 32, fontWeight: 900, marginBottom: 8, letterSpacing: '-0.02em' }}>
+            {formatName(athlete.Name)}
+          </div>
+
+          {/* Tags */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 32, flexWrap: 'wrap' as const }}>
+            <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.2)', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
+              BIB #{athlete.Bib}
+            </span>
+            <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.2)', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
+              {genderLabel}
+            </span>
+            <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.2)', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
+              {athlete.Category}
+            </span>
+          </div>
+
+          {/* Chip Time */}
+          <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 16, padding: '24px 20px', marginBottom: 20 }}>
+            <div style={{ fontSize: 11, opacity: 0.6, textTransform: 'uppercase' as const, letterSpacing: '0.1em', fontWeight: 700, marginBottom: 8 }}>
+              Chip Time
+            </div>
+            <div style={{ fontSize: 48, fontWeight: 900, fontFamily: 'ui-monospace, monospace', letterSpacing: '-0.02em' }}>
+              {athlete.ChipTime}
+            </div>
+            <div style={{ display: 'flex', gap: 20, marginTop: 12, fontSize: 13, opacity: 0.7 }}>
+              <span>Pace: <strong style={{ fontFamily: 'ui-monospace, monospace' }}>{athlete.Pace}</strong> /km</span>
+              {athlete.Gap && athlete.Gap !== '-' && <span>Gap: <strong style={{ fontFamily: 'ui-monospace, monospace' }}>{athlete.Gap}</strong></span>}
+            </div>
+          </div>
+
+          {/* Ranks */}
+          <div style={{ display: 'flex', gap: 12 }}>
+            {[
+              { label: 'Tổng hạng', value: `#${athlete.OverallRank}` },
+              { label: `Hạng ${genderLabel}`, value: `#${athlete.GenderRank}` },
+              { label: 'Hạng nhóm tuổi', value: `#${athlete.CatRank}` },
+            ].map((item) => (
+              <div key={item.label} style={{ flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: '14px 12px', textAlign: 'center' as const }}>
+                <div style={{ fontSize: 22, fontWeight: 900 }}>{item.value}</div>
+                <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase' as const, letterSpacing: '0.05em', fontWeight: 700, marginTop: 4 }}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Branding */}
+          <div style={{ marginTop: 24, textAlign: 'center' as const, fontSize: 12, opacity: 0.4, fontWeight: 600 }}>
+            5bib.com
+          </div>
         </div>
       </div>
     </div>
