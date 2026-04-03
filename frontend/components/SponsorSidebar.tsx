@@ -14,9 +14,9 @@ interface Sponsor {
 }
 
 const LOGO_SIZES: Record<Sponsor['level'], { width: number; height: number }> = {
-  diamond: { width: 56, height: 56 },
-  gold: { width: 44, height: 44 },
-  silver: { width: 34, height: 34 },
+  diamond: { width: 80, height: 80 },
+  gold: { width: 68, height: 68 },
+  silver: { width: 56, height: 56 },
 }
 
 export default function SponsorSidebar() {
@@ -47,7 +47,7 @@ export default function SponsorSidebar() {
 
       <aside
         className="fixed right-0 top-1/2 -translate-y-1/2 z-40 hidden lg:flex flex-col items-center
-                   w-[64px] max-h-[80vh] overflow-hidden rounded-l-lg
+                   w-[92px] max-h-[80vh] overflow-hidden rounded-l-lg
                    bg-black/30 backdrop-blur-sm border-l border-t border-b border-white/10"
       >
         <div

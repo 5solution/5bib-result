@@ -23,6 +23,7 @@ import {
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Logo5bib from "@/components/Logo5bib";
 
 const navItems = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
@@ -119,8 +120,8 @@ export default function DashboardLayout({
       <aside className="hidden w-60 shrink-0 border-r bg-card md:flex md:flex-col">
         <div className="flex h-14 items-center px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <Trophy className="size-5 text-primary" />
-            <span className="text-lg font-bold">5BIB Admin</span>
+            <Logo5bib className="h-7" />
+            <span className="text-xs font-semibold text-muted-foreground">Admin</span>
           </Link>
         </div>
         <Separator />
@@ -153,7 +154,10 @@ export default function DashboardLayout({
             </SheetTrigger>
             <SheetContent side="left" className="w-60 p-0">
               <SheetHeader className="p-4">
-                <SheetTitle>5BIB Admin</SheetTitle>
+                <SheetTitle className="flex items-center gap-2">
+                  <Logo5bib className="h-6" />
+                  <span className="text-xs font-semibold text-muted-foreground">Admin</span>
+                </SheetTitle>
               </SheetHeader>
               <Separator />
               <nav className="p-3">

@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
+import Logo5bib from "@/components/Logo5bib";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -47,8 +48,9 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">5BIB Admin</CardTitle>
+        <CardHeader className="text-center flex flex-col items-center">
+          <Logo5bib className="h-10 mb-2"  />
+          <CardTitle className="text-lg font-bold text-muted-foreground">Admin Panel</CardTitle>
           <CardDescription>
             Đăng nhập để quản lý hệ thống
           </CardDescription>

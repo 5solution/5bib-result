@@ -10,7 +10,7 @@ import {
 import { useRouter } from 'next/navigation';
 import LiveTimer from '@/components/LiveTimer';
 import { countryToFlag } from '@/lib/country-flags';
-import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults } from '@/lib/api-hooks';
+import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults, useCourseStats } from '@/lib/api-hooks';
 
 /* ─── Types ─── */
 
@@ -207,7 +207,34 @@ export default function CourseRankingPage() {
   const results: RaceResult[] = useMemo(() => (resultsRaw as any)?.data ?? [], [resultsRaw]);
   const totalItems = useMemo(() => (resultsRaw as any)?.pagination?.total ?? 0, [resultsRaw]);
 
-  const course = race?.courses.find((c) => c.id === courseId) || null;
+  // Fetch course stats for finishers count
+  const { data: courseStatsRaw } = useCourseStats(courseId, { enabled: !!courseId });
+  const courseStats = useMemo(() => {
+    const s = (courseStatsRaw as any)?.data ?? courseStatsRaw;
+    return s || null;
+  }, [courseStatsRaw]);
+
+  // Fetch total starters (unfiltered count)
+  const { data: totalRaw } = useRaceResults({
+    course_id: courseId,
+    pageNo: 1,
+    pageSize: 1,
+    sortField: 'OverallRank',
+    sortDirection: 'ASC',
+  }, { enabled: !!courseId });
+  const totalStarters = useMemo(() => (totalRaw as any)?.pagination?.total ?? 0, [totalRaw]);
+
+  const rawCourse = race?.courses.find((c) => c.id === courseId) || null;
+  const course = useMemo(() => {
+    if (!rawCourse) return null;
+    const finishers = courseStats?.totalFinishers ?? 0;
+    return {
+      ...rawCourse,
+      starters: totalStarters,
+      finishers,
+      dnf: totalStarters > finishers ? totalStarters - finishers : 0,
+    };
+  }, [rawCourse, courseStats, totalStarters]);
 
   const toggleBib = (bib: number) => {
     setSelectedBibs(prev => {
@@ -380,19 +407,19 @@ export default function CourseRankingPage() {
                 <span className="text-blue-100">
                   Xuất phát{' '}
                   <strong className="text-white font-black text-lg md:text-xl ml-1.5">
-                    {course.starters?.toLocaleString('vi-VN') || '-'}
+                    {(course.starters ?? 0).toLocaleString('vi-VN')}
                   </strong>
                 </span>
                 <span className="text-blue-100">
                   DNF{' '}
                   <strong className="text-yellow-300 font-black text-lg md:text-xl ml-1.5">
-                    {course.dnf?.toLocaleString('vi-VN') || '-'}
+                    {(course.dnf ?? 0).toLocaleString('vi-VN')}
                   </strong>
                 </span>
                 <span className="text-blue-100">
                   Hoàn thành{' '}
                   <strong className="text-emerald-300 font-black text-lg md:text-xl ml-1.5">
-                    {course.finishers?.toLocaleString('vi-VN') || '-'}
+                    {(course.finishers ?? 0).toLocaleString('vi-VN')}
                   </strong>
                 </span>
               </div>

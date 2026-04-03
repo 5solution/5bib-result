@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 import { useSponsors } from '@/lib/api-hooks';
 
@@ -40,14 +41,8 @@ export default function Header() {
       <div className="bg-blue-700">
         <div className="flex items-stretch h-14">
           {/* Logo — flush left */}
-          <Link href="/" className="relative flex items-center gap-2.5 group overflow-hidden px-5 shrink-0">
-            <div className="w-9 h-9 bg-white flex items-center justify-center font-black text-blue-700 text-sm tracking-tighter">
-              5B
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="text-[17px] font-black tracking-tight text-white">5BIB</span>
-              <span className="text-[9px] font-semibold text-blue-200/70 tracking-[0.15em] uppercase">Race Results</span>
-            </div>
+          <Link href="/" className="relative flex items-center group overflow-hidden px-5 shrink-0">
+            <Image src="/logo_5BIB_white.png" alt="5BIB" width={120} height={36} className="h-9 w-auto" priority />
             <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/25 to-transparent pointer-events-none" />
           </Link>
 
@@ -87,7 +82,7 @@ export default function Header() {
 
       {/* Sponsor trapezoid — absolute, top-right, extends below header */}
       {sponsors.length > 0 && (
-        <div className="hidden md:block absolute top-0 right-0 z-50" style={{ height: 80 }}>
+        <div className="hidden md:block absolute top-0 right-0 z-50" style={{ height: 90 }}>
           <SponsorCarousel sponsors={sponsors} />
         </div>
       )}
@@ -169,7 +164,7 @@ function SponsorCarousel({ sponsors }: { sponsors: Sponsor[] }) {
         style={{
           width: 220,
           clipPath: 'polygon(16% 0%, 100% 0%, 100% 100%, 0% 100%)',
-          paddingLeft: 36,
+          paddingLeft: 32,
         }}
       >
         <div className="relative w-full h-full overflow-hidden">
@@ -184,7 +179,7 @@ function SponsorCarousel({ sponsors }: { sponsors: Sponsor[] }) {
                 <img
                   src={s.logoUrl}
                   alt={s.name}
-                  className="h-9 w-auto max-w-[140px] object-contain pointer-events-none"
+                  className="h-14 w-auto max-w-[150px] object-contain pointer-events-none"
                   draggable={false}
                 />
               ) : (

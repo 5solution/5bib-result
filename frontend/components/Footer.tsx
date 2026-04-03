@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -11,11 +12,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Brand */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-[var(--5bib-accent)] flex items-center justify-center font-black text-[var(--5bib-bg)] text-sm tracking-tighter">
-                5B
-              </div>
-              <span className="text-xl font-black tracking-tight text-white">5BIB</span>
+            <div className="flex items-center mb-4">
+              <Image src="/logo.png" alt="5BIB" width={107} height={32} className="h-8 w-auto" />
             </div>
             <p className="text-sm text-[var(--5bib-text-muted)] leading-relaxed max-w-xs">
               Nền tảng theo dõi kết quả giải chạy trực tiếp hàng đầu Việt Nam. Cập nhật thời gian thực, xếp hạng chi tiết.

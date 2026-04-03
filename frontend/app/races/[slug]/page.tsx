@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route } from 'lucide-react';
 import LiveTimer from '@/components/LiveTimer';
 import { useRaceBySlug } from '@/lib/api-hooks';
-import { raceResultControllerGetRaceResults } from '@/lib/api-generated';
+import { raceResultControllerGetRaceResults, raceResultControllerGetCourseStats } from '@/lib/api-generated';
 
 const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
 
@@ -118,6 +118,7 @@ export default function RaceDetailPage() {
 
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const [courseResults, setCourseResults] = useState<Record<string, RaceResult[]>>({});
+  const [courseStatsMap, setCourseStatsMap] = useState<Record<string, { starters: number; finishers: number; dnf: number }>>({});
 
   const race = useMemo<RaceInfo | null>(() => {
     const r = (raceRaw as any)?.data ?? raceRaw;
@@ -159,24 +160,39 @@ export default function RaceDetailPage() {
     if (!race || race.status === 'upcoming') return; // Don't fetch results for upcoming races
     const fetchResults = async () => {
       const results: Record<string, RaceResult[]> = {};
+      const statsMap: Record<string, { starters: number; finishers: number; dnf: number }> = {};
       for (const course of race.courses) {
         try {
-          const res = await raceResultControllerGetRaceResults({
-            query: {
-              course_id: course.id,
-              pageNo: 1,
-              pageSize: 10,
-              sortField: 'OverallRank',
-              sortDirection: 'ASC',
-            },
-          });
+          const [res, statsRes] = await Promise.all([
+            raceResultControllerGetRaceResults({
+              query: {
+                course_id: course.id,
+                pageNo: 1,
+                pageSize: 10,
+                sortField: 'OverallRank',
+                sortDirection: 'ASC',
+              },
+            }),
+            raceResultControllerGetCourseStats({
+              path: { courseId: course.id },
+            }),
+          ]);
           const list = (res.data as any)?.data ?? res.data;
           results[course.id] = Array.isArray(list) ? list : [];
+          const total = (res.data as any)?.pagination?.total ?? 0;
+          const stats = (statsRes.data as any)?.data ?? statsRes.data;
+          const finishers = stats?.totalFinishers ?? 0;
+          statsMap[course.id] = {
+            starters: total,
+            finishers,
+            dnf: total > finishers ? total - finishers : 0,
+          };
         } catch {
           results[course.id] = [];
         }
       }
       setCourseResults(results);
+      setCourseStatsMap(statsMap);
     };
     fetchResults();
   }, [race]);
@@ -375,11 +391,11 @@ export default function RaceDetailPage() {
                       }`}>
                         {race.status === 'live' ? 'Đang diễn ra' : race.status === 'completed' ? 'Đã kết thúc' : 'Sắp diễn ra'}
                       </div>
-                      {(course.starters || race.status === 'completed') && (
+                      {(courseStatsMap[course.id] || race.status === 'completed') && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">
-                          <span>STARTERS <strong className="text-base ml-1">{course.starters || '-'}</strong></span>
-                          <span>DNF <strong className="text-base ml-1">{course.dnf || '-'}</strong></span>
-                          <span>FINISHERS <strong className="text-base ml-1">{course.finishers || '-'}</strong></span>
+                          <span>STARTERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.starters ?? '-'}</strong></span>
+                          <span>DNF <strong className="text-base ml-1">{courseStatsMap[course.id]?.dnf ?? '-'}</strong></span>
+                          <span>FINISHERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.finishers ?? '-'}</strong></span>
                         </div>
                       )}
                     </div>
