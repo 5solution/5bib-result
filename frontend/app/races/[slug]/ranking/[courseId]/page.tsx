@@ -700,20 +700,44 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
   const rankNum = parseInt(rankStr);
   const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
 
+  const isTop3 = typeof rank === 'number' && rank >= 1 && rank <= 3;
+
   const getMedalColor = (r: number | string) => {
-    if (r === 1) return 'bg-amber-400 text-amber-900';
-    if (r === 2) return 'bg-slate-300 text-slate-700';
-    if (r === 3) return 'bg-orange-300 text-orange-800';
+    if (r === 1) return 'bg-gradient-to-br from-yellow-300 to-amber-500 text-amber-900 shadow-md shadow-amber-200/50';
+    if (r === 2) return 'bg-gradient-to-br from-gray-200 to-gray-400 text-gray-700 shadow-md shadow-gray-200/50';
+    if (r === 3) return 'bg-gradient-to-br from-amber-400 to-orange-600 text-orange-900 shadow-md shadow-orange-200/50';
     if (typeof r === 'string' && ['DNF', 'DNS', 'DSQ', 'OOC'].includes(r)) return 'bg-red-100 text-red-600';
     if (r === '') return 'bg-slate-50 text-slate-300';
     return 'bg-slate-100 text-slate-600';
+  };
+
+  const getRowBg = () => {
+    if (selected) return 'bg-blue-50/40';
+    if (rank === 1) return 'bg-amber-50/60';
+    if (rank === 2) return 'bg-gray-50/60';
+    if (rank === 3) return 'bg-orange-50/40';
+    return '';
+  };
+
+  const getRowBorder = () => {
+    if (rank === 1) return 'shadow-[inset_4px_0_0_0_#f59e0b]';
+    if (rank === 2) return 'shadow-[inset_4px_0_0_0_#9ca3af]';
+    if (rank === 3) return 'shadow-[inset_4px_0_0_0_#ea580c]';
+    return '';
+  };
+
+  const getMedalEmoji = (r: number) => {
+    if (r === 1) return '🥇';
+    if (r === 2) return '🥈';
+    if (r === 3) return '🥉';
+    return '';
   };
 
   const formatName = (name: string) =>
     name.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <tr className={`group transition-all duration-200 hover:bg-blue-50/60 hover:shadow-[inset_4px_0_0_0_#2563eb] cursor-pointer ${selected ? 'bg-blue-50/40' : ''}`}>
+    <tr className={`group transition-all duration-200 hover:bg-blue-50/60 hover:shadow-[inset_4px_0_0_0_#2563eb] cursor-pointer ${getRowBg()} ${!selected ? getRowBorder() : ''}`}>
       <td className="px-2 py-3.5">
         <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 hover:border-blue-400'}`}>
           {selected && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
@@ -722,6 +746,10 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
       <td className="px-4 py-3.5">
         {isUpcoming ? (
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs bg-slate-50 text-slate-300">-</div>
+        ) : isTop3 ? (
+          <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-lg ${getMedalColor(rank)}`}>
+            {getMedalEmoji(rank as number)}
+          </div>
         ) : (
           <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
             {rank || '-'}
@@ -736,7 +764,7 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
               {result.Name.charAt(0)}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold text-slate-900 group-hover:text-blue-700 truncate transition-colors">
+              <p className={`text-sm font-bold group-hover:text-blue-700 truncate transition-colors ${isTop3 ? 'text-slate-950 font-black' : 'text-slate-900'}`}>
                 {formatName(result.Name)}
               </p>
               <div className="flex items-center gap-2 mt-0.5">
@@ -794,27 +822,47 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
   const rankStr = (rawRank || '').trim();
   const rankNum = parseInt(rankStr);
   const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
+  const isTop3 = typeof rank === 'number' && rank >= 1 && rank <= 3;
 
   const getMedalColor = (r: number | string) => {
-    if (r === 1) return 'bg-amber-400 text-amber-900';
-    if (r === 2) return 'bg-slate-300 text-slate-700';
-    if (r === 3) return 'bg-orange-300 text-orange-800';
+    if (r === 1) return 'bg-gradient-to-br from-yellow-300 to-amber-500 text-amber-900 shadow-md shadow-amber-200/50';
+    if (r === 2) return 'bg-gradient-to-br from-gray-200 to-gray-400 text-gray-700 shadow-md shadow-gray-200/50';
+    if (r === 3) return 'bg-gradient-to-br from-amber-400 to-orange-600 text-orange-900 shadow-md shadow-orange-200/50';
     if (typeof r === 'string' && ['DNF', 'DNS', 'DSQ', 'OOC'].includes(r)) return 'bg-red-100 text-red-600';
     if (r === '') return 'bg-slate-50 text-slate-300';
     return 'bg-slate-100 text-slate-600';
+  };
+
+  const getMedalEmoji = (r: number) => {
+    if (r === 1) return '🥇';
+    if (r === 2) return '🥈';
+    if (r === 3) return '🥉';
+    return '';
+  };
+
+  const getMobileBg = () => {
+    if (selected) return 'bg-blue-50/40';
+    if (rank === 1) return 'bg-amber-50/60 border-l-4 border-l-amber-400';
+    if (rank === 2) return 'bg-gray-50/60 border-l-4 border-l-gray-400';
+    if (rank === 3) return 'bg-orange-50/40 border-l-4 border-l-orange-400';
+    return '';
   };
 
   const formatName = (name: string) =>
     name.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <div className={`px-4 py-4 flex items-center gap-3 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
+    <div className={`px-4 py-4 flex items-center gap-3 transition-colors ${getMobileBg()}`}>
       <button onClick={onToggle} className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${selected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'}`}>
         {selected && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
       </button>
       <Link href={`/races/${slug}/${result.Bib}`} className="flex items-center gap-3 flex-1 min-w-0">
         {isUpcoming ? (
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs bg-slate-50 text-slate-300 shrink-0">-</div>
+        ) : isTop3 ? (
+          <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-lg shrink-0 ${getMedalColor(rank)}`}>
+            {getMedalEmoji(rank as number)}
+          </div>
         ) : (
           <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
             {rank || '-'}
@@ -823,7 +871,7 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-slate-900 truncate">{formatName(result.Name)}</p>
+            <p className={`text-sm font-bold truncate ${isTop3 ? 'text-slate-950 font-black' : 'text-slate-900'}`}>{formatName(result.Name)}</p>
             <span className="text-xs font-mono font-black text-blue-600">BIB: {result.Bib}</span>
           </div>
           <div className="flex items-center gap-3 mt-1">

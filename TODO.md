@@ -41,6 +41,9 @@
 
 ## Todo
 
+- [ ] [HIGH] Tùy chỉnh ảnh kết quả — sau khi ấn "Tải ảnh KQ", user có thể chỉnh sửa: upload ảnh làm background thay background xanh mặc định, chỉnh sửa avatar, tùy chọn layout/style. Preview trước khi tải về.
+- [ ] [NORMAL] Hiển thị nationality ở course card trên races/[slug] — mục thống kê cự ly hiện số quốc gia tham gia, default Việt Nam nếu không có data
+- [x] [NORMAL] Vinh danh Top 3 — hạng 1/2/3 có UI đặc biệt trên ranking page: medal emoji, gradient badge, highlighted row bg, colored left border, bolder name
 - [ ] [LOW] Tích hợp gallery ảnh với 5Pix — cần biết API/endpoint của 5Pix
 - [ ] [NORMAL] Thay placeholder PWA icons (192x192, 512x512) bằng logo 5BIB thật
 
