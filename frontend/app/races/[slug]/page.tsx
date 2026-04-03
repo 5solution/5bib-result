@@ -301,7 +301,7 @@ export default function RaceDetailPage() {
               {/* Status badge */}
               <div className="flex items-center gap-3 mt-4">
                 {race.status === 'live' && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-600 rounded text-xs font-bold text-white uppercase">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-rose-700 via-red-600 to-amber-600 rounded text-xs font-bold text-white uppercase shadow-lg shadow-red-500/30">
                     <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                     Live
                   </span>
@@ -381,9 +381,9 @@ export default function RaceDetailPage() {
                     {/* Race finished banner */}
                     <div className="absolute bottom-0 left-0 right-0">
                       <div className={`px-4 py-2.5 text-center text-sm font-bold text-white uppercase ${
-                        race.status === 'live' ? 'bg-red-600' : race.status === 'completed' ? 'bg-red-700' : 'bg-gradient-to-r from-[#2563eb] to-[#1faaff]'
+                        race.status === 'live' ? 'bg-gradient-to-r from-rose-700 via-red-600 to-amber-600' : race.status === 'completed' ? 'bg-red-700' : 'bg-gradient-to-r from-[#2563eb] to-[#1faaff]'
                       }`}>
-                        {race.status === 'live' ? 'Đang diễn ra' : race.status === 'completed' ? 'Đã kết thúc' : 'Sắp diễn ra'}
+                        {race.status === 'live' ? '🔴 Đang diễn ra' : race.status === 'completed' ? 'Đã kết thúc' : 'Sắp diễn ra'}
                       </div>
                       {(courseStatsMap[course.id] || race.status === 'completed') && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">

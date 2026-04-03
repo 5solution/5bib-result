@@ -386,7 +386,7 @@ export default function CourseRankingPage() {
         </div>
 
         {/* ── PHẦN 2: Trạng thái cuộc đua — full width gradient ── */}
-        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800">
+        <div className={`bg-gradient-to-r ${race.status === 'live' ? 'from-rose-700 via-red-600 to-amber-600' : 'from-blue-600 via-blue-700 to-blue-800'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8 flex-1">
               <div className="flex items-center gap-2.5">
