@@ -572,7 +572,7 @@ export default function AthleteDetailPage() {
           {/* Tags row */}
           <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
             <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-black border border-white/30 tracking-wide" style={{ fontFamily: 'var(--font-mono)' }}>
-              BIB #{athlete.Bib}
+              BIB: {athlete.Bib}
             </span>
             <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
               {athlete.distance}
@@ -627,11 +627,11 @@ export default function AthleteDetailPage() {
           </div>
 
           {/* Rank badges row */}
-          <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+          <div className={`grid ${athlete.CatRank ? 'grid-cols-3' : 'grid-cols-2'} divide-x divide-gray-100 border-t border-gray-100`}>
             {[
-              { label: 'Tổng hạng', rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
-              { label: `Hạng ${genderLabel}`, rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
-              { label: 'Hạng nhóm tuổi', rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+              { label: 'Overall Rank', rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
+              { label: 'Gender Rank', rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
+              ...(athlete.CatRank ? [{ label: 'Cat Rank', rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' }] : []),
             ].map((item) => (
               <div key={item.label} className="py-5 md:py-6 text-center group hover:bg-gray-50/50 transition-colors">
                 <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${item.bg} ${item.color} mb-2`}>
@@ -836,7 +836,7 @@ export default function AthleteDetailPage() {
         </div>}
 
         {/* === CERTIFICATE === */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+        {raceData?.enableEcert !== false && (<div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
               <Award className="w-5 h-5 text-amber-600" />
@@ -860,7 +860,7 @@ export default function AthleteDetailPage() {
                 </div>
                 <div className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-bold mb-3">Certificate of Completion</div>
                 <div className="text-2xl md:text-3xl font-black text-gray-900 mb-1">{formatName(athlete.Name)}</div>
-                <div className="text-sm text-gray-400 mb-5">BIB #{athlete.Bib}</div>
+                <div className="text-sm text-gray-400 mb-5">BIB: {athlete.Bib}</div>
                 <div className="text-4xl md:text-5xl font-black text-blue-600 mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{athlete.ChipTime}</div>
                 <div className="text-sm text-gray-500 font-medium">
                   {athlete.distance} &middot; {athlete.race_name || slug.replace(/-/g, ' ')}
@@ -883,7 +883,7 @@ export default function AthleteDetailPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>)}
 
         {/* === CLAIM / APPEAL SECTION === */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
@@ -1088,7 +1088,7 @@ export default function AthleteDetailPage() {
           {/* Tags */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 32, flexWrap: 'wrap' as const }}>
             <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.2)', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
-              BIB #{athlete.Bib}
+              BIB: {athlete.Bib}
             </span>
             <span style={{ padding: '4px 12px', background: 'rgba(255,255,255,0.2)', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
               {genderLabel}
@@ -1115,9 +1115,9 @@ export default function AthleteDetailPage() {
           {/* Ranks */}
           <div style={{ display: 'flex', gap: 12 }}>
             {[
-              { label: 'Tổng hạng', value: `#${athlete.OverallRank}` },
-              { label: `Hạng ${genderLabel}`, value: `#${athlete.GenderRank}` },
-              { label: 'Hạng nhóm tuổi', value: `#${athlete.CatRank}` },
+              { label: 'Overall Rank', value: `#${athlete.OverallRank}` },
+              { label: 'Gender Rank', value: `#${athlete.GenderRank}` },
+              ...(athlete.CatRank ? [{ label: 'Cat Rank', value: `#${athlete.CatRank}` }] : []),
             ].map((item) => (
               <div key={item.label} style={{ flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: '14px 12px', textAlign: 'center' as const }}>
                 <div style={{ fontSize: 22, fontWeight: 900 }}>{item.value}</div>

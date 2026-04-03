@@ -59,6 +59,7 @@ interface RaceResult {
   race_id: number;
   course_id: string;
   distance: string;
+  TimingPoint?: string;
 }
 
 /* ─── Demo data ─── */
@@ -254,7 +255,7 @@ export default function CourseRankingPage() {
             <div className="h-4 w-32 bg-white/20 rounded mb-4" />
             <div className="h-10 w-2/3 bg-white/20 rounded mb-3" />
             <div className="flex gap-6 mt-6">
-              {[1,2,3,4].map(i => (
+              {[1, 2, 3, 4].map(i => (
                 <div key={i} className="flex flex-col items-center gap-1.5">
                   <div className="h-3 w-16 bg-white/15 rounded" />
                   <div className="h-5 w-20 bg-white/20 rounded" />
@@ -318,13 +319,7 @@ export default function CourseRankingPage() {
           <div className="absolute inset-0 bg-gradient-to-b from-blue-700/90 via-blue-600/70 to-blue-800/90" />
 
           <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-            {/* Breadcrumb */}
-            <Link
-              href={`/races/${slug}`}
-              className="inline-flex items-center gap-1 text-sm text-blue-200 hover:text-white mb-4 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" /> {race.name}
-            </Link>
+
 
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-white">
               {course.name || course.distance}
@@ -516,35 +511,35 @@ export default function CourseRankingPage() {
                   ))}
                 </div>
               ) : (
-              <>
-              {/* Desktop */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="min-w-full">
-                  <thead>
-                    <tr className="bg-slate-50 border-b-2 border-slate-200">
-                      <th className="px-2 py-3.5 w-10"></th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">Hạng</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vận động viên</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-36">Thời gian</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Pace</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">Gap</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {paginatedResults.map((result) => (
-                      <RankingRow key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                <>
+                  {/* Desktop */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr className="bg-slate-50 border-b-2 border-slate-200">
+                          <th className="px-2 py-3.5 w-10"></th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">Hạng</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vận động viên</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-36">Thời gian</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Pace</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">Gap</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedResults.map((result) => (
+                          <RankingRow key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-              {/* Mobile */}
-              <div className="md:hidden divide-y divide-slate-100">
-                {paginatedResults.map((result) => (
-                  <MobileRankingCard key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} />
-                ))}
-              </div>
-              </>
+                  {/* Mobile */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {paginatedResults.map((result) => (
+                      <MobileRankingCard key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} />
+                    ))}
+                  </div>
+                </>
               )}
 
               {/* Empty */}
@@ -706,10 +701,9 @@ function RankingRow({ result, slug, selected, onToggle }: { result: RaceResult; 
                 {formatName(result.Name)}
               </p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs font-mono font-bold text-blue-600">#{result.Bib}</span>
-                <span className={`inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${
-                  result.Gender === 'Male' ? 'bg-blue-500' : 'bg-pink-500'
-                }`}>
+                <span className="text-xs font-mono font-bold text-blue-600">BIB: {result.Bib}</span>
+                <span className={`inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${result.Gender === 'Male' ? 'bg-blue-500' : 'bg-pink-500'
+                  }`}>
                   {result.Gender === 'Male' ? '♂' : '♀'}
                 </span>
                 <span className="text-xs text-slate-400">{countryToFlag(result.Nationality) || countryToFlag(result.Nation) || result.Nation} {result.Category}</span>
@@ -720,6 +714,9 @@ function RankingRow({ result, slug, selected, onToggle }: { result: RaceResult; 
       </td>
 
       <td className="px-4 py-3.5">
+        {result.TimingPoint && result.TimingPoint !== 'Finish' && (
+          <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
+        )}
         <p className="text-sm font-bold text-slate-900 font-mono tracking-tight">{result.ChipTime}</p>
       </td>
 
@@ -761,14 +758,14 @@ function MobileRankingCard({ result, slug, selected, onToggle }: { result: RaceR
         {selected && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
       </button>
       <Link href={`/races/${slug}/${result.Bib}`} className="flex items-center gap-3 flex-1 min-w-0">
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
           {rank || '-'}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-bold text-slate-900 truncate">{formatName(result.Name)}</p>
-            <span className="text-xs font-mono font-bold text-blue-600">#{result.Bib}</span>
+            <span className="text-xs font-mono font-bold text-blue-600">BIB: {result.Bib}</span>
           </div>
           <div className="flex items-center gap-3 mt-1">
             <span className="text-xs text-slate-500">{result.Nation} {result.Category}</span>
@@ -776,6 +773,9 @@ function MobileRankingCard({ result, slug, selected, onToggle }: { result: RaceR
         </div>
 
         <div className="text-right shrink-0">
+          {result.TimingPoint && result.TimingPoint !== 'Finish' && (
+            <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
+          )}
           <p className="text-sm font-bold text-slate-900 font-mono">{result.ChipTime}</p>
           <p className="text-xs text-slate-400 font-mono mt-0.5">{result.Pace}</p>
         </div>
@@ -841,13 +841,12 @@ function RankingPagination({
           key={i}
           onClick={() => typeof page === 'number' && onPageChange(page)}
           disabled={page === '...'}
-          className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-semibold transition-all ${
-            page === currentPage
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
-              : page === '...'
+          className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-semibold transition-all ${page === currentPage
+            ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
+            : page === '...'
               ? 'cursor-default text-slate-300'
               : 'text-slate-600 hover:bg-slate-100'
-          }`}
+            }`}
         >
           {page}
         </button>
@@ -887,32 +886,23 @@ function SubHeader({ race, course, slug }: { race: RaceInfo; course: Course; slu
 
   return (
     <div
-      className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white border-b border-slate-200 shadow-sm'
-          : 'bg-transparent border-b border-white/10'
-      }`}
+      className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${scrolled
+        ? 'bg-white border-b border-slate-200 shadow-sm'
+        : 'bg-transparent border-b border-white/10'
+        }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-12 gap-4">
         {/* Back to race */}
         <Link
           href={`/races/${slug}`}
-          className={`flex items-center gap-1.5 text-sm font-semibold shrink-0 transition-colors duration-300 ${
-            scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white'
-          }`}
+          className={`flex items-center gap-1.5 text-sm font-semibold shrink-0 transition-colors duration-300 ${scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white'
+            }`}
         >
           <ChevronLeft className="w-4 h-4" />
           <span className="hidden sm:inline">{race.name}</span>
         </Link>
 
         <div className="flex-1" />
-
-        {/* Course name */}
-        <span className={`text-sm font-bold transition-colors duration-300 ${
-          scrolled ? 'text-slate-900' : 'text-white'
-        }`}>
-          {course.name || course.distance}
-        </span>
 
         <div className="flex-1" />
 
@@ -922,15 +912,14 @@ function SubHeader({ race, course, slug }: { race: RaceInfo; course: Course; slu
             <Link
               key={c.id}
               href={`/races/${slug}/ranking/${c.id}`}
-              className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors duration-300 ${
-                c.id === course.id
-                  ? scrolled
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-white/20 text-white'
-                  : scrolled
-                    ? 'text-slate-500 hover:bg-slate-100 hover:text-blue-700'
-                    : 'text-white/60 hover:text-white hover:bg-white/10'
-              }`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors duration-300 ${c.id === course.id
+                ? scrolled
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-white/20 text-white'
+                : scrolled
+                  ? 'text-slate-500 hover:bg-slate-100 hover:text-blue-700'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+                }`}
             >
               {c.distance}
             </Link>

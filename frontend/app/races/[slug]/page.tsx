@@ -182,9 +182,9 @@ export default function RaceDetailPage() {
   }, [race]);
 
   const formatDateRange = (start: string, end?: string) => {
-    if (!start) return 'Chưa xác định';
+    if (!start) return '';
     const s = new Date(start);
-    if (isNaN(s.getTime())) return 'Chưa xác định';
+    if (isNaN(s.getTime())) return '';
     if (!end) return s.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
     const e = new Date(end);
     if (isNaN(e.getTime())) return s.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -311,12 +311,8 @@ export default function RaceDetailPage() {
             </div>
 
             {/* Right: logo placeholder */}
-            {race.logoUrl ? (
+            {race.logoUrl && (
               <img src={race.logoUrl} alt={race.name} className="h-20 md:h-24 w-auto object-contain" />
-            ) : (
-              <div className="hidden md:flex items-center justify-center w-40 h-20 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
-                <span className="text-white/60 text-sm font-semibold">Logo</span>
-              </div>
             )}
           </div>
         </div>
@@ -358,9 +354,10 @@ export default function RaceDetailPage() {
             const accent = accentColors[ci % accentColors.length];
 
             return (
-              <div
+              <Link
                 key={course.id}
-                className={`group border border-slate-200 ${accent.border} border-b-4 rounded-lg overflow-hidden bg-white shadow-sm transition-all duration-300 hover:shadow-xl ${accent.bg} hover:-translate-y-0.5`}
+                href={`/races/${slug}/ranking/${course.id}`}
+                className={`group border border-slate-200 ${accent.border} border-b-4 rounded-lg overflow-hidden bg-white shadow-sm transition-all duration-300 hover:shadow-xl ${accent.bg} hover:-translate-y-0.5 cursor-pointer`}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_0.8fr]">
                   {/* Part 1: Image + race status */}
@@ -402,12 +399,12 @@ export default function RaceDetailPage() {
                       {/* Stats grid */}
                       <div className={`grid ${course.elevation ? 'grid-cols-3' : 'grid-cols-2'} gap-4 mt-4`}>
                         <div>
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Hạng mục</p>
-                          <p className="text-lg font-bold text-slate-900">{course.distance}</p>
+                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Giờ xuất phát</p>
+                          <p className="text-lg font-bold text-slate-900">{course.startTime || '-'}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Cự ly</p>
-                          <p className="text-lg font-bold text-slate-900">{course.distanceKm || '-'} KM</p>
+                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">COT</p>
+                          <p className="text-lg font-bold text-slate-900">{course.cutOffTime || '-'}</p>
                         </div>
                         {course.elevation && (
                           <div>
@@ -427,17 +424,17 @@ export default function RaceDetailPage() {
 
                     {/* CTA */}
                     <div className="mt-5">
-                      <Link
-                        href={`/races/${slug}/ranking/${course.id}`}
-                        className="group/cta inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-slate-700 border border-slate-300 rounded-full hover:bg-slate-50 transition-all"
+                      <span
+                        className="group/cta inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-slate-700 border border-slate-300 rounded-full group-hover:bg-slate-50 transition-all"
                       >
                         {race.status === 'upcoming' ? 'Xem chi tiết' : 'Xếp hạng & Thống kê'}
-                        <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover/cta:translate-x-1" />
-                      </Link>
+                        <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                      </span>
                     </div>
                   </div>
 
                   {/* Part 3: Top 3 (for live/completed) or Course info (for upcoming) */}
+                  {(race.status === 'upcoming' || (men.length > 0 || women.length > 0)) && (
                   <div className="p-5 md:p-6 border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50">
                     {race.status === 'upcoming' ? (
                       /* ── Upcoming: show course details ── */
@@ -536,8 +533,9 @@ export default function RaceDetailPage() {
                       </>
                     )}
                   </div>
+                  )}
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -570,14 +568,8 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-12 gap-4">
         {/* Race logo + name */}
         <div className="flex items-center gap-3 shrink-0">
-          {race.logoUrl ? (
+          {race.logoUrl && (
             <img src={race.logoUrl} alt="" className="h-7 w-auto object-contain" />
-          ) : (
-            <div className={`w-8 h-8 flex items-center justify-center font-black text-xs rounded transition-colors duration-300 ${
-              scrolled ? 'bg-blue-100 text-blue-700' : 'bg-white/15 text-white'
-            }`}>
-              {(race.name || '?').charAt(0)}
-            </div>
           )}
           <span className={`text-sm font-bold hidden sm:inline truncate max-w-[200px] lg:max-w-[300px] transition-colors duration-300 ${
             scrolled ? 'text-slate-900' : 'text-white'
