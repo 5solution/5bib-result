@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
+import { useSponsors } from '@/lib/api-hooks';
 
 const navLinks = [
   { href: '/', label: 'Trang chủ' },
@@ -21,24 +22,17 @@ interface Sponsor {
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const pathname = usePathname();
+  const { data: sponsorsRaw } = useSponsors();
 
-  useEffect(() => {
-    fetch('/api/sponsors')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body) => {
-        const list: Sponsor[] = body?.data ?? body ?? [];
-        if (Array.isArray(list) && list.length > 0) {
-          const priority: Record<string, number> = { diamond: 0, gold: 1, silver: 2 };
-          list.sort(
-            (a, b) => (priority[a.level] ?? 9) - (priority[b.level] ?? 9) || a.order - b.order,
-          );
-          setSponsors(list);
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const sponsors = useMemo(() => {
+    const list: Sponsor[] = (sponsorsRaw as any)?.data ?? sponsorsRaw ?? [];
+    if (!Array.isArray(list) || list.length === 0) return [];
+    const priority: Record<string, number> = { diamond: 0, gold: 1, silver: 2 };
+    return [...list].sort(
+      (a, b) => (priority[a.level] ?? 9) - (priority[b.level] ?? 9) || a.order - b.order,
+    );
+  }, [sponsorsRaw]);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">

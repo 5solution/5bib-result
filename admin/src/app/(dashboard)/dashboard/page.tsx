@@ -2,7 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { api, authHeaders } from "@/lib/api";
+import "@/lib/api"; // ensure client baseUrl is configured
+import { authHeaders } from "@/lib/api";
+import {
+  racesControllerSearchRaces,
+  adminControllerGetClaims,
+  adminControllerPurgeCache,
+  raceResultControllerManualSync,
+} from "@/lib/api-generated";
 import {
   Card,
   CardContent,
@@ -35,12 +42,12 @@ export default function DashboardPage() {
     try {
       // Fetch races to get counts
       const [racesRes, claimsRes] = await Promise.all([
-        api.GET("/api/races", {
-          params: { query: { pageSize: 1 } },
+        racesControllerSearchRaces({
+          query: { pageSize: 1 },
           ...authHeaders(token),
         }),
-        api.GET("/api/admin/claims", {
-          params: { query: { pageSize: 1 } },
+        adminControllerGetClaims({
+          query: { pageSize: 1 },
           ...authHeaders(token),
         }),
       ]);
@@ -50,8 +57,8 @@ export default function DashboardPage() {
       };
 
       // Fetch live races separately
-      const liveRes = await api.GET("/api/races", {
-        params: { query: { status: "live", pageSize: 1 } },
+      const liveRes = await racesControllerSearchRaces({
+        query: { status: "live", pageSize: 1 },
         ...authHeaders(token),
       });
       const liveData = liveRes.data as unknown as {
@@ -83,7 +90,7 @@ export default function DashboardPage() {
     if (!token) return;
     setSyncing(true);
     try {
-      const { error } = await api.POST("/api/race-results/sync", {
+      const { error } = await raceResultControllerManualSync({
         ...authHeaders(token),
       });
       if (error) throw error;
@@ -184,8 +191,8 @@ export default function DashboardPage() {
               if (!token) return;
               try {
                 // Purge cache requires a courseId, we use "all" as a placeholder
-                await api.POST("/api/admin/cache/purge/{courseId}", {
-                  params: { path: { courseId: "all" } },
+                await adminControllerPurgeCache({
+                  path: { courseId: "all" },
                   ...authHeaders(token),
                 });
                 toast.success("Đã xóa bộ nhớ đệm!");

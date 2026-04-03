@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
+import { QueryProvider } from '@/lib/query-provider'
 
 const inter = Inter({
   subsets: ['latin', 'vietnamese'],
@@ -42,9 +43,11 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${inter.variable} ${beVietnamPro.variable}`}>
       <body className="font-sans antialiased bg-[var(--5bib-bg)] text-[var(--5bib-text)] min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <QueryProvider>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </QueryProvider>
         <Toaster
           position="top-right"
           toastOptions={{

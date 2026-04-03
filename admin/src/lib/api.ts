@@ -1,10 +1,9 @@
-import createClient from "openapi-fetch";
-import type { paths } from "./api-types";
+import { client } from './api-generated/client.gen';
 
-// Use empty string for relative URLs (proxy through Next.js API route)
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+// Configure base URL — empty string because we use the /api/[...proxy] runtime proxy
+client.setConfig({ baseUrl: '' });
 
-export const api = createClient<paths>({ baseUrl: API_URL });
+export { client };
 
 // Helper to add auth header
 export function authHeaders(token: string) {

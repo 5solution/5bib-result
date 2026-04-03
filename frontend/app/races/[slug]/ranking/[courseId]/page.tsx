@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'next/navigation';
 import LiveTimer from '@/components/LiveTimer';
 import { countryToFlag } from '@/lib/country-flags';
+import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults } from '@/lib/api-hooks';
 
 /* ─── Types ─── */
 
@@ -142,22 +143,70 @@ export default function CourseRankingPage() {
   const slug = params.slug as string;
   const courseId = params.courseId as string;
 
-  const [race, setRace] = useState<RaceInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [results, setResults] = useState<RaceResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [availableGenders, setAvailableGenders] = useState<string[]>([]);
-  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const rankingRef = useRef<HTMLDivElement>(null);
 
-  const [totalItems, setTotalItems] = useState(0);
-  const [loadingResults, setLoadingResults] = useState(false);
-  const [sponsors, setSponsors] = useState<any[]>([]);
   const [selectedBibs, setSelectedBibs] = useState<Set<number>>(new Set());
   const router = useRouter();
+
+  // ─── Data fetching via API hooks ───
+  const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
+  const race = useMemo<RaceInfo | null>(() => {
+    const r = (raceRaw as any)?.data ?? raceRaw;
+    if (!r) return null;
+    return {
+      id: r._id || r.id,
+      name: r.title || r.name,
+      slug: r.slug,
+      date: r.startDate || r.date || '',
+      end_date: r.endDate || r.end_date,
+      location: r.province || r.location || '',
+      status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
+      courses: (r.courses || []).map((c: any) => ({
+        id: c.courseId || c.id,
+        distance: c.distance || c.name,
+        name: c.name,
+        distanceKm: c.distanceKm,
+        elevation: c.elevationGain ? `${c.elevationGain} M+` : undefined,
+        cutOffTime: c.cutOffTime,
+        starters: 0,
+        dnf: 0,
+        finishers: 0,
+      })),
+      logoUrl: r.logoUrl,
+      imageUrl: r.imageUrl,
+    };
+  }, [raceRaw]);
+
+  const { data: filtersRaw } = useFilterOptions(courseId);
+  const availableGenders = useMemo(() => (filtersRaw as any)?.data?.genders || [], [filtersRaw]);
+  const availableCategories = useMemo(() => (filtersRaw as any)?.data?.categories || [], [filtersRaw]);
+
+  const { data: sponsorsRaw } = useRaceSponsors(String(race?.id || ''), { enabled: !!race?.id });
+  const sponsors = useMemo(() => {
+    const list = (sponsorsRaw as any)?.data ?? sponsorsRaw;
+    return Array.isArray(list) ? list : [];
+  }, [sponsorsRaw]);
+
+  const { data: resultsRaw, isLoading: loadingResults } = useRaceResults({
+    course_id: courseId,
+    name: searchQuery.trim() || undefined,
+    gender: genderFilter || undefined,
+    category: categoryFilter || undefined,
+    pageNo: currentPage,
+    pageSize: ITEMS_PER_PAGE,
+    sortField: 'OverallRank',
+    sortDirection: 'ASC',
+  }, {
+    enabled: !!courseId,
+  });
+  const results: RaceResult[] = useMemo(() => (resultsRaw as any)?.data ?? [], [resultsRaw]);
+  const totalItems = useMemo(() => (resultsRaw as any)?.pagination?.total ?? 0, [resultsRaw]);
+
+  const course = race?.courses.find((c) => c.id === courseId) || null;
 
   const toggleBib = (bib: number) => {
     setSelectedBibs(prev => {
@@ -173,119 +222,6 @@ export default function CourseRankingPage() {
     const bibs = Array.from(selectedBibs).join(',');
     router.push(`/races/${slug}/compare/${courseId}?bibs=${bibs}`);
   };
-
-  const fetchRace = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/races/slug/${slug}`);
-      if (res.ok) {
-        const body = await res.json();
-        const r = body?.data ?? body;
-        if (r) {
-          setRace({
-            id: r._id || r.id,
-            name: r.title || r.name,
-            slug: r.slug,
-            date: r.startDate || r.date || '',
-            end_date: r.endDate || r.end_date,
-            location: r.province || r.location || '',
-            status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
-            courses: (r.courses || []).map((c: any) => ({
-              id: c.courseId || c.id,
-              distance: c.distance || c.name,
-              name: c.name,
-              distanceKm: c.distanceKm,
-              elevation: c.elevationGain ? `${c.elevationGain} M+` : undefined,
-              cutOffTime: c.cutOffTime,
-              starters: 0,
-              dnf: 0,
-              finishers: 0,
-            })),
-            logoUrl: r.logoUrl,
-            imageUrl: r.imageUrl,
-          });
-        } else {
-          setRace(DEMO_RACE);
-        }
-      } else {
-        setRace(DEMO_RACE);
-      }
-    } catch {
-      setRace(DEMO_RACE);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    fetchRace();
-  }, [fetchRace]);
-
-  // Fetch filter options
-  useEffect(() => {
-    if (!courseId) return;
-    fetch(`/api/race-results/filters/${courseId}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((body) => {
-        if (body?.data) {
-          setAvailableGenders(body.data.genders || []);
-          setAvailableCategories(body.data.categories || []);
-        }
-      })
-      .catch(() => {});
-  }, [courseId]);
-
-  // Fetch race-specific sponsors
-  useEffect(() => {
-    if (!race?.id) return;
-    fetch(`/api/sponsors/race/${race.id}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((body) => {
-        const list = body?.data ?? body;
-        if (Array.isArray(list)) setSponsors(list);
-      })
-      .catch(() => {});
-  }, [race?.id]);
-
-  const course = race?.courses.find((c) => c.id === courseId) || null;
-
-  const fetchResults = useCallback(async () => {
-    if (!courseId) return;
-    setLoadingResults(true);
-    try {
-      const params = new URLSearchParams({
-        course_id: courseId,
-        pageNo: String(currentPage),
-        pageSize: String(ITEMS_PER_PAGE),
-        sortField: 'OverallRank',
-        sortDirection: 'ASC',
-      });
-      if (searchQuery.trim()) params.set('name', searchQuery.trim());
-      if (genderFilter) params.set('gender', genderFilter);
-      if (categoryFilter) params.set('category', categoryFilter);
-
-      const res = await fetch(`/api/race-results?${params}`);
-      if (res.ok) {
-        const body = await res.json();
-        setResults(body?.data ?? []);
-        setTotalItems(body?.pagination?.total ?? 0);
-      }
-    } catch {
-      setResults([]);
-    } finally {
-      setLoadingResults(false);
-    }
-  }, [courseId, currentPage, searchQuery, genderFilter, categoryFilter]);
-
-  useEffect(() => {
-    fetchResults();
-  }, [fetchResults]);
-
-  // Auto-refresh every 30s when race is live
-  useEffect(() => {
-    if (race?.status !== 'live') return;
-    const interval = setInterval(() => { fetchResults(); }, 30000);
-    return () => clearInterval(interval);
-  }, [race?.status, fetchResults]);
 
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
   const paginatedResults = results;
@@ -308,7 +244,7 @@ export default function CourseRankingPage() {
     rankingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  if (loading) {
+  if (loadingRace) {
     return (
       <div className="min-h-screen bg-white pt-14">
         {/* Hero skeleton */}
@@ -516,7 +452,7 @@ export default function CourseRankingPage() {
                       >
                         Tất cả
                       </button>
-                      {availableGenders.map((g) => (
+                      {availableGenders.map((g: string) => (
                         <button
                           key={g}
                           onClick={() => setGenderFilter(g === genderFilter ? '' : g)}
@@ -538,7 +474,7 @@ export default function CourseRankingPage() {
                       className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 cursor-pointer"
                     >
                       <option value="">Tất cả</option>
-                      {availableCategories.map((c) => (
+                      {availableCategories.map((c: string) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
                     </select>

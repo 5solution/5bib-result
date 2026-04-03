@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { countryToFlag } from '@/lib/country-flags';
+import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachment } from '@/lib/api-hooks';
 
 interface AthleteResult {
   Bib: number;
@@ -124,56 +125,34 @@ export default function AthleteDetailPage() {
   const slug = params.slug as string;
   const bib = params.bib as string;
 
-  const [athlete, setAthlete] = useState<AthleteResult | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Data fetching via react-query hooks
+  const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
+  const raceData = useMemo(() => (raceRaw as any)?.data ?? raceRaw, [raceRaw]);
+  const raceId = raceData?._id || '';
+
+  const { data: athleteRaw, isLoading: loadingAthlete } = useAthleteDetail(raceId, bib, { enabled: !!raceId });
+
+  const { athlete, courseType } = useMemo(() => {
+    const data = (athleteRaw as any)?.data ?? athleteRaw;
+    if (!data) return { athlete: null as AthleteResult | null, courseType: 'split' };
+    const courses = raceData?.courses || [];
+    const matchedCourse = courses.find((c: any) => c.courseId === data.course_id);
+    const checkpoints = matchedCourse?.checkpoints as CheckpointConfig[] | undefined;
+    const detectedCourseType = (matchedCourse?.courseType as string) || 'split';
+    const splits = parseSplitsFromData(data, checkpoints) || undefined;
+    return {
+      athlete: {
+        ...data,
+        splits,
+        race_name: raceData?.title || slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+      } as AthleteResult,
+      courseType: detectedCourseType,
+    };
+  }, [athleteRaw, raceData, slug]);
+
+  const loading = loadingRace || loadingAthlete;
+
   const [linkCopied, setLinkCopied] = useState(false);
-  const [courseType, setCourseType] = useState<string>('split');
-
-  const fetchAthlete = useCallback(async () => {
-    try {
-      setLoading(true);
-      // Resolve slug → raceId first
-      const raceRes = await fetch(`/api/races/slug/${slug}`);
-      if (!raceRes.ok) { setAthlete(DEMO_ATHLETE); return; }
-      const raceBody = await raceRes.json();
-      const raceData = raceBody?.data ?? raceBody;
-      const raceId = raceData?._id;
-      if (!raceId) { setAthlete(DEMO_ATHLETE); return; }
-
-      const res = await fetch(`/api/race-results/athlete/${raceId}/${bib}`);
-      if (res.ok) {
-        const body = await res.json();
-        const data = body?.data ?? body;
-        if (data) {
-          // Find checkpoint config for this course from race data
-          const courses = raceData?.courses || [];
-          const courseId = data.course_id;
-          const matchedCourse = courses.find((c: { courseId: string }) => c.courseId === courseId);
-          const checkpoints = matchedCourse?.checkpoints as CheckpointConfig[] | undefined;
-          const detectedCourseType = (matchedCourse?.courseType as string) || 'split';
-          setCourseType(detectedCourseType);
-          const splits = parseSplitsFromData(data, checkpoints) || undefined;
-          setAthlete({
-            ...data,
-            splits,
-            race_name: raceData.title || slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
-          });
-        } else {
-          setAthlete(DEMO_ATHLETE);
-        }
-      } else {
-        setAthlete(DEMO_ATHLETE);
-      }
-    } catch {
-      setAthlete(DEMO_ATHLETE);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug, bib]);
-
-  useEffect(() => {
-    fetchAthlete();
-  }, [fetchAthlete]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -297,6 +276,8 @@ export default function AthleteDetailPage() {
   const [claimSubmitted, setClaimSubmitted] = useState(false);
   const claimFileRef = useRef<HTMLInputElement>(null);
 
+  const uploadMutation = useUploadClaimAttachment();
+
   const handleClaimFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -306,15 +287,8 @@ export default function AthleteDetailPage() {
     }
     setClaimUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/race-results/claims/upload', { method: 'POST', body: formData });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Upload failed');
-      }
-      const { url } = await res.json();
-      setClaimAttachments(prev => [...prev, url]);
+      const result = await uploadMutation.mutateAsync(file);
+      setClaimAttachments(prev => [...prev, result.url]);
       toast.success(`Đã tải lên: ${file.name}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Tải file thất bại');
@@ -322,7 +296,9 @@ export default function AthleteDetailPage() {
       setClaimUploading(false);
       if (claimFileRef.current) claimFileRef.current.value = '';
     }
-  }, []);
+  }, [uploadMutation]);
+
+  const submitClaimMutation = useSubmitClaim();
 
   const handleClaimSubmit = useCallback(async () => {
     if (!athlete) return;
@@ -330,32 +306,22 @@ export default function AthleteDetailPage() {
       toast.error('Vui lòng điền đầy đủ: Họ tên, Số điện thoại, và Nội dung khiếu nại.');
       return;
     }
+    if (!raceId) {
+      toast.error('Không tìm thấy giải đấu');
+      return;
+    }
     setClaimSubmitting(true);
     try {
-      // Resolve raceId from slug
-      const raceRes = await fetch(`/api/races/slug/${slug}`);
-      const raceBody = await raceRes.json();
-      const raceId = raceBody?.data?._id || raceBody?._id;
-      if (!raceId) throw new Error('Không tìm thấy giải đấu');
-
-      const res = await fetch('/api/race-results/claims', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          raceId,
-          courseId: athlete.course_id || '',
-          bib: String(athlete.Bib),
-          name: claimName.trim(),
-          email: claimEmail.trim() || undefined,
-          phone: claimPhone.trim(),
-          description: claimDescription.trim(),
-          attachments: claimAttachments.length > 0 ? claimAttachments : undefined,
-        }),
+      await submitClaimMutation.mutateAsync({
+        raceId,
+        courseId: athlete.course_id || '',
+        bib: String(athlete.Bib),
+        name: claimName.trim(),
+        email: claimEmail.trim(),
+        phone: claimPhone.trim(),
+        description: claimDescription.trim(),
+        attachments: claimAttachments.length > 0 ? claimAttachments : undefined,
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Submit failed');
-      }
       setClaimSubmitted(true);
       toast.success('Khiếu nại đã được gửi thành công! Chúng tôi sẽ liên hệ bạn sớm nhất.');
     } catch (err: unknown) {
@@ -363,7 +329,7 @@ export default function AthleteDetailPage() {
     } finally {
       setClaimSubmitting(false);
     }
-  }, [athlete, slug, claimName, claimEmail, claimPhone, claimDescription, claimAttachments]);
+  }, [athlete, raceId, claimName, claimEmail, claimPhone, claimDescription, claimAttachments, submitClaimMutation]);
 
   const fireCelebration = useCallback(() => {
     // Confetti burst

@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { api, authHeaders } from "@/lib/api";
+import "@/lib/api"; // ensure client baseUrl is configured
+import { authHeaders } from "@/lib/api";
+import { adminControllerGetSyncLogs } from "@/lib/api-generated";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -76,10 +78,12 @@ export default function SyncLogsPage() {
   const fetchLogs = useCallback(async () => {
     if (!token) return;
     try {
-      const { data } = await api.GET("/api/admin/sync-logs", {
-        params: { query: { page, pageSize: 20 } },
+      const { data, error } = await adminControllerGetSyncLogs({
+        query: { page, pageSize: 20 },
         ...authHeaders(token),
       });
+
+      if (error) throw error;
 
       const result = data as unknown as {
         data?: {

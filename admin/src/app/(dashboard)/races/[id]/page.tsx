@@ -3,8 +3,23 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, authHeaders } from "@/lib/api";
-import type { components } from "@/lib/api-types";
+import "@/lib/api"; // ensure client baseUrl is configured
+import { authHeaders } from "@/lib/api";
+import {
+  racesControllerGetRaceById,
+  racesControllerUpdateRace,
+  racesControllerUpdateStatus,
+  racesControllerAddCourse,
+  racesControllerUpdateCourse,
+  racesControllerRemoveCourse,
+  adminControllerForceSync,
+  adminControllerResetData,
+  raceResultControllerGetRaceResults,
+  sponsorsControllerFindByRaceId,
+  sponsorsControllerCreate,
+  sponsorsControllerUpdate,
+  sponsorsControllerRemove,
+} from "@/lib/api-generated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -185,12 +200,12 @@ export default function RaceDetailPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const { data, response } = await api.GET("/api/races/{id}", {
-        params: { path: { id: raceId } },
+      const { data, error } = await racesControllerGetRaceById({
+        path: { id: raceId },
         ...authHeaders(token),
       });
 
-      if (!response.ok) throw new Error("Race not found");
+      if (error) throw new Error("Race not found");
 
       const body = data as any;
       const raceData = (body?.data ?? body) as Race;
@@ -235,11 +250,12 @@ export default function RaceDetailPage() {
     if (!token) return;
     setLoadingSponsors(true);
     try {
-      const res = await fetch(`/api/sponsors/race/${raceId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const { data, error } = await sponsorsControllerFindByRaceId({
+        path: { raceId },
+        ...authHeaders(token),
       });
-      if (res.ok) {
-        const body = await res.json();
+      if (!error) {
+        const body = data as any;
         setRaceSponsors(body?.data ?? body ?? []);
       }
     } catch { /* ignore */ } finally {
@@ -269,20 +285,19 @@ export default function RaceDetailPage() {
     try {
       const payload = { ...sponsorForm, raceId };
       if (editingSponsor) {
-        const res = await fetch(`/api/sponsors/${editingSponsor._id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(payload),
+        const { error } = await sponsorsControllerUpdate({
+          path: { id: editingSponsor._id },
+          body: payload as any,
+          ...authHeaders(token),
         });
-        if (!res.ok) throw new Error('Update failed');
+        if (error) throw new Error('Update failed');
         toast.success('Đã cập nhật nhà tài trợ');
       } else {
-        const res = await fetch('/api/sponsors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(payload),
+        const { error } = await sponsorsControllerCreate({
+          body: payload as any,
+          ...authHeaders(token),
         });
-        if (!res.ok) throw new Error('Create failed');
+        if (error) throw new Error('Create failed');
         toast.success('Đã thêm nhà tài trợ');
       }
       setSponsorDialogOpen(false);
@@ -297,11 +312,11 @@ export default function RaceDetailPage() {
   async function handleDeleteSponsor(id: string) {
     if (!token) return;
     try {
-      const res = await fetch(`/api/sponsors/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+      const { error } = await sponsorsControllerRemove({
+        path: { id },
+        ...authHeaders(token),
       });
-      if (!res.ok) throw new Error('Delete failed');
+      if (error) throw new Error('Delete failed');
       toast.success('Đã xóa nhà tài trợ');
       fetchRaceSponsors();
     } catch {
@@ -313,8 +328,8 @@ export default function RaceDetailPage() {
     if (!token || !race) return;
     setSaving(true);
     try {
-      const { error } = await api.PATCH("/api/races/{id}", {
-        params: { path: { id: raceId } },
+      const { error } = await racesControllerUpdateRace({
+        path: { id: raceId },
         body: {
           ...editForm,
           status: editForm.status || race.status,
@@ -335,8 +350,8 @@ export default function RaceDetailPage() {
   async function handleUpdateStatus(newStatus: RaceStatus) {
     if (!token) return;
     try {
-      const { error } = await api.PATCH("/api/races/{id}/status", {
-        params: { path: { id: raceId } },
+      const { error } = await racesControllerUpdateStatus({
+        path: { id: raceId },
         body: { status: newStatus } as any,
         ...authHeaders(token),
       });
@@ -353,8 +368,8 @@ export default function RaceDetailPage() {
     setSavingCourse(true);
     try {
       if (editingCourse) {
-        const { error } = await api.PATCH("/api/races/{id}/courses/{courseId}", {
-          params: { path: { id: raceId, courseId: editingCourse.courseId } },
+        const { error } = await racesControllerUpdateCourse({
+          path: { id: raceId, courseId: editingCourse.courseId },
           body: {
             name: courseForm.name,
             distance: courseForm.distance,
@@ -376,8 +391,8 @@ export default function RaceDetailPage() {
         if (error) throw error;
         toast.success("Cập nhật cự ly thành công!");
       } else {
-        const { error } = await api.POST("/api/races/{id}/courses", {
-          params: { path: { id: raceId } },
+        const { error } = await racesControllerAddCourse({
+          path: { id: raceId },
           body: {
             name: courseForm.name,
             distance: courseForm.distance,
@@ -404,10 +419,10 @@ export default function RaceDetailPage() {
           const cid = courseForm.courseId || courseForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
           toast.info("Đang đồng bộ dữ liệu...");
           try {
-            await api.POST("/api/admin/races/{raceId}/courses/{courseId}/force-sync", {
-              params: { path: { raceId: raceId, courseId: cid } },
+            await adminControllerForceSync({
+              path: { raceId: raceId, courseId: cid },
               ...authHeaders(token),
-            } as any);
+            });
             toast.success("Đồng bộ dữ liệu thành công!");
           } catch {
             toast.warning("Đồng bộ thất bại, sẽ tự động đồng bộ sau 10 phút");
@@ -428,8 +443,8 @@ export default function RaceDetailPage() {
   async function handleRemoveCourse(courseId: string) {
     if (!token) return;
     try {
-      const { error } = await api.DELETE("/api/races/{id}/courses/{courseId}", {
-        params: { path: { id: raceId, courseId } },
+      const { error } = await racesControllerRemoveCourse({
+        path: { id: raceId, courseId },
         ...authHeaders(token),
       });
       if (error) throw error;
@@ -444,13 +459,10 @@ export default function RaceDetailPage() {
     if (!token) return;
     setSyncingCourseId(courseId);
     try {
-      const { error } = await api.POST(
-        "/api/admin/races/{raceId}/courses/{courseId}/force-sync",
-        {
-          params: { path: { raceId, courseId } },
-          ...authHeaders(token),
-        }
-      );
+      const { error } = await adminControllerForceSync({
+        path: { raceId, courseId },
+        ...authHeaders(token),
+      });
       if (error) throw error;
       toast.success("Đồng bộ thành công!");
     } catch {
@@ -464,13 +476,10 @@ export default function RaceDetailPage() {
     if (!token) return;
     setResettingCourseId(courseId);
     try {
-      const { error } = await api.POST(
-        "/api/admin/races/{raceId}/courses/{courseId}/reset-data",
-        {
-          params: { path: { raceId, courseId } },
-          ...authHeaders(token),
-        }
-      );
+      const { error } = await adminControllerResetData({
+        path: { raceId, courseId },
+        ...authHeaders(token),
+      });
       if (error) throw error;
       toast.success("Đã xóa dữ liệu!");
     } catch {
@@ -483,10 +492,11 @@ export default function RaceDetailPage() {
   async function handleExportCSV(courseId: string, courseName: string) {
     try {
       // Fetch all results (large page)
-      const res = await fetch(`/api/race-results?course_id=${courseId}&pageNo=1&pageSize=10000&sortField=OverallRank&sortDirection=ASC`);
-      if (!res.ok) { toast.error("Không thể tải dữ liệu"); return; }
-      const body = await res.json();
-      const results = body?.data ?? [];
+      const { data: body, error } = await raceResultControllerGetRaceResults({
+        query: { course_id: courseId, pageNo: 1, pageSize: 10000, sortField: 'OverallRank', sortDirection: 'ASC' },
+      });
+      if (error) { toast.error("Không thể tải dữ liệu"); return; }
+      const results = (body as any)?.data ?? [];
       if (results.length === 0) { toast.error("Không có dữ liệu để xuất"); return; }
 
       const headers = ['Rank', 'BIB', 'Name', 'Gender', 'Category', 'ChipTime', 'GunTime', 'Pace', 'Gap', 'Nationality'];

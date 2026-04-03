@@ -1,4 +1,6 @@
-import createClient from "openapi-fetch";
-import type { paths } from "./api-types";
+import { client } from './api-generated/client.gen';
 
-export const api = createClient<paths>({ baseUrl: "" });
+// Configure base URL — empty string because we use the /api/[...proxy] runtime proxy
+client.setConfig({ baseUrl: '' });
+
+export { client };

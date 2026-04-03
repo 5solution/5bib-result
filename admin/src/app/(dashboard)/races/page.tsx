@@ -3,8 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, authHeaders } from "@/lib/api";
-import type { components } from "@/lib/api-types";
+import "@/lib/api"; // ensure client baseUrl is configured
+import { authHeaders } from "@/lib/api";
+import {
+  racesControllerSearchRaces,
+  racesControllerCreateRace,
+  racesControllerDeleteRace,
+} from "@/lib/api-generated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -113,17 +118,17 @@ export default function RacesPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const { data } = await api.GET("/api/races", {
-        params: {
-          query: {
-            title: search || undefined,
-            status: statusFilter === "all" ? "all" : statusFilter,
-            page,
-            pageSize: 20,
-          },
+      const { data, error } = await racesControllerSearchRaces({
+        query: {
+          title: search || undefined,
+          status: statusFilter === "all" ? "all" : statusFilter,
+          page,
+          pageSize: 20,
         },
         ...authHeaders(token),
       });
+
+      if (error) throw error;
 
       const result = data as unknown as {
         data?: {
@@ -159,7 +164,7 @@ export default function RacesPage() {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/(^-|-$)/g, "");
 
-      const { error } = await api.POST("/api/races", {
+      const { error } = await racesControllerCreateRace({
         body: {
           title: newRace.title,
           slug,
@@ -196,8 +201,8 @@ export default function RacesPage() {
     if (!token || !deleteId) return;
     setDeleting(true);
     try {
-      const { error } = await api.DELETE("/api/races/{id}", {
-        params: { path: { id: deleteId } },
+      const { error } = await racesControllerDeleteRace({
+        path: { id: deleteId },
         ...authHeaders(token),
       });
       if (error) throw error;

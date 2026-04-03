@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Search, MapPin, Calendar, ChevronRight, X } from 'lucide-react';
+import { useRaces } from '@/lib/api-hooks';
 
 interface Race {
   id: number;
@@ -30,17 +31,6 @@ const RACE_IMAGES = [
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&q=80',
 ];
 
-const DEMO_RACES: Race[] = [
-  { id: 1, name: 'VnExpress Marathon Hà Nội 2026', slug: 'vnexpress-marathon-hanoi-2026', date: '2026-04-12', location: 'Hà Nội', status: 'upcoming', distances: ['5K', '10K', '21K', '42K'], total_results: 0 },
-  { id: 2, name: 'Dalat Ultra Trail 2026', slug: 'dalat-ultra-trail-2026', date: '2026-03-28', location: 'Đà Lạt, Lâm Đồng', status: 'live', distances: ['21K', '42K', '55K', '70K'], total_results: 1200 },
-  { id: 3, name: 'Techcombank HCM Marathon 2026', slug: 'techcombank-hcm-marathon-2026', date: '2026-01-15', location: 'TP. Hồ Chí Minh', status: 'completed', distances: ['5K', '10K', '21K', '42K'], total_results: 15000 },
-  { id: 4, name: 'Halong Bay Heritage Marathon', slug: 'halong-bay-heritage-marathon-2025', date: '2025-11-10', location: 'Quảng Ninh', status: 'completed', distances: ['5K', '10K', '21K', '42K'], total_results: 8000 },
-  { id: 5, name: 'Hue Marathon 2026', slug: 'hue-marathon-2026', date: '2026-06-01', location: 'Huế', status: 'upcoming', distances: ['5K', '10K', '21K'], total_results: 0 },
-  { id: 6, name: 'Vietnam Mountain Marathon 2026', slug: 'vietnam-mountain-marathon-2026', date: '2026-09-20', location: 'Sa Pa, Lào Cai', status: 'upcoming', distances: ['10K', '21K', '42K', '70K', '100K'], total_results: 0 },
-  { id: 7, name: 'Da Nang International Marathon', slug: 'da-nang-international-marathon', date: '2025-08-15', location: 'Đà Nẵng', status: 'completed', distances: ['5K', '10K', '21K', '42K'], total_results: 10000 },
-  { id: 8, name: 'Quy Nhon Night Run 2026', slug: 'quy-nhon-night-run-2026', date: '2026-05-10', location: 'Quy Nhơn, Bình Định', status: 'upcoming', distances: ['5K', '10K', '21K'], total_results: 0 },
-  { id: 9, name: 'Phú Quốc Island Trail 2026', slug: 'phu-quoc-island-trail-2026', date: '2026-10-10', location: 'Phú Quốc, Kiên Giang', status: 'upcoming', distances: ['15K', '25K', '50K'], total_results: 0 },
-];
 
 type StatusFilter = 'all' | 'live' | 'upcoming' | 'completed';
 
@@ -62,40 +52,23 @@ function CalendarContent() {
   const initialStatus = (searchParams.get('status') as StatusFilter) || 'all';
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
-  const [races, setRaces] = useState<Race[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchRaces = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/races');
-      if (res.ok) {
-        const body = await res.json();
-        const apiList = body?.data?.list ?? body?.data ?? [];
-        setRaces(apiList.map((r: any) => ({
-          id: r._id || r.id,
-          name: r.title || r.name,
-          slug: r.slug,
-          date: r.startDate || r.date || '',
-          end_date: r.endDate || r.end_date,
-          location: r.province || r.location || '',
-          status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
-          distances: r.courses?.map((c: any) => c.distance || c.name) || r.distances || [],
-          total_results: r.total_results || 0,
-        })));
-      } else {
-        setRaces(DEMO_RACES);
-      }
-    } catch {
-      setRaces(DEMO_RACES);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: racesRaw, isLoading: loading } = useRaces();
 
-  useEffect(() => {
-    fetchRaces();
-  }, [fetchRaces]);
+  const races = useMemo<Race[]>(() => {
+    const apiList = (racesRaw as any)?.data?.list ?? (racesRaw as any)?.data ?? (racesRaw as any) ?? [];
+    return apiList.map((r: any) => ({
+      id: r._id || r.id,
+      name: r.title || r.name,
+      slug: r.slug,
+      date: r.startDate || r.date || '',
+      end_date: r.endDate || r.end_date,
+      location: r.province || r.location || '',
+      status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
+      distances: r.courses?.map((c: any) => c.distance || c.name) || r.distances || [],
+      total_results: r.total_results || 0,
+    }));
+  }, [racesRaw]);
 
   const filteredRaces = races.filter((race) => {
     const matchesSearch =

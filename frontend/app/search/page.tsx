@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, ChevronLeft, Trophy, Calendar, Loader2 } from 'lucide-react';
 import { countryToFlag } from '@/lib/country-flags';
+import { useGlobalSearch } from '@/lib/api-hooks';
 
 interface SearchResult {
   Bib: number;
@@ -42,42 +43,17 @@ function SearchContent() {
   const initialQuery = searchParams.get('q') || '';
 
   const [query, setQuery] = useState(initialQuery);
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [activeQuery, setActiveQuery] = useState(initialQuery);
 
-  const doSearch = useCallback(async (q: string) => {
-    if (!q || q.trim().length < 2) {
-      setResults([]);
-      setSearched(false);
-      return;
-    }
-    setLoading(true);
-    setSearched(true);
-    try {
-      const res = await fetch(`/api/race-results/search?q=${encodeURIComponent(q.trim())}&limit=50`);
-      if (res.ok) {
-        const body = await res.json();
-        setResults(body?.data ?? []);
-      } else {
-        setResults([]);
-      }
-    } catch {
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (initialQuery) doSearch(initialQuery);
-  }, [initialQuery, doSearch]);
+  const { data: searchRaw, isLoading: loading } = useGlobalSearch(activeQuery, 50);
+  const results = useMemo<SearchResult[]>(() => (searchRaw as any)?.data ?? [], [searchRaw]);
+  const searched = activeQuery.length >= 2;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
       router.replace(`/search?q=${encodeURIComponent(query.trim())}`, { scroll: false });
-      doSearch(query.trim());
+      setActiveQuery(query.trim());
     }
   };
 

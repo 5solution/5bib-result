@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { api, authHeaders } from "@/lib/api";
+import "@/lib/api"; // ensure client baseUrl is configured
+import { authHeaders } from "@/lib/api";
+import {
+  adminControllerGetClaims,
+  adminControllerResolveClaim,
+} from "@/lib/api-generated";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,10 +87,12 @@ export default function ClaimsPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const { data } = await api.GET("/api/admin/claims", {
-        params: { query: { page, pageSize: 20 } },
+      const { data, error } = await adminControllerGetClaims({
+        query: { page, pageSize: 20 },
         ...authHeaders(token),
       });
+
+      if (error) throw error;
 
       const result = data as unknown as {
         data?: {
@@ -128,12 +135,12 @@ export default function ClaimsPage() {
     if (!token || !activeClaim) return;
     setResolving(true);
     try {
-      const { error } = await api.PATCH("/api/admin/claims/{id}", {
-        params: { path: { id: activeClaim._id } },
+      const { error } = await adminControllerResolveClaim({
+        path: { id: activeClaim._id },
         body: {
           status: resolveAction,
           adminNote: adminNote || undefined,
-        },
+        } as any,
         ...authHeaders(token),
       });
       if (error) throw error;

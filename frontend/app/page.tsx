@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useRaces } from '@/lib/api-hooks';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -130,13 +131,6 @@ function pad(n: number): string {
 export default function HomePage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [races, setRaces] = useState<Race[]>([]);
-  const [stats, setStats] = useState<StatsData>({
-    totalRaces: 0,
-    totalResults: 0,
-    totalAthletes: 0,
-  });
-  const [loading, setLoading] = useState(true);
   const [, setTick] = useState(0);
 
   // Tick every second for countdown timers
@@ -145,56 +139,42 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/races');
-      if (!res.ok) throw new Error('fetch failed');
-      const body = await res.json();
-      const apiList: ApiRace[] = body?.data?.list ?? body?.data ?? [];
+  const { data: racesRaw, isLoading: loading } = useRaces();
 
-      // Filter out drafts and map
-      const raceList: Race[] = apiList
-        .filter((r) => r.status !== 'draft')
-        .map((r) => ({
-          id: r._id,
-          name: r.title,
-          slug: r.slug,
-          startDate: r.startDate || null,
-          endDate: r.endDate || null,
-          location: r.province || '',
-          imageUrl: r.imageUrl || null,
-          bannerUrl: r.bannerUrl || null,
-          status:
-            r.status === 'live'
-              ? 'live'
-              : r.status === 'pre_race'
-                ? 'upcoming'
-                : 'completed',
-          distances:
-            r.courses?.map((c) => c.distance || c.name).filter(Boolean) || [],
-          totalResults: r.total_results || 0,
-        }));
+  const races = useMemo<Race[]>(() => {
+    const apiList: ApiRace[] = (racesRaw as any)?.data?.list ?? (racesRaw as any)?.data ?? (racesRaw as any) ?? [];
+    if (!Array.isArray(apiList)) return [];
+    return apiList
+      .filter((r) => r.status !== 'draft')
+      .map((r) => ({
+        id: r._id,
+        name: r.title,
+        slug: r.slug,
+        startDate: r.startDate || null,
+        endDate: r.endDate || null,
+        location: r.province || '',
+        imageUrl: r.imageUrl || null,
+        bannerUrl: r.bannerUrl || null,
+        status:
+          r.status === 'live'
+            ? 'live'
+            : r.status === 'pre_race'
+              ? 'upcoming'
+              : 'completed',
+        distances:
+          r.courses?.map((c) => c.distance || c.name).filter(Boolean) || [],
+        totalResults: r.total_results || 0,
+      }));
+  }, [racesRaw]);
 
-      setRaces(raceList);
-
-      const totalResults = raceList.reduce((sum, r) => sum + r.totalResults, 0);
-      setStats({
-        totalRaces: raceList.length,
-        totalResults: totalResults || raceList.length * 500,
-        totalAthletes: Math.round((totalResults || raceList.length * 500) * 0.85),
-      });
-    } catch {
-      setRaces([]);
-      setStats({ totalRaces: 0, totalResults: 0, totalAthletes: 0 });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const stats = useMemo<StatsData>(() => {
+    const totalResults = races.reduce((sum, r) => sum + r.totalResults, 0);
+    return {
+      totalRaces: races.length,
+      totalResults: totalResults || races.length * 500,
+      totalAthletes: Math.round((totalResults || races.length * 500) * 0.85),
+    };
+  }, [races]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

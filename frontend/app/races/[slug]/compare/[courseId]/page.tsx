@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useMemo, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Trophy, Clock, TrendingUp, Users, Loader2 } from 'lucide-react';
+import { useRaceBySlug, useCompareAthletes } from '@/lib/api-hooks';
 
 interface AthleteResult {
   Bib: number;
@@ -70,45 +71,34 @@ function CompareContent() {
   const courseId = params.courseId as string;
   const bibsParam = searchParams.get('bibs') || '';
 
-  const [athletes, setAthletes] = useState<AthleteResult[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [raceName, setRaceName] = useState('');
-  const [raceId, setRaceId] = useState('');
-  const [checkpoints, setCheckpoints] = useState<CheckpointConfig[]>([]);
-
   const bibs = bibsParam.split(',').filter(Boolean);
 
-  const fetchData = useCallback(async () => {
-    if (bibs.length < 2) { setLoading(false); return; }
+  // Fetch race info
+  const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
 
-    try {
-      // Fetch race info first to get raceId
-      const raceRes = await fetch(`/api/races/slug/${slug}`);
-      if (!raceRes.ok) { setLoading(false); return; }
-      const raceBody = await raceRes.json();
-      const race = raceBody?.data ?? raceBody;
-      const id = race?._id || race?.id;
-      setRaceId(id);
-      setRaceName(race?.title || '');
+  const { raceId, raceName, checkpoints } = useMemo(() => {
+    const race = (raceRaw as any)?.data ?? raceRaw;
+    if (!race) return { raceId: '', raceName: '', checkpoints: [] as CheckpointConfig[] };
+    const id = race._id || race.id || '';
+    const name = race.title || '';
+    const course = (race.courses || []).find((c: any) => (c.courseId || c.id) === courseId);
+    const cps: CheckpointConfig[] = course?.checkpoints || [];
+    return { raceId: id, raceName: name, checkpoints: cps };
+  }, [raceRaw, courseId]);
 
-      // Get checkpoints from course
-      const course = (race?.courses || []).find((c: any) => (c.courseId || c.id) === courseId);
-      if (course?.checkpoints) setCheckpoints(course.checkpoints);
+  // Fetch compare data
+  const { data: compareRaw, isLoading: loadingCompare } = useCompareAthletes(
+    raceId,
+    bibs.join(','),
+    { enabled: !!raceId && bibs.length >= 2 },
+  );
 
-      // Fetch compare data
-      const compareRes = await fetch(`/api/race-results/compare/${id}?bibs=${bibs.join(',')}`);
-      if (compareRes.ok) {
-        const body = await compareRes.json();
-        setAthletes(body?.data ?? []);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [slug, courseId, bibsParam]);
+  const athletes: AthleteResult[] = useMemo(() => {
+    const data = (compareRaw as any)?.data ?? compareRaw;
+    return Array.isArray(data) ? data : [];
+  }, [compareRaw]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const loading = loadingRace || loadingCompare;
 
   const formatName = (name: string) =>
     name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');

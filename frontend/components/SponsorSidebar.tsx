@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import Image from 'next/image'
+import { useSponsors } from '@/lib/api-hooks'
 
 interface Sponsor {
   _id: string
@@ -19,23 +20,16 @@ const LOGO_SIZES: Record<Sponsor['level'], { width: number; height: number }> = 
 }
 
 export default function SponsorSidebar() {
-  const [sponsors, setSponsors] = useState<Sponsor[]>([])
+  const { data: sponsorsRaw } = useSponsors()
 
-  useEffect(() => {
-    fetch('/api/sponsors')
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((body) => {
-        const list: Sponsor[] = body?.data ?? body ?? []
-        const priority: Record<string, number> = { diamond: 0, gold: 1, silver: 2 }
-        list.sort(
-          (a, b) => (priority[a.level] ?? 9) - (priority[b.level] ?? 9) || a.order - b.order,
-        )
-        setSponsors(list)
-      })
-      .catch(() => {
-        // silently ignore – sidebar is non-critical
-      })
-  }, [])
+  const sponsors = useMemo(() => {
+    const list: Sponsor[] = (sponsorsRaw as any)?.data ?? sponsorsRaw ?? []
+    if (!Array.isArray(list) || list.length === 0) return []
+    const priority: Record<string, number> = { diamond: 0, gold: 1, silver: 2 }
+    return [...list].sort(
+      (a, b) => (priority[a.level] ?? 9) - (priority[b.level] ?? 9) || a.order - b.order,
+    )
+  }, [sponsorsRaw])
 
   if (sponsors.length === 0) return null
 

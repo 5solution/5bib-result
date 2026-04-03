@@ -5,6 +5,9 @@ import { Plus, X, Loader2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import "@/lib/api"; // ensure client baseUrl is configured
+import { authHeaders } from "@/lib/api";
+import { uploadControllerUploadFile } from "@/lib/api-generated";
 
 interface SponsorBannersProps {
   value: string[];
@@ -12,8 +15,6 @@ interface SponsorBannersProps {
   folder?: string;
   token?: string;
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export default function SponsorBanners({
   value = [],
@@ -32,20 +33,14 @@ export default function SponsorBanners({
     }
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("folder", folder);
-
-      const res = await fetch(`${API_URL}/api/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+      const { data, error } = await uploadControllerUploadFile({
+        body: { file },
+        ...authHeaders(token),
       });
 
-      if (!res.ok) throw new Error("Upload failed");
-
-      const data = await res.json();
-      const finalUrl = data?.url ?? data;
+      if (error) throw new Error("Upload failed");
+      const result = data as any;
+      const finalUrl = result?.url ?? result;
       if (!finalUrl) throw new Error("Upload failed");
       onChange([...value, finalUrl]);
       toast.success("Tải banner thành công!");

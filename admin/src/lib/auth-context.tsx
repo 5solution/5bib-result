@@ -8,7 +8,8 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { api } from "./api";
+import "./api"; // ensure client baseUrl is configured
+import { authControllerLogin } from "./api-generated";
 
 interface AuthContextType {
   token: string | null;
@@ -35,15 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { data, error, response } = await api.POST("/api/auth/login", {
+    const { data, error } = await authControllerLogin({
       body: { email, password },
     });
 
-    if (!response.ok || error) {
+    if (error) {
       throw new Error("Sai email hoac mat khau");
     }
 
-    // The response type doesn't define content, so we parse it manually
     const result = data as unknown as { access_token?: string; token?: string };
     const accessToken = result?.access_token || result?.token;
 

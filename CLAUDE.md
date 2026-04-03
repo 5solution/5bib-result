@@ -134,6 +134,20 @@ AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET
 BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at build time
 ```
 
+## Development Rules
+
+### Backend API Rules
+- Every new API endpoint MUST have full `@ApiResponse({ type: DtoClass })` decorator with proper response DTO
+- All controller methods must define `@ApiOperation`, `@ApiResponse` (success), and `@ApiTags`
+- Response DTOs must use `@ApiProperty()` on every field for proper OpenAPI schema generation
+- This ensures `@hey-api/openapi-ts` can generate correct TypeScript types for frontend/admin
+
+### Frontend/Admin API Rules
+- All API calls use `@hey-api/openapi-ts` generated SDK from `lib/api-generated/`
+- TanStack Query hooks in `lib/api-hooks.ts` wrap SDK calls for React components
+- Run `pnpm generate:api` to regenerate types after backend API changes
+- Never use raw `fetch()` for API calls — always use generated SDK functions or hooks
+
 ## Common Issues & Solutions
 - **MongoDB ECONNREFUSED in Docker**: Use `host.docker.internal:27018` + `extra_hosts` in docker-compose
 - **nginx 502**: Check escaped `$http_upgrade` in nginx config

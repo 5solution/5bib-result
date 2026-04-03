@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route } from 'lucide-react';
 import LiveTimer from '@/components/LiveTimer';
+import { useRaceBySlug } from '@/lib/api-hooks';
+import { raceResultControllerGetRaceResults } from '@/lib/api-generated';
 
 const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
 
@@ -114,62 +116,44 @@ export default function RaceDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
 
-  const [race, setRace] = useState<RaceInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const [courseResults, setCourseResults] = useState<Record<string, RaceResult[]>>({});
 
-  const fetchRace = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/races/slug/${slug}`);
-      if (res.ok) {
-        const body = await res.json();
-        const r = body?.data ?? body;
-        if (r) {
-          setRace({
-            id: r._id || r.id,
-            name: r.title || r.name,
-            slug: r.slug,
-            date: r.startDate || r.date || '',
-            end_date: r.endDate || r.end_date,
-            location: r.province || r.location || '',
-            status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
-            distances: r.courses?.map((c: any) => c.distance || c.name) || [],
-            courses: (r.courses || []).map((c: any, i: number) => ({
-              id: c.courseId || c.id,
-              distance: c.distance || c.name,
-              name: c.name,
-              distanceKm: c.distanceKm,
-              elevation: c.elevationGain ? `${c.elevationGain} M+` : undefined,
-              cutOffTime: c.cutOffTime,
-              startTime: c.startTime,
-              startLocation: c.startLocation,
-              starters: 0,
-              dnf: 0,
-              finishers: 0,
-              image: c.imageUrl || COURSE_IMAGES[i % COURSE_IMAGES.length],
-              gpxUrl: c.gpxUrl,
-            })),
-            logoUrl: r.logoUrl,
-            imageUrl: r.imageUrl,
-            description: r.description,
-            organizer: r.organizer,
-          });
-        } else {
-          setRace(DEMO_RACE);
-        }
-      } else {
-        setRace(DEMO_RACE);
-      }
-    } catch {
-      setRace(DEMO_RACE);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
+  const race = useMemo<RaceInfo | null>(() => {
+    const r = (raceRaw as any)?.data ?? raceRaw;
+    if (!r) return loadingRace ? null : DEMO_RACE;
+    return {
+      id: r._id || r.id,
+      name: r.title || r.name,
+      slug: r.slug,
+      date: r.startDate || r.date || '',
+      end_date: r.endDate || r.end_date,
+      location: r.province || r.location || '',
+      status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
+      distances: r.courses?.map((c: any) => c.distance || c.name) || [],
+      courses: (r.courses || []).map((c: any, i: number) => ({
+        id: c.courseId || c.id,
+        distance: c.distance || c.name,
+        name: c.name,
+        distanceKm: c.distanceKm,
+        elevation: c.elevationGain ? `${c.elevationGain} M+` : undefined,
+        cutOffTime: c.cutOffTime,
+        startTime: c.startTime,
+        startLocation: c.startLocation,
+        starters: 0,
+        dnf: 0,
+        finishers: 0,
+        image: c.imageUrl || COURSE_IMAGES[i % COURSE_IMAGES.length],
+        gpxUrl: c.gpxUrl,
+      })),
+      logoUrl: r.logoUrl,
+      imageUrl: r.imageUrl,
+      description: r.description,
+      organizer: r.organizer,
+    };
+  }, [raceRaw, loadingRace]);
 
-  useEffect(() => {
-    fetchRace();
-  }, [fetchRace]);
+  const loading = loadingRace;
 
   useEffect(() => {
     if (!race || race.status === 'upcoming') return; // Don't fetch results for upcoming races
@@ -177,14 +161,17 @@ export default function RaceDetailPage() {
       const results: Record<string, RaceResult[]> = {};
       for (const course of race.courses) {
         try {
-          const res = await fetch(`/api/race-results?race_id=${race.id}&course_id=${course.id}&pageNo=1&pageSize=10&sortField=OverallRank&sortDirection=ASC`);
-          if (res.ok) {
-            const body = await res.json();
-            const list = body?.data ?? body;
-            results[course.id] = Array.isArray(list) ? list : [];
-          } else {
-            results[course.id] = [];
-          }
+          const res = await raceResultControllerGetRaceResults({
+            query: {
+              course_id: course.id,
+              pageNo: 1,
+              pageSize: 10,
+              sortField: 'OverallRank',
+              sortDirection: 'ASC',
+            },
+          });
+          const list = (res.data as any)?.data ?? res.data;
+          results[course.id] = Array.isArray(list) ? list : [];
         } catch {
           results[course.id] = [];
         }

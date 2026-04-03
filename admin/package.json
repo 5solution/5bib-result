@@ -7,16 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "generate:api": "openapi-typescript http://localhost:8081/swagger/json -o src/lib/api-types.ts"
+    "generate:api": "openapi-ts -i http://localhost:8081/swagger/json -o src/lib/api-generated"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
+    "@hey-api/openapi-ts": "^0.95.0",
+    "@tanstack/react-query": "^5.96.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.7.0",
     "next": "16.2.1",
-    "openapi-fetch": "^0.17.0",
-    "openapi-typescript": "^7.13.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.1.0",

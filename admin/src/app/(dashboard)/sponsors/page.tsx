@@ -2,8 +2,15 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { api, authHeaders } from "@/lib/api";
-import type { components } from "@/lib/api-types";
+import "@/lib/api"; // ensure client baseUrl is configured
+import { authHeaders } from "@/lib/api";
+import {
+  sponsorsControllerFindAll,
+  sponsorsControllerCreate,
+  sponsorsControllerUpdate,
+  sponsorsControllerRemove,
+  uploadControllerUploadFile,
+} from "@/lib/api-generated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,21 +93,14 @@ function LogoUploadButton({
     if (!file || !token) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const { data, error } = await uploadControllerUploadFile({
+        body: { file },
+        ...authHeaders(token),
+      });
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || ""}/api/upload`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        }
-      );
-
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      onChange(data.url || data.data?.url || "");
+      if (error) throw error;
+      const result = data as any;
+      onChange(result?.url || result?.data?.url || "");
       toast.success("Tải logo thành công!");
     } catch {
       toast.error("Tải logo thất bại");
@@ -148,7 +148,7 @@ function LogoUploadButton({
   );
 }
 
-const emptySponsor: Partial<components["schemas"]["CreateSponsorDto"]> = {
+const emptySponsor: Partial<{ name: string; logoUrl: string; website: string; level: string; order: number }> = {
   name: "",
   logoUrl: "",
   website: "",
@@ -165,14 +165,14 @@ export default function SponsorsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newSponsor, setNewSponsor] =
-    useState<Partial<components["schemas"]["CreateSponsorDto"]>>({
+    useState<Partial<{ name: string; logoUrl: string; website: string; level: string; order: number }>>({
       ...emptySponsor,
     });
 
   // Edit dialog
   const [editSponsor, setEditSponsor] = useState<Sponsor | null>(null);
   const [editForm, setEditForm] =
-    useState<Partial<components["schemas"]["UpdateSponsorDto"]>>({});
+    useState<Partial<{ name: string; logoUrl: string; website: string; level: string; order: number; isActive: boolean }>>({});
   const [saving, setSaving] = useState(false);
 
   // Delete dialog
@@ -183,10 +183,11 @@ export default function SponsorsPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const { data } = await api.GET("/api/sponsors/all", {
+      const { data, error } = await sponsorsControllerFindAll({
         ...authHeaders(token),
       });
 
+      if (error) throw error;
       const result = data as unknown as { data?: Sponsor[] };
       setSponsors(result?.data ?? []);
     } catch {
@@ -204,12 +205,12 @@ export default function SponsorsPage() {
     if (!token || !newSponsor.name || !newSponsor.logoUrl) return;
     setCreating(true);
     try {
-      const { error } = await api.POST("/api/sponsors", {
+      const { error } = await sponsorsControllerCreate({
         body: {
-          name: newSponsor.name,
-          logoUrl: newSponsor.logoUrl,
+          name: newSponsor.name!,
+          logoUrl: newSponsor.logoUrl!,
           website: newSponsor.website || undefined,
-          level: newSponsor.level || "silver",
+          level: (newSponsor.level || "silver") as any,
           order: newSponsor.order ?? 0,
           isActive: true,
         },
@@ -243,13 +244,13 @@ export default function SponsorsPage() {
     if (!token || !editSponsor) return;
     setSaving(true);
     try {
-      const { error } = await api.PATCH("/api/sponsors/{id}", {
-        params: { path: { id: editSponsor._id } },
+      const { error } = await sponsorsControllerUpdate({
+        path: { id: editSponsor._id },
         body: {
           name: editForm.name,
           logoUrl: editForm.logoUrl,
           website: editForm.website || undefined,
-          level: editForm.level || "silver",
+          level: (editForm.level || "silver") as any,
           order: editForm.order ?? 0,
           isActive: editForm.isActive ?? true,
         },
@@ -270,8 +271,8 @@ export default function SponsorsPage() {
     if (!token || !deleteId) return;
     setDeleting(true);
     try {
-      const { error } = await api.DELETE("/api/sponsors/{id}", {
-        params: { path: { id: deleteId } },
+      const { error } = await sponsorsControllerRemove({
+        path: { id: deleteId },
         ...authHeaders(token),
       });
       if (error) throw error;

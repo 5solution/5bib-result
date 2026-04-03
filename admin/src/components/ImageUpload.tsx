@@ -5,6 +5,9 @@ import { Upload, X, Loader2, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import "@/lib/api"; // ensure client baseUrl is configured
+import { authHeaders } from "@/lib/api";
+import { uploadControllerUploadFile } from "@/lib/api-generated";
 
 interface ImageUploadProps {
   value?: string;
@@ -15,8 +18,6 @@ interface ImageUploadProps {
   previewHeight?: string;
   accept?: string;
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export default function ImageUpload({
   value,
@@ -40,23 +41,14 @@ export default function ImageUpload({
 
       setUploading(true);
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("folder", folder);
-
-        const res = await fetch(`${API_URL}/api/upload`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
+        const { data, error } = await uploadControllerUploadFile({
+          body: { file },
+          ...authHeaders(token),
         });
 
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.message || "Upload failed");
-        }
-
-        const data = await res.json();
-        const url = data?.url ?? data;
+        if (error) throw new Error("Upload failed");
+        const result = data as any;
+        const url = result?.url ?? result;
         if (!url) throw new Error("Upload failed");
         onChange(url);
         toast.success("Tải ảnh thành công!");
