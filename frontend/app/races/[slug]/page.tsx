@@ -338,14 +338,7 @@ export default function RaceDetailPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Upcoming race info block */}
         {race.status === 'upcoming' && (race.description || race.organizer) && (
-          <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
-            {race.organizer && (
-              <p className="text-sm text-blue-600 font-semibold mb-1">Ban tổ chức: {race.organizer}</p>
-            )}
-            {race.description && (
-              <p className="text-sm text-slate-600 leading-relaxed">{race.description}</p>
-            )}
-          </div>
+          <RaceDescription description={race.description} organizer={race.organizer} />
         )}
 
         <h2 className="text-2xl md:text-3xl font-black text-slate-900 mb-8">
@@ -558,6 +551,31 @@ export default function RaceDetailPage() {
       </div>
     </div>
     </>
+  );
+}
+
+function RaceDescription({ description, organizer }: { description?: string; organizer?: string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="mb-8 p-4 md:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
+      {organizer && (
+        <p className="text-sm text-blue-600 font-semibold mb-1">Ban tổ chức: {organizer}</p>
+      )}
+      {description && (
+        <div>
+          <p className={`text-sm text-slate-600 leading-relaxed ${!expanded ? 'line-clamp-1 md:line-clamp-none' : ''}`}>
+            {description}
+          </p>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="md:hidden mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+          >
+            {expanded ? 'Thu gọn' : 'Xem thêm'}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
