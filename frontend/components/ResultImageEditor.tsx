@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { X, Download, ImagePlus, RotateCcw, Loader2 } from 'lucide-react';
+import { X, Download, ImagePlus, RotateCcw, Loader2, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AthleteData {
@@ -42,6 +42,7 @@ export default function ResultImageEditor({
   const [bgStyle, setBgStyle] = useState(BACKGROUNDS[0].gradient);
   const [customBg, setCustomBg] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const formatName = (name: string) =>
     name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -68,54 +69,74 @@ export default function ResultImageEditor({
     setBgStyle(BACKGROUNDS[0].gradient);
   }, []);
 
+  const captureCard = useCallback(async (): Promise<Blob | null> => {
+    if (!cardRef.current) return null;
+    const html2canvas = (await import('html2canvas-pro')).default;
+    const canvas = await html2canvas(cardRef.current, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: null,
+    });
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/png');
+    });
+  }, []);
+
+  const getFileName = useCallback(() => {
+    return `result-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
+  }, [athlete]);
+
   const handleDownload = useCallback(async () => {
     if (!cardRef.current) return;
     setDownloading(true);
     try {
-      const html2canvas = (await import('html2canvas-pro')).default;
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: null,
-      });
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          toast.error('Không thể tạo ảnh');
-          setDownloading(false);
-          return;
-        }
-        const fileName = `result-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
-
-        if (navigator.share && navigator.canShare) {
-          const file = new File([blob], fileName, { type: 'image/png' });
-          const shareData = { files: [file] };
-          if (navigator.canShare(shareData)) {
-            try {
-              await navigator.share(shareData);
-              setDownloading(false);
-              return;
-            } catch {
-              // Fall through to download
-            }
-          }
-        }
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast.success('Đã tải ảnh kết quả!');
+      const blob = await captureCard();
+      if (!blob) {
+        toast.error('Không thể tạo ảnh');
         setDownloading(false);
-      }, 'image/png');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getFileName();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Đã tải ảnh kết quả!');
     } catch {
       toast.error('Không thể tạo ảnh');
+    } finally {
       setDownloading(false);
     }
-  }, [athlete]);
+  }, [captureCard, getFileName]);
+
+  const handleShare = useCallback(async () => {
+    if (!cardRef.current) return;
+    setSharing(true);
+    try {
+      const blob = await captureCard();
+      if (!blob) {
+        toast.error('Không thể tạo ảnh');
+        setSharing(false);
+        return;
+      }
+      const file = new File([blob], getFileName(), { type: 'image/png' });
+      const shareData = { files: [file] };
+      if (navigator.canShare?.(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        toast.error('Trình duyệt không hỗ trợ chia sẻ');
+      }
+    } catch {
+      // User cancelled share - not an error
+    } finally {
+      setSharing(false);
+    }
+  }, [captureCard, getFileName]);
+
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   const backgroundCss = customBg
     ? { backgroundImage: `url(${customBg})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -253,12 +274,22 @@ export default function ResultImageEditor({
         <div className="px-5 pb-5 flex gap-3">
           <button
             onClick={handleDownload}
-            disabled={downloading}
+            disabled={downloading || sharing}
             className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-60"
           >
             {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {downloading ? 'Đang xử lý...' : 'Tải ảnh kết quả'}
+            {downloading ? 'Đang xử lý...' : 'Tải về'}
           </button>
+          {canShare && (
+            <button
+              onClick={handleShare}
+              disabled={downloading || sharing}
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all disabled:opacity-60"
+            >
+              {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+              {sharing ? '...' : 'Chia sẻ'}
+            </button>
+          )}
         </div>
       </div>
     </div>
