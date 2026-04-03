@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, ChevronLeft, Trophy, Calendar, Loader2 } from 'lucide-react';
+import { countryToFlag } from '@/lib/country-flags';
 
 interface SearchResult {
   Bib: number;
@@ -192,7 +193,7 @@ function SearchContent() {
                           <p className="font-bold text-gray-900 truncate">{formatName(r.Name)}</p>
                           <p className="text-xs text-gray-400">
                             BIB {r.Bib} &middot; {r.distance} &middot; {r.Gender === 'Female' ? 'Nu' : 'Nam'} &middot; {r.Category}
-                            {r.Nationality && r.Nationality !== 'undefined' ? ` &middot; ${r.Nation || r.Nationality}` : ''}
+                            {r.Nationality && r.Nationality !== 'undefined' ? ` · ${countryToFlag(r.Nationality) || countryToFlag(r.Nation) || r.Nation}` : ''}
                           </p>
                         </div>
                         {/* Time */}

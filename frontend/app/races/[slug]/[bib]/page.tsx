@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
+import { countryToFlag } from '@/lib/country-flags';
 
 interface AthleteResult {
   Bib: number;
@@ -554,7 +555,7 @@ export default function AthleteDetailPage() {
             </span>
             {athlete.Nationality && (
               <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
-                {athlete.Nation} {athlete.Nationality}
+                {countryToFlag(athlete.Nationality) || countryToFlag(athlete.Nation) || athlete.Nation} {athlete.Nationality}
               </span>
             )}
           </div>
@@ -871,7 +872,7 @@ export default function AthleteDetailPage() {
             </div>
             {!showClaimForm && !claimSubmitted && (
               <button
-                onClick={() => setShowClaimForm(true)}
+                onClick={() => { setShowClaimForm(true); if (athlete?.Name && !claimName) setClaimName(athlete.Name.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')); }}
                 className="px-4 py-2 text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors"
               >
                 Gửi khiếu nại

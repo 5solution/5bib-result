@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import LiveTimer from '@/components/LiveTimer';
+import { countryToFlag } from '@/lib/country-flags';
 
 /* ─── Types ─── */
 
@@ -278,6 +279,13 @@ export default function CourseRankingPage() {
   useEffect(() => {
     fetchResults();
   }, [fetchResults]);
+
+  // Auto-refresh every 30s when race is live
+  useEffect(() => {
+    if (race?.status !== 'live') return;
+    const interval = setInterval(() => { fetchResults(); }, 30000);
+    return () => clearInterval(interval);
+  }, [race?.status, fetchResults]);
 
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
   const paginatedResults = results;
@@ -768,7 +776,7 @@ function RankingRow({ result, slug, selected, onToggle }: { result: RaceResult; 
                 }`}>
                   {result.Gender === 'Male' ? '♂' : '♀'}
                 </span>
-                <span className="text-xs text-slate-400">{result.Nation} {result.Category}</span>
+                <span className="text-xs text-slate-400">{countryToFlag(result.Nationality) || countryToFlag(result.Nation) || result.Nation} {result.Category}</span>
               </div>
             </div>
           </div>

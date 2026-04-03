@@ -40,11 +40,11 @@
 - [x] [HIGH] So sánh thành tích 2+ VDV cùng cự ly
 - [ ] [NORMAL] Admin claim detail page — xem chi tiết khiếu nại, preview tracklog
 - [ ] [NORMAL] Hiển thị bản đồ GPX trên trang course detail (Mapbox/Leaflet)
-- [ ] [NORMAL] Auto-refresh ranking khi race đang live (poll 30s)
+- [x] [NORMAL] Auto-refresh ranking khi race đang live (poll 30s)
 - [ ] [NORMAL] Share result dạng hình ảnh cho social media
 - [ ] [NORMAL] PWA support — xem kết quả offline
-- [ ] [NORMAL] Tự động fill Khiếu nại kết quả họ tên của người chạy
-- [ ] [NORMAL] Giải đang diễn ra và đã kết thúc sẽ hiển thị thêm nationality theo cờ, ví dụ trong response có     "Nationality": "France", thì convert thành cờ ở races/{slug} hoặc 
+- [x] [NORMAL] Tự động fill Khiếu nại kết quả họ tên của người chạy
+- [x] [NORMAL] Giải đang diễn ra và đã kết thúc sẽ hiển thị thêm nationality theo cờ, ví dụ trong response có     "Nationality": "France", thì convert thành cờ ở races/{slug} hoặc
 - [ ] [LOW] Dark mode toggle
 - [ ] [LOW] Export kết quả CSV/Excel từ admin
 - [ ] [LOW] Tích hợp gallery ảnh với 5Pix
