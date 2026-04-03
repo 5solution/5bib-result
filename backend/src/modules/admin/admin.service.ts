@@ -3,6 +3,7 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { RaceResultService } from '../race-result/services/race-result.service';
 import { RacesService } from '../races/races.service';
+import { TelegramService } from '../notification/telegram.service';
 
 @Injectable()
 export class AdminService {
@@ -12,6 +13,7 @@ export class AdminService {
     private readonly raceResultService: RaceResultService,
     private readonly racesService: RacesService,
     @InjectRedis() private readonly redis: Redis,
+    private readonly telegramService: TelegramService,
   ) {}
 
   /**
@@ -85,6 +87,21 @@ export class AdminService {
     if (!claim) {
       throw new NotFoundException('Claim not found');
     }
+
+    // Send Telegram notification
+    this.telegramService
+      .notifyClaimResolved({
+        bib: claim.bib?.toString() || '',
+        name: claim.name || '',
+        phone: claim.phone,
+        description: claim.description || '',
+        status,
+        adminNote,
+      })
+      .catch((err) =>
+        this.logger.error(`Telegram notification failed: ${err.message}`),
+      );
+
     return { data: claim, success: true };
   }
 
