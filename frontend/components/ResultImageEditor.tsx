@@ -71,15 +71,36 @@ export default function ResultImageEditor({
 
   const captureCard = useCallback(async (): Promise<Blob | null> => {
     if (!cardRef.current) return null;
-    const html2canvas = (await import('html2canvas-pro')).default;
-    const canvas = await html2canvas(cardRef.current, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: null,
-    });
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob), 'image/png');
-    });
+
+    // html2canvas doesn't support aspect-ratio CSS, so we must set explicit dimensions
+    const el = cardRef.current;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const origWidth = el.style.width;
+    const origHeight = el.style.height;
+    const origAspect = el.style.aspectRatio;
+    el.style.width = `${w}px`;
+    el.style.height = `${h}px`;
+    el.style.aspectRatio = 'unset';
+
+    try {
+      const html2canvas = (await import('html2canvas-pro')).default;
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: null,
+        width: w,
+        height: h,
+      });
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), 'image/png');
+      });
+    } finally {
+      // Restore original styles
+      el.style.width = origWidth;
+      el.style.height = origHeight;
+      el.style.aspectRatio = origAspect;
+    }
   }, []);
 
   const getFileName = useCallback(() => {
