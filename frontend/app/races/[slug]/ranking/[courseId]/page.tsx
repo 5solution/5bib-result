@@ -545,7 +545,9 @@ export default function CourseRankingPage() {
                       <thead>
                         <tr className="bg-slate-50 border-b-2 border-slate-200">
                           <th className="px-2 py-3.5 w-10"></th>
-                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">Hạng</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">
+                            {categoryFilter ? 'Hạng nhóm' : genderFilter ? 'Hạng GT' : 'Hạng'}
+                          </th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vận động viên</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-36">Thời gian</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Pace</th>
@@ -554,7 +556,7 @@ export default function CourseRankingPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {paginatedResults.map((result) => (
-                          <RankingRow key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} />
+                          <RankingRow key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} genderFilter={genderFilter} categoryFilter={categoryFilter} />
                         ))}
                       </tbody>
                     </table>
@@ -563,7 +565,7 @@ export default function CourseRankingPage() {
                   {/* Mobile */}
                   <div className="md:hidden divide-y divide-slate-100">
                     {paginatedResults.map((result) => (
-                      <MobileRankingCard key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} />
+                      <MobileRankingCard key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} genderFilter={genderFilter} categoryFilter={categoryFilter} />
                     ))}
                   </div>
                 </>
@@ -687,8 +689,9 @@ export default function CourseRankingPage() {
 
 /* ─── RankingRow — desktop table row ─── */
 
-function RankingRow({ result, slug, selected, onToggle }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void }) {
-  const rankStr = (result.OverallRank || '').trim();
+function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string }) {
+  const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
+  const rankStr = (rawRank || '').trim();
   const rankNum = parseInt(rankStr);
   const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
 
@@ -762,8 +765,9 @@ function RankingRow({ result, slug, selected, onToggle }: { result: RaceResult; 
 
 /* ─── MobileRankingCard ─── */
 
-function MobileRankingCard({ result, slug, selected, onToggle }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void }) {
-  const rankStr = (result.OverallRank || '').trim();
+function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, categoryFilter }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string }) {
+  const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
+  const rankStr = (rawRank || '').trim();
   const rankNum = parseInt(rankStr);
   const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
 

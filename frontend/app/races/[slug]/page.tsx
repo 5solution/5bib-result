@@ -387,7 +387,7 @@ export default function RaceDetailPage() {
                     {/* Race finished banner */}
                     <div className="absolute bottom-0 left-0 right-0">
                       <div className={`px-4 py-2.5 text-center text-sm font-bold text-white uppercase ${
-                        race.status === 'live' ? 'bg-red-600' : race.status === 'completed' ? 'bg-red-700' : 'bg-blue-600'
+                        race.status === 'live' ? 'bg-red-600' : race.status === 'completed' ? 'bg-red-700' : 'bg-gradient-to-r from-[#2563eb] to-[#1faaff]'
                       }`}>
                         {race.status === 'live' ? 'Đang diễn ra' : race.status === 'completed' ? 'Đã kết thúc' : 'Sắp diễn ra'}
                       </div>
