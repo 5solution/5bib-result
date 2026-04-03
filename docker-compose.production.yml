@@ -1,0 +1,50 @@
+services:
+  5bib-result-backend:
+    image: ghcr.io/5solution/5bib-result/backend:production
+    container_name: 5bib-production-backend
+    restart: unless-stopped
+    env_file: ./backend.env
+    ports:
+      - "8082:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+  5bib-result-frontend:
+    image: ghcr.io/5solution/5bib-result/frontend:production
+    container_name: 5bib-production-frontend
+    restart: unless-stopped
+    environment:
+      - BACKEND_URL=http://5bib-result-backend:8081
+    ports:
+      - "3084:3002"
+    depends_on:
+      - 5bib-result-backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  5bib-result-admin:
+    image: ghcr.io/5solution/5bib-result/admin:production
+    container_name: 5bib-production-admin
+    restart: unless-stopped
+    environment:
+      - BACKEND_URL=http://5bib-result-backend:8081
+    ports:
+      - "3085:3000"
+    depends_on:
+      - 5bib-result-backend
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M

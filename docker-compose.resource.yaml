@@ -1,0 +1,22 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: 5bib-mongo
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=mongo
+      - MONGO_INITDB_ROOT_PASSWORD=Yx5Y9kvqaMnfnMESExipoAoQNnufBfNQ2aO0l28lM
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+volumes:
+  mongo_data:
+    driver: local

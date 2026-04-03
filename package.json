@@ -1,0 +1,18 @@
+{
+  "name": "5bib-result",
+  "version": "1.0.0",
+  "private": true,
+  "description": "5BIB Race Result - Monorepo",
+  "scripts": {
+    "dev:backend": "cd backend && pnpm dev",
+    "dev:frontend": "cd frontend && pnpm dev",
+    "dev:admin": "cd admin && pnpm dev",
+    "build:backend": "cd backend && pnpm build",
+    "build:frontend": "cd frontend && pnpm build",
+    "build:admin": "cd admin && pnpm build",
+    "build": "npm run build:backend && npm run build:frontend && npm run build:admin",
+    "generate:api:frontend": "cd frontend && pnpm generate:api",
+    "generate:api:admin": "cd admin && pnpm generate:api",
+    "generate:api": "npm run generate:api:frontend && npm run generate:api:admin"
+  }
+}
