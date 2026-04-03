@@ -39,14 +39,10 @@
 
 ## In Progress
 
-## Todo (PAUSED — tất cả đều cần thêm dependency mới)
+## Todo
 
-- [ ] [HIGH] Telegram thông báo khi admin xử lý khiếu nại (thông báo vào một group id), chỉ sử dụng telegraf (không start bot) để dùng cho nhiều dự án — **cần `telegraf`**
-- [ ] [NORMAL] Hiển thị bản đồ GPX trên trang course detail — **cần `leaflet` hoặc `mapbox-gl`**
-- [ ] [NORMAL] Share result dạng hình ảnh cho social media — **cần `html2canvas` hoặc tương đương**
-- [ ] [NORMAL] PWA support — xem kết quả offline — **cần `next-pwa`**
-- [ ] [LOW] Dark mode toggle
-- [ ] [LOW] Tích hợp gallery ảnh với 5Pix
+- [ ] [LOW] Tích hợp gallery ảnh với 5Pix — cần biết API/endpoint của 5Pix
+- [ ] [NORMAL] Thay placeholder PWA icons (192x192, 512x512) bằng logo 5BIB thật
 
 ## Done
 
@@ -61,3 +57,7 @@
 - [x] [NORMAL] Tự động fill Khiếu nại kết quả họ tên của người chạy
 - [x] [NORMAL] Hiển thị nationality theo cờ quốc gia — countryToFlag utility, ranking/athlete/search pages
 - [x] [LOW] Export kết quả CSV/Excel từ admin — download button per course trên admin race detail
+- [x] [HIGH] Telegram thông báo khi admin xử lý khiếu nại — TelegramService (telegraf, không start bot), NotificationModule, tự động gửi vào group khi resolve/reject claim
+- [x] [NORMAL] Hiển thị bản đồ GPX trên trang course detail — GpxMap component (Leaflet), dynamic import, parse GPX XML, start/finish markers
+- [x] [NORMAL] Share result dạng hình ảnh cho social media — html2canvas-pro, hidden share card, native Web Share API + download fallback
+- [x] [NORMAL] PWA support — @serwist/next service worker, web app manifest, offline caching
