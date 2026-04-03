@@ -623,7 +623,7 @@ export default function CourseRankingPage() {
                         className="block transition-transform hover:scale-105"
                       >
                         {s.logoUrl ? (
-                          <img src={s.logoUrl} alt={s.name} className="h-24 md:h-28 w-auto object-contain" />
+                          <img src={s.logoUrl} alt={s.name} className="h-32 md:h-40 w-auto object-contain" />
                         ) : (
                           <div className="px-8 py-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-lg font-bold text-slate-500">{s.name}</div>
                         )}
@@ -643,7 +643,7 @@ export default function CourseRankingPage() {
                         className="block transition-transform hover:scale-105"
                       >
                         {s.logoUrl ? (
-                          <img src={s.logoUrl} alt={s.name} className="h-16 md:h-20 w-auto object-contain" />
+                          <img src={s.logoUrl} alt={s.name} className="h-24 md:h-28 w-auto object-contain" />
                         ) : (
                           <div className="px-6 py-3 bg-slate-50 border border-dashed border-slate-200 rounded-lg text-sm font-semibold text-slate-400">{s.name}</div>
                         )}
@@ -663,7 +663,7 @@ export default function CourseRankingPage() {
                         className="block transition-transform hover:scale-105"
                       >
                         {s.logoUrl ? (
-                          <img src={s.logoUrl} alt={s.name} className="h-10 md:h-14 w-auto object-contain" />
+                          <img src={s.logoUrl} alt={s.name} className="h-16 md:h-20 w-auto object-contain" />
                         ) : (
                           <div className="px-4 py-2 bg-slate-50 border border-dashed border-slate-200 rounded text-xs font-semibold text-slate-400">{s.name}</div>
                         )}
