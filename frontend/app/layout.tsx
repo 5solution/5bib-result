@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Be_Vietnam_Pro } from 'next/font/google'
 import { Toaster } from 'sonner'
 import './globals.css'
@@ -19,6 +19,19 @@ const beVietnamPro = Be_Vietnam_Pro({
 export const metadata: Metadata = {
   title: '5BIB - Kết quả giải chạy trực tiếp',
   description: 'Theo dõi kết quả, xếp hạng và thành tích của bạn trên nền tảng 5BIB',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: '5BIB',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#2563eb',
 }
 
 export default function RootLayout({
