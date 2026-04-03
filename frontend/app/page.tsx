@@ -199,7 +199,7 @@ export default function HomePage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/calendar?search=${encodeURIComponent(searchQuery.trim())}`);
+      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 

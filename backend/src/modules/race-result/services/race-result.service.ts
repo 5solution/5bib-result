@@ -485,6 +485,45 @@ export class RaceResultService {
   }
 
   /**
+   * Global search across all races by name or bib
+   */
+  async globalSearch(query: string, limit = 20) {
+    if (!query || query.trim().length < 2) return { data: [] };
+
+    const q = query.trim();
+    const filter = {
+      $or: [
+        { name: { $regex: q, $options: 'i' } },
+        { bib: q },
+      ],
+    };
+
+    const results = await this.resultModel
+      .find(filter)
+      .sort({ overallRankNumeric: 1 })
+      .limit(limit)
+      .lean()
+      .exec();
+
+    // Enrich with race info
+    const raceIds = [...new Set(results.map((r) => r.raceId))];
+    const races = await this.racesService.findByIds(raceIds);
+    const raceMap = new Map(races.map((r) => [String(r._id), r]));
+
+    const data = results.map((doc) => {
+      const race = raceMap.get(doc.raceId);
+      return {
+        ...this.mapDocToResponse(doc),
+        race_name: race?.title || '',
+        race_slug: race?.slug || '',
+        race_date: race?.startDate || '',
+      };
+    });
+
+    return { data };
+  }
+
+  /**
    * Get available filter options (genders, categories) for a course
    */
   async getFilterOptions(courseId: string) {

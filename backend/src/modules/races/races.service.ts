@@ -272,6 +272,10 @@ export class RacesService {
       .exec();
   }
 
+  async findByIds(ids: string[]): Promise<RaceDocument[]> {
+    return this.raceModel.find({ _id: { $in: ids } }).lean().exec();
+  }
+
   async syncRacesFromSource() {
     try {
       this.logger.log('Starting race sync from source API...');

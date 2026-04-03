@@ -53,6 +53,18 @@ export class RaceResultController {
     return this.raceResultService.getRaceResults(dto);
   }
 
+  @Get('search')
+  @ApiOperation({ summary: 'Global search by name or bib across all races' })
+  @ApiQuery({ name: 'q', type: String, description: 'Search query (name or bib)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max results (default 20)' })
+  @ApiResponse({ status: 200, description: 'Returns matching athletes with race info' })
+  async globalSearch(
+    @Query('q') q: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.raceResultService.globalSearch(q, limit || 20);
+  }
+
   @Get('leaderboard/:courseId')
   @ApiOperation({ summary: 'Get top N results for a course' })
   @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
