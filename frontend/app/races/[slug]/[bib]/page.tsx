@@ -150,6 +150,8 @@ export default function AthleteDetailPage() {
     };
   }, [athleteRaw, raceData, slug]);
 
+  const raceStatus = raceData?.status;
+  const isUpcoming = raceStatus === 'upcoming' || raceStatus === 'pre_race';
   const loading = loadingRace || loadingAthlete;
 
   const [linkCopied, setLinkCopied] = useState(false);
@@ -553,11 +555,13 @@ export default function AthleteDetailPage() {
               </span>
             </div>
             {/* Rank badge overlay */}
-            <div className={`absolute -bottom-2 -right-2 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br ${getRankMedalColor(athlete.OverallRank)} flex items-center justify-center shadow-lg border-3 border-white`}>
-              <span className="text-lg md:text-xl font-black text-white">
-                {parseInt(athlete.OverallRank) <= 3 ? formatRank(athlete.OverallRank) : `#${athlete.OverallRank}`}
-              </span>
-            </div>
+            {!isUpcoming && (
+              <div className={`absolute -bottom-2 -right-2 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br ${getRankMedalColor(athlete.OverallRank)} flex items-center justify-center shadow-lg border-3 border-white`}>
+                <span className="text-lg md:text-xl font-black text-white">
+                  {parseInt(athlete.OverallRank) <= 3 ? formatRank(athlete.OverallRank) : `#${athlete.OverallRank}`}
+                </span>
+              </div>
+            )}
             {/* Gender badge */}
             <div className={`absolute -bottom-2 -left-2 w-10 h-10 md:w-11 md:h-11 rounded-full ${genderColor} flex items-center justify-center shadow-lg border-2 border-white`}>
               <span className="text-lg text-white font-bold">{genderIcon}</span>
@@ -599,55 +603,67 @@ export default function AthleteDetailPage() {
 
         {/* === TIME CARD (floating over hero) === */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          {/* Big time display */}
-          <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
-            <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">Chip Time</div>
-            <div className="text-5xl md:text-7xl font-black text-blue-600 tracking-tight mb-3" style={{ fontFamily: 'var(--font-mono)' }}>
-              {athlete.ChipTime}
-            </div>
-            <div className="flex items-center justify-center gap-4 md:gap-8 text-sm text-gray-500">
-              <span className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-gray-400" />
-                Gun: <span className="font-mono font-bold text-gray-700">{athlete.GunTime}</span>
-              </span>
-              <span className="w-px h-4 bg-gray-200" />
-              <span className="flex items-center gap-1.5">
-                <TrendingUp className="w-4 h-4 text-gray-400" />
-                Pace: <span className="font-mono font-bold text-gray-700">{athlete.Pace} /km</span>
-              </span>
-              {athlete.Gap && athlete.Gap !== '-' && (
-                <>
-                  <span className="w-px h-4 bg-gray-200 hidden md:block" />
-                  <span className="hidden md:flex items-center gap-1.5">
-                    Gap: <span className="font-mono font-bold text-gray-700">{athlete.Gap}</span>
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Rank badges row */}
-          <div className={`grid ${athlete.CatRank ? 'grid-cols-3' : 'grid-cols-2'} divide-x divide-gray-100 border-t border-gray-100`}>
-            {[
-              { label: 'Overall Rank', rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
-              { label: 'Gender Rank', rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
-              ...(athlete.CatRank ? [{ label: 'Cat Rank', rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' }] : []),
-            ].map((item) => (
-              <div key={item.label} className="py-5 md:py-6 text-center group hover:bg-gray-50/50 transition-colors">
-                <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${item.bg} ${item.color} mb-2`}>
-                  {item.icon}
-                </div>
-                <div className="text-2xl md:text-3xl font-black text-gray-900">
-                  {parseInt(item.rank) <= 3 ? formatRank(item.rank) : `#${item.rank}`}
-                </div>
-                <div className="text-xs text-gray-400 font-semibold uppercase tracking-wider mt-1">{item.label}</div>
+          {isUpcoming ? (
+            <div className="text-center py-10 md:py-14 px-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4">
+                <Calendar className="w-8 h-8 text-blue-400" />
               </div>
-            ))}
-          </div>
+              <h3 className="text-xl md:text-2xl font-bold text-slate-700 mb-2">Giải chưa diễn ra</h3>
+              <p className="text-sm text-slate-400">Kết quả sẽ được cập nhật khi giải bắt đầu</p>
+            </div>
+          ) : (
+            <>
+              {/* Big time display */}
+              <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
+                <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">Chip Time</div>
+                <div className="text-5xl md:text-7xl font-black text-blue-600 tracking-tight mb-3" style={{ fontFamily: 'var(--font-mono)' }}>
+                  {athlete.ChipTime}
+                </div>
+                <div className="flex items-center justify-center gap-4 md:gap-8 text-sm text-gray-500">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-gray-400" />
+                    Gun: <span className="font-mono font-bold text-gray-700">{athlete.GunTime}</span>
+                  </span>
+                  <span className="w-px h-4 bg-gray-200" />
+                  <span className="flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-gray-400" />
+                    Pace: <span className="font-mono font-bold text-gray-700">{athlete.Pace} /km</span>
+                  </span>
+                  {athlete.Gap && athlete.Gap !== '-' && (
+                    <>
+                      <span className="w-px h-4 bg-gray-200 hidden md:block" />
+                      <span className="hidden md:flex items-center gap-1.5">
+                        Gap: <span className="font-mono font-bold text-gray-700">{athlete.Gap}</span>
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Rank badges row */}
+              <div className={`grid ${athlete.CatRank ? 'grid-cols-3' : 'grid-cols-2'} divide-x divide-gray-100 border-t border-gray-100`}>
+                {[
+                  { label: 'Overall Rank', rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
+                  { label: 'Gender Rank', rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
+                  ...(athlete.CatRank ? [{ label: 'Cat Rank', rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' }] : []),
+                ].map((item) => (
+                  <div key={item.label} className="py-5 md:py-6 text-center group hover:bg-gray-50/50 transition-colors">
+                    <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${item.bg} ${item.color} mb-2`}>
+                      {item.icon}
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-gray-900">
+                      {parseInt(item.rank) <= 3 ? formatRank(item.rank) : `#${item.rank}`}
+                    </div>
+                    <div className="text-xs text-gray-400 font-semibold uppercase tracking-wider mt-1">{item.label}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* === SPLIT TIMES === */}
-        {hasSplits && <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+        {hasSplits && !isUpcoming && <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
               <Timer className="w-5 h-5 text-blue-600" />

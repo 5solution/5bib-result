@@ -601,7 +601,13 @@ export class RaceResultService {
     if (cached) return cached;
 
     const pipeline = [
-      { $match: { courseId, overallRankNumeric: { $nin: [999999, null] } } },
+      {
+        $match: {
+          courseId,
+          overallRankNumeric: { $nin: [999999, null] },
+          chipTime: { $nin: ['', null] },
+        },
+      },
       {
         $addFields: {
           chipTimeParts: { $split: ['$chipTime', ':'] },
@@ -613,17 +619,38 @@ export class RaceResultService {
             $add: [
               {
                 $multiply: [
-                  { $toInt: { $arrayElemAt: ['$chipTimeParts', 0] } },
+                  {
+                    $convert: {
+                      input: { $arrayElemAt: ['$chipTimeParts', 0] },
+                      to: 'int',
+                      onError: 0,
+                      onNull: 0,
+                    },
+                  },
                   3600,
                 ],
               },
               {
                 $multiply: [
-                  { $toInt: { $arrayElemAt: ['$chipTimeParts', 1] } },
+                  {
+                    $convert: {
+                      input: { $arrayElemAt: ['$chipTimeParts', 1] },
+                      to: 'int',
+                      onError: 0,
+                      onNull: 0,
+                    },
+                  },
                   60,
                 ],
               },
-              { $toInt: { $arrayElemAt: ['$chipTimeParts', 2] } },
+              {
+                $convert: {
+                  input: { $arrayElemAt: ['$chipTimeParts', 2] },
+                  to: 'int',
+                  onError: 0,
+                  onNull: 0,
+                },
+              },
             ],
           },
         },

@@ -185,7 +185,7 @@ export default function RaceDetailPage() {
           statsMap[course.id] = {
             starters: total,
             finishers,
-            dnf: total > finishers ? total - finishers : 0,
+            dnf: finishers > 0 && total > finishers ? total - finishers : 0,
           };
         } catch {
           results[course.id] = [];
@@ -387,8 +387,12 @@ export default function RaceDetailPage() {
                       {(courseStatsMap[course.id] || race.status === 'completed') && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">
                           <span>STARTERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.starters ?? '-'}</strong></span>
-                          <span>DNF <strong className="text-base ml-1">{courseStatsMap[course.id]?.dnf ?? '-'}</strong></span>
-                          <span>FINISHERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.finishers ?? '-'}</strong></span>
+                          {(courseStatsMap[course.id]?.dnf ?? 0) > 0 && (
+                            <span>DNF <strong className="text-base ml-1">{courseStatsMap[course.id]?.dnf}</strong></span>
+                          )}
+                          {(courseStatsMap[course.id]?.finishers ?? 0) > 0 && (
+                            <span>FINISHERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.finishers}</strong></span>
+                          )}
                         </div>
                       )}
                     </div>

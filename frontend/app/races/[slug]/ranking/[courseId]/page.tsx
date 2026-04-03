@@ -232,7 +232,7 @@ export default function CourseRankingPage() {
       ...rawCourse,
       starters: totalStarters,
       finishers,
-      dnf: totalStarters > finishers ? totalStarters - finishers : 0,
+      dnf: finishers > 0 && totalStarters > finishers ? totalStarters - finishers : 0,
     };
   }, [rawCourse, courseStats, totalStarters]);
 
@@ -410,18 +410,22 @@ export default function CourseRankingPage() {
                     {(course.starters ?? 0).toLocaleString('vi-VN')}
                   </strong>
                 </span>
-                <span className="text-blue-100">
-                  DNF{' '}
-                  <strong className="text-yellow-300 font-black text-lg md:text-xl ml-1.5">
-                    {(course.dnf ?? 0).toLocaleString('vi-VN')}
-                  </strong>
-                </span>
-                <span className="text-blue-100">
-                  Hoàn thành{' '}
-                  <strong className="text-emerald-300 font-black text-lg md:text-xl ml-1.5">
-                    {(course.finishers ?? 0).toLocaleString('vi-VN')}
-                  </strong>
-                </span>
+                {(course.dnf ?? 0) > 0 && (
+                  <span className="text-blue-100">
+                    DNF{' '}
+                    <strong className="text-yellow-300 font-black text-lg md:text-xl ml-1.5">
+                      {course.dnf!.toLocaleString('vi-VN')}
+                    </strong>
+                  </span>
+                )}
+                {(course.finishers ?? 0) > 0 && (
+                  <span className="text-blue-100">
+                    Hoàn thành{' '}
+                    <strong className="text-emerald-300 font-black text-lg md:text-xl ml-1.5">
+                      {course.finishers!.toLocaleString('vi-VN')}
+                    </strong>
+                  </span>
+                )}
               </div>
             </div>
 
@@ -556,7 +560,7 @@ export default function CourseRankingPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {paginatedResults.map((result) => (
-                          <RankingRow key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} genderFilter={genderFilter} categoryFilter={categoryFilter} />
+                          <RankingRow key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} genderFilter={genderFilter} categoryFilter={categoryFilter} raceStatus={race.status} />
                         ))}
                       </tbody>
                     </table>
@@ -565,7 +569,7 @@ export default function CourseRankingPage() {
                   {/* Mobile */}
                   <div className="md:hidden divide-y divide-slate-100">
                     {paginatedResults.map((result) => (
-                      <MobileRankingCard key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} genderFilter={genderFilter} categoryFilter={categoryFilter} />
+                      <MobileRankingCard key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} genderFilter={genderFilter} categoryFilter={categoryFilter} raceStatus={race.status} />
                     ))}
                   </div>
                 </>
@@ -689,7 +693,8 @@ export default function CourseRankingPage() {
 
 /* ─── RankingRow — desktop table row ─── */
 
-function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string }) {
+function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string }) {
+  const isUpcoming = raceStatus === 'upcoming';
   const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
   const rankStr = (rawRank || '').trim();
   const rankNum = parseInt(rankStr);
@@ -715,9 +720,13 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
         </button>
       </td>
       <td className="px-4 py-3.5">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
-          {rank || '-'}
-        </div>
+        {isUpcoming ? (
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs bg-slate-50 text-slate-300">-</div>
+        ) : (
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
+            {rank || '-'}
+          </div>
+        )}
       </td>
 
       <td className="px-4 py-3.5">
@@ -731,7 +740,7 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
                 {formatName(result.Name)}
               </p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs font-mono font-bold text-blue-600">BIB: {result.Bib}</span>
+                <span className="text-xs font-mono font-black text-blue-600">BIB: {result.Bib}</span>
                 <span className={`inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${result.Gender === 'Male' ? 'bg-blue-500' : 'bg-pink-500'
                   }`}>
                   {result.Gender === 'Male' ? '♂' : '♀'}
@@ -744,20 +753,34 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
       </td>
 
       <td className="px-4 py-3.5">
-        {result.TimingPoint && result.TimingPoint !== 'Finish' && (
-          <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
+        {isUpcoming ? (
+          <p className="text-xs text-slate-400 italic">Chưa diễn ra</p>
+        ) : (
+          <>
+            {result.TimingPoint && result.TimingPoint !== 'Finish' && (
+              <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
+            )}
+            <p className="text-sm font-bold text-slate-900 font-mono tracking-tight">{result.ChipTime}</p>
+          </>
         )}
-        <p className="text-sm font-bold text-slate-900 font-mono tracking-tight">{result.ChipTime}</p>
       </td>
 
       <td className="px-4 py-3.5">
-        <p className="text-sm text-slate-600 font-mono">{result.Pace}</p>
+        {isUpcoming ? (
+          <p className="text-xs text-slate-400 italic">-</p>
+        ) : (
+          <p className="text-sm text-slate-600 font-mono">{result.Pace}</p>
+        )}
       </td>
 
       <td className="px-4 py-3.5">
-        <p className={`text-sm font-mono ${result.Gap === '-' ? 'text-slate-300' : 'text-slate-500'}`}>
-          {result.Gap}
-        </p>
+        {isUpcoming ? (
+          <p className="text-xs text-slate-400 italic">-</p>
+        ) : (
+          <p className={`text-sm font-mono ${result.Gap === '-' ? 'text-slate-300' : 'text-slate-500'}`}>
+            {result.Gap}
+          </p>
+        )}
       </td>
     </tr>
   );
@@ -765,7 +788,8 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
 
 /* ─── MobileRankingCard ─── */
 
-function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, categoryFilter }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string }) {
+function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string }) {
+  const isUpcoming = raceStatus === 'upcoming';
   const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
   const rankStr = (rawRank || '').trim();
   const rankNum = parseInt(rankStr);
@@ -789,14 +813,18 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
         {selected && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
       </button>
       <Link href={`/races/${slug}/${result.Bib}`} className="flex items-center gap-3 flex-1 min-w-0">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
-          {rank || '-'}
-        </div>
+        {isUpcoming ? (
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs bg-slate-50 text-slate-300 shrink-0">-</div>
+        ) : (
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
+            {rank || '-'}
+          </div>
+        )}
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-bold text-slate-900 truncate">{formatName(result.Name)}</p>
-            <span className="text-xs font-mono font-bold text-blue-600">BIB: {result.Bib}</span>
+            <span className="text-xs font-mono font-black text-blue-600">BIB: {result.Bib}</span>
           </div>
           <div className="flex items-center gap-3 mt-1">
             <span className="text-xs text-slate-500">{result.Nation} {result.Category}</span>
@@ -804,11 +832,17 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
         </div>
 
         <div className="text-right shrink-0">
-          {result.TimingPoint && result.TimingPoint !== 'Finish' && (
-            <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
+          {isUpcoming ? (
+            <p className="text-xs text-slate-400 italic">Chưa diễn ra</p>
+          ) : (
+            <>
+              {result.TimingPoint && result.TimingPoint !== 'Finish' && (
+                <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
+              )}
+              <p className="text-sm font-bold text-slate-900 font-mono">{result.ChipTime}</p>
+              <p className="text-xs text-slate-400 font-mono mt-0.5">{result.Pace}</p>
+            </>
           )}
-          <p className="text-sm font-bold text-slate-900 font-mono">{result.ChipTime}</p>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">{result.Pace}</p>
         </div>
       </Link>
     </div>
