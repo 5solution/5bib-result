@@ -276,7 +276,7 @@ export default function RaceDetailPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-blue-700/90 via-blue-600/70 to-blue-800/90" />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 lg:py-28">
           {/* Breadcrumb */}
           <Link href="/calendar" className="inline-flex items-center gap-1 text-sm text-blue-200 hover:text-white mb-6 transition-colors">
             <ChevronLeft className="w-4 h-4" /> Lịch sự kiện

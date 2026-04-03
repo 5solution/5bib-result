@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   description: 'Theo dõi kết quả, xếp hạng và thành tích của bạn trên nền tảng 5BIB',
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.svg',
+    icon: '/logo.png',
     apple: '/logo.png',
   },
   openGraph: {
