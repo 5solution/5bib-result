@@ -5,8 +5,9 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Search, MapPin, Calendar, ChevronLeft, ChevronRight, ChevronDown,
-  Users, X, ChevronsLeft, ChevronsRight,
+  Users, X, ChevronsLeft, ChevronsRight, GitCompareArrows,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import LiveTimer from '@/components/LiveTimer';
 
 /* ─── Types ─── */
@@ -154,6 +155,23 @@ export default function CourseRankingPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [loadingResults, setLoadingResults] = useState(false);
   const [sponsors, setSponsors] = useState<any[]>([]);
+  const [selectedBibs, setSelectedBibs] = useState<Set<number>>(new Set());
+  const router = useRouter();
+
+  const toggleBib = (bib: number) => {
+    setSelectedBibs(prev => {
+      const next = new Set(prev);
+      if (next.has(bib)) next.delete(bib);
+      else if (next.size < 5) next.add(bib);
+      return next;
+    });
+  };
+
+  const goCompare = () => {
+    if (selectedBibs.size < 2) return;
+    const bibs = Array.from(selectedBibs).join(',');
+    router.push(`/races/${slug}/compare/${courseId}?bibs=${bibs}`);
+  };
 
   const fetchRace = useCallback(async () => {
     try {
@@ -560,6 +578,7 @@ export default function CourseRankingPage() {
                 <table className="min-w-full">
                   <thead>
                     <tr className="bg-slate-50 border-b-2 border-slate-200">
+                      <th className="px-2 py-3.5 w-10"></th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">Hạng</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vận động viên</th>
                       <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-36">Thời gian</th>
@@ -569,7 +588,7 @@ export default function CourseRankingPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {paginatedResults.map((result) => (
-                      <RankingRow key={result.Bib} result={result} slug={slug} />
+                      <RankingRow key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} />
                     ))}
                   </tbody>
                 </table>
@@ -578,7 +597,7 @@ export default function CourseRankingPage() {
               {/* Mobile */}
               <div className="md:hidden divide-y divide-slate-100">
                 {paginatedResults.map((result) => (
-                  <MobileRankingCard key={result.Bib} result={result} slug={slug} />
+                  <MobileRankingCard key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} />
                 ))}
               </div>
               </>
@@ -676,13 +695,33 @@ export default function CourseRankingPage() {
           </div>
         </div>
       </div>
+      {/* Floating compare bar */}
+      {selectedBibs.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4">
+          <GitCompareArrows className="w-5 h-5 text-blue-400 shrink-0" />
+          <span className="text-sm font-medium">{selectedBibs.size} VDV</span>
+          <button
+            onClick={goCompare}
+            disabled={selectedBibs.size < 2}
+            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400 text-sm font-bold rounded-lg transition-colors"
+          >
+            So sánh
+          </button>
+          <button
+            onClick={() => setSelectedBibs(new Set())}
+            className="p-1 hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </>
   );
 }
 
 /* ─── RankingRow — desktop table row ─── */
 
-function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
+function RankingRow({ result, slug, selected, onToggle }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void }) {
   const rankStr = (result.OverallRank || '').trim();
   const rankNum = parseInt(rankStr);
   const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
@@ -700,7 +739,12 @@ function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
     name.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <tr className="group transition-all duration-200 hover:bg-blue-50/60 hover:shadow-[inset_4px_0_0_0_#2563eb] cursor-pointer">
+    <tr className={`group transition-all duration-200 hover:bg-blue-50/60 hover:shadow-[inset_4px_0_0_0_#2563eb] cursor-pointer ${selected ? 'bg-blue-50/40' : ''}`}>
+      <td className="px-2 py-3.5">
+        <button onClick={(e) => { e.stopPropagation(); onToggle(); }} className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 hover:border-blue-400'}`}>
+          {selected && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+        </button>
+      </td>
       <td className="px-4 py-3.5">
         <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
           {rank || '-'}
@@ -750,7 +794,7 @@ function RankingRow({ result, slug }: { result: RaceResult; slug: string }) {
 
 /* ─── MobileRankingCard ─── */
 
-function MobileRankingCard({ result, slug }: { result: RaceResult; slug: string }) {
+function MobileRankingCard({ result, slug, selected, onToggle }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void }) {
   const rankStr = (result.OverallRank || '').trim();
   const rankNum = parseInt(rankStr);
   const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
@@ -768,9 +812,12 @@ function MobileRankingCard({ result, slug }: { result: RaceResult; slug: string 
     name.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <Link href={`/races/${slug}/${result.Bib}`} className="block">
-      <div className="px-4 py-4 flex items-center gap-3 active:bg-blue-50 transition-colors">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
+    <div className={`px-4 py-4 flex items-center gap-3 transition-colors ${selected ? 'bg-blue-50/40' : ''}`}>
+      <button onClick={onToggle} className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${selected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'}`}>
+        {selected && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+      </button>
+      <Link href={`/races/${slug}/${result.Bib}`} className="flex items-center gap-3 flex-1 min-w-0">
+      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
           {rank || '-'}
         </div>
 
@@ -788,8 +835,8 @@ function MobileRankingCard({ result, slug }: { result: RaceResult; slug: string 
           <p className="text-sm font-bold text-slate-900 font-mono">{result.ChipTime}</p>
           <p className="text-xs text-slate-400 font-mono mt-0.5">{result.Pace}</p>
         </div>
-      </div>
-    </Link>
+      </Link>
+    </div>
   );
 }
 

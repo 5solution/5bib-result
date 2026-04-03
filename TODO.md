@@ -37,7 +37,7 @@
 ## Todo
 - [ ] [HIGH] Telegram thông báo khi admin xử lý khiếu nại (thông báo vào một group id), chỉ sử dụng telegraf (không start bot) để dùng cho nhiều dự án
 - [x] [HIGH] Tìm kiếm BIB/tên trên homepage xuyên suốt tất cả các giải
-- [ ] [HIGH] So sánh thành tích 2+ VDV cùng cự ly
+- [x] [HIGH] So sánh thành tích 2+ VDV cùng cự ly
 - [ ] [NORMAL] Admin claim detail page — xem chi tiết khiếu nại, preview tracklog
 - [ ] [NORMAL] Hiển thị bản đồ GPX trên trang course detail (Mapbox/Leaflet)
 - [ ] [NORMAL] Auto-refresh ranking khi race đang live (poll 30s)
@@ -55,4 +55,5 @@
 - [x] [NORMAL] Pre-race event page — upcoming races show course details (start time, COT, elevation, start location) instead of results table, organizer + description info block
 - [x] [NORMAL] Live race timer — reusable LiveTimer component shows elapsed time since race start, displayed on race detail hero and ranking page status bar
 - [x] [HIGH] Tìm kiếm BIB/tên trên homepage xuyên suốt tất cả các giải — backend globalSearch endpoint + frontend /search page with grouped results by race
+- [x] [HIGH] So sánh thành tích 2+ VDV cùng cự ly — checkbox selection on ranking page, floating compare bar, compare page with split times & overall summary
 
