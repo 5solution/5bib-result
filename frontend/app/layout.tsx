@@ -18,6 +18,7 @@ const beVietnamPro = Be_Vietnam_Pro({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://result.5bib.com'),
   title: '5BIB - Kết quả giải chạy trực tiếp',
   description: 'Theo dõi kết quả, xếp hạng và thành tích của bạn trên nền tảng 5BIB',
   manifest: '/manifest.json',
