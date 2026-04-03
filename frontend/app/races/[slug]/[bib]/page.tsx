@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachment } from '@/lib/api-hooks';
+import ResultImageEditor from '@/components/ResultImageEditor';
 
 interface AthleteResult {
   Bib: number;
@@ -263,6 +264,7 @@ export default function AthleteDetailPage() {
 
   const [downloading, setDownloading] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
+  const [showImageEditor, setShowImageEditor] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
   const celebrationAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -492,11 +494,10 @@ export default function AthleteDetailPage() {
             {/* Share buttons */}
             <div className="flex items-center gap-2">
               <button
-                onClick={handleShareAsImage}
-                disabled={sharingImage}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20 disabled:opacity-50"
+                onClick={() => setShowImageEditor(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
-                {sharingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                <Download className="w-3.5 h-3.5" />
                 Ảnh KQ
               </button>
               <button
@@ -1045,6 +1046,14 @@ export default function AthleteDetailPage() {
           </Link>
         </div>
       </div>
+
+      {/* Result Image Editor Modal */}
+      {showImageEditor && (
+        <ResultImageEditor
+          athlete={athlete}
+          onClose={() => setShowImageEditor(false)}
+        />
+      )}
 
       {/* Hidden share card for image capture */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
