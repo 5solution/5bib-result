@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route } from 'lucide-react';
+import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route, Globe } from 'lucide-react';
 import LiveTimer from '@/components/LiveTimer';
 import { useRaceBySlug } from '@/lib/api-hooks';
 import { raceResultControllerGetRaceResults, raceResultControllerGetCourseStats } from '@/lib/api-generated';
@@ -118,7 +118,7 @@ export default function RaceDetailPage() {
 
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const [courseResults, setCourseResults] = useState<Record<string, RaceResult[]>>({});
-  const [courseStatsMap, setCourseStatsMap] = useState<Record<string, { starters: number; finishers: number; dnf: number }>>({});
+  const [courseStatsMap, setCourseStatsMap] = useState<Record<string, { starters: number; finishers: number; dnf: number; nationalityCount: number }>>({});
 
   const race = useMemo<RaceInfo | null>(() => {
     const r = (raceRaw as any)?.data ?? raceRaw;
@@ -160,7 +160,7 @@ export default function RaceDetailPage() {
     if (!race || race.status === 'upcoming') return; // Don't fetch results for upcoming races
     const fetchResults = async () => {
       const results: Record<string, RaceResult[]> = {};
-      const statsMap: Record<string, { starters: number; finishers: number; dnf: number }> = {};
+      const statsMap: Record<string, { starters: number; finishers: number; dnf: number; nationalityCount: number }> = {};
       for (const course of race.courses) {
         try {
           const [res, statsRes] = await Promise.all([
@@ -186,6 +186,7 @@ export default function RaceDetailPage() {
             starters: total,
             finishers,
             dnf: finishers > 0 && total > finishers ? total - finishers : 0,
+            nationalityCount: stats?.nationalityCount ?? 0,
           };
         } catch {
           results[course.id] = [];
@@ -392,6 +393,9 @@ export default function RaceDetailPage() {
                           )}
                           {(courseStatsMap[course.id]?.finishers ?? 0) > 0 && (
                             <span>FINISHERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.finishers}</strong></span>
+                          )}
+                          {(courseStatsMap[course.id]?.nationalityCount ?? 0) > 0 && (
+                            <span className="flex items-center gap-1">🌍 <strong className="text-base ml-0.5">{courseStatsMap[course.id]?.nationalityCount}</strong> quốc gia</span>
                           )}
                         </div>
                       )}

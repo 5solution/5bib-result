@@ -667,7 +667,10 @@ export class RaceResultService {
       },
     ];
 
-    const [agg] = await this.resultModel.aggregate(pipeline).exec();
+    const [agg, nationalities] = await Promise.all([
+      this.resultModel.aggregate(pipeline).exec().then((r) => r[0]),
+      this.resultModel.distinct('nationality', { courseId, nationality: { $nin: ['', null] } }).exec(),
+    ]);
 
     if (!agg) {
       const empty = {
@@ -678,6 +681,7 @@ export class RaceResultService {
         avgPace: null,
         maleCount: 0,
         femaleCount: 0,
+        nationalityCount: nationalities.length || 0,
       };
       await this.setCache(cacheKey, empty, 60);
       return empty;
@@ -705,6 +709,7 @@ export class RaceResultService {
       avgPace: null as string | null,
       maleCount,
       femaleCount,
+      nationalityCount: nationalities.length || 0,
     };
 
     await this.setCache(cacheKey, stats, 60);
