@@ -58,6 +58,7 @@ import {
   Clock,
   MapPin,
   Image as ImageIcon,
+  Download,
 } from "lucide-react";
 
 type RaceStatus = "draft" | "pre_race" | "live" | "ended";
@@ -476,6 +477,37 @@ export default function RaceDetailPage() {
       toast.error("Xóa dữ liệu thất bại");
     } finally {
       setResettingCourseId(null);
+    }
+  }
+
+  async function handleExportCSV(courseId: string, courseName: string) {
+    try {
+      // Fetch all results (large page)
+      const res = await fetch(`/api/race-results?course_id=${courseId}&pageNo=1&pageSize=10000&sortField=OverallRank&sortDirection=ASC`);
+      if (!res.ok) { toast.error("Không thể tải dữ liệu"); return; }
+      const body = await res.json();
+      const results = body?.data ?? [];
+      if (results.length === 0) { toast.error("Không có dữ liệu để xuất"); return; }
+
+      const headers = ['Rank', 'BIB', 'Name', 'Gender', 'Category', 'ChipTime', 'GunTime', 'Pace', 'Gap', 'Nationality'];
+      const csvRows = [headers.join(',')];
+      for (const r of results) {
+        csvRows.push([
+          r.OverallRank, r.Bib, `"${(r.Name || '').replace(/"/g, '""')}"`,
+          r.Gender, r.Category, r.ChipTime, r.GunTime, r.Pace, r.Gap, r.Nationality,
+        ].join(','));
+      }
+
+      const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${race?.title || 'race'}-${courseName || courseId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Đã xuất ${results.length} kết quả`);
+    } catch {
+      toast.error("Xuất CSV thất bại");
     }
   }
 
@@ -1133,6 +1165,14 @@ export default function RaceDetailPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => handleExportCSV(course.courseId, course.name)}
+                              title="Xuất CSV"
+                            >
+                              <Download className="size-3" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon-xs"

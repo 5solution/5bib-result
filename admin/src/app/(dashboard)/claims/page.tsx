@@ -192,7 +192,7 @@ export default function ClaimsPage() {
                 </TableRow>
               ) : (
                 claims.map((claim) => (
-                  <TableRow key={claim._id}>
+                  <TableRow key={claim._id} className="cursor-pointer" onClick={() => openResolve(claim, claim.status === 'pending' ? 'resolved' : claim.status as any)}>
                     <TableCell className="text-xs">
                       {formatDate(claim.createdAt)}
                     </TableCell>
@@ -302,19 +302,27 @@ export default function ClaimsPage() {
               <p className="text-muted-foreground">{activeClaim.description}</p>
               {activeClaim.attachments && activeClaim.attachments.length > 0 && (
                 <div className="pt-1">
-                  <p className="font-medium mb-1">📎 Tệp đính kèm:</p>
-                  <div className="space-y-1">
-                    {activeClaim.attachments.map((url, i) => (
-                      <a
-                        key={i}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-xs text-blue-500 hover:underline truncate"
-                      >
-                        {url.split('/').pop() || `File ${i + 1}`}
-                      </a>
-                    ))}
+                  <p className="font-medium mb-1">📎 Tệp đính kèm ({activeClaim.attachments.length}):</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {activeClaim.attachments.map((url, i) => {
+                      const ext = url.split('.').pop()?.toLowerCase() || '';
+                      const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext);
+                      const filename = url.split('/').pop() || `File ${i + 1}`;
+                      return isImage ? (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border border-zinc-700 hover:border-blue-500 transition-colors">
+                          <img src={url} alt={filename} className="w-full h-32 object-cover" />
+                          <p className="text-[10px] text-muted-foreground p-1 truncate">{filename}</p>
+                        </a>
+                      ) : (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-zinc-700 hover:border-blue-500 transition-colors">
+                          <span className="text-lg">{['gpx', 'kml', 'kmz', 'fit', 'tcx'].includes(ext) ? '🗺️' : '📄'}</span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium truncate">{filename}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase">{ext}</p>
+                          </div>
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}

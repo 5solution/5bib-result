@@ -38,7 +38,7 @@
 - [ ] [HIGH] Telegram thông báo khi admin xử lý khiếu nại (thông báo vào một group id), chỉ sử dụng telegraf (không start bot) để dùng cho nhiều dự án
 - [x] [HIGH] Tìm kiếm BIB/tên trên homepage xuyên suốt tất cả các giải
 - [x] [HIGH] So sánh thành tích 2+ VDV cùng cự ly
-- [ ] [NORMAL] Admin claim detail page — xem chi tiết khiếu nại, preview tracklog
+- [x] [NORMAL] Admin claim detail page — xem chi tiết khiếu nại, preview tracklog
 - [ ] [NORMAL] Hiển thị bản đồ GPX trên trang course detail (Mapbox/Leaflet)
 - [x] [NORMAL] Auto-refresh ranking khi race đang live (poll 30s)
 - [ ] [NORMAL] Share result dạng hình ảnh cho social media
@@ -46,7 +46,7 @@
 - [x] [NORMAL] Tự động fill Khiếu nại kết quả họ tên của người chạy
 - [x] [NORMAL] Giải đang diễn ra và đã kết thúc sẽ hiển thị thêm nationality theo cờ, ví dụ trong response có     "Nationality": "France", thì convert thành cờ ở races/{slug} hoặc
 - [ ] [LOW] Dark mode toggle
-- [ ] [LOW] Export kết quả CSV/Excel từ admin
+- [x] [LOW] Export kết quả CSV/Excel từ admin
 - [ ] [LOW] Tích hợp gallery ảnh với 5Pix
 
 ## Done
