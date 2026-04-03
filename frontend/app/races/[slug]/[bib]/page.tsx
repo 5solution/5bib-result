@@ -387,52 +387,24 @@ export default function AthleteDetailPage() {
     toast.loading('Đang tải chứng nhận...', { id: 'cert-download' });
 
     try {
-      // Dynamically import pdfjs
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      const response = await fetch(`/api/race-results/certificate/${raceId}/${athlete.Bib}`);
+      if (!response.ok) throw new Error('Failed to fetch certificate');
 
-      // Fetch PDF via proxy to avoid CORS
-      const pdfUrl = athlete.Certificate;
-      const response = await fetch(pdfUrl);
-      const arrayBuffer = await response.arrayBuffer();
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificate-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      // Load PDF
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
-
-      // Render at 3x for high quality
-      const scale = 3;
-      const viewport = page.getViewport({ scale });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d')!;
-
-      await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
-
-      // Convert to PNG and download
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          toast.error('Không thể tạo ảnh. Thử lại sau.', { id: 'cert-download' });
-          setDownloading(false);
-          return;
-        }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `certificate-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        toast.success('Tải chứng nhận thành công! 🎉', { id: 'cert-download' });
-        fireCelebration();
-        setDownloading(false);
-      }, 'image/png');
+      toast.success('Tải chứng nhận thành công! 🎉', { id: 'cert-download' });
+      fireCelebration();
+      setDownloading(false);
     } catch (err) {
       console.error('Certificate download error:', err);
-      // Fallback: open PDF directly
       window.open(athlete.Certificate, '_blank');
       toast.dismiss('cert-download');
       setDownloading(false);

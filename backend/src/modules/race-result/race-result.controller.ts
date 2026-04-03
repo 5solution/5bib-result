@@ -5,10 +5,13 @@ import {
   Query,
   Param,
   Body,
+  Res,
   BadRequestException,
+  NotFoundException,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiOperation,
   ApiResponse,
@@ -102,6 +105,49 @@ export class RaceResultController {
       return { data: null, success: false, message: 'Athlete not found' };
     }
     return { data: result, success: true };
+  }
+
+  @Get('certificate/:raceId/:bib')
+  @ApiOperation({ summary: 'Get certificate as PNG image for an athlete' })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
+  @ApiResponse({ status: 200, description: 'Returns certificate as PNG image' })
+  @ApiResponse({ status: 404, description: 'Athlete or certificate not found' })
+  async getCertificate(
+    @Param('raceId') raceId: string,
+    @Param('bib') bib: string,
+    @Res() res: Response,
+  ) {
+    const athlete = await this.raceResultService.getAthleteDetail(raceId, bib);
+    if (!athlete || !athlete.Certificate) {
+      throw new NotFoundException('Certificate not found');
+    }
+
+    const pdfRes = await fetch(athlete.Certificate);
+    if (!pdfRes.ok) {
+      throw new NotFoundException('Certificate not available');
+    }
+
+    const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
+
+    const { pdfToPng } = await import('pdf-to-png-converter');
+    const pages = await pdfToPng(pdfBuffer, {
+      viewportScale: 3,
+      pagesToProcess: [1],
+    });
+
+    if (!pages.length || !pages[0].content) {
+      throw new NotFoundException('Failed to convert certificate');
+    }
+
+    const pngBuffer = pages[0].content;
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Length': pngBuffer.length.toString(),
+      'Cache-Control': 'public, max-age=3600',
+      'Content-Disposition': `inline; filename="certificate-${bib}.png"`,
+    });
+    res.send(pngBuffer);
   }
 
   @Get('compare/:raceId')
