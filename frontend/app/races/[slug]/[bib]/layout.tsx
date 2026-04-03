@@ -31,10 +31,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     : null;
   const courseName = course?.name || course?.distance || athlete?.distance || '';
 
-  const title = `5BIB - ${raceName} - ${athleteName}`;
+  const title = `5BIB - ${athleteName} - BIB ${bib} - ${raceName}`;
   const description = courseName
-    ? `Kết quả ${athleteName} - cự ly ${courseName} tại giải ${raceName}`
-    : `Kết quả ${athleteName} tại giải ${raceName}`;
+    ? `Kết quả ${athleteName} (BIB ${bib}) - cự ly ${courseName} tại giải ${raceName}`
+    : `Kết quả ${athleteName} (BIB ${bib}) tại giải ${raceName}`;
 
   const image = course?.imageUrl || getRaceImage(race);
 

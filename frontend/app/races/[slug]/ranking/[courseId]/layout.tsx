@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     (c: any) => (c.courseId || c.id) === courseId,
   );
   const courseName = course?.name || course?.distance || courseId;
-  const title = `5BIB - ${raceName} - ${courseName}`;
+  const title = `5BIB - ${courseName} - ${raceName}`;
   const description = `Bảng xếp hạng cự ly ${courseName} tại giải ${raceName}`;
   const image = getCourseImage(course, race);
 
