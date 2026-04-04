@@ -40,7 +40,7 @@ export class MailService {
       return;
     }
 
-    const subject = `[5BIB] Kết quả xử lý khiếu nại - ${data.eventTitle}`;
+    const subject = `[5BIB] Kết quả xử lý khiếu nại số Bib ${data.bib} - ${data.eventTitle}`;
 
     const mergeVars = [
       { name: 'registered_name', content: data.registeredName },
