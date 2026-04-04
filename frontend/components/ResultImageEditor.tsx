@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { X, Download, ImagePlus, RotateCcw, Loader2, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 interface AthleteData {
   Name: string;
@@ -37,6 +38,7 @@ export default function ResultImageEditor({
   athlete: AthleteData;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const cardRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [bgStyle, setBgStyle] = useState(BACKGROUNDS[0].gradient);
@@ -53,7 +55,7 @@ export default function ResultImageEditor({
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      toast.error('Vui lòng chọn file ảnh');
+      toast.error(t('resultImage.selectImageError'));
       return;
     }
     const reader = new FileReader();
@@ -117,7 +119,7 @@ export default function ResultImageEditor({
     try {
       const blob = await captureCard();
       if (!blob) {
-        toast.error('Không thể tạo ảnh');
+        toast.error(t('resultImage.errorCreate'));
         setDownloading(false);
         return;
       }
@@ -129,9 +131,9 @@ export default function ResultImageEditor({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('Đã tải ảnh kết quả!');
+      toast.success(t('resultImage.successDownload'));
     } catch {
-      toast.error('Không thể tạo ảnh');
+      toast.error(t('resultImage.errorCreate'));
     } finally {
       setDownloading(false);
     }
@@ -143,7 +145,7 @@ export default function ResultImageEditor({
     try {
       const blob = await captureCard();
       if (!blob) {
-        toast.error('Không thể tạo ảnh');
+        toast.error(t('resultImage.errorCreate'));
         setSharing(false);
         return;
       }
@@ -152,7 +154,7 @@ export default function ResultImageEditor({
       if (navigator.canShare?.(shareData)) {
         await navigator.share(shareData);
       } else {
-        toast.error('Trình duyệt không hỗ trợ chia sẻ');
+        toast.error(t('resultImage.shareNotSupported'));
       }
     } catch {
       // User cancelled share - not an error
@@ -172,7 +174,7 @@ export default function ResultImageEditor({
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-lg font-bold text-slate-900">Tạo ảnh kết quả</h3>
+          <h3 className="text-lg font-bold text-slate-900">{t('resultImage.title')}</h3>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-slate-500" />
           </button>
@@ -180,7 +182,7 @@ export default function ResultImageEditor({
 
         {/* Background picker */}
         <div className="px-5 py-3 border-b bg-slate-50">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chọn nền</p>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('resultImage.chooseBg')}</p>
           <div className="flex items-center gap-2 flex-wrap">
             {BACKGROUNDS.map(bg => (
               <button
@@ -304,7 +306,7 @@ export default function ResultImageEditor({
             className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-60"
           >
             {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {downloading ? 'Đang xử lý...' : 'Tải về'}
+            {downloading ? t('common.processing') : t('resultImage.downloadBtn')}
           </button>
           {canShare && (
             <button
@@ -313,7 +315,7 @@ export default function ResultImageEditor({
               className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all disabled:opacity-60"
             >
               {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
-              {sharing ? '...' : 'Chia sẻ'}
+              {sharing ? '...' : t('resultImage.shareBtn')}
             </button>
           )}
         </div>

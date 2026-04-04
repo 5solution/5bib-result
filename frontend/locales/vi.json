@@ -23,6 +23,7 @@
     "share": "Chia sẻ",
     "download": "Tải về",
     "processing": "Đang xử lý...",
+    "cancel": "Hủy",
     "country": "quốc gia",
     "perKm": "/km"
   },
@@ -169,7 +170,8 @@
     "certificateSuccess": "Tải chứng nhận thành công!",
     "certificateNotReady": "Chứng nhận chưa sẵn sàng. Vui lòng thử lại sau.",
     "start": "Xuất phát",
-    "finish": "Về đích"
+    "finish": "Về đích",
+    "backToRanking": "Quay lại bảng xếp hạng"
   },
   "claim": {
     "title": "Khiếu nại kết quả",
@@ -195,7 +197,10 @@
     "validationError": "Vui lòng điền đầy đủ: Họ tên, Số điện thoại, và Nội dung khiếu nại.",
     "raceNotFound": "Không tìm thấy giải đấu",
     "submitSuccess": "Khiếu nại đã được gửi thành công! Chúng tôi sẽ liên hệ bạn sớm nhất.",
-    "submitFailed": "Gửi khiếu nại thất bại"
+    "submitFailed": "Gửi khiếu nại thất bại",
+    "uploadFailed": "Tải file thất bại",
+    "submitting": "Đang gửi...",
+    "helpText": "Nếu bạn cho rằng kết quả có sai sót, bạn có thể gửi yêu cầu khiếu nại kèm theo bằng chứng (tracklog GPS, ảnh chụp đồng hồ...) để ban tổ chức xem xét."
   },
   "search": {
     "placeholder": "Nhập tên vận động viên hoặc số BIB...",
@@ -227,7 +232,8 @@
     "shareBtn": "Chia sẻ",
     "errorCreate": "Không thể tạo ảnh",
     "successDownload": "Đã tải ảnh kết quả!",
-    "shareNotSupported": "Trình duyệt không hỗ trợ chia sẻ"
+    "shareNotSupported": "Trình duyệt không hỗ trợ chia sẻ",
+    "selectImageError": "Vui lòng chọn file ảnh"
   },
   "header": {
     "title": "KẾT QUẢ GIẢI CHẠY 5BIB",
@@ -289,5 +295,20 @@
     "title": "Chứng chỉ hoàn thành",
     "download": "Tải xuống",
     "share": "Chia sẻ"
+  },
+  "compare": {
+    "title": "So sánh vận động viên",
+    "needAtLeast2": "Cần chọn ít nhất 2 VĐV để so sánh",
+    "backToRanking": "Quay lại bảng xếp hạng",
+    "ranking": "Bảng xếp hạng",
+    "rank": "Hạng",
+    "time": "Thời gian",
+    "ageGroup": "Nhóm tuổi",
+    "byCheckpoint": "So sánh theo checkpoint",
+    "summary": "Tổng hợp",
+    "metrics": "Chỉ số",
+    "overallRank": "Hạng tổng",
+    "genderRank": "Hạng giới tính",
+    "categoryRank": "Hạng nhóm tuổi"
   }
 }

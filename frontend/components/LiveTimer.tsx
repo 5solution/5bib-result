@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Timer } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface LiveTimerProps {
   startDate: string;
@@ -10,6 +11,7 @@ interface LiveTimerProps {
 }
 
 export default function LiveTimer({ startDate, className = '', variant = 'badge' }: LiveTimerProps) {
+  const { t } = useTranslation();
   const [elapsed, setElapsed] = useState('');
 
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function LiveTimer({ startDate, className = '', variant = 'badge'
     return (
       <div className={`inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 ${className}`}>
         <Timer className="w-4 h-4 text-red-400" />
-        <span className="text-sm font-medium text-white/80">Thời gian</span>
+        <span className="text-sm font-medium text-white/80">{t('ranking.time')}</span>
         <span className="font-mono text-lg font-black text-white tabular-nums tracking-wider">
           {elapsed}
         </span>

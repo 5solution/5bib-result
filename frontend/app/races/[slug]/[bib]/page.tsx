@@ -297,7 +297,7 @@ export default function AthleteDetailPage() {
       setClaimAttachments(prev => [...prev, result.url]);
       toast.success(t('claim.uploadSuccess', { name: file.name }));
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Tải file thất bại');
+      toast.error(err instanceof Error ? err.message : t('claim.uploadFailed'));
     } finally {
       setClaimUploading(false);
       if (claimFileRef.current) claimFileRef.current.value = '';
@@ -466,7 +466,7 @@ export default function AthleteDetailPage() {
   const maxPace = paces.length > 0 ? Math.max(...paces) : 0;
   const minPace = paces.length > 0 ? Math.min(...paces) : 0;
 
-  const genderLabel = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'Nam' : 'Nữ';
+  const genderLabel = athlete.Gender === 'Male' || athlete.Gender === 'M' ? t('common.male') : t('common.female');
   const genderIcon = athlete.Gender === 'Male' || athlete.Gender === 'M' ? '♂' : '♀';
   const genderColor = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'bg-blue-600' : 'bg-pink-500';
 
@@ -507,14 +507,14 @@ export default function AthleteDetailPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-                Chia sẻ
+                {t('common.share')}
               </button>
               <button
                 onClick={handleCopyLink}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
                 {linkCopied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
-                {linkCopied ? 'Đã sao chép' : 'Copy link'}
+                {linkCopied ? t('athlete.copied') : t('athlete.copyLink')}
               </button>
             </div>
           </div>
@@ -583,14 +583,14 @@ export default function AthleteDetailPage() {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4">
                 <Calendar className="w-8 h-8 text-blue-400" />
               </div>
-              <h3 className="text-xl md:text-2xl font-bold text-slate-700 mb-2">Giải chưa diễn ra</h3>
-              <p className="text-sm text-slate-400">Kết quả sẽ được cập nhật khi giải bắt đầu</p>
+              <h3 className="text-xl md:text-2xl font-bold text-slate-700 mb-2">{t('athlete.upcomingTitle')}</h3>
+              <p className="text-sm text-slate-400">{t('athlete.upcomingSubtitle')}</p>
             </div>
           ) : (
             <>
               {/* Big time display */}
               <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
-                <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">Chip Time</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">{t('athlete.chipTime')}</div>
                 <div className="text-5xl md:text-7xl font-black text-blue-600 tracking-tight mb-3" style={{ fontFamily: 'var(--font-mono)' }}>
                   {athlete.ChipTime}
                 </div>
@@ -618,9 +618,9 @@ export default function AthleteDetailPage() {
               {/* Rank badges row */}
               <div className={`grid ${athlete.CatRank ? 'grid-cols-3' : 'grid-cols-2'} divide-x divide-gray-100 border-t border-gray-100`}>
                 {[
-                  { label: 'Overall Rank', rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
-                  { label: 'Gender Rank', rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
-                  ...(athlete.CatRank ? [{ label: 'Cat Rank', rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' }] : []),
+                  { label: t('athlete.overallRank'), rank: athlete.OverallRank, icon: <Trophy className="w-5 h-5" />, color: 'text-amber-500', bg: 'bg-amber-50' },
+                  { label: t('athlete.genderRank'), rank: athlete.GenderRank, icon: <Users className="w-5 h-5" />, color: 'text-blue-500', bg: 'bg-blue-50' },
+                  ...(athlete.CatRank ? [{ label: t('athlete.catRank'), rank: athlete.CatRank, icon: <Tag className="w-5 h-5" />, color: 'text-emerald-500', bg: 'bg-emerald-50' }] : []),
                 ].map((item) => (
                   <div key={item.label} className="py-5 md:py-6 text-center group hover:bg-gray-50/50 transition-colors">
                     <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${item.bg} ${item.color} mb-2`}>
@@ -645,10 +645,10 @@ export default function AthleteDetailPage() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900">
-                {courseType === 'team_relay' ? 'Thời gian các vòng (Đội)' : courseType === 'lap' ? 'Thời gian các vòng' : 'Chi tiết cuộc đua'}
+                {courseType === 'team_relay' ? t('athlete.raceDetailTeam') : courseType === 'lap' ? t('athlete.raceDetailLap') : t('athlete.raceDetail')}
               </h2>
               <p className="text-xs text-gray-400">
-                {courseType === 'team_relay' ? 'Lap times theo từng thành viên' : courseType === 'lap' ? 'Lap times qua các vòng' : 'Split times tại các checkpoint'}
+                {courseType === 'team_relay' ? t('athlete.splitDescTeam') : courseType === 'lap' ? t('athlete.splitDescLap') : t('athlete.splitDescSplit')}
               </p>
             </div>
           </div>
@@ -702,15 +702,15 @@ export default function AthleteDetailPage() {
                 <tr className="bg-gray-50/80">
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-8">#</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    {courseType === 'lap' || courseType === 'team_relay' ? 'Vòng' : 'Checkpoint'}
+                    {courseType === 'lap' || courseType === 'team_relay' ? t('athlete.lap') : t('athlete.checkpoint')}
                   </th>
                   {courseType === 'team_relay' && (
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Thành viên</th>
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('athlete.member')}</th>
                   )}
                   {courseType === 'split' && (
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Cự ly</th>
+                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('race.distance')}</th>
                   )}
-                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Thời gian</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('ranking.time')}</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Pace</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-24"></th>
                 </tr>
@@ -764,8 +764,8 @@ export default function AthleteDetailPage() {
               <TrendingUp className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Biểu đồ Pace</h2>
-              <p className="text-xs text-gray-400">Phân tích tốc độ qua từng chặng</p>
+              <h2 className="text-lg font-bold text-gray-900">{t('athlete.paceChart')}</h2>
+              <p className="text-xs text-gray-400">{t('athlete.paceAnalysis')}</p>
             </div>
           </div>
           <div className="p-6">
@@ -810,15 +810,15 @@ export default function AthleteDetailPage() {
             <div className="flex items-center justify-center gap-6 mt-6 pt-4 border-t border-gray-100 text-xs text-gray-500">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500" />
-                Nhanh nhất
+                {t('athlete.fastestLegend')}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-500" />
-                Chậm nhất
+                {t('athlete.slowestLegend')}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-400 to-blue-500" />
-                Bình thường
+                {t('athlete.normalLegend')}
               </span>
             </div>
           </div>
@@ -831,8 +831,8 @@ export default function AthleteDetailPage() {
               <Award className="w-5 h-5 text-amber-600" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Chứng nhận hoàn thành</h2>
-              <p className="text-xs text-gray-400">E-Certificate of Completion</p>
+              <h2 className="text-lg font-bold text-gray-900">{t('athlete.certificate')}</h2>
+              <p className="text-xs text-gray-400">{t('athlete.certificateSubtitle')}</p>
             </div>
           </div>
           <div className="p-6 md:p-8">
@@ -847,7 +847,7 @@ export default function AthleteDetailPage() {
                 <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-lg shadow-amber-200">
                   <Award className="w-8 h-8 text-white" />
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-bold mb-3">Certificate of Completion</div>
+                <div className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-bold mb-3">{t('athlete.certificateTitle')}</div>
                 <div className="text-2xl md:text-3xl font-black text-gray-900 mb-1">{formatName(athlete.Name)}</div>
                 <div className="text-sm text-gray-400 mb-5">BIB: {athlete.Bib}</div>
                 <div className="text-4xl md:text-5xl font-black text-blue-600 mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{athlete.ChipTime}</div>
@@ -868,7 +868,7 @@ export default function AthleteDetailPage() {
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
-                {downloading ? 'Đang xử lý...' : 'Tải chứng nhận (PNG)'}
+                {downloading ? t('common.processing') : t('athlete.downloadCertificate')}
               </button>
             </div>
           </div>
@@ -882,8 +882,8 @@ export default function AthleteDetailPage() {
                 <AlertTriangle className="w-5 h-5 text-orange-600" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Khiếu nại kết quả</h2>
-                <p className="text-xs text-gray-400">Gửi yêu cầu xem xét lại thành tích</p>
+                <h2 className="text-lg font-bold text-gray-900">{t('claim.title')}</h2>
+                <p className="text-xs text-gray-400">{t('claim.subtitle')}</p>
               </div>
             </div>
             {!showClaimForm && !claimSubmitted && (
@@ -891,7 +891,7 @@ export default function AthleteDetailPage() {
                 onClick={() => { setShowClaimForm(true); if (athlete?.Name && !claimName) setClaimName(athlete.Name.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')); }}
                 className="px-4 py-2 text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors"
               >
-                Gửi khiếu nại
+                {t('claim.submit')}
               </button>
             )}
           </div>
@@ -901,9 +901,9 @@ export default function AthleteDetailPage() {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center">
                 <Check className="w-8 h-8 text-green-600" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Đã gửi khiếu nại</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">{t('claim.submitted')}</h3>
               <p className="text-sm text-gray-500 max-w-md mx-auto">
-                Yêu cầu của bạn đã được ghi nhận. Ban tổ chức sẽ xem xét và liên hệ bạn qua số điện thoại đã cung cấp.
+                {t('claim.submittedMessage')}
               </p>
             </div>
           ) : showClaimForm ? (
@@ -912,26 +912,26 @@ export default function AthleteDetailPage() {
                 {/* Name */}
                 <div>
                   <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-                    <User className="w-3.5 h-3.5" /> Họ tên <span className="text-red-500">*</span>
+                    <User className="w-3.5 h-3.5" /> {t('claim.nameLabel')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={claimName}
                     onChange={(e) => setClaimName(e.target.value)}
-                    placeholder="Nguyễn Văn A"
+                    placeholder={t('claim.namePlaceholder')}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                   />
                 </div>
                 {/* Phone */}
                 <div>
                   <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-                    <Phone className="w-3.5 h-3.5" /> Số điện thoại <span className="text-red-500">*</span>
+                    <Phone className="w-3.5 h-3.5" /> {t('claim.phoneLabel')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
                     value={claimPhone}
                     onChange={(e) => setClaimPhone(e.target.value)}
-                    placeholder="0912 345 678"
+                    placeholder={t('claim.phonePlaceholder')}
                     className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                   />
                 </div>
@@ -940,13 +940,13 @@ export default function AthleteDetailPage() {
               {/* Email (optional) */}
               <div className="mb-4">
                 <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-                  <Mail className="w-3.5 h-3.5" /> Email <span className="text-gray-400 text-xs font-normal">(không bắt buộc)</span>
+                  <Mail className="w-3.5 h-3.5" /> {t('claim.emailLabel')} <span className="text-gray-400 text-xs font-normal">{t('claim.emailOptional')}</span>
                 </label>
                 <input
                   type="email"
                   value={claimEmail}
                   onChange={(e) => setClaimEmail(e.target.value)}
-                  placeholder="email@example.com"
+                  placeholder={t('claim.emailPlaceholder')}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                 />
               </div>
@@ -954,12 +954,12 @@ export default function AthleteDetailPage() {
               {/* Description */}
               <div className="mb-4">
                 <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-                  <FileText className="w-3.5 h-3.5" /> Nội dung khiếu nại <span className="text-red-500">*</span>
+                  <FileText className="w-3.5 h-3.5" /> {t('claim.descriptionLabel')} <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={claimDescription}
                   onChange={(e) => setClaimDescription(e.target.value)}
-                  placeholder="Mô tả chi tiết lý do khiếu nại: thời gian chip không chính xác, thiếu checkpoint, sai cự ly..."
+                  placeholder={t('claim.descriptionPlaceholder')}
                   rows={4}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all resize-none"
                 />
@@ -968,7 +968,7 @@ export default function AthleteDetailPage() {
               {/* File upload */}
               <div className="mb-6">
                 <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
-                  <Upload className="w-3.5 h-3.5" /> Tải lên bằng chứng <span className="text-gray-400 text-xs font-normal">(GPX, KML, FIT, ảnh — tối đa 20MB)</span>
+                  <Upload className="w-3.5 h-3.5" /> {t('claim.uploadLabel')} <span className="text-gray-400 text-xs font-normal">{t('claim.uploadHint')}</span>
                 </label>
                 <input
                   ref={claimFileRef}
@@ -983,9 +983,9 @@ export default function AthleteDetailPage() {
                   className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-200 hover:border-blue-300 rounded-xl text-sm text-gray-500 hover:text-blue-600 transition-all w-full justify-center"
                 >
                   {claimUploading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Đang tải lên...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t('claim.uploading')}</>
                   ) : (
-                    <><Upload className="w-4 h-4" /> Chọn file (tracklog, ảnh chụp màn hình...)</>
+                    <><Upload className="w-4 h-4" /> {t('claim.uploadButton')}</>
                   )}
                 </button>
                 {claimAttachments.length > 0 && (
@@ -1017,22 +1017,22 @@ export default function AthleteDetailPage() {
                   className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-orange-200 hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {claimSubmitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Đang gửi...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t('claim.submitting')}</>
                   ) : (
-                    'Gửi khiếu nại'
+                    t('claim.submit')
                   )}
                 </button>
                 <button
                   onClick={() => { setShowClaimForm(false); setClaimName(''); setClaimEmail(''); setClaimPhone(''); setClaimDescription(''); setClaimAttachments([]); }}
                   className="px-6 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
                 >
-                  Hủy
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
           ) : (
             <div className="px-6 py-5 text-sm text-gray-500">
-              Nếu bạn cho rằng kết quả có sai sót, bạn có thể gửi yêu cầu khiếu nại kèm theo bằng chứng (tracklog GPS, ảnh chụp đồng hồ...) để ban tổ chức xem xét.
+              {t('claim.helpText')}
             </div>
           )}
         </div>
@@ -1044,7 +1044,7 @@ export default function AthleteDetailPage() {
             className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-blue-600 transition-colors font-medium"
           >
             <ChevronLeft className="w-4 h-4" />
-            Quay lại bảng xếp hạng
+            {t('athlete.backToRanking')}
           </Link>
         </div>
       </div>

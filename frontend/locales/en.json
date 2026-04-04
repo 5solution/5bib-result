@@ -23,6 +23,7 @@
     "share": "Share",
     "download": "Download",
     "processing": "Processing...",
+    "cancel": "Cancel",
     "country": "countries",
     "perKm": "/km"
   },
@@ -169,7 +170,8 @@
     "certificateSuccess": "Certificate downloaded!",
     "certificateNotReady": "Certificate not ready. Please try again later.",
     "start": "Start",
-    "finish": "Finish"
+    "finish": "Finish",
+    "backToRanking": "Back to rankings"
   },
   "claim": {
     "title": "Appeal Result",
@@ -195,7 +197,10 @@
     "validationError": "Please fill in: Full name, Phone number, and Description.",
     "raceNotFound": "Race not found",
     "submitSuccess": "Appeal submitted successfully! We will contact you soon.",
-    "submitFailed": "Failed to submit appeal"
+    "submitFailed": "Failed to submit appeal",
+    "uploadFailed": "Upload failed",
+    "submitting": "Submitting...",
+    "helpText": "If you believe the result is incorrect, you can submit an appeal with evidence (GPS tracklog, watch screenshot...) for the organizer to review."
   },
   "search": {
     "placeholder": "Enter athlete name or BIB number...",
@@ -227,7 +232,8 @@
     "shareBtn": "Share",
     "errorCreate": "Could not create image",
     "successDownload": "Result image downloaded!",
-    "shareNotSupported": "Browser does not support sharing"
+    "shareNotSupported": "Browser does not support sharing",
+    "selectImageError": "Please select an image file"
   },
   "header": {
     "title": "5BIB RACE RESULTS",
@@ -289,5 +295,20 @@
     "title": "Certificate of Completion",
     "download": "Download",
     "share": "Share"
+  },
+  "compare": {
+    "title": "Compare Athletes",
+    "needAtLeast2": "Select at least 2 athletes to compare",
+    "backToRanking": "Back to rankings",
+    "ranking": "Rankings",
+    "rank": "Rank",
+    "time": "Time",
+    "ageGroup": "Age Group",
+    "byCheckpoint": "Compare by checkpoint",
+    "summary": "Summary",
+    "metrics": "Metrics",
+    "overallRank": "Overall Rank",
+    "genderRank": "Gender Rank",
+    "categoryRank": "Category Rank"
   }
 }
