@@ -47,6 +47,7 @@
 - [ ] [LOW] Tích hợp gallery ảnh với 5Pix — cần biết API/endpoint của 5Pix (BLOCKED)
 - [x] [NORMAL] Thay placeholder PWA icons (192x192, 512x512) bằng logo 5BIB thật — resized từ logo.png
 - [x] [NORMAL] Pace chart trên athlete detail — biểu đồ pace qua các checkpoint (đã có horizontal bar chart với fastest/slowest highlighting)
+- [x] [NORMAL] Multi-language EN — i18next + react-i18next, LanguageSwitcher toggle trên header, 200+ strings translated across all pages (homepage, race, ranking, athlete, search, calendar, compare, components)
 - [ ] [LOW] QR code BIB lookup — scan QR tại event → redirect trang kết quả VĐV
 - [ ] [LOW] Email notification kết quả — gửi email cho VĐV sau khi giải kết thúc
 - [ ] [LOW] Social proof — hiển thị số lượt xem kết quả, số lần chia sẻ
