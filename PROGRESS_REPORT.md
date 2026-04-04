@@ -1,22 +1,18 @@
-# Progress Report — 2026-04-04
+# Progress Report — 2026-04-04 (Session 2)
 
 ## Session Summary
 
-All actionable tasks completed. 1 task blocked (needs external API info).
+Cleared all NORMAL+ tasks. Fixed result image editor issues. Added gradient live badges.
 
 ### Completed This Session
 
 | Priority | Task | Details |
 |----------|------|---------|
-| HIGH | Tùy chỉnh ảnh kết quả | ResultImageEditor modal: 5 preset gradients + upload ảnh nền, preview real-time, tải PNG |
-| HIGH | Backend certificate PDF→PNG | `GET /race-results/certificate/:raceId/:bib` — server-side convert via pdf-to-png-converter |
-| NORMAL | Vinh danh Top 3 | Medal emoji (🥇🥈🥉), gradient badge, highlighted row, colored left border |
-| NORMAL | Nationality trên course card | Backend `nationalityCount` in getCourseStats, frontend "🌍 N quốc gia" |
-| NORMAL | PWA icons | Resized logo.png → 192x192 + 512x512 |
-| FIX | Empty chipTime aggregation | Filter empty chipTime, $convert with onError in getCourseStats |
-| FIX | DNF logic giải chưa diễn ra | Chỉ tính/hiển thị DNF khi finishers > 0 |
-| FIX | "Giải chưa diễn ra" messaging | Ranking + athlete page show placeholder when race is upcoming |
-| FIX | Race description mobile | Truncate 1 line + "Xem thêm" toggle |
+| FIX | Result image download | Split "Tải về" (direct download) + "Chia sẻ" (Web Share API) buttons |
+| FIX | Result image capture mismatch | html2canvas doesn't support aspect-ratio — set explicit px dimensions before capture |
+| FIX | Result image bottom cutoff | Use scrollHeight + overflow:visible during capture |
+| FIX | 5bib.com text → logo | Replace branding text with logo_5BIB_white.png |
+| NORMAL | Gradient live badges | Rose-red-amber gradient for "Đang diễn ra" on race detail + ranking pages |
 
 ### Blocked
 
@@ -26,29 +22,50 @@ All actionable tasks completed. 1 task blocked (needs external API info).
 
 ### All-Time Stats
 
-- **Total features shipped**: 18
+- **Total features shipped**: 20+
+- **Bugs fixed this session**: 4
 - **Blocked**: 1
+
+## Remaining [LOW] Tasks
+
+1. **QR code BIB lookup** — Scan QR tại event → redirect kết quả VĐV
+2. **Email notification** — Gửi kết quả cho VĐV sau giải
+3. **Social proof** — Số lượt xem/chia sẻ kết quả
+4. **5Pix gallery** — BLOCKED
 
 ## Brainstorm — Next Improvements
 
 1. **Live tracking bản đồ** — Vị trí VĐV real-time trên GPX map khi race live
-2. **Pace chart** — Biểu đồ pace qua checkpoint trên athlete detail
-3. **Leaderboard animation** — Animate position changes khi race live
-4. **Multi-language EN** — i18next đã setup, cần translations
-5. **Dark mode** — CSS variables có sẵn, cần toggle
-6. **QR code BIB lookup** — Scan QR → kết quả VĐV
-7. **Email notification** — Gửi kết quả cho VĐV sau giải
-8. **Race photo matching** — AI match ảnh với BIB (cần 5Pix)
-9. **Social proof** — Số lượt xem/chia sẻ kết quả
-10. **Comparison history** — Lưu so sánh đã thực hiện
+2. **Leaderboard animation** — Animate position changes khi race live
+3. **Race photo matching** — AI match ảnh với BIB (cần 5Pix)
+4. **Comparison history** — Lưu so sánh đã thực hiện
+5. **SEO optimization** — Dynamic OG images per athlete, structured data
+6. **Performance dashboard** — Admin analytics: views, shares, popular races
+7. **Athlete profile page** — Tổng hợp kết quả tất cả giải của 1 VĐV
+8. **Course record tracking** — Highlight khi VĐV phá kỷ lục cự ly
+9. **Strava integration** — Link activity Strava với kết quả
+10. **Push notification PWA** — Thông báo kết quả live qua browser notification
 
 ---
 
-## Previous Session (2026-04-02)
+## Previous Sessions
 
-### Completed
+### Session 1 (2026-04-04)
 
-1. [HIGH] Claim/Appeal Feature — form + tracklog upload + admin review
-2. [HIGH] Per-Race Sponsors — backend raceId, admin CRUD, frontend tiered display
-3. [NORMAL] Pre-Race Event Page — course details for upcoming races
-4. [NORMAL] Live Race Timer — reusable LiveTimer component
+| Priority | Task | Details |
+|----------|------|---------|
+| HIGH | Tùy chỉnh ảnh kết quả | ResultImageEditor modal: 5 preset gradients + upload ảnh nền |
+| HIGH | Backend certificate PDF→PNG | Server-side convert via pdf-to-png-converter |
+| NORMAL | Vinh danh Top 3 | Medal emoji, gradient badge, highlighted row |
+| NORMAL | Nationality trên course card | Backend nationalityCount, frontend display |
+| NORMAL | PWA icons | Resized logo.png → 192x192 + 512x512 |
+| FIX | Empty chipTime aggregation | Filter + $convert with onError |
+| FIX | DNF logic giải chưa diễn ra | Only show DNF when finishers > 0 |
+| FIX | "Giải chưa diễn ra" messaging | Placeholder for upcoming races |
+
+### Session 0 (2026-04-02)
+
+1. [HIGH] Claim/Appeal Feature
+2. [HIGH] Per-Race Sponsors
+3. [NORMAL] Pre-Race Event Page
+4. [NORMAL] Live Race Timer

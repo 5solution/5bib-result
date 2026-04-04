@@ -8,6 +8,7 @@ import {
   Users, X, ChevronsLeft, ChevronsRight, GitCompareArrows,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import LiveTimer from '@/components/LiveTimer';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults, useCourseStats } from '@/lib/api-hooks';
@@ -152,6 +153,7 @@ export default function CourseRankingPage() {
 
   const [selectedBibs, setSelectedBibs] = useState<Set<number>>(new Set());
   const router = useRouter();
+  const { t } = useTranslation();
 
   // ─── Data fetching via API hooks ───
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
@@ -259,9 +261,9 @@ export default function CourseRankingPage() {
   }, [searchQuery, genderFilter, categoryFilter]);
 
   const formatDateRange = (start: string, end?: string) => {
-    if (!start) return 'Chưa xác định';
+    if (!start) return t('common.unknown');
     const s = new Date(start);
-    if (isNaN(s.getTime())) return 'Chưa xác định';
+    if (isNaN(s.getTime())) return t('common.unknown');
     if (!end) return s.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
     const e = new Date(end);
     if (isNaN(e.getTime())) return s.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -315,21 +317,21 @@ export default function CourseRankingPage() {
     return (
       <div className="min-h-screen bg-white pt-14 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4">Không tìm thấy cự ly</h2>
-          <Link href={`/races/${slug}`} className="text-blue-600 hover:underline">Quay lại giải đấu</Link>
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">{t('ranking.courseNotFound')}</h2>
+          <Link href={`/races/${slug}`} className="text-blue-600 hover:underline">{t('ranking.backToRace')}</Link>
         </div>
       </div>
     );
   }
 
-  const statusLabel = race.status === 'live' ? 'Đang diễn ra' : race.status === 'completed' ? 'Đã kết thúc' : 'Sắp diễn ra';
+  const statusLabel = race.status === 'live' ? t('status.live') : race.status === 'completed' ? t('status.completed') : t('status.upcoming');
 
   const infoItems = [
-    { label: 'Địa điểm xuất phát', value: course.startLocation || race.location },
-    { label: 'Giờ xuất phát', value: course.startTime || '05:00' },
-    { label: 'Cự ly', value: `${course.distanceKm || '-'} KM` },
+    { label: t('race.startLocation'), value: course.startLocation || race.location },
+    { label: t('race.startTime'), value: course.startTime || '05:00' },
+    { label: t('race.distance'), value: `${course.distanceKm || '-'} KM` },
     ...(course.cutOffTime ? [{ label: 'COT', value: course.cutOffTime }] : []),
-    ...(course.elevation ? [{ label: 'Tổng leo cao', value: course.elevation }] : []),
+    ...(course.elevation ? [{ label: t('race.totalElevation'), value: course.elevation }] : []),
   ];
 
   return (
@@ -405,12 +407,12 @@ export default function CourseRankingPage() {
 
               <div className="flex items-center gap-6 sm:gap-8 text-sm md:text-base">
                 <span className="text-blue-100">
-                  Xuất phát{' '}
+                  {t('ranking.starters')}{' '}
                   <strong className="text-white font-black text-lg md:text-xl ml-1.5">
                     {(course.starters ?? 0).toLocaleString('vi-VN')}
                   </strong>
                 </span>
-                {(course.dnf ?? 0) > 0 && (
+                {race.status !== 'live' && (course.dnf ?? 0) > 0 && (
                   <span className="text-blue-100">
                     DNF{' '}
                     <strong className="text-yellow-300 font-black text-lg md:text-xl ml-1.5">
@@ -418,9 +420,9 @@ export default function CourseRankingPage() {
                     </strong>
                   </span>
                 )}
-                {(course.finishers ?? 0) > 0 && (
+                {race.status !== 'live' && (course.finishers ?? 0) > 0 && (
                   <span className="text-blue-100">
-                    Hoàn thành{' '}
+                    {t('ranking.finishers')}{' '}
                     <strong className="text-emerald-300 font-black text-lg md:text-xl ml-1.5">
                       {course.finishers!.toLocaleString('vi-VN')}
                     </strong>
@@ -433,7 +435,7 @@ export default function CourseRankingPage() {
               onClick={scrollToRanking}
               className="flex items-center justify-center gap-2.5 px-7 py-3 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/30 text-white text-sm md:text-base font-bold rounded-full transition-all cursor-pointer shrink-0"
             >
-              Xem bảng xếp hạng
+              {t('ranking.viewRanking')}
               <ChevronDown className="w-4 h-4 animate-bounce" />
             </button>
           </div>
@@ -449,7 +451,7 @@ export default function CourseRankingPage() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Tìm vận động viên theo tên hoặc số BIB..."
+                  placeholder={t('ranking.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-4 py-3.5 bg-white border-2 border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm"
@@ -470,13 +472,13 @@ export default function CourseRankingPage() {
               <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
                 {availableGenders.length > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Giới tính</span>
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('ranking.genderFilter')}</span>
                     <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                       <button
                         onClick={() => setGenderFilter('')}
                         className={`px-3 py-1.5 text-xs font-semibold transition-colors ${!genderFilter ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
                       >
-                        Tất cả
+                        {t('common.all')}
                       </button>
                       {availableGenders.map((g: string) => (
                         <button
@@ -484,7 +486,7 @@ export default function CourseRankingPage() {
                           onClick={() => setGenderFilter(g === genderFilter ? '' : g)}
                           className={`px-3 py-1.5 text-xs font-semibold transition-colors border-l border-slate-200 ${genderFilter === g ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
                         >
-                          {g === 'Male' ? 'Nam' : g === 'Female' ? 'Nữ' : g}
+                          {g === 'Male' ? t('common.male') : g === 'Female' ? t('common.female') : g}
                         </button>
                       ))}
                     </div>
@@ -493,13 +495,13 @@ export default function CourseRankingPage() {
 
                 {availableCategories.length > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nhóm tuổi</span>
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('ranking.ageGroup')}</span>
                     <select
                       value={categoryFilter}
                       onChange={(e) => setCategoryFilter(e.target.value)}
                       className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 cursor-pointer"
                     >
-                      <option value="">Tất cả</option>
+                      <option value="">{t('common.all')}</option>
                       {availableCategories.map((c: string) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
@@ -513,7 +515,7 @@ export default function CourseRankingPage() {
                     className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
                     <X className="w-3.5 h-3.5" />
-                    Xóa bộ lọc
+                    {t('common.clearFilters')}
                   </button>
                 )}
               </div>
@@ -521,7 +523,7 @@ export default function CourseRankingPage() {
 
             {(searchQuery || genderFilter || categoryFilter) && (
               <p className="text-center text-sm text-slate-500 mb-4">
-                Tìm thấy <strong className="text-slate-700">{totalItems}</strong> kết quả
+                {t('common.resultsFound')} <strong className="text-slate-700">{totalItems}</strong> {t('common.results')}
               </p>
             )}
 
@@ -550,10 +552,10 @@ export default function CourseRankingPage() {
                         <tr className="bg-slate-50 border-b-2 border-slate-200">
                           <th className="px-2 py-3.5 w-10"></th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">
-                            {categoryFilter ? 'Hạng nhóm' : genderFilter ? 'Hạng GT' : 'Hạng'}
+                            {categoryFilter ? t('ranking.catRank') : genderFilter ? t('ranking.genderRank') : t('ranking.rank')}
                           </th>
-                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vận động viên</th>
-                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-36">Thời gian</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('ranking.athlete')}</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-36">{t('ranking.time')}</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Pace</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">Gap</th>
                         </tr>
@@ -579,8 +581,8 @@ export default function CourseRankingPage() {
               {paginatedResults.length === 0 && (
                 <div className="py-16 text-center">
                   <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500 font-medium">Không tìm thấy kết quả</p>
-                  <p className="text-sm text-slate-400 mt-1">Thử tìm kiếm với từ khóa khác</p>
+                  <p className="text-slate-500 font-medium">{t('ranking.noResults')}</p>
+                  <p className="text-sm text-slate-400 mt-1">{t('ranking.tryDifferentSearch')}</p>
                 </div>
               )}
             </div>
@@ -600,7 +602,7 @@ export default function CourseRankingPage() {
             {sponsors.length > 0 && (
               <div className="mt-16 py-10 border-t-2 border-slate-100">
                 <p className="text-center text-xs font-bold uppercase tracking-[0.25em] text-slate-400 mb-8">
-                  Đơn vị tài trợ
+                  {t('ranking.sponsors')}
                 </p>
                 {/* Diamond sponsors — extra large */}
                 {sponsors.filter(s => s.level === 'diamond').length > 0 && (
@@ -671,13 +673,13 @@ export default function CourseRankingPage() {
       {selectedBibs.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4 animate-in slide-in-from-bottom-4">
           <GitCompareArrows className="w-5 h-5 text-blue-400 shrink-0" />
-          <span className="text-sm font-medium">{selectedBibs.size} VĐV</span>
+          <span className="text-sm font-medium">{t('ranking.athleteCount', { count: selectedBibs.size })}</span>
           <button
             onClick={goCompare}
             disabled={selectedBibs.size < 2}
             className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400 text-sm font-bold rounded-lg transition-colors"
           >
-            So sánh
+            {t('ranking.compare')}
           </button>
           <button
             onClick={() => setSelectedBibs(new Set())}
@@ -694,6 +696,7 @@ export default function CourseRankingPage() {
 /* ─── RankingRow — desktop table row ─── */
 
 function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string }) {
+  const { t } = useTranslation();
   const isUpcoming = raceStatus === 'upcoming';
   const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
   const rankStr = (rawRank || '').trim();
@@ -782,7 +785,7 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
 
       <td className="px-4 py-3.5">
         {isUpcoming ? (
-          <p className="text-xs text-slate-400 italic">Chưa diễn ra</p>
+          <p className="text-xs text-slate-400 italic">{t('status.notStarted')}</p>
         ) : (
           <>
             {result.TimingPoint && result.TimingPoint !== 'Finish' && (
@@ -817,6 +820,7 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
 /* ─── MobileRankingCard ─── */
 
 function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string }) {
+  const { t } = useTranslation();
   const isUpcoming = raceStatus === 'upcoming';
   const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
   const rankStr = (rawRank || '').trim();
@@ -881,7 +885,7 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
 
         <div className="text-right shrink-0">
           {isUpcoming ? (
-            <p className="text-xs text-slate-400 italic">Chưa diễn ra</p>
+            <p className="text-xs text-slate-400 italic">{t('status.notStarted')}</p>
           ) : (
             <>
               {result.TimingPoint && result.TimingPoint !== 'Finish' && (
@@ -908,6 +912,7 @@ function RankingPagination({
   totalPages: number;
   onPageChange: (page: number) => void;
 }) {
+  const { t } = useTranslation();
   const getPages = (): (number | string)[] => {
     const pages: (number | string)[] = [];
     if (totalPages <= 7) {
@@ -936,7 +941,7 @@ function RankingPagination({
         onClick={() => onPageChange(1)}
         disabled={currentPage === 1}
         className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-        aria-label="Trang đầu"
+        aria-label={t('ranking.firstPage')}
       >
         <ChevronsLeft className="w-4 h-4" />
       </button>
@@ -944,7 +949,7 @@ function RankingPagination({
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
         className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-        aria-label="Trang trước"
+        aria-label={t('ranking.prevPage')}
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -969,7 +974,7 @@ function RankingPagination({
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
         className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-        aria-label="Trang sau"
+        aria-label={t('ranking.nextPage')}
       >
         <ChevronRight className="w-4 h-4" />
       </button>
@@ -977,7 +982,7 @@ function RankingPagination({
         onClick={() => onPageChange(totalPages)}
         disabled={currentPage === totalPages}
         className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-        aria-label="Trang cuối"
+        aria-label={t('ranking.lastPage')}
       >
         <ChevronsRight className="w-4 h-4" />
       </button>
@@ -988,6 +993,7 @@ function RankingPagination({
 /* ─── SubHeader — sticky sub-navigation for ranking page ─── */
 
 function SubHeader({ race, course, slug }: { race: RaceInfo; course: Course; slug: string }) {
+  const { t } = useTranslation();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {

@@ -3,6 +3,7 @@
 import { useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { Search, MapPin, Calendar, ChevronRight, X } from 'lucide-react';
 import { useRaces } from '@/lib/api-hooks';
 
@@ -47,6 +48,7 @@ export default function CalendarPage() {
 }
 
 function CalendarContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get('search') || '';
   const initialStatus = (searchParams.get('status') as StatusFilter) || 'all';
@@ -86,9 +88,9 @@ function CalendarContent() {
   });
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return 'Chưa xác định';
+    if (!dateStr) return t('common.unknown');
     const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return 'Chưa xác định';
+    if (isNaN(d.getTime())) return t('common.unknown');
     return d.toLocaleDateString('vi-VN', {
       day: '2-digit',
       month: 'long',
@@ -97,9 +99,9 @@ function CalendarContent() {
   };
 
   const formatDateRange = (start: string, end?: string) => {
-    if (!start) return 'Chưa xác định';
+    if (!start) return t('common.unknown');
     const s = new Date(start);
-    if (isNaN(s.getTime())) return 'Chưa xác định';
+    if (isNaN(s.getTime())) return t('common.unknown');
     if (!end) return formatDate(start);
     const e = new Date(end);
     if (isNaN(e.getTime())) return formatDate(start);
@@ -116,10 +118,10 @@ function CalendarContent() {
     const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const secs = Math.floor((diff % (1000 * 60)) / 1000);
     return [
-      { value: String(days).padStart(2, '0'), unit: 'Ngày' },
-      { value: String(hours).padStart(2, '0'), unit: 'Giờ' },
-      { value: String(mins).padStart(2, '0'), unit: 'Phút' },
-      { value: String(secs).padStart(2, '0'), unit: 'Giây' },
+      { value: String(days).padStart(2, '0'), unit: t('countdown.days') },
+      { value: String(hours).padStart(2, '0'), unit: t('countdown.hours') },
+      { value: String(mins).padStart(2, '0'), unit: t('countdown.minutes') },
+      { value: String(secs).padStart(2, '0'), unit: t('countdown.seconds') },
     ];
   };
 
@@ -128,10 +130,10 @@ function CalendarContent() {
   };
 
   const statusTabs: { key: StatusFilter; label: string }[] = [
-    { key: 'all', label: 'Tất cả' },
-    { key: 'live', label: 'Đang diễn ra' },
-    { key: 'upcoming', label: 'Sắp tới' },
-    { key: 'completed', label: 'Đã kết thúc' },
+    { key: 'all', label: t('calendar.filterAll') },
+    { key: 'live', label: t('calendar.filterLive') },
+    { key: 'upcoming', label: t('calendar.filterUpcoming') },
+    { key: 'completed', label: t('calendar.filterCompleted') },
   ];
 
   return (
@@ -145,8 +147,8 @@ function CalendarContent() {
         <div className="absolute inset-0 bg-gradient-to-b from-blue-700/90 via-blue-600/70 to-blue-800/90" />
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 text-center">
-          <p className="text-blue-200 text-sm font-medium tracking-wider uppercase mb-2">Chương trình đầy đủ</p>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-8">Upcoming Events</h1>
+          <p className="text-blue-200 text-sm font-medium tracking-wider uppercase mb-2">{t('calendar.subtitle')}</p>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-8">{t('calendar.title')}</h1>
 
           {/* Search + Filter bar */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-2xl mx-auto">
@@ -154,7 +156,7 @@ function CalendarContent() {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Tên sự kiện..."
+                placeholder={t('calendar.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-11 pr-10 py-3 bg-white rounded-full text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm shadow-lg"
@@ -189,7 +191,7 @@ function CalendarContent() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex items-center justify-between mb-6">
           <p className="text-sm text-slate-500">
-            {loading ? 'Đang tải...' : `${filteredRaces.length} kết quả`}
+            {loading ? t('common.loading') : t('calendar.resultsCount', { count: filteredRaces.length })}
           </p>
         </div>
 
@@ -215,11 +217,11 @@ function CalendarContent() {
             <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shadow-inner">
               <Search className="w-9 h-9 text-slate-300" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Không tìm thấy sự kiện</h3>
-            <p className="text-slate-500 text-sm max-w-sm mx-auto">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm để tìm giải chạy phù hợp</p>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">{t('calendar.noEvents')}</h3>
+            <p className="text-slate-500 text-sm max-w-sm mx-auto">{t('calendar.noEventsHint')}</p>
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} className="mt-4 px-5 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 transition-colors">
-                Xóa bộ lọc
+                {t('common.clearFilters')}
               </button>
             )}
           </div>
@@ -243,15 +245,15 @@ function CalendarContent() {
                       {race.status === 'live' ? (
                         <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-600 rounded text-xs font-bold text-white uppercase">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          Live
+                          {t('status.live')}
                         </span>
                       ) : race.status === 'upcoming' ? (
                         <span className="px-3 py-1 bg-blue-600/80 backdrop-blur-sm rounded text-xs font-bold text-white uppercase">
-                          Coming Soon
+                          {t('calendar.comingSoon')}
                         </span>
                       ) : (
                         <span className="px-3 py-1 bg-slate-600/80 backdrop-blur-sm rounded text-xs font-bold text-white uppercase">
-                          Completed
+                          {t('status.completed')}
                         </span>
                       )}
                     </div>
@@ -260,7 +262,7 @@ function CalendarContent() {
                     {race.total_results != null && race.total_results > 0 && (
                       <div className="absolute top-4 right-4 z-20">
                         <span className="px-3 py-1 bg-white/15 backdrop-blur-sm rounded text-xs font-semibold text-white">
-                          {race.total_results.toLocaleString('vi-VN')} kết quả
+                          {t('calendar.resultsCount', { count: race.total_results })}
                         </span>
                       </div>
                     )}
@@ -299,7 +301,7 @@ function CalendarContent() {
                       {/* Live tracking */}
                       <div className="flex items-center gap-1.5 mt-3 text-xs text-white/70">
                         <MapPin className="w-3.5 h-3.5" />
-                        Live Tracking
+                        {t('status.liveTracking')}
                       </div>
                     </div>
                   </div>

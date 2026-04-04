@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useRaces } from '@/lib/api-hooks';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -71,10 +72,10 @@ const HERO_BG =
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDateVN(dateStr: string | null): string {
-  if (!dateStr) return 'Chưa xác định';
+function formatDateVN(dateStr: string | null, fallback = 'Chưa xác định'): string {
+  if (!dateStr) return fallback;
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return 'Chưa xác định';
+  if (isNaN(d.getTime())) return fallback;
   return d.toLocaleDateString('vi-VN', {
     day: '2-digit',
     month: 'long',
@@ -82,10 +83,10 @@ function formatDateVN(dateStr: string | null): string {
   });
 }
 
-function formatDateRange(start: string | null, end: string | null): string {
-  if (!start) return 'Chưa xác định';
+function formatDateRange(start: string | null, end: string | null, fallback = 'Chưa xác định'): string {
+  if (!start) return fallback;
   const s = new Date(start);
-  if (isNaN(s.getTime())) return 'Chưa xác định';
+  if (isNaN(s.getTime())) return fallback;
 
   if (end) {
     const e = new Date(end);
@@ -95,10 +96,10 @@ function formatDateRange(start: string | null, end: string | null): string {
       if (sameMonth) {
         return `${s.getDate()} - ${e.toLocaleDateString('vi-VN', { day: '2-digit', month: 'long', year: 'numeric' })}`;
       }
-      return `${formatDateVN(start)} - ${formatDateVN(end)}`;
+      return `${formatDateVN(start, fallback)} - ${formatDateVN(end, fallback)}`;
     }
   }
-  return formatDateVN(start);
+  return formatDateVN(start, fallback);
 }
 
 function getCountdown(dateStr: string | null): { days: number; hours: number; minutes: number; seconds: number } | null {
@@ -129,6 +130,7 @@ function pad(n: number): string {
 // ---------------------------------------------------------------------------
 
 export default function HomePage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [, setTick] = useState(0);
@@ -205,27 +207,23 @@ export default function HomePage() {
   const features = [
     {
       icon: <Timer className="w-7 h-7" />,
-      title: 'Live Tracking',
-      description:
-        'Theo dõi kết quả trực tiếp theo thời gian thực khi vận động viên về đích.',
+      title: t('home.featureLiveTitle'),
+      description: t('home.featureLiveDesc'),
     },
     {
       icon: <Trophy className="w-7 h-7" />,
-      title: 'Kết quả chi tiết',
-      description:
-        'Chip time, gun time, pace, split times và xếp hạng chi tiết theo hạng mục.',
+      title: t('home.featureDetailTitle'),
+      description: t('home.featureDetailDesc'),
     },
     {
       icon: <Award className="w-7 h-7" />,
-      title: 'Chứng nhận điện tử',
-      description:
-        'Tải về chứng nhận hoàn thành kỹ thuật số với đầy đủ thông tin thành tích.',
+      title: t('home.featureCertTitle'),
+      description: t('home.featureCertDesc'),
     },
     {
       icon: <Share2 className="w-7 h-7" />,
-      title: 'Chia sẻ thành tích',
-      description:
-        'Chia sẻ kết quả lên mạng xã hội và tự hào với thành tích của bạn.',
+      title: t('home.featureShareTitle'),
+      description: t('home.featureShareDesc'),
     },
   ];
 
@@ -254,20 +252,20 @@ export default function HomePage() {
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
                 </span>
                 <span className="text-red-300 text-sm font-semibold">
-                  {liveRaces.length} giải đang diễn ra LIVE
+                  {t('home.liveRaces', { count: liveRaces.length })}
                 </span>
               </div>
             )}
 
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-white mb-5 leading-[1.05] uppercase">
-              Kết quả<br />
-              giải chạy{' '}
-              <span className="text-blue-400">trực tiếp</span>
+              {t('home.headline').split('\n').map((line, i, arr) => (
+                <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
+              ))}{' '}
+              <span className="text-blue-400">{t('home.headlineLive')}</span>
             </h1>
 
             <p className="text-base md:text-lg text-white/70 mb-8 max-w-xl leading-relaxed">
-              Nền tảng kết quả giải chạy #1 Việt Nam. Xem kết quả realtime, theo
-              dõi vận động viên, truy cập thống kê chi tiết.
+              {t('home.tagline')}
             </p>
 
             {/* Search bar */}
@@ -276,7 +274,7 @@ export default function HomePage() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                 <input
                   type="text"
-                  placeholder="Tìm giải chạy, vận động viên, hoặc số BIB..."
+                  placeholder={t('home.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-32 py-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/60 focus:bg-white/15 transition-all text-base"
@@ -285,7 +283,7 @@ export default function HomePage() {
                   type="submit"
                   className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all text-sm"
                 >
-                  Tìm kiếm
+                  {t('common.search')}
                 </button>
               </div>
             </form>
@@ -295,21 +293,21 @@ export default function HomePage() {
               {[
                 {
                   value: loading ? '--' : stats.totalRaces,
-                  label: 'Giải đấu',
+                  label: t('home.statsRaces'),
                   icon: <Calendar className="w-4 h-4 text-blue-400" />,
                 },
                 {
                   value: loading
                     ? '--'
                     : stats.totalResults.toLocaleString('vi-VN'),
-                  label: 'Kết quả',
+                  label: t('home.statsResults'),
                   icon: <Trophy className="w-4 h-4 text-blue-400" />,
                 },
                 {
                   value: loading
                     ? '--'
                     : stats.totalAthletes.toLocaleString('vi-VN'),
-                  label: 'VĐV',
+                  label: t('home.statsAthletes'),
                   icon: <Users className="w-4 h-4 text-blue-400" />,
                 },
               ].map((stat, i) => (
@@ -338,13 +336,13 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl md:text-2xl font-bold text-white">
-                {liveRaces.length > 0 ? 'Live & Upcoming Events' : 'Upcoming Events'}
+                {liveRaces.length > 0 ? `Live & ${t('home.upcomingEvents')}` : t('home.upcomingEvents')}
               </h2>
               <Link
                 href="/calendar"
                 className="hidden md:inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white border border-white/30 rounded-full hover:bg-white/10 transition-all"
               >
-                Xem tất cả <ChevronRight className="w-4 h-4" />
+                {t('common.viewAll')} <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
           </div>
@@ -380,7 +378,7 @@ export default function HomePage() {
                     ))
                   : (
                     <div className="flex items-center justify-center w-full min-w-[300px] h-[400px] text-white/50 text-sm">
-                      Chưa có sự kiện sắp tới
+                      {t('home.noUpcoming')}
                     </div>
                   )}
             </div>
@@ -399,10 +397,10 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12 md:mb-16">
             <h2 className="text-2xl md:text-3xl font-black text-[var(--5bib-text)] mb-3">
-              Tính năng nổi bật
+              {t('home.features')}
             </h2>
             <p className="text-[var(--5bib-text-muted)] max-w-lg mx-auto">
-              Trải nghiệm theo dõi kết quả giải chạy toàn diện nhất
+              {t('home.featuresSubtitle')}
             </p>
           </div>
 
@@ -447,11 +445,10 @@ export default function HomePage() {
               </div>
               <div>
                 <h3 className="text-xl md:text-2xl font-bold text-white">
-                  Race Alert
+                  {t('home.raceAlert')}
                 </h3>
                 <p className="text-slate-300 text-sm md:text-base mt-1 max-w-lg">
-                  Nhận thông báo cập nhật từ 5BIB: lịch giải đấu, điểm nhấn sự
-                  kiện, tóm tắt giải chạy, kết quả và nhiều hơn nữa!
+                  {t('home.raceAlertDesc')}
                 </p>
               </div>
             </div>
@@ -459,7 +456,7 @@ export default function HomePage() {
               href="/calendar"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-white border border-white/30 rounded-full hover:bg-white/10 transition-all shrink-0"
             >
-              Đăng ký nhận thông báo <ChevronRight className="w-4 h-4" />
+              {t('home.subscribe')} <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
@@ -473,18 +470,17 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl md:text-3xl font-black text-[var(--5bib-text)]">
-                Xem lại các giải đã diễn ra
+                {t('home.pastEvents')}
               </h2>
               <p className="text-[var(--5bib-text-muted)] mt-1 max-w-xl">
-                Xem lại thành tích của các vận động viên, khám phá dữ liệu cự ly
-                và theo dõi sự phát triển qua từng mùa giải.
+                {t('home.pastEventsSubtitle')}
               </p>
             </div>
             <Link
               href="/calendar?status=completed"
               className="hidden md:inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-[var(--5bib-text)] border border-[var(--5bib-border)] rounded-full hover:bg-slate-50 transition-all"
             >
-              Xem tất cả <ChevronRight className="w-4 h-4" />
+              {t('common.viewAll')} <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
@@ -517,7 +513,7 @@ export default function HomePage() {
                   ))
                 : (
                   <div className="flex items-center justify-center w-full min-w-[300px] h-[380px] text-[var(--5bib-text-muted)] text-sm">
-                    Chưa có giải đã kết thúc
+                    {t('home.noPastEvents')}
                   </div>
                 )}
           </div>
@@ -529,7 +525,7 @@ export default function HomePage() {
             href="/calendar?status=completed"
             className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-[var(--5bib-accent)] border border-[var(--5bib-accent)]/30 rounded-full hover:bg-blue-50 transition-all"
           >
-            Xem tất cả giải đã kết thúc <ChevronRight className="w-4 h-4" />
+            {t('home.viewAllPast')} <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
       </section>
@@ -542,6 +538,7 @@ export default function HomePage() {
 // ---------------------------------------------------------------------------
 
 function EventCard({ race }: { race: Race }) {
+  const { t } = useTranslation();
   const isLive = race.status === 'live';
   const countdown = getCountdown(race.startDate);
   const image = getRaceImage(race);
@@ -570,7 +567,7 @@ function EventCard({ race }: { race: Race }) {
             </span>
           ) : (
             <span className="px-3 py-1 bg-blue-600/80 backdrop-blur-sm rounded text-xs font-bold text-white uppercase tracking-wide">
-              Sắp diễn ra
+              {t('status.upcoming')}
             </span>
           )}
         </div>
@@ -587,17 +584,17 @@ function EventCard({ race }: { race: Race }) {
           </div>
 
           <p className="text-white/90 text-xs font-medium">
-            {formatDateRange(race.startDate, race.endDate)}
+            {formatDateRange(race.startDate, race.endDate, t('common.unknown'))}
           </p>
 
           {/* Countdown timer */}
           {!isLive && countdown && (
             <div className="flex gap-1.5 mt-3">
               {[
-                { value: countdown.days, unit: 'Ngày' },
-                { value: countdown.hours, unit: 'Giờ' },
-                { value: countdown.minutes, unit: 'Phút' },
-                { value: countdown.seconds, unit: 'Giây' },
+                { value: countdown.days, unit: t('countdown.days') },
+                { value: countdown.hours, unit: t('countdown.hours') },
+                { value: countdown.minutes, unit: t('countdown.minutes') },
+                { value: countdown.seconds, unit: t('countdown.seconds') },
               ].map((item, ci) => (
                 <div
                   key={ci}
@@ -630,7 +627,7 @@ function EventCard({ race }: { race: Race }) {
 
           <div className="flex items-center gap-1 mt-3 text-[11px] text-white/60">
             <Timer className="w-3 h-3" />
-            {isLive ? 'Đang diễn ra' : 'Live Tracking'}
+            {isLive ? t('status.live') : t('status.liveTracking')}
           </div>
         </div>
       </div>
@@ -643,6 +640,7 @@ function EventCard({ race }: { race: Race }) {
 // ---------------------------------------------------------------------------
 
 function PastEventCard({ race }: { race: Race }) {
+  const { t } = useTranslation();
   const image = getRaceImage(race);
 
   return (
@@ -659,7 +657,7 @@ function PastEventCard({ race }: { race: Race }) {
 
         <div className="absolute top-3 left-3 z-20">
           <span className="px-3 py-1 bg-slate-700/80 backdrop-blur-sm rounded text-xs font-bold text-white uppercase tracking-wide">
-            Đã kết thúc
+            {t('status.completed')}
           </span>
         </div>
 
@@ -674,18 +672,18 @@ function PastEventCard({ race }: { race: Race }) {
           </div>
 
           <p className="text-white/90 text-xs font-medium">
-            {formatDateVN(race.startDate)}
+            {formatDateVN(race.startDate, t('common.unknown'))}
           </p>
 
           {race.totalResults > 0 && (
             <div className="mt-2 px-2 py-1 bg-white/15 backdrop-blur-sm rounded text-[10px] font-bold text-white inline-block">
-              {race.totalResults.toLocaleString('vi-VN')} kết quả
+              {t('home.resultsCount', { count: race.totalResults })}
             </div>
           )}
 
           <div className="flex items-center gap-1 mt-2.5 text-[11px] text-white/60">
             <Trophy className="w-3 h-3" />
-            Xem kết quả
+            {t('home.viewResults')}
           </div>
         </div>
       </div>

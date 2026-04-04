@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
+import { useTranslation } from 'react-i18next';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachment } from '@/lib/api-hooks';
 import ResultImageEditor from '@/components/ResultImageEditor';
@@ -122,6 +123,7 @@ const DEMO_ATHLETE: AthleteResult = {
 };
 
 export default function AthleteDetailPage() {
+  const { t } = useTranslation();
   const params = useParams();
   const slug = params.slug as string;
   const bib = params.bib as string;
@@ -160,7 +162,7 @@ export default function AthleteDetailPage() {
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setLinkCopied(true);
-      toast.success('Đã sao chép liên kết!');
+      toast.success(t('common.copiedLink'));
       setTimeout(() => setLinkCopied(false), 2000);
     });
   };
@@ -185,7 +187,7 @@ export default function AthleteDetailPage() {
       });
       canvas.toBlob(async (blob) => {
         if (!blob) {
-          toast.error('Không thể tạo ảnh');
+          toast.error(t('resultImage.errorCreate'));
           setSharingImage(false);
           return;
         }
@@ -215,11 +217,11 @@ export default function AthleteDetailPage() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        toast.success('Đã tải ảnh kết quả!');
+        toast.success(t('resultImage.successDownload'));
         setSharingImage(false);
       }, 'image/png');
     } catch {
-      toast.error('Không thể tạo ảnh chia sẻ');
+      toast.error(t('resultImage.errorCreate'));
       setSharingImage(false);
     }
   }, [athlete]);
@@ -286,14 +288,14 @@ export default function AthleteDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) {
-      toast.error('File quá lớn. Giới hạn 20MB.');
+      toast.error(t('claim.fileTooLarge'));
       return;
     }
     setClaimUploading(true);
     try {
       const result = await uploadMutation.mutateAsync(file);
       setClaimAttachments(prev => [...prev, result.url]);
-      toast.success(`Đã tải lên: ${file.name}`);
+      toast.success(t('claim.uploadSuccess', { name: file.name }));
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Tải file thất bại');
     } finally {
@@ -307,11 +309,11 @@ export default function AthleteDetailPage() {
   const handleClaimSubmit = useCallback(async () => {
     if (!athlete) return;
     if (!claimName.trim() || !claimPhone.trim() || !claimDescription.trim()) {
-      toast.error('Vui lòng điền đầy đủ: Họ tên, Số điện thoại, và Nội dung khiếu nại.');
+      toast.error(t('claim.validationError'));
       return;
     }
     if (!raceId) {
-      toast.error('Không tìm thấy giải đấu');
+      toast.error(t('claim.raceNotFound'));
       return;
     }
     setClaimSubmitting(true);
@@ -327,9 +329,9 @@ export default function AthleteDetailPage() {
         attachments: claimAttachments.length > 0 ? claimAttachments : undefined,
       });
       setClaimSubmitted(true);
-      toast.success('Khiếu nại đã được gửi thành công! Chúng tôi sẽ liên hệ bạn sớm nhất.');
+      toast.success(t('claim.submitSuccess'));
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Gửi khiếu nại thất bại');
+      toast.error(err instanceof Error ? err.message : t('claim.submitFailed'));
     } finally {
       setClaimSubmitting(false);
     }
@@ -381,12 +383,12 @@ export default function AthleteDetailPage() {
 
   const downloadCertificateAsPng = useCallback(async () => {
     if (!athlete?.Certificate) {
-      toast.info('Chứng nhận chưa sẵn sàng. Vui lòng thử lại sau.');
+      toast.info(t('athlete.certificateNotReady'));
       return;
     }
 
     setDownloading(true);
-    toast.loading('Đang tải chứng nhận...', { id: 'cert-download' });
+    toast.loading(t('athlete.loadingCertificate'), { id: 'cert-download' });
 
     try {
       const response = await fetch(`/api/race-results/certificate/${raceId}/${athlete.Bib}`);
@@ -402,7 +404,7 @@ export default function AthleteDetailPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success('Tải chứng nhận thành công! 🎉', { id: 'cert-download' });
+      toast.success(t('athlete.certificateSuccess'), { id: 'cert-download' });
       fireCelebration();
       setDownloading(false);
     } catch (err) {
@@ -448,10 +450,10 @@ export default function AthleteDetailPage() {
           <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
             <Users className="w-10 h-10 text-gray-400" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Không tìm thấy vận động viên</h2>
-          <p className="text-gray-500 mb-6">BIB #{bib} không tồn tại trong cuộc đua này</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('athlete.notFound')}</h2>
+          <p className="text-gray-500 mb-6">{t('athlete.notFoundDetail', { bib })}</p>
           <Link href={`/races/${slug}`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-colors">
-            <ChevronLeft className="w-4 h-4" /> Quay lại kết quả
+            <ChevronLeft className="w-4 h-4" /> {t('athlete.backToResults')}
           </Link>
         </div>
       </div>
@@ -489,7 +491,7 @@ export default function AthleteDetailPage() {
               className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors font-medium"
             >
               <ChevronLeft className="w-4 h-4" />
-              <span>Kết quả {athlete.distance}</span>
+              <span>{t('athlete.resultDistance', { distance: athlete.distance })}</span>
             </Link>
             {/* Share buttons */}
             <div className="flex items-center gap-2">
@@ -498,7 +500,7 @@ export default function AthleteDetailPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
               >
                 <Download className="w-3.5 h-3.5" />
-                Ảnh KQ
+                {t('athlete.resultImage')}
               </button>
               <button
                 onClick={handleShareFacebook}

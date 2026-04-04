@@ -3,6 +3,7 @@
 import { useState, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 import { Search, ChevronLeft, Trophy, Calendar, Loader2 } from 'lucide-react';
 import { countryToFlag } from '@/lib/country-flags';
 import { useGlobalSearch } from '@/lib/api-hooks';
@@ -38,6 +39,7 @@ export default function SearchPage() {
 }
 
 function SearchContent() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialQuery = searchParams.get('q') || '';
@@ -83,7 +85,7 @@ function SearchContent() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-blue-600 transition-colors mb-4">
-            <ChevronLeft className="w-4 h-4" /> Trang chủ
+            <ChevronLeft className="w-4 h-4" /> {t('nav.home')}
           </Link>
 
           <form onSubmit={handleSubmit} className="flex gap-3">
@@ -93,7 +95,7 @@ function SearchContent() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Nhập tên vận động viên hoặc số BIB..."
+                placeholder={t('search.placeholder')}
                 autoFocus
                 className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
               />
@@ -103,7 +105,7 @@ function SearchContent() {
               disabled={loading}
               className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors disabled:opacity-60"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Tìm kiếm'}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : t('search.searchButton')}
             </button>
           </form>
         </div>
@@ -114,22 +116,22 @@ function SearchContent() {
         {loading && (
           <div className="flex flex-col items-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
-            <p className="text-sm text-gray-400">Đang tìm kiếm...</p>
+            <p className="text-sm text-gray-400">{t('search.searching')}</p>
           </div>
         )}
 
         {!loading && searched && results.length === 0 && (
           <div className="text-center py-16">
             <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-gray-700 mb-1">Không tìm thấy kết quả</h3>
-            <p className="text-sm text-gray-400">Thử tìm kiếm với tên hoặc số BIB khác</p>
+            <h3 className="text-lg font-bold text-gray-700 mb-1">{t('search.noResults')}</h3>
+            <p className="text-sm text-gray-400">{t('search.noResultsHint')}</p>
           </div>
         )}
 
         {!loading && results.length > 0 && (
           <>
             <p className="text-sm text-gray-500 mb-6">
-              Tìm thấy <strong className="text-gray-900">{results.length}</strong> kết quả cho &ldquo;<strong>{initialQuery}</strong>&rdquo;
+              {t('common.resultsFound')} <strong className="text-gray-900">{results.length}</strong> {t('search.resultsFor')} &ldquo;<strong>{initialQuery}</strong>&rdquo;
             </p>
 
             <div className="space-y-8">
@@ -168,14 +170,14 @@ function SearchContent() {
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-gray-900 truncate">{formatName(r.Name)}</p>
                           <p className="text-xs text-gray-400">
-                            BIB {r.Bib} &middot; {r.distance} &middot; {r.Gender === 'Female' ? 'Nữ' : 'Nam'} &middot; {r.Category}
+                            BIB {r.Bib} &middot; {r.distance} &middot; {r.Gender === 'Female' ? t('common.female') : t('common.male')} &middot; {r.Category}
                             {r.Nationality && r.Nationality !== 'undefined' ? ` · ${countryToFlag(r.Nationality) || countryToFlag(r.Nation) || r.Nation}` : ''}
                           </p>
                         </div>
                         {/* Time */}
                         <div className="text-right shrink-0">
                           <p className="font-mono font-bold text-gray-900 text-sm">{r.ChipTime || '-'}</p>
-                          {r.Pace && <p className="text-xs text-gray-400">{r.Pace}/km</p>}
+                          {r.Pace && <p className="text-xs text-gray-400">{r.Pace}{t('common.perKm')}</p>}
                         </div>
                       </Link>
                     ))}
@@ -189,8 +191,8 @@ function SearchContent() {
         {!loading && !searched && (
           <div className="text-center py-16">
             <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-gray-700 mb-1">Tìm kiếm vận động viên</h3>
-            <p className="text-sm text-gray-400">Nhập tên hoặc số BIB để tìm kết quả thi đấu</p>
+            <h3 className="text-lg font-bold text-gray-700 mb-1">{t('search.idleTitle')}</h3>
+            <p className="text-sm text-gray-400">{t('search.idleSubtitle')}</p>
           </div>
         )}
       </div>

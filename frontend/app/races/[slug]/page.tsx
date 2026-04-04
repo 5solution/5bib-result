@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { useTranslation } from 'react-i18next';
 import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route, Globe } from 'lucide-react';
 import LiveTimer from '@/components/LiveTimer';
 import { useRaceBySlug } from '@/lib/api-hooks';
@@ -113,6 +114,7 @@ function generateResults(courseId: string, distance: string): RaceResult[] {
 }
 
 export default function RaceDetailPage() {
+  const { t } = useTranslation();
   const params = useParams();
   const slug = params.slug as string;
 
@@ -253,8 +255,8 @@ export default function RaceDetailPage() {
     return (
       <div className="min-h-screen bg-white pt-14 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900 mb-4">Không tìm thấy giải đấu</h2>
-          <Link href="/calendar" className="text-blue-600 hover:underline">Quay lại lịch sự kiện</Link>
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">{t('race.notFound')}</h2>
+          <Link href="/calendar" className="text-blue-600 hover:underline">{t('race.backToCalendar')}</Link>
         </div>
       </div>
     );
@@ -280,7 +282,7 @@ export default function RaceDetailPage() {
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 lg:py-28">
           {/* Breadcrumb */}
           <Link href="/calendar" className="inline-flex items-center gap-1 text-sm text-blue-200 hover:text-white mb-6 transition-colors">
-            <ChevronLeft className="w-4 h-4" /> Lịch sự kiện
+            <ChevronLeft className="w-4 h-4" /> {t('nav.calendar')}
           </Link>
 
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
@@ -309,13 +311,13 @@ export default function RaceDetailPage() {
                 {race.status === 'upcoming' && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500 rounded text-xs font-bold text-white uppercase">
                     <Calendar className="w-3.5 h-3.5" />
-                    Sắp diễn ra
+                    {t('status.upcoming')}
                   </span>
                 )}
                 {race.status !== 'upcoming' && (
                   <span className="flex items-center gap-1 text-sm text-blue-200">
                     <MapPin className="w-3.5 h-3.5" />
-                    Live Tracking
+                    {t('status.liveTracking')}
                   </span>
                 )}
               </div>
@@ -343,7 +345,7 @@ export default function RaceDetailPage() {
         )}
 
         <h2 className="text-2xl md:text-3xl font-black text-slate-900 mb-8">
-          {race.courses.length} Cự ly
+          {t('race.distances', { count: race.courses.length })}
         </h2>
 
         {/* Course cards — vertical list */}
@@ -383,19 +385,19 @@ export default function RaceDetailPage() {
                       <div className={`px-4 py-2.5 text-center text-sm font-bold text-white uppercase ${
                         race.status === 'live' ? 'bg-gradient-to-r from-rose-700 via-red-600 to-amber-600' : race.status === 'completed' ? 'bg-red-700' : 'bg-gradient-to-r from-[#2563eb] to-[#1faaff]'
                       }`}>
-                        {race.status === 'live' ? '🔴 Đang diễn ra' : race.status === 'completed' ? 'Đã kết thúc' : 'Sắp diễn ra'}
+                        {race.status === 'live' ? '🔴 ' + t('status.live') : race.status === 'completed' ? t('status.completed') : t('status.upcoming')}
                       </div>
                       {(courseStatsMap[course.id] || race.status === 'completed') && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">
                           <span>STARTERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.starters ?? '-'}</strong></span>
-                          {(courseStatsMap[course.id]?.dnf ?? 0) > 0 && (
+                          {race.status !== 'live' && (courseStatsMap[course.id]?.dnf ?? 0) > 0 && (
                             <span>DNF <strong className="text-base ml-1">{courseStatsMap[course.id]?.dnf}</strong></span>
                           )}
-                          {(courseStatsMap[course.id]?.finishers ?? 0) > 0 && (
+                          {race.status !== 'live' && (courseStatsMap[course.id]?.finishers ?? 0) > 0 && (
                             <span>FINISHERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.finishers}</strong></span>
                           )}
                           {(courseStatsMap[course.id]?.nationalityCount ?? 0) > 0 && (
-                            <span className="flex items-center gap-1">🌍 <strong className="text-base ml-0.5">{courseStatsMap[course.id]?.nationalityCount}</strong> quốc gia</span>
+                            <span className="flex items-center gap-1">🌍 <strong className="text-base ml-0.5">{courseStatsMap[course.id]?.nationalityCount}</strong> {t('common.country')}</span>
                           )}
                         </div>
                       )}
@@ -416,7 +418,7 @@ export default function RaceDetailPage() {
                       {/* Stats grid */}
                       <div className={`grid ${course.elevation ? 'grid-cols-3' : 'grid-cols-2'} gap-4 mt-4`}>
                         <div>
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">Giờ xuất phát</p>
+                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.startTime')}</p>
                           <p className="text-lg font-bold text-slate-900">{course.startTime || '-'}</p>
                         </div>
                         <div>
@@ -425,7 +427,7 @@ export default function RaceDetailPage() {
                         </div>
                         {course.elevation && (
                           <div>
-                            <p className="text-[11px] text-slate-400 uppercase tracking-wide">Leo cao</p>
+                            <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.elevation')}</p>
                             <p className="text-lg font-bold text-slate-900">{course.elevation}</p>
                           </div>
                         )}
@@ -444,26 +446,26 @@ export default function RaceDetailPage() {
                       <span
                         className="group/cta inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-slate-700 border border-slate-300 rounded-full group-hover:bg-slate-50 transition-all"
                       >
-                        {race.status === 'upcoming' ? 'Xem chi tiết' : 'Xếp hạng & Thống kê'}
+                        {race.status === 'upcoming' ? t('race.viewDetails') : t('race.rankingAndStats')}
                         <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
                       </span>
                     </div>
                   </div>
 
                   {/* Part 3: Top 3 (for live/completed) or Course info (for upcoming) */}
-                  {(race.status === 'upcoming' || (men.length > 0 || women.length > 0)) && (
+                  {(race.status === 'upcoming' || race.status === 'live' || (men.length > 0 || women.length > 0)) && (
                   <div className="p-5 md:p-6 border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50">
-                    {race.status === 'upcoming' ? (
+                    {(race.status === 'upcoming' || race.status === 'live') ? (
                       /* ── Upcoming: show course details ── */
                       <div className="space-y-4">
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Thông tin cự ly</p>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t('race.courseInfo')}</p>
                         {course.startTime && (
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
                               <Clock className="w-4 h-4 text-blue-600" />
                             </div>
                             <div>
-                              <p className="text-[10px] text-slate-400 uppercase">Giờ xuất phát</p>
+                              <p className="text-[10px] text-slate-400 uppercase">{t('race.startTime')}</p>
                               <p className="text-sm font-bold text-slate-800">{course.startTime}</p>
                             </div>
                           </div>
@@ -474,7 +476,7 @@ export default function RaceDetailPage() {
                               <Timer className="w-4 h-4 text-orange-600" />
                             </div>
                             <div>
-                              <p className="text-[10px] text-slate-400 uppercase">Cut-off time</p>
+                              <p className="text-[10px] text-slate-400 uppercase">{t('race.cutOffTime')}</p>
                               <p className="text-sm font-bold text-slate-800">{course.cutOffTime}</p>
                             </div>
                           </div>
@@ -485,7 +487,7 @@ export default function RaceDetailPage() {
                               <Mountain className="w-4 h-4 text-emerald-600" />
                             </div>
                             <div>
-                              <p className="text-[10px] text-slate-400 uppercase">Leo cao</p>
+                              <p className="text-[10px] text-slate-400 uppercase">{t('race.elevation')}</p>
                               <p className="text-sm font-bold text-slate-800">{course.elevation}</p>
                             </div>
                           </div>
@@ -496,7 +498,7 @@ export default function RaceDetailPage() {
                               <MapPin className="w-4 h-4 text-purple-600" />
                             </div>
                             <div>
-                              <p className="text-[10px] text-slate-400 uppercase">Điểm xuất phát</p>
+                              <p className="text-[10px] text-slate-400 uppercase">{t('race.startLocation')}</p>
                               <p className="text-sm font-bold text-slate-800">{course.startLocation}</p>
                             </div>
                           </div>
@@ -505,7 +507,7 @@ export default function RaceDetailPage() {
                           <div className="flex items-center justify-center py-6">
                             <div className="text-center">
                               <Route className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                              <p className="text-xs text-slate-400">Thông tin sẽ được cập nhật</p>
+                              <p className="text-xs text-slate-400">{t('race.courseInfoPending')}</p>
                             </div>
                           </div>
                         )}
@@ -514,7 +516,7 @@ export default function RaceDetailPage() {
                       /* ── Live/Completed: show top 3 ── */
                       <>
                         <div className="mb-5">
-                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Top 3 Nữ</p>
+                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('race.top3Women')}</p>
                           <div className="space-y-2">
                             {women.length > 0 ? women.map((r, i) => (
                               <div key={r.Bib} className="flex items-center gap-2.5">
@@ -526,12 +528,12 @@ export default function RaceDetailPage() {
                                 <span className="text-xs text-slate-400">{r.Nation}</span>
                               </div>
                             )) : (
-                              <p className="text-xs text-slate-400">Chưa có dữ liệu</p>
+                              <p className="text-xs text-slate-400">{t('race.noData')}</p>
                             )}
                           </div>
                         </div>
                         <div>
-                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Top 3 Nam</p>
+                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('race.top3Men')}</p>
                           <div className="space-y-2">
                             {men.length > 0 ? men.map((r, i) => (
                               <div key={r.Bib} className="flex items-center gap-2.5">
@@ -543,7 +545,7 @@ export default function RaceDetailPage() {
                                 <span className="text-xs text-slate-400">{r.Nation}</span>
                               </div>
                             )) : (
-                              <p className="text-xs text-slate-400">Chưa có dữ liệu</p>
+                              <p className="text-xs text-slate-400">{t('race.noData')}</p>
                             )}
                           </div>
                         </div>
@@ -563,12 +565,13 @@ export default function RaceDetailPage() {
 }
 
 function RaceDescription({ description, organizer }: { description?: string; organizer?: string }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   return (
     <div className="mb-8 p-4 md:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
       {organizer && (
-        <p className="text-sm text-blue-600 font-semibold mb-1">Ban tổ chức: {organizer}</p>
+        <p className="text-sm text-blue-600 font-semibold mb-1">{t('race.organizer', { name: organizer })}</p>
       )}
       {description && (
         <div>
@@ -579,7 +582,7 @@ function RaceDescription({ description, organizer }: { description?: string; org
             onClick={() => setExpanded(!expanded)}
             className="md:hidden mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
           >
-            {expanded ? 'Thu gọn' : 'Xem thêm'}
+            {expanded ? t('race.collapse') : t('race.readMore')}
           </button>
         </div>
       )}
@@ -588,6 +591,7 @@ function RaceDescription({ description, organizer }: { description?: string; org
 }
 
 function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
+  const { t } = useTranslation();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -630,7 +634,7 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
           }`}
         >
           <User className="w-4 h-4" />
-          VĐV của tôi
+          {t('race.myAthletes')}
         </Link>
         <Link
           href={`/races/${slug}?search=`}
@@ -639,7 +643,7 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
           }`}
         >
           <Search className="w-4 h-4" />
-          Tìm VĐV
+          {t('race.findAthletes')}
         </Link>
       </div>
     </div>

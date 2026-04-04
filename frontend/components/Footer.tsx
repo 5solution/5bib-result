@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useTranslation } from 'react-i18next';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+  const { t } = useTranslation();
 
   return (
     <footer className="bg-[var(--5bib-surface)] border-t border-[var(--5bib-border)]">
@@ -16,29 +18,29 @@ export default function Footer() {
               <Image src="/logo.png" alt="5BIB" width={107} height={32} className="h-8 w-auto" />
             </div>
             <p className="text-sm text-[var(--5bib-text-muted)] leading-relaxed max-w-xs">
-              Nền tảng theo dõi kết quả giải chạy trực tiếp hàng đầu Việt Nam. Cập nhật thời gian thực, xếp hạng chi tiết.
+              {t('footer.description')}
             </p>
           </div>
 
           {/* Links */}
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--5bib-text-muted)] mb-4">
-              Liên kết
+              {t('footer.links')}
             </h3>
             <ul className="space-y-3">
               <li>
                 <Link href="/" className="text-sm text-[var(--5bib-text-muted)] hover:text-[var(--5bib-accent)] transition-colors">
-                  Trang chủ
+                  {t('nav.home')}
                 </Link>
               </li>
               <li>
                 <Link href="/calendar" className="text-sm text-[var(--5bib-text-muted)] hover:text-[var(--5bib-accent)] transition-colors">
-                  Lịch sự kiện
+                  {t('nav.calendar')}
                 </Link>
               </li>
               <li>
-                <Link href="/calendar" className="text-sm text-[var(--5bib-text-muted)] hover:text-[var(--5bib-accent)] transition-colors">
-                  Tìm vận động viên
+                <Link href="/search" className="text-sm text-[var(--5bib-text-muted)] hover:text-[var(--5bib-accent)] transition-colors">
+                  {t('nav.searchAthlete')}
                 </Link>
               </li>
             </ul>
@@ -47,7 +49,7 @@ export default function Footer() {
           {/* Contact */}
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--5bib-text-muted)] mb-4">
-              Liên hệ
+              {t('footer.contact')}
             </h3>
             <ul className="space-y-3 text-sm text-[var(--5bib-text-muted)]">
               <li className="flex items-center gap-2">

@@ -5,12 +5,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useSponsors } from '@/lib/api-hooks';
-
-const navLinks = [
-  { href: '/', label: 'Trang chủ' },
-  { href: '/calendar', label: 'Lịch sự kiện' },
-];
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 interface Sponsor {
   _id: string;
@@ -24,7 +21,13 @@ interface Sponsor {
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const { t } = useTranslation();
   const { data: sponsorsRaw } = useSponsors();
+
+  const navLinks = [
+    { href: '/', label: t('nav.home') },
+    { href: '/calendar', label: t('nav.calendar') },
+  ];
 
   const sponsors = useMemo(() => {
     const list: Sponsor[] = (sponsorsRaw as any)?.data ?? sponsorsRaw ?? [];
@@ -69,14 +72,17 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden ml-auto px-4 text-blue-100 hover:text-white"
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          {/* Language + Mobile menu */}
+          <div className="flex items-center ml-auto">
+            <LanguageSwitcher />
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden px-3 text-blue-100 hover:text-white"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
       </div>
 
