@@ -39,6 +39,9 @@ interface SplitTime {
   time: string;
   pace: string;
   member?: string;
+  timeOfDay?: string;
+  overallRank?: string;
+  genderRank?: string;
 }
 
 interface CheckpointConfig {
@@ -57,15 +60,26 @@ function parseSplitsFromData(data: Record<string, unknown>, checkpoints?: Checkp
     const chiptimes: Record<string, string> = JSON.parse(chiptimesStr);
     const paces: Record<string, string> = pacesStr ? JSON.parse(pacesStr) : {};
 
-    // Parse Member field if present (for team_relay races)
+    // Parse optional JSON fields
     let members: Record<string, string> = {};
+    let tods: Record<string, string> = {};
+    let overallRanks: Record<string, string> = {};
+    let genderRanks: Record<string, string> = {};
     const memberStr = data.Member as string | undefined;
     if (memberStr) {
-      try {
-        members = JSON.parse(memberStr);
-      } catch {
-        // ignore invalid Member JSON
-      }
+      try { members = JSON.parse(memberStr); } catch { /* ignore */ }
+    }
+    const todsStr = data.TODs as string | undefined;
+    if (todsStr) {
+      try { tods = JSON.parse(todsStr); } catch { /* ignore */ }
+    }
+    const overallRanksStr = data.OverallRanks as string | undefined;
+    if (overallRanksStr) {
+      try { overallRanks = JSON.parse(overallRanksStr); } catch { /* ignore */ }
+    }
+    const genderRanksStr = data.GenderRanks as string | undefined;
+    if (genderRanksStr) {
+      try { genderRanks = JSON.parse(genderRanksStr); } catch { /* ignore */ }
     }
 
     // Build a lookup map from checkpoint config
@@ -92,6 +106,9 @@ function parseSplitsFromData(data: Record<string, unknown>, checkpoints?: Checkp
           time: chiptimes[key] || '-',
           pace: paces[key] || '-',
           member: members[key] || undefined,
+          timeOfDay: tods[key] || undefined,
+          overallRank: overallRanks[key] || undefined,
+          genderRank: genderRanks[key] || undefined,
         };
       });
 
@@ -671,9 +688,6 @@ export default function AthleteDetailPage() {
                       <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
                       <span className="font-semibold text-gray-900 text-sm">{split.name}</span>
                     </div>
-                    {courseType === 'split' && (
-                      <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{split.distance}</span>
-                    )}
                   </div>
                   {courseType === 'team_relay' && split.member && (
                     <div className="pl-9 mb-1">
@@ -690,6 +704,13 @@ export default function AthleteDetailPage() {
                       </div>
                     )}
                   </div>
+                  {(split.timeOfDay || split.overallRank || split.genderRank) && (
+                    <div className="flex items-center gap-3 pl-9 mt-1 text-xs text-gray-500">
+                      {split.timeOfDay && <span>ToD: <span className="font-mono">{split.timeOfDay}</span></span>}
+                      {split.overallRank && <span>Overall: <span className="font-mono font-semibold text-gray-700">{split.overallRank}</span></span>}
+                      {split.genderRank && <span>Gender: <span className="font-mono font-semibold text-purple-600">{split.genderRank}</span></span>}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -707,11 +728,11 @@ export default function AthleteDetailPage() {
                   {courseType === 'team_relay' && (
                     <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('athlete.member')}</th>
                   )}
-                  {courseType === 'split' && (
-                    <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('race.distance')}</th>
-                  )}
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('ranking.time')}</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">ToD</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Pace</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Overall</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Gender</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-24"></th>
                 </tr>
               </thead>
@@ -740,11 +761,11 @@ export default function AthleteDetailPage() {
                           )}
                         </td>
                       )}
-                      {courseType === 'split' && (
-                        <td className="px-6 py-3.5 text-gray-500 font-medium">{split.distance}</td>
-                      )}
                       <td className="px-6 py-3.5 text-right font-mono font-bold text-blue-600">{split.time}</td>
+                      <td className="px-6 py-3.5 text-right font-mono text-gray-500">{split.timeOfDay || '-'}</td>
                       <td className="px-6 py-3.5 text-right font-mono text-gray-600">{split.pace !== '-' ? `${split.pace} /km` : '-'}</td>
+                      <td className="px-6 py-3.5 text-right font-mono text-gray-700 font-semibold">{split.overallRank || '-'}</td>
+                      <td className="px-6 py-3.5 text-right font-mono text-purple-600 font-semibold">{split.genderRank || '-'}</td>
                       <td className="px-6 py-3.5 text-right">
                         {isFastest && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">FASTEST</span>}
                         {isSlowest && <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-1 rounded-full">SLOWEST</span>}
