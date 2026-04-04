@@ -4,6 +4,7 @@ import Redis from 'ioredis';
 import { RaceResultService } from '../race-result/services/race-result.service';
 import { RacesService } from '../races/races.service';
 import { TelegramService } from '../notification/telegram.service';
+import { MailService } from '../notification/mail.service';
 
 @Injectable()
 export class AdminService {
@@ -14,6 +15,7 @@ export class AdminService {
     private readonly racesService: RacesService,
     @InjectRedis() private readonly redis: Redis,
     private readonly telegramService: TelegramService,
+    private readonly mailService: MailService,
   ) {}
 
   /**
@@ -101,6 +103,29 @@ export class AdminService {
       .catch((err) =>
         this.logger.error(`Telegram notification failed: ${err.message}`),
       );
+
+    // Send email to claimant
+    if (claim.email) {
+      let eventTitle = '';
+      try {
+        const race = await this.racesService.getRaceById(claim.raceId);
+        eventTitle = race?.data?.title || '';
+      } catch { /* ignore */ }
+
+      this.mailService
+        .sendClaimResolvedEmail({
+          toEmail: claim.email,
+          registeredName: claim.name || '',
+          bib: claim.bib?.toString() || '',
+          phone: claim.phone || '',
+          reason: claim.description || '',
+          adminNote: adminNote || '',
+          eventTitle,
+        })
+        .catch((err) =>
+          this.logger.error(`Email notification failed: ${err.message}`),
+        );
+    }
 
     return { data: claim, success: true };
   }

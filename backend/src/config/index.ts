@@ -18,6 +18,7 @@ const envVarsSchema = Joi.object()
     AWS_SECRET_ACCESS_KEY: Joi.string().optional().allow(''),
     AWS_S3_BUCKET: Joi.string().default('5bib-assets'),
     AWS_S3_CDN_URL: Joi.string().optional().allow(''),
+    MAILCHIMP_API_KEY: Joi.string().optional().allow(''),
   })
   .unknown();
 
@@ -46,5 +47,8 @@ export const env = {
     secretAccessKey: envVars.AWS_SECRET_ACCESS_KEY,
     bucket: envVars.AWS_S3_BUCKET,
     cdnUrl: envVars.AWS_S3_CDN_URL,
+  },
+  mailchimp: {
+    apiKey: envVars.MAILCHIMP_API_KEY || '',
   },
 };
