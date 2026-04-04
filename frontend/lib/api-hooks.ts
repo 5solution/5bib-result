@@ -75,7 +75,7 @@ export function useRaceResults(params: {
   pageSize?: number;
   sortField?: string;
   sortDirection?: 'ASC' | 'DESC';
-}, options?: { enabled?: boolean }) {
+}, options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery({
     queryKey: ['race-results', params],
     queryFn: async () => {
@@ -86,6 +86,7 @@ export function useRaceResults(params: {
       return result.data;
     },
     enabled: options?.enabled ?? !!params.course_id,
+    refetchInterval: options?.refetchInterval,
   });
 }
 
@@ -132,7 +133,7 @@ export function useFilterOptions(courseId: string, options?: { enabled?: boolean
   });
 }
 
-export function useCourseStats(courseId: string, options?: { enabled?: boolean }) {
+export function useCourseStats(courseId: string, options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery({
     queryKey: ['course-stats', courseId],
     queryFn: async () => {
@@ -143,6 +144,7 @@ export function useCourseStats(courseId: string, options?: { enabled?: boolean }
       return result.data;
     },
     enabled: options?.enabled ?? !!courseId,
+    refetchInterval: options?.refetchInterval,
   });
 }
 

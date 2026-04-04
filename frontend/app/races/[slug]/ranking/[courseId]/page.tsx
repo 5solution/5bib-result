@@ -194,6 +194,8 @@ export default function CourseRankingPage() {
     return Array.isArray(list) ? list : [];
   }, [sponsorsRaw]);
 
+  const isLive = race?.status === 'live';
+
   const { data: resultsRaw, isLoading: loadingResults } = useRaceResults({
     course_id: courseId,
     name: searchQuery.trim() || undefined,
@@ -205,12 +207,13 @@ export default function CourseRankingPage() {
     sortDirection: 'ASC',
   }, {
     enabled: !!courseId,
+    refetchInterval: isLive ? 30_000 : false,
   });
   const results: RaceResult[] = useMemo(() => (resultsRaw as any)?.data ?? [], [resultsRaw]);
   const totalItems = useMemo(() => (resultsRaw as any)?.pagination?.total ?? 0, [resultsRaw]);
 
   // Fetch course stats for finishers count
-  const { data: courseStatsRaw } = useCourseStats(courseId, { enabled: !!courseId });
+  const { data: courseStatsRaw } = useCourseStats(courseId, { enabled: !!courseId, refetchInterval: isLive ? 30_000 : false });
   const courseStats = useMemo(() => {
     const s = (courseStatsRaw as any)?.data ?? courseStatsRaw;
     return s || null;
@@ -223,7 +226,7 @@ export default function CourseRankingPage() {
     pageSize: 1,
     sortField: 'OverallRank',
     sortDirection: 'ASC',
-  }, { enabled: !!courseId });
+  }, { enabled: !!courseId, refetchInterval: isLive ? 30_000 : false });
   const totalStarters = useMemo(() => (totalRaw as any)?.pagination?.total ?? 0, [totalRaw]);
 
   const rawCourse = race?.courses.find((c) => c.id === courseId) || null;
