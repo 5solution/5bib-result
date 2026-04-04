@@ -33,16 +33,18 @@ const BACKGROUNDS = [
 
 export default function ResultImageEditor({
   athlete,
+  raceId,
   onClose,
 }: {
   athlete: AthleteData;
+  raceId: string;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const cardRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [bgStyle, setBgStyle] = useState(BACKGROUNDS[0].gradient);
+  const [selectedBg, setSelectedBg] = useState(BACKGROUNDS[0].id);
   const [customBg, setCustomBg] = useState<string | null>(null);
+  const [customBgFile, setCustomBgFile] = useState<File | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [sharing, setSharing] = useState(false);
 
@@ -61,55 +63,44 @@ export default function ResultImageEditor({
     const reader = new FileReader();
     reader.onload = () => {
       setCustomBg(reader.result as string);
+      setCustomBgFile(file);
     };
     reader.readAsDataURL(file);
     if (fileRef.current) fileRef.current.value = '';
-  }, []);
+  }, [t]);
 
   const resetBg = useCallback(() => {
     setCustomBg(null);
-    setBgStyle(BACKGROUNDS[0].gradient);
+    setCustomBgFile(null);
+    setSelectedBg(BACKGROUNDS[0].id);
   }, []);
 
-  const captureCard = useCallback(async (): Promise<Blob | null> => {
-    if (!cardRef.current) return null;
-
-    const el = cardRef.current;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    const origWidth = el.style.width;
-    const origHeight = el.style.height;
-    const origAspect = el.style.aspectRatio;
-    // Lock dimensions so flex layout (spacer) is preserved
-    el.style.width = `${w}px`;
-    el.style.height = `${h}px`;
-    el.style.aspectRatio = 'unset';
-
-    try {
-      const { toBlob } = await import('html-to-image');
-      const blob = await toBlob(el, {
-        pixelRatio: 3,
-        width: w,
-        height: h,
-        cacheBust: true,
-      });
-      return blob;
-    } finally {
-      el.style.width = origWidth;
-      el.style.height = origHeight;
-      el.style.aspectRatio = origAspect;
+  const fetchImage = useCallback(async (): Promise<Blob | null> => {
+    const formData = new FormData();
+    formData.append('bg', customBgFile ? 'blue' : selectedBg);
+    if (customBgFile) {
+      formData.append('customBg', customBgFile);
     }
-  }, []);
+
+    const res = await fetch(`/api/race-results/result-image/${raceId}/${athlete.Bib}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+    return res.blob();
+  }, [raceId, athlete.Bib, selectedBg, customBgFile]);
 
   const getFileName = useCallback(() => {
     return `result-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
   }, [athlete]);
 
   const handleDownload = useCallback(async () => {
-    if (!cardRef.current) return;
     setDownloading(true);
     try {
-      const blob = await captureCard();
+      const blob = await fetchImage();
       if (!blob) {
         toast.error(t('resultImage.errorCreate'));
         setDownloading(false);
@@ -129,13 +120,12 @@ export default function ResultImageEditor({
     } finally {
       setDownloading(false);
     }
-  }, [captureCard, getFileName]);
+  }, [fetchImage, getFileName, t]);
 
   const handleShare = useCallback(async () => {
-    if (!cardRef.current) return;
     setSharing(true);
     try {
-      const blob = await captureCard();
+      const blob = await fetchImage();
       if (!blob) {
         toast.error(t('resultImage.errorCreate'));
         setSharing(false);
@@ -153,13 +143,13 @@ export default function ResultImageEditor({
     } finally {
       setSharing(false);
     }
-  }, [captureCard, getFileName]);
+  }, [fetchImage, getFileName, t]);
 
   const canShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   const backgroundCss = customBg
     ? { backgroundImage: `url(${customBg})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { background: bgStyle };
+    : { background: BACKGROUNDS.find(b => b.id === selectedBg)?.gradient || BACKGROUNDS[0].gradient };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
@@ -179,8 +169,8 @@ export default function ResultImageEditor({
             {BACKGROUNDS.map(bg => (
               <button
                 key={bg.id}
-                onClick={() => { setCustomBg(null); setBgStyle(bg.gradient); }}
-                className={`w-8 h-8 rounded-full border-2 transition-all ${!customBg && bgStyle === bg.gradient ? 'border-blue-600 scale-110' : 'border-transparent hover:border-slate-300'}`}
+                onClick={() => { setCustomBg(null); setCustomBgFile(null); setSelectedBg(bg.id); }}
+                className={`w-8 h-8 rounded-full border-2 transition-all ${!customBg && selectedBg === bg.id ? 'border-blue-600 scale-110' : 'border-transparent hover:border-slate-300'}`}
                 style={{ background: bg.gradient }}
                 title={bg.label}
               />
@@ -201,10 +191,9 @@ export default function ResultImageEditor({
           <input ref={fileRef} type="file" accept="image/*" onChange={handleUploadBg} className="hidden" />
         </div>
 
-        {/* Preview card */}
+        {/* Preview card (DOM-based for fast interactive preview) */}
         <div className="p-5">
           <div
-            ref={cardRef}
             className="rounded-xl overflow-hidden"
             style={{
               width: '100%',

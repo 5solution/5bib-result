@@ -148,6 +148,32 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 - Run `pnpm generate:api` to regenerate types after backend API changes
 - Never use raw `fetch()` for API calls — always use generated SDK functions or hooks
 
+## Frontend Design System ("Velocity" — Athletic Editorial)
+- **Theme file**: `frontend/app/globals.css`
+- **Palette**: Warm stone base (`#fafaf9` bg, `#1c1917` text), blue accent `#1d4ed8`, energy orange `--5bib-energy: #ea580c`, trail green `--5bib-trail: #166534`
+- **Fonts**: Be Vietnam Pro (headings, `--font-heading`) + Inter (body, `--font-sans`). Monospace: JetBrains Mono / SF Mono (`--font-mono`)
+- **Motion tokens**: `--ease-out-expo`, `--ease-spring`, `--duration-fast/normal/slow`
+- **Shadow system**: `--shadow-xs` → `--shadow-xl`, `--shadow-glow`
+- **Key utilities**:
+  - Animation: `stagger-in`, `slide-up`, `scale-in`, `shimmer`
+  - Texture: `grain`, `topo-lines`, `hero-pattern`, `diagonal-lines`
+  - Glass: `glass-light`, `glass-dark`
+  - Typography: `text-gradient`, `text-gradient-warm`, `mono-data`, `accent-underline`
+  - Athletic: `rank-gold`, `rank-silver`, `rank-bronze`
+  - Interactive: `card-hover`, `result-row-hover`, `glow-accent`, `focus-ring`
+  - Layout: `scrollbar-hide`, `scrollbar-thin`, `sep`
+
+## Result Image Generation
+- **Backend service**: `backend/src/modules/race-result/services/result-image.service.ts`
+- **Library**: `@napi-rs/canvas` — canvas-based, no headless browser
+- **Output**: 1080×1350px PNG (4:5 ratio, Instagram-ready)
+- **Endpoint**: `POST /race-results/result-image/:raceId/:bib` (multipart/form-data)
+  - `bg`: preset gradient key (`blue|dark|sunset|forest|purple`)
+  - `customBg`: optional image file upload for custom background
+- **Fonts**: Inter + Be Vietnam Pro TTFs bundled in `backend/assets/fonts/`
+- **Frontend**: `ResultImageEditor` component previews with DOM, calls backend API for download/share
+- **Logo**: `backend/assets/logo_5BIB_white.png`
+
 ## Common Issues & Solutions
 - **MongoDB ECONNREFUSED in Docker**: Use `host.docker.internal:27018` + `extra_hosts` in docker-compose
 - **nginx 502**: Check escaped `$http_upgrade` in nginx config

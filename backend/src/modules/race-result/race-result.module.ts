@@ -6,6 +6,7 @@ import { SyncLog, SyncLogSchema } from './schemas/sync-log.schema';
 import { ResultClaim, ResultClaimSchema } from './schemas/result-claim.schema';
 import { RaceResultController } from './race-result.controller';
 import { RaceResultService } from './services/race-result.service';
+import { ResultImageService } from './services/result-image.service';
 import { RaceSyncCron } from './services/race-sync.cron';
 import { RacesModule } from '../races/races.module';
 import { UploadModule } from '../upload/upload.module';
@@ -22,7 +23,7 @@ import { UploadModule } from '../upload/upload.module';
     UploadModule,
   ],
   controllers: [RaceResultController],
-  providers: [RaceResultService, RaceSyncCron],
+  providers: [RaceResultService, ResultImageService, RaceSyncCron],
   exports: [RaceResultService],
 })
 export class RaceResultModule {}

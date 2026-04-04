@@ -4,66 +4,92 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme {
-  --font-display: Inter, system-ui, sans-serif;
-  --font-body: Inter, system-ui, sans-serif;
-  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+/* ═══════════════════════════════════════════════════════════════
+   5BIB VELOCITY — Athletic Editorial Design System
+   Vietnamese Trail Running Results Platform
+   ═══════════════════════════════════════════════════════════════ */
 
-  /* 5BIB Light Theme — Blue Primary */
-  --color-5bib-bg: #ffffff;
-  --color-5bib-surface: #f8fafc;
-  --color-5bib-surface-2: #f1f5f9;
-  --color-5bib-accent: #2563eb;
-  --color-5bib-accent-dim: #1d4ed8;
-  --color-5bib-text: #0f172a;
-  --color-5bib-text-muted: #64748b;
-  --color-5bib-border: #e2e8f0;
-  --color-5bib-success: #16a34a;
-  --color-5bib-live: #ef4444;
-  --color-5bib-gold: #d97706;
-  --color-5bib-silver: #64748b;
-  --color-5bib-bronze: #b45309;
+@theme {
+  --font-display: "Be Vietnam Pro", system-ui, sans-serif;
+  --font-body: "Inter", "Be Vietnam Pro", system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+
+  /* ── Core Palette ── */
+  --color-5bib-bg: #fafaf9;
+  --color-5bib-surface: #f5f5f4;
+  --color-5bib-surface-2: #e7e5e4;
+  --color-5bib-accent: #1d4ed8;
+  --color-5bib-accent-dim: #1e3a8a;
+  --color-5bib-text: #1c1917;
+  --color-5bib-text-muted: #78716c;
+  --color-5bib-border: #d6d3d1;
+  --color-5bib-success: #15803d;
+  --color-5bib-live: #dc2626;
+  --color-5bib-gold: #b45309;
+  --color-5bib-silver: #6b7280;
+  --color-5bib-bronze: #92400e;
 }
 
 :root {
-  --5bib-bg: #ffffff;
-  --5bib-surface: #f8fafc;
-  --5bib-surface-2: #f1f5f9;
-  --5bib-accent: #2563eb;
-  --5bib-accent-dim: #1d4ed8;
-  --5bib-text: #0f172a;
-  --5bib-text-muted: #64748b;
-  --5bib-border: #e2e8f0;
-  --5bib-success: #16a34a;
-  --5bib-live: #ef4444;
-  --5bib-gold: #d97706;
-  --5bib-silver: #64748b;
-  --5bib-bronze: #b45309;
+  /* ── 5BIB Brand ── */
+  --5bib-bg: #fafaf9;
+  --5bib-surface: #f5f5f4;
+  --5bib-surface-2: #e7e5e4;
+  --5bib-accent: #1d4ed8;
+  --5bib-accent-dim: #1e3a8a;
+  --5bib-accent-glow: rgba(29, 78, 216, 0.3);
+  --5bib-text: #1c1917;
+  --5bib-text-muted: #78716c;
+  --5bib-border: #d6d3d1;
+  --5bib-success: #15803d;
+  --5bib-live: #dc2626;
+  --5bib-gold: #b45309;
+  --5bib-silver: #6b7280;
+  --5bib-bronze: #92400e;
+  --5bib-energy: #ea580c;
+  --5bib-trail: #166534;
 
-  --background: #ffffff;
-  --foreground: #0f172a;
+  /* ── shadcn tokens ── */
+  --background: #fafaf9;
+  --foreground: #1c1917;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #1c1917;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #2563eb;
+  --popover-foreground: #1c1917;
+  --primary: #1d4ed8;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  --secondary: #f5f5f4;
+  --secondary-foreground: #1c1917;
+  --muted: #f5f5f4;
+  --muted-foreground: #78716c;
   --accent: #eff6ff;
-  --accent-foreground: #1e40af;
-  --destructive: #ef4444;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #2563eb;
-  --radius: 0.625rem;
-  --chart-1: #2563eb;
-  --chart-2: #1d4ed8;
-  --chart-3: #16a34a;
-  --chart-4: #d97706;
-  --chart-5: #ef4444;
+  --accent-foreground: #1e3a8a;
+  --destructive: #dc2626;
+  --border: #d6d3d1;
+  --input: #d6d3d1;
+  --ring: #1d4ed8;
+  --radius: 0.5rem;
+
+  --chart-1: #1d4ed8;
+  --chart-2: #ea580c;
+  --chart-3: #15803d;
+  --chart-4: #b45309;
+  --chart-5: #dc2626;
+
+  /* ── Elevation shadows ── */
+  --shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-sm: 0 2px 8px rgba(28, 25, 23, 0.06);
+  --shadow-md: 0 4px 16px rgba(28, 25, 23, 0.08);
+  --shadow-lg: 0 8px 32px rgba(28, 25, 23, 0.10);
+  --shadow-xl: 0 16px 48px rgba(28, 25, 23, 0.12);
+  --shadow-glow: 0 0 24px var(--5bib-accent-glow);
+
+  /* ── Motion tokens ── */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 500ms;
 }
 
 @theme inline {
@@ -109,72 +135,230 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Sporty utility effects */
+/* ═══════════════════════════════════════════════════════════════
+   UTILITY EFFECTS
+   ═══════════════════════════════════════════════════════════════ */
+
 @layer utilities {
+
+  /* ── Live pulse ── */
   .pulse-live {
     animation: pulse-live 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
-
   @keyframes pulse-live {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.4; }
   }
 
+  /* ── Glow effects ── */
   .glow-accent {
-    box-shadow: 0 0 20px rgba(37, 99, 235, 0.25);
+    box-shadow: var(--shadow-glow);
   }
-
   .glow-accent-hover:hover {
-    box-shadow: 0 0 30px rgba(37, 99, 235, 0.35);
+    box-shadow: 0 0 36px var(--5bib-accent-glow);
   }
 
+  /* ── Hero background — topographic mesh ── */
   .hero-pattern {
     background-image:
-      radial-gradient(circle at 20% 50%, rgba(37, 99, 235, 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 80% 20%, rgba(37, 99, 235, 0.1) 0%, transparent 50%),
-      radial-gradient(circle at 50% 80%, rgba(29, 78, 216, 0.12) 0%, transparent 50%);
+      radial-gradient(ellipse 80% 60% at 15% 45%, rgba(29, 78, 216, 0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 85% 25%, rgba(234, 88, 12, 0.07) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 40% at 50% 90%, rgba(22, 101, 52, 0.06) 0%, transparent 50%);
   }
 
+  /* ── Diagonal race stripe ── */
   .diagonal-lines {
     background-image: repeating-linear-gradient(
-      45deg,
+      -45deg,
       transparent,
-      transparent 10px,
-      rgba(255, 255, 255, 0.05) 10px,
-      rgba(255, 255, 255, 0.05) 20px
+      transparent 8px,
+      rgba(29, 78, 216, 0.03) 8px,
+      rgba(29, 78, 216, 0.03) 9px
     );
   }
 
+  /* ── Film grain texture ── */
+  .grain {
+    position: relative;
+  }
+  .grain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: multiply;
+  }
+
+  /* ── Card hover lift ── */
   .card-hover {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      transform var(--duration-normal) var(--ease-out-expo),
+      box-shadow var(--duration-normal) var(--ease-out-expo),
+      border-color var(--duration-fast) ease;
   }
   .card-hover:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 40px rgba(37, 99, 235, 0.12);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
     border-color: var(--5bib-accent);
   }
+  .card-hover:active {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
 
+  /* ── Result row ── */
   .result-row-hover {
-    transition: all 0.2s ease;
+    transition: all var(--duration-fast) ease;
+    border-left: 3px solid transparent;
   }
   .result-row-hover:hover {
-    background-color: rgba(37, 99, 235, 0.05);
-    border-left: 3px solid var(--5bib-accent);
+    background-color: rgba(29, 78, 216, 0.04);
+    border-left-color: var(--5bib-accent);
   }
 
+  /* ── Glass morphism ── */
   .glass-light {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.4);
   }
 
+  .glass-dark {
+    background: rgba(28, 25, 23, 0.6);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* ── Text gradient ── */
   .text-gradient {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 40%, #3b82f6 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
+  .text-gradient-warm {
+    background: linear-gradient(135deg, #ea580c, #b45309);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Stagger reveal animations ── */
+  .stagger-in > * {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: stagger-fade-in var(--duration-slow) var(--ease-out-expo) forwards;
+  }
+  .stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-in > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-in > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-in > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-in > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-in > *:nth-child(6) { animation-delay: 300ms; }
+  .stagger-in > *:nth-child(7) { animation-delay: 360ms; }
+  .stagger-in > *:nth-child(8) { animation-delay: 420ms; }
+
+  @keyframes stagger-fade-in {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ── Slide-up entrance ── */
+  .slide-up {
+    animation: slide-up var(--duration-slow) var(--ease-out-expo) both;
+  }
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ── Scale-in entrance ── */
+  .scale-in {
+    animation: scale-in 0.4s var(--ease-spring) both;
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* ── Shimmer loading ── */
+  .shimmer {
+    background: linear-gradient(
+      100deg,
+      transparent 33%,
+      rgba(29, 78, 216, 0.06) 50%,
+      transparent 67%
+    );
+    background-size: 300% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -100% 0; }
+  }
+
+  /* ── Rank badge highlight ── */
+  .rank-gold {
+    background: linear-gradient(135deg, #fbbf24 0%, #b45309 100%);
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+  .rank-silver {
+    background: linear-gradient(135deg, #d1d5db 0%, #6b7280 100%);
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+  .rank-bronze {
+    background: linear-gradient(135deg, #d97706 0%, #92400e 100%);
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  /* ── Accent underline — editorial style ── */
+  .accent-underline {
+    text-decoration: none;
+    background-image: linear-gradient(var(--5bib-accent), var(--5bib-accent));
+    background-size: 0% 2px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    transition: background-size var(--duration-normal) var(--ease-out-expo);
+  }
+  .accent-underline:hover {
+    background-size: 100% 2px;
+  }
+
+  /* ── Topographic contour decoration ── */
+  .topo-lines {
+    background-image:
+      repeating-radial-gradient(
+        circle at 50% 50%,
+        transparent 0,
+        transparent 40px,
+        rgba(29, 78, 216, 0.025) 40px,
+        rgba(29, 78, 216, 0.025) 41px
+      );
+  }
+
+  /* ── Scrollbar ── */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -182,17 +366,98 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--5bib-border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--5bib-border);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--5bib-text-muted);
+  }
+
+  /* ── Focus ring ── */
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus-visible {
+    box-shadow: 0 0 0 2px var(--5bib-bg), 0 0 0 4px var(--5bib-accent);
+  }
+
+  /* ── Separator — editorial thin line ── */
+  .sep {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--5bib-border) 20%,
+      var(--5bib-border) 80%,
+      transparent 100%
+    );
+  }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   BASE LAYER
+   ═══════════════════════════════════════════════════════════════ */
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
-    @apply bg-[var(--5bib-bg)] text-[var(--5bib-text)];
+    background-color: var(--5bib-bg);
+    color: var(--5bib-text);
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
+
   html {
     @apply font-sans;
     scroll-behavior: smooth;
+  }
+
+  /* ── Typography refinements ── */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading), "Be Vietnam Pro", system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    font-feature-settings: 'kern' 1, 'ss01' 1;
+  }
+
+  /* ── Selection ── */
+  ::selection {
+    background: rgba(29, 78, 216, 0.15);
+    color: var(--5bib-text);
+  }
+
+  /* ── Smooth image rendering ── */
+  img {
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPONENT OVERRIDES
+   ═══════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* ── Monospace data cells — for race times, paces ── */
+  .mono-data {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
 }

@@ -26,6 +26,8 @@ import { memoryStorage } from 'multer';
 import { GetRaceResultsDto } from './dto/get-race-results.dto';
 import { SubmitClaimDto } from './dto/submit-claim.dto';
 import { RaceResultService } from './services/race-result.service';
+import { ResultImageService } from './services/result-image.service';
+import { RacesService } from '../races/races.service';
 import { UploadService } from '../upload/upload.service';
 
 @ApiTags('Race Results')
@@ -33,6 +35,8 @@ import { UploadService } from '../upload/upload.service';
 export class RaceResultController {
   constructor(
     private readonly raceResultService: RaceResultService,
+    private readonly resultImageService: ResultImageService,
+    private readonly racesService: RacesService,
     private readonly uploadService: UploadService,
   ) {}
 
@@ -250,6 +254,76 @@ export class RaceResultController {
   @ApiResponse({ status: 201, description: 'Claim created' })
   async submitClaim(@Body() dto: SubmitClaimDto) {
     return this.raceResultService.submitClaim(dto);
+  }
+
+  @Post('result-image/:raceId/:bib')
+  @ApiOperation({ summary: 'Generate result image for an athlete' })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        bg: { type: 'string', enum: ['blue', 'dark', 'sunset', 'forest', 'purple'], default: 'blue' },
+        customBg: { type: 'string', format: 'binary', description: 'Custom background image' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Returns result image as PNG' })
+  @ApiResponse({ status: 404, description: 'Athlete not found' })
+  @UseInterceptors(
+    FileInterceptor('customBg', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  async generateResultImage(
+    @Param('raceId') raceId: string,
+    @Param('bib') bib: string,
+    @Body('bg') bg: string,
+    @UploadedFile() customBg: Express.Multer.File | undefined,
+    @Res() res: Response,
+  ) {
+    const athlete = await this.raceResultService.getAthleteDetail(raceId, bib);
+    if (!athlete) {
+      throw new NotFoundException('Athlete not found');
+    }
+
+    // Get race name from the races module
+    let raceName = '';
+    try {
+      const race = await this.racesService.getRaceById(raceId);
+      raceName = race?.data?.title || '';
+    } catch { /* ignore */ }
+
+    const pngBuffer = await this.resultImageService.generateImage(
+      {
+        Name: athlete.Name,
+        Bib: athlete.Bib,
+        ChipTime: athlete.ChipTime,
+        GunTime: athlete.GunTime,
+        Pace: athlete.Pace,
+        Gap: athlete.Gap || '--',
+        Gender: athlete.Gender,
+        Category: athlete.Category,
+        OverallRank: athlete.OverallRank,
+        GenderRank: athlete.GenderRank,
+        CatRank: athlete.CatRank,
+        distance: athlete.distance,
+        race_name: raceName,
+      },
+      bg || 'blue',
+      customBg?.buffer,
+    );
+
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Length': pngBuffer.length.toString(),
+      'Cache-Control': 'no-cache',
+      'Content-Disposition': `inline; filename="result-${bib}.png"`,
+    });
+    res.send(pngBuffer);
   }
 
   @Post('sync')
