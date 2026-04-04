@@ -134,5 +134,5 @@ jobs:
             echo "${{ secrets.GHCR_TOKEN }}" |docker login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
             cd /opt/5bib-result
             docker compose pull
-            docker compose up -d --remove-orphans
+            docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin
             docker image prune -f
