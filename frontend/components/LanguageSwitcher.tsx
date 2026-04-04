@@ -20,7 +20,7 @@ export default function LanguageSwitcher() {
   return (
     <button
       onClick={toggle}
-      className="flex items-center gap-1 px-2 py-1 text-blue-100 hover:text-white hover:bg-white/10 rounded transition-colors text-sm"
+      className="flex items-center gap-1 px-2 py-1 text-indigo-300 hover:text-white hover:bg-white/10 rounded transition-colors text-sm"
       title={`Switch to ${next.code === 'en' ? 'English' : 'Tiếng Việt'}`}
     >
       <span className="text-base">{next.flag}</span>

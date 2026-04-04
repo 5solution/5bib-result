@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Be_Vietnam_Pro } from 'next/font/google'
+import { Plus_Jakarta_Sans, Be_Vietnam_Pro } from 'next/font/google'
 import { Toaster } from 'sonner'
 import './globals.css'
 import Header from '@/components/Header'
@@ -7,8 +7,9 @@ import Footer from '@/components/Footer'
 import { QueryProvider } from '@/lib/query-provider'
 import I18nProvider from '@/components/I18nProvider'
 
-const inter = Inter({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600', '700', '800'],
   variable: '--font-sans',
 })
 
@@ -46,7 +47,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#2563eb',
+  themeColor: '#1e1b4b',
 }
 
 export default function RootLayout({
@@ -55,7 +56,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="vi" className={`${inter.variable} ${beVietnamPro.variable}`}>
+    <html lang="vi" className={`${plusJakarta.variable} ${beVietnamPro.variable}`}>
       <body className="font-sans antialiased bg-[var(--5bib-bg)] text-[var(--5bib-text)] min-h-screen flex flex-col">
         <I18nProvider>
         <QueryProvider>
