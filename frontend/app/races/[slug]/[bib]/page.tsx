@@ -706,9 +706,9 @@ export default function AthleteDetailPage() {
                   </div>
                   {(split.timeOfDay || split.overallRank || split.genderRank) && (
                     <div className="flex items-center gap-3 pl-9 mt-1 text-xs text-gray-500">
-                      {split.timeOfDay && <span>ToD: <span className="font-mono">{split.timeOfDay}</span></span>}
+                      {split.timeOfDay && <span>Thời gian thực: <span className="font-mono">{split.timeOfDay}</span></span>}
                       {split.overallRank && <span>Overall: <span className="font-mono font-semibold text-gray-700">{split.overallRank}</span></span>}
-                      {split.genderRank && <span>Gender: <span className="font-mono font-semibold text-purple-600">{split.genderRank}</span></span>}
+                      {split.genderRank && <span>Giới tính: <span className="font-mono font-semibold text-purple-600">{split.genderRank}</span></span>}
                     </div>
                   )}
                 </div>
@@ -729,10 +729,10 @@ export default function AthleteDetailPage() {
                     <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('athlete.member')}</th>
                   )}
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('ranking.time')}</th>
-                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">ToD</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Thời gian thực</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Pace</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Overall</th>
-                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Gender</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Giới tính</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-24"></th>
                 </tr>
               </thead>
@@ -812,10 +812,10 @@ export default function AthleteDetailPage() {
                       <div className="relative h-10 bg-gray-100 rounded-xl overflow-hidden">
                         <div
                           className={`absolute left-0 top-0 h-full rounded-xl transition-all duration-700 ease-out flex items-center justify-end px-4 ${isFastest
-                              ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-lg shadow-emerald-200'
-                              : isSlowest
-                                ? 'bg-gradient-to-r from-orange-400 to-orange-500 shadow-lg shadow-orange-200'
-                                : 'bg-gradient-to-r from-blue-400 to-blue-500'
+                            ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-lg shadow-emerald-200'
+                            : isSlowest
+                              ? 'bg-gradient-to-r from-orange-400 to-orange-500 shadow-lg shadow-orange-200'
+                              : 'bg-gradient-to-r from-blue-400 to-blue-500'
                             }`}
                           style={{ width: `${percentage}%` }}
                         >
