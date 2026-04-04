@@ -74,38 +74,30 @@ export default function ResultImageEditor({
   const captureCard = useCallback(async (): Promise<Blob | null> => {
     if (!cardRef.current) return null;
 
-    // html2canvas doesn't support aspect-ratio CSS, so we must set explicit dimensions
     const el = cardRef.current;
     const w = el.offsetWidth;
-    // Use max of offsetHeight and scrollHeight to capture all content
-    const h = Math.max(el.offsetHeight, el.scrollHeight);
+    const h = el.offsetHeight;
     const origWidth = el.style.width;
     const origHeight = el.style.height;
     const origAspect = el.style.aspectRatio;
-    const origOverflow = el.style.overflow;
+    // Lock dimensions so flex layout (spacer) is preserved
     el.style.width = `${w}px`;
     el.style.height = `${h}px`;
     el.style.aspectRatio = 'unset';
-    el.style.overflow = 'visible';
 
     try {
-      const html2canvas = (await import('html2canvas-pro')).default;
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: null,
+      const { toBlob } = await import('html-to-image');
+      const blob = await toBlob(el, {
+        pixelRatio: 3,
         width: w,
         height: h,
+        cacheBust: true,
       });
-      return new Promise((resolve) => {
-        canvas.toBlob((blob) => resolve(blob), 'image/png');
-      });
+      return blob;
     } finally {
-      // Restore original styles
       el.style.width = origWidth;
       el.style.height = origHeight;
       el.style.aspectRatio = origAspect;
-      el.style.overflow = origOverflow;
     }
   }, []);
 
