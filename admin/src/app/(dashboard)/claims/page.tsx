@@ -296,10 +296,10 @@ export default function ClaimsPage() {
             </DialogDescription>
           </DialogHeader>
           {activeClaim && (
-            <div className="space-y-2 text-sm px-1">
+            <div className="space-y-2 text-sm px-1 max-h-[40vh] overflow-y-auto">
               {activeClaim.phone && <p>📱 SĐT: <strong>{activeClaim.phone}</strong></p>}
               {activeClaim.email && <p>✉️ Email: {activeClaim.email}</p>}
-              <p className="text-muted-foreground">{activeClaim.description}</p>
+              <p className="text-muted-foreground whitespace-pre-wrap">{activeClaim.description}</p>
               {activeClaim.attachments && activeClaim.attachments.length > 0 && (
                 <div className="pt-1">
                   <p className="font-medium mb-1">📎 Tệp đính kèm ({activeClaim.attachments.length}):</p>
