@@ -357,25 +357,25 @@ export default function HomePage() {
             >
               {loading
                 ? Array.from({ length: 4 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="shrink-0 w-[280px] md:w-[300px] h-[400px] md:h-[440px] bg-white/10 animate-pulse rounded-lg overflow-hidden"
-                    >
-                      <div className="h-full flex flex-col justify-end p-4 gap-2">
-                        <div className="h-3 w-16 bg-white/10 rounded" />
-                        <div className="h-5 w-3/4 bg-white/10 rounded" />
-                        <div className="h-3 w-1/2 bg-white/10 rounded" />
-                        <div className="h-3 w-2/3 bg-white/10 rounded mt-1" />
-                        <div className="flex gap-1.5 mt-2">
-                          {[1,2,3,4].map(j => <div key={j} className="h-10 w-10 bg-white/10 rounded" />)}
-                        </div>
+                  <div
+                    key={i}
+                    className="shrink-0 w-[280px] md:w-[300px] h-[400px] md:h-[440px] bg-white/10 animate-pulse rounded-lg overflow-hidden"
+                  >
+                    <div className="h-full flex flex-col justify-end p-4 gap-2">
+                      <div className="h-3 w-16 bg-white/10 rounded" />
+                      <div className="h-5 w-3/4 bg-white/10 rounded" />
+                      <div className="h-3 w-1/2 bg-white/10 rounded" />
+                      <div className="h-3 w-2/3 bg-white/10 rounded mt-1" />
+                      <div className="flex gap-1.5 mt-2">
+                        {[1, 2, 3, 4].map(j => <div key={j} className="h-10 w-10 bg-white/10 rounded" />)}
                       </div>
                     </div>
-                  ))
+                  </div>
+                ))
                 : liveAndUpcoming.length > 0
                   ? liveAndUpcoming.map((race) => (
-                      <EventCard key={race.id} race={race} />
-                    ))
+                    <EventCard key={race.id} race={race} />
+                  ))
                   : (
                     <div className="flex items-center justify-center w-full min-w-[300px] h-[400px] text-white/50 text-sm">
                       {t('home.noUpcoming')}
@@ -390,40 +390,7 @@ export default function HomePage() {
       {/* Spacer */}
       <div className="py-8 md:py-12 bg-[var(--5bib-bg)]" />
 
-      {/* ================================================================= */}
-      {/* FEATURES SECTION                                                   */}
-      {/* ================================================================= */}
-      <section className="py-16 md:py-20 bg-[var(--5bib-surface)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12 md:mb-16">
-            <h2 className="text-2xl md:text-3xl font-black text-[var(--5bib-text)] mb-3">
-              {t('home.features')}
-            </h2>
-            <p className="text-[var(--5bib-text-muted)] max-w-lg mx-auto">
-              {t('home.featuresSubtitle')}
-            </p>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {features.map((feature, i) => (
-              <div
-                key={i}
-                className="p-6 bg-white border border-[var(--5bib-border)] rounded-xl card-hover group shadow-sm"
-              >
-                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-[var(--5bib-accent)] mb-4 group-hover:bg-blue-100 transition-colors">
-                  {feature.icon}
-                </div>
-                <h3 className="text-lg font-bold text-[var(--5bib-text)] mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-[var(--5bib-text-muted)] leading-relaxed">
-                  {feature.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ================================================================= */}
       {/* RACE ALERT BANNER                                                  */}
@@ -495,22 +462,22 @@ export default function HomePage() {
           >
             {loading
               ? Array.from({ length: 4 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="shrink-0 w-[280px] md:w-[300px] h-[380px] md:h-[420px] bg-slate-100 animate-pulse rounded-lg overflow-hidden"
-                  >
-                    <div className="h-full flex flex-col justify-end p-4 gap-2">
-                      <div className="h-3 w-20 bg-slate-200 rounded" />
-                      <div className="h-5 w-3/4 bg-slate-200 rounded" />
-                      <div className="h-3 w-1/2 bg-slate-200 rounded" />
-                      <div className="h-3 w-2/3 bg-slate-200 rounded mt-1" />
-                    </div>
+                <div
+                  key={i}
+                  className="shrink-0 w-[280px] md:w-[300px] h-[380px] md:h-[420px] bg-slate-100 animate-pulse rounded-lg overflow-hidden"
+                >
+                  <div className="h-full flex flex-col justify-end p-4 gap-2">
+                    <div className="h-3 w-20 bg-slate-200 rounded" />
+                    <div className="h-5 w-3/4 bg-slate-200 rounded" />
+                    <div className="h-3 w-1/2 bg-slate-200 rounded" />
+                    <div className="h-3 w-2/3 bg-slate-200 rounded mt-1" />
                   </div>
-                ))
+                </div>
+              ))
               : completedRaces.length > 0
                 ? completedRaces.map((race) => (
-                    <PastEventCard key={race.id} race={race} />
-                  ))
+                  <PastEventCard key={race.id} race={race} />
+                ))
                 : (
                   <div className="flex items-center justify-center w-full min-w-[300px] h-[380px] text-[var(--5bib-text-muted)] text-sm">
                     {t('home.noPastEvents')}
@@ -519,6 +486,40 @@ export default function HomePage() {
           </div>
           <ScrollBar orientation="horizontal" />
         </ScrollArea>
+        {/* ================================================================= */}
+        {/* FEATURES SECTION                                                   */}
+        {/* ================================================================= */}
+        <section className="py-16 md:py-20 bg-[var(--5bib-surface)]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12 md:mb-16">
+              <h2 className="text-2xl md:text-3xl font-black text-[var(--5bib-text)] mb-3">
+                {t('home.features')}
+              </h2>
+              <p className="text-[var(--5bib-text-muted)] max-w-lg mx-auto">
+                {t('home.featuresSubtitle')}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {features.map((feature, i) => (
+                <div
+                  key={i}
+                  className="p-6 bg-white border border-[var(--5bib-border)] rounded-xl card-hover group shadow-sm"
+                >
+                  <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-[var(--5bib-accent)] mb-4 group-hover:bg-blue-100 transition-colors">
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-lg font-bold text-[var(--5bib-text)] mb-2">
+                    {feature.title}
+                  </h3>
+                  <p className="text-sm text-[var(--5bib-text-muted)] leading-relaxed">
+                    {feature.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <div className="mt-6 text-center md:hidden">
           <Link

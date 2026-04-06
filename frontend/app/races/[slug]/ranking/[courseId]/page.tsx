@@ -219,27 +219,18 @@ export default function CourseRankingPage() {
     return s || null;
   }, [courseStatsRaw]);
 
-  // Fetch total starters (unfiltered count)
-  const { data: totalRaw } = useRaceResults({
-    course_id: courseId,
-    pageNo: 1,
-    pageSize: 1,
-    sortField: 'OverallRank',
-    sortDirection: 'ASC',
-  }, { enabled: !!courseId, refetchInterval: isLive ? 30_000 : false });
-  const totalStarters = useMemo(() => (totalRaw as any)?.pagination?.total ?? 0, [totalRaw]);
-
   const rawCourse = race?.courses.find((c) => c.id === courseId) || null;
   const course = useMemo(() => {
     if (!rawCourse) return null;
-    const finishers = courseStats?.totalFinishers ?? 0;
+    // Use Started/Finished/DNF from first result record (provided by external API)
+    const firstResult = results[0] as any;
     return {
       ...rawCourse,
-      starters: totalStarters,
-      finishers,
-      dnf: finishers > 0 && totalStarters > finishers ? totalStarters - finishers : 0,
+      starters: firstResult?.Started ?? 0,
+      finishers: firstResult?.Finished ?? 0,
+      dnf: firstResult?.DNF ?? 0,
     };
-  }, [rawCourse, courseStats, totalStarters]);
+  }, [rawCourse, results]);
 
   const toggleBib = (bib: number) => {
     setSelectedBibs(prev => {
@@ -409,27 +400,33 @@ export default function CourseRankingPage() {
               <div className="hidden sm:block w-px h-7 bg-white/30" />
 
               <div className="flex items-center gap-6 sm:gap-8 text-sm md:text-base">
-                <span className="text-blue-100">
-                  {t('ranking.starters')}{' '}
-                  <strong className="text-white font-black text-lg md:text-xl ml-1.5">
-                    {(course.starters ?? 0).toLocaleString('vi-VN')}
-                  </strong>
-                </span>
-                {race.status !== 'live' && (course.dnf ?? 0) > 0 && (
-                  <span className="text-blue-100">
-                    DNF{' '}
-                    <strong className="text-yellow-300 font-black text-lg md:text-xl ml-1.5">
-                      {course.dnf!.toLocaleString('vi-VN')}
-                    </strong>
-                  </span>
-                )}
-                {race.status !== 'live' && (course.finishers ?? 0) > 0 && (
-                  <span className="text-blue-100">
-                    {t('ranking.finishers')}{' '}
-                    <strong className="text-emerald-300 font-black text-lg md:text-xl ml-1.5">
-                      {course.finishers!.toLocaleString('vi-VN')}
-                    </strong>
-                  </span>
+                {race.status === 'upcoming' ? (
+                  <span className="text-blue-200 italic">{t('status.upcoming')}</span>
+                ) : (
+                  <>
+                    <span className="text-blue-100">
+                      {t('ranking.starters')}{' '}
+                      <strong className="text-white font-black text-lg md:text-xl ml-1.5">
+                        {(course.starters ?? 0).toLocaleString('vi-VN')}
+                      </strong>
+                    </span>
+                    {(course.finishers ?? 0) > 0 && (
+                      <span className="text-blue-100">
+                        {t('ranking.finishers')}{' '}
+                        <strong className="text-emerald-300 font-black text-lg md:text-xl ml-1.5">
+                          {course.finishers!.toLocaleString('vi-VN')}
+                        </strong>
+                      </span>
+                    )}
+                    {(course.dnf ?? 0) > 0 && (
+                      <span className="text-blue-100">
+                        DNF{' '}
+                        <strong className="text-yellow-300 font-black text-lg md:text-xl ml-1.5">
+                          {course.dnf!.toLocaleString('vi-VN')}
+                        </strong>
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             </div>

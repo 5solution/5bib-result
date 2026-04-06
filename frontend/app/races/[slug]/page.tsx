@@ -180,14 +180,18 @@ export default function RaceDetailPage() {
             }),
           ]);
           const list = (res.data as any)?.data ?? res.data;
-          results[course.id] = Array.isArray(list) ? list : [];
-          const total = (res.data as any)?.pagination?.total ?? 0;
+          const resultArr = Array.isArray(list) ? list : [];
+          results[course.id] = resultArr;
           const stats = (statsRes.data as any)?.data ?? statsRes.data;
-          const finishers = stats?.totalFinishers ?? 0;
+          // Use Started/Finished/DNF from first result record (provided by external API)
+          const firstResult = resultArr[0] as any;
+          const started = firstResult?.Started ?? 0;
+          const finished = firstResult?.Finished ?? 0;
+          const dnf = firstResult?.DNF ?? 0;
           statsMap[course.id] = {
-            starters: total,
-            finishers,
-            dnf: finishers > 0 && total > finishers ? total - finishers : 0,
+            starters: started,
+            finishers: finished,
+            dnf,
             nationalityCount: stats?.nationalityCount ?? 0,
           };
         } catch {
@@ -387,14 +391,14 @@ export default function RaceDetailPage() {
                       }`}>
                         {race.status === 'live' ? '🔴 ' + t('status.live') : race.status === 'completed' ? t('status.completed') : t('status.upcoming')}
                       </div>
-                      {(courseStatsMap[course.id] || race.status === 'completed') && (
+                      {courseStatsMap[course.id] && (courseStatsMap[course.id]?.starters ?? 0) > 0 && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">
-                          <span>STARTERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.starters ?? '-'}</strong></span>
-                          {race.status !== 'live' && (courseStatsMap[course.id]?.dnf ?? 0) > 0 && (
-                            <span>DNF <strong className="text-base ml-1">{courseStatsMap[course.id]?.dnf}</strong></span>
-                          )}
-                          {race.status !== 'live' && (courseStatsMap[course.id]?.finishers ?? 0) > 0 && (
+                          <span>STARTERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.starters}</strong></span>
+                          {(courseStatsMap[course.id]?.finishers ?? 0) > 0 && (
                             <span>FINISHERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.finishers}</strong></span>
+                          )}
+                          {(courseStatsMap[course.id]?.dnf ?? 0) > 0 && (
+                            <span>DNF <strong className="text-base ml-1">{courseStatsMap[course.id]?.dnf}</strong></span>
                           )}
                           {(courseStatsMap[course.id]?.nationalityCount ?? 0) > 0 && (
                             <span className="flex items-center gap-1">🌍 <strong className="text-base ml-0.5">{courseStatsMap[course.id]?.nationalityCount}</strong> {t('common.country')}</span>

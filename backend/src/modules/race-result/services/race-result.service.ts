@@ -42,6 +42,9 @@ interface RaceResultApiItem {
   Nationality: string;
   Nation: string;
   Member?: string;
+  Started?: number;
+  Finished?: number;
+  DNF?: number;
 }
 
 @Injectable()
@@ -320,6 +323,9 @@ export class RaceResultService {
         nationality: result.Nationality,
         nation: result.Nation,
         member: result.Member || null,
+        started: result.Started ?? null,
+        finished: result.Finished ?? null,
+        dnf: result.DNF ?? null,
         syncedAt: new Date(),
         rawData: result,
       };
@@ -479,6 +485,9 @@ export class RaceResultService {
       Nationality: doc.nationality,
       Nation: doc.nation,
       Member: doc.member,
+      Started: doc.started ?? null,
+      Finished: doc.finished ?? null,
+      DNF: doc.dnf ?? null,
       race_id: doc.raceId,
       course_id: doc.courseId,
       distance: doc.distance,

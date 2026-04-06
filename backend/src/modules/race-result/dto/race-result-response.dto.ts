@@ -27,6 +27,9 @@ export class RaceResultItemDto {
   @ApiPropertyOptional({ example: 'VN' }) Nationality: string;
   @ApiPropertyOptional({ example: 'VNM' }) Nation: string;
   @ApiPropertyOptional() Member: string;
+  @ApiPropertyOptional({ example: 384 }) Started: number;
+  @ApiPropertyOptional({ example: 348 }) Finished: number;
+  @ApiPropertyOptional({ example: 46 }) DNF: number;
   @ApiProperty({ example: '6651abc123' }) race_id: string;
   @ApiProperty({ example: '708' }) course_id: string;
   @ApiProperty({ example: '10KM' }) distance: string;

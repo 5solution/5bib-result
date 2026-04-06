@@ -67,6 +67,11 @@ export class RaceResult {
   // Team relay member mapping (JSON string: lap → member name)
   @Prop() member: string;
 
+  // Course-level counters (from external API)
+  @Prop() started: number;
+  @Prop() finished: number;
+  @Prop() dnf: number;
+
   // Raw data from API (flexible)
   @Prop({ type: Object }) rawData: Record<string, any>;
 
