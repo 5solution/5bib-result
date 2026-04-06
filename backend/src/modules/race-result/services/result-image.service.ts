@@ -234,7 +234,7 @@ export class ResultImageService {
 
     // Time value
     ctx.fillStyle = 'white';
-    ctx.font = `900 80px ui-monospace, "SF Mono", Menlo, monospace`;
+    ctx.font = `900 80px "Inter", "Be Vietnam Pro", "Noto Sans Mono", sans-serif`;
     ctx.fillText(athlete.ChipTime, PADDING_X + 40, chipBoxY + 120);
 
     // Pace + Gap
@@ -243,7 +243,7 @@ export class ResultImageService {
     let paceText = `Pace: `;
     ctx.fillText(paceText, PADDING_X + 40, chipBoxY + 160);
     const paceW = ctx.measureText(paceText).width;
-    ctx.font = `700 24px ui-monospace, "SF Mono", Menlo, monospace`;
+    ctx.font = `700 24px "Inter", "Be Vietnam Pro", "Noto Sans Mono", sans-serif`;
     const paceVal = `${athlete.Pace} /km`;
     ctx.fillText(paceVal, PADDING_X + 40 + paceW, chipBoxY + 160);
     const paceValW = ctx.measureText(paceVal).width;
@@ -254,7 +254,7 @@ export class ResultImageService {
       const gapLabel = 'Gap: ';
       ctx.fillText(gapLabel, gapX, chipBoxY + 160);
       const gapLabelW = ctx.measureText(gapLabel).width;
-      ctx.font = `700 24px ui-monospace, "SF Mono", Menlo, monospace`;
+      ctx.font = `700 24px "Inter", "Be Vietnam Pro", "Noto Sans Mono", sans-serif`;
       ctx.fillText(athlete.Gap, gapX + gapLabelW, chipBoxY + 160);
     }
 
