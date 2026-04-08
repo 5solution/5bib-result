@@ -60,6 +60,7 @@
     "statsAthletes": "Athletes",
     "liveRaces": "{{count}} races LIVE now",
     "upcomingEvents": "Upcoming Events",
+    "recentEvents": "Recent Events",
     "noUpcoming": "No upcoming events",
     "features": "Key Features",
     "featuresSubtitle": "The most comprehensive race results tracking experience",

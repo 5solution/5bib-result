@@ -336,7 +336,11 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl md:text-2xl font-bold text-white">
-                {liveRaces.length > 0 ? `Live & ${t('home.upcomingEvents')}` : t('home.upcomingEvents')}
+                {liveAndUpcoming.length === 0 && completedRaces.length > 0
+                  ? t('home.recentEvents')
+                  : liveRaces.length > 0
+                    ? `Live & ${t('home.upcomingEvents')}`
+                    : t('home.upcomingEvents')}
               </h2>
               <Link
                 href="/calendar"
@@ -376,11 +380,15 @@ export default function HomePage() {
                   ? liveAndUpcoming.map((race) => (
                     <EventCard key={race.id} race={race} />
                   ))
-                  : (
-                    <div className="flex items-center justify-center w-full min-w-[300px] h-[400px] text-white/50 text-sm">
-                      {t('home.noUpcoming')}
-                    </div>
-                  )}
+                  : completedRaces.length > 0
+                    ? completedRaces.slice(0, 8).map((race) => (
+                      <PastEventCard key={race.id} race={race} />
+                    ))
+                    : (
+                      <div className="flex items-center justify-center w-full min-w-[300px] h-[400px] text-white/50 text-sm">
+                        {t('home.noEvents')}
+                      </div>
+                    )}
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
