@@ -268,7 +268,10 @@ export class RacesService {
    */
   async getRacesWithApiUrls(): Promise<RaceDocument[]> {
     return this.raceModel
-      .find({ 'courses.apiUrl': { $exists: true, $ne: null } })
+      .find({
+        'courses.apiUrl': { $exists: true, $ne: null },
+        status: { $in: ['pre_race', 'live'] },
+      })
       .exec();
   }
 
