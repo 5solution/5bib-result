@@ -131,7 +131,8 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            echo "${{ secrets.GHCR_TOKEN }}" |docker login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
+            TOKEN=$(grep -oP 'ghp_[A-Za-z0-9]+' /opt/.github_token)
+            echo "$TOKEN" | docker login ghcr.io -u 0xaldric --password-stdin
             cd /opt/5bib-result
             docker compose pull
             docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin
