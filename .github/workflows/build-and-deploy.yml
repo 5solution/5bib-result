@@ -131,9 +131,14 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            TAG=${{ github.sha }}
+            TAG=${TAG:0:7}
             TOKEN=$(grep -oP 'ghp_[A-Za-z0-9]+' /opt/.github_token)
             echo "$TOKEN" | docker login ghcr.io -u 0xaldric --password-stdin
             cd /opt/5bib-result
+            sed -i "s|ghcr.io/5solution/5bib-result/backend:.*|ghcr.io/5solution/5bib-result/backend:${TAG}|" docker-compose.yml
+            sed -i "s|ghcr.io/5solution/5bib-result/frontend:.*|ghcr.io/5solution/5bib-result/frontend:${TAG}|" docker-compose.yml
+            sed -i "s|ghcr.io/5solution/5bib-result/admin:.*|ghcr.io/5solution/5bib-result/admin:${TAG}|" docker-compose.yml
             docker compose pull
             docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin
             docker image prune -f
