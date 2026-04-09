@@ -244,7 +244,7 @@ export class RaceResultService {
     const strValue = String(value).trim();
     const numValue = parseInt(strValue, 10);
 
-    if (numValue === -1 || isNaN(numValue)) {
+    if (numValue === -1 || numValue === 0 || isNaN(numValue)) {
       // Status-based ranks (DNF, DNS, DSQ, OOC) → 900000 (after normal ranks)
       const statusValues = ['DNF', 'DNS', 'DSQ', 'OOC'];
       const upperStr = strValue.toUpperCase();
@@ -255,7 +255,7 @@ export class RaceResultService {
       ) {
         return { original: strValue, numeric: 900000 };
       }
-      // Unknown / no status → 999999 (last)
+      // Unknown / no status / zero rank → 999999 (last)
       return { original: strValue, numeric: 999999 };
     }
 
