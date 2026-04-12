@@ -23,14 +23,14 @@ export class ReconciliationCalcService {
     feeVatRate: number,
     manualAdjustment = 0,
   ): CalcSummary {
-    // 5BIB orders: sum line_price × qty per order_line_item row (per-line contribution).
-    // Dùng line_price × qty thay vì subtotal_price (order-level) để nhất quán với buildLineItems()
-    // và tránh double-count khi 1 order có nhiều order_line_item khác cự ly.
-    const gross_revenue = fiveBibOrders.reduce(
-      (sum, r) => sum + Number(r.line_price || 0) * Number(r.qty || 0),
+    // 5BIB orders: sum subtotal_price per unique order (actual cash received after discounts).
+    // subtotal_price is order-level (one value per order_id), so must deduplicate first.
+    const uniqueFiveBibOrders = this.deduplicateByOrderId(fiveBibOrders);
+    const gross_revenue = uniqueFiveBibOrders.reduce(
+      (sum, r) => sum + Number(r.subtotal_price || 0),
       0,
     );
-    const total_discount = this.deduplicateByOrderId(fiveBibOrders).reduce(
+    const total_discount = uniqueFiveBibOrders.reduce(
       (sum, r) => sum + Number(r.total_discounts || 0),
       0,
     );
@@ -70,7 +70,7 @@ export class ReconciliationCalcService {
   }
 
   buildLineItems(fiveBibOrders: any[]): LineItem[] {
-    const map = new Map<string, LineItem & { _seenOrderIds?: Set<string> }>();
+    const map = new Map<string, LineItem & { _seenOrderIds: Set<string> }>();
 
     for (const r of fiveBibOrders) {
       const category = r.order_category ?? '';
@@ -78,6 +78,7 @@ export class ReconciliationCalcService {
       const distance = r.distance ?? '';
       const isChangeCourse = category === 'CHANGE_COURSE';
       const linePrice = Number(r.line_price || 0);
+      const orderId = String(r.order_id);
       // CHANGE_COURSE: nhóm theo line_price (phí đổi cự ly) vì mỗi người có thể trả khác nhau
       // ORDINARY/PERSONAL_GROUP: nhóm theo cự ly + loại vé như bình thường
       const key = isChangeCourse
@@ -96,17 +97,20 @@ export class ReconciliationCalcService {
           discount_amount: 0,
           subtotal: 0,
           add_on_price: 0,
+          _seenOrderIds: new Set<string>(),
         });
       }
 
       const item = map.get(key)!;
       item.quantity += Number(r.qty || 0);
       item.add_on_price += Number(r.total_add_on_price || 0);
-      item.discount_amount += Number(r.total_discounts || 0);
 
-      // Dùng line_price × qty (per-line-item) thay vì subtotal_price (order-level).
-      // Đảm bảo Section 3 Grand Total = Section 1 net_revenue (cùng metric).
-      item.subtotal += Number(r.line_price || 0) * Number(r.qty || 0);
+      // subtotal_price và total_discounts là order-level → chỉ cộng một lần mỗi order_id trong nhóm
+      if (!item._seenOrderIds.has(orderId)) {
+        item._seenOrderIds.add(orderId);
+        item.subtotal += Number(r.subtotal_price || 0);
+        item.discount_amount += Number(r.total_discounts || 0);
+      }
     }
 
     return Array.from(map.values()).map(({ _seenOrderIds, ...rest }) => rest as LineItem);
