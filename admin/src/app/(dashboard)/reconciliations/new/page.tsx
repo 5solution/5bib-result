@@ -275,7 +275,7 @@ export default function NewReconciliationPage() {
   function computedPayout() {
     if (!preview) return 0;
     const adj = parseFloat(manualAdjustment) || 0;
-    return preview.net_revenue - computedFee() - computedVat() + adj;
+    return preview.net_revenue - computedFee() - computedVat() - computedManualFee() + adj;
   }
 
   async function handleCreate() {
@@ -691,7 +691,7 @@ export default function NewReconciliationPage() {
               {preview.manual_ticket_count > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Phí thủ công ({preview.manual_ticket_count} vé)</span>
-                  <span className="font-medium text-muted-foreground">{formatVnd(computedManualFee())}</span>
+                  <span className="font-medium text-red-400">− {formatVnd(computedManualFee())}</span>
                 </div>
               )}
               {parseFloat(manualAdjustment) !== 0 && (
