@@ -634,8 +634,8 @@ export default function MerchantDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {feeHistory.map(h => (
-                      <TableRow key={h.id}>
+                    {feeHistory.map((h, i) => (
+                      <TableRow key={h.id ?? `${h.changed_at}-${i}`}>
                         <TableCell className="text-sm">
                           {new Date(h.changed_at).toLocaleString("vi-VN")}
                         </TableCell>
