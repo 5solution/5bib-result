@@ -38,6 +38,8 @@ import {
   CheckCircle,
   RefreshCw,
   ArrowRight,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 async function downloadWithAuth(url: string, filename: string, token: string) {
@@ -108,7 +110,16 @@ interface ReconciliationDetail {
   manual_adjustment: number;
   adjustment_note: string | null;
   payout_amount: number;
-  status: "draft" | "reviewed" | "sent" | "signed" | "completed";
+  status: "draft" | "flagged" | "ready" | "approved" | "sent" | "reviewed" | "signed" | "completed";
+  flags?: Array<{
+    type: string;
+    severity: "ERROR" | "WARNING" | "INFO";
+    message: string;
+    count: number | null;
+  }>;
+  approved_by?: number | null;
+  approved_at?: string | null;
+  created_source?: string;
   xlsx_url: string | null;
   docx_url: string | null;
   signed_at: string | null;
@@ -117,18 +128,24 @@ interface ReconciliationDetail {
   createdAt: string;
 }
 
-const STATUS_ORDER = ["draft", "reviewed", "sent", "signed", "completed"] as const;
+const STATUS_ORDER = ["draft", "ready", "approved", "sent", "completed"] as const;
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Nháp",
-  reviewed: "Đã xem xét",
+  flagged: "Có vấn đề",
+  ready: "Sẵn sàng duyệt",
+  approved: "Đã duyệt",
   sent: "Đã gửi",
+  reviewed: "Đã xem xét",
   signed: "Đã ký",
   completed: "Hoàn tất",
 };
 
 const NEXT_STATUS: Record<string, string> = {
   draft: "reviewed",
+  flagged: "approved",
+  ready: "approved",
+  approved: "sent",
   reviewed: "sent",
   sent: "signed",
   signed: "completed",
@@ -136,6 +153,9 @@ const NEXT_STATUS: Record<string, string> = {
 
 const NEXT_STATUS_LABEL: Record<string, string> = {
   draft: "Chuyển sang Đã xem xét",
+  flagged: "Chuyển sang Đã duyệt",
+  ready: "Chuyển sang Đã duyệt",
+  approved: "Chuyển sang Đã gửi",
   reviewed: "Chuyển sang Đã gửi",
   sent: "Chuyển sang Đã ký",
   signed: "Hoàn tất",
@@ -161,7 +181,9 @@ function formatPeriod(start: string, end: string) {
 }
 
 function StatusStep({ currentStatus }: { currentStatus: string }) {
-  const currentIdx = STATUS_ORDER.indexOf(currentStatus as typeof STATUS_ORDER[number]);
+  // For flagged, map to draft position for stepper display purposes
+  const displayStatus = currentStatus === "flagged" ? "draft" : currentStatus;
+  const currentIdx = STATUS_ORDER.indexOf(displayStatus as typeof STATUS_ORDER[number]);
   return (
     <div className="flex items-center gap-1 overflow-x-auto pb-2">
       {STATUS_ORDER.map((s, i) => {
@@ -215,6 +237,9 @@ export default function ReconciliationDetailPage() {
   // Regenerate
   const [regenLoading, setRegenLoading] = useState(false);
 
+  // Quick approve
+  const [approveLoading, setApproveLoading] = useState(false);
+
   const fetchDetail = useCallback(async () => {
     if (!token || !id) return;
     setLoading(true);
@@ -262,6 +287,25 @@ export default function ReconciliationDetailPage() {
     }
   }
 
+  async function handleQuickApprove() {
+    if (!token || !data) return;
+    setApproveLoading(true);
+    try {
+      const res = await fetch(`/api/reconciliations/${id}/status`, {
+        method: "PATCH",
+        headers: { ...authHeaders(token).headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "approved" }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Đã approve đối soát");
+      await fetchDetail();
+    } catch {
+      toast.error("Không thể approve");
+    } finally {
+      setApproveLoading(false);
+    }
+  }
+
   async function handleRegenerate(type: "xlsx" | "docx" | "both") {
     if (!token || !data) return;
     setRegenLoading(true);
@@ -306,6 +350,18 @@ export default function ReconciliationDetailPage() {
   const canTransition = data.status !== "completed";
   const nextStatus = NEXT_STATUS[data.status];
 
+  const badgeClass = ({
+    flagged: "bg-red-500/20 text-red-400",
+    ready: "bg-blue-500/20 text-blue-400",
+    approved: "bg-green-500/20 text-green-400",
+    completed: "bg-green-600/20 text-green-300",
+    signed: "bg-green-500/20 text-green-400",
+    sent: "bg-yellow-500/20 text-yellow-400",
+    reviewed: "bg-blue-500/20 text-blue-400",
+  } as Record<string, string>)[data.status] ?? "bg-zinc-500/20 text-zinc-400";
+
+  const showBanner = data.status === "ready" || data.status === "flagged" || data.status === "approved";
+
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
       {/* Header */}
@@ -321,24 +377,89 @@ export default function ReconciliationDetailPage() {
               {data.tenant_name} · {formatPeriod(data.period_start, data.period_end)} · Ngày tạo: {formatDate(data.createdAt)}
             </p>
           </div>
-          <Badge
-            className={
-              data.status === "completed"
-                ? "bg-green-600/20 text-green-300"
-                : data.status === "signed"
-                ? "bg-green-500/20 text-green-400"
-                : data.status === "sent"
-                ? "bg-yellow-500/20 text-yellow-400"
-                : data.status === "reviewed"
-                ? "bg-blue-500/20 text-blue-400"
-                : "bg-zinc-500/20 text-zinc-400"
-            }
-          >
+          <Badge className={badgeClass}>
             {data.status === "completed" && <CheckCircle className="mr-1 size-3" />}
             {STATUS_LABELS[data.status]}
           </Badge>
         </div>
       </div>
+
+      {/* Quick Approve Banner */}
+      {showBanner && data.status === "ready" && (
+        <Card className="border-green-500/40 bg-green-500/5">
+          <CardContent className="flex items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="size-5 text-green-500 shrink-0" />
+              <div>
+                <p className="font-semibold text-green-400">Đối soát sạch — không có cảnh báo lỗi</p>
+                <p className="text-sm text-muted-foreground">
+                  Doanh thu: {formatVnd(data.net_revenue)} · Phí: {formatVnd(data.fee_amount)} · Merchant nhận: {formatVnd(data.payout_amount)}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button variant="outline" size="sm" onClick={() => router.push(`/reconciliations`)}>Xem danh sách</Button>
+              <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleQuickApprove} disabled={approveLoading}>
+                {approveLoading ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle className="mr-1.5 size-4" />}
+                Approve nhanh
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showBanner && data.status === "flagged" && (
+        <Card className="border-red-500/40 bg-red-500/5">
+          <CardContent className="pt-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="size-5 text-red-400 shrink-0" />
+              <p className="font-semibold text-red-400">Cần xử lý trước khi approve</p>
+            </div>
+            {data.flags?.map((flag, i) => (
+              <div
+                key={i}
+                className={`flex items-start gap-2 text-sm rounded-md px-3 py-2 ${
+                  flag.severity === "ERROR"
+                    ? "bg-red-500/10 text-red-300 border border-red-500/20"
+                    : flag.severity === "WARNING"
+                    ? "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20"
+                    : "bg-blue-500/10 text-blue-300 border border-blue-500/20"
+                }`}
+              >
+                <span className="shrink-0">
+                  {flag.severity === "ERROR" ? "🔴" : flag.severity === "WARNING" ? "🟡" : "🔵"}
+                </span>
+                <span>{flag.message}</span>
+              </div>
+            ))}
+            <div className="flex gap-2 mt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleQuickApprove}
+                disabled={approveLoading}
+                className="text-muted-foreground"
+              >
+                {approveLoading ? "Đang xử lý..." : "Approve anyway (không khuyến nghị)"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showBanner && data.status === "approved" && (
+        <Card className="border-blue-500/30 bg-blue-500/5">
+          <CardContent className="flex items-center gap-3 py-4">
+            <CheckCircle className="size-5 text-blue-400" />
+            <div>
+              <p className="font-semibold text-blue-400">Đã duyệt</p>
+              <p className="text-sm text-muted-foreground">
+                Duyệt lúc: {formatDate(data.approved_at)} · Merchant nhận: {formatVnd(data.payout_amount)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status stepper */}
       <Card>

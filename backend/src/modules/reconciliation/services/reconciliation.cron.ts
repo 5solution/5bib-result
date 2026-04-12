@@ -12,6 +12,10 @@ import {
   MerchantConfig,
   MerchantConfigDocument,
 } from '../../merchant/schemas/merchant-config.schema';
+import {
+  ReconciliationCronLog,
+  ReconciliationCronLogDocument,
+} from '../schemas/reconciliation-cron-log.schema';
 
 const TELEGRAM_BOT_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN ||
@@ -38,6 +42,8 @@ export class ReconciliationCron {
     private readonly reconciliationModel: Model<ReconciliationDocument>,
     @InjectModel(MerchantConfig.name)
     private readonly configModel: Model<MerchantConfigDocument>,
+    @InjectModel(ReconciliationCronLog.name)
+    private readonly cronLogModel: Model<ReconciliationCronLogDocument>,
   ) {}
 
   // Chạy lúc 08:00 ngày 1 hàng tháng
@@ -157,6 +163,29 @@ export class ReconciliationCron {
 
     this.isRunning = false;
     this.logger.log(`Cron done — created=${created}, skipped=${skipped}, errors=${errors}`);
+
+    // Save cron log entry
+    const errorDetails = results
+      .filter((r) => r.status === 'error')
+      .map((r) => ({
+        tenant_id: 0,
+        merchant_name: r.merchant,
+        race_title: r.race,
+        reason: r.reason ?? '',
+      }));
+    try {
+      await this.cronLogModel.create({
+        period,
+        ran_at: new Date(),
+        created_count: created,
+        skipped_count: skipped,
+        error_count: errors,
+        error_details: errorDetails,
+        triggered_by: 'cron',
+      });
+    } catch (logErr) {
+      this.logger.error(`Failed to save cron log: ${logErr.message}`);
+    }
 
     const month = `T${String(prevMonthStart.getMonth() + 1).padStart(2, '0')}/${prevMonthStart.getFullYear()}`;
     let msg = `🤖 Auto đối soát ${month} hoàn thành\n`;

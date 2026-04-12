@@ -10,6 +10,10 @@ import {
   MerchantConfig,
   MerchantConfigSchema,
 } from '../merchant/schemas/merchant-config.schema';
+import {
+  ReconciliationCronLog,
+  ReconciliationCronLogSchema,
+} from './schemas/reconciliation-cron-log.schema';
 import { ReconciliationController } from './reconciliation.controller';
 import { ReconciliationService } from './reconciliation.service';
 import { ReconciliationQueryService } from './services/reconciliation-query.service';
@@ -25,6 +29,7 @@ import { ReconciliationCron } from './services/reconciliation.cron';
     MongooseModule.forFeature([
       { name: Reconciliation.name, schema: ReconciliationSchema },
       { name: MerchantConfig.name, schema: MerchantConfigSchema },
+      { name: ReconciliationCronLog.name, schema: ReconciliationCronLogSchema },
     ]),
   ],
   controllers: [ReconciliationController],

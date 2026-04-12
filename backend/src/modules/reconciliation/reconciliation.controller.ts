@@ -21,6 +21,7 @@ import { DocxService } from './services/docx.service';
 import { PreviewReconciliationDto } from './dto/preview-reconciliation.dto';
 import { CreateReconciliationDto } from './dto/create-reconciliation.dto';
 import { UpdateReconciliationStatusDto } from './dto/update-reconciliation-status.dto';
+import { BatchCreateReconciliationDto } from './dto/batch-create-reconciliation.dto';
 
 function fmtDate(s: string): string {
   if (!s) return '';
@@ -83,6 +84,13 @@ export class ReconciliationController {
       merchantIds.map((id) => this.preflightService.run(id, body.period)),
     );
     return results;
+  }
+
+  @Post('batch')
+  @ApiOperation({ summary: 'Batch create reconciliations for multiple merchants' })
+  @ApiResponse({ status: 201 })
+  batchCreate(@Body() dto: BatchCreateReconciliationDto) {
+    return this.reconciliationService.batchCreate(dto);
   }
 
   @Post('preview')
@@ -161,6 +169,13 @@ export class ReconciliationController {
       'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
     });
     res.send(buf);
+  }
+
+  @Get('cron-logs')
+  @ApiOperation({ summary: 'Get recent reconciliation cron run logs' })
+  @ApiResponse({ status: 200, description: 'Recent cron logs' })
+  getCronLogs() {
+    return this.reconciliationService.getCronLogs();
   }
 
   @Get(':id')

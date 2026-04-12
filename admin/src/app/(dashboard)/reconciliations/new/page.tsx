@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronRight, ChevronLeft, CheckCircle, Download } from "lucide-react";
+import { AlertTriangle, ChevronRight, ChevronLeft, CheckCircle, Download, Loader2 } from "lucide-react";
 
 async function downloadWithAuth(url: string, filename: string, token: string) {
   const res = await fetch(url, {
@@ -123,6 +123,37 @@ interface CreateResult {
   docx_url: string | null;
 }
 
+interface PreflightRaceResult {
+  race_id: number;
+  race_name: string;
+  order_count: number;
+  gross_revenue: number;
+  manual_order_count: number;
+  ordinary_missing_payment_ref: number;
+}
+
+interface PreflightFlag {
+  type: string;
+  severity: "ERROR" | "WARNING" | "INFO";
+  message: string;
+  count: number | null;
+}
+
+interface PreflightResult {
+  tenant_id: number;
+  merchant_name: string;
+  period: string;
+  can_create: boolean;
+  races_with_orders: PreflightRaceResult[];
+  races_skipped: Array<{ race_id: number; race_name: string; reason: string }>;
+  warnings: PreflightFlag[];
+  summary: {
+    total_orders: number;
+    estimated_gross_revenue: number;
+    estimated_fee: number | null;
+  };
+}
+
 function formatVnd(n: number) {
   return new Intl.NumberFormat("vi-VN").format(n) + " đ";
 }
@@ -166,6 +197,11 @@ export default function NewReconciliationPage() {
   const [periodEnd, setPeriodEnd] = useState(getMonthEnd(-1));
   const [previewLoading, setPreviewLoading] = useState(false);
 
+  // Preflight state
+  const [preflight, setPreflight] = useState<PreflightResult | null>(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
+  const [errorConfirmed, setErrorConfirmed] = useState(false);
+
   // Step 2 state
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [feeRate, setFeeRate] = useState("");
@@ -201,6 +237,8 @@ export default function NewReconciliationPage() {
       setRaces([]);
       setSelectedRaceId("");
       setRaceTitle("");
+      setPreflight(null);
+      setErrorConfirmed(false);
       return;
     }
     setRacesLoading(true);
@@ -217,6 +255,29 @@ export default function NewReconciliationPage() {
   }, [token, selectedMerchantId]);
 
   const selectedRace = races.find((r) => String(r.race_id) === selectedRaceId);
+
+  async function handlePreflight() {
+    if (!token || !selectedMerchantId || !selectedRaceId || !periodStart || !periodEnd) {
+      toast.error("Vui lòng điền đầy đủ thông tin");
+      return;
+    }
+    setPreflightLoading(true);
+    setPreflight(null);
+    setErrorConfirmed(false);
+    try {
+      const period = periodStart.slice(0, 7); // YYYY-MM
+      const res = await fetch(
+        `/api/reconciliations/preflight?merchant_id=${selectedMerchantId}&period=${period}&race_id=${selectedRaceId}`,
+        { headers: authHeaders(token).headers }
+      );
+      const json = await res.json();
+      setPreflight(json.data ?? json);
+    } catch {
+      toast.error("Không thể kiểm tra dữ liệu");
+    } finally {
+      setPreflightLoading(false);
+    }
+  }
 
   async function handlePreview() {
     const effectiveRaceTitle = raceTitle || selectedRace?.title || "";
@@ -393,7 +454,18 @@ export default function NewReconciliationPage() {
               ) : racesLoading ? (
                 <p className="text-sm text-muted-foreground">Đang tải giải đấu...</p>
               ) : (
-                <Select value={selectedRaceId} onValueChange={(v) => { if (v) { setSelectedRaceId(v); const r = races.find((r) => String(r.race_id) === v); if (r) setRaceTitle(r.title); } }}>
+                <Select
+                  value={selectedRaceId}
+                  onValueChange={(v) => {
+                    if (v) {
+                      setSelectedRaceId(v);
+                      const r = races.find((r) => String(r.race_id) === v);
+                      if (r) setRaceTitle(r.title);
+                      setPreflight(null);
+                      setErrorConfirmed(false);
+                    }
+                  }}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Chọn giải đấu...">
                       {selectedRace ? selectedRace.title : "Chọn giải đấu..."}
@@ -435,6 +507,8 @@ export default function NewReconciliationPage() {
                   onClick={() => {
                     setPeriodStart(getMonthStart(0));
                     setPeriodEnd(getMonthEnd(0));
+                    setPreflight(null);
+                    setErrorConfirmed(false);
                   }}
                 >
                   Tháng này
@@ -446,6 +520,8 @@ export default function NewReconciliationPage() {
                   onClick={() => {
                     setPeriodStart(getMonthStart(-1));
                     setPeriodEnd(getMonthEnd(-1));
+                    setPreflight(null);
+                    setErrorConfirmed(false);
                   }}
                 >
                   Tháng trước
@@ -457,7 +533,7 @@ export default function NewReconciliationPage() {
                   <Input
                     type="date"
                     value={periodStart}
-                    onChange={(e) => setPeriodStart(e.target.value)}
+                    onChange={(e) => { setPeriodStart(e.target.value); setPreflight(null); setErrorConfirmed(false); }}
                   />
                 </div>
                 <span className="text-muted-foreground mt-5">—</span>
@@ -466,14 +542,145 @@ export default function NewReconciliationPage() {
                   <Input
                     type="date"
                     value={periodEnd}
-                    onChange={(e) => setPeriodEnd(e.target.value)}
+                    onChange={(e) => { setPeriodEnd(e.target.value); setPreflight(null); setErrorConfirmed(false); }}
                   />
                 </div>
               </div>
             </div>
 
-            <Button onClick={handlePreview} disabled={previewLoading} className="self-start">
-              {previewLoading ? "Đang lấy dữ liệu..." : "Lấy dữ liệu →"}
+            {/* Preflight panel */}
+            {preflight && (() => {
+              const hasErrors = preflight.warnings.some((w) => w.severity === "ERROR");
+              const canProceed = preflight.can_create && (!hasErrors || errorConfirmed);
+
+              return (
+                <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4">
+                  {/* Header */}
+                  <div className="flex items-center gap-2 border-b pb-3 text-sm font-semibold">
+                    <span>🔍</span>
+                    <span>Kiểm tra dữ liệu — {preflight.merchant_name} · {preflight.period}</span>
+                  </div>
+
+                  {/* Races summary */}
+                  <div className="flex flex-col gap-1.5 text-sm">
+                    {preflight.races_with_orders.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span>✅</span>
+                        <span>
+                          {preflight.races_with_orders.length} giải có giao dịch ({preflight.summary.total_orders} orders)
+                        </span>
+                      </div>
+                    )}
+                    {preflight.races_skipped.map((r, i) => (
+                      <div key={i} className="flex items-start gap-2 text-muted-foreground">
+                        <span>⏭</span>
+                        <span>
+                          Bỏ qua: &ldquo;{r.race_name}&rdquo; ({r.reason})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Flags */}
+                  {preflight.warnings.length > 0 && (
+                    <div className="flex flex-col gap-1.5 border-t pt-3 text-sm">
+                      {preflight.warnings.map((w, i) => (
+                        <div
+                          key={i}
+                          className={`flex items-start gap-2 rounded px-2 py-1 ${
+                            w.severity === "ERROR"
+                              ? "border border-red-500/30 bg-red-500/10 text-red-700"
+                              : w.severity === "WARNING"
+                              ? "border border-yellow-500/30 bg-yellow-500/10 text-yellow-700"
+                              : "border border-blue-500/30 bg-blue-500/10 text-blue-700"
+                          }`}
+                        >
+                          <span>
+                            {w.severity === "ERROR" ? "🔴" : w.severity === "WARNING" ? "🟡" : "🔵"}
+                          </span>
+                          <span className="flex-1">{w.message}</span>
+                          <span className={`shrink-0 text-xs font-semibold ${
+                            w.severity === "ERROR" ? "text-red-600" : w.severity === "WARNING" ? "text-yellow-600" : "text-blue-600"
+                          }`}>
+                            [{w.severity}]
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Summary estimate */}
+                  <div className="border-t pt-3 text-sm text-muted-foreground">
+                    Ước tính: {preflight.summary.total_orders} đơn · {formatVnd(preflight.summary.estimated_gross_revenue)} doanh thu
+                    {preflight.summary.estimated_fee != null && (
+                      <span> · Phí 5BIB: ~{formatVnd(preflight.summary.estimated_fee)}</span>
+                    )}
+                  </div>
+
+                  {/* Status message */}
+                  {!preflight.can_create ? (
+                    <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-700">
+                      Không có giao dịch trong kỳ
+                    </div>
+                  ) : hasErrors ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-700">
+                        <AlertTriangle className="size-4 shrink-0" />
+                        Dữ liệu có vấn đề — vẫn có thể tạo
+                      </div>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={errorConfirmed}
+                          onChange={(e) => setErrorConfirmed(e.target.checked)}
+                          className="rounded"
+                        />
+                        Tôi đã kiểm tra và xác nhận vẫn tạo
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-700">
+                      <CheckCircle className="size-4 shrink-0" />
+                      ✅ Dữ liệu sạch, sẵn sàng tạo đối soát
+                    </div>
+                  )}
+
+                  {/* Continue button */}
+                  <Button
+                    onClick={handlePreview}
+                    disabled={!canProceed || previewLoading}
+                    className="self-start"
+                  >
+                    {previewLoading ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        Đang lấy dữ liệu...
+                      </>
+                    ) : (
+                      "Tiếp tục →"
+                    )}
+                  </Button>
+                </div>
+              );
+            })()}
+
+            {/* Check data button — shown when preflight not yet loaded */}
+            <Button
+              onClick={handlePreflight}
+              disabled={preflightLoading}
+              variant={preflight ? "outline" : "default"}
+              className="self-start"
+            >
+              {preflightLoading ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Đang kiểm tra...
+                </>
+              ) : preflight ? (
+                "Kiểm tra lại"
+              ) : (
+                "Kiểm tra dữ liệu"
+              )}
             </Button>
           </CardContent>
         </Card>

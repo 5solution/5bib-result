@@ -13,6 +13,10 @@ import {
   MerchantConfig,
   MerchantConfigDocument,
 } from '../merchant/schemas/merchant-config.schema';
+import {
+  ReconciliationCronLog,
+  ReconciliationCronLogDocument,
+} from './schemas/reconciliation-cron-log.schema';
 import { Tenant } from '../merchant/entities/tenant.entity';
 import { ReconciliationQueryService } from './services/reconciliation-query.service';
 import { ReconciliationCalcService } from './services/reconciliation-calc.service';
@@ -22,6 +26,7 @@ import { DocxService } from './services/docx.service';
 import { PreviewReconciliationDto } from './dto/preview-reconciliation.dto';
 import { CreateReconciliationDto } from './dto/create-reconciliation.dto';
 import { UpdateReconciliationStatusDto } from './dto/update-reconciliation-status.dto';
+import { BatchCreateReconciliationDto } from './dto/batch-create-reconciliation.dto';
 
 const BUCKET_NAME = env.s3.bucket;
 const REGION = env.s3.region;
@@ -40,6 +45,8 @@ export class ReconciliationService {
     private reconciliationModel: Model<ReconciliationDocument>,
     @InjectModel(MerchantConfig.name)
     private configModel: Model<MerchantConfigDocument>,
+    @InjectModel(ReconciliationCronLog.name)
+    private cronLogModel: Model<ReconciliationCronLogDocument>,
     @InjectRepository(Tenant, 'platform')
     private tenantRepo: Repository<Tenant>,
   ) {
@@ -299,6 +306,159 @@ export class ReconciliationService {
 
     await doc.save();
     return doc;
+  }
+
+  async batchCreate(dto: BatchCreateReconciliationDto): Promise<{
+    created: number;
+    skipped: number;
+    failed: number;
+    results: Array<{
+      merchant_id: number;
+      merchant_name: string;
+      race_id: number;
+      race_title: string;
+      status: 'created' | 'skipped' | 'failed';
+      reason?: string;
+      reconciliation_id?: string;
+    }>;
+  }> {
+    let merchantIds: number[];
+    if (dto.merchant_ids === 'all') {
+      merchantIds = await this.getAllMerchantIds();
+    } else {
+      merchantIds = dto.merchant_ids;
+    }
+
+    const { period_start, period_end } = this.parsePeriod(dto.period);
+
+    const results: Array<{
+      merchant_id: number;
+      merchant_name: string;
+      race_id: number;
+      race_title: string;
+      status: 'created' | 'skipped' | 'failed';
+      reason?: string;
+      reconciliation_id?: string;
+    }> = [];
+
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const merchantId of merchantIds) {
+      let merchantName = `Merchant #${merchantId}`;
+      try {
+        const preflight = await this.preflightService.run(merchantId, dto.period);
+        merchantName = preflight.merchant_name;
+
+        const config = await this.configModel.findOne({ tenantId: merchantId }).lean();
+
+        if (dto.skip_errors) {
+          const hasErrors = preflight.warnings.some((w) => w.severity === 'ERROR');
+          if (hasErrors) {
+            for (const race of preflight.races_with_orders) {
+              results.push({
+                merchant_id: merchantId,
+                merchant_name: merchantName,
+                race_id: race.race_id,
+                race_title: race.race_name,
+                status: 'skipped',
+                reason: 'Skipped due to ERROR-severity preflight flags',
+              });
+              skipped++;
+            }
+            continue;
+          }
+        }
+
+        for (const race of preflight.races_with_orders) {
+          try {
+            const existing = await this.reconciliationModel.findOne({
+              tenant_id: merchantId,
+              mysql_race_id: race.race_id,
+              period_start,
+              period_end,
+            });
+
+            if (existing) {
+              results.push({
+                merchant_id: merchantId,
+                merchant_name: merchantName,
+                race_id: race.race_id,
+                race_title: race.race_name,
+                status: 'skipped',
+                reason: 'Reconciliation already exists for this period',
+                reconciliation_id: String(existing._id),
+              });
+              skipped++;
+              continue;
+            }
+
+            const doc = await this.create({
+              tenant_id: merchantId,
+              mysql_race_id: race.race_id,
+              race_title: race.race_name,
+              period_start,
+              period_end,
+              fee_rate_applied: config?.service_fee_rate ?? null,
+              manual_fee_per_ticket: config?.manual_fee_per_ticket ?? 5000,
+              fee_vat_rate: config?.fee_vat_rate ?? 0,
+              manual_adjustment: 0,
+              adjustment_note: null,
+              signed_date_str: null,
+              generate_xlsx: true,
+              generate_docx: true,
+              created_by: null,
+              created_source: 'batch',
+            } as any);
+
+            results.push({
+              merchant_id: merchantId,
+              merchant_name: merchantName,
+              race_id: race.race_id,
+              race_title: race.race_name,
+              status: 'created',
+              reconciliation_id: String(doc._id),
+            });
+            created++;
+          } catch (err) {
+            results.push({
+              merchant_id: merchantId,
+              merchant_name: merchantName,
+              race_id: race.race_id,
+              race_title: race.race_name,
+              status: 'failed',
+              reason: err.message,
+            });
+            failed++;
+          }
+        }
+      } catch (err) {
+        results.push({
+          merchant_id: merchantId,
+          merchant_name: merchantName,
+          race_id: 0,
+          race_title: '—',
+          status: 'failed',
+          reason: err.message,
+        });
+        failed++;
+      }
+    }
+
+    return { created, skipped, failed, results };
+  }
+
+  async getCronLogs(limit = 12) {
+    return this.cronLogModel.find({}).sort({ ran_at: -1 }).limit(limit).lean();
+  }
+
+  private parsePeriod(period: string): { period_start: string; period_end: string } {
+    const [year, month] = period.split('-').map(Number);
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    return { period_start: fmt(start), period_end: fmt(end) };
   }
 
   private async uploadBuffer(
