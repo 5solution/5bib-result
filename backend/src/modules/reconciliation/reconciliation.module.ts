@@ -14,8 +14,10 @@ import { ReconciliationController } from './reconciliation.controller';
 import { ReconciliationService } from './reconciliation.service';
 import { ReconciliationQueryService } from './services/reconciliation-query.service';
 import { ReconciliationCalcService } from './services/reconciliation-calc.service';
+import { ReconciliationPreflightService } from './services/reconciliation-preflight.service';
 import { XlsxService } from './services/xlsx.service';
 import { DocxService } from './services/docx.service';
+import { ReconciliationCron } from './services/reconciliation.cron';
 
 @Module({
   imports: [
@@ -30,8 +32,10 @@ import { DocxService } from './services/docx.service';
     ReconciliationService,
     ReconciliationQueryService,
     ReconciliationCalcService,
+    ReconciliationPreflightService,
     XlsxService,
     DocxService,
+    ReconciliationCron,
   ],
   exports: [ReconciliationService],
 })

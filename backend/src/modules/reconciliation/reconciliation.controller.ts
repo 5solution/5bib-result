@@ -15,6 +15,7 @@ import { ApiOperation, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ReconciliationService } from './reconciliation.service';
 import { ReconciliationQueryService } from './services/reconciliation-query.service';
+import { ReconciliationPreflightService } from './services/reconciliation-preflight.service';
 import { XlsxService } from './services/xlsx.service';
 import { DocxService } from './services/docx.service';
 import { PreviewReconciliationDto } from './dto/preview-reconciliation.dto';
@@ -43,9 +44,46 @@ export class ReconciliationController {
   constructor(
     private readonly reconciliationService: ReconciliationService,
     private readonly queryService: ReconciliationQueryService,
+    private readonly preflightService: ReconciliationPreflightService,
     private readonly xlsxService: XlsxService,
     private readonly docxService: DocxService,
   ) {}
+
+  @Get('preflight')
+  @ApiOperation({ summary: 'Pre-flight check for a single merchant + period' })
+  @ApiResponse({ status: 200, description: 'Pre-flight result with warnings' })
+  @ApiQuery({ name: 'merchant_id', required: true, type: Number })
+  @ApiQuery({ name: 'period', required: true, type: String, description: 'YYYY-MM' })
+  @ApiQuery({ name: 'race_id', required: false, type: Number })
+  preflight(
+    @Query('merchant_id') merchant_id: string,
+    @Query('period') period: string,
+    @Query('race_id') race_id?: string,
+  ) {
+    return this.preflightService.run(
+      Number(merchant_id),
+      period,
+      race_id ? Number(race_id) : undefined,
+    );
+  }
+
+  @Post('preflight/batch')
+  @ApiOperation({ summary: 'Batch pre-flight check for multiple merchants' })
+  @ApiResponse({ status: 200, description: 'Pre-flight results for all merchants' })
+  async preflightBatch(
+    @Body() body: { period: string; merchant_ids: number[] | 'all' },
+  ) {
+    let merchantIds: number[];
+    if (body.merchant_ids === 'all') {
+      merchantIds = await this.reconciliationService.getAllMerchantIds();
+    } else {
+      merchantIds = body.merchant_ids;
+    }
+    const results = await Promise.all(
+      merchantIds.map((id) => this.preflightService.run(id, body.period)),
+    );
+    return results;
+  }
 
   @Post('preview')
   @ApiOperation({ summary: 'Preview reconciliation data from MySQL without saving' })

@@ -123,13 +123,26 @@ export class Reconciliation {
   @Prop({ type: String, default: null })
   adjustment_note: string | null;
 
-  // Status workflow: draft → reviewed → sent → signed → completed
+  // Status workflow: draft → flagged/ready → approved → sent
   @Prop({
     type: String,
-    enum: ['draft', 'reviewed', 'sent', 'signed', 'completed'],
+    enum: ['draft', 'flagged', 'ready', 'approved', 'sent', 'reviewed', 'signed', 'completed'],
     default: 'draft',
   })
   status: string;
+
+  // Pre-flight flags/warnings computed at creation time
+  @Prop({ type: [Object], default: [] })
+  flags: Array<{
+    type: string;
+    severity: 'ERROR' | 'WARNING' | 'INFO';
+    message: string;
+    count: number | null;
+  }>;
+
+  // Source: 'manual' | 'cron'
+  @Prop({ type: String, default: 'manual' })
+  created_source: string;
 
   // Generated file URLs (S3)
   @Prop({ type: String, default: null })
@@ -139,14 +152,20 @@ export class Reconciliation {
   docx_url: string | null;
 
   // Audit
-  @Prop({ type: Number, required: true })
-  created_by: number;
+  @Prop({ type: Number, default: null })
+  created_by: number | null;
 
   @Prop({ type: Number, default: null })
   reviewed_by: number | null;
 
   @Prop({ type: Date, default: null })
   reviewed_at: Date | null;
+
+  @Prop({ type: Number, default: null })
+  approved_by: number | null;
+
+  @Prop({ type: Date, default: null })
+  approved_at: Date | null;
 
   @Prop({ type: Date, default: null })
   signed_at: Date | null;

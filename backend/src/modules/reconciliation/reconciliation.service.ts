@@ -16,6 +16,7 @@ import {
 import { Tenant } from '../merchant/entities/tenant.entity';
 import { ReconciliationQueryService } from './services/reconciliation-query.service';
 import { ReconciliationCalcService } from './services/reconciliation-calc.service';
+import { ReconciliationPreflightService } from './services/reconciliation-preflight.service';
 import { XlsxService } from './services/xlsx.service';
 import { DocxService } from './services/docx.service';
 import { PreviewReconciliationDto } from './dto/preview-reconciliation.dto';
@@ -32,6 +33,7 @@ export class ReconciliationService {
   constructor(
     private queryService: ReconciliationQueryService,
     private calcService: ReconciliationCalcService,
+    private preflightService: ReconciliationPreflightService,
     private xlsxService: XlsxService,
     private docxService: DocxService,
     @InjectModel(Reconciliation.name)
@@ -120,6 +122,16 @@ export class ReconciliationService {
     const lineItems = this.calcService.buildLineItems(fiveBibOrders);
     const manualOrderRows = this.calcService.buildManualOrders(manualOrders);
 
+    // Run pre-flight to determine flags and status
+    const period = dto.period_start.slice(0, 7); // YYYY-MM
+    const preflight = await this.preflightService.run(
+      dto.tenant_id,
+      period,
+      dto.mysql_race_id,
+    );
+    const flags = this.preflightService.extractFlags(preflight);
+    const status = this.preflightService.determineStatus(flags);
+
     const doc = await this.reconciliationModel.create({
       tenant_id: dto.tenant_id,
       mysql_race_id: dto.mysql_race_id,
@@ -133,12 +145,16 @@ export class ReconciliationService {
       ...summary,
       manual_adjustment: manualAdjustment,
       adjustment_note: dto.adjustment_note ?? null,
-      status: 'draft',
+      status,
+      flags,
+      created_source: (dto as any).created_source ?? 'manual',
       xlsx_url: null,
       docx_url: null,
-      created_by: dto.created_by,
+      created_by: dto.created_by ?? null,
       reviewed_by: null,
       reviewed_at: null,
+      approved_by: null,
+      approved_at: null,
       signed_at: null,
       signed_date_str: dto.signed_date_str ?? null,
       line_items: lineItems,
@@ -183,6 +199,11 @@ export class ReconciliationService {
 
     await doc.save();
     return doc;
+  }
+
+  async getAllMerchantIds(): Promise<number[]> {
+    const configs = await this.configModel.find({}, { tenantId: 1 }).lean();
+    return configs.map((c) => c.tenantId);
   }
 
   async findAll(filters: {
@@ -233,6 +254,11 @@ export class ReconciliationService {
 
     if (dto.status === 'reviewed') {
       doc.reviewed_at = new Date();
+    }
+
+    if (dto.status === 'approved') {
+      doc.approved_at = new Date();
+      if (dto.approved_by) doc.approved_by = dto.approved_by;
     }
 
     if (dto.status === 'signed') {
