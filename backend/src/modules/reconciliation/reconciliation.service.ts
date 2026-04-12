@@ -54,9 +54,10 @@ export class ReconciliationService {
     const tenant = await this.queryService.getTenant(dto.tenant_id);
     const config = await this.configModel.findOne({ tenantId: dto.tenant_id });
 
-    const feeRate = config?.service_fee_rate ?? null;
-    const manualFeePerTicket = config?.manual_fee_per_ticket ?? 5000;
-    const feeVatRate = config?.fee_vat_rate ?? 0;
+    // DTO values take priority; fall back to merchant config
+    const feeRate = dto.fee_rate_applied ?? config?.service_fee_rate ?? null;
+    const manualFeePerTicket = dto.manual_fee_per_ticket ?? config?.manual_fee_per_ticket ?? 5000;
+    const feeVatRate = dto.fee_vat_rate ?? config?.fee_vat_rate ?? 0;
 
     const { fiveBibOrders, manualOrders, missingPaymentRef } =
       await this.queryService.queryOrders(
