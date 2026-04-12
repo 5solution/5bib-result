@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   Card,
   CardContent,
@@ -40,12 +41,15 @@ import {
   ArrowRight,
   Loader2,
   AlertTriangle,
+  Calendar,
+  Building2,
+  Clock,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 
 async function downloadWithAuth(url: string, filename: string, token: string) {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error("Download failed");
   const blob = await res.blob();
   const a = document.createElement("a");
@@ -58,10 +62,10 @@ async function downloadWithAuth(url: string, filename: string, token: string) {
 function fmtDate(s: string): string {
   if (!s) return "";
   const parts = s.split("-");
-  return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s;
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : s;
 }
 
-function buildRecFilename(data: any, ext: string): string {
+function buildRecFilename(data: ReconciliationDetail, ext: string): string {
   const parts = [
     data.tenant_name || String(data.tenant_id),
     data.race_title,
@@ -153,11 +157,11 @@ const NEXT_STATUS: Record<string, string> = {
 
 const NEXT_STATUS_LABEL: Record<string, string> = {
   draft: "Chuyển sang Đã xem xét",
-  flagged: "Chuyển sang Đã duyệt",
-  ready: "Chuyển sang Đã duyệt",
-  approved: "Chuyển sang Đã gửi",
-  reviewed: "Chuyển sang Đã gửi",
-  sent: "Chuyển sang Đã ký",
+  flagged: "Duyệt (bỏ qua lỗi)",
+  ready: "Approve",
+  approved: "Đánh dấu Đã gửi",
+  reviewed: "Đánh dấu Đã gửi",
+  sent: "Đánh dấu Đã ký",
   signed: "Hoàn tất",
 };
 
@@ -167,52 +171,51 @@ function formatVnd(n: number) {
 
 function formatDate(iso: string | null | undefined) {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return new Date(iso).toLocaleDateString("vi-VN", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  });
 }
 
 function formatPeriod(start: string, end: string) {
   if (!start || !end) return "—";
-  const s = new Date(start);
-  const e = new Date(end);
-  const fmt = (d: Date) =>
-    d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
-  return `${fmt(s)} – ${fmt(e)}`;
+  return `${fmtDate(start)} – ${fmtDate(end)}`;
 }
 
-function StatusStep({ currentStatus }: { currentStatus: string }) {
-  // For flagged, map to draft position for stepper display purposes
+const STATUS_BADGE: Record<string, string> = {
+  draft:     "bg-zinc-500/15 text-zinc-400 border-zinc-500/20",
+  flagged:   "bg-red-500/15 text-red-400 border-red-500/20",
+  ready:     "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  approved:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  sent:      "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  reviewed:  "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  signed:    "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  completed: "bg-emerald-600/15 text-emerald-300 border-emerald-600/20",
+};
+
+function StatusStepper({ currentStatus }: { currentStatus: string }) {
   const displayStatus = currentStatus === "flagged" ? "draft" : currentStatus;
   const currentIdx = STATUS_ORDER.indexOf(displayStatus as typeof STATUS_ORDER[number]);
   return (
-    <div className="flex items-center gap-1 overflow-x-auto pb-2">
+    <div className="flex items-center gap-0 overflow-x-auto">
       {STATUS_ORDER.map((s, i) => {
         const done = i < currentIdx;
         const active = i === currentIdx;
         return (
-          <div key={s} className="flex items-center gap-1 shrink-0">
-            <div className="flex items-center gap-1.5">
-              <div
-                className={`flex size-6 items-center justify-center rounded-full text-xs ${
-                  done
-                    ? "bg-green-500 text-white"
-                    : active
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {done ? <CheckCircle className="size-3.5" /> : i + 1}
+          <div key={s} className="flex items-center shrink-0">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className={`flex size-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                done ? "bg-emerald-500 text-white" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground/50"
+              }`}>
+                {done ? <CheckCircle className="size-4" /> : i + 1}
               </div>
-              <span
-                className={`text-xs ${
-                  active ? "font-semibold" : done ? "text-muted-foreground" : "text-muted-foreground/50"
-                }`}
-              >
+              <span className={`text-[11px] font-medium ${
+                active ? "text-foreground" : done ? "text-muted-foreground" : "text-muted-foreground/40"
+              }`}>
                 {STATUS_LABELS[s]}
               </span>
             </div>
             {i < STATUS_ORDER.length - 1 && (
-              <ArrowRight className="size-3 text-muted-foreground/40 ml-1" />
+              <div className={`h-px w-12 mx-2 mb-4 ${i < currentIdx ? "bg-emerald-500/40" : "bg-border"}`} />
             )}
           </div>
         );
@@ -228,25 +231,17 @@ export default function ReconciliationDetailPage() {
 
   const [data, setData] = useState<ReconciliationDetail | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Transition modal
   const [transitionOpen, setTransitionOpen] = useState(false);
   const [transitionLoading, setTransitionLoading] = useState(false);
   const [signedAt, setSignedAt] = useState(new Date().toISOString().slice(0, 10));
-
-  // Regenerate
   const [regenLoading, setRegenLoading] = useState(false);
-
-  // Quick approve
   const [approveLoading, setApproveLoading] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     if (!token || !id) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/reconciliations/${id}`, {
-        headers: authHeaders(token).headers,
-      });
+      const res = await fetch(`/api/reconciliations/${id}`, { headers: authHeaders(token).headers });
       if (!res.ok) throw new Error();
       const json = await res.json();
       setData(json.data ?? json);
@@ -257,9 +252,7 @@ export default function ReconciliationDetailPage() {
     }
   }, [token, id]);
 
-  useEffect(() => {
-    fetchDetail();
-  }, [fetchDetail]);
+  useEffect(() => { fetchDetail(); }, [fetchDetail]);
 
   async function handleTransition() {
     if (!token || !data) return;
@@ -268,16 +261,14 @@ export default function ReconciliationDetailPage() {
     setTransitionLoading(true);
     try {
       const body: Record<string, unknown> = { status: nextStatus };
-      if (data.status === "sent") {
-        body.signed_at = signedAt;
-      }
+      if (data.status === "sent") body.signed_at = signedAt;
       const res = await fetch(`/api/reconciliations/${id}/status`, {
         method: "PATCH",
         headers: { ...authHeaders(token).headers, "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
-      toast.success(`Đã chuyển trạng thái sang: ${STATUS_LABELS[nextStatus]}`);
+      toast.success(`Đã chuyển sang: ${STATUS_LABELS[nextStatus]}`);
       setTransitionOpen(false);
       await fetchDetail();
     } catch {
@@ -327,10 +318,14 @@ export default function ReconciliationDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4 max-w-4xl">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-48 w-full" />
+      <div className="flex flex-col gap-5 max-w-5xl">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton className="h-48 col-span-2" />
+          <Skeleton className="h-48" />
+        </div>
       </div>
     );
   }
@@ -339,8 +334,7 @@ export default function ReconciliationDetailPage() {
     return (
       <div className="flex flex-col gap-4">
         <Button variant="ghost" onClick={() => router.push("/reconciliations")} className="self-start">
-          <ChevronLeft className="mr-1 size-4" />
-          Quay lại
+          <ChevronLeft className="mr-1 size-4" /> Quay lại
         </Button>
         <p className="text-muted-foreground">Không tìm thấy bản đối soát</p>
       </div>
@@ -349,349 +343,354 @@ export default function ReconciliationDetailPage() {
 
   const canTransition = data.status !== "completed";
   const nextStatus = NEXT_STATUS[data.status];
+  const badgeClass = STATUS_BADGE[data.status] ?? STATUS_BADGE.draft;
+  const isFlagged = data.status === "flagged";
+  const isReady = data.status === "ready";
+  const isApproved = data.status === "approved";
 
-  const badgeClass = ({
-    flagged: "bg-red-500/20 text-red-400",
-    ready: "bg-blue-500/20 text-blue-400",
-    approved: "bg-green-500/20 text-green-400",
-    completed: "bg-green-600/20 text-green-300",
-    signed: "bg-green-500/20 text-green-400",
-    sent: "bg-yellow-500/20 text-yellow-400",
-    reviewed: "bg-blue-500/20 text-blue-400",
-  } as Record<string, string>)[data.status] ?? "bg-zinc-500/20 text-zinc-400";
-
-  const showBanner = data.status === "ready" || data.status === "flagged" || data.status === "approved";
+  const totalFees = data.fee_amount + data.manual_fee_amount + data.fee_vat_amount;
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <Button variant="ghost" onClick={() => router.push("/reconciliations")} className="self-start -ml-2">
-          <ChevronLeft className="mr-1 size-4" />
-          Danh sách đối soát
-        </Button>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold">{data.race_title}</h1>
-            <p className="text-sm text-muted-foreground">
-              {data.tenant_name} · {formatPeriod(data.period_start, data.period_end)} · Ngày tạo: {formatDate(data.createdAt)}
-            </p>
-          </div>
-          <Badge className={badgeClass}>
-            {data.status === "completed" && <CheckCircle className="mr-1 size-3" />}
-            {STATUS_LABELS[data.status]}
-          </Badge>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5 max-w-5xl">
 
-      {/* Quick Approve Banner */}
-      {showBanner && data.status === "ready" && (
-        <Card className="border-green-500/40 bg-green-500/5">
-          <CardContent className="flex items-center justify-between gap-4 py-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="size-5 text-green-500 shrink-0" />
-              <div>
-                <p className="font-semibold text-green-400">Đối soát sạch — không có cảnh báo lỗi</p>
-                <p className="text-sm text-muted-foreground">
-                  Doanh thu: {formatVnd(data.net_revenue)} · Phí %: {formatVnd(data.fee_amount)}{data.manual_fee_amount > 0 ? ` · Phí thủ công: ${formatVnd(data.manual_fee_amount)}` : ""} · Merchant nhận: {formatVnd(data.payout_amount)}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button variant="outline" size="sm" onClick={() => router.push(`/reconciliations`)}>Xem danh sách</Button>
-              <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleQuickApprove} disabled={approveLoading}>
-                {approveLoading ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle className="mr-1.5 size-4" />}
-                Approve nhanh
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* ── Back nav ── */}
+      <Button variant="ghost" onClick={() => router.push("/reconciliations")} className="self-start -ml-2 text-muted-foreground hover:text-foreground">
+        <ChevronLeft className="mr-1 size-4" />
+        Danh sách đối soát
+      </Button>
 
-      {showBanner && data.status === "flagged" && (
-        <Card className="border-red-500/40 bg-red-500/5">
-          <CardContent className="pt-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="size-5 text-red-400 shrink-0" />
-              <p className="font-semibold text-red-400">Cần xử lý trước khi approve</p>
-            </div>
-            {data.flags?.map((flag, i) => (
-              <div
-                key={i}
-                className={`flex items-start gap-2 text-sm rounded-md px-3 py-2 ${
-                  flag.severity === "ERROR"
-                    ? "bg-red-500/10 text-red-300 border border-red-500/20"
-                    : flag.severity === "WARNING"
-                    ? "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20"
-                    : "bg-blue-500/10 text-blue-300 border border-blue-500/20"
-                }`}
-              >
-                <span className="shrink-0">
-                  {flag.severity === "ERROR" ? "🔴" : flag.severity === "WARNING" ? "🟡" : "🔵"}
+      {/* ── Header card ── */}
+      <Card className="overflow-hidden">
+        <div className="px-6 py-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-bold leading-tight truncate">{data.race_title}</h1>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="size-3.5 shrink-0" />
+                  {data.tenant_name}
                 </span>
-                <span>{flag.message}</span>
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="size-3.5 shrink-0" />
+                  {formatPeriod(data.period_start, data.period_end)}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Clock className="size-3.5 shrink-0" />
+                  Tạo {formatDate(data.createdAt)}
+                  {data.created_source === "cron" && <span className="text-xs text-muted-foreground/60">(auto)</span>}
+                </span>
               </div>
-            ))}
-            <div className="flex gap-2 mt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleQuickApprove}
-                disabled={approveLoading}
-                className="text-muted-foreground"
-              >
-                {approveLoading ? "Đang xử lý..." : "Approve anyway (không khuyến nghị)"}
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <Badge className={`${badgeClass} border text-sm px-3 py-1 shrink-0`}>
+              {data.status === "completed" && <CheckCircle className="mr-1.5 size-3.5" />}
+              {STATUS_LABELS[data.status]}
+            </Badge>
+          </div>
+        </div>
 
-      {showBanner && data.status === "approved" && (
-        <Card className="border-blue-500/30 bg-blue-500/5">
-          <CardContent className="flex items-center gap-3 py-4">
-            <CheckCircle className="size-5 text-blue-400" />
-            <div>
-              <p className="font-semibold text-blue-400">Đã duyệt</p>
-              <p className="text-sm text-muted-foreground">
-                Duyệt lúc: {formatDate(data.approved_at)} · Merchant nhận: {formatVnd(data.payout_amount)}
-              </p>
+        {/* ── Banner inside header ── */}
+        {isReady && (
+          <div className="border-t border-emerald-500/20 bg-emerald-500/5 px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle className="size-4 text-emerald-400 shrink-0" />
+              <span className="text-sm font-medium text-emerald-400">Đối soát sạch — không có cảnh báo lỗi</span>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0" onClick={handleQuickApprove} disabled={approveLoading}>
+              {approveLoading ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle className="size-3.5" />}
+              <span className="ml-1.5">Approve</span>
+            </Button>
+          </div>
+        )}
 
-      {/* Status stepper */}
+        {isFlagged && (
+          <div className="border-t border-red-500/20 bg-red-500/5 px-6 py-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="size-4 text-red-400 shrink-0" />
+              <span className="text-sm font-semibold text-red-400">Có vấn đề cần kiểm tra</span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {data.flags?.map((flag, i) => (
+                <div key={i} className={`flex items-start gap-2 text-xs rounded px-3 py-2 border ${
+                  flag.severity === "ERROR"
+                    ? "bg-red-500/10 text-red-300 border-red-500/20"
+                    : flag.severity === "WARNING"
+                    ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                    : "bg-blue-500/10 text-blue-300 border-blue-500/20"
+                }`}>
+                  <span className="shrink-0 mt-px">
+                    {flag.severity === "ERROR" ? "🔴" : flag.severity === "WARNING" ? "🟡" : "🔵"}
+                  </span>
+                  {flag.message}
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" onClick={handleQuickApprove} disabled={approveLoading} className="self-start text-muted-foreground text-xs">
+              {approveLoading ? <Loader2 className="size-3 animate-spin mr-1" /> : null}
+              Approve anyway (không khuyến nghị)
+            </Button>
+          </div>
+        )}
+
+        {isApproved && (
+          <div className="border-t border-blue-500/20 bg-blue-500/5 px-6 py-3 flex items-center gap-2.5">
+            <CheckCircle className="size-4 text-blue-400 shrink-0" />
+            <span className="text-sm text-blue-400">
+              Đã duyệt {formatDate(data.approved_at)} · Merchant nhận{" "}
+              <strong className="text-blue-300">{formatVnd(data.payout_amount)}</strong>
+            </span>
+          </div>
+        )}
+      </Card>
+
+      {/* ── Status stepper ── */}
       <Card>
-        <CardContent className="pt-4">
-          <StatusStep currentStatus={data.status} />
+        <CardContent className="py-4 px-6">
+          <StatusStepper currentStatus={data.status} />
         </CardContent>
       </Card>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Doanh thu thực</p>
-            <p className="text-lg font-bold">{formatVnd(data.net_revenue)}</p>
+      {/* ── Main content: Financials + Actions ── */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+
+        {/* Financial ledger */}
+        <Card className="lg:col-span-3">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Tổng kết tài chính</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-col gap-0 text-sm">
+              {/* Revenue */}
+              <div className="flex items-center justify-between py-2.5">
+                <span className="text-muted-foreground">Doanh thu thực</span>
+                <span className="font-semibold tabular-nums">{formatVnd(data.net_revenue)}</span>
+              </div>
+              <Separator />
+
+              {/* Fees */}
+              <div className="flex items-center justify-between py-2 text-red-400/80">
+                <span className="text-muted-foreground pl-3">Phí dịch vụ {data.fee_rate_applied != null ? `(${data.fee_rate_applied}%)` : ""}</span>
+                <span className="tabular-nums">− {formatVnd(data.fee_amount)}</span>
+              </div>
+              {data.manual_fee_amount > 0 && (
+                <div className="flex items-center justify-between py-2 text-red-400/80">
+                  <span className="text-muted-foreground pl-3">
+                    Phí thủ công
+                    {data.manual_ticket_count > 0 && (
+                      <span className="ml-1.5 text-xs text-muted-foreground/60">
+                        ({data.manual_ticket_count} vé × {formatVnd(data.manual_fee_per_ticket)})
+                      </span>
+                    )}
+                  </span>
+                  <span className="tabular-nums">− {formatVnd(data.manual_fee_amount)}</span>
+                </div>
+              )}
+              {data.fee_vat_amount > 0 && (
+                <div className="flex items-center justify-between py-2 text-red-400/80">
+                  <span className="text-muted-foreground pl-3">VAT trên phí ({data.fee_vat_rate}%)</span>
+                  <span className="tabular-nums">− {formatVnd(data.fee_vat_amount)}</span>
+                </div>
+              )}
+              {data.manual_adjustment !== 0 && (
+                <div className={`flex items-center justify-between py-2 ${data.manual_adjustment > 0 ? "text-emerald-400/80" : "text-red-400/80"}`}>
+                  <span className="text-muted-foreground pl-3">Điều chỉnh thủ công</span>
+                  <span className="tabular-nums">{data.manual_adjustment > 0 ? "+" : "−"} {formatVnd(Math.abs(data.manual_adjustment))}</span>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* Subtotal fees */}
+              <div className="flex items-center justify-between py-2 text-xs text-muted-foreground/60">
+                <span className="pl-3">Tổng phí khấu trừ</span>
+                <span className="tabular-nums">− {formatVnd(totalFees)}</span>
+              </div>
+
+              <Separator />
+
+              {/* Payout */}
+              <div className="flex items-center justify-between py-3">
+                <span className="font-semibold">Merchant nhận</span>
+                <span className="text-lg font-bold text-emerald-400 tabular-nums">{formatVnd(data.payout_amount)}</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Phí dịch vụ (%)</p>
-            <p className="text-lg font-bold text-red-400">{formatVnd(data.fee_amount)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Phí thủ công</p>
-            <p className="text-lg font-bold text-red-400">{formatVnd(data.manual_fee_amount)}</p>
-            {data.manual_ticket_count > 0 && (
-              <p className="text-xs text-muted-foreground mt-0.5">{data.manual_ticket_count} vé × {formatVnd(data.manual_fee_per_ticket)}</p>
+
+        {/* Actions */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Thao tác</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 flex flex-col gap-4">
+
+            {/* Downloads */}
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground font-medium">Tải xuống</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => downloadWithAuth(
+                    data.xlsx_url || `/api/reconciliations/${data._id}/download/xlsx`,
+                    buildRecFilename(data, "xlsx"), token!
+                  ).catch(() => toast.error("Tải XLSX thất bại"))}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
+                >
+                  <FileSpreadsheet className="size-4" />
+                  XLSX
+                </button>
+                <button
+                  onClick={() => downloadWithAuth(
+                    data.docx_url || `/api/reconciliations/${data._id}/download/docx`,
+                    buildRecFilename(data, "docx"), token!
+                  ).catch(() => toast.error("Tải DOCX thất bại"))}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  <FileText className="size-4" />
+                  DOCX
+                </button>
+              </div>
+            </div>
+
+            {/* Transition */}
+            {canTransition && nextStatus && (
+              <>
+                <Separator />
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-muted-foreground font-medium">Chuyển trạng thái</p>
+                  <Button className="w-full" onClick={() => setTransitionOpen(true)}>
+                    <ArrowRight className="mr-2 size-4" />
+                    {NEXT_STATUS_LABEL[data.status]}
+                  </Button>
+                </div>
+              </>
             )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">VAT trên phí</p>
-            <p className="text-lg font-bold text-red-400">{formatVnd(data.fee_vat_amount)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Thanh toán</p>
-            <p className="text-lg font-bold text-green-400">{formatVnd(data.payout_amount)}</p>
+
+            {/* Regenerate */}
+            <Separator />
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground font-medium">Tạo lại tài liệu</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button variant="outline" size="sm" disabled={regenLoading} onClick={() => handleRegenerate("xlsx")} className="text-xs">
+                  <RefreshCw className="mr-1 size-3" />
+                  XLSX
+                </Button>
+                <Button variant="outline" size="sm" disabled={regenLoading} onClick={() => handleRegenerate("docx")} className="text-xs">
+                  <RefreshCw className="mr-1 size-3" />
+                  DOCX
+                </Button>
+                <Button variant="outline" size="sm" disabled={regenLoading} onClick={() => handleRegenerate("both")} className="text-xs">
+                  <RefreshCw className="mr-1 size-3" />
+                  Cả hai
+                </Button>
+              </div>
+            </div>
+
+            {/* Fee config (compact) */}
+            <Separator />
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground font-medium">Cấu hình phí</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                <span className="text-muted-foreground">Tỉ lệ</span>
+                <span className="font-medium text-right">{data.fee_rate_applied != null ? `${data.fee_rate_applied}%` : "—"}</span>
+                <span className="text-muted-foreground">Phí/vé thủ công</span>
+                <span className="font-medium text-right">{formatVnd(data.manual_fee_per_ticket)}</span>
+                <span className="text-muted-foreground">VAT rate</span>
+                <span className="font-medium text-right">{data.fee_vat_rate}%</span>
+                {data.signed_at && (
+                  <>
+                    <span className="text-muted-foreground">Ngày ký</span>
+                    <span className="font-medium text-right">{formatDate(data.signed_at)}</span>
+                  </>
+                )}
+              </div>
+              {data.adjustment_note && (
+                <p className="text-xs text-muted-foreground/70 italic mt-0.5">{data.adjustment_note}</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Actions panel */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Thao tác</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {/* Row 1: Downloads + Transition */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() =>
-                  downloadWithAuth(
-                    data.xlsx_url || `/api/reconciliations/${data._id}/download/xlsx`,
-                    buildRecFilename(data, "xlsx"),
-                    token!,
-                  ).catch(() => toast.error("Tải XLSX thất bại"))
-                }
-                className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
-              >
-                <Download className="size-4" />
-                Tải XLSX
-              </button>
-              <button
-                onClick={() =>
-                  downloadWithAuth(
-                    data.docx_url || `/api/reconciliations/${data._id}/download/docx`,
-                    buildRecFilename(data, "docx"),
-                    token!,
-                  ).catch(() => toast.error("Tải DOCX thất bại"))
-                }
-                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                <Download className="size-4" />
-                Tải DOCX
-              </button>
-            </div>
-
-            {canTransition && nextStatus && (
-              <Button onClick={() => setTransitionOpen(true)}>
-                <ArrowRight className="mr-2 size-4" />
-                {NEXT_STATUS_LABEL[data.status]}
-              </Button>
-            )}
-          </div>
-
-          {/* Row 2: Regenerate (secondary) */}
-          <div className="flex flex-wrap gap-2 border-t pt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={regenLoading}
-              onClick={() => handleRegenerate("xlsx")}
-            >
-              <RefreshCw className="mr-1.5 size-3.5" />
-              Tạo lại XLSX
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={regenLoading}
-              onClick={() => handleRegenerate("docx")}
-            >
-              <RefreshCw className="mr-1.5 size-3.5" />
-              Tạo lại DOCX
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={regenLoading}
-              onClick={() => handleRegenerate("both")}
-            >
-              <RefreshCw className="mr-1.5 size-3.5" />
-              Tạo lại cả hai
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Fee config snapshot */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Cấu hình phí (snapshot)</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-          <div>
-            <p className="text-muted-foreground">Tỉ lệ phí</p>
-            <p className="font-semibold">{data.fee_rate_applied != null ? `${data.fee_rate_applied}%` : "—"}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Phí/vé thủ công</p>
-            <p className="font-semibold">{formatVnd(data.manual_fee_per_ticket)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">VAT rate</p>
-            <p className="font-semibold">{data.fee_vat_rate}%</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Điều chỉnh thủ công</p>
-            <p className={`font-semibold ${data.manual_adjustment > 0 ? "text-green-400" : data.manual_adjustment < 0 ? "text-red-400" : ""}`}>
-              {data.manual_adjustment !== 0 ? formatVnd(data.manual_adjustment) : "—"}
-            </p>
-          </div>
-          {data.adjustment_note && (
-            <div className="col-span-2 sm:col-span-4">
-              <p className="text-muted-foreground">Ghi chú điều chỉnh</p>
-              <p className="italic text-sm">{data.adjustment_note}</p>
-            </div>
-          )}
-          {data.signed_at && (
-            <div>
-              <p className="text-muted-foreground">Ngày ký</p>
-              <p className="font-semibold">{formatDate(data.signed_at)}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Line items */}
+      {/* ── Line items ── */}
       {data.line_items && data.line_items.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Bảng chi tiết đơn 5BIB</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Bảng chi tiết đơn 5BIB
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">STT</TableHead>
+                  <TableHead className="w-10 pl-6">#</TableHead>
                   <TableHead>Loại đơn</TableHead>
                   <TableHead>Loại vé</TableHead>
                   <TableHead>Cự ly</TableHead>
-                  <TableHead className="text-right">Số lượng</TableHead>
+                  <TableHead className="text-right">SL</TableHead>
                   <TableHead className="text-right">Đơn giá</TableHead>
                   <TableHead className="text-right">Giảm giá</TableHead>
-                  <TableHead className="text-right">Thành tiền</TableHead>
+                  <TableHead className="text-right pr-6">Thành tiền</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.line_items.map((item, i) => (
                   <TableRow key={i}>
-                    <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="text-muted-foreground pl-6">{i + 1}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs font-normal">
                         {item.order_category || "—"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{item.ticket_type_name || "—"}</TableCell>
-                    <TableCell>{item.distance_name || "—"}</TableCell>
-                    <TableCell className="text-right">{item.quantity}</TableCell>
-                    <TableCell className="text-right">{formatVnd(item.unit_price)}</TableCell>
-                    <TableCell className="text-right">{item.discount_amount ? formatVnd(item.discount_amount) : "—"}</TableCell>
-                    <TableCell className="text-right font-medium">{formatVnd(item.subtotal)}</TableCell>
+                    <TableCell className="text-sm">{item.ticket_type_name || "—"}</TableCell>
+                    <TableCell className="text-sm">{item.distance_name || "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{item.quantity}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">{formatVnd(item.unit_price)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
+                      {item.discount_amount ? formatVnd(item.discount_amount) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold pr-6">{formatVnd(item.subtotal)}</TableCell>
                   </TableRow>
                 ))}
+                {/* Total row */}
+                <TableRow className="bg-muted/30 font-semibold">
+                  <TableCell colSpan={7} className="pl-6 text-sm">Tổng doanh thu</TableCell>
+                  <TableCell className="text-right tabular-nums pr-6">{formatVnd(data.net_revenue)}</TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </CardContent>
         </Card>
       )}
 
-      {/* Manual orders */}
+      {/* ── Manual orders ── */}
       {data.manual_orders && data.manual_orders.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Đơn thủ công</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Đơn thủ công
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">STT</TableHead>
+                  <TableHead className="w-10 pl-6">#</TableHead>
                   <TableHead>Tên người tham gia</TableHead>
                   <TableHead>Loại vé</TableHead>
-                  <TableHead className="text-right">Số lượng</TableHead>
+                  <TableHead className="text-right">SL</TableHead>
                   <TableHead className="text-right">Đơn giá</TableHead>
-                  <TableHead className="text-right">Thành tiền</TableHead>
+                  <TableHead className="text-right pr-6">Thành tiền</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.manual_orders.map((row, i) => (
                   <TableRow key={i}>
-                    <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell>{row.participant_name || "—"}</TableCell>
-                    <TableCell>{row.ticket_type_name || "—"}</TableCell>
-                    <TableCell className="text-right">{row.quantity}</TableCell>
-                    <TableCell className="text-right">{formatVnd(row.unit_price)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatVnd(row.subtotal)}</TableCell>
+                    <TableCell className="text-muted-foreground pl-6">{i + 1}</TableCell>
+                    <TableCell className="font-medium">{row.participant_name || "—"}</TableCell>
+                    <TableCell className="text-sm">{row.ticket_type_name || "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{row.quantity}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm">{formatVnd(row.unit_price)}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold pr-6">{formatVnd(row.subtotal)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -700,13 +699,14 @@ export default function ReconciliationDetailPage() {
         </Card>
       )}
 
-      {/* Transition Dialog */}
+      {/* ── Transition dialog ── */}
       <Dialog open={transitionOpen} onOpenChange={setTransitionOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Chuyển trạng thái đối soát</DialogTitle>
+            <DialogTitle>Chuyển trạng thái</DialogTitle>
             <DialogDescription>
-              Chuyển từ <strong>{STATUS_LABELS[data.status]}</strong> sang{" "}
+              <strong>{STATUS_LABELS[data.status]}</strong>
+              {" → "}
               <strong>{nextStatus ? STATUS_LABELS[nextStatus] : ""}</strong>
             </DialogDescription>
           </DialogHeader>
@@ -714,20 +714,15 @@ export default function ReconciliationDetailPage() {
           {data.status === "sent" && (
             <div className="flex flex-col gap-2">
               <Label>Ngày ký <span className="text-red-400">*</span></Label>
-              <Input
-                type="date"
-                value={signedAt}
-                onChange={(e) => setSignedAt(e.target.value)}
-              />
+              <Input type="date" value={signedAt} onChange={(e) => setSignedAt(e.target.value)} />
             </div>
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTransitionOpen(false)}>
-              Hủy
-            </Button>
+            <Button variant="outline" onClick={() => setTransitionOpen(false)}>Hủy</Button>
             <Button onClick={handleTransition} disabled={transitionLoading}>
-              {transitionLoading ? "Đang xử lý..." : "Xác nhận"}
+              {transitionLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Xác nhận
             </Button>
           </DialogFooter>
         </DialogContent>
