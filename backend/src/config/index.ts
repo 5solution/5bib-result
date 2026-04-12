@@ -19,6 +19,12 @@ const envVarsSchema = Joi.object()
     AWS_S3_BUCKET: Joi.string().default('5bib-assets'),
     AWS_S3_CDN_URL: Joi.string().optional().allow(''),
     MAILCHIMP_API_KEY: Joi.string().optional().allow(''),
+    // P3/P2 — 5BIB Platform MySQL (readonly)
+    PLATFORM_DB_HOST: Joi.string().optional().allow(''),
+    PLATFORM_DB_PORT: Joi.number().default(3306),
+    PLATFORM_DB_NAME: Joi.string().optional().allow(''),
+    PLATFORM_DB_USER: Joi.string().optional().allow(''),
+    PLATFORM_DB_PASS: Joi.string().optional().allow(''),
   })
   .unknown();
 
@@ -50,5 +56,12 @@ export const env = {
   },
   mailchimp: {
     apiKey: envVars.MAILCHIMP_API_KEY || '',
+  },
+  platformDb: {
+    host: envVars.PLATFORM_DB_HOST as string | undefined,
+    port: envVars.PLATFORM_DB_PORT as number,
+    name: envVars.PLATFORM_DB_NAME as string | undefined,
+    user: envVars.PLATFORM_DB_USER as string | undefined,
+    pass: envVars.PLATFORM_DB_PASS as string | undefined,
   },
 };
