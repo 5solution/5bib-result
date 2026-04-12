@@ -393,7 +393,7 @@ export default function ReconciliationDetailPage() {
               <div>
                 <p className="font-semibold text-green-400">Đối soát sạch — không có cảnh báo lỗi</p>
                 <p className="text-sm text-muted-foreground">
-                  Doanh thu: {formatVnd(data.net_revenue)} · Phí: {formatVnd(data.fee_amount)} · Merchant nhận: {formatVnd(data.payout_amount)}
+                  Doanh thu: {formatVnd(data.net_revenue)} · Phí %: {formatVnd(data.fee_amount)}{data.manual_fee_amount > 0 ? ` · Phí thủ công: ${formatVnd(data.manual_fee_amount)}` : ""} · Merchant nhận: {formatVnd(data.payout_amount)}
                 </p>
               </div>
             </div>
@@ -469,7 +469,7 @@ export default function ReconciliationDetailPage() {
       </Card>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Card>
           <CardContent className="pt-4">
             <p className="text-xs text-muted-foreground">Doanh thu thực</p>
@@ -478,8 +478,17 @@ export default function ReconciliationDetailPage() {
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground">Phí dịch vụ</p>
+            <p className="text-xs text-muted-foreground">Phí dịch vụ (%)</p>
             <p className="text-lg font-bold text-red-400">{formatVnd(data.fee_amount)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs text-muted-foreground">Phí thủ công</p>
+            <p className="text-lg font-bold text-red-400">{formatVnd(data.manual_fee_amount)}</p>
+            {data.manual_ticket_count > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5">{data.manual_ticket_count} vé × {formatVnd(data.manual_fee_per_ticket)}</p>
+            )}
           </CardContent>
         </Card>
         <Card>
