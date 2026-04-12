@@ -752,6 +752,12 @@ export default function NewReconciliationPage() {
                   {formatVnd(computedFee() + computedVat())}
                 </p>
               </div>
+              {computedManualFee() > 0 && (
+                <div>
+                  <p className="text-muted-foreground">Phí thủ công ({preview.manual_ticket_count} vé)</p>
+                  <p className="font-semibold text-red-400">{formatVnd(computedManualFee())}</p>
+                </div>
+              )}
               <div>
                 <p className="text-muted-foreground">Điều chỉnh</p>
                 <p className="font-semibold">
