@@ -105,11 +105,22 @@ export class ReconciliationCalcService {
       item.quantity += Number(r.qty || 0);
       item.add_on_price += Number(r.total_add_on_price || 0);
 
-      // subtotal_price và total_discounts là order-level → chỉ cộng một lần mỗi order_id trong nhóm
-      if (!item._seenOrderIds.has(orderId)) {
-        item._seenOrderIds.add(orderId);
-        item.subtotal += Number(r.subtotal_price || 0);
-        item.discount_amount += Number(r.total_discounts || 0);
+      if (isChangeCourse) {
+        // CHANGE_COURSE: line_price = giá vé gốc, subtotal_price = phí đổi thực tế đã trả
+        // Dùng subtotal_price (dedup) để lấy đúng số tiền thực tế
+        if (!item._seenOrderIds.has(orderId)) {
+          item._seenOrderIds.add(orderId);
+          item.subtotal += Number(r.subtotal_price || 0);
+          item.discount_amount += Number(r.total_discounts || 0);
+        }
+      } else {
+        // ORDINARY/PERSONAL_GROUP: subtotal = line_price × qty (gross per line item)
+        // discount dedup by order_id → Grand Total = SUM(gross) - SUM(disc) = SUM(subtotal_price) = Section 1
+        item.subtotal += Number(r.line_price || 0) * Number(r.qty || 0);
+        if (!item._seenOrderIds.has(orderId)) {
+          item._seenOrderIds.add(orderId);
+          item.discount_amount += Number(r.total_discounts || 0);
+        }
       }
     }
 
