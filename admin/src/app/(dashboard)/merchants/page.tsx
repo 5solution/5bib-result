@@ -140,7 +140,7 @@ export default function MerchantsPage() {
             className="pl-9"
           />
         </div>
-        <Select value={approval} onValueChange={v => { setApproval(v); setPage(0); }}>
+        <Select value={approval} onValueChange={v => { if (v) { setApproval(v); setPage(0); } }}>
           <SelectTrigger className="w-[160px]"><SelectValue placeholder="Trang thai duyet" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tat ca</SelectItem>
@@ -148,7 +148,7 @@ export default function MerchantsPage() {
             <SelectItem value="pending">Cho duyet</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={contractStatus} onValueChange={v => { setContractStatus(v); setPage(0); }}>
+        <Select value={contractStatus} onValueChange={v => { if (v) { setContractStatus(v); setPage(0); } }}>
           <SelectTrigger className="w-[170px]"><SelectValue placeholder="Hop dong" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tat ca HD</SelectItem>
@@ -158,7 +158,7 @@ export default function MerchantsPage() {
             <SelectItem value="terminated">Cham dut</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={feeStatus} onValueChange={v => { setFeeStatus(v); setPage(0); }}>
+        <Select value={feeStatus} onValueChange={v => { if (v) { setFeeStatus(v); setPage(0); } }}>
           <SelectTrigger className="w-[160px]"><SelectValue placeholder="Cau hinh phi" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tat ca phi</SelectItem>

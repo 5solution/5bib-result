@@ -329,7 +329,7 @@ export default function MerchantDetailPage() {
                       <Label>VAT trên phí mới (%)</Label>
                       <Select
                         value={feeForm.fee_vat_rate}
-                        onValueChange={v => setFeeForm(p => ({ ...p, fee_vat_rate: v }))}
+                        onValueChange={v => setFeeForm(p => ({ ...p, fee_vat_rate: v ?? p.fee_vat_rate }))}
                       >
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>

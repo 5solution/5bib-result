@@ -13,6 +13,7 @@ import { UploadModule } from './upload/upload.module';
 import { SponsorsModule } from './sponsors/sponsors.module';
 import { NotificationModule } from './notification/notification.module';
 import { MerchantModule } from './merchant/merchant.module';
+import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { Tenant } from './merchant/entities/tenant.entity';
 
 // Conditional: chỉ khởi tạo Platform DB nếu PLATFORM_DB_HOST được cung cấp
@@ -34,6 +35,7 @@ const platformDbModules = env.platformDb.host
         },
       }),
       MerchantModule,
+      ReconciliationModule,
     ]
   : [];
 

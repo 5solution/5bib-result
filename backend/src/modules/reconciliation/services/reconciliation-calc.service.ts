@@ -1,0 +1,128 @@
+import { Injectable } from '@nestjs/common';
+import { LineItem, ManualOrderRow } from '../schemas/reconciliation.schema';
+
+export interface CalcSummary {
+  gross_revenue: number;
+  total_discount: number;
+  net_revenue: number;
+  fee_amount: number;
+  fee_vat_amount: number;
+  manual_ticket_count: number;
+  manual_gross_revenue: number;
+  manual_fee_amount: number;
+  payout_amount: number;
+}
+
+@Injectable()
+export class ReconciliationCalcService {
+  calculateSummary(
+    fiveBibOrders: any[],
+    manualOrders: any[],
+    feeRate: number | null,
+    manualFeePerTicket: number,
+    feeVatRate: number,
+    manualAdjustment = 0,
+  ): CalcSummary {
+    // 5BIB orders: sum subtotal_price and total_discounts per unique order_id
+    const uniqueFiveBibOrders = this.deduplicateByOrderId(fiveBibOrders);
+    const gross_revenue = uniqueFiveBibOrders.reduce(
+      (sum, r) => sum + Number(r.subtotal_price || 0),
+      0,
+    );
+    const total_discount = uniqueFiveBibOrders.reduce(
+      (sum, r) => sum + Number(r.total_discounts || 0),
+      0,
+    );
+    const net_revenue = gross_revenue;
+
+    const fee_amount = feeRate
+      ? Math.round((net_revenue * feeRate) / 100)
+      : 0;
+    const fee_vat_amount = Math.round((fee_amount * feeVatRate) / 100);
+
+    // Manual orders
+    const uniqueManualOrders = this.deduplicateByOrderId(manualOrders);
+    const manual_ticket_count = manualOrders.reduce(
+      (sum, r) => sum + Number(r.qty || 0),
+      0,
+    );
+    const manual_gross_revenue = uniqueManualOrders.reduce(
+      (sum, r) => sum + Number(r.subtotal_price || 0),
+      0,
+    );
+    const manual_fee_amount = manual_ticket_count * manualFeePerTicket;
+
+    const payout_amount =
+      net_revenue - fee_amount - fee_vat_amount + manualAdjustment;
+
+    return {
+      gross_revenue,
+      total_discount,
+      net_revenue,
+      fee_amount,
+      fee_vat_amount,
+      manual_ticket_count,
+      manual_gross_revenue,
+      manual_fee_amount,
+      payout_amount,
+    };
+  }
+
+  buildLineItems(fiveBibOrders: any[]): LineItem[] {
+    const map = new Map<string, LineItem>();
+
+    for (const r of fiveBibOrders) {
+      const category = r.order_category ?? '';
+      const typeName = r.type_name ?? '';
+      const distance = r.distance ?? '';
+      const key = `${category}|${typeName}|${distance}`;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          order_category: category,
+          ticket_type_name: typeName,
+          distance_name: distance,
+          unit_price: Number(r.origin_price || r.line_price || 0),
+          quantity: 0,
+          discount_amount: 0,
+          subtotal: 0,
+          add_on_price: 0,
+        });
+      }
+
+      const item = map.get(key)!;
+      item.quantity += Number(r.qty || 0);
+      item.discount_amount += Number(r.total_discounts || 0);
+      item.add_on_price += Number(r.total_add_on_price || 0);
+      // subtotal per line = line_price * qty
+      item.subtotal += Number(r.line_price || 0) * Number(r.qty || 0);
+    }
+
+    return Array.from(map.values());
+  }
+
+  buildManualOrders(manualOrders: any[]): ManualOrderRow[] {
+    return manualOrders.map((r) => ({
+      order_id: Number(r.order_id),
+      ticket_type_name: r.type_name ?? '',
+      participant_name: r.full_name ?? `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(),
+      quantity: Number(r.qty || 0),
+      unit_price: Number(r.origin_price || r.line_price || 0),
+      subtotal: Number(r.subtotal_price || 0),
+      note: null,
+    }));
+  }
+
+  private deduplicateByOrderId(rows: any[]): any[] {
+    const seen = new Set<number>();
+    const result: any[] = [];
+    for (const r of rows) {
+      const id = Number(r.order_id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        result.push(r);
+      }
+    }
+    return result;
+  }
+}

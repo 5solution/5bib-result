@@ -22,6 +22,7 @@ import {
   LogOut,
   Menu,
   Store,
+  ReceiptText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { href: "/races", label: "Giải đấu", icon: Trophy },
   { href: "/merchants", label: "Merchant", icon: Store },
+  { href: "/reconciliations", label: "Đối soát", icon: ReceiptText },
   { href: "/sponsors", label: "Nhà tài trợ", icon: Handshake },
   { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
   { href: "/claims", label: "Khiếu nại", icon: FileWarning },
