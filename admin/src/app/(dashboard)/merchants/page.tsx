@@ -130,42 +130,54 @@ export default function MerchantsPage() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Tên, email, mã số thuế..."
-            value={q}
-            onChange={e => { setQ(e.target.value); setPage(0); }}
-            className="pl-9"
-          />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="flex flex-col gap-1 flex-1 min-w-[200px] max-w-sm">
+          <span className="text-xs font-medium text-muted-foreground">Tìm kiếm</span>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Tên, email, mã số thuế..."
+              value={q}
+              onChange={e => { setQ(e.target.value); setPage(0); }}
+              className="pl-9"
+            />
+          </div>
         </div>
-        <Select value={approval} onValueChange={v => { if (v) { setApproval(v); setPage(0); } }}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Trạng thái duyệt" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả</SelectItem>
-            <SelectItem value="approved">Đã duyệt (platform)</SelectItem>
-            <SelectItem value="pending">Chờ duyệt (platform)</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={contractStatus} onValueChange={v => { if (v) { setContractStatus(v); setPage(0); } }}>
-          <SelectTrigger className="w-[190px]"><SelectValue placeholder="Trạng thái hợp đồng" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả hợp đồng</SelectItem>
-            <SelectItem value="pending">Chờ xử lý</SelectItem>
-            <SelectItem value="active">Đang hoạt động</SelectItem>
-            <SelectItem value="suspended">Tạm dừng</SelectItem>
-            <SelectItem value="terminated">Đã chấm dứt</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={feeStatus} onValueChange={v => { if (v) { setFeeStatus(v); setPage(0); } }}>
-          <SelectTrigger className="w-[170px]"><SelectValue placeholder="Cấu hình phí" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả</SelectItem>
-            <SelectItem value="has_fee">Đã cấu hình phí</SelectItem>
-            <SelectItem value="no_fee">Chưa có phí</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Duyệt platform</span>
+          <Select value={approval} onValueChange={v => { if (v) { setApproval(v); setPage(0); } }}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="approved">Đã duyệt</SelectItem>
+              <SelectItem value="pending">Chờ duyệt</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Hợp đồng</span>
+          <Select value={contractStatus} onValueChange={v => { if (v) { setContractStatus(v); setPage(0); } }}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="pending">Chờ xử lý</SelectItem>
+              <SelectItem value="active">Đang hoạt động</SelectItem>
+              <SelectItem value="suspended">Tạm dừng</SelectItem>
+              <SelectItem value="terminated">Đã chấm dứt</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Phí dịch vụ</span>
+          <Select value={feeStatus} onValueChange={v => { if (v) { setFeeStatus(v); setPage(0); } }}>
+            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="has_fee">Đã cấu hình</SelectItem>
+              <SelectItem value="no_fee">Chưa có phí</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {loading ? (
