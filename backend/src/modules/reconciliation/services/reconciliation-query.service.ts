@@ -49,10 +49,16 @@ export class ReconciliationQueryService {
       period_end + ' 23:59:59',
     ]);
 
-    const fiveBibOrders = rows.filter((r) =>
-      FIVE_BIB_CATEGORIES.includes(r.order_category),
+    // PERSONAL_GROUP có payment_ref = đã thanh toán qua 5BIB → tính vào Section 1
+    // PERSONAL_GROUP không có payment_ref = nhập tay bởi organizer → tính vào Section 2 (Manual)
+    const fiveBibOrders = rows.filter((r) => {
+      if (r.order_category === 'PERSONAL_GROUP') return !!r.payment_ref;
+      return FIVE_BIB_CATEGORIES.includes(r.order_category);
+    });
+    const manualOrders = rows.filter((r) =>
+      r.order_category === 'MANUAL' ||
+      (r.order_category === 'PERSONAL_GROUP' && !r.payment_ref),
     );
-    const manualOrders = rows.filter((r) => r.order_category === 'MANUAL');
     const missingPaymentRef = fiveBibOrders.filter(
       (r) => !r.payment_ref,
     );

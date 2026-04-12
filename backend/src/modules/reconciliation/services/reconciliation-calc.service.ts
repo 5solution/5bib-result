@@ -77,22 +77,22 @@ export class ReconciliationCalcService {
       const typeName = r.type_name ?? '';
       const distance = r.distance ?? '';
       const isChangeCourse = category === 'CHANGE_COURSE';
-      const linePrice = Number(r.line_price || 0);
       const orderId = String(r.order_id);
-      // CHANGE_COURSE: nhóm theo line_price (phí đổi cự ly) vì mỗi người có thể trả khác nhau
-      // ORDINARY/PERSONAL_GROUP: nhóm theo cự ly + loại vé như bình thường
+      // CHANGE_COURSE: nhóm theo subtotal_price (phí đổi thực tế mỗi người trả) vì có thể khác nhau
+      // ORDINARY/PERSONAL_GROUP: gộp chung theo typeName + distance (không phân biệt category)
+      const ccFee = Number(r.subtotal_price || 0);
       const key = isChangeCourse
-        ? `CHANGE_COURSE|${typeName}|${distance}|${linePrice}`
-        : `${category}|${typeName}|${distance}`;
+        ? `CHANGE_COURSE|${typeName}|${distance}|${ccFee}`
+        : `${typeName}|${distance}`;
 
       if (!map.has(key)) {
         map.set(key, {
-          order_category: category,
+          order_category: isChangeCourse ? category : 'ORDINARY',
           // Thêm label "_CHANGE COURSE" để phân biệt với đơn mua mới
           ticket_type_name: isChangeCourse ? `${typeName}_CHANGE COURSE` : typeName,
           distance_name: isChangeCourse ? `${distance}_CHANGE COURSE` : distance,
-          // CHANGE_COURSE: đơn giá = phí đổi cự ly thực tế (line_price), không phải giá vé gốc
-          unit_price: isChangeCourse ? linePrice : Number(r.origin_price || r.line_price || 0),
+          // CHANGE_COURSE: unit_price = phí đổi cự ly thực tế (subtotal_price), không phải giá vé gốc
+          unit_price: isChangeCourse ? ccFee : Number(r.origin_price || r.line_price || 0),
           quantity: 0,
           discount_amount: 0,
           subtotal: 0,
