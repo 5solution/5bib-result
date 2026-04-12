@@ -362,12 +362,14 @@ export default function NewReconciliationPage() {
                 <div className="text-sm text-muted-foreground">Đang tải...</div>
               ) : (
                 <Select value={selectedMerchantId} onValueChange={v => { if (v) setSelectedMerchantId(v); }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn merchant..." />
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn merchant...">
+                      {selectedMerchant ? `${selectedMerchant.name}${selectedMerchant.service_fee_rate == null ? " ⚠" : ""}` : "Chọn merchant..."}
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-w-[500px]">
                     {merchants.map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)}>
+                      <SelectItem key={m.id} value={String(m.id)} className="whitespace-normal">
                         {m.name}
                         {m.service_fee_rate == null && " ⚠"}
                       </SelectItem>
@@ -392,12 +394,14 @@ export default function NewReconciliationPage() {
                 <p className="text-sm text-muted-foreground">Đang tải giải đấu...</p>
               ) : (
                 <Select value={selectedRaceId} onValueChange={(v) => { if (v) { setSelectedRaceId(v); const r = races.find((r) => String(r.race_id) === v); if (r) setRaceTitle(r.title); } }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn giải đấu..." />
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn giải đấu...">
+                      {selectedRace ? selectedRace.title : "Chọn giải đấu..."}
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-w-[500px]">
                     {races.map((r) => (
-                      <SelectItem key={r.race_id} value={String(r.race_id)}>
+                      <SelectItem key={r.race_id} value={String(r.race_id)} className="whitespace-normal">
                         {r.title}
                       </SelectItem>
                     ))}
