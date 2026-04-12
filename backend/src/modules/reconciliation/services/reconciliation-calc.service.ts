@@ -54,7 +54,7 @@ export class ReconciliationCalcService {
     const manual_fee_amount = manual_ticket_count * manualFeePerTicket;
 
     const payout_amount =
-      net_revenue - fee_amount - fee_vat_amount + manualAdjustment;
+      net_revenue - fee_amount - fee_vat_amount - manual_fee_amount + manualAdjustment;
 
     return {
       gross_revenue,
