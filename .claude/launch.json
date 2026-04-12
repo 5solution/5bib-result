@@ -3,15 +3,15 @@
   "configurations": [
     {
       "name": "frontend",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "frontend", "dev"],
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH && cd frontend && pnpm dev"],
       "port": 3002,
       "autoPort": false
     },
     {
       "name": "admin",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "admin", "dev"],
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH && cd admin && npx next dev --port 3000"],
       "port": 3000,
       "autoPort": false
     }
