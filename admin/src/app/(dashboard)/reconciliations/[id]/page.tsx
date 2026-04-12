@@ -510,49 +510,48 @@ export default function ReconciliationDetailPage() {
         <CardHeader>
           <CardTitle className="text-base">Thao tác</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {/* Downloads */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() =>
-                downloadWithAuth(
-                  data.xlsx_url || `/api/reconciliations/${data._id}/download/xlsx`,
-                  buildRecFilename(data, "xlsx"),
-                  token!,
-                ).catch(() => toast.error("Tải XLSX thất bại"))
-              }
-              className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
-            >
-              <Download className="size-4" />
-              Tải XLSX
-            </button>
-            <button
-              onClick={() =>
-                downloadWithAuth(
-                  data.docx_url || `/api/reconciliations/${data._id}/download/docx`,
-                  buildRecFilename(data, "docx"),
-                  token!,
-                ).catch(() => toast.error("Tải DOCX thất bại"))
-              }
-              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              <Download className="size-4" />
-              Tải DOCX
-            </button>
-          </div>
+        <CardContent className="flex flex-col gap-4">
+          {/* Row 1: Downloads + Transition */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() =>
+                  downloadWithAuth(
+                    data.xlsx_url || `/api/reconciliations/${data._id}/download/xlsx`,
+                    buildRecFilename(data, "xlsx"),
+                    token!,
+                  ).catch(() => toast.error("Tải XLSX thất bại"))
+                }
+                className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+              >
+                <Download className="size-4" />
+                Tải XLSX
+              </button>
+              <button
+                onClick={() =>
+                  downloadWithAuth(
+                    data.docx_url || `/api/reconciliations/${data._id}/download/docx`,
+                    buildRecFilename(data, "docx"),
+                    token!,
+                  ).catch(() => toast.error("Tải DOCX thất bại"))
+                }
+                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                <Download className="size-4" />
+                Tải DOCX
+              </button>
+            </div>
 
-          {/* Status transition */}
-          {canTransition && nextStatus && (
-            <div className="flex items-center gap-3">
+            {canTransition && nextStatus && (
               <Button onClick={() => setTransitionOpen(true)}>
                 <ArrowRight className="mr-2 size-4" />
                 {NEXT_STATUS_LABEL[data.status]}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Regenerate */}
-          <div className="flex flex-wrap gap-2">
+          {/* Row 2: Regenerate (secondary) */}
+          <div className="flex flex-wrap gap-2 border-t pt-3">
             <Button
               variant="outline"
               size="sm"
