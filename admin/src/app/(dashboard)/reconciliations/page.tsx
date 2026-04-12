@@ -8,7 +8,6 @@ import { authHeaders } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -31,7 +30,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -597,7 +595,7 @@ export default function ReconciliationsPage() {
                     )}
                   </div>
 
-                  <ScrollArea className="max-h-[360px] pr-1">
+                  <div className="max-h-[360px] overflow-y-auto pr-1">
                     <div className="flex flex-col gap-2">
                       {/* Merchants with orders */}
                       {preflightCanCreate.length > 0 && (
@@ -613,11 +611,12 @@ export default function ReconciliationsPage() {
                                 key={p.tenant_id}
                                 className="flex items-start gap-3 rounded-lg border px-3 py-3 hover:bg-muted/30 transition-colors"
                               >
-                                <Checkbox
+                                <input
+                                  type="checkbox"
                                   id={`batch-merchant-${p.tenant_id}`}
                                   checked={isChecked}
-                                  onCheckedChange={() => toggleBatchSelect(p.tenant_id)}
-                                  className="mt-0.5"
+                                  onChange={() => toggleBatchSelect(p.tenant_id)}
+                                  className="mt-0.5 size-4 cursor-pointer rounded border-input accent-primary"
                                 />
                                 <div className="flex-1 min-w-0">
                                   <label
@@ -680,7 +679,7 @@ export default function ReconciliationsPage() {
                               key={p.tenant_id}
                               className="flex items-center gap-3 rounded-lg border border-dashed px-3 py-2.5 opacity-50"
                             >
-                              <Checkbox disabled checked={false} className="mt-0" />
+                              <input type="checkbox" disabled checked={false} onChange={() => {}} className="size-4 cursor-not-allowed rounded border-input" />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm text-muted-foreground">{p.merchant_name}</p>
                                 {p.races_skipped.length > 0 && (
@@ -694,14 +693,16 @@ export default function ReconciliationsPage() {
                         </>
                       )}
                     </div>
-                  </ScrollArea>
+                  </div>
 
                   {/* Skip errors checkbox */}
                   <div className="flex items-center gap-2 pt-1">
-                    <Checkbox
+                    <input
+                      type="checkbox"
                       id="skip-errors"
                       checked={skipErrors}
-                      onCheckedChange={(v: boolean) => setSkipErrors(v)}
+                      onChange={(e) => setSkipErrors(e.target.checked)}
+                      className="size-4 cursor-pointer rounded border-input accent-primary"
                     />
                     <label htmlFor="skip-errors" className="text-sm cursor-pointer">
                       Bỏ qua merchant có lỗi (chỉ tạo merchant sạch)
@@ -776,7 +777,7 @@ export default function ReconciliationsPage() {
                         Xem danh sách thất bại ({batchResult.failed})
                       </button>
                       {batchErrorOpen && (
-                        <ScrollArea className="max-h-[200px]">
+                        <div className="max-h-[200px] overflow-y-auto">
                           <div className="flex flex-col gap-1.5">
                             {batchResult.results
                               .filter((r) => r.status === "failed" || r.status === "error")
@@ -797,7 +798,7 @@ export default function ReconciliationsPage() {
                                 </div>
                               ))}
                           </div>
-                        </ScrollArea>
+                        </div>
                       )}
                     </div>
                   )}
