@@ -70,9 +70,26 @@ interface Merchant {
   contact_phone: string | null;
   address: string | null;
   website: string | null;
+  company_name: string | null;
   approved_at: string | null;
   approved_by: number | null;
+  // Admin-editable company fields (MongoDB)
+  legal_name: string | null;
+  admin_tax_code: string | null;
+  business_address: string | null;
+  representative_name: string | null;
+  representative_title: string | null;
+  bank_account: string | null;
+  bank_name: string | null;
+  bank_branch: string | null;
+  admin_note: string | null;
   created_on: string;
+}
+
+interface Race {
+  race_id: number;
+  title: string;
+  created_on: string | null;
 }
 
 interface FeeHistoryRecord {
@@ -99,7 +116,23 @@ export default function MerchantDetailPage() {
 
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [feeHistory, setFeeHistory] = useState<FeeHistoryRecord[]>([]);
+  const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Company edit
+  const [companyEditing, setCompanyEditing] = useState(false);
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [companyForm, setCompanyForm] = useState({
+    legal_name: "",
+    tax_code: "",
+    business_address: "",
+    representative_name: "",
+    representative_title: "",
+    bank_account: "",
+    bank_name: "",
+    bank_branch: "",
+    admin_note: "",
+  });
 
   // Fee update modal
   const [feeModalOpen, setFeeModalOpen] = useState(false);
@@ -115,9 +148,10 @@ export default function MerchantDetailPage() {
   const fetchMerchant = useCallback(async () => {
     if (!token) return;
     try {
-      const [mRes, hRes] = await Promise.all([
+      const [mRes, hRes, rRes] = await Promise.all([
         fetch(`/api/merchants/${id}`, { headers: authHeaders(token).headers }),
         fetch(`/api/merchants/${id}/fee-history`, { headers: authHeaders(token).headers }),
+        fetch(`/api/merchants/${id}/races`, { headers: authHeaders(token).headers }),
       ]);
       if (!mRes.ok) throw new Error("Not found");
       const mJson = await mRes.json();
@@ -125,6 +159,10 @@ export default function MerchantDetailPage() {
       if (hRes.ok) {
         const hJson = await hRes.json();
         setFeeHistory(hJson.data ?? []);
+      }
+      if (rRes.ok) {
+        const rJson = await rRes.json();
+        setRaces(rJson.data ?? []);
       }
     } catch {
       toast.error("Không thể tải thông tin merchant");
@@ -177,6 +215,42 @@ export default function MerchantDetailPage() {
       toast.error("Cập nhật phí thất bại");
     } finally {
       setUpdatingFee(false);
+    }
+  }
+
+  function openCompanyEdit() {
+    if (!merchant) return;
+    setCompanyForm({
+      legal_name: merchant.legal_name ?? "",
+      tax_code: merchant.admin_tax_code ?? "",
+      business_address: merchant.business_address ?? "",
+      representative_name: merchant.representative_name ?? "",
+      representative_title: merchant.representative_title ?? "",
+      bank_account: merchant.bank_account ?? "",
+      bank_name: merchant.bank_name ?? "",
+      bank_branch: merchant.bank_branch ?? "",
+      admin_note: merchant.admin_note ?? "",
+    });
+    setCompanyEditing(true);
+  }
+
+  async function handleCompanySave() {
+    if (!token) return;
+    setCompanyLoading(true);
+    try {
+      const res = await fetch(`/api/merchants/${id}/company`, {
+        method: "PATCH",
+        headers: { ...authHeaders(token).headers, "Content-Type": "application/json" },
+        body: JSON.stringify(companyForm),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Đã cập nhật thông tin công ty");
+      setCompanyEditing(false);
+      fetchMerchant();
+    } catch {
+      toast.error("Cập nhật thất bại");
+    } finally {
+      setCompanyLoading(false);
     }
   }
 
@@ -239,27 +313,32 @@ export default function MerchantDetailPage() {
       <Tabs defaultValue="info">
         <TabsList>
           <TabsTrigger value="info">Thông tin</TabsTrigger>
+          <TabsTrigger value="company">Công ty đối tác</TabsTrigger>
           <TabsTrigger value="fee">
             Phí dịch vụ
             {merchant.service_fee_rate == null && (
               <AlertTriangle className="ml-1 size-3 text-red-400" />
             )}
           </TabsTrigger>
+          <TabsTrigger value="races">Giải đấu ({races.length})</TabsTrigger>
           <TabsTrigger value="status">Trạng thái</TabsTrigger>
         </TabsList>
 
-        {/* ── Tab 1: Thông tin ── */}
+        {/* ── Tab 1: Thông tin (từ 5BIB platform — readonly) ── */}
         <TabsContent value="info" className="mt-4">
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Thông tin công ty</CardTitle>
+                <CardTitle className="text-base">Thông tin từ 5BIB Platform</CardTitle>
+                <CardDescription>Dữ liệu đồng bộ từ hệ thống platform (readonly)</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <div className="grid grid-cols-[140px_1fr] gap-2 text-sm">
-                  <span className="text-muted-foreground">Tên công ty</span>
+                  <span className="text-muted-foreground">Tên hiển thị</span>
                   <span className="font-medium">{merchant.name}</span>
-                  <span className="text-muted-foreground">Mã số thuế</span>
+                  <span className="text-muted-foreground">Tên công ty</span>
+                  <span>{merchant.company_name ?? "—"}</span>
+                  <span className="text-muted-foreground">MST (platform)</span>
                   <span>{merchant.tax_code ?? "—"}</span>
                   <span className="text-muted-foreground">API Token</span>
                   <span className="font-mono text-xs">{merchant.api_token ?? "—"}</span>
@@ -268,7 +347,7 @@ export default function MerchantDetailPage() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Người liên hệ</CardTitle>
+                <CardTitle className="text-base">Người liên hệ (từ platform)</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2 text-sm">
                 <div className="grid grid-cols-[140px_1fr] gap-2">
@@ -286,6 +365,111 @@ export default function MerchantDetailPage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* ── Tab 2: Thông tin công ty đối tác (admin editable, MongoDB) ── */}
+        <TabsContent value="company" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Thông tin công ty đối tác</CardTitle>
+                  <CardDescription>Thông tin do admin nhập, dùng cho hợp đồng và đối soát</CardDescription>
+                </div>
+                {!companyEditing ? (
+                  <Button size="sm" onClick={openCompanyEdit}>
+                    <Pencil className="size-4 mr-1" />
+                    Chỉnh sửa
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setCompanyEditing(false)}>Hủy</Button>
+                    <Button size="sm" onClick={handleCompanySave} disabled={companyLoading}>
+                      {companyLoading ? "Đang lưu..." : "Lưu"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {companyEditing ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Tên pháp nhân</Label>
+                    <Input value={companyForm.legal_name} onChange={e => setCompanyForm(p => ({ ...p, legal_name: e.target.value }))} placeholder="Tên đầy đủ trên ĐKKD" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Mã số thuế</Label>
+                    <Input value={companyForm.tax_code} onChange={e => setCompanyForm(p => ({ ...p, tax_code: e.target.value }))} placeholder="MST trên ĐKKD" />
+                  </div>
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <Label>Địa chỉ ĐKKD</Label>
+                    <Input value={companyForm.business_address} onChange={e => setCompanyForm(p => ({ ...p, business_address: e.target.value }))} placeholder="Địa chỉ đầy đủ" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Người đại diện</Label>
+                    <Input value={companyForm.representative_name} onChange={e => setCompanyForm(p => ({ ...p, representative_name: e.target.value }))} placeholder="Họ tên người đại diện" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Chức vụ</Label>
+                    <Input value={companyForm.representative_title} onChange={e => setCompanyForm(p => ({ ...p, representative_title: e.target.value }))} placeholder="VD: Giám đốc" />
+                  </div>
+                  <Separator className="sm:col-span-2" />
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Số tài khoản ngân hàng</Label>
+                    <Input value={companyForm.bank_account} onChange={e => setCompanyForm(p => ({ ...p, bank_account: e.target.value }))} placeholder="Số TK" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Tên ngân hàng</Label>
+                    <Input value={companyForm.bank_name} onChange={e => setCompanyForm(p => ({ ...p, bank_name: e.target.value }))} placeholder="VD: Vietcombank" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Chi nhánh</Label>
+                    <Input value={companyForm.bank_branch} onChange={e => setCompanyForm(p => ({ ...p, bank_branch: e.target.value }))} placeholder="VD: CN Hà Nội" />
+                  </div>
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <Label>Ghi chú admin</Label>
+                    <Input value={companyForm.admin_note} onChange={e => setCompanyForm(p => ({ ...p, admin_note: e.target.value }))} placeholder="Ghi chú nội bộ..." />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="flex flex-col gap-3 text-sm">
+                    <h4 className="font-semibold text-muted-foreground">Thông tin pháp nhân</h4>
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                      <span className="text-muted-foreground">Tên pháp nhân</span>
+                      <span className="font-medium">{merchant.legal_name ?? "—"}</span>
+                      <span className="text-muted-foreground">MST</span>
+                      <span>{merchant.admin_tax_code ?? "—"}</span>
+                      <span className="text-muted-foreground">Địa chỉ ĐKKD</span>
+                      <span>{merchant.business_address ?? "—"}</span>
+                      <span className="text-muted-foreground">Người đại diện</span>
+                      <span>{merchant.representative_name ?? "—"}</span>
+                      <span className="text-muted-foreground">Chức vụ</span>
+                      <span>{merchant.representative_title ?? "—"}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-3 text-sm">
+                    <h4 className="font-semibold text-muted-foreground">Thông tin ngân hàng</h4>
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                      <span className="text-muted-foreground">Số TK</span>
+                      <span className="font-mono">{merchant.bank_account ?? "—"}</span>
+                      <span className="text-muted-foreground">Ngân hàng</span>
+                      <span>{merchant.bank_name ?? "—"}</span>
+                      <span className="text-muted-foreground">Chi nhánh</span>
+                      <span>{merchant.bank_branch ?? "—"}</span>
+                    </div>
+                    {merchant.admin_note && (
+                      <div className="mt-2">
+                        <span className="text-muted-foreground">Ghi chú: </span>
+                        <span className="italic">{merchant.admin_note}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── Tab 2: Phí dịch vụ ── */}
@@ -472,7 +656,43 @@ export default function MerchantDetailPage() {
           </div>
         </TabsContent>
 
-        {/* ── Tab 3: Trạng thái ── */}
+        {/* ── Tab: Giải đấu ── */}
+        <TabsContent value="races" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Giải đấu từ 5BIB Platform</CardTitle>
+              <CardDescription>{races.length} giải đấu</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {races.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-6">Merchant này chưa có giải đấu nào.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-20">ID</TableHead>
+                      <TableHead>Tên giải</TableHead>
+                      <TableHead className="hidden sm:table-cell">Ngày tạo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {races.map(r => (
+                      <TableRow key={r.race_id}>
+                        <TableCell className="font-mono text-sm">{r.race_id}</TableCell>
+                        <TableCell className="font-medium">{r.title}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+                          {r.created_on ? new Date(r.created_on).toLocaleDateString("vi-VN") : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Tab: Trạng thái ── */}
         <TabsContent value="status" className="mt-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>

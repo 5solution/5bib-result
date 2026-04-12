@@ -54,6 +54,48 @@ export class MerchantConfig {
   /** Ghi chú lý do từ chối */
   @Prop({ type: String, default: null })
   rejection_note: string | null;
+
+  /** Đánh dấu merchant quan trọng — hiển thị đầu danh sách */
+  @Prop({ type: Boolean, default: false })
+  is_starred: boolean;
+
+  // ── Thông tin công ty (admin tự chỉnh sửa) ──────────────
+
+  /** Tên pháp nhân / tên công ty chính thức (khác với tên hiển thị trên platform) */
+  @Prop({ type: String, default: null })
+  legal_name: string | null;
+
+  /** Mã số thuế (admin nhập, có thể khác với vat trên platform) */
+  @Prop({ type: String, default: null })
+  tax_code: string | null;
+
+  /** Địa chỉ đăng ký kinh doanh */
+  @Prop({ type: String, default: null })
+  business_address: string | null;
+
+  /** Người đại diện pháp luật */
+  @Prop({ type: String, default: null })
+  representative_name: string | null;
+
+  /** Chức vụ người đại diện */
+  @Prop({ type: String, default: null })
+  representative_title: string | null;
+
+  /** Số tài khoản ngân hàng */
+  @Prop({ type: String, default: null })
+  bank_account: string | null;
+
+  /** Tên ngân hàng */
+  @Prop({ type: String, default: null })
+  bank_name: string | null;
+
+  /** Chi nhánh ngân hàng */
+  @Prop({ type: String, default: null })
+  bank_branch: string | null;
+
+  /** Ghi chú admin */
+  @Prop({ type: String, default: null })
+  admin_note: string | null;
 }
 
 export const MerchantConfigSchema = SchemaFactory.createForClass(MerchantConfig);

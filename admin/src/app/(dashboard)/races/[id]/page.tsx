@@ -1541,7 +1541,7 @@ export default function RaceDetailPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
                     <Label>Cấp độ</Label>
-                    <Select value={sponsorForm.level} onValueChange={v => setSponsorForm(f => ({ ...f, level: v || 'silver' }))}>
+                    <Select value={sponsorForm.level} onValueChange={v => setSponsorForm(f => ({ ...f, level: v || 'silver' }))} items={{ diamond: "Kim cương", gold: "Vàng", silver: "Bạc" }}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="diamond">Kim cương</SelectItem>

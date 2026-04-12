@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -26,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-  Search,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -98,7 +96,6 @@ export default function ReconciliationsPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
-  const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(0);
 
@@ -107,9 +104,8 @@ export default function ReconciliationsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        page: String(page),
-        pageSize: "20",
-        ...(q && { q }),
+        page: String(page + 1),
+        limit: "20",
         ...(status !== "all" && { status }),
       });
       const res = await fetch(`/api/reconciliations?${params}`, {
@@ -117,15 +113,16 @@ export default function ReconciliationsPage() {
       });
       if (!res.ok) throw new Error();
       const json = await res.json();
-      setItems(json.data?.list ?? json.data ?? []);
-      setTotal(json.data?.total ?? 0);
-      setTotalPages(json.data?.totalPages ?? 1);
+      // Backend returns { data: [...], total: N }
+      setItems(json.data ?? []);
+      setTotal(json.total ?? 0);
+      setTotalPages(Math.ceil((json.total ?? 0) / 20));
     } catch {
       toast.error("Không thể tải danh sách đối soát");
     } finally {
       setLoading(false);
     }
-  }, [token, q, status, page]);
+  }, [token, status, page]);
 
   useEffect(() => {
     fetchItems();
@@ -146,32 +143,23 @@ export default function ReconciliationsPage() {
         </Link>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Tìm theo tên giải..."
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(0);
-            }}
-            className="pl-9"
-          />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Trạng thái</span>
+          <Select value={status} onValueChange={(v) => { if (v) { setStatus(v); setPage(0); } }} items={{ all: "Tất cả trạng thái", draft: "Nháp", reviewed: "Đã xem xét", sent: "Đã gửi", signed: "Đã ký", completed: "Hoàn tất" }}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Trạng thái" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả trạng thái</SelectItem>
+              <SelectItem value="draft">Nháp</SelectItem>
+              <SelectItem value="reviewed">Đã xem xét</SelectItem>
+              <SelectItem value="sent">Đã gửi</SelectItem>
+              <SelectItem value="signed">Đã ký</SelectItem>
+              <SelectItem value="completed">Hoàn tất</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={status} onValueChange={(v) => { if (v) { setStatus(v); setPage(0); } }}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Trạng thái" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả trạng thái</SelectItem>
-            <SelectItem value="draft">Nháp</SelectItem>
-            <SelectItem value="reviewed">Đã xem xét</SelectItem>
-            <SelectItem value="sent">Đã gửi</SelectItem>
-            <SelectItem value="signed">Đã ký</SelectItem>
-            <SelectItem value="completed">Hoàn tất</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {loading ? (

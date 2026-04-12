@@ -75,14 +75,23 @@ export class ReconciliationCalcService {
       const category = r.order_category ?? '';
       const typeName = r.type_name ?? '';
       const distance = r.distance ?? '';
-      const key = `${category}|${typeName}|${distance}`;
+      const isChangeCourse = category === 'CHANGE_COURSE';
+      const linePrice = Number(r.line_price || 0);
+
+      // CHANGE_COURSE: nhóm theo line_price (phí đổi cự ly) vì mỗi người có thể trả khác nhau
+      // ORDINARY/PERSONAL_GROUP: nhóm theo cự ly + loại vé như bình thường
+      const key = isChangeCourse
+        ? `CHANGE_COURSE|${typeName}|${distance}|${linePrice}`
+        : `${category}|${typeName}|${distance}`;
 
       if (!map.has(key)) {
         map.set(key, {
           order_category: category,
-          ticket_type_name: typeName,
-          distance_name: distance,
-          unit_price: Number(r.origin_price || r.line_price || 0),
+          // Thêm label "_CHANGE COURSE" để phân biệt với đơn mua mới
+          ticket_type_name: isChangeCourse ? `${typeName}_CHANGE COURSE` : typeName,
+          distance_name: isChangeCourse ? `${distance}_CHANGE COURSE` : distance,
+          // CHANGE_COURSE: đơn giá = phí đổi cự ly thực tế (line_price), không phải giá vé gốc
+          unit_price: isChangeCourse ? linePrice : Number(r.origin_price || r.line_price || 0),
           quantity: 0,
           discount_amount: 0,
           subtotal: 0,
@@ -94,8 +103,8 @@ export class ReconciliationCalcService {
       item.quantity += Number(r.qty || 0);
       item.discount_amount += Number(r.total_discounts || 0);
       item.add_on_price += Number(r.total_add_on_price || 0);
-      // subtotal per line = line_price * qty
-      item.subtotal += Number(r.line_price || 0) * Number(r.qty || 0);
+      // Tất cả đều dùng subtotal_price thực thu từ DB (sau discount)
+      item.subtotal += Number(r.subtotal_price || 0);
     }
 
     return Array.from(map.values());

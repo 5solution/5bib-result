@@ -63,4 +63,14 @@ export class ReconciliationQueryService {
   async getTenant(tenant_id: number): Promise<Tenant | null> {
     return this.tenantRepo.findOne({ where: { id: tenant_id } });
   }
+
+  async getRacesByTenant(tenant_id: number): Promise<any[]> {
+    const sql = `
+      SELECT r.race_id, r.title, r.created_on, r.modified_on
+      FROM races r
+      WHERE r.tenant_id = ?
+      ORDER BY r.created_on DESC
+    `;
+    return this.tenantRepo.manager.query(sql, [tenant_id]);
+  }
 }

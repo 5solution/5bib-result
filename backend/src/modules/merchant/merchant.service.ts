@@ -19,6 +19,7 @@ import {
 } from './schemas/merchant-fee-history.schema';
 import { SearchMerchantsDto } from './dto/search-merchants.dto';
 import { UpdateMerchantFeeDto } from './dto/update-merchant-fee.dto';
+import { UpdateMerchantCompanyDto } from './dto/update-merchant-company.dto';
 import { ApproveMerchantDto } from './dto/approve-merchant.dto';
 
 @Injectable()
@@ -61,7 +62,8 @@ export class MerchantService {
     const tenants = await qb.getMany();
 
     // 2. Load tất cả MongoDB configs cho batch này
-    const tenantIds = tenants.map((t) => t.id);
+    // Note: MySQL bigint returns string, MongoDB stores number → normalize to number
+    const tenantIds = tenants.map((t) => Number(t.id));
     const configs = await this.configModel
       .find({ tenantId: { $in: tenantIds } })
       .lean()
@@ -70,7 +72,7 @@ export class MerchantService {
 
     // 3. Merge MySQL + MongoDB
     let merged = tenants.map((t) =>
-      this.mergeFormat(t, configMap.get(t.id) ?? null),
+      this.mergeFormat(t, configMap.get(Number(t.id)) ?? null),
     );
 
     // 4. Apply MongoDB-based filters (contract_status, fee_status)
@@ -83,7 +85,13 @@ export class MerchantService {
       merged = merged.filter((m) => m.service_fee_rate === null);
     }
 
-    // 5. Paginate in-memory (tổng số merchant chỉ ~58, OK)
+    // 5. Sort: starred first, then by created_on DESC
+    merged.sort((a, b) => {
+      if (a.is_starred !== b.is_starred) return a.is_starred ? -1 : 1;
+      return 0; // keep original order (already sorted by created_on DESC from MySQL)
+    });
+
+    // 6. Paginate in-memory (tổng số merchant chỉ ~58, OK)
     const total = merged.length;
     const totalPages = Math.ceil(total / pageSize);
     const list = merged.slice(page * pageSize, (page + 1) * pageSize);
@@ -223,6 +231,72 @@ export class MerchantService {
     return { data: this.mergeFormat(tenant, config.toObject()) };
   }
 
+  // ── Toggle star (write to MongoDB) ────────────────────────────
+
+  async toggleStar(id: number) {
+    const tenant = await this.tenantRepo.findOne({
+      where: { id, deleted: false },
+    });
+    if (!tenant) throw new NotFoundException(`Merchant #${id} không tồn tại`);
+
+    let config = await this.configModel.findOne({ tenantId: id }).exec();
+    if (!config) {
+      config = new this.configModel({ tenantId: id });
+    }
+
+    config.is_starred = !config.is_starred;
+    await config.save();
+    return { data: this.mergeFormat(tenant, config.toObject()) };
+  }
+
+  // ── Update company info (write to MongoDB) ───────────────────
+
+  async updateCompany(id: number, dto: UpdateMerchantCompanyDto) {
+    const tenant = await this.tenantRepo.findOne({
+      where: { id, deleted: false },
+    });
+    if (!tenant) throw new NotFoundException(`Merchant #${id} không tồn tại`);
+
+    let config = await this.configModel.findOne({ tenantId: id }).exec();
+    if (!config) {
+      config = new this.configModel({ tenantId: id });
+    }
+
+    const fields = [
+      'legal_name',
+      'tax_code',
+      'business_address',
+      'representative_name',
+      'representative_title',
+      'bank_account',
+      'bank_name',
+      'bank_branch',
+      'admin_note',
+    ] as const;
+
+    for (const field of fields) {
+      if (dto[field] !== undefined) {
+        (config as any)[field] = dto[field];
+      }
+    }
+
+    await config.save();
+    return { data: this.mergeFormat(tenant, config.toObject()) };
+  }
+
+  // ── Get races for a merchant (from MySQL) ───────────────────
+
+  async getRaces(tenantId: number) {
+    const sql = `
+      SELECT r.race_id, r.title, r.created_on, r.modified_on
+      FROM races r
+      WHERE r.tenant_id = ?
+      ORDER BY r.created_on DESC
+    `;
+    const races = await this.tenantRepo.manager.query(sql, [tenantId]);
+    return { data: races };
+  }
+
   // ── Merge format helper ──────────────────────────────────────
 
   private mergeFormat(
@@ -230,13 +304,13 @@ export class MerchantService {
     config: Partial<MerchantConfig> | null,
   ) {
     return {
-      id: t.id,
+      id: Number(t.id),
       name: t.name,
       tax_code: t.vat,
       // Platform approval (readonly from MySQL)
       is_approved: t.is_approved,
       api_token: t.api_token ? `${t.api_token.slice(0, 8)}••••` : null,
-      owner_id: t.owner_id,
+      owner_id: t.owner_id ? Number(t.owner_id) : null,
       // Contact info từ metadata JSON (platform data)
       contact_name: t.metadata?.name ?? t.metadata?.companyName ?? null,
       contact_email: t.metadata?.email ?? null,
@@ -251,10 +325,21 @@ export class MerchantService {
       fee_vat_rate: config?.fee_vat_rate ?? 0,
       fee_effective_date: config?.fee_effective_date ?? null,
       fee_note: config?.fee_note ?? null,
-      // Contract / approval tracking từ MongoDB
+      // Starred / Contract / approval tracking từ MongoDB
+      is_starred: config?.is_starred ?? false,
       contract_status: config?.contract_status ?? 'pending',
       approved_at: config?.approved_at ?? null,
       approved_by: config?.approved_by ?? null,
+      // Thông tin công ty (admin chỉnh sửa, lưu MongoDB)
+      legal_name: config?.legal_name ?? null,
+      admin_tax_code: config?.tax_code ?? null,
+      business_address: config?.business_address ?? null,
+      representative_name: config?.representative_name ?? null,
+      representative_title: config?.representative_title ?? null,
+      bank_account: config?.bank_account ?? null,
+      bank_name: config?.bank_name ?? null,
+      bank_branch: config?.bank_branch ?? null,
+      admin_note: config?.admin_note ?? null,
       // Timestamps
       created_on: t.created_on,
     };

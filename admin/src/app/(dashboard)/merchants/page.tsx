@@ -32,6 +32,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Star,
 } from "lucide-react";
 
 interface Merchant {
@@ -39,6 +40,7 @@ interface Merchant {
   name: string;
   tax_code: string | null;
   is_approved: boolean;
+  is_starred: boolean;
   contract_status: "pending" | "active" | "suspended" | "terminated";
   service_fee_rate: number | null;
   manual_fee_per_ticket: number;
@@ -121,6 +123,31 @@ export default function MerchantsPage() {
     fetchMerchants();
   }, [fetchMerchants]);
 
+  async function toggleStar(merchantId: number) {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/merchants/${merchantId}/star`, {
+        method: "PATCH",
+        headers: authHeaders(token).headers,
+      });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      const updated = json.data;
+      // Update in-place to avoid full refetch
+      setMerchants(prev => {
+        const next = prev.map(m => m.id === merchantId ? { ...m, is_starred: updated.is_starred } : m);
+        // Re-sort: starred first
+        next.sort((a, b) => {
+          if (a.is_starred !== b.is_starred) return a.is_starred ? -1 : 1;
+          return 0;
+        });
+        return next;
+      });
+    } catch {
+      toast.error("Không thể cập nhật");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -145,7 +172,7 @@ export default function MerchantsPage() {
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Duyệt platform</span>
-          <Select value={approval} onValueChange={v => { if (v) { setApproval(v); setPage(0); } }}>
+          <Select value={approval} onValueChange={v => { if (v) { setApproval(v); setPage(0); } }} items={{ all: "Tất cả", approved: "Đã duyệt", pending: "Chờ duyệt" }}>
             <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
@@ -156,7 +183,7 @@ export default function MerchantsPage() {
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Hợp đồng</span>
-          <Select value={contractStatus} onValueChange={v => { if (v) { setContractStatus(v); setPage(0); } }}>
+          <Select value={contractStatus} onValueChange={v => { if (v) { setContractStatus(v); setPage(0); } }} items={{ all: "Tất cả", pending: "Chờ xử lý", active: "Đang hoạt động", suspended: "Tạm dừng", terminated: "Đã chấm dứt" }}>
             <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
@@ -169,7 +196,7 @@ export default function MerchantsPage() {
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Phí dịch vụ</span>
-          <Select value={feeStatus} onValueChange={v => { if (v) { setFeeStatus(v); setPage(0); } }}>
+          <Select value={feeStatus} onValueChange={v => { if (v) { setFeeStatus(v); setPage(0); } }} items={{ all: "Tất cả", has_fee: "Đã cấu hình", no_fee: "Chưa có phí" }}>
             <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
@@ -189,6 +216,7 @@ export default function MerchantsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10"></TableHead>
                 <TableHead>Merchant</TableHead>
                 <TableHead className="hidden md:table-cell">Email liên hệ</TableHead>
                 <TableHead>Phí dịch vụ</TableHead>
@@ -200,13 +228,22 @@ export default function MerchantsPage() {
             <TableBody>
               {merchants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                     Không tìm thấy merchant nào
                   </TableCell>
                 </TableRow>
               ) : (
                 merchants.map(m => (
                   <TableRow key={m.id}>
+                    <TableCell className="w-10 pr-0">
+                      <button
+                        onClick={() => toggleStar(m.id)}
+                        className="hover:scale-110 transition-transform"
+                        title={m.is_starred ? "Bỏ đánh dấu" : "Đánh dấu quan trọng"}
+                      >
+                        <Star className={`size-4 ${m.is_starred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/40 hover:text-yellow-400"}`} />
+                      </button>
+                    </TableCell>
                     <TableCell>
                       <div>
                         <button

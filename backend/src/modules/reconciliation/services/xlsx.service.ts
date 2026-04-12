@@ -2,9 +2,47 @@ import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { ReconciliationDocument } from '../schemas/reconciliation.schema';
 
-function fmtNum(n: number | undefined | null): string {
-  if (n == null) return '0';
-  return n.toLocaleString('vi-VN');
+const FONT_BASE: Partial<ExcelJS.Font> = {
+  name: 'Times New Roman',
+  size: 10,
+  color: { argb: 'FF000000' },
+};
+const FONT_BOLD: Partial<ExcelJS.Font> = { ...FONT_BASE, bold: true };
+const FONT_HEADER: Partial<ExcelJS.Font> = { ...FONT_BASE, bold: true, size: 12 };
+
+const VND_FMT = '_(* #,##0_);_(* (#,##0);_(* "-"??_);_(@_)';
+const PCT_FMT = '0.0%';
+
+const BORDER_THIN: Partial<ExcelJS.Borders> = {
+  top: { style: 'thin' },
+  bottom: { style: 'thin' },
+  left: { style: 'thin' },
+  right: { style: 'thin' },
+};
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return dateStr;
+}
+
+/** Apply font, border, numFmt to a cell */
+function styleCell(
+  cell: ExcelJS.Cell,
+  value: any,
+  opts: {
+    font?: Partial<ExcelJS.Font>;
+    numFmt?: string;
+    border?: boolean;
+    alignment?: Partial<ExcelJS.Alignment>;
+  } = {},
+) {
+  cell.value = value;
+  cell.font = opts.font ?? FONT_BASE;
+  if (opts.numFmt) cell.numFmt = opts.numFmt;
+  if (opts.border !== false) cell.border = BORDER_THIN;
+  if (opts.alignment) cell.alignment = opts.alignment;
 }
 
 @Injectable()
@@ -14,183 +52,376 @@ export class XlsxService {
     workbook.creator = '5BIB';
     workbook.created = new Date();
 
-    this.buildSheet1(workbook, rec);
-    this.buildSheet2(workbook, rec);
-    this.buildSheet3(workbook, rec);
-    this.buildSheet4(workbook, rec);
-    this.buildSheet5(workbook, rec);
+    this.buildTongQuan(workbook, rec);
+    this.buildPivot(workbook, rec);
+    this.buildRawOrderSheet(workbook, 'Tổng quan đơn hàng', [
+      ...rec.raw_5bib_orders,
+      ...rec.raw_manual_orders,
+    ]);
+    this.buildRawOrderSheet(workbook, 'Đơn hàng 5BIB', rec.raw_5bib_orders);
+    this.buildRawOrderSheet(
+      workbook,
+      'Đơn hàng thủ công',
+      rec.raw_manual_orders,
+    );
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
   }
 
-  private buildSheet1(wb: ExcelJS.Workbook, rec: ReconciliationDocument) {
+  /* ================================================================== */
+  /* SHEET 1: Tổng quan — matches reference XLSX layout                  */
+  /* ================================================================== */
+  private buildTongQuan(wb: ExcelJS.Workbook, rec: ReconciliationDocument) {
     const ws = wb.addWorksheet('Tổng quan');
 
-    // Header info
-    ws.addRow(['Biên bản quyết toán']);
-    ws.addRow(['Giải đấu:', rec.race_title]);
-    ws.addRow(['Đơn vị tổ chức:', rec.tenant_name]);
-    ws.addRow(['Kỳ quyết toán:', `${rec.period_start} đến ${rec.period_end}`]);
-    ws.addRow([]);
+    // Column widths matching reference
+    ws.getColumn(1).width = 35;
+    ws.getColumn(2).width = 15;
+    ws.getColumn(3).width = 13;
+    ws.getColumn(4).width = 12;
+    ws.getColumn(5).width = 10;
+    ws.getColumn(6).width = 13;
+    ws.getColumn(7).width = 12;
+    ws.getColumn(8).width = 22;
+    ws.getColumn(9).width = 20;
 
-    // Table A — 5BIB orders summary
-    ws.addRow(['A. Đơn hàng 5BIB (ORDINARY / PERSONAL_GROUP / CHANGE_COURSE)']);
-    ws.addRow(['Chỉ tiêu', 'Giá trị (VNĐ)']);
-    ws.addRow(['Doanh thu gộp (gross_revenue)', rec.gross_revenue]);
-    ws.addRow(['Tổng giảm giá (total_discount)', rec.total_discount]);
-    ws.addRow(['Doanh thu thực (net_revenue)', rec.net_revenue]);
-    ws.addRow([
-      `Tỉ lệ phí (fee_rate_applied)`,
-      rec.fee_rate_applied != null ? `${rec.fee_rate_applied}%` : 'Không áp dụng',
-    ]);
-    ws.addRow(['Tiền phí (fee_amount)', rec.fee_amount]);
-    ws.addRow([`VAT trên phí (${rec.fee_vat_rate}%)`, rec.fee_vat_amount]);
-    ws.addRow([]);
+    let r = 1;
 
-    // Table B — Manual orders
-    ws.addRow(['B. Đơn hàng thủ công (MANUAL)']);
-    ws.addRow(['Chỉ tiêu', 'Giá trị']);
-    ws.addRow(['Số vé thủ công', rec.manual_ticket_count]);
-    ws.addRow(['Doanh thu thủ công', rec.manual_gross_revenue]);
-    ws.addRow(['Phí/vé thủ công (VNĐ)', rec.manual_fee_per_ticket]);
-    ws.addRow(['Tổng phí thủ công', rec.manual_fee_amount]);
-    ws.addRow([]);
+    // --- Header block (rows 1-3) ---
+    styleCell(ws.getRow(r).getCell(1), `SỰ KIỆN: ${rec.race_title}`, {
+      font: FONT_HEADER,
+      border: false,
+    });
+    r++;
+    styleCell(
+      ws.getRow(r).getCell(1),
+      `Ngày đối soát: ${formatDate(rec.signed_date_str ?? new Date().toISOString().slice(0, 10))}`,
+      { font: FONT_HEADER, border: false },
+    );
+    r++;
+    styleCell(
+      ws.getRow(r).getCell(1),
+      `Giai đoạn: Từ ${formatDate(rec.period_start)} đến hết ${formatDate(rec.period_end)}`,
+      { font: FONT_HEADER, border: false },
+    );
+    r += 2; // skip blank row
 
-    // Table C — Line items
-    ws.addRow(['C. Chi tiết theo hạng mục']);
-    ws.addRow(['Loại đơn', 'Cự ly', 'Giai đoạn', 'SL', 'Đơn giá', 'Giảm giá', 'Thành tiền', 'Add-on']);
-    for (const li of rec.line_items) {
-      ws.addRow([
-        li.order_category,
-        li.distance_name,
-        li.ticket_type_name,
-        li.quantity,
-        li.unit_price,
-        li.discount_amount,
-        li.subtotal,
-        li.add_on_price,
-      ]);
-    }
-    ws.addRow([]);
+    // === SECTION 1: GIAO DỊCH THANH TOÁN QUA 5BIB ===
+    styleCell(
+      ws.getRow(r).getCell(1),
+      '1. GIAO DỊCH THANH TOÁN QUA 5BIB',
+      { font: FONT_BOLD, border: false },
+    );
+    r++;
 
-    // Final totals
-    ws.addRow(['D. Tổng quyết toán']);
-    ws.addRow(['Điều chỉnh thủ công', rec.manual_adjustment]);
-    if (rec.adjustment_note) {
-      ws.addRow(['Ghi chú điều chỉnh', rec.adjustment_note]);
-    }
-    ws.addRow(['TIỀN THANH TOÁN CHO ĐƠN VỊ TỔ CHỨC (payout_amount)', rec.payout_amount]);
+    // Section 1 header
+    ['STT', 'Giá trị giao dịch', 'Tỷ lệ phí', 'Phí bán vé'].forEach(
+      (txt, i) =>
+        styleCell(ws.getRow(r).getCell(i + 1), txt, { font: FONT_BOLD }),
+    );
+    r++;
 
-    // Style header row
-    ws.getRow(1).font = { bold: true, size: 14 };
-    ws.getColumn(1).width = 45;
-    ws.getColumn(2).width = 30;
-  }
+    // Section 1 data
+    styleCell(ws.getRow(r).getCell(1), 1);
+    styleCell(ws.getRow(r).getCell(2), rec.net_revenue, { numFmt: VND_FMT });
+    styleCell(ws.getRow(r).getCell(3), rec.fee_rate_applied != null ? rec.fee_rate_applied / 100 : 0, { numFmt: PCT_FMT });
+    styleCell(ws.getRow(r).getCell(4), rec.fee_amount, { numFmt: VND_FMT });
+    r++;
 
-  private buildSheet2(wb: ExcelJS.Workbook, rec: ReconciliationDocument) {
-    const ws = wb.addWorksheet('Pivot');
+    // Section 1 total (A:C merged)
+    ws.mergeCells(`A${r}:C${r}`);
+    styleCell(ws.getRow(r).getCell(1), 'Tổng cộng', { font: FONT_BOLD });
+    styleCell(ws.getRow(r).getCell(4), rec.fee_amount, {
+      font: FONT_BOLD,
+      numFmt: VND_FMT,
+    });
+    r += 2; // skip blank
 
-    // Pivot: type_name × distance_name → qty & subtotal
-    const typeNames = [...new Set(rec.line_items.map((li) => li.ticket_type_name))];
-    const distances = [...new Set(rec.line_items.map((li) => li.distance_name))];
+    // === SECTION 2: PHÍ DỊCH VỤ ===
+    styleCell(ws.getRow(r).getCell(1), '2. PHÍ DỊCH VỤ', {
+      font: FONT_BOLD,
+      border: false,
+    });
+    r++;
 
-    // Header row
-    const headerRow = ['Giai đoạn / Cự ly'];
-    for (const d of distances) {
-      headerRow.push(`${d} - SL`, `${d} - Thành tiền`);
-    }
-    headerRow.push('Tổng SL', 'Tổng thành tiền');
-    ws.addRow(headerRow);
-    ws.getRow(1).font = { bold: true };
+    ['STT', 'Số lượng vé', 'Phí/vé', 'Phí dịch vụ'].forEach((txt, i) =>
+      styleCell(ws.getRow(r).getCell(i + 1), txt, { font: FONT_BOLD }),
+    );
+    r++;
 
-    for (const typeName of typeNames) {
-      const row: (string | number)[] = [typeName];
-      let totalQty = 0;
-      let totalSubtotal = 0;
+    styleCell(ws.getRow(r).getCell(1), 1);
+    styleCell(ws.getRow(r).getCell(2), rec.manual_ticket_count || 0);
+    styleCell(ws.getRow(r).getCell(3), rec.manual_fee_per_ticket || 0, {
+      numFmt: VND_FMT,
+    });
+    styleCell(ws.getRow(r).getCell(4), rec.manual_fee_amount || 0, {
+      numFmt: VND_FMT,
+    });
+    r++;
 
-      for (const d of distances) {
-        const item = rec.line_items.find(
-          (li) => li.ticket_type_name === typeName && li.distance_name === d,
-        );
-        const qty = item?.quantity ?? 0;
-        const sub = item?.subtotal ?? 0;
-        row.push(qty, sub);
-        totalQty += qty;
-        totalSubtotal += sub;
-      }
+    ws.mergeCells(`A${r}:C${r}`);
+    styleCell(ws.getRow(r).getCell(1), 'Tổng cộng', { font: FONT_BOLD });
+    styleCell(ws.getRow(r).getCell(4), rec.manual_fee_amount || 0, {
+      font: FONT_BOLD,
+      numFmt: VND_FMT,
+    });
+    r += 2;
 
-      row.push(totalQty, totalSubtotal);
-      ws.addRow(row);
-    }
+    // === SECTION 3: CHI TIẾT GIAO DỊCH ===
+    styleCell(ws.getRow(r).getCell(1), '3. CHI TIẾT GIAO DỊCH', {
+      font: FONT_BOLD,
+      border: false,
+    });
+    r++;
 
-    ws.getColumn(1).width = 30;
-    for (let i = 2; i <= headerRow.length; i++) {
-      ws.getColumn(i).width = 18;
-    }
-  }
-
-  private buildOrderSheet(
-    ws: ExcelJS.Worksheet,
-    orders: Array<Record<string, any>>,
-  ) {
-    const headers = [
-      'STT', 'order_id', 'Loại đơn', 'Ngày xử lý', 'Họ tên', 'Email', 'SĐT',
-      'Cự ly', 'Giai đoạn', 'SL', 'Đơn giá', 'Giảm giá', 'Thành tiền',
-      'Add-on', 'Payment Ref', 'Mã giảm giá',
+    // Column headers
+    const h3 = [
+      'Cự ly',
+      'Đơn giá',
+      'Số lượng',
+      'Số lượng áo',
+      'Đơn giá',
+      'Thành tiền áo',
+      'Giảm giá',
+      'Tổng cộng',
     ];
-    const headerRow = ws.addRow(headers);
-    headerRow.font = { bold: true };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFD6E4F0' },
-    };
+    h3.forEach((txt, i) =>
+      styleCell(ws.getRow(r).getCell(i + 1), txt, { font: FONT_BOLD }),
+    );
+    r++;
 
-    ws.autoFilter = { from: 'A1', to: `P1` };
-    ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+    // Sub-header formula labels
+    const subLabels = [
+      '',
+      '(1)',
+      '(2)',
+      '(3)',
+      '(4)',
+      '(5) = (3) x (4)',
+      '(6)',
+      '(7) = [(1) x (2) + (5)] - (6)',
+    ];
+    subLabels.forEach((txt, i) =>
+      styleCell(ws.getRow(r).getCell(i + 1), txt),
+    );
+    r++;
 
-    let stt = 1;
-    for (const r of orders) {
-      ws.addRow([
-        stt++,
-        r.order_id,
-        r.order_category,
-        r.processed_on,
-        r.full_name,
-        r.email,
-        r.phone_number,
-        r.distance,
-        r.type_name,
-        r.qty,
-        r.line_price,
-        r.total_discounts,
-        r.subtotal_price,
-        r.total_add_on_price,
-        r.payment_ref,
-        r.discount_code,
-      ]);
+    // Data rows — one per line_item
+    let totalQty = 0;
+    let totalDiscount = 0;
+    let grandTotal = 0;
+
+    for (const li of rec.line_items) {
+      const row = ws.getRow(r);
+      styleCell(row.getCell(1), li.distance_name);
+      styleCell(row.getCell(2), li.unit_price, { numFmt: VND_FMT });
+      styleCell(row.getCell(3), li.quantity, { numFmt: VND_FMT });
+      styleCell(row.getCell(4), 0, { numFmt: VND_FMT }); // add-on qty
+      styleCell(row.getCell(5), 0, { numFmt: VND_FMT }); // add-on price
+      styleCell(row.getCell(6), 0, { numFmt: VND_FMT }); // add-on total
+      styleCell(row.getCell(7), li.discount_amount, { numFmt: VND_FMT });
+      styleCell(row.getCell(8), li.subtotal, { numFmt: VND_FMT });
+      // Col 9: ticket type name (no border)
+      styleCell(row.getCell(9), li.ticket_type_name, { border: false });
+
+      totalQty += li.quantity;
+      totalDiscount += li.discount_amount;
+      grandTotal += li.subtotal;
+      r++;
     }
 
-    const colWidths = [6, 12, 20, 20, 25, 28, 15, 20, 25, 6, 14, 12, 14, 10, 20, 16];
-    colWidths.forEach((w, i) => {
-      ws.getColumn(i + 1).width = w;
+    // Totals row
+    const totRow = ws.getRow(r);
+    styleCell(totRow.getCell(1), 'Tổng', { font: FONT_BOLD });
+    styleCell(totRow.getCell(2), '', { font: FONT_BOLD });
+    styleCell(totRow.getCell(3), totalQty, { font: FONT_BOLD, numFmt: VND_FMT });
+    styleCell(totRow.getCell(4), 0, { font: FONT_BOLD, numFmt: VND_FMT });
+    styleCell(totRow.getCell(5), '', { font: FONT_BOLD });
+    styleCell(totRow.getCell(6), 0, { font: FONT_BOLD, numFmt: VND_FMT });
+    styleCell(totRow.getCell(7), totalDiscount, { font: FONT_BOLD, numFmt: VND_FMT });
+    styleCell(totRow.getCell(8), grandTotal, { font: FONT_BOLD, numFmt: VND_FMT });
+    r++;
+
+    // Summary footer rows (merged A:G)
+
+    // Phí bán vé
+    ws.mergeCells(`A${r}:G${r}`);
+    styleCell(ws.getRow(r).getCell(1), 'Phí bán vé (chưa bao gồm VAT)', {
+      font: FONT_BOLD,
+    });
+    styleCell(ws.getRow(r).getCell(8), rec.fee_amount, {
+      font: FONT_BOLD,
+      numFmt: VND_FMT,
+    });
+    r++;
+
+    // Phí dịch vụ
+    ws.mergeCells(`A${r}:G${r}`);
+    styleCell(
+      ws.getRow(r).getCell(1),
+      'Phí dịch vụ (chưa bao gồm VAT)',
+      { font: FONT_BOLD },
+    );
+    styleCell(ws.getRow(r).getCell(8), rec.manual_fee_amount || 0, {
+      font: FONT_BOLD,
+      numFmt: VND_FMT,
+    });
+    r++;
+
+    // VAT
+    styleCell(
+      ws.getRow(r).getCell(1),
+      `Giá trị thuế GTGT (${rec.fee_vat_rate}%)`,
+      { font: FONT_BOLD },
+    );
+    for (let c = 2; c <= 7; c++) {
+      ws.getRow(r).getCell(c).border = BORDER_THIN;
+    }
+    styleCell(ws.getRow(r).getCell(8), rec.fee_vat_amount, {
+      font: FONT_BOLD,
+      numFmt: VND_FMT,
+    });
+    r++;
+
+    // Hoàn trả merchant
+    ws.mergeCells(`A${r}:G${r}`);
+    styleCell(
+      ws.getRow(r).getCell(1),
+      'Hoàn trả merchant (chưa bao gồm VAT)',
+      { font: FONT_BOLD },
+    );
+    styleCell(ws.getRow(r).getCell(8), rec.payout_amount, {
+      font: FONT_BOLD,
+      numFmt: VND_FMT,
     });
   }
 
-  private buildSheet3(wb: ExcelJS.Workbook, rec: ReconciliationDocument) {
-    const ws = wb.addWorksheet('Tổng quan đơn hàng');
-    const all = [...rec.raw_5bib_orders, ...rec.raw_manual_orders];
-    this.buildOrderSheet(ws, all);
+  /* ================================================================== */
+  /* SHEET 2: Pivot                                                      */
+  /* ================================================================== */
+  private buildPivot(wb: ExcelJS.Workbook, rec: ReconciliationDocument) {
+    const ws = wb.addWorksheet('Pivot');
+
+    ws.getColumn(1).width = 41;
+    ws.getColumn(2).width = 39;
+    ws.getColumn(3).width = 13;
+    ws.getColumn(4).width = 13;
+    ws.getColumn(5).width = 10;
+    ws.getColumn(6).width = 21;
+    ws.getColumn(7).width = 20;
+
+    // Headers at row 3 (reference has rows 1-2 empty)
+    const hdrRow = ws.getRow(3);
+    [
+      'order_category',
+      'type_name',
+      'distance',
+      'origin_price',
+      'Sum of qty',
+      'Sum of total_discounts',
+      'Sum of subtotal_price',
+    ].forEach((txt, i) => {
+      hdrRow.getCell(i + 1).value = txt;
+      hdrRow.getCell(i + 1).font = FONT_BOLD;
+    });
+
+    let r = 4;
+    let grandQty = 0;
+    let grandDiscount = 0;
+    let grandSubtotal = 0;
+
+    for (const li of rec.line_items) {
+      const row = ws.getRow(r);
+      row.getCell(1).value = li.order_category;
+      row.getCell(2).value = li.ticket_type_name;
+      row.getCell(3).value = li.distance_name;
+      row.getCell(4).value = li.unit_price;
+      row.getCell(5).value = li.quantity;
+      row.getCell(6).value = li.discount_amount;
+      row.getCell(7).value = li.subtotal;
+      r++;
+      grandQty += li.quantity;
+      grandDiscount += li.discount_amount;
+      grandSubtotal += li.subtotal;
+    }
+
+    const gt = ws.getRow(r);
+    gt.getCell(1).value = 'Grand Total';
+    gt.getCell(1).font = FONT_BOLD;
+    gt.getCell(5).value = grandQty;
+    gt.getCell(5).font = FONT_BOLD;
+    gt.getCell(6).value = grandDiscount;
+    gt.getCell(6).font = FONT_BOLD;
+    gt.getCell(7).value = grandSubtotal;
+    gt.getCell(7).font = FONT_BOLD;
   }
 
-  private buildSheet4(wb: ExcelJS.Workbook, rec: ReconciliationDocument) {
-    const ws = wb.addWorksheet('Đơn hàng 5bib');
-    this.buildOrderSheet(ws, rec.raw_5bib_orders);
-  }
+  /* ================================================================== */
+  /* SHEET 3/4/5: Raw order data                                         */
+  /* ================================================================== */
+  private buildRawOrderSheet(
+    wb: ExcelJS.Workbook,
+    name: string,
+    orders: Array<Record<string, any>>,
+  ) {
+    const ws = wb.addWorksheet(name);
 
-  private buildSheet5(wb: ExcelJS.Workbook, rec: ReconciliationDocument) {
-    const ws = wb.addWorksheet('Đơn hàng thủ công');
-    this.buildOrderSheet(ws, rec.raw_manual_orders);
+    const headers = [
+      'id',
+      'modified_on',
+      'order_id',
+      'order_category',
+      'line_price',
+      'create_by',
+      'name',
+      'email',
+      'last_name',
+      'first_name',
+      'phone_number',
+      'internal_status',
+      'order_modified_on',
+      'payment_ref',
+      'processed_on',
+      'distance',
+      'type_name',
+      'origin_price',
+      'qty',
+      'total_discounts',
+      'total_add_on_price',
+      'code',
+      'subtotal_price',
+      'total_price',
+      'vat_metadata',
+    ];
+
+    const colWidths = [
+      9, 19, 8, 13, 8, 8, 12, 28, 11, 11, 26, 19, 19, 25, 19, 30, 13, 9, 3,
+      11, 14, 19, 11, 8, 15,
+    ];
+
+    const hdrRow = ws.addRow(headers);
+    hdrRow.font = FONT_BOLD;
+
+    ws.autoFilter = {
+      from: 'A1',
+      to: String.fromCharCode(64 + headers.length) + '1',
+    };
+    ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+
+    for (const o of orders) {
+      ws.addRow(
+        headers.map((h) => {
+          const v = o[h];
+          if (v === undefined || v === null) return '';
+          if (typeof v === 'object') return JSON.stringify(v);
+          return v;
+        }),
+      );
+    }
+
+    colWidths.forEach((w, i) => {
+      if (i < headers.length) ws.getColumn(i + 1).width = w;
+    });
   }
 }

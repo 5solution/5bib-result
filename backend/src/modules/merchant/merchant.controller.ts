@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MerchantService } from './merchant.service';
 import { SearchMerchantsDto } from './dto/search-merchants.dto';
 import { UpdateMerchantFeeDto } from './dto/update-merchant-fee.dto';
+import { UpdateMerchantCompanyDto } from './dto/update-merchant-company.dto';
 import { ApproveMerchantDto } from './dto/approve-merchant.dto';
 
 @ApiTags('merchants')
@@ -64,6 +65,33 @@ export class MerchantController {
   @ApiResponse({ status: 200 })
   getFeeHistory(@Param('id', ParseIntPipe) id: number) {
     return this.merchantService.getFeeHistory(id);
+  }
+
+  @Patch(':id/star')
+  @ApiOperation({ summary: 'Toggle đánh dấu merchant quan trọng' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200 })
+  toggleStar(@Param('id', ParseIntPipe) id: number) {
+    return this.merchantService.toggleStar(id);
+  }
+
+  @Patch(':id/company')
+  @ApiOperation({ summary: 'Cập nhật thông tin công ty đối tác (lưu vào MongoDB)' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200 })
+  updateCompany(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateMerchantCompanyDto,
+  ) {
+    return this.merchantService.updateCompany(id, dto);
+  }
+
+  @Get(':id/races')
+  @ApiOperation({ summary: 'Danh sách giải đấu của merchant (từ MySQL platform)' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200 })
+  getRaces(@Param('id', ParseIntPipe) id: number) {
+    return this.merchantService.getRaces(id);
   }
 
   @Patch(':id/approve')

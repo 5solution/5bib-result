@@ -34,30 +34,59 @@ import {
 import { toast } from "sonner";
 import {
   ChevronLeft,
-  ExternalLink,
+  Download,
   CheckCircle,
   RefreshCw,
   ArrowRight,
 } from "lucide-react";
 
+async function downloadWithAuth(url: string, filename: string, token: string) {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Download failed");
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function fmtDate(s: string): string {
+  if (!s) return "";
+  const parts = s.split("-");
+  return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s;
+}
+
+function buildRecFilename(data: any, ext: string): string {
+  const parts = [
+    data.tenant_name || String(data.tenant_id),
+    data.race_title,
+    `${fmtDate(data.period_start)} đến ${fmtDate(data.period_end)}`,
+  ].filter(Boolean);
+  return `${parts.join(" - ")}.${ext}`;
+}
+
 interface LineItem {
-  phase?: string;
-  course?: string;
-  order_type?: string;
-  quantity: number;
+  order_category: string;
+  ticket_type_name: string;
+  distance_name: string;
   unit_price: number;
-  discount: number;
-  total: number;
-  [key: string]: unknown;
+  quantity: number;
+  discount_amount: number;
+  subtotal: number;
+  add_on_price: number;
 }
 
 interface ManualOrderRow {
-  participant_name?: string;
-  course?: string;
+  order_id: number;
+  ticket_type_name: string;
+  participant_name: string;
   quantity: number;
   unit_price: number;
-  total: number;
-  [key: string]: unknown;
+  subtotal: number;
+  note: string | null;
 }
 
 interface ReconciliationDetail {
@@ -354,28 +383,32 @@ export default function ReconciliationDetailPage() {
         <CardContent className="flex flex-col gap-3">
           {/* Downloads */}
           <div className="flex flex-wrap gap-2">
-            {data.xlsx_url && (
-              <a
-                href={data.xlsx_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
-              >
-                <ExternalLink className="size-4" />
-                Tải XLSX
-              </a>
-            )}
-            {data.docx_url && (
-              <a
-                href={data.docx_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                <ExternalLink className="size-4" />
-                Tải DOCX
-              </a>
-            )}
+            <button
+              onClick={() =>
+                downloadWithAuth(
+                  data.xlsx_url || `/api/reconciliations/${data._id}/download/xlsx`,
+                  buildRecFilename(data, "xlsx"),
+                  token!,
+                ).catch(() => toast.error("Tải XLSX thất bại"))
+              }
+              className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+            >
+              <Download className="size-4" />
+              Tải XLSX
+            </button>
+            <button
+              onClick={() =>
+                downloadWithAuth(
+                  data.docx_url || `/api/reconciliations/${data._id}/download/docx`,
+                  buildRecFilename(data, "docx"),
+                  token!,
+                ).catch(() => toast.error("Tải DOCX thất bại"))
+              }
+              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              <Download className="size-4" />
+              Tải DOCX
+            </button>
           </div>
 
           {/* Status transition */}
@@ -471,9 +504,9 @@ export default function ReconciliationDetailPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">STT</TableHead>
-                  <TableHead>Giai đoạn</TableHead>
-                  <TableHead>Cự ly</TableHead>
                   <TableHead>Loại đơn</TableHead>
+                  <TableHead>Loại vé</TableHead>
+                  <TableHead>Cự ly</TableHead>
                   <TableHead className="text-right">Số lượng</TableHead>
                   <TableHead className="text-right">Đơn giá</TableHead>
                   <TableHead className="text-right">Giảm giá</TableHead>
@@ -484,17 +517,17 @@ export default function ReconciliationDetailPage() {
                 {data.line_items.map((item, i) => (
                   <TableRow key={i}>
                     <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell>{item.phase ?? "—"}</TableCell>
-                    <TableCell>{item.course ?? "—"}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
-                        {item.order_type ?? "—"}
+                        {item.order_category || "—"}
                       </Badge>
                     </TableCell>
+                    <TableCell>{item.ticket_type_name || "—"}</TableCell>
+                    <TableCell>{item.distance_name || "—"}</TableCell>
                     <TableCell className="text-right">{item.quantity}</TableCell>
                     <TableCell className="text-right">{formatVnd(item.unit_price)}</TableCell>
-                    <TableCell className="text-right">{item.discount ? formatVnd(item.discount) : "—"}</TableCell>
-                    <TableCell className="text-right font-medium">{formatVnd(item.total)}</TableCell>
+                    <TableCell className="text-right">{item.discount_amount ? formatVnd(item.discount_amount) : "—"}</TableCell>
+                    <TableCell className="text-right font-medium">{formatVnd(item.subtotal)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -515,7 +548,7 @@ export default function ReconciliationDetailPage() {
                 <TableRow>
                   <TableHead className="w-10">STT</TableHead>
                   <TableHead>Tên người tham gia</TableHead>
-                  <TableHead>Cự ly</TableHead>
+                  <TableHead>Loại vé</TableHead>
                   <TableHead className="text-right">Số lượng</TableHead>
                   <TableHead className="text-right">Đơn giá</TableHead>
                   <TableHead className="text-right">Thành tiền</TableHead>
@@ -525,11 +558,11 @@ export default function ReconciliationDetailPage() {
                 {data.manual_orders.map((row, i) => (
                   <TableRow key={i}>
                     <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell>{row.participant_name ?? "—"}</TableCell>
-                    <TableCell>{row.course ?? "—"}</TableCell>
+                    <TableCell>{row.participant_name || "—"}</TableCell>
+                    <TableCell>{row.ticket_type_name || "—"}</TableCell>
                     <TableCell className="text-right">{row.quantity}</TableCell>
                     <TableCell className="text-right">{formatVnd(row.unit_price)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatVnd(row.total)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatVnd(row.subtotal)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

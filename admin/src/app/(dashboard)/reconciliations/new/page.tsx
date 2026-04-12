@@ -30,7 +30,35 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronRight, ChevronLeft, CheckCircle, ExternalLink } from "lucide-react";
+import { AlertTriangle, ChevronRight, ChevronLeft, CheckCircle, Download } from "lucide-react";
+
+async function downloadWithAuth(url: string, filename: string, token: string) {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Download failed");
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function fmtDate(s: string): string {
+  if (!s) return "";
+  const parts = s.split("-");
+  return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s;
+}
+
+function buildRecFilename(data: any, ext: string): string {
+  const parts = [
+    data.tenant_name || String(data.tenant_id),
+    data.race_title,
+    `${fmtDate(data.period_start)} đến ${fmtDate(data.period_end)}`,
+  ].filter(Boolean);
+  return `${parts.join(" - ")}.${ext}`;
+}
 
 interface Merchant {
   id: number;
@@ -41,33 +69,35 @@ interface Merchant {
   fee_vat_rate: number;
 }
 
+interface Race {
+  race_id: number;
+  title: string;
+  created_on: string | null;
+}
+
 interface LineItem {
-  phase?: string;
-  course?: string;
-  order_type?: string;
-  quantity: number;
+  order_category: string;
+  ticket_type_name: string;
+  distance_name: string;
   unit_price: number;
-  discount: number;
-  total: number;
-  [key: string]: unknown;
+  quantity: number;
+  discount_amount: number;
+  subtotal: number;
+  add_on_price: number;
 }
 
 interface ManualOrderRow {
-  participant_name?: string;
-  course?: string;
+  order_id: number;
+  ticket_type_name: string;
+  participant_name: string;
   quantity: number;
   unit_price: number;
-  total: number;
-  [key: string]: unknown;
+  subtotal: number;
+  note: string | null;
 }
 
 interface PreviewResult {
-  tenant_id: number;
   tenant_name: string;
-  mysql_race_id: number;
-  race_title: string;
-  period_start: string;
-  period_end: string;
   fee_rate_applied: number | null;
   manual_fee_per_ticket: number;
   fee_vat_rate: number;
@@ -81,8 +111,8 @@ interface PreviewResult {
   manual_fee_amount: number;
   payout_amount: number;
   missing_payment_ref_count: number;
-  total_5bib_orders: number;
-  total_manual_orders: number;
+  raw_5bib_order_count: number;
+  raw_manual_order_count: number;
   line_items: LineItem[];
   manual_orders: ManualOrderRow[];
 }
@@ -128,7 +158,9 @@ export default function NewReconciliationPage() {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [merchantsLoading, setMerchantsLoading] = useState(true);
   const [selectedMerchantId, setSelectedMerchantId] = useState<string>("");
-  const [mysqlRaceId, setMysqlRaceId] = useState("");
+  const [races, setRaces] = useState<Race[]>([]);
+  const [racesLoading, setRacesLoading] = useState(false);
+  const [selectedRaceId, setSelectedRaceId] = useState<string>("");
   const [raceTitle, setRaceTitle] = useState("");
   const [periodStart, setPeriodStart] = useState(getMonthStart(-1));
   const [periodEnd, setPeriodEnd] = useState(getMonthEnd(-1));
@@ -158,14 +190,37 @@ export default function NewReconciliationPage() {
       .then((r) => r.json())
       .then((json) => {
         const list: Merchant[] = json.data?.list ?? json.data ?? [];
-        setMerchants(list.filter((m) => m.contract_status === "active"));
+        setMerchants(list);
       })
       .catch(() => toast.error("Không thể tải danh sách merchant"))
       .finally(() => setMerchantsLoading(false));
   }, [token]);
 
+  useEffect(() => {
+    if (!token || !selectedMerchantId) {
+      setRaces([]);
+      setSelectedRaceId("");
+      setRaceTitle("");
+      return;
+    }
+    setRacesLoading(true);
+    fetch(`/api/reconciliations/races/${selectedMerchantId}`, {
+      headers: authHeaders(token).headers,
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        const list: Race[] = json.data ?? json ?? [];
+        setRaces(list);
+      })
+      .catch(() => toast.error("Không thể tải danh sách giải đấu"))
+      .finally(() => setRacesLoading(false));
+  }, [token, selectedMerchantId]);
+
+  const selectedRace = races.find((r) => String(r.race_id) === selectedRaceId);
+
   async function handlePreview() {
-    if (!token || !selectedMerchantId || !mysqlRaceId || !raceTitle || !periodStart || !periodEnd) {
+    const effectiveRaceTitle = raceTitle || selectedRace?.title || "";
+    if (!token || !selectedMerchantId || !selectedRaceId || !effectiveRaceTitle || !periodStart || !periodEnd) {
       toast.error("Vui lòng điền đầy đủ thông tin");
       return;
     }
@@ -176,8 +231,8 @@ export default function NewReconciliationPage() {
         headers: { ...authHeaders(token).headers, "Content-Type": "application/json" },
         body: JSON.stringify({
           tenant_id: Number(selectedMerchantId),
-          mysql_race_id: Number(mysqlRaceId),
-          race_title: raceTitle,
+          mysql_race_id: Number(selectedRaceId),
+          race_title: effectiveRaceTitle,
           period_start: periodStart,
           period_end: periodEnd,
         }),
@@ -220,7 +275,7 @@ export default function NewReconciliationPage() {
   function computedPayout() {
     if (!preview) return 0;
     const adj = parseFloat(manualAdjustment) || 0;
-    return preview.net_revenue - computedFee() - computedVat() - computedManualFee() + adj;
+    return preview.net_revenue - computedFee() - computedVat() + adj;
   }
 
   async function handleCreate() {
@@ -236,16 +291,16 @@ export default function NewReconciliationPage() {
         method: "POST",
         headers: { ...authHeaders(token).headers, "Content-Type": "application/json" },
         body: JSON.stringify({
-          tenant_id: preview.tenant_id,
-          mysql_race_id: preview.mysql_race_id,
-          race_title: preview.race_title,
-          period_start: preview.period_start,
-          period_end: preview.period_end,
-          fee_rate_override: parseFloat(feeRate) || undefined,
-          fee_vat_rate_override: parseFloat(feeVatRate) || undefined,
-          manual_fee_per_ticket_override: parseFloat(manualFeePerTicket) || undefined,
+          tenant_id: Number(selectedMerchantId),
+          mysql_race_id: Number(selectedRaceId),
+          race_title: raceTitle || selectedRace?.title || "",
+          period_start: periodStart,
+          period_end: periodEnd,
+          fee_rate_applied: parseFloat(feeRate) || null,
+          fee_vat_rate: parseFloat(feeVatRate) || 0,
+          manual_fee_per_ticket: parseFloat(manualFeePerTicket) || 0,
           manual_adjustment: adj,
-          adjustment_note: adjustmentNote,
+          adjustment_note: adjustmentNote || null,
           signed_date_str: signedDateStr,
           generate_xlsx: createXlsx,
           generate_docx: createDocx,
@@ -328,26 +383,41 @@ export default function NewReconciliationPage() {
               )}
             </div>
 
-            {/* MySQL Race ID */}
+            {/* Race */}
             <div className="flex flex-col gap-1.5">
-              <Label>MySQL Race ID</Label>
-              <Input
-                type="number"
-                placeholder="VD: 12345"
-                value={mysqlRaceId}
-                onChange={(e) => setMysqlRaceId(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">ID của giải đấu từ database platform 5BIB</p>
+              <Label>Giải đấu</Label>
+              {!selectedMerchantId ? (
+                <p className="text-sm text-muted-foreground">Chọn merchant trước</p>
+              ) : racesLoading ? (
+                <p className="text-sm text-muted-foreground">Đang tải giải đấu...</p>
+              ) : (
+                <Select value={selectedRaceId} onValueChange={(v) => { if (v) { setSelectedRaceId(v); const r = races.find((r) => String(r.race_id) === v); if (r) setRaceTitle(r.title); } }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn giải đấu..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {races.map((r) => (
+                      <SelectItem key={r.race_id} value={String(r.race_id)}>
+                        {r.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {races.length === 0 && selectedMerchantId && !racesLoading && (
+                <p className="text-xs text-muted-foreground">Merchant này chưa có giải đấu nào</p>
+              )}
             </div>
 
-            {/* Race Title */}
+            {/* Race Title Override */}
             <div className="flex flex-col gap-1.5">
-              <Label>Tên giải đấu</Label>
+              <Label>Tên giải (tùy chỉnh)</Label>
               <Input
-                placeholder="VD: Vietnam Trail Marathon 2026"
+                placeholder={selectedRace?.title || "Tên giải hiển thị trên tài liệu"}
                 value={raceTitle}
                 onChange={(e) => setRaceTitle(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">Để trống sẽ dùng tên giải từ hệ thống</p>
             </div>
 
             {/* Period */}
@@ -424,7 +494,7 @@ export default function NewReconciliationPage() {
             <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <div className="flex flex-col gap-1">
                 <p className="text-xs text-muted-foreground">Tổng giao dịch</p>
-                <p className="text-lg font-semibold">{preview.total_5bib_orders}</p>
+                <p className="text-lg font-semibold">{preview.raw_5bib_order_count}</p>
               </div>
               <div className="flex flex-col gap-1">
                 <p className="text-xs text-muted-foreground">Doanh thu gross</p>
@@ -503,9 +573,9 @@ export default function NewReconciliationPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">STT</TableHead>
-                      <TableHead>Giai đoạn</TableHead>
-                      <TableHead>Cự ly</TableHead>
                       <TableHead>Loại đơn</TableHead>
+                      <TableHead>Loại vé</TableHead>
+                      <TableHead>Cự ly</TableHead>
                       <TableHead className="text-right">Số lượng</TableHead>
                       <TableHead className="text-right">Đơn giá</TableHead>
                       <TableHead className="text-right">Giảm giá</TableHead>
@@ -516,17 +586,17 @@ export default function NewReconciliationPage() {
                     {preview.line_items.map((item, i) => (
                       <TableRow key={i}>
                         <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                        <TableCell>{item.phase ?? "—"}</TableCell>
-                        <TableCell>{item.course ?? "—"}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            {item.order_type ?? "—"}
+                            {item.order_category || "—"}
                           </Badge>
                         </TableCell>
+                        <TableCell>{item.ticket_type_name || "—"}</TableCell>
+                        <TableCell>{item.distance_name || "—"}</TableCell>
                         <TableCell className="text-right">{item.quantity}</TableCell>
                         <TableCell className="text-right">{formatVnd(item.unit_price)}</TableCell>
-                        <TableCell className="text-right">{item.discount ? formatVnd(item.discount) : "—"}</TableCell>
-                        <TableCell className="text-right font-medium">{formatVnd(item.total)}</TableCell>
+                        <TableCell className="text-right">{item.discount_amount ? formatVnd(item.discount_amount) : "—"}</TableCell>
+                        <TableCell className="text-right font-medium">{formatVnd(item.subtotal)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -547,7 +617,7 @@ export default function NewReconciliationPage() {
                     <TableRow>
                       <TableHead className="w-10">STT</TableHead>
                       <TableHead>Tên người tham gia</TableHead>
-                      <TableHead>Cự ly</TableHead>
+                      <TableHead>Loại vé</TableHead>
                       <TableHead className="text-right">Số lượng</TableHead>
                       <TableHead className="text-right">Đơn giá</TableHead>
                       <TableHead className="text-right">Thành tiền</TableHead>
@@ -557,11 +627,11 @@ export default function NewReconciliationPage() {
                     {preview.manual_orders.map((row, i) => (
                       <TableRow key={i}>
                         <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                        <TableCell>{row.participant_name ?? "—"}</TableCell>
-                        <TableCell>{row.course ?? "—"}</TableCell>
+                        <TableCell>{row.participant_name || "—"}</TableCell>
+                        <TableCell>{row.ticket_type_name || "—"}</TableCell>
                         <TableCell className="text-right">{row.quantity}</TableCell>
                         <TableCell className="text-right">{formatVnd(row.unit_price)}</TableCell>
-                        <TableCell className="text-right font-medium">{formatVnd(row.total)}</TableCell>
+                        <TableCell className="text-right font-medium">{formatVnd(row.subtotal)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -620,8 +690,8 @@ export default function NewReconciliationPage() {
               </div>
               {preview.manual_ticket_count > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Phí thủ công</span>
-                  <span className="font-medium text-red-400">− {formatVnd(computedManualFee())}</span>
+                  <span className="text-muted-foreground">Phí thủ công ({preview.manual_ticket_count} vé)</span>
+                  <span className="font-medium text-muted-foreground">{formatVnd(computedManualFee())}</span>
                 </div>
               )}
               {parseFloat(manualAdjustment) !== 0 && (
@@ -666,7 +736,7 @@ export default function NewReconciliationPage() {
               </div>
               <div>
                 <p className="text-muted-foreground">Giải đấu</p>
-                <p className="font-medium">{preview.race_title}</p>
+                <p className="font-medium">{raceTitle || selectedRace?.title || ""}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Doanh thu thực</p>
@@ -757,27 +827,35 @@ export default function NewReconciliationPage() {
               Bản đối soát đã được tạo. Bạn có thể tải tài liệu hoặc xem chi tiết bên dưới.
             </p>
             <div className="flex flex-wrap gap-3">
-              {createResult.xlsx_url && (
-                <a
-                  href={createResult.xlsx_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              {createXlsx && (
+                <button
+                  onClick={() =>
+                    downloadWithAuth(
+                      createResult.xlsx_url || `/api/reconciliations/${createResult._id}/download/xlsx`,
+                      buildRecFilename(createResult, "xlsx"),
+                      token!,
+                    ).catch(() => toast.error("Tải XLSX thất bại"))
+                  }
                   className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
                 >
-                  <ExternalLink className="size-4" />
+                  <Download className="size-4" />
                   Tải XLSX
-                </a>
+                </button>
               )}
-              {createResult.docx_url && (
-                <a
-                  href={createResult.docx_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              {createDocx && (
+                <button
+                  onClick={() =>
+                    downloadWithAuth(
+                      createResult.docx_url || `/api/reconciliations/${createResult._id}/download/docx`,
+                      buildRecFilename(createResult, "docx"),
+                      token!,
+                    ).catch(() => toast.error("Tải DOCX thất bại"))
+                  }
                   className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
-                  <ExternalLink className="size-4" />
+                  <Download className="size-4" />
                   Tải DOCX
-                </a>
+                </button>
               )}
               <Button
                 variant="outline"

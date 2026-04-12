@@ -27,9 +27,15 @@ async function proxyRequest(req: NextRequest) {
   const res = await fetch(targetUrl, init);
   const data = await res.arrayBuffer();
 
+  const responseHeaders: Record<string, string> = {
+    'Content-Type': res.headers.get('Content-Type') || 'application/json',
+  };
+  const disposition = res.headers.get('Content-Disposition');
+  if (disposition) responseHeaders['Content-Disposition'] = disposition;
+
   return new NextResponse(data, {
     status: res.status,
-    headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+    headers: responseHeaders,
   });
 }
 
