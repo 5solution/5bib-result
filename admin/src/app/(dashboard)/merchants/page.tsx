@@ -50,10 +50,10 @@ interface Merchant {
 }
 
 const CONTRACT_LABELS: Record<string, { label: string; className: string }> = {
-  pending: { label: "Cho xu ly", className: "bg-yellow-500/20 text-yellow-400" },
-  active: { label: "Dang hoat dong", className: "bg-green-500/20 text-green-400" },
-  suspended: { label: "Tam dung", className: "bg-orange-500/20 text-orange-400" },
-  terminated: { label: "Da cham dut", className: "bg-red-500/20 text-red-400" },
+  pending: { label: "Chờ xử lý", className: "bg-yellow-500/20 text-yellow-400" },
+  active: { label: "Đang hoạt động", className: "bg-green-500/20 text-green-400" },
+  suspended: { label: "Tạm dừng", className: "bg-orange-500/20 text-orange-400" },
+  terminated: { label: "Đã chấm dứt", className: "bg-red-500/20 text-red-400" },
 };
 
 function ContractBadge({ status }: { status: string }) {
@@ -65,12 +65,12 @@ function ApprovalBadge({ approved }: { approved: boolean }) {
   return approved ? (
     <Badge className="bg-green-500/20 text-green-400">
       <CheckCircle className="mr-1 size-3" />
-      Da duyet
+      Đã duyệt
     </Badge>
   ) : (
     <Badge className="bg-zinc-500/20 text-zinc-400">
       <Clock className="mr-1 size-3" />
-      Cho duyet
+      Chờ duyệt
     </Badge>
   );
 }
@@ -111,7 +111,7 @@ export default function MerchantsPage() {
       setTotal(json.data?.total ?? 0);
       setTotalPages(json.data?.totalPages ?? 0);
     } catch {
-      toast.error("Khong the tai danh sach merchant");
+      toast.error("Không thể tải danh sách merchant");
     } finally {
       setLoading(false);
     }
@@ -124,9 +124,9 @@ export default function MerchantsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold">Merchant</h1>
+        <h1 className="text-2xl font-bold">Quản lý Merchant</h1>
         <p className="text-sm text-muted-foreground">
-          {total} merchant tu nen tang 5BIB
+          {total} merchant từ nền tảng 5BIB
         </p>
       </div>
 
@@ -134,36 +134,36 @@ export default function MerchantsPage() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Ten, email, ma so thue..."
+            placeholder="Tên, email, mã số thuế..."
             value={q}
             onChange={e => { setQ(e.target.value); setPage(0); }}
             className="pl-9"
           />
         </div>
         <Select value={approval} onValueChange={v => { if (v) { setApproval(v); setPage(0); } }}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Trang thai duyet" /></SelectTrigger>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Trạng thái duyệt" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tat ca</SelectItem>
-            <SelectItem value="approved">Da duyet</SelectItem>
-            <SelectItem value="pending">Cho duyet</SelectItem>
+            <SelectItem value="all">Tất cả</SelectItem>
+            <SelectItem value="approved">Đã duyệt (platform)</SelectItem>
+            <SelectItem value="pending">Chờ duyệt (platform)</SelectItem>
           </SelectContent>
         </Select>
         <Select value={contractStatus} onValueChange={v => { if (v) { setContractStatus(v); setPage(0); } }}>
-          <SelectTrigger className="w-[170px]"><SelectValue placeholder="Hop dong" /></SelectTrigger>
+          <SelectTrigger className="w-[190px]"><SelectValue placeholder="Trạng thái hợp đồng" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tat ca HD</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="suspended">Tam dung</SelectItem>
-            <SelectItem value="terminated">Cham dut</SelectItem>
+            <SelectItem value="all">Tất cả hợp đồng</SelectItem>
+            <SelectItem value="pending">Chờ xử lý</SelectItem>
+            <SelectItem value="active">Đang hoạt động</SelectItem>
+            <SelectItem value="suspended">Tạm dừng</SelectItem>
+            <SelectItem value="terminated">Đã chấm dứt</SelectItem>
           </SelectContent>
         </Select>
         <Select value={feeStatus} onValueChange={v => { if (v) { setFeeStatus(v); setPage(0); } }}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Cau hinh phi" /></SelectTrigger>
+          <SelectTrigger className="w-[170px]"><SelectValue placeholder="Cấu hình phí" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tat ca phi</SelectItem>
-            <SelectItem value="has_fee">Da co phi</SelectItem>
-            <SelectItem value="no_fee">Chua co phi</SelectItem>
+            <SelectItem value="all">Tất cả</SelectItem>
+            <SelectItem value="has_fee">Đã cấu hình phí</SelectItem>
+            <SelectItem value="no_fee">Chưa có phí</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -178,18 +178,18 @@ export default function MerchantsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Merchant</TableHead>
-                <TableHead className="hidden md:table-cell">Email</TableHead>
-                <TableHead>Phi dich vu</TableHead>
-                <TableHead className="hidden sm:table-cell">Platform</TableHead>
-                <TableHead className="hidden lg:table-cell">Hop dong</TableHead>
-                <TableHead className="text-right">Thao tac</TableHead>
+                <TableHead className="hidden md:table-cell">Email liên hệ</TableHead>
+                <TableHead>Phí dịch vụ</TableHead>
+                <TableHead className="hidden sm:table-cell">Duyệt platform</TableHead>
+                <TableHead className="hidden lg:table-cell">Hợp đồng</TableHead>
+                <TableHead className="text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {merchants.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
-                    Khong tim thay merchant nao
+                    Không tìm thấy merchant nào
                   </TableCell>
                 </TableRow>
               ) : (
@@ -204,7 +204,7 @@ export default function MerchantsPage() {
                           {m.name}
                         </button>
                         {m.tax_code && (
-                          <p className="text-xs text-muted-foreground">{m.tax_code}</p>
+                          <p className="text-xs text-muted-foreground">MST: {m.tax_code}</p>
                         )}
                       </div>
                     </TableCell>
@@ -216,13 +216,13 @@ export default function MerchantsPage() {
                         <div className="flex flex-col gap-0.5">
                           <span className="text-sm font-medium">{m.service_fee_rate}%</span>
                           <span className="text-xs text-muted-foreground">
-                            {m.manual_fee_per_ticket.toLocaleString("vi-VN")}d/ve · VAT {m.fee_vat_rate}%
+                            {m.manual_fee_per_ticket.toLocaleString("vi-VN")}đ/vé · VAT {m.fee_vat_rate}%
                           </span>
                         </div>
                       ) : (
                         <Badge className="bg-red-500/20 text-red-400">
                           <AlertTriangle className="mr-1 size-3" />
-                          Chua co phi
+                          Chưa có phí
                         </Badge>
                       )}
                     </TableCell>
@@ -250,7 +250,7 @@ export default function MerchantsPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Trang {page + 1}/{totalPages} · {total} merchant
+                Trang {page + 1} / {totalPages} · {total} merchant
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
