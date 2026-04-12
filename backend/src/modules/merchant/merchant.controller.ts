@@ -25,7 +25,7 @@ import { ApproveMerchantDto } from './dto/approve-merchant.dto';
 @ApiTags('merchants')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('api/merchants')
+@Controller('merchants')
 export class MerchantController {
   constructor(private readonly merchantService: MerchantService) {}
 
