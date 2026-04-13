@@ -166,23 +166,24 @@ export class AnalyticsService {
       prevMonth,
     );
 
-    // 1. Current month paid summary
+    // 1. Current month paid summary — MANUAL orders excluded from GMV
+    //    (5BIB has no revenue share on manual orders, only fixed ticket fee)
     const [curRow] = await this.db.query(
       `SELECT
-        COUNT(*) as order_count,
-        COALESCE(SUM(total_price), 0) as gross_gmv,
-        COALESCE(SUM(IFNULL(total_discounts, 0)), 0) as total_discounts,
-        COALESCE(SUM(GREATEST(total_price - IFNULL(total_discounts, 0), 0)), 0) as net_gmv
+        COUNT(CASE WHEN order_category != 'MANUAL' THEN 1 END) as order_count,
+        COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN total_price ELSE 0 END), 0) as gross_gmv,
+        COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN IFNULL(total_discounts, 0) ELSE 0 END), 0) as total_discounts,
+        COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN GREATEST(total_price - IFNULL(total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
       FROM order_metadata
       WHERE financial_status = 'paid' AND ${curClause}`,
       curParams,
     );
 
-    // 2. Previous month paid summary
+    // 2. Previous month paid summary — same exclusion for consistent comparison
     const [prevRow] = await this.db.query(
       `SELECT
-        COUNT(*) as order_count,
-        COALESCE(SUM(total_price), 0) as gross_gmv
+        COUNT(CASE WHEN order_category != 'MANUAL' THEN 1 END) as order_count,
+        COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN total_price ELSE 0 END), 0) as gross_gmv
       FROM order_metadata
       WHERE financial_status = 'paid' AND ${prevClause}`,
       prevParams,
@@ -296,9 +297,9 @@ export class AnalyticsService {
       if (query.tenantId) {
         sql = `SELECT
           DATE(om.payment_on) as date,
-          COUNT(*) as order_count,
-          COALESCE(SUM(om.total_price), 0) as gmv,
-          COALESCE(SUM(GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0)), 0) as net_gmv
+          COUNT(CASE WHEN om.order_category != 'MANUAL' THEN 1 END) as order_count,
+          COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN om.total_price ELSE 0 END), 0) as gmv,
+          COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
         FROM order_metadata om
         JOIN races r ON r.race_id = om.race_id
         WHERE om.financial_status = 'paid' AND r.tenant_id = ? ${whereClause}
@@ -308,9 +309,9 @@ export class AnalyticsService {
       } else {
         sql = `SELECT
           DATE(payment_on) as date,
-          COUNT(*) as order_count,
-          COALESCE(SUM(total_price), 0) as gmv,
-          COALESCE(SUM(GREATEST(total_price - IFNULL(total_discounts, 0), 0)), 0) as net_gmv
+          COUNT(CASE WHEN order_category != 'MANUAL' THEN 1 END) as order_count,
+          COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN total_price ELSE 0 END), 0) as gmv,
+          COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN GREATEST(total_price - IFNULL(total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
         FROM order_metadata
         WHERE financial_status = 'paid' ${whereClause}
         GROUP BY DATE(payment_on)
@@ -349,9 +350,9 @@ export class AnalyticsService {
           t.name as tenant_name,
           r.tenant_id,
           r.race_type,
-          COUNT(om.id) as order_count,
-          COALESCE(SUM(om.total_price), 0) as gross_gmv,
-          COALESCE(SUM(GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0)), 0) as net_gmv
+          COUNT(CASE WHEN om.order_category != 'MANUAL' THEN 1 END) as order_count,
+          COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN om.total_price ELSE 0 END), 0) as gross_gmv,
+          COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
         FROM order_metadata om
         JOIN races r ON r.race_id = om.race_id
         JOIN tenant t ON t.id = r.tenant_id
@@ -703,13 +704,13 @@ export class AnalyticsService {
           r.tenant_id,
           t.name as merchant_name,
           COUNT(DISTINCT om.race_id) as race_count,
-          COUNT(CASE WHEN om.financial_status = 'paid' THEN 1 END) as paid_orders,
+          COUNT(CASE WHEN om.financial_status = 'paid' AND om.order_category != 'MANUAL' THEN 1 END) as paid_orders,
           COUNT(CASE WHEN om.financial_status = 'voided' THEN 1 END) as voided_orders,
-          COALESCE(SUM(CASE WHEN om.financial_status = 'paid' THEN om.total_price ELSE 0 END), 0) as gross_gmv,
-          COALESCE(SUM(CASE WHEN om.financial_status = 'paid'
+          COALESCE(SUM(CASE WHEN om.financial_status = 'paid' AND om.order_category != 'MANUAL' THEN om.total_price ELSE 0 END), 0) as gross_gmv,
+          COALESCE(SUM(CASE WHEN om.financial_status = 'paid' AND om.order_category != 'MANUAL'
             THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv,
-          SUM(CASE WHEN om.financial_status = 'paid' AND om.order_category = 'MANUAL'
-            THEN 1 ELSE 0 END) as manual_orders,
+          COUNT(CASE WHEN om.financial_status = 'paid' AND om.order_category = 'MANUAL'
+            THEN 1 END) as manual_orders,
           MAX(CASE WHEN om.financial_status = 'paid' THEN om.payment_on END) as last_order_date
         FROM order_metadata om
         JOIN races r ON r.race_id = om.race_id
