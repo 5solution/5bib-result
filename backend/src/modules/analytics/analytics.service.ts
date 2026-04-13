@@ -416,9 +416,9 @@ export class AnalyticsService {
       query.month,
     );
     const dateWhere = clause ? `AND ${clause}` : '';
-    const page = Math.max(query.page ?? 1, 1);
+    const page = Math.max(query.page ?? 0, 0);
     const limit = Math.min(query.limit ?? 20, 100);
-    const offset = (page - 1) * limit;
+    const offset = page * limit;
 
     const extraConditions: string[] = [];
     const extraParams: any[] = [];
@@ -480,9 +480,19 @@ export class AnalyticsService {
       [...params, ...extraParams, limit, offset],
     );
 
+    const countRows = await this.db.query(
+      `SELECT COUNT(DISTINCT om.race_id) as total
+      FROM order_metadata om
+      JOIN races r ON r.race_id = om.race_id
+      JOIN tenant t ON t.id = r.tenant_id
+      WHERE r.is_delete = 0 ${dateWhere} ${extraWhere}`,
+      [...params, ...extraParams],
+    );
+    const total = Number(countRows[0]?.total ?? 0);
+
     const feeConfigs = await this.getFeeConfigs();
 
-    return rows.map((r: any) => {
+    const data = rows.map((r: any) => {
       const cfg = feeConfigs.get(Number(r.tenant_id)) ?? {
         fee_rate: 0,
         manual_fee: 5000,
@@ -512,6 +522,8 @@ export class AnalyticsService {
           total > 0 ? Math.round((voidedOrders / total) * 10000) / 100 : 0,
       };
     });
+
+    return { data, total, page, limit };
   }
 
   async getRaceDetail(raceId: number, query: AnalyticsQueryDto) {
@@ -925,7 +937,7 @@ export class AnalyticsService {
           om.order_category,
           COUNT(*) as count,
           AVG(CASE WHEN om.financial_status = 'paid'
-            THEN TIMESTAMPDIFF(MINUTE, om.created_on, om.payment_on) END) as avg_minutes_to_pay
+            THEN TIMESTAMPDIFF(MINUTE, om.processed_on, om.payment_on) END) as avg_minutes_to_pay
         FROM order_metadata om
         ${joinClause}
         WHERE 1=1 ${dateWhere} ${extraWhere}

@@ -103,8 +103,8 @@ export class AnalyticsQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(1)
-  page?: number = 1;
+  @Min(0)
+  page?: number = 0;
 
   @ApiProperty({
     description: 'Items per page (max 100)',
