@@ -12,6 +12,7 @@ import {
 } from '../reconciliation/schemas/reconciliation.schema';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
+import { AnalyticsCron } from './analytics.cron';
 
 @Module({
   imports: [
@@ -22,6 +23,6 @@ import { AnalyticsService } from './analytics.service';
     ]),
   ],
   controllers: [AnalyticsController],
-  providers: [AnalyticsService],
+  providers: [AnalyticsService, AnalyticsCron],
 })
 export class AnalyticsModule {}

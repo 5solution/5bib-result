@@ -19,8 +19,20 @@ import {
 } from '../reconciliation/schemas/reconciliation.schema';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 
-const CACHE_TTL = 300; // 5 minutes
+/** Current month: 15 min. Historical months: 24 h (data doesn't change). */
+const TTL_CURRENT = 900;   // 15 minutes
+const TTL_HISTORY = 86400; // 24 hours
 const MAX_DATE_RANGE_DAYS = 366;
+
+function currentMonthStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthTtl(month?: string): number {
+  if (!month) return TTL_CURRENT;
+  return month === currentMonthStr() ? TTL_CURRENT : TTL_HISTORY;
+}
 
 @Injectable()
 export class AnalyticsService {
@@ -49,7 +61,14 @@ export class AnalyticsService {
     }
   }
 
-  private async cachedQuery<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  /**
+   * Read from Redis cache. On miss, compute via fn() and store.
+   * TTL auto-detected: if the cache key contains the current month string
+   * (YYYY-MM) → 15 min. Otherwise (historical data) → 24 h.
+   * Pass an explicit ttl to override.
+   */
+  async cachedQuery<T>(key: string, fn: () => Promise<T>, ttl?: number): Promise<T> {
+    const resolvedTtl = ttl ?? (key.includes(currentMonthStr()) ? TTL_CURRENT : TTL_HISTORY);
     try {
       const cached = await this.redis.get(key);
       if (cached) return JSON.parse(cached) as T;
@@ -58,7 +77,7 @@ export class AnalyticsService {
     }
     const result = await fn();
     try {
-      await this.redis.set(key, JSON.stringify(result), 'EX', CACHE_TTL);
+      await this.redis.set(key, JSON.stringify(result), 'EX', resolvedTtl);
     } catch (e) {
       this.logger.warn(`Redis set failed for key ${key}: ${e}`);
     }
