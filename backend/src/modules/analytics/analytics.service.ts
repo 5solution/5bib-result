@@ -123,7 +123,7 @@ export class AnalyticsService {
     const map = new Map<number, { fee_rate: number; manual_fee: number }>();
     for (const c of configs) {
       map.set(c.tenantId, {
-        fee_rate: c.service_fee_rate ?? 0,
+        fee_rate: c.service_fee_rate ?? 5.5,
         manual_fee: c.manual_fee_per_ticket ?? 5000,
       });
     }
@@ -232,7 +232,7 @@ export class AnalyticsService {
     let platformFee = 0;
     for (const row of tenantGmvRows) {
       const cfg = feeConfigs.get(Number(row.tenant_id)) ?? {
-        fee_rate: 0,
+        fee_rate: 5.5,
         manual_fee: 5000,
       };
       platformFee += (Number(row.net_gmv) * cfg.fee_rate) / 100;
@@ -366,7 +366,7 @@ export class AnalyticsService {
 
       return rows.map((r: any) => {
         const cfg = feeConfigs.get(Number(r.tenant_id)) ?? {
-          fee_rate: 0,
+          fee_rate: 5.5,
           manual_fee: 5000,
         };
         const netGmv = Number(r.net_gmv);
@@ -513,7 +513,7 @@ export class AnalyticsService {
 
     const data = rows.map((r: any) => {
       const cfg = feeConfigs.get(Number(r.tenant_id)) ?? {
-        fee_rate: 0,
+        fee_rate: 5.5,
         manual_fee: 5000,
       };
       const paidOrders = Number(r.paid_orders);
@@ -635,7 +635,7 @@ export class AnalyticsService {
 
     const feeConfigs = await this.getFeeConfigs();
     const tenantId = Number(summary.tenant_id);
-    const cfg = feeConfigs.get(tenantId) ?? { fee_rate: 0, manual_fee: 5000 };
+    const cfg = feeConfigs.get(tenantId) ?? { fee_rate: 5.5, manual_fee: 5000 };
     const netGmv = Number(summary.net_gmv);
 
     return {
@@ -724,7 +724,7 @@ export class AnalyticsService {
 
       return rows.map((r: any) => {
         const cfg = feeConfigs.get(Number(r.tenant_id)) ?? {
-          fee_rate: 0,
+          fee_rate: 5.5,
           manual_fee: 5000,
         };
         const paidOrders = Number(r.paid_orders);
