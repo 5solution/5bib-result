@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Patch,
@@ -264,6 +266,14 @@ export class ReconciliationController {
     @Body() dto: UpdateReconciliationStatusDto,
   ) {
     return this.reconciliationService.updateStatus(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete a reconciliation record' })
+  @ApiResponse({ status: 204, description: 'Deleted successfully' })
+  delete(@Param('id') id: string) {
+    return this.reconciliationService.delete(id);
   }
 
   @Post(':id/regenerate')

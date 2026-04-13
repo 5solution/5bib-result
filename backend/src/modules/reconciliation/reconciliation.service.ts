@@ -450,6 +450,11 @@ export class ReconciliationService {
     return { created, skipped, failed, results };
   }
 
+  async delete(id: string): Promise<void> {
+    const result = await this.reconciliationModel.deleteOne({ _id: id });
+    if (result.deletedCount === 0) throw new NotFoundException(`Reconciliation ${id} not found`);
+  }
+
   async getCronLogs(limit = 12) {
     return this.cronLogModel.find({}).sort({ ran_at: -1 }).limit(limit).lean();
   }

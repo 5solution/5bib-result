@@ -43,6 +43,7 @@ import {
   ChevronUp,
   Archive,
   Download,
+  Trash2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -168,6 +169,10 @@ export default function ReconciliationsPage() {
   // M5: Cron error banner
   const [cronLogs, setCronLogs] = useState<CronLog[]>([]);
   const [cronBannerExpanded, setCronBannerExpanded] = useState(false);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<Reconciliation | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Export ZIP state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -433,6 +438,25 @@ export default function ReconciliationsPage() {
     setBatchErrorOpen(false);
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/reconciliations/${deleteTarget._id}`, {
+        method: "DELETE",
+        headers: authHeaders(token!).headers,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.success(`Đã xóa đối soát của ${deleteTarget.tenant_name}`);
+      setDeleteTarget(null);
+      fetchItems();
+    } catch (err: any) {
+      toast.error(`Xóa thất bại: ${err.message}`);
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
   function toggleBatchSelect(tenantId: number) {
     setBatchSelected((prev) => {
       const next = new Set(prev);
@@ -598,6 +622,7 @@ export default function ReconciliationsPage() {
                 <TableHead className="text-right">Thanh toán</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead className="hidden sm:table-cell">Ngày tạo</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -648,6 +673,15 @@ export default function ReconciliationsPage() {
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                       {formatDate(item.createdAt)}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => setDeleteTarget(item)}
+                        className="rounded p-1.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                        title="Xóa đối soát"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -813,6 +847,39 @@ export default function ReconciliationsPage() {
                   }}
                 >
                   Thử lại
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-400">
+              <Trash2 className="size-5" />
+              Xóa bản ghi đối soát
+            </DialogTitle>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="flex flex-col gap-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                Bạn có chắc muốn xóa bản đối soát này không? Hành động này không thể hoàn tác.
+              </p>
+              <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm flex flex-col gap-1">
+                <span className="font-medium">{deleteTarget.tenant_name}</span>
+                <span className="text-muted-foreground">{deleteTarget.race_title}</span>
+                <span className="text-muted-foreground">{formatPeriod(deleteTarget.period_start, deleteTarget.period_end)}</span>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleteLoading}>
+                  Hủy
+                </Button>
+                <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading}>
+                  {deleteLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Trash2 className="mr-2 size-4" />}
+                  Xóa
                 </Button>
               </DialogFooter>
             </div>
