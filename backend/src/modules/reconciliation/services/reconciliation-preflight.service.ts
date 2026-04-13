@@ -218,16 +218,12 @@ export class ReconciliationPreflightService {
 
   private parsePeriod(period: string): { period_start: string; period_end: string } {
     const [year, month] = period.split('-').map(Number);
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0); // last day of month
+    const mm = String(month).padStart(2, '0');
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
     return {
-      period_start: this.fmtDate(start),
-      period_end: this.fmtDate(end),
+      period_start: `${year}-${mm}-01`,
+      period_end: `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
     };
-  }
-
-  private fmtDate(d: Date): string {
-    return d.toISOString().slice(0, 10);
   }
 
   private dedup(rows: any[]): any[] {

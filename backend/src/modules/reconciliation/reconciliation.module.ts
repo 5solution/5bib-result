@@ -14,6 +14,7 @@ import {
   ReconciliationCronLog,
   ReconciliationCronLogSchema,
 } from './schemas/reconciliation-cron-log.schema';
+import { ExportJob, ExportJobSchema } from './export/export-job.schema';
 import { ReconciliationController } from './reconciliation.controller';
 import { ReconciliationService } from './reconciliation.service';
 import { ReconciliationQueryService } from './services/reconciliation-query.service';
@@ -22,6 +23,8 @@ import { ReconciliationPreflightService } from './services/reconciliation-prefli
 import { XlsxService } from './services/xlsx.service';
 import { DocxService } from './services/docx.service';
 import { ReconciliationCron } from './services/reconciliation.cron';
+import { BatchExportService } from './export/batch-export.service';
+import { TongHopService } from './export/tong-hop.service';
 
 @Module({
   imports: [
@@ -30,6 +33,7 @@ import { ReconciliationCron } from './services/reconciliation.cron';
       { name: Reconciliation.name, schema: ReconciliationSchema },
       { name: MerchantConfig.name, schema: MerchantConfigSchema },
       { name: ReconciliationCronLog.name, schema: ReconciliationCronLogSchema },
+      { name: ExportJob.name, schema: ExportJobSchema },
     ]),
   ],
   controllers: [ReconciliationController],
@@ -41,6 +45,8 @@ import { ReconciliationCron } from './services/reconciliation.cron';
     XlsxService,
     DocxService,
     ReconciliationCron,
+    BatchExportService,
+    TongHopService,
   ],
   exports: [ReconciliationService],
 })

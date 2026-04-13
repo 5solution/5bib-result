@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -18,10 +19,12 @@ import { ReconciliationQueryService } from './services/reconciliation-query.serv
 import { ReconciliationPreflightService } from './services/reconciliation-preflight.service';
 import { XlsxService } from './services/xlsx.service';
 import { DocxService } from './services/docx.service';
+import { BatchExportService } from './export/batch-export.service';
 import { PreviewReconciliationDto } from './dto/preview-reconciliation.dto';
 import { CreateReconciliationDto } from './dto/create-reconciliation.dto';
 import { UpdateReconciliationStatusDto } from './dto/update-reconciliation-status.dto';
 import { BatchCreateReconciliationDto } from './dto/batch-create-reconciliation.dto';
+import { ExportZipByIdsDto, ExportZipByPeriodDto } from './dto/export-zip.dto';
 
 function fmtDate(s: string): string {
   if (!s) return '';
@@ -48,6 +51,7 @@ export class ReconciliationController {
     private readonly preflightService: ReconciliationPreflightService,
     private readonly xlsxService: XlsxService,
     private readonly docxService: DocxService,
+    private readonly batchExportService: BatchExportService,
   ) {}
 
   @Get('preflight')
@@ -170,6 +174,73 @@ export class ReconciliationController {
     });
     res.send(buf);
   }
+
+  // ── Export ZIP endpoints ──────────────────────────────────────────────
+
+  @Post('export/zip/by-ids')
+  @ApiOperation({ summary: 'Trigger async ZIP export for selected reconciliation IDs' })
+  @ApiResponse({ status: 201, description: 'Export job created' })
+  exportByIds(@Body() dto: ExportZipByIdsDto) {
+    return this.batchExportService.triggerByIds(dto.ids, dto.label);
+  }
+
+  @Post('export/zip/by-period')
+  @ApiOperation({ summary: 'Trigger async ZIP export for all reconciliations in a period' })
+  @ApiResponse({ status: 201, description: 'Export job created' })
+  exportByPeriod(@Body() dto: ExportZipByPeriodDto) {
+    return this.batchExportService.triggerByPeriod(
+      dto.periodStart,
+      dto.periodEnd,
+      dto.label,
+    );
+  }
+
+  @Get('export-jobs/:jobId')
+  @ApiOperation({ summary: 'Get export job status' })
+  @ApiResponse({ status: 200, description: 'Job status with progress' })
+  async getExportJob(@Param('jobId') jobId: string) {
+    const job = await this.batchExportService.getJobStatus(jobId);
+    if (!job) throw new NotFoundException(`Export job ${jobId} not found`);
+    return job;
+  }
+
+  @Get('export-jobs/:jobId/download')
+  @ApiOperation({ summary: 'Download ZIP file' })
+  @ApiResponse({ status: 200, description: 'ZIP file stream or redirect to S3' })
+  async downloadExportJob(@Param('jobId') jobId: string, @Res() res: Response) {
+    const job = await this.batchExportService.getJobStatus(jobId);
+    if (!job) throw new NotFoundException(`Export job ${jobId} not found`);
+    if (job.status !== 'done' || !job.zipUrl) {
+      return res.status(400).json({ message: 'Export not ready yet', status: job.status });
+    }
+
+    if (job.isLocal) {
+      const buf = await this.batchExportService.getLocalZipBuffer(jobId);
+      if (!buf) return res.status(404).json({ message: 'Local ZIP file not found' });
+      res.set({
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="batch_doi_soat.zip"`,
+        'Content-Length': buf.length,
+      });
+      return res.send(buf);
+    }
+
+    // Fetch the S3 URL server-side and pipe back with explicit Content-Disposition
+    // so the browser always downloads rather than opening the file.
+    const s3Res = await fetch(job.zipUrl);
+    if (!s3Res.ok) {
+      return res.status(502).json({ message: `Failed to fetch ZIP from S3: HTTP ${s3Res.status}` });
+    }
+    const buf = Buffer.from(await s3Res.arrayBuffer());
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="batch_doi_soat.zip"`,
+      'Content-Length': buf.length,
+    });
+    return res.send(buf);
+  }
+
+  // ── End Export ZIP endpoints ──────────────────────────────────────────
 
   @Get('cron-logs')
   @ApiOperation({ summary: 'Get recent reconciliation cron run logs' })

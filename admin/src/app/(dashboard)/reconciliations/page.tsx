@@ -41,7 +41,10 @@ import {
   Users,
   ChevronDown,
   ChevronUp,
+  Archive,
+  Download,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface Reconciliation {
   _id: string;
@@ -166,6 +169,18 @@ export default function ReconciliationsPage() {
   const [cronLogs, setCronLogs] = useState<CronLog[]>([]);
   const [cronBannerExpanded, setCronBannerExpanded] = useState(false);
 
+  // Export ZIP state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<"selection" | "period">("selection");
+  const [exportPeriodStart, setExportPeriodStart] = useState("");
+  const [exportPeriodEnd, setExportPeriodEnd] = useState("");
+  const [exportLabel, setExportLabel] = useState("");
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<"idle" | "processing" | "done" | "failed">("idle");
+  const [exportProgress, setExportProgress] = useState<{ total: number; done: number } | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
   // M3: Batch modal state
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchStep, setBatchStep] = useState<0 | 1 | 2>(0);
@@ -228,6 +243,132 @@ export default function ReconciliationsPage() {
   useEffect(() => {
     fetchCronLogs();
   }, [fetchCronLogs]);
+
+  // Authenticated download helper — uses fetch so Authorization header is included
+  const downloadExportJob = useCallback(async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/reconciliations/export-jobs/${jobId}/download`, {
+        headers: authHeaders(token!).headers,
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Download failed: ${res.status} ${body}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "batch_doi_soat.zip";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setExportError(err.message ?? "Tải file thất bại");
+    }
+  }, [token]);
+
+  // Poll export job status every 2s
+  useEffect(() => {
+    if (!exportJobId || exportStatus !== "processing") return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/reconciliations/export-jobs/${exportJobId}`, {
+          headers: authHeaders(token!).headers,
+        });
+        if (!res.ok) return;
+        const job = await res.json();
+        setExportProgress(job.progress);
+        if (job.status === "done") {
+          setExportStatus("done");
+          clearInterval(interval);
+          // Auto-download with auth
+          downloadExportJob(job.jobId);
+        } else if (job.status === "failed") {
+          setExportStatus("failed");
+          setExportError(job.errorMessage ?? "Export thất bại");
+          clearInterval(interval);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [exportJobId, exportStatus, token]);
+
+  async function handleExportByIds() {
+    if (selectedIds.size === 0) return;
+    setExportStatus("processing");
+    setExportProgress({ total: selectedIds.size, done: 0 });
+    setExportError(null);
+    try {
+      const res = await fetch("/api/reconciliations/export/zip/by-ids", {
+        method: "POST",
+        headers: { ...authHeaders(token!).headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          label: exportLabel || `Xuất ${selectedIds.size} đối soát`,
+        }),
+      });
+      const json = await res.json();
+      setExportJobId(json.jobId);
+    } catch {
+      setExportStatus("failed");
+      setExportError("Không thể khởi động export");
+    }
+  }
+
+  async function handleExportByPeriod() {
+    if (!exportPeriodStart || !exportPeriodEnd) return;
+    setExportStatus("processing");
+    setExportProgress(null);
+    setExportError(null);
+    try {
+      const res = await fetch("/api/reconciliations/export/zip/by-period", {
+        method: "POST",
+        headers: { ...authHeaders(token!).headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          periodStart: exportPeriodStart,
+          periodEnd: exportPeriodEnd,
+          label: exportLabel || `${exportPeriodStart} → ${exportPeriodEnd}`,
+        }),
+      });
+      const json = await res.json();
+      setExportJobId(json.jobId);
+      setExportProgress({ total: json.total, done: 0 });
+    } catch {
+      setExportStatus("failed");
+      setExportError("Không thể khởi động export");
+    }
+  }
+
+  function handleExportClose() {
+    if (exportStatus === "processing") return; // don't close while running
+    setExportOpen(false);
+    setExportJobId(null);
+    setExportStatus("idle");
+    setExportProgress(null);
+    setExportError(null);
+    setExportLabel("");
+  }
+
+  function toggleSelectId(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === items.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((i) => i._id)));
+    }
+  }
 
   async function handleBatchPreflight() {
     setBatchLoading(true);
@@ -380,6 +521,23 @@ export default function ReconciliationsPage() {
           <p className="text-sm text-muted-foreground">{total} bản ghi đối soát</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* ZIP Export buttons */}
+          <Button
+            variant="outline"
+            disabled={selectedIds.size === 0}
+            onClick={() => { setExportMode("selection"); setExportOpen(true); }}
+          >
+            <Archive className="mr-2 size-4" />
+            Xuất ZIP ({selectedIds.size})
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => { setExportMode("period"); setExportOpen(true); }}
+          >
+            <Archive className="mr-2 size-4" />
+            Xuất theo kỳ
+          </Button>
+
           {/* M3: Batch button */}
           <Button variant="outline" onClick={() => setBatchOpen(true)}>
             <Users className="mr-2 size-4" />
@@ -424,6 +582,14 @@ export default function ReconciliationsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    checked={items.length > 0 && selectedIds.size === items.length}
+                    onChange={toggleSelectAll}
+                    className="size-4 cursor-pointer rounded border-input accent-primary"
+                  />
+                </TableHead>
                 <TableHead>Merchant</TableHead>
                 <TableHead>Giải đấu</TableHead>
                 <TableHead className="hidden md:table-cell">Kỳ đối soát</TableHead>
@@ -448,6 +614,14 @@ export default function ReconciliationsPage() {
                     className="cursor-pointer"
                     onClick={() => router.push(`/reconciliations/${item._id}`)}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item._id)}
+                        onChange={() => toggleSelectId(item._id)}
+                        className="size-4 cursor-pointer rounded border-input accent-primary"
+                      />
+                    </TableCell>
                     <TableCell>
                       <span className="font-medium">{item.tenant_name}</span>
                     </TableCell>
@@ -508,6 +682,143 @@ export default function ReconciliationsPage() {
           )}
         </>
       )}
+
+      {/* ZIP Export dialog */}
+      <Dialog open={exportOpen} onOpenChange={(open) => { if (!open) handleExportClose(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="size-5" />
+              Xuất ZIP đối soát
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Idle / config state */}
+          {exportStatus === "idle" && (
+            <div className="flex flex-col gap-5 py-2">
+              {exportMode === "selection" ? (
+                <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+                  Sẽ xuất <span className="font-semibold">{selectedIds.size}</span> đối soát đã chọn
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-muted-foreground">Chọn kỳ để xuất toàn bộ đối soát trong khoảng thời gian đó.</p>
+                  <div className="flex gap-3">
+                    <div className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-muted-foreground">Từ ngày</span>
+                      <Input
+                        type="date"
+                        value={exportPeriodStart}
+                        onChange={(e) => setExportPeriodStart(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-muted-foreground">Đến ngày</span>
+                      <Input
+                        type="date"
+                        value={exportPeriodEnd}
+                        onChange={(e) => setExportPeriodEnd(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Nhãn (tuỳ chọn)</span>
+                <Input
+                  placeholder="VD: Tháng 04/2026"
+                  value={exportLabel}
+                  onChange={(e) => setExportLabel(e.target.value)}
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={handleExportClose}>Hủy</Button>
+                <Button
+                  onClick={exportMode === "selection" ? handleExportByIds : handleExportByPeriod}
+                  disabled={
+                    exportMode === "selection"
+                      ? selectedIds.size === 0
+                      : !exportPeriodStart || !exportPeriodEnd
+                  }
+                >
+                  <Archive className="mr-2 size-4" />
+                  Bắt đầu xuất
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Processing state */}
+          {exportStatus === "processing" && (
+            <div className="flex flex-col items-center gap-5 py-6">
+              <Loader2 className="size-10 animate-spin text-blue-400" />
+              <div className="flex flex-col items-center gap-1 text-center">
+                <p className="font-medium">Đang tạo file đối soát...</p>
+                {exportProgress && exportProgress.total > 0 && (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      {exportProgress.done}/{exportProgress.total} merchants
+                    </p>
+                    <div className="mt-2 w-60 h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-blue-500 transition-all"
+                        style={{ width: `${Math.round((exportProgress.done / exportProgress.total) * 100)}%` }}
+                      />
+                    </div>
+                  </>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">Thường mất 15–30 giây</p>
+              </div>
+            </div>
+          )}
+
+          {/* Done state */}
+          {exportStatus === "done" && (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <CheckCircle className="size-10 text-green-400" />
+              <div className="flex flex-col items-center gap-1 text-center">
+                <p className="font-medium">Xuất thành công!</p>
+                <p className="text-sm text-muted-foreground">File ZIP đã được tải xuống tự động.</p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => exportJobId && downloadExportJob(exportJobId)}
+              >
+                <Download className="mr-2 size-4" />
+                Tải lại
+              </Button>
+              <DialogFooter>
+                <Button onClick={handleExportClose}>Đóng</Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Failed state */}
+          {exportStatus === "failed" && (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <AlertTriangle className="size-10 text-red-400" />
+              <div className="flex flex-col items-center gap-1 text-center">
+                <p className="font-medium">Xuất thất bại</p>
+                {exportError && (
+                  <p className="text-sm text-red-400">{exportError}</p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={handleExportClose}>Đóng</Button>
+                <Button
+                  onClick={() => {
+                    setExportStatus("idle");
+                    setExportJobId(null);
+                    setExportError(null);
+                  }}
+                >
+                  Thử lại
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* M3: Batch creation modal */}
       <Dialog open={batchOpen} onOpenChange={(open) => { if (!open) handleBatchClose(); }}>

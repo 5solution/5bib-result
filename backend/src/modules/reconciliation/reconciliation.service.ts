@@ -261,6 +261,7 @@ export class ReconciliationService {
 
     if (dto.status === 'reviewed') {
       doc.reviewed_at = new Date();
+      if (dto.reviewed_by) doc.reviewed_by = dto.reviewed_by;
     }
 
     if (dto.status === 'approved') {
@@ -400,7 +401,7 @@ export class ReconciliationService {
               race_title: race.race_name,
               period_start,
               period_end,
-              fee_rate_applied: config?.service_fee_rate ?? null,
+              fee_rate_applied: config?.service_fee_rate ?? 5.5,
               manual_fee_per_ticket: config?.manual_fee_per_ticket ?? 5000,
               fee_vat_rate: config?.fee_vat_rate ?? 0,
               manual_adjustment: 0,
@@ -455,10 +456,12 @@ export class ReconciliationService {
 
   private parsePeriod(period: string): { period_start: string; period_end: string } {
     const [year, month] = period.split('-').map(Number);
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0);
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    return { period_start: fmt(start), period_end: fmt(end) };
+    const mm = String(month).padStart(2, '0');
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return {
+      period_start: `${year}-${mm}-01`,
+      period_end: `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
+    };
   }
 
   private async uploadBuffer(

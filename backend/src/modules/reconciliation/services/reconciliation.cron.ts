@@ -125,7 +125,7 @@ export class ReconciliationCron {
                 race_title,
                 period_start,
                 period_end,
-                fee_rate_applied: config.service_fee_rate ?? null,
+                fee_rate_applied: config.service_fee_rate ?? 5.5,
                 manual_fee_per_ticket: config.manual_fee_per_ticket ?? 5000,
                 fee_vat_rate: config.fee_vat_rate ?? 0,
                 manual_adjustment: 0,
@@ -218,6 +218,9 @@ export class ReconciliationCron {
   }
 
   private fmtDate(d: Date): string {
-    return d.toISOString().slice(0, 10);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 }

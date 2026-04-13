@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import "./api"; // ensure client baseUrl is configured
@@ -26,6 +27,7 @@ const TOKEN_KEY = "5bib_admin_token";
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const logoutRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
@@ -33,6 +35,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(stored);
     }
     setIsLoading(false);
+  }, []);
+
+  // Global fetch interceptor: auto-redirect to /login on 401
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (...args: Parameters<typeof fetch>) => {
+      const res = await originalFetch(...args);
+      if (res.status === 401 && !window.location.pathname.startsWith("/login")) {
+        logoutRef.current();
+        window.location.href = "/login";
+      }
+      return res;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -59,6 +77,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
   }, []);
+
+  // Keep ref in sync so the fetch interceptor always calls the latest logout
+  useEffect(() => {
+    logoutRef.current = logout;
+  }, [logout]);
 
   return (
     <AuthContext value={{

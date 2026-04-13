@@ -10,9 +10,10 @@ export class PreviewReconciliationDto {
   @IsNumber()
   mysql_race_id: number;
 
-  @ApiProperty({ description: 'Race title for display', example: 'VPBank Hanoi Marathon 2025' })
+  @ApiPropertyOptional({ description: 'Race title for display', example: 'VPBank Hanoi Marathon 2025' })
+  @IsOptional()
   @IsString()
-  race_title: string;
+  race_title?: string;
 
   @ApiProperty({ description: 'Period start date YYYY-MM-DD', example: '2025-01-01' })
   @IsDateString()

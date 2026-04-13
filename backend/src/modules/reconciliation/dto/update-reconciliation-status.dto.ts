@@ -9,6 +9,11 @@ export class UpdateReconciliationStatusDto {
   @IsIn(['draft', 'flagged', 'ready', 'approved', 'sent', 'reviewed', 'signed', 'completed'])
   status: string;
 
+  @ApiPropertyOptional({ description: 'Admin user id (for reviewed status)' })
+  @IsOptional()
+  @IsNumber()
+  reviewed_by?: number;
+
   @ApiPropertyOptional({ description: 'Admin user id (for approved status)' })
   @IsOptional()
   @IsNumber()
