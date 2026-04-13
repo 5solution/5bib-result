@@ -77,7 +77,7 @@ interface TopRace {
 
 interface TopMerchant {
   tenantId: number;
-  tenantName: string;
+  merchantName: string;
   grossGmv: number;
   orderCount: number;
 }
@@ -276,7 +276,7 @@ export default function AnalyticsOverviewPage() {
   }));
 
   const merchantBarData = topMerchants.map((m) => ({
-    label: m.tenantName,
+    label: m.merchantName,
     value: m.grossGmv,
   }));
 
