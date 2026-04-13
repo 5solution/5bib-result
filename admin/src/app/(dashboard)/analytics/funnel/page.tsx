@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -226,9 +227,18 @@ export default function SalesFunnelPage() {
 
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
-  const [tenantId, setTenantId] = useState("");
+  const [tenantId, setTenantId] = useState("all");
   const [data, setData] = useState<FunnelData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [merchants, setMerchants] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/merchants?pageSize=200", { headers: authHeaders(token).headers })
+      .then((r) => r.json())
+      .then((j) => setMerchants((j.data?.list ?? j.data ?? []).map((m: any) => ({ id: m.id, name: m.name }))))
+      .catch(() => {});
+  }, [token]);
 
   const fetchData = useCallback(async () => {
     if (!token) return;
@@ -237,7 +247,7 @@ export default function SalesFunnelPage() {
       const params = new URLSearchParams({
         from,
         to,
-        ...(tenantId && { tenantId }),
+        ...(tenantId !== "all" && { tenantId }),
       });
       const res = await fetch(`/api/analytics/funnel?${params}`, {
         headers: authHeaders(token).headers,
@@ -304,19 +314,24 @@ export default function SalesFunnelPage() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Tenant ID</span>
-          <Input
-            placeholder="Lọc merchant..."
-            value={tenantId}
-            onChange={(e) => setTenantId(e.target.value)}
-            className="w-[160px]"
-          />
+          <span className="text-xs font-medium text-muted-foreground">Merchant</span>
+          <Select value={tenantId} onValueChange={(v) => { if (v != null) setTenantId(v); }}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Tất cả merchant" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả merchant</SelectItem>
+              {merchants.map((m) => (
+                <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        {(from !== defaultFrom || to !== defaultTo || tenantId) && (
+        {(from !== defaultFrom || to !== defaultTo || tenantId !== "all") && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => { setFrom(defaultFrom); setTo(defaultTo); setTenantId(""); }}
+            onClick={() => { setFrom(defaultFrom); setTo(defaultTo); setTenantId("all"); }}
           >
             <X className="mr-1 size-3" /> Reset
           </Button>

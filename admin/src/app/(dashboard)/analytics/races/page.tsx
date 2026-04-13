@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
 import {
@@ -101,7 +101,17 @@ export default function RacePerformancePage() {
     return `${m}-${String(days).padStart(2, "0")}`;
   });
   const [raceType, setRaceType] = useState("all");
-  const [tenantId, setTenantId] = useState("");
+  const [tenantId, setTenantId] = useState("all");
+
+  // Merchant list for dropdown
+  const [merchants, setMerchants] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/merchants?pageSize=200", { headers: authHeaders(token).headers })
+      .then((r) => r.json())
+      .then((j) => setMerchants((j.data?.list ?? j.data ?? []).map((m: any) => ({ id: m.id, name: m.name }))))
+      .catch(() => {});
+  }, [token]);
 
   // Detail drawer
   const [detailOpen, setDetailOpen] = useState(false);
@@ -119,7 +129,7 @@ export default function RacePerformancePage() {
         page: String(page),
         limit: String(LIMIT),
         ...(raceType !== "all" && { raceType }),
-        ...(tenantId && { tenantId }),
+        ...(tenantId !== "all" && { tenantId }),
       });
       const res = await fetch(`/api/analytics/races?${params}`, {
         headers: authHeaders(token).headers,
@@ -220,19 +230,24 @@ export default function RacePerformancePage() {
           </Select>
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Tenant ID</span>
-          <Input
-            placeholder="Lọc merchant..."
-            value={tenantId}
-            onChange={(e) => { setTenantId(e.target.value); setPage(0); }}
-            className="w-[160px]"
-          />
+          <span className="text-xs font-medium text-muted-foreground">Merchant</span>
+          <Select value={tenantId} onValueChange={(v) => { if (v != null) { setTenantId(v); setPage(0); } }}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Tất cả merchant" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả merchant</SelectItem>
+              {merchants.map((m) => (
+                <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        {(raceType !== "all" || tenantId) && (
+        {(raceType !== "all" || tenantId !== "all") && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => { setRaceType("all"); setTenantId(""); setPage(0); }}
+            onClick={() => { setRaceType("all"); setTenantId("all"); setPage(0); }}
           >
             <X className="mr-1 size-3" /> Xóa lọc
           </Button>
