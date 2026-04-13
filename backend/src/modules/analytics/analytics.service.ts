@@ -153,7 +153,7 @@ export class AnalyticsService {
         COUNT(*) as order_count,
         COALESCE(SUM(total_price), 0) as gross_gmv,
         COALESCE(SUM(IFNULL(total_discounts, 0)), 0) as total_discounts,
-        COALESCE(SUM(total_price - IFNULL(total_discounts, 0)), 0) as net_gmv
+        COALESCE(SUM(GREATEST(total_price - IFNULL(total_discounts, 0), 0)), 0) as net_gmv
       FROM order_metadata
       WHERE financial_status = 'paid' AND ${curClause}`,
       curParams,
@@ -195,7 +195,7 @@ export class AnalyticsService {
     const tenantGmvRows = await this.db.query(
       `SELECT r.tenant_id,
         SUM(CASE WHEN om.order_category != 'MANUAL'
-          THEN om.total_price - IFNULL(om.total_discounts, 0) ELSE 0 END) as net_gmv,
+          THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END) as net_gmv,
         SUM(CASE WHEN om.order_category = 'MANUAL'
           THEN IFNULL(oli_agg.total_quantity, 0) ELSE 0 END) as manual_tickets
       FROM order_metadata om
@@ -279,7 +279,7 @@ export class AnalyticsService {
           DATE(om.payment_on) as date,
           COUNT(*) as order_count,
           COALESCE(SUM(om.total_price), 0) as gmv,
-          COALESCE(SUM(om.total_price - IFNULL(om.total_discounts, 0)), 0) as net_gmv
+          COALESCE(SUM(GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0)), 0) as net_gmv
         FROM order_metadata om
         JOIN races r ON r.race_id = om.race_id
         WHERE om.financial_status = 'paid' AND r.tenant_id = ? ${whereClause}
@@ -291,7 +291,7 @@ export class AnalyticsService {
           DATE(payment_on) as date,
           COUNT(*) as order_count,
           COALESCE(SUM(total_price), 0) as gmv,
-          COALESCE(SUM(total_price - IFNULL(total_discounts, 0)), 0) as net_gmv
+          COALESCE(SUM(GREATEST(total_price - IFNULL(total_discounts, 0), 0)), 0) as net_gmv
         FROM order_metadata
         WHERE financial_status = 'paid' ${whereClause}
         GROUP BY DATE(payment_on)
@@ -332,7 +332,7 @@ export class AnalyticsService {
           r.race_type,
           COUNT(om.id) as order_count,
           COALESCE(SUM(om.total_price), 0) as gross_gmv,
-          COALESCE(SUM(om.total_price - IFNULL(om.total_discounts, 0)), 0) as net_gmv
+          COALESCE(SUM(GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0)), 0) as net_gmv
         FROM order_metadata om
         JOIN races r ON r.race_id = om.race_id
         JOIN tenant t ON t.id = r.tenant_id
@@ -381,7 +381,7 @@ export class AnalyticsService {
           order_category,
           COUNT(*) as order_count,
           COALESCE(SUM(total_price), 0) as gross_gmv,
-          COALESCE(SUM(total_price - IFNULL(total_discounts, 0)), 0) as net_gmv
+          COALESCE(SUM(GREATEST(total_price - IFNULL(total_discounts, 0), 0)), 0) as net_gmv
         FROM order_metadata
         WHERE financial_status = 'paid' ${whereClause}
         GROUP BY order_category
@@ -468,7 +468,7 @@ export class AnalyticsService {
         COUNT(DISTINCT CASE WHEN om.financial_status = 'paid' THEN om.user_id END) as unique_runners,
         COALESCE(SUM(CASE WHEN om.financial_status = 'paid' THEN om.total_price ELSE 0 END), 0) as gross_gmv,
         COALESCE(SUM(CASE WHEN om.financial_status = 'paid'
-          THEN om.total_price - IFNULL(om.total_discounts, 0) ELSE 0 END), 0) as net_gmv
+          THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
       FROM order_metadata om
       JOIN races r ON r.race_id = om.race_id
       JOIN tenant t ON t.id = r.tenant_id
@@ -553,7 +553,7 @@ export class AnalyticsService {
         COUNT(DISTINCT CASE WHEN om.financial_status = 'paid' THEN om.user_id END) as unique_runners,
         COALESCE(SUM(CASE WHEN om.financial_status = 'paid' THEN om.total_price ELSE 0 END), 0) as gross_gmv,
         COALESCE(SUM(CASE WHEN om.financial_status = 'paid'
-          THEN om.total_price - IFNULL(om.total_discounts, 0) ELSE 0 END), 0) as net_gmv
+          THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
       FROM order_metadata om
       JOIN races r ON r.race_id = om.race_id
       JOIN tenant t ON t.id = r.tenant_id
@@ -688,7 +688,7 @@ export class AnalyticsService {
           COUNT(CASE WHEN om.financial_status = 'voided' THEN 1 END) as voided_orders,
           COALESCE(SUM(CASE WHEN om.financial_status = 'paid' THEN om.total_price ELSE 0 END), 0) as gross_gmv,
           COALESCE(SUM(CASE WHEN om.financial_status = 'paid'
-            THEN om.total_price - IFNULL(om.total_discounts, 0) ELSE 0 END), 0) as net_gmv,
+            THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv,
           SUM(CASE WHEN om.financial_status = 'paid' AND om.order_category = 'MANUAL'
             THEN 1 ELSE 0 END) as manual_orders,
           MAX(CASE WHEN om.financial_status = 'paid' THEN om.payment_on END) as last_order_date
