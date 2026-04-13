@@ -64,21 +64,21 @@ const RACE_TYPES = [
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RaceRow {
-  race_id: number;
-  race_title: string;
-  tenant_name: string;
-  race_type: string;
-  race_date: string;
-  orders: number;
-  gmv: number;
-  platform_fee: number;
-  avg_order: number;
-  voided_pct: number;
+  raceId: number;
+  raceName: string;
+  tenantName: string;
+  raceType: string;
+  eventStartDate: string;
+  paidOrders: number;
+  grossGmv: number;
+  platformFee: number;
+  avgOrderValue: number;
+  voidedRate: number;
 }
 
 interface RaceDetail {
-  daily_orders: { date: string; orders: number }[];
-  category_breakdown: { category: string; orders: number; gmv: number }[];
+  dailyRevenue: { date: string; orderCount: number; gmv: number }[];
+  categoryBreakdown: { category: string; orderCount: number; gmv: number }[];
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ export default function RacePerformancePage() {
       const params = new URLSearchParams({
         from,
         to,
-        page: String(page + 1),
+        page: String(page),
         limit: String(LIMIT),
         ...(raceType !== "all" && { raceType }),
         ...(tenantId && { tenantId }),
@@ -144,7 +144,7 @@ export default function RacePerformancePage() {
     setDetailLoading(true);
     try {
       const res = await fetch(
-        `/api/analytics/races/${race.race_id}?from=${from}&to=${to}`,
+        `/api/analytics/races/${race.raceId}?from=${from}&to=${to}`,
         { headers: authHeaders(token!).headers }
       );
       if (!res.ok) throw new Error();
@@ -272,40 +272,40 @@ export default function RacePerformancePage() {
               ) : (
                 rows.map((row) => (
                   <TableRow
-                    key={row.race_id}
+                    key={row.raceId}
                     className="cursor-pointer"
                     onClick={() => openDetail(row)}
                   >
                     <TableCell>
-                      <p className="font-medium text-sm">{row.race_title}</p>
-                      <p className="text-xs text-muted-foreground">ID: {row.race_id}</p>
+                      <p className="font-medium text-sm">{row.raceName}</p>
+                      <p className="text-xs text-muted-foreground">ID: {row.raceId}</p>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                      {row.tenant_name}
+                      {row.tenantName}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <Badge variant="outline" className="text-xs capitalize">
-                        {row.race_type || "—"}
+                        {row.raceType || "—"}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                      {dateLabel(row.race_date)}
+                      {dateLabel(row.eventStartDate)}
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {row.orders.toLocaleString("vi-VN")}
+                      {row.paidOrders.toLocaleString("vi-VN")}
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium tabular-nums">
-                      {formatVnd(row.gmv)}
+                      {formatVnd(row.grossGmv)}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums text-muted-foreground">
-                      {formatVnd(row.platform_fee)}
+                      {formatVnd(row.platformFee)}
                     </TableCell>
                     <TableCell className="hidden xl:table-cell text-right text-sm tabular-nums text-muted-foreground">
-                      {formatVnd(row.avg_order)}
+                      {formatVnd(row.avgOrderValue)}
                     </TableCell>
                     <TableCell className="hidden xl:table-cell text-right text-sm tabular-nums">
-                      <span className={row.voided_pct > 5 ? "text-red-500" : "text-muted-foreground"}>
-                        {row.voided_pct.toFixed(1)}%
+                      <span className={row.voidedRate > 5 ? "text-red-500" : "text-muted-foreground"}>
+                        {row.voidedRate.toFixed(1)}%
                       </span>
                     </TableCell>
                   </TableRow>
@@ -347,12 +347,12 @@ export default function RacePerformancePage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {selectedRace?.race_title ?? "Chi tiết race"}
+              {selectedRace?.raceName ?? "Chi tiết race"}
             </DialogTitle>
             {selectedRace && (
               <p className="text-xs text-muted-foreground">
-                {selectedRace.tenant_name} · {selectedRace.orders.toLocaleString("vi-VN")} đơn ·{" "}
-                {formatVnd(selectedRace.gmv)} GMV
+                {selectedRace.tenantName} · {selectedRace.paidOrders.toLocaleString("vi-VN")} đơn ·{" "}
+                {formatVnd(selectedRace.grossGmv)} GMV
               </p>
             )}
           </DialogHeader>
@@ -371,9 +371,9 @@ export default function RacePerformancePage() {
                 </CardHeader>
                 <CardContent>
                   <AreaChart
-                    data={detail.daily_orders.map((d) => ({
+                    data={detail.dailyRevenue.map((d) => ({
                       date: d.date.slice(5),
-                      value: d.orders,
+                      value: d.orderCount,
                     }))}
                     height={160}
                     color="#8b5cf6"
@@ -382,7 +382,7 @@ export default function RacePerformancePage() {
               </Card>
 
               {/* Category breakdown */}
-              {detail.category_breakdown.length > 0 && (
+              {detail.categoryBreakdown.length > 0 && (
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Phân loại danh mục
@@ -396,11 +396,11 @@ export default function RacePerformancePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {detail.category_breakdown.map((c, i) => (
+                      {detail.categoryBreakdown.map((c, i) => (
                         <TableRow key={i}>
                           <TableCell className="text-sm">{c.category}</TableCell>
                           <TableCell className="text-right text-sm tabular-nums">
-                            {c.orders.toLocaleString("vi-VN")}
+                            {c.orderCount.toLocaleString("vi-VN")}
                           </TableCell>
                           <TableCell className="text-right text-sm tabular-nums font-medium">
                             {formatVnd(c.gmv)}

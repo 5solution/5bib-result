@@ -45,34 +45,41 @@ function monthOptions(): { value: string; label: string }[] {
 
 interface OverviewData {
   gmv: number;
-  gmv_change_pct: number;
-  orders: number;
-  orders_change_pct: number;
-  platform_fee: number;
-  races_open: number;
-  pending_reconciliation: number;
+  netGmv: number;
+  orderCount: number;
+  platformFee: number;
+  openRaces: number;
+  pendingReconciliations: number;
+  vsLastMonth: { gmvChange: number | null; orderChange: number | null };
+  categoryBreakdown: { category: string; count: number; gmv: number }[];
 }
 
 interface DailyRevenue {
   date: string;
-  revenue: number;
+  gmv: number;
+  netGmv: number;
+  orderCount: number;
 }
 
 interface CategoryRevenue {
   category: string;
-  revenue: number;
+  grossGmv: number;
+  count: number;
+  pct: number;
 }
 
 interface TopRace {
-  race_id: number;
-  race_title: string;
-  gmv: number;
+  raceId: number;
+  raceName: string;
+  grossGmv: number;
+  orderCount: number;
 }
 
 interface TopMerchant {
-  tenant_id: number;
-  merchant_name: string;
-  gmv: number;
+  tenantId: number;
+  tenantName: string;
+  grossGmv: number;
+  orderCount: number;
 }
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
@@ -254,23 +261,23 @@ export default function AnalyticsOverviewPage() {
 
   const areaData = dailyRevenue.map((d) => ({
     date: d.date.slice(5), // MM-DD
-    value: d.revenue,
+    value: d.gmv,
   }));
 
   const donutData = categoryRevenue.map((c, i) => ({
     label: c.category,
-    value: c.revenue,
+    value: c.grossGmv,
     color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
   }));
 
   const raceBarData = topRaces.map((r) => ({
-    label: r.race_title,
-    value: r.gmv,
+    label: r.raceName,
+    value: r.grossGmv,
   }));
 
   const merchantBarData = topMerchants.map((m) => ({
-    label: m.merchant_name,
-    value: m.gmv,
+    label: m.tenantName,
+    value: m.grossGmv,
   }));
 
   return (
@@ -321,29 +328,29 @@ export default function AnalyticsOverviewPage() {
         <KpiCard
           title="Tổng GMV tháng này"
           value={overview ? formatVnd(overview.gmv) : "—"}
-          pct={overview?.gmv_change_pct}
+          pct={overview?.vsLastMonth?.gmvChange ?? undefined}
           sub="so với tháng trước"
           icon={Banknote}
           loading={loadingOverview}
         />
         <KpiCard
           title="Tổng đơn hàng"
-          value={overview ? overview.orders.toLocaleString("vi-VN") : "—"}
-          pct={overview?.orders_change_pct}
+          value={overview ? overview.orderCount.toLocaleString("vi-VN") : "—"}
+          pct={overview?.vsLastMonth?.orderChange ?? undefined}
           sub="so với tháng trước"
           icon={ShoppingCart}
           loading={loadingOverview}
         />
         <KpiCard
           title="Platform fee tháng này"
-          value={overview ? formatVnd(overview.platform_fee) : "—"}
+          value={overview ? formatVnd(overview.platformFee) : "—"}
           icon={TrendingUp}
           loading={loadingOverview}
         />
         <KpiCard
           title="Races đang mở"
-          value={overview ? String(overview.races_open) : "—"}
-          sub={`${overview?.pending_reconciliation ?? "—"} chờ đối soát`}
+          value={overview ? String(overview.openRaces) : "—"}
+          sub={`${overview?.pendingReconciliations ?? "—"} chờ đối soát`}
           icon={Trophy}
           loading={loadingOverview}
         />

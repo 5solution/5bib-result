@@ -33,20 +33,15 @@ function currentMonthStr() {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface FunnelData {
-  created: number;
-  paid: number;
-  voided: number;
-  conversion_rate: number;
-  void_rate: number;
-  avg_time_to_pay_minutes: number;
-  pending_over_24h: number;
-  by_category: {
-    category: string;
-    created: number;
-    paid: number;
-    voided: number;
-    conversion_rate: number;
-    void_rate: number;
+  paidOrders: number;
+  voidedOrders: number;
+  conversionRate: number;
+  voidRate: number;
+  avgTimeToPay: number | null;
+  breakdownByCategory: {
+    financialStatus: string;
+    orderCategory: string;
+    count: number;
   }[];
 }
 
@@ -340,9 +335,9 @@ export default function SalesFunnelPage() {
               <Skeleton className="mx-auto h-64 w-64 rounded-full" />
             ) : data ? (
               <FunnelViz
-                created={data.created}
-                paid={data.paid}
-                voided={data.voided}
+                created={data.paidOrders + data.voidedOrders}
+                paid={data.paidOrders}
+                voided={data.voidedOrders}
               />
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">
@@ -356,39 +351,38 @@ export default function SalesFunnelPage() {
         <div className="grid grid-cols-2 gap-4 content-start">
           <KpiCard
             title="Conversion rate"
-            value={data ? `${(data.conversion_rate * 100).toFixed(1)}%` : "—"}
+            value={data ? `${data.conversionRate.toFixed(1)}%` : "—"}
             sub="tỷ lệ thanh toán thành công"
             icon={TrendingUp}
             loading={loading}
           />
           <KpiCard
             title="Void rate"
-            value={data ? `${(data.void_rate * 100).toFixed(1)}%` : "—"}
+            value={data ? `${data.voidRate.toFixed(1)}%` : "—"}
             sub="tỷ lệ đơn bị hủy"
             icon={TrendingDown}
-            danger={data ? data.void_rate > 0.1 : false}
+            danger={data ? data.voidRate > 10 : false}
             loading={loading}
           />
           <KpiCard
             title="Avg time to pay"
-            value={data ? `${data.avg_time_to_pay_minutes.toFixed(0)} phút` : "—"}
+            value={data ? `${(data.avgTimeToPay ?? 0).toFixed(0)} phút` : "—"}
             sub="trung bình từ tạo → thanh toán"
             icon={Clock}
             loading={loading}
           />
           <KpiCard
-            title="Pending > 24h"
-            value={data ? data.pending_over_24h.toLocaleString("vi-VN") : "—"}
-            sub="đơn chờ thanh toán quá lâu"
+            title="Tổng đơn"
+            value={data ? (data.paidOrders + data.voidedOrders).toLocaleString("vi-VN") : "—"}
+            sub={`${data?.paidOrders ?? 0} paid · ${data?.voidedOrders ?? 0} voided`}
             icon={AlertCircle}
-            danger={data ? data.pending_over_24h > 0 : false}
             loading={loading}
           />
         </div>
       </div>
 
       {/* Breakdown by category */}
-      {!loading && data && data.by_category && data.by_category.length > 0 && (
+      {!loading && data && data.breakdownByCategory && data.breakdownByCategory.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Phân tích theo danh mục</CardTitle>
@@ -398,35 +392,21 @@ export default function SalesFunnelPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Danh mục</TableHead>
-                  <TableHead className="text-right">Tạo đơn</TableHead>
-                  <TableHead className="text-right">Thanh toán</TableHead>
-                  <TableHead className="text-right">Void</TableHead>
-                  <TableHead className="text-right">Conversion %</TableHead>
-                  <TableHead className="text-right">Void %</TableHead>
+                  <TableHead className="text-right">Trạng thái</TableHead>
+                  <TableHead className="text-right">Số đơn</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.by_category.map((cat, i) => (
+                {data.breakdownByCategory.map((cat, i) => (
                   <TableRow key={i}>
-                    <TableCell className="font-medium text-sm">{cat.category}</TableCell>
-                    <TableCell className="text-right text-sm tabular-nums">
-                      {cat.created.toLocaleString("vi-VN")}
-                    </TableCell>
-                    <TableCell className="text-right text-sm tabular-nums text-green-600">
-                      {cat.paid.toLocaleString("vi-VN")}
-                    </TableCell>
-                    <TableCell className="text-right text-sm tabular-nums text-red-500">
-                      {cat.voided.toLocaleString("vi-VN")}
-                    </TableCell>
-                    <TableCell className="text-right text-sm tabular-nums">
-                      <span className={cat.conversion_rate < 0.5 ? "text-yellow-500" : "text-green-600"}>
-                        {(cat.conversion_rate * 100).toFixed(1)}%
+                    <TableCell className="font-medium text-sm">{cat.orderCategory}</TableCell>
+                    <TableCell className="text-right text-sm">
+                      <span className={cat.financialStatus === 'paid' ? 'text-green-600' : 'text-red-500'}>
+                        {cat.financialStatus}
                       </span>
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      <span className={cat.void_rate > 0.1 ? "text-red-500" : "text-muted-foreground"}>
-                        {(cat.void_rate * 100).toFixed(1)}%
-                      </span>
+                      {cat.count.toLocaleString("vi-VN")}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -436,7 +416,7 @@ export default function SalesFunnelPage() {
         </Card>
       )}
 
-      {!loading && data && data.by_category.length === 0 && (
+      {!loading && data && (data.breakdownByCategory ?? []).length === 0 && (
         <div className="rounded-lg border border-dashed px-6 py-10 text-center">
           <p className="text-sm text-muted-foreground">
             Chưa có dữ liệu funnel trong khoảng thời gian này

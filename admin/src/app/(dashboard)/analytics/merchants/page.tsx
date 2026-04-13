@@ -44,15 +44,15 @@ function monthOptions(): { value: string; label: string }[] {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface MerchantRow {
-  tenant_id: number;
-  merchant_name: string;
-  fee_rate: number;
-  races: number;
-  orders: number;
-  gmv: number;
-  platform_fee: number;
-  manual_pct: number;
-  voided_pct: number;
+  tenantId: number;
+  merchantName: string;
+  feeRate: number;
+  raceCount: number;
+  paidOrders: number;
+  grossGmv: number;
+  platformFee: number;
+  manualOrderPct: number;
+  voidedRate: number;
 }
 
 // ─── SVG Scatter Plot ─────────────────────────────────────────────────────────
@@ -71,8 +71,8 @@ function ScatterPlot({ data }: { data: MerchantRow[] }) {
   const cw = width - padL - padR;
   const ch = height - padT - padB;
 
-  const maxGmv = Math.max(...data.map((d) => d.gmv)) || 1;
-  const maxOrders = Math.max(...data.map((d) => d.orders)) || 1;
+  const maxGmv = Math.max(...data.map((d) => d.grossGmv)) || 1;
+  const maxOrders = Math.max(...data.map((d) => d.paidOrders)) || 1;
 
   const toX = (gmv: number) => padL + (gmv / maxGmv) * cw;
   const toY = (orders: number) => padT + ch - (orders / maxOrders) * ch;
@@ -144,11 +144,11 @@ function ScatterPlot({ data }: { data: MerchantRow[] }) {
 
         {/* Dots */}
         {data.map((d, i) => {
-          const cx = toX(d.gmv);
-          const cy = toY(d.orders);
+          const cx = toX(d.grossGmv);
+          const cy = toY(d.paidOrders);
           const isHovered = hoveredIdx === i;
           return (
-            <g key={d.tenant_id}>
+            <g key={d.tenantId}>
               <circle
                 cx={cx}
                 cy={cy}
@@ -171,9 +171,9 @@ function ScatterPlot({ data }: { data: MerchantRow[] }) {
                   <div
                     className="rounded border bg-popover px-2 py-1 text-xs shadow-md"
                   >
-                    <p className="font-medium text-foreground">{d.merchant_name}</p>
+                    <p className="font-medium text-foreground">{d.merchantName}</p>
                     <p className="text-muted-foreground">
-                      {d.orders} đơn · {formatVnd(d.gmv)}
+                      {d.paidOrders} đơn · {formatVnd(d.grossGmv)}
                     </p>
                   </div>
                 </foreignObject>
@@ -215,7 +215,7 @@ export default function MerchantComparisonPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const totalGmv = rows.reduce((s, r) => s + r.gmv, 0);
+  const totalGmv = rows.reduce((s, r) => s + r.grossGmv, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -290,34 +290,34 @@ export default function MerchantComparisonPage() {
                 </TableRow>
               ) : (
                 rows.map((row) => (
-                  <TableRow key={row.tenant_id}>
+                  <TableRow key={row.tenantId}>
                     <TableCell>
-                      <p className="font-medium text-sm">{row.merchant_name}</p>
-                      <p className="text-xs text-muted-foreground">ID: {row.tenant_id}</p>
+                      <p className="font-medium text-sm">{row.merchantName}</p>
+                      <p className="text-xs text-muted-foreground">ID: {row.tenantId}</p>
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-right text-sm tabular-nums text-muted-foreground">
-                      {row.fee_rate != null ? `${(row.fee_rate * 100).toFixed(1)}%` : "—"}
+                      {row.feeRate != null ? `${row.feeRate.toFixed(1)}%` : "—"}
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {row.races}
+                      {row.raceCount}
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {row.orders.toLocaleString("vi-VN")}
+                      {row.paidOrders.toLocaleString("vi-VN")}
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium tabular-nums">
-                      {formatVnd(row.gmv)}
+                      {formatVnd(row.grossGmv)}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-right text-sm tabular-nums text-muted-foreground">
-                      {formatVnd(row.platform_fee)}
+                      {formatVnd(row.platformFee)}
                     </TableCell>
                     <TableCell className="hidden xl:table-cell text-right text-sm tabular-nums">
-                      <span className={row.manual_pct > 20 ? "text-yellow-500" : "text-muted-foreground"}>
-                        {row.manual_pct.toFixed(1)}%
+                      <span className={row.manualOrderPct > 20 ? "text-yellow-500" : "text-muted-foreground"}>
+                        {row.manualOrderPct.toFixed(1)}%
                       </span>
                     </TableCell>
                     <TableCell className="hidden xl:table-cell text-right text-sm tabular-nums">
-                      <span className={row.voided_pct > 5 ? "text-red-500" : "text-muted-foreground"}>
-                        {row.voided_pct.toFixed(1)}%
+                      <span className={row.voidedRate > 5 ? "text-red-500" : "text-muted-foreground"}>
+                        {row.voidedRate.toFixed(1)}%
                       </span>
                     </TableCell>
                   </TableRow>
@@ -350,11 +350,11 @@ export default function MerchantComparisonPage() {
                 <span className="font-bold">{formatVnd(totalGmv)}</span>
                 {" "}·{" "}
                 <span className="text-muted-foreground">
-                  {rows.reduce((s, r) => s + r.orders, 0).toLocaleString("vi-VN")} đơn hàng
+                  {rows.reduce((s, r) => s + r.paidOrders, 0).toLocaleString("vi-VN")} đơn hàng
                 </span>
                 {" "}·{" "}
                 <span className="text-muted-foreground">
-                  {formatVnd(rows.reduce((s, r) => s + r.platform_fee, 0))} platform fee
+                  {formatVnd(rows.reduce((s, r) => s + r.platformFee, 0))} platform fee
                 </span>
               </p>
             </div>

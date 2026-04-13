@@ -40,11 +40,14 @@ const CATEGORY_COLORS = [
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RunnerBehaviorData {
-  repeat_runner_rate: number;
-  avg_lead_time_days: number;
-  unique_runners: number;
-  booking_heatmap: number[][];  // 7 rows (days) × 24 cols (hours)
-  category_mix: { category: string; count: number }[];
+  repeatRunnerRate: number;
+  avgLeadTimeDays: number;
+  totalRunners: number;
+  repeatRunners: number;
+  peakBookingHour: number;
+  peakByHour: { hour: number; orderCount: number }[];
+  peakByDow: { dow: number; orderCount: number }[];
+  categoryMix: { category: string; count: number }[];
 }
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
@@ -123,17 +126,20 @@ export default function RunnerBehaviorPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const donutData = (data?.category_mix ?? []).map((c, i) => ({
+  const donutData = (data?.categoryMix ?? []).map((c, i) => ({
     label: c.category,
     value: c.count,
     color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
   }));
 
-  // Build a safe 7×24 heatmap fallback
-  const heatmap: number[][] =
-    data?.booking_heatmap && data.booking_heatmap.length === 7
-      ? data.booking_heatmap
-      : Array.from({ length: 7 }, () => Array(24).fill(0));
+  // Build 7×24 heatmap from peakByHour (flatten into single row for now)
+  const heatmap: number[][] = Array.from({ length: 7 }, (_, dow) => {
+    return Array.from({ length: 24 }, (_, hour) => {
+      const dowEntry = data?.peakByDow?.find((d) => d.dow === dow + 1);
+      const hourEntry = data?.peakByHour?.find((h) => h.hour === hour);
+      return dowEntry && hourEntry ? Math.round((dowEntry.orderCount * hourEntry.orderCount) / Math.max((data?.totalRunners ?? 1), 1)) : 0;
+    });
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -197,21 +203,21 @@ export default function RunnerBehaviorPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <KpiCard
           title="Tỷ lệ runner quay lại"
-          value={data ? `${(data.repeat_runner_rate * 100).toFixed(1)}%` : "—"}
+          value={data ? `${data.repeatRunnerRate.toFixed(1)}%` : "—"}
           sub="runners đặt vé lần 2+"
           icon={Repeat}
           loading={loading}
         />
         <KpiCard
           title="Avg booking lead time"
-          value={data ? `${data.avg_lead_time_days.toFixed(0)} ngày` : "—"}
+          value={data ? `${data.avgLeadTimeDays.toFixed(0)} ngày` : "—"}
           sub="trung bình trước ngày race"
           icon={Clock}
           loading={loading}
         />
         <KpiCard
           title="Unique runners"
-          value={data ? data.unique_runners.toLocaleString("vi-VN") : "—"}
+          value={data ? data.totalRunners.toLocaleString("vi-VN") : "—"}
           sub="trong khoảng thời gian"
           icon={Users}
           loading={loading}
