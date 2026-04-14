@@ -1174,94 +1174,94 @@ export default function RaceDetailPage() {
               ) : (
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Tên</TableHead>
-                      <TableHead className="hidden sm:table-cell">Khoảng cách</TableHead>
-                      <TableHead className="hidden md:table-cell">Giờ xuất phát</TableHead>
-                      <TableHead className="hidden lg:table-cell">Đường dẫn API</TableHead>
-                      <TableHead className="text-right">Thao tác</TableHead>
+                    <TableRow className="text-base">
+                      <TableHead className="text-base py-4">Tên</TableHead>
+                      <TableHead className="hidden sm:table-cell text-base py-4">Khoảng cách</TableHead>
+                      <TableHead className="hidden md:table-cell text-base py-4">Giờ xuất phát</TableHead>
+                      <TableHead className="hidden lg:table-cell text-base py-4">Đường dẫn API</TableHead>
+                      <TableHead className="text-right text-base py-4">Thao tác</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {race.courses.map((course) => (
-                      <TableRow key={course.courseId}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
+                      <TableRow key={course.courseId} className="text-base">
+                        <TableCell className="font-medium py-4">
+                          <div className="flex items-center gap-3">
                             {course.imageUrl && (
-                              <img src={course.imageUrl} alt="" className="size-8 rounded object-cover" />
+                              <img src={course.imageUrl} alt="" className="size-14 rounded-lg object-cover flex-shrink-0" />
                             )}
                             <div>
-                              <div>{course.name}</div>
+                              <div className="text-base font-semibold">{course.name}</div>
                               {course.startTime && (
-                                <span className="text-xs text-muted-foreground">{course.startTime}</span>
+                                <span className="text-sm text-muted-foreground">{course.startTime}</span>
                               )}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="hidden sm:table-cell text-muted-foreground">
+                        <TableCell className="hidden sm:table-cell text-base text-muted-foreground py-4">
                           {course.distance || "-"}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-muted-foreground">
+                        <TableCell className="hidden md:table-cell text-base text-muted-foreground py-4">
                           {course.startTime || "-"}
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-muted-foreground max-w-[200px] truncate">
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[240px] truncate py-4">
                           {course.apiUrl || "-"}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
+                        <TableCell className="text-right py-4">
+                          <div className="flex items-center justify-end gap-2">
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => handleExportCSV(course.courseId, course.name)}
                               title="Xuất CSV"
                             >
-                              <Download className="size-3" />
+                              <Download className="size-4" />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => handleForceSync(course.courseId)}
                               disabled={syncingCourseId === course.courseId}
                               title="Ép đồng bộ"
                             >
                               <RefreshCw
-                                className={`size-3 ${
+                                className={`size-4 ${
                                   syncingCourseId === course.courseId ? "animate-spin" : ""
                                 }`}
                               />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => handleResetData(course.courseId)}
                               disabled={resettingCourseId === course.courseId}
                               title="Xóa dữ liệu"
                             >
-                              <RotateCcw className="size-3" />
+                              <RotateCcw className="size-4" />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => openCloneCourse(course)}
                               title="Nhân bản cự ly"
                             >
-                              <Copy className="size-3" />
+                              <Copy className="size-4" />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => openEditCourse(course)}
                               title="Sửa"
                             >
-                              <Pencil className="size-3" />
+                              <Pencil className="size-4" />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => handleRemoveCourse(course.courseId)}
                               title="Xóa"
                             >
-                              <Trash2 className="size-3 text-destructive" />
+                              <Trash2 className="size-4 text-destructive" />
                             </Button>
                           </div>
                         </TableCell>
