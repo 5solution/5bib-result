@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import "@/lib/api"; // ensure client baseUrl is configured
 import { authHeaders } from "@/lib/api";
@@ -78,10 +79,20 @@ import {
 
 type RaceStatus = "draft" | "pre_race" | "live" | "ended";
 
+interface CheckpointServices {
+  water: boolean;
+  food: boolean;
+  sleep: boolean;
+  dropBag: boolean;
+  medical: boolean;
+  notes?: string;
+}
+
 interface Checkpoint {
   key: string;
   name: string;
   distance?: string;
+  services?: CheckpointServices;
 }
 
 interface Course {
@@ -582,6 +593,12 @@ export default function RaceDetailPage() {
           <p className="text-sm text-muted-foreground">{race.slug}</p>
         </div>
         <StatusBadge status={race.status} />
+        <Link href={`/races/${raceId}/results`}>
+          <Button variant="outline" size="sm">
+            <Pencil className="size-4 mr-1.5" />
+            Sửa kết quả
+          </Button>
+        </Link>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1054,53 +1071,98 @@ export default function RaceDetailPage() {
                     <div className="flex flex-col gap-3">
                       {(courseForm.checkpoints as Checkpoint[] || []).map(
                         (cp: Checkpoint, idx: number) => (
-                          <div key={idx} className="flex items-start gap-2">
-                            <div className="grid flex-1 grid-cols-3 gap-2">
-                              <Input
-                                value={cp.key}
-                                onChange={(e) => {
-                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                  updated[idx] = { ...updated[idx], key: e.target.value };
+                          <div key={idx} className="border border-zinc-700 rounded-lg p-3 space-y-2">
+                            <div className="flex items-start gap-2">
+                              <div className="grid flex-1 grid-cols-3 gap-2">
+                                <Input
+                                  value={cp.key}
+                                  onChange={(e) => {
+                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                    updated[idx] = { ...updated[idx], key: e.target.value };
+                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                  }}
+                                  placeholder="Key (VD: TM1)"
+                                  className="text-sm"
+                                />
+                                <Input
+                                  value={cp.name}
+                                  onChange={(e) => {
+                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                    updated[idx] = { ...updated[idx], name: e.target.value };
+                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                  }}
+                                  placeholder="Tên (VD: CP1 - Suối Vàng)"
+                                  className="text-sm"
+                                />
+                                <Input
+                                  value={cp.distance ?? ""}
+                                  onChange={(e) => {
+                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                    updated[idx] = { ...updated[idx], distance: e.target.value || undefined };
+                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                  }}
+                                  placeholder="Khoảng cách (VD: 10K)"
+                                  className="text-sm"
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                onClick={() => {
+                                  const updated = (courseForm.checkpoints as Checkpoint[]).filter(
+                                    (_: Checkpoint, i: number) => i !== idx
+                                  );
                                   setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
                                 }}
-                                placeholder="Key (VD: TM1)"
-                                className="text-sm"
-                              />
-                              <Input
-                                value={cp.name}
-                                onChange={(e) => {
-                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                  updated[idx] = { ...updated[idx], name: e.target.value };
-                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                }}
-                                placeholder="Tên (VD: CP1 - Suối Vàng)"
-                                className="text-sm"
-                              />
-                              <Input
-                                value={cp.distance ?? ""}
-                                onChange={(e) => {
-                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                  updated[idx] = { ...updated[idx], distance: e.target.value || undefined };
-                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                }}
-                                placeholder="Khoảng cách (VD: 10K)"
-                                className="text-sm"
-                              />
+                                title="Xóa checkpoint"
+                              >
+                                <Trash2 className="size-3 text-destructive" />
+                              </Button>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={() => {
-                                const updated = (courseForm.checkpoints as Checkpoint[]).filter(
-                                  (_: Checkpoint, i: number) => i !== idx
-                                );
-                                setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                              }}
-                              title="Xóa checkpoint"
-                            >
-                              <Trash2 className="size-3 text-destructive" />
-                            </Button>
+                            {/* Services toggles */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Dịch vụ:</span>
+                              {([
+                                { key: 'water', label: '💧 Nước' },
+                                { key: 'food', label: '🍌 Đồ ăn' },
+                                { key: 'sleep', label: '🛏 Ngủ nghỉ' },
+                                { key: 'dropBag', label: '🎒 Drop Bag' },
+                                { key: 'medical', label: '🏥 Y tế' },
+                              ] as { key: keyof CheckpointServices; label: string }[]).map(({ key, label }) => (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                    const svc = updated[idx].services || { water: false, food: false, sleep: false, dropBag: false, medical: false };
+                                    updated[idx] = { ...updated[idx], services: { ...svc, [key]: !svc[key as keyof CheckpointServices] } };
+                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors border ${
+                                    cp.services?.[key as keyof CheckpointServices]
+                                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                                      : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-500'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            {/* Notes */}
+                            {(cp.services?.water || cp.services?.food || cp.services?.sleep || cp.services?.dropBag || cp.services?.medical) && (
+                              <Input
+                                value={cp.services?.notes ?? ""}
+                                onChange={(e) => {
+                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                  const svc = updated[idx].services || { water: false, food: false, sleep: false, dropBag: false, medical: false };
+                                  updated[idx] = { ...updated[idx], services: { ...svc, notes: e.target.value || undefined } };
+                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                }}
+                                placeholder="Ghi chú dịch vụ (VD: Nước + gel + chuối)"
+                                className="text-xs"
+                              />
+                            )}
                           </div>
                         )
                       )}

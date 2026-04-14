@@ -31,6 +31,7 @@ interface AthleteResult {
   distance: string;
   splits?: SplitTime[];
   race_name?: string;
+  avatarUrl?: string | null;
 }
 
 interface SplitTime {
@@ -42,12 +43,28 @@ interface SplitTime {
   timeOfDay?: string;
   overallRank?: string;
   genderRank?: string;
+  // PRD Phase 1 — computed by backend
+  rankDelta?: number;    // BR-01: positive = moved up (green), negative = dropped (red)
+  isPaceAlert?: boolean; // BR-02: pace drop ≥ 20% below avg → bg-red-50
+  speed?: number;        // km/h at this segment
+  // PRD Phase 2C — checkpoint services
+  services?: CheckpointServices;
+}
+
+interface CheckpointServices {
+  water?: boolean;
+  food?: boolean;
+  sleep?: boolean;
+  dropBag?: boolean;
+  medical?: boolean;
+  notes?: string;
 }
 
 interface CheckpointConfig {
   key: string;
   name: string;
   distance?: string;
+  services?: CheckpointServices;
 }
 
 /** Parse Chiptimes/Paces JSON strings from API into SplitTime[], using checkpoint config for names */
@@ -109,6 +126,7 @@ function parseSplitsFromData(data: Record<string, unknown>, checkpoints?: Checkp
           timeOfDay: tods[key] || undefined,
           overallRank: overallRanks[key] || undefined,
           genderRank: genderRanks[key] || undefined,
+          services: cp?.services,
         };
       });
 
@@ -165,6 +183,7 @@ export default function AthleteDetailPage() {
         ...data,
         splits,
         race_name: raceData?.title || slug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        avatarUrl: data.avatarUrl ?? null,
       } as AthleteResult,
       courseType: detectedCourseType,
     };
@@ -214,6 +233,14 @@ export default function AthleteDetailPage() {
     return name.substring(0, 2).toUpperCase();
   };
 
+  const getAvatarColor = (bibVal: number | string, raceIdVal: string) => {
+    const colors = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#8B5CF6'];
+    let h = 0;
+    const str = `${raceIdVal}-${bibVal}`;
+    for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+    return colors[Math.abs(h) % colors.length];
+  };
+
   const formatRank = (rank: string) => {
     const num = parseInt(rank);
     if (num === 1) return '🥇';
@@ -245,6 +272,17 @@ export default function AthleteDetailPage() {
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimSubmitted, setClaimSubmitted] = useState(false);
   const claimFileRef = useRef<HTMLInputElement>(null);
+
+  // Avatar upload state (P2-B-ii)
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [avatarStep, setAvatarStep] = useState<'email' | 'otp' | 'file'>('email');
+  const [avatarEmail, setAvatarEmail] = useState('');
+  const [avatarOtp, setAvatarOtp] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [currentAvatarUrl, setCurrentAvatarUrl] = useState<string | null>(null);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
 
   const uploadMutation = useUploadClaimAttachment();
 
@@ -300,6 +338,78 @@ export default function AthleteDetailPage() {
       setClaimSubmitting(false);
     }
   }, [athlete, raceId, claimName, claimEmail, claimPhone, claimDescription, claimAttachments, submitClaimMutation]);
+
+  const handleRequestOtp = useCallback(async () => {
+    if (!avatarEmail.trim()) return;
+    setAvatarLoading(true);
+    try {
+      const res = await fetch('/api/race-results/avatar/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raceId, bib: String(athlete?.Bib), email: avatarEmail.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Lỗi gửi OTP');
+      toast.success('OTP đã được gửi đến email của bạn');
+      setAvatarStep('otp');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Gửi OTP thất bại');
+    } finally {
+      setAvatarLoading(false);
+    }
+  }, [avatarEmail, raceId, athlete]);
+
+  const handleVerifyOtp = useCallback(() => {
+    if (avatarOtp.trim().length !== 6) {
+      toast.error('Nhập đủ 6 số OTP');
+      return;
+    }
+    setAvatarStep('file');
+  }, [avatarOtp]);
+
+  const handleAvatarFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) {
+      toast.error('Chỉ hỗ trợ JPG, PNG, WebP');
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      toast.error('Ảnh tối đa 5MB');
+      return;
+    }
+    setAvatarFile(f);
+    const reader = new FileReader();
+    reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
+    reader.readAsDataURL(f);
+  }, []);
+
+  const handleAvatarUpload = useCallback(async () => {
+    if (!avatarFile || !athlete) return;
+    setAvatarLoading(true);
+    try {
+      const form = new FormData();
+      form.append('raceId', raceId);
+      form.append('bib', String(athlete.Bib));
+      form.append('otp', avatarOtp.trim());
+      form.append('file', avatarFile);
+      const res = await fetch('/api/race-results/avatar/upload', { method: 'POST', body: form });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Upload thất bại');
+      setCurrentAvatarUrl(json.avatarUrl);
+      toast.success('Đã cập nhật ảnh đại diện!');
+      setShowAvatarModal(false);
+      setAvatarStep('email');
+      setAvatarEmail('');
+      setAvatarOtp('');
+      setAvatarFile(null);
+      setAvatarPreview(null);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Upload thất bại');
+    } finally {
+      setAvatarLoading(false);
+    }
+  }, [avatarFile, athlete, raceId, avatarOtp]);
 
   const fireCelebration = useCallback(() => {
     // Confetti burst
@@ -488,21 +598,40 @@ export default function AthleteDetailPage() {
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-28 pt-6 text-center">
           {/* Avatar */}
           <div className="relative inline-block mb-5">
-            <div className="w-28 h-28 md:w-36 md:h-36 rounded-full bg-white/20 backdrop-blur-sm border-4 border-white/40 flex items-center justify-center mx-auto shadow-2xl">
-              <span className="text-4xl md:text-5xl font-black text-white tracking-tight">
-                {getInitials(athlete.Name)}
-              </span>
-            </div>
+            {(currentAvatarUrl || athlete.avatarUrl) ? (
+              <img
+                src={currentAvatarUrl || athlete.avatarUrl!}
+                alt={athlete.Name}
+                className="w-28 h-28 md:w-36 md:h-36 rounded-full border-4 border-white/40 object-cover mx-auto shadow-2xl"
+              />
+            ) : (
+              <div
+                className="w-28 h-28 md:w-36 md:h-36 rounded-full border-4 border-white/40 flex items-center justify-center mx-auto shadow-2xl"
+                style={{ background: getAvatarColor(athlete.Bib, raceId) }}
+              >
+                <span className="text-4xl md:text-5xl font-black text-white tracking-tight drop-shadow-md">
+                  {getInitials(athlete.Name)}
+                </span>
+              </div>
+            )}
+            {/* Camera upload button */}
+            <button
+              onClick={() => { setShowAvatarModal(true); setAvatarStep('email'); }}
+              title="Đổi ảnh đại diện"
+              className="absolute top-0 right-0 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-md border border-white/60 transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-600" />
+            </button>
             {/* Rank badge overlay */}
             {!isUpcoming && (
-              <div className={`absolute -bottom-2 -right-2 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br ${getRankMedalColor(athlete.OverallRank)} flex items-center justify-center shadow-lg border-3 border-white`}>
+              <div className={`absolute -bottom-2 -right-10 md:-right-12 w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br ${getRankMedalColor(athlete.OverallRank)} flex items-center justify-center shadow-lg border-3 border-white`}>
                 <span className="text-lg md:text-xl font-black text-white">
                   {parseInt(athlete.OverallRank) <= 3 ? formatRank(athlete.OverallRank) : `#${athlete.OverallRank}`}
                 </span>
               </div>
             )}
             {/* Gender badge */}
-            <div className={`absolute -bottom-2 -left-2 w-10 h-10 md:w-11 md:h-11 rounded-full ${genderColor} flex items-center justify-center shadow-lg border-2 border-white`}>
+            <div className={`absolute -bottom-2 -left-10 md:-left-12 w-10 h-10 md:w-11 md:h-11 rounded-full ${genderColor} flex items-center justify-center shadow-lg border-2 border-white`}>
               <span className="text-lg text-white font-bold">{genderIcon}</span>
             </div>
           </div>
@@ -624,16 +753,35 @@ export default function AthleteDetailPage() {
               const isFastest = split.pace !== '-' && paceSeconds === minPace;
               const isSlowest = split.pace !== '-' && paceSeconds === maxPace;
               const isStart = split.pace === '-';
+              const isPaceAlert = split.isPaceAlert === true;
+              const delta = split.rankDelta ?? 0;
 
               return (
                 <div
                   key={i}
-                  className={`px-5 py-4 border-b border-gray-50 ${i % 2 === 1 ? 'bg-gray-50/50' : ''} ${isFastest ? 'bg-emerald-50/50 border-l-4 border-l-emerald-500' : isSlowest ? 'bg-orange-50/50 border-l-4 border-l-orange-400' : ''}`}
+                  className={`px-5 py-4 border-b border-gray-50 ${
+                    isPaceAlert
+                      ? 'bg-red-50/80 border-l-4 border-l-red-400'
+                      : isFastest
+                        ? 'bg-emerald-50/50 border-l-4 border-l-emerald-500'
+                        : isSlowest
+                          ? 'bg-orange-50/50 border-l-4 border-l-orange-400'
+                          : i % 2 === 1
+                            ? 'bg-gray-50/50'
+                            : ''
+                  }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
                       <span className="font-semibold text-gray-900 text-sm">{split.name}</span>
+                      {/* Rank delta badge (BR-01) */}
+                      {i > 0 && delta !== 0 && (
+                        <span className={`text-[10px] font-bold ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {delta > 0 ? `↑${delta}` : `↓${Math.abs(delta)}`}
+                        </span>
+                      )}
+                      {isPaceAlert && <span className="text-[10px] font-bold text-red-600">⚠️</span>}
                     </div>
                   </div>
                   {courseType === 'team_relay' && split.member && (
@@ -668,7 +816,7 @@ export default function AthleteDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50/80">
-                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-8">#</th>
+                  <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-16">Hạng ↕</th>
                   <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     {courseType === 'lap' || courseType === 'team_relay' ? t('athlete.lap') : t('athlete.checkpoint')}
                   </th>
@@ -678,8 +826,8 @@ export default function AthleteDetailPage() {
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">{t('ranking.time')}</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Thời gian thực</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Pace</th>
+                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Tốc độ</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Overall</th>
-                  <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Giới tính</th>
                   <th className="text-right px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-24"></th>
                 </tr>
               </thead>
@@ -688,17 +836,59 @@ export default function AthleteDetailPage() {
                   const paceSeconds = getPaceInSeconds(split.pace);
                   const isFastest = split.pace !== '-' && paceSeconds === minPace;
                   const isSlowest = split.pace !== '-' && paceSeconds === maxPace;
+                  // BR-02: pace alert takes priority for row bg
+                  const isPaceAlert = split.isPaceAlert === true;
+                  const delta = split.rankDelta ?? 0;
 
                   return (
                     <tr
                       key={i}
-                      className={`border-b border-gray-50 transition-colors ${isFastest ? 'bg-emerald-50/60 hover:bg-emerald-50' : isSlowest ? 'bg-orange-50/60 hover:bg-orange-50' : i % 2 === 1 ? 'bg-gray-50/30 hover:bg-gray-50/60' : 'hover:bg-gray-50/40'
-                        }`}
+                      className={`border-b border-gray-50 transition-colors ${
+                        isPaceAlert
+                          ? 'bg-red-50/80 hover:bg-red-50'
+                          : isFastest
+                            ? 'bg-emerald-50/60 hover:bg-emerald-50'
+                            : isSlowest
+                              ? 'bg-orange-50/60 hover:bg-orange-50'
+                              : i % 2 === 1
+                                ? 'bg-gray-50/30 hover:bg-gray-50/60'
+                                : 'hover:bg-gray-50/40'
+                      }`}
                     >
+                      {/* Rank delta cell (BR-01) */}
                       <td className="px-6 py-3.5">
-                        <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                        {i === 0 || delta === 0 ? (
+                          <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                        ) : delta > 0 ? (
+                          <div className="flex items-center gap-1">
+                            <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                            <span className="text-[10px] font-bold text-green-600">↑{delta}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                            <span className="text-[10px] font-bold text-red-500">↓{Math.abs(delta)}</span>
+                          </div>
+                        )}
                       </td>
-                      <td className="px-6 py-3.5 font-semibold text-gray-900">{split.name}</td>
+                      <td className="px-6 py-3.5 font-semibold text-gray-900">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{split.name}</span>
+                          {isPaceAlert && (
+                            <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">⚠️ pace drop</span>
+                          )}
+                        </div>
+                        {split.services && (split.services.water || split.services.food || split.services.sleep || split.services.dropBag || split.services.medical) && (
+                          <div className="flex items-center gap-1 mt-1">
+                            {split.services.water && <span title="Nước/Đồ uống" className="text-sm">💧</span>}
+                            {split.services.food && <span title="Thức ăn" className="text-sm">🍌</span>}
+                            {split.services.sleep && <span title="Khu ngủ nghỉ" className="text-sm">🛏</span>}
+                            {split.services.dropBag && <span title="Drop Bag" className="text-sm">🎒</span>}
+                            {split.services.medical && <span title="Y tế" className="text-sm">🏥</span>}
+                            {split.services.notes && <span className="text-[10px] text-gray-400 italic ml-1">{split.services.notes}</span>}
+                          </div>
+                        )}
+                      </td>
                       {courseType === 'team_relay' && (
                         <td className="px-6 py-3.5">
                           {split.member ? (
@@ -711,11 +901,14 @@ export default function AthleteDetailPage() {
                       <td className="px-6 py-3.5 text-right font-mono font-bold text-blue-600">{split.time}</td>
                       <td className="px-6 py-3.5 text-right font-mono text-gray-500">{split.timeOfDay || '-'}</td>
                       <td className="px-6 py-3.5 text-right font-mono text-gray-600">{split.pace !== '-' ? `${split.pace} /km` : '-'}</td>
+                      <td className="px-6 py-3.5 text-right font-mono text-gray-500 text-xs">
+                        {split.speed != null ? `${split.speed.toFixed(1)} km/h` : '—'}
+                      </td>
                       <td className="px-6 py-3.5 text-right font-mono text-gray-700 font-semibold">{split.overallRank || '-'}</td>
-                      <td className="px-6 py-3.5 text-right font-mono text-purple-600 font-semibold">{split.genderRank || '-'}</td>
                       <td className="px-6 py-3.5 text-right">
                         {isFastest && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">FASTEST</span>}
                         {isSlowest && <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-1 rounded-full">SLOWEST</span>}
+                        {isPaceAlert && !isFastest && !isSlowest && <span className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-1 rounded-full">PACE ↓</span>}
                       </td>
                     </tr>
                   );
@@ -1024,6 +1217,124 @@ export default function AthleteDetailPage() {
           raceId={raceId}
           onClose={() => setShowImageEditor(false)}
         />
+      )}
+
+      {/* Avatar Upload Modal (P2-B-ii) */}
+      {showAvatarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowAvatarModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-gray-900">Đổi ảnh đại diện</h3>
+              <button onClick={() => setShowAvatarModal(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Step indicators */}
+            <div className="flex items-center gap-2 mb-6">
+              {(['email', 'otp', 'file'] as const).map((s, i) => (
+                <div key={s} className="flex items-center gap-2">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${avatarStep === s ? 'bg-blue-600 text-white' : ['email', 'otp', 'file'].indexOf(avatarStep) > i ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-400'}`}>{i + 1}</div>
+                  {i < 2 && <div className="flex-1 h-px bg-gray-200 w-6" />}
+                </div>
+              ))}
+              <span className="ml-2 text-xs text-gray-500">{avatarStep === 'email' ? 'Xác thực email' : avatarStep === 'otp' ? 'Nhập OTP' : 'Chọn ảnh'}</span>
+            </div>
+
+            {avatarStep === 'email' && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">Nhập email đã đăng ký khi tham gia giải. Chúng tôi sẽ gửi mã xác thực.</p>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Email đăng ký</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="email"
+                      value={avatarEmail}
+                      onChange={e => setAvatarEmail(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleRequestOtp()}
+                      placeholder="email@example.com"
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleRequestOtp}
+                  disabled={avatarLoading || !avatarEmail.trim()}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  {avatarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  Gửi mã OTP
+                </button>
+              </div>
+            )}
+
+            {avatarStep === 'otp' && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">Nhập mã 6 số đã được gửi đến <strong>{avatarEmail}</strong>. Mã có hiệu lực trong 10 phút.</p>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Mã OTP</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={avatarOtp}
+                    onChange={e => setAvatarOtp(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
+                    placeholder="000000"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-center text-2xl font-mono font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setAvatarStep('email')} className="flex-1 py-2.5 border border-gray-200 text-gray-600 font-semibold rounded-xl text-sm hover:bg-gray-50 transition-colors">
+                    Quay lại
+                  </button>
+                  <button
+                    onClick={handleVerifyOtp}
+                    disabled={avatarOtp.length !== 6}
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-colors"
+                  >
+                    Xác nhận
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {avatarStep === 'file' && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">Chọn ảnh đại diện. Ảnh sẽ được crop thành hình vuông 200×200.</p>
+                <div
+                  onClick={() => avatarFileRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
+                >
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="preview" className="w-24 h-24 rounded-full object-cover mx-auto mb-2 shadow-md" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
+                      <Upload className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
+                  <p className="text-sm font-medium text-gray-700">{avatarFile ? avatarFile.name : 'Nhấn để chọn ảnh'}</p>
+                  <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP · Tối đa 5MB</p>
+                </div>
+                <input ref={avatarFileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarFileChange} />
+                <div className="flex gap-2">
+                  <button onClick={() => setAvatarStep('otp')} className="flex-1 py-2.5 border border-gray-200 text-gray-600 font-semibold rounded-xl text-sm hover:bg-gray-50 transition-colors">
+                    Quay lại
+                  </button>
+                  <button
+                    onClick={handleAvatarUpload}
+                    disabled={avatarLoading || !avatarFile}
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    {avatarLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    Tải lên
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
     </div>

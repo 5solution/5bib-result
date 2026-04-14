@@ -43,16 +43,22 @@ interface Claim {
   phone?: string;
   description: string;
   attachments?: string[];
-  status: "pending" | "resolved" | "rejected";
+  status: "pending" | "approved" | "rejected";
   adminNote?: string;
-  createdAt: string;
+  resolutionNote?: string;
+  resolvedBy?: string;
+  autoUpdated?: boolean;
+  created_at: string;
+  createdAt?: string;
 }
 
 function ClaimStatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; className: string }> = {
-    pending: { label: "Chờ xử lý", className: "bg-yellow-500/20 text-yellow-400" },
-    resolved: { label: "Đã xử lý", className: "bg-green-500/20 text-green-400" },
-    rejected: { label: "Từ chối", className: "bg-red-500/20 text-red-400" },
+    pending: { label: "Chờ xử lý", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+    approved: { label: "Chấp nhận", className: "bg-green-500/20 text-green-400 border-green-500/30" },
+    // legacy
+    resolved: { label: "Chấp nhận", className: "bg-green-500/20 text-green-400 border-green-500/30" },
+    rejected: { label: "Từ chối", className: "bg-red-500/20 text-red-400 border-red-500/30" },
   };
   const c = config[status] || { label: status, className: "bg-zinc-500/20 text-zinc-400" };
   return <Badge className={c.className}>{c.label}</Badge>;
@@ -70,17 +76,25 @@ function formatDate(iso: string) {
   }
 }
 
+const STATUS_FILTERS = [
+  { value: "", label: "Tất cả" },
+  { value: "pending", label: "Chờ xử lý" },
+  { value: "approved", label: "Chấp nhận" },
+  { value: "rejected", label: "Từ chối" },
+];
+
 export default function ClaimsPage() {
   const { token } = useAuth();
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+  const [statusFilter, setStatusFilter] = useState("");
 
   // Resolve dialog
   const [activeClaim, setActiveClaim] = useState<Claim | null>(null);
-  const [resolveAction, setResolveAction] = useState<"resolved" | "rejected">("resolved");
-  const [adminNote, setAdminNote] = useState("");
+  const [resolveAction, setResolveAction] = useState<"approved" | "rejected">("approved");
+  const [resolutionNote, setResolutionNote] = useState("");
   const [resolving, setResolving] = useState(false);
 
   const fetchClaims = useCallback(async () => {
@@ -88,7 +102,7 @@ export default function ClaimsPage() {
     setLoading(true);
     try {
       const { data, error } = await adminControllerGetClaims({
-        query: { page, pageSize: 20 },
+        query: { page, pageSize: 20, status: statusFilter || undefined } as any,
         ...authHeaders(token),
       });
 
@@ -112,40 +126,57 @@ export default function ClaimsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, page]);
+  }, [token, page, statusFilter]);
 
   useEffect(() => {
     fetchClaims();
   }, [fetchClaims]);
 
-  function openResolve(claim: Claim, action: "resolved" | "rejected") {
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
+  function openResolve(claim: Claim, action: "approved" | "rejected") {
     setActiveClaim(claim);
     setResolveAction(action);
-    setAdminNote("");
+    setResolutionNote("");
   }
 
   async function handleResolve() {
     if (!token || !activeClaim) return;
+    if (!resolutionNote.trim() || resolutionNote.trim().length < 5) {
+      toast.error("Ghi chú giải quyết phải có ít nhất 5 ký tự");
+      return;
+    }
     setResolving(true);
     try {
-      const { error } = await adminControllerResolveClaim({
-        path: { id: activeClaim._id },
-        body: {
-          status: resolveAction,
-          adminNote: adminNote || undefined,
-        } as any,
-        ...authHeaders(token),
+      // Call new /resolve endpoint (BR-04)
+      const res = await fetch(`/api/admin/claims/${activeClaim._id}/resolve`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: resolveAction, resolutionNote: resolutionNote.trim() }),
       });
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          toast.error("Khiếu nại này đã được xử lý rồi");
+        } else {
+          throw new Error(err.message || "Lỗi xử lý khiếu nại");
+        }
+        return;
+      }
       toast.success(
-        resolveAction === "resolved"
-          ? "Đã xử lý khiếu nại!"
+        resolveAction === "approved"
+          ? "Đã chấp nhận và cập nhật kết quả!"
           : "Đã từ chối khiếu nại!"
       );
       setActiveClaim(null);
       fetchClaims();
-    } catch {
-      toast.error("Xử lý khiếu nại thất bại");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Xử lý khiếu nại thất bại");
     } finally {
       setResolving(false);
     }
@@ -158,6 +189,23 @@ export default function ClaimsPage() {
         <p className="text-sm text-muted-foreground">
           Quản lý yêu cầu chỉnh sửa kết quả thi đấu
         </p>
+      </div>
+
+      {/* Status filter tabs */}
+      <div className="flex gap-1 border border-zinc-700 rounded-lg p-1 w-fit">
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setStatusFilter(f.value)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              statusFilter === f.value
+                ? "bg-zinc-700 text-white"
+                : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -194,7 +242,7 @@ export default function ClaimsPage() {
                 claims.map((claim) => (
                   <TableRow key={claim._id} className="cursor-pointer" onClick={() => openResolve(claim, claim.status === 'pending' ? 'resolved' : claim.status as any)}>
                     <TableCell className="text-xs">
-                      {formatDate(claim.createdAt)}
+                      {formatDate(claim.created_at || claim.createdAt || '')}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-muted-foreground">
                       {claim.raceName || claim.raceId}
@@ -225,15 +273,15 @@ export default function ClaimsPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => openResolve(claim, "resolved")}
-                            title="Xử lý"
+                            onClick={(e) => { e.stopPropagation(); openResolve(claim, "approved"); }}
+                            title="Chấp nhận"
                           >
                             <CheckCircle className="size-4 text-green-400" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => openResolve(claim, "rejected")}
+                            onClick={(e) => { e.stopPropagation(); openResolve(claim, "rejected"); }}
                             title="Từ chối"
                           >
                             <XCircle className="size-4 text-red-400" />
@@ -284,14 +332,16 @@ export default function ClaimsPage() {
         open={!!activeClaim}
         onOpenChange={(open) => !open && setActiveClaim(null)}
       >
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {resolveAction === "resolved" ? "Xử lý khiếu nại" : "Từ chối khiếu nại"}
+              {resolveAction === "approved"
+                ? "✅ Chấp nhận & Cập nhật kết quả"
+                : "❌ Từ chối khiếu nại"}
             </DialogTitle>
             <DialogDescription>
               {activeClaim && (
-                <>BIB: <strong>{activeClaim.bib}</strong> — {activeClaim.name}</>
+                <span>BIB: <strong>{activeClaim.bib}</strong> — {activeClaim.name}</span>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -330,28 +380,41 @@ export default function ClaimsPage() {
           )}
           <div className="flex flex-col gap-4 py-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="admin-note">Ghi chú admin</Label>
-              <Input
-                id="admin-note"
-                value={adminNote}
-                onChange={(e) => setAdminNote(e.target.value)}
-                placeholder="Nhập ghi chú..."
+              <Label htmlFor="resolution-note">
+                Ghi chú giải quyết <span className="text-red-400">*</span>
+                <span className="text-xs text-muted-foreground ml-1">(tối thiểu 5 ký tự)</span>
+              </Label>
+              <textarea
+                id="resolution-note"
+                value={resolutionNote}
+                onChange={(e) => setResolutionNote(e.target.value)}
+                placeholder={resolveAction === "approved" ? "Đã kiểm tra tracklog, xác nhận đúng..." : "Không đủ bằng chứng để xác nhận..."}
+                rows={3}
+                className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
+              {resolutionNote.length > 0 && resolutionNote.length < 5 && (
+                <p className="text-xs text-red-400">Cần thêm {5 - resolutionNote.length} ký tự nữa</p>
+              )}
             </div>
+            {resolveAction === "approved" && (
+              <p className="text-xs text-amber-400 bg-amber-400/10 px-3 py-2 rounded-md">
+                ⚠️ Khi chấp nhận, hệ thống sẽ tự động ghi log chỉnh sửa vào kết quả của VĐV.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setActiveClaim(null)}>
               Hủy
             </Button>
             <Button
-              variant={resolveAction === "resolved" ? "default" : "destructive"}
+              variant={resolveAction === "approved" ? "default" : "destructive"}
               onClick={handleResolve}
-              disabled={resolving}
+              disabled={resolving || resolutionNote.trim().length < 5}
             >
               {resolving
                 ? "Đang xử lý..."
-                : resolveAction === "resolved"
-                  ? "Xử lý"
+                : resolveAction === "approved"
+                  ? "Chấp nhận & Cập nhật"
                   : "Từ chối"}
             </Button>
           </DialogFooter>

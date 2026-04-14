@@ -199,6 +199,73 @@ export class RaceResultController {
     return { data: stats, success: true };
   }
 
+  @Post('avatar/request-otp')
+  @ApiOperation({ summary: 'Request OTP to verify email before avatar upload' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['raceId', 'bib', 'email'],
+      properties: {
+        raceId: { type: 'string' },
+        bib: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'OTP sent to registered email' })
+  @ApiResponse({ status: 400, description: 'Email does not match or no email on record' })
+  @ApiResponse({ status: 404, description: 'Athlete not found' })
+  async requestAvatarOtp(
+    @Body('raceId') raceId: string,
+    @Body('bib') bib: string,
+    @Body('email') email: string,
+  ) {
+    if (!raceId || !bib || !email) {
+      throw new BadRequestException('raceId, bib and email are required');
+    }
+    return this.raceResultService.requestAvatarOtp(raceId, bib, email);
+  }
+
+  @Post('avatar/upload')
+  @ApiOperation({ summary: 'Upload avatar after OTP verification' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['raceId', 'bib', 'otp', 'file'],
+      properties: {
+        raceId: { type: 'string' },
+        bib: { type: 'string' },
+        otp: { type: 'string' },
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Avatar uploaded, returns avatarUrl' })
+  @ApiResponse({ status: 400, description: 'Invalid OTP or upload failed' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  async uploadAvatar(
+    @Body('raceId') raceId: string,
+    @Body('bib') bib: string,
+    @Body('otp') otp: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!raceId || !bib || !otp) {
+      throw new BadRequestException('raceId, bib and otp are required');
+    }
+    if (!file) throw new BadRequestException('No file uploaded');
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException('Only JPG, PNG or WebP images allowed');
+    }
+    return this.raceResultService.uploadAvatar(raceId, bib, otp, file);
+  }
+
   @Post('claims/upload')
   @ApiOperation({ summary: 'Upload attachment for a claim (tracklog, screenshot)' })
   @ApiConsumes('multipart/form-data')

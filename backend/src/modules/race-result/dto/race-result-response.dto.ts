@@ -34,6 +34,7 @@ export class RaceResultItemDto {
   @ApiProperty({ example: '708' }) course_id: string;
   @ApiProperty({ example: '10KM' }) distance: string;
   @ApiPropertyOptional() synced_at: string;
+  @ApiPropertyOptional({ example: 'https://s3.amazonaws.com/bucket/avatar.jpg' }) avatarUrl?: string;
 }
 
 export class RaceResultsPaginatedDto {
@@ -77,6 +78,15 @@ export class CourseStatsDto {
   @ApiPropertyOptional() avgPace: string | null;
   @ApiProperty({ example: 80 }) maleCount: number;
   @ApiProperty({ example: 70 }) femaleCount: number;
+  @ApiProperty({ example: 200 }) nationalityCount: number;
+  // Extended stats (PRD Phase 1)
+  @ApiProperty({ example: 508 }) started: number;
+  @ApiProperty({ example: 307 }) finished: number;
+  @ApiProperty({ example: 201 }) dnf: number;
+  @ApiProperty({ example: 5 }) dns: number;
+  @ApiProperty({ example: 2 }) dsq: number;
+  @ApiPropertyOptional({ example: '3:20:15' }) fastestTime: string | null;
+  @ApiPropertyOptional({ example: '4:45:00' }) avgChipTime: string | null;
 }
 
 export class CourseStatsResponseDto {
@@ -106,4 +116,24 @@ export class ClaimSubmitResponseDto {
 export class SyncResponseDto {
   @ApiProperty({ example: 'Sync completed successfully' }) message: string;
   @ApiProperty({ example: '2025-01-01T00:00:00.000Z' }) timestamp: string;
+}
+
+export class SplitTimeWithDeltaDto {
+  @ApiProperty() name: string;
+  @ApiPropertyOptional() time: string;
+  @ApiPropertyOptional() pace: string;
+  @ApiPropertyOptional({ example: 5 }) rank: number | null;
+  @ApiPropertyOptional({ example: 12.5 }) speed: number | null;
+  // Computed fields (BR-01, BR-02)
+  @ApiProperty({ example: 2, description: 'Positive = moved up, negative = dropped' }) rankDelta: number;
+  @ApiProperty({ example: false }) isPaceAlert: boolean;
+}
+
+export class EditHistoryEntryDto {
+  @ApiProperty() editedBy: string;
+  @ApiProperty() editedAt: Date;
+  @ApiProperty() field: string;
+  @ApiPropertyOptional() oldValue: unknown;
+  @ApiPropertyOptional() newValue: unknown;
+  @ApiProperty() reason: string;
 }

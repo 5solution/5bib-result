@@ -183,15 +183,10 @@ export default function RaceDetailPage() {
           const resultArr = Array.isArray(list) ? list : [];
           results[course.id] = resultArr;
           const stats = (statsRes.data as any)?.data ?? statsRes.data;
-          // Use Started/Finished/DNF from first result record (provided by external API)
-          const firstResult = resultArr[0] as any;
-          const started = firstResult?.Started ?? 0;
-          const finished = firstResult?.Finished ?? 0;
-          const dnf = firstResult?.DNF ?? 0;
           statsMap[course.id] = {
-            starters: started,
-            finishers: finished,
-            dnf,
+            starters: stats?.started ?? stats?.total ?? 0,
+            finishers: stats?.finished ?? 0,
+            dnf: stats?.dnf ?? 0,
             nationalityCount: stats?.nationalityCount ?? 0,
           };
         } catch {
@@ -384,12 +379,28 @@ export default function RaceDetailPage() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
 
-                    {/* Race finished banner */}
+                    {/* Race status banner */}
                     <div className="absolute bottom-0 left-0 right-0">
-                      <div className={`px-4 py-2.5 text-center text-sm font-bold text-white uppercase ${
-                        race.status === 'live' ? 'bg-gradient-to-r from-rose-700 via-red-600 to-amber-600' : race.status === 'completed' ? 'bg-red-700' : 'bg-gradient-to-r from-[#2563eb] to-[#1faaff]'
+                      <div className={`px-4 py-2.5 text-center text-sm font-bold text-white uppercase tracking-wide ${
+                        race.status === 'live'
+                          ? 'bg-emerald-600'
+                          : race.status === 'completed'
+                            ? 'bg-red-700'
+                            : 'bg-slate-600'
                       }`}>
-                        {race.status === 'live' ? '🔴 ' + t('status.live') : race.status === 'completed' ? t('status.completed') : t('status.upcoming')}
+                        {race.status === 'live' && (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                            ĐANG DIỄN RA
+                          </span>
+                        )}
+                        {race.status === 'completed' && (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-white" />
+                            RACE FINISHED
+                          </span>
+                        )}
+                        {race.status === 'upcoming' && 'SẮP DIỄN RA'}
                       </div>
                       {courseStatsMap[course.id] && (courseStatsMap[course.id]?.starters ?? 0) > 0 && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">

@@ -4,10 +4,23 @@ import { HydratedDocument } from 'mongoose';
 export type RaceDocument = HydratedDocument<Race>;
 
 @Schema({ _id: false })
+export class CheckpointServices {
+  @Prop({ default: false }) water: boolean;
+  @Prop({ default: false }) food: boolean;
+  @Prop({ default: false }) sleep: boolean;
+  @Prop({ default: false }) dropBag: boolean;
+  @Prop({ default: false }) medical: boolean;
+  @Prop() notes?: string;
+}
+export const CheckpointServicesSchema =
+  SchemaFactory.createForClass(CheckpointServices);
+
+@Schema({ _id: false })
 export class CourseCheckpoint {
   @Prop({ required: true }) key: string; // timing point key, e.g. "TM1", "TM2", "Finish"
   @Prop({ required: true }) name: string; // display name, e.g. "Trạm 1 - Suối Vàng"
   @Prop() distance?: string; // e.g. "5K"
+  @Prop({ type: CheckpointServicesSchema }) services?: CheckpointServices;
 }
 
 export const CourseCheckpointSchema =

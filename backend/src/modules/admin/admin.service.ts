@@ -71,20 +71,26 @@ export class AdminService {
   }
 
   /**
-   * List all claims (paginated)
+   * List all claims (paginated, optional status filter)
    */
-  async getClaims(page: number, pageSize: number) {
-    return this.raceResultService.getClaims(page, pageSize);
+  async getClaims(page: number, pageSize: number, status?: string) {
+    return this.raceResultService.getClaims(page, pageSize, status);
   }
 
   /**
-   * Resolve or reject a claim
+   * Resolve or reject a claim (PRD BR-04)
    */
-  async resolveClaim(claimId: string, status: string, adminNote?: string) {
+  async resolveClaim(
+    claimId: string,
+    action: 'approved' | 'rejected',
+    resolutionNote: string,
+    resolvedBy: string,
+  ) {
     const claim = await this.raceResultService.resolveClaim(
       claimId,
-      status,
-      adminNote,
+      action,
+      resolutionNote,
+      resolvedBy,
     );
     if (!claim) {
       throw new NotFoundException('Claim not found');
@@ -97,8 +103,8 @@ export class AdminService {
         name: claim.name || '',
         phone: claim.phone,
         description: claim.description || '',
-        status,
-        adminNote,
+        status: action,
+        adminNote: resolutionNote,
       })
       .catch((err) =>
         this.logger.error(`Telegram notification failed: ${err.message}`),
@@ -119,7 +125,7 @@ export class AdminService {
           bib: claim.bib?.toString() || '',
           phone: claim.phone || '',
           reason: claim.description || '',
-          adminNote: adminNote || '',
+          adminNote: resolutionNote || '',
           eventTitle,
         })
         .catch((err) =>
@@ -128,6 +134,24 @@ export class AdminService {
     }
 
     return { data: claim, success: true };
+  }
+
+  /**
+   * Edit a race result manually with audit trail (PRD BR-03)
+   */
+  async editResult(
+    resultId: string,
+    fields: {
+      chipTime?: string;
+      gunTime?: string;
+      name?: string;
+      status?: string;
+      overallRank?: number;
+    },
+    reason: string,
+    adminUserId: string,
+  ) {
+    return this.raceResultService.editResult(resultId, fields, reason, adminUserId);
   }
 
   /**
