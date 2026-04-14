@@ -713,17 +713,18 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
         </div>
       </div>
 
-      {/* Sponsor tile — absolutely positioned, flush with row height */}
+      {/* Sponsor tile — same width + angle as MY 5BIB tile to form one unified right block */}
       {sponsors.length > 0 && (
         <div
-          className="hidden md:block absolute top-0 right-0 bg-slate-100"
+          className="hidden md:block absolute top-0 right-0"
           style={{
             width: 200,
             height: 65,
-            clipPath: 'polygon(22% 0%, 100% 0%, 100% 100%, 0% 100%)',
+            clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
+            background: '#0f172a',
           }}
         >
-          <div className="relative w-full h-full flex items-center justify-center" style={{ paddingLeft: 40, paddingRight: 12 }}>
+          <div className="relative w-full h-full flex items-center justify-center" style={{ paddingLeft: 36, paddingRight: 12 }}>
             {sponsors.map((s, i) => (
               <div
                 key={s._id || s.name}
@@ -736,11 +737,11 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
                     src={s.logoUrl}
                     alt={s.name}
                     className="w-auto h-auto object-contain"
-                    style={{ maxWidth: 140, maxHeight: 72 }}
+                    style={{ maxWidth: 130, maxHeight: 48 }}
                     draggable={false}
                   />
                 ) : (
-                  <span className="text-lg font-bold text-slate-800 tracking-wide">{s.name}</span>
+                  <span className="text-sm font-bold text-white tracking-wide">{s.name}</span>
                 )}
               </div>
             ))}
