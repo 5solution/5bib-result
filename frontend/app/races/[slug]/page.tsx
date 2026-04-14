@@ -161,60 +161,59 @@ export default function RaceDetailPage() {
 
   useEffect(() => {
     if (!race || race.status === 'upcoming') return; // Don't fetch results for upcoming races
-    const fetchResults = async () => {
-      const results: Record<string, RaceResult[]> = {};
-      const statsMap: Record<string, { starters: number; finishers: number; dnf: number; nationalityCount: number }> = {};
-      for (const course of race.courses) {
-        try {
-          const [menRes, womenRes, statsRes] = await Promise.all([
-            raceResultControllerGetRaceResults({
-              query: {
-                raceId: String(race.id),
-                course_id: course.id,
-                gender: 'Male',
-                pageNo: 1,
-                pageSize: 3,
-                sortField: 'GenderRank',
-                sortDirection: 'ASC',
-              },
-            }),
-            raceResultControllerGetRaceResults({
-              query: {
-                raceId: String(race.id),
-                course_id: course.id,
-                gender: 'Female',
-                pageNo: 1,
-                pageSize: 3,
-                sortField: 'GenderRank',
-                sortDirection: 'ASC',
-              },
-            }),
-            raceResultControllerGetCourseStats({
-              path: { courseId: course.id },
-            }),
-          ]);
-          const menList = (menRes.data as any)?.data ?? menRes.data;
-          const womenList = (womenRes.data as any)?.data ?? womenRes.data;
-          const resultArr = [
-            ...(Array.isArray(menList) ? menList : []),
-            ...(Array.isArray(womenList) ? womenList : []),
-          ];
-          results[course.id] = resultArr;
-          const stats = (statsRes.data as any)?.data ?? statsRes.data;
-          statsMap[course.id] = {
+    const raceId = String(race.id);
+    const courses = race.courses;
+
+    courses.forEach(async (course) => {
+      try {
+        const [menRes, womenRes, statsRes] = await Promise.all([
+          raceResultControllerGetRaceResults({
+            query: {
+              raceId,
+              course_id: course.id,
+              gender: 'Male',
+              pageNo: 1,
+              pageSize: 3,
+              sortField: 'GenderRank',
+              sortDirection: 'ASC',
+            },
+          }),
+          raceResultControllerGetRaceResults({
+            query: {
+              raceId,
+              course_id: course.id,
+              gender: 'Female',
+              pageNo: 1,
+              pageSize: 3,
+              sortField: 'GenderRank',
+              sortDirection: 'ASC',
+            },
+          }),
+          raceResultControllerGetCourseStats({
+            path: { courseId: course.id },
+          }),
+        ]);
+        const menList = (menRes.data as any)?.data ?? menRes.data;
+        const womenList = (womenRes.data as any)?.data ?? womenRes.data;
+        const resultArr = [
+          ...(Array.isArray(menList) ? menList : []),
+          ...(Array.isArray(womenList) ? womenList : []),
+        ];
+        const stats = (statsRes.data as any)?.data ?? statsRes.data;
+        setCourseResults(prev => ({ ...prev, [course.id]: resultArr }));
+        setCourseStatsMap(prev => ({
+          ...prev,
+          [course.id]: {
             starters: stats?.started ?? stats?.total ?? 0,
             finishers: stats?.finished ?? 0,
             dnf: stats?.dnf ?? 0,
             nationalityCount: stats?.nationalityCount ?? 0,
-          };
-        } catch {
-          results[course.id] = [];
-        }
+          },
+        }));
+      } catch {
+        setCourseResults(prev => ({ ...prev, [course.id]: [] }));
       }
-      setCourseResults(results);
-      setCourseStatsMap(statsMap);
-    };
-    fetchResults();
+    });
   }, [race]);
 
   const formatDateRange = (start: string, end?: string) => {
