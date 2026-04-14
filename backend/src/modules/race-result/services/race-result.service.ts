@@ -657,7 +657,12 @@ export class RaceResultService {
       });
     }
 
-    return mapped;
+    return {
+      ...mapped,
+      _id: result._id?.toString(),
+      editHistory: result.editHistory ?? [],
+      isManuallyEdited: result.isManuallyEdited ?? false,
+    };
   }
 
   /**
