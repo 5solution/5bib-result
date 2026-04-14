@@ -716,9 +716,9 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
         {sponsors.length > 0 && (
           <div
             className={`hidden md:flex items-center justify-center shrink-0 relative overflow-hidden transition-colors duration-300 ${sponsorBg}`}
-            style={{ width: 240, clipPath: 'polygon(12% 0%, 100% 0%, 100% 100%, 0% 100%)' }}
+            style={{ width: 200, clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)' }}
           >
-            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 210, height: 57, paddingLeft: 24 }}>
+            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 200, height: 65, paddingLeft: 32, paddingRight: 12 }}>
               {sponsors.map((s, i) => (
                 <div
                   key={s._id || s.name}
@@ -730,8 +730,8 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
                     <img
                       src={s.logoUrl}
                       alt={s.name}
-                      className="w-auto object-contain"
-                      style={{ height: 52, maxWidth: 200, filter: 'brightness(0) invert(1)' }}
+                      className="w-full h-auto object-contain"
+                      style={{ filter: 'brightness(0) invert(1)' }}
                       draggable={false}
                     />
                   ) : (
