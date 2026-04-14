@@ -1,8 +1,13 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsOptional, IsString, IsInt, Min, IsIn, Max } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsInt, Min, IsIn, Max } from 'class-validator';
 
 export class GetRaceResultsDto {
+  @ApiProperty({ description: 'Race ID (required to scope results to a single race)', example: '69de58ec491b72f9dc18ea81' })
+  @IsNotEmpty()
+  @IsString()
+  raceId: string;
+
   @ApiPropertyOptional({ description: 'Course ID', example: '708' })
   @IsOptional()
   @IsString()

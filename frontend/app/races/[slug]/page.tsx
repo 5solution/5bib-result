@@ -168,6 +168,7 @@ export default function RaceDetailPage() {
           const [res, statsRes] = await Promise.all([
             raceResultControllerGetRaceResults({
               query: {
+                raceId: String(race.id),
                 course_id: course.id,
                 pageNo: 1,
                 pageSize: 10,

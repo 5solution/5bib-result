@@ -21,13 +21,17 @@ import { AdminService } from './admin.service';
 import { ResolveClaimDto } from './dto/resolve-claim.dto';
 import { EditResultDto, ResolveClaimV2Dto } from './dto/edit-result.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RaceResultService } from '../race-result/services/race-result.service';
 
 @ApiTags('Admin')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly raceResultService: RaceResultService,
+  ) {}
 
   @Get('sync-logs')
   @ApiOperation({ summary: 'Get paginated sync logs' })
@@ -137,6 +141,23 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Cache purged' })
   async purgeCache(@Param('courseId') courseId: string) {
     return this.adminService.purgeCache(courseId);
+  }
+
+  @Get('race-results/athlete/:raceId/:bib')
+  @ApiOperation({ summary: 'Get full athlete detail including _id and editHistory (admin only)' })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
+  @ApiResponse({ status: 200, description: 'Returns full athlete result detail with _id, editHistory, isManuallyEdited' })
+  @ApiResponse({ status: 404, description: 'Athlete not found' })
+  async getAthleteDetail(
+    @Param('raceId') raceId: string,
+    @Param('bib') bib: string,
+  ) {
+    const result = await this.raceResultService.getAthleteDetail(raceId, bib);
+    if (!result) {
+      return { data: null, success: false, message: 'Athlete not found' };
+    }
+    return { data: result, success: true };
   }
 
   @Post('test-otp-email')

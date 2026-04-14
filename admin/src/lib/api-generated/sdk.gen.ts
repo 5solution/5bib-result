@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AdminControllerEditResultData, AdminControllerEditResultErrors, AdminControllerEditResultResponses, AdminControllerForceSyncData, AdminControllerForceSyncErrors, AdminControllerForceSyncResponses, AdminControllerGetClaimsData, AdminControllerGetClaimsResponses, AdminControllerGetSyncLogsData, AdminControllerGetSyncLogsResponses, AdminControllerPurgeCacheData, AdminControllerPurgeCacheResponses, AdminControllerResetDataData, AdminControllerResetDataResponses, AdminControllerResolveClaimData, AdminControllerResolveClaimErrors, AdminControllerResolveClaimResponses, AdminControllerResolveClaimV2Data, AdminControllerResolveClaimV2Errors, AdminControllerResolveClaimV2Responses, AdminControllerTestOtpEmailData, AdminControllerTestOtpEmailResponses, AnalyticsControllerGetBookingPatternsData, AnalyticsControllerGetBookingPatternsResponses, AnalyticsControllerGetDailyRevenueData, AnalyticsControllerGetDailyRevenueResponses, AnalyticsControllerGetFunnelData, AnalyticsControllerGetFunnelResponses, AnalyticsControllerGetMerchantComparisonData, AnalyticsControllerGetMerchantComparisonResponses, AnalyticsControllerGetOverviewData, AnalyticsControllerGetOverviewResponses, AnalyticsControllerGetRaceDetailData, AnalyticsControllerGetRaceDetailResponses, AnalyticsControllerGetRacePerformanceData, AnalyticsControllerGetRacePerformanceResponses, AnalyticsControllerGetRevenueByCategoryData, AnalyticsControllerGetRevenueByCategoryResponses, AnalyticsControllerGetRunnerBehaviorData, AnalyticsControllerGetRunnerBehaviorResponses, AnalyticsControllerGetTopRacesData, AnalyticsControllerGetTopRacesResponses, AuthControllerLoginData, AuthControllerLoginErrors, AuthControllerLoginResponses, AuthControllerProfileData, AuthControllerProfileErrors, AuthControllerProfileResponses, MerchantControllerApproveData, MerchantControllerApproveResponses, MerchantControllerFindAllData, MerchantControllerFindAllResponses, MerchantControllerFindOneData, MerchantControllerFindOneErrors, MerchantControllerFindOneResponses, MerchantControllerGetFeeHistoryData, MerchantControllerGetFeeHistoryResponses, MerchantControllerGetRacesData, MerchantControllerGetRacesResponses, MerchantControllerToggleStarData, MerchantControllerToggleStarResponses, MerchantControllerUpdateCompanyData, MerchantControllerUpdateCompanyResponses, MerchantControllerUpdateFeeData, MerchantControllerUpdateFeeResponses, RaceResultControllerCompareAthletesData, RaceResultControllerCompareAthletesResponses, RaceResultControllerGenerateResultImageData, RaceResultControllerGenerateResultImageErrors, RaceResultControllerGenerateResultImageResponses, RaceResultControllerGetAthleteDetailData, RaceResultControllerGetAthleteDetailResponses, RaceResultControllerGetCertificateData, RaceResultControllerGetCertificateErrors, RaceResultControllerGetCertificateResponses, RaceResultControllerGetCourseStatsData, RaceResultControllerGetCourseStatsResponses, RaceResultControllerGetFilterOptionsData, RaceResultControllerGetFilterOptionsResponses, RaceResultControllerGetLeaderboardData, RaceResultControllerGetLeaderboardResponses, RaceResultControllerGetRaceDistancesData, RaceResultControllerGetRaceDistancesResponses, RaceResultControllerGetRaceResultsData, RaceResultControllerGetRaceResultsResponses, RaceResultControllerGlobalSearchData, RaceResultControllerGlobalSearchResponses, RaceResultControllerManualSyncData, RaceResultControllerManualSyncErrors, RaceResultControllerManualSyncResponses, RaceResultControllerRequestAvatarOtpData, RaceResultControllerRequestAvatarOtpErrors, RaceResultControllerRequestAvatarOtpResponses, RaceResultControllerSubmitClaimData, RaceResultControllerSubmitClaimResponses, RaceResultControllerUploadAvatarData, RaceResultControllerUploadAvatarErrors, RaceResultControllerUploadAvatarResponses, RaceResultControllerUploadClaimAttachmentData, RaceResultControllerUploadClaimAttachmentResponses, RacesControllerAddCourseData, RacesControllerAddCourseErrors, RacesControllerAddCourseResponses, RacesControllerCreateRaceData, RacesControllerCreateRaceResponses, RacesControllerDeleteRaceData, RacesControllerDeleteRaceErrors, RacesControllerDeleteRaceResponses, RacesControllerGetRaceByIdData, RacesControllerGetRaceByIdErrors, RacesControllerGetRaceByIdResponses, RacesControllerGetRaceByProductIdData, RacesControllerGetRaceByProductIdErrors, RacesControllerGetRaceByProductIdResponses, RacesControllerGetRaceBySlugData, RacesControllerGetRaceBySlugErrors, RacesControllerGetRaceBySlugResponses, RacesControllerRemoveCourseData, RacesControllerRemoveCourseErrors, RacesControllerRemoveCourseResponses, RacesControllerSearchRacesData, RacesControllerSearchRacesResponses, RacesControllerSyncRacesData, RacesControllerSyncRacesErrors, RacesControllerSyncRacesResponses, RacesControllerUpdateCourseData, RacesControllerUpdateCourseErrors, RacesControllerUpdateCourseResponses, RacesControllerUpdateRaceData, RacesControllerUpdateRaceErrors, RacesControllerUpdateRaceResponses, RacesControllerUpdateStatusData, RacesControllerUpdateStatusErrors, RacesControllerUpdateStatusResponses, ReconciliationControllerBatchCreateData, ReconciliationControllerBatchCreateResponses, ReconciliationControllerCreateData, ReconciliationControllerCreateResponses, ReconciliationControllerDeleteData, ReconciliationControllerDeleteResponses, ReconciliationControllerDownloadDocxData, ReconciliationControllerDownloadDocxResponses, ReconciliationControllerDownloadExportJobData, ReconciliationControllerDownloadExportJobResponses, ReconciliationControllerDownloadXlsxData, ReconciliationControllerDownloadXlsxResponses, ReconciliationControllerExportByIdsData, ReconciliationControllerExportByIdsResponses, ReconciliationControllerExportByPeriodData, ReconciliationControllerExportByPeriodResponses, ReconciliationControllerFindAllData, ReconciliationControllerFindAllResponses, ReconciliationControllerFindOneData, ReconciliationControllerFindOneResponses, ReconciliationControllerGetCronLogsData, ReconciliationControllerGetCronLogsResponses, ReconciliationControllerGetExportJobData, ReconciliationControllerGetExportJobResponses, ReconciliationControllerGetRacesData, ReconciliationControllerGetRacesResponses, ReconciliationControllerPreflightBatchData, ReconciliationControllerPreflightBatchResponses, ReconciliationControllerPreflightData, ReconciliationControllerPreflightResponses, ReconciliationControllerPreviewData, ReconciliationControllerPreviewResponses, ReconciliationControllerRegenerateData, ReconciliationControllerRegenerateResponses, ReconciliationControllerUpdateStatusData, ReconciliationControllerUpdateStatusResponses, SponsorsControllerCreateData, SponsorsControllerCreateResponses, SponsorsControllerFindAllActiveData, SponsorsControllerFindAllActiveResponses, SponsorsControllerFindAllData, SponsorsControllerFindAllResponses, SponsorsControllerFindByRaceIdData, SponsorsControllerFindByRaceIdResponses, SponsorsControllerRemoveData, SponsorsControllerRemoveErrors, SponsorsControllerRemoveResponses, SponsorsControllerUpdateData, SponsorsControllerUpdateErrors, SponsorsControllerUpdateResponses, UploadControllerUploadFileData, UploadControllerUploadFileResponses } from './types.gen';
+import type { AdminControllerEditResultData, AdminControllerEditResultErrors, AdminControllerEditResultResponses, AdminControllerForceSyncData, AdminControllerForceSyncErrors, AdminControllerForceSyncResponses, AdminControllerGetAthleteDetailData, AdminControllerGetAthleteDetailErrors, AdminControllerGetAthleteDetailResponses, AdminControllerGetClaimsData, AdminControllerGetClaimsResponses, AdminControllerGetSyncLogsData, AdminControllerGetSyncLogsResponses, AdminControllerPurgeCacheData, AdminControllerPurgeCacheResponses, AdminControllerResetDataData, AdminControllerResetDataResponses, AdminControllerResolveClaimData, AdminControllerResolveClaimErrors, AdminControllerResolveClaimResponses, AdminControllerResolveClaimV2Data, AdminControllerResolveClaimV2Errors, AdminControllerResolveClaimV2Responses, AdminControllerTestOtpEmailData, AdminControllerTestOtpEmailResponses, AnalyticsControllerGetBookingPatternsData, AnalyticsControllerGetBookingPatternsResponses, AnalyticsControllerGetDailyRevenueData, AnalyticsControllerGetDailyRevenueResponses, AnalyticsControllerGetFunnelData, AnalyticsControllerGetFunnelResponses, AnalyticsControllerGetMerchantComparisonData, AnalyticsControllerGetMerchantComparisonResponses, AnalyticsControllerGetOverviewData, AnalyticsControllerGetOverviewResponses, AnalyticsControllerGetRaceDetailData, AnalyticsControllerGetRaceDetailResponses, AnalyticsControllerGetRacePerformanceData, AnalyticsControllerGetRacePerformanceResponses, AnalyticsControllerGetRevenueByCategoryData, AnalyticsControllerGetRevenueByCategoryResponses, AnalyticsControllerGetRunnerBehaviorData, AnalyticsControllerGetRunnerBehaviorResponses, AnalyticsControllerGetTopRacesData, AnalyticsControllerGetTopRacesResponses, AuthControllerLoginData, AuthControllerLoginErrors, AuthControllerLoginResponses, AuthControllerProfileData, AuthControllerProfileErrors, AuthControllerProfileResponses, MerchantControllerApproveData, MerchantControllerApproveResponses, MerchantControllerFindAllData, MerchantControllerFindAllResponses, MerchantControllerFindOneData, MerchantControllerFindOneErrors, MerchantControllerFindOneResponses, MerchantControllerGetFeeHistoryData, MerchantControllerGetFeeHistoryResponses, MerchantControllerGetRacesData, MerchantControllerGetRacesResponses, MerchantControllerToggleStarData, MerchantControllerToggleStarResponses, MerchantControllerUpdateCompanyData, MerchantControllerUpdateCompanyResponses, MerchantControllerUpdateFeeData, MerchantControllerUpdateFeeResponses, RaceResultControllerCompareAthletesData, RaceResultControllerCompareAthletesResponses, RaceResultControllerGenerateResultImageData, RaceResultControllerGenerateResultImageErrors, RaceResultControllerGenerateResultImageResponses, RaceResultControllerGetAthleteDetailData, RaceResultControllerGetAthleteDetailResponses, RaceResultControllerGetCertificateData, RaceResultControllerGetCertificateErrors, RaceResultControllerGetCertificateResponses, RaceResultControllerGetCourseStatsData, RaceResultControllerGetCourseStatsResponses, RaceResultControllerGetFilterOptionsData, RaceResultControllerGetFilterOptionsResponses, RaceResultControllerGetLeaderboardData, RaceResultControllerGetLeaderboardResponses, RaceResultControllerGetRaceDistancesData, RaceResultControllerGetRaceDistancesResponses, RaceResultControllerGetRaceResultsData, RaceResultControllerGetRaceResultsResponses, RaceResultControllerGlobalSearchData, RaceResultControllerGlobalSearchResponses, RaceResultControllerManualSyncData, RaceResultControllerManualSyncErrors, RaceResultControllerManualSyncResponses, RaceResultControllerRequestAvatarOtpData, RaceResultControllerRequestAvatarOtpErrors, RaceResultControllerRequestAvatarOtpResponses, RaceResultControllerSubmitClaimData, RaceResultControllerSubmitClaimResponses, RaceResultControllerUploadAvatarData, RaceResultControllerUploadAvatarErrors, RaceResultControllerUploadAvatarResponses, RaceResultControllerUploadClaimAttachmentData, RaceResultControllerUploadClaimAttachmentResponses, RacesControllerAddCourseData, RacesControllerAddCourseErrors, RacesControllerAddCourseResponses, RacesControllerCreateRaceData, RacesControllerCreateRaceResponses, RacesControllerDeleteRaceData, RacesControllerDeleteRaceErrors, RacesControllerDeleteRaceResponses, RacesControllerGetRaceByIdData, RacesControllerGetRaceByIdErrors, RacesControllerGetRaceByIdResponses, RacesControllerGetRaceByProductIdData, RacesControllerGetRaceByProductIdErrors, RacesControllerGetRaceByProductIdResponses, RacesControllerGetRaceBySlugData, RacesControllerGetRaceBySlugErrors, RacesControllerGetRaceBySlugResponses, RacesControllerRemoveCourseData, RacesControllerRemoveCourseErrors, RacesControllerRemoveCourseResponses, RacesControllerSearchRacesData, RacesControllerSearchRacesResponses, RacesControllerSyncRacesData, RacesControllerSyncRacesErrors, RacesControllerSyncRacesResponses, RacesControllerUpdateCourseData, RacesControllerUpdateCourseErrors, RacesControllerUpdateCourseResponses, RacesControllerUpdateRaceData, RacesControllerUpdateRaceErrors, RacesControllerUpdateRaceResponses, RacesControllerUpdateStatusData, RacesControllerUpdateStatusErrors, RacesControllerUpdateStatusResponses, ReconciliationControllerBatchCreateData, ReconciliationControllerBatchCreateResponses, ReconciliationControllerCreateData, ReconciliationControllerCreateResponses, ReconciliationControllerDeleteData, ReconciliationControllerDeleteResponses, ReconciliationControllerDownloadDocxData, ReconciliationControllerDownloadDocxResponses, ReconciliationControllerDownloadExportJobData, ReconciliationControllerDownloadExportJobResponses, ReconciliationControllerDownloadXlsxData, ReconciliationControllerDownloadXlsxResponses, ReconciliationControllerExportByIdsData, ReconciliationControllerExportByIdsResponses, ReconciliationControllerExportByPeriodData, ReconciliationControllerExportByPeriodResponses, ReconciliationControllerFindAllData, ReconciliationControllerFindAllResponses, ReconciliationControllerFindOneData, ReconciliationControllerFindOneResponses, ReconciliationControllerGetCronLogsData, ReconciliationControllerGetCronLogsResponses, ReconciliationControllerGetExportJobData, ReconciliationControllerGetExportJobResponses, ReconciliationControllerGetRacesData, ReconciliationControllerGetRacesResponses, ReconciliationControllerPreflightBatchData, ReconciliationControllerPreflightBatchResponses, ReconciliationControllerPreflightData, ReconciliationControllerPreflightResponses, ReconciliationControllerPreviewData, ReconciliationControllerPreviewResponses, ReconciliationControllerRegenerateData, ReconciliationControllerRegenerateResponses, ReconciliationControllerUpdateStatusData, ReconciliationControllerUpdateStatusResponses, SponsorsControllerCreateData, SponsorsControllerCreateResponses, SponsorsControllerFindAllActiveData, SponsorsControllerFindAllActiveResponses, SponsorsControllerFindAllData, SponsorsControllerFindAllResponses, SponsorsControllerFindByRaceIdData, SponsorsControllerFindByRaceIdResponses, SponsorsControllerRemoveData, SponsorsControllerRemoveErrors, SponsorsControllerRemoveResponses, SponsorsControllerUpdateData, SponsorsControllerUpdateErrors, SponsorsControllerUpdateResponses, UploadControllerUploadFileData, UploadControllerUploadFileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -270,6 +270,7 @@ export const racesControllerSearchRaces = <ThrowOnError extends boolean = false>
  * Create a new race (admin)
  */
 export const racesControllerCreateRace = <ThrowOnError extends boolean = false>(options: Options<RacesControllerCreateRaceData, ThrowOnError>) => (options.client ?? client).post<RacesControllerCreateRaceResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races',
     ...options,
     headers: {
@@ -286,7 +287,11 @@ export const racesControllerGetRaceBySlug = <ThrowOnError extends boolean = fals
 /**
  * Delete a race (admin)
  */
-export const racesControllerDeleteRace = <ThrowOnError extends boolean = false>(options: Options<RacesControllerDeleteRaceData, ThrowOnError>) => (options.client ?? client).delete<RacesControllerDeleteRaceResponses, RacesControllerDeleteRaceErrors, ThrowOnError>({ url: '/api/races/{id}', ...options });
+export const racesControllerDeleteRace = <ThrowOnError extends boolean = false>(options: Options<RacesControllerDeleteRaceData, ThrowOnError>) => (options.client ?? client).delete<RacesControllerDeleteRaceResponses, RacesControllerDeleteRaceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/races/{id}',
+    ...options
+});
 
 /**
  * Get race by ID
@@ -297,6 +302,7 @@ export const racesControllerGetRaceById = <ThrowOnError extends boolean = false>
  * Update a race (admin)
  */
 export const racesControllerUpdateRace = <ThrowOnError extends boolean = false>(options: Options<RacesControllerUpdateRaceData, ThrowOnError>) => (options.client ?? client).patch<RacesControllerUpdateRaceResponses, RacesControllerUpdateRaceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races/{id}',
     ...options,
     headers: {
@@ -314,6 +320,7 @@ export const racesControllerGetRaceByProductId = <ThrowOnError extends boolean =
  * Update race lifecycle status (admin)
  */
 export const racesControllerUpdateStatus = <ThrowOnError extends boolean = false>(options: Options<RacesControllerUpdateStatusData, ThrowOnError>) => (options.client ?? client).patch<RacesControllerUpdateStatusResponses, RacesControllerUpdateStatusErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races/{id}/status',
     ...options,
     headers: {
@@ -326,6 +333,7 @@ export const racesControllerUpdateStatus = <ThrowOnError extends boolean = false
  * Add a course to a race (admin)
  */
 export const racesControllerAddCourse = <ThrowOnError extends boolean = false>(options: Options<RacesControllerAddCourseData, ThrowOnError>) => (options.client ?? client).post<RacesControllerAddCourseResponses, RacesControllerAddCourseErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races/{id}/courses',
     ...options,
     headers: {
@@ -337,12 +345,17 @@ export const racesControllerAddCourse = <ThrowOnError extends boolean = false>(o
 /**
  * Remove a course from a race (admin)
  */
-export const racesControllerRemoveCourse = <ThrowOnError extends boolean = false>(options: Options<RacesControllerRemoveCourseData, ThrowOnError>) => (options.client ?? client).delete<RacesControllerRemoveCourseResponses, RacesControllerRemoveCourseErrors, ThrowOnError>({ url: '/api/races/{id}/courses/{courseId}', ...options });
+export const racesControllerRemoveCourse = <ThrowOnError extends boolean = false>(options: Options<RacesControllerRemoveCourseData, ThrowOnError>) => (options.client ?? client).delete<RacesControllerRemoveCourseResponses, RacesControllerRemoveCourseErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/races/{id}/courses/{courseId}',
+    ...options
+});
 
 /**
  * Update a course in a race (admin)
  */
 export const racesControllerUpdateCourse = <ThrowOnError extends boolean = false>(options: Options<RacesControllerUpdateCourseData, ThrowOnError>) => (options.client ?? client).patch<RacesControllerUpdateCourseResponses, RacesControllerUpdateCourseErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races/{id}/courses/{courseId}',
     ...options,
     headers: {
@@ -354,7 +367,11 @@ export const racesControllerUpdateCourse = <ThrowOnError extends boolean = false
 /**
  * Manually sync races from source API
  */
-export const racesControllerSyncRaces = <ThrowOnError extends boolean = false>(options?: Options<RacesControllerSyncRacesData, ThrowOnError>) => (options?.client ?? client).post<RacesControllerSyncRacesResponses, RacesControllerSyncRacesErrors, ThrowOnError>({ url: '/api/races/sync', ...options });
+export const racesControllerSyncRaces = <ThrowOnError extends boolean = false>(options?: Options<RacesControllerSyncRacesData, ThrowOnError>) => (options?.client ?? client).post<RacesControllerSyncRacesResponses, RacesControllerSyncRacesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/races/sync',
+    ...options
+});
 
 /**
  * Get available race distances/types
@@ -364,7 +381,7 @@ export const raceResultControllerGetRaceDistances = <ThrowOnError extends boolea
 /**
  * Get race results with filters and pagination
  */
-export const raceResultControllerGetRaceResults = <ThrowOnError extends boolean = false>(options?: Options<RaceResultControllerGetRaceResultsData, ThrowOnError>) => (options?.client ?? client).get<RaceResultControllerGetRaceResultsResponses, unknown, ThrowOnError>({ url: '/api/race-results', ...options });
+export const raceResultControllerGetRaceResults = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetRaceResultsData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetRaceResultsResponses, unknown, ThrowOnError>({ url: '/api/race-results', ...options });
 
 /**
  * Global search by name or bib across all races
@@ -550,6 +567,15 @@ export const adminControllerEditResult = <ThrowOnError extends boolean = false>(
 export const adminControllerPurgeCache = <ThrowOnError extends boolean = false>(options: Options<AdminControllerPurgeCacheData, ThrowOnError>) => (options.client ?? client).post<AdminControllerPurgeCacheResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/cache/purge/{courseId}',
+    ...options
+});
+
+/**
+ * Get full athlete detail including _id and editHistory (admin only)
+ */
+export const adminControllerGetAthleteDetail = <ThrowOnError extends boolean = false>(options: Options<AdminControllerGetAthleteDetailData, ThrowOnError>) => (options.client ?? client).get<AdminControllerGetAthleteDetailResponses, AdminControllerGetAthleteDetailErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/race-results/athlete/{raceId}/{bib}',
     ...options
 });
 

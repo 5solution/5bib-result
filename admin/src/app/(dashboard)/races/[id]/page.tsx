@@ -505,7 +505,7 @@ export default function RaceDetailPage() {
     try {
       // Fetch all results (large page)
       const { data: body, error } = await raceResultControllerGetRaceResults({
-        query: { course_id: courseId, pageNo: 1, pageSize: 10000, sortField: 'OverallRank', sortDirection: 'ASC' },
+        query: { raceId, course_id: courseId, pageNo: 1, pageSize: 100, sortField: 'OverallRank', sortDirection: 'ASC' },
       });
       if (error) { toast.error("Không thể tải dữ liệu"); return; }
       const results = (body as any)?.data ?? [];
@@ -1192,9 +1192,6 @@ export default function RaceDetailPage() {
                             )}
                             <div>
                               <div className="text-base font-semibold">{course.name}</div>
-                              {course.startTime && (
-                                <span className="text-sm text-muted-foreground">{course.startTime}</span>
-                              )}
                             </div>
                           </div>
                         </TableCell>

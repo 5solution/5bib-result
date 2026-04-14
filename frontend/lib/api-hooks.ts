@@ -67,6 +67,7 @@ export function useRaceBySlug(slug: string, options?: { enabled?: boolean }) {
 // ─── Race Results ───────────────────────────────────────────────
 
 export function useRaceResults(params: {
+  raceId?: string;
   course_id?: string;
   name?: string;
   gender?: string;
@@ -75,17 +76,19 @@ export function useRaceResults(params: {
   pageSize?: number;
   sortField?: string;
   sortDirection?: 'ASC' | 'DESC';
+  type?: 'finisher' | 'dnf' | 'dns' | 'dsq';
+  nationality?: string;
 }, options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery({
     queryKey: ['race-results', params],
     queryFn: async () => {
       const result = await raceResultControllerGetRaceResults({
-        query: params as any,
+        query: { ...params, raceId: params.raceId ?? '' } as Parameters<typeof raceResultControllerGetRaceResults>[0]['query'],
       });
       if (result.error) throw result.error;
       return result.data;
     },
-    enabled: options?.enabled ?? !!params.course_id,
+    enabled: options?.enabled ?? (!!params.course_id && !!params.raceId),
     refetchInterval: options?.refetchInterval,
   });
 }

@@ -12,7 +12,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
-import { raceResultControllerGetAthleteDetail, adminControllerEditResult, type EditResultDto } from "@/lib/api-generated";
+import { adminControllerGetAthleteDetail, adminControllerEditResult, type EditResultDto } from "@/lib/api-generated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,7 +115,7 @@ export default function EditResultPage() {
     setSearching(true);
     setResult(null);
     try {
-      const { data, error } = await raceResultControllerGetAthleteDetail({
+      const { data, error } = await adminControllerGetAthleteDetail({
         path: { raceId, bib: bibInput.trim() },
         ...authHeaders(token),
       });
@@ -301,7 +301,7 @@ export default function EditResultPage() {
                   <Label className="flex items-center gap-1.5">
                     <Trophy className="size-3.5 text-muted-foreground" /> Trạng thái
                   </Label>
-                  <Select value={status} onValueChange={setStatus}>
+                  <Select value={status} onValueChange={(v) => setStatus(v ?? '')}>
                     <SelectTrigger className={status !== result.TimingPoint ? "border-amber-500/50 bg-amber-500/5" : ""}>
                       <SelectValue />
                     </SelectTrigger>

@@ -4,6 +4,207 @@ export type ClientOptions = {
     baseUrl: string;
 };
 
+export type UpdateMerchantFeeDto = {
+    /**
+     * Tỉ lệ phí dịch vụ mới (%)
+     */
+    service_fee_rate?: number;
+    /**
+     * Phí vé thủ công mới (VNĐ/vé)
+     */
+    manual_fee_per_ticket?: number;
+    /**
+     * VAT trên phí mới (%)
+     */
+    fee_vat_rate?: number;
+    /**
+     * Ngày áp dụng phí mới
+     */
+    fee_effective_date?: string;
+    /**
+     * Lý do thay đổi phí — bắt buộc
+     */
+    note: string;
+};
+
+export type UpdateMerchantCompanyDto = {
+    legal_name?: string;
+    tax_code?: string;
+    business_address?: string;
+    representative_name?: string;
+    representative_title?: string;
+    bank_account?: string;
+    bank_name?: string;
+    bank_branch?: string;
+    admin_note?: string;
+};
+
+export type ApproveMerchantDto = {
+    /**
+     * true = duyệt, false = từ chối
+     */
+    is_approved?: boolean;
+    contract_status?: 'pending' | 'active' | 'suspended' | 'terminated';
+    /**
+     * Ghi chú khi từ chối
+     */
+    rejection_note?: string;
+};
+
+export type BatchCreateReconciliationDto = {
+    period: string;
+    /**
+     * Array of merchant IDs or "all"
+     */
+    merchant_ids: {
+        [key: string]: unknown;
+    };
+    skip_errors?: boolean;
+};
+
+export type PreviewReconciliationDto = {
+    /**
+     * MySQL tenant.id
+     */
+    tenant_id: number;
+    /**
+     * MySQL race_course.race_id
+     */
+    mysql_race_id: number;
+    /**
+     * Race title for display
+     */
+    race_title?: string;
+    /**
+     * Period start date YYYY-MM-DD
+     */
+    period_start: string;
+    /**
+     * Period end date YYYY-MM-DD
+     */
+    period_end: string;
+    /**
+     * Override fee rate % (e.g. 6.5 for 6.5%)
+     */
+    fee_rate_applied?: number;
+    /**
+     * Override manual fee per ticket
+     */
+    manual_fee_per_ticket?: number;
+    /**
+     * Override VAT rate % on fees
+     */
+    fee_vat_rate?: number;
+};
+
+export type CreateReconciliationDto = {
+    /**
+     * MySQL tenant.id
+     */
+    tenant_id: number;
+    /**
+     * MySQL race_course.race_id
+     */
+    mysql_race_id: number;
+    /**
+     * Race title for display
+     */
+    race_title?: string;
+    /**
+     * Period start date YYYY-MM-DD
+     */
+    period_start: string;
+    /**
+     * Period end date YYYY-MM-DD
+     */
+    period_end: string;
+    /**
+     * Fee rate % (null = no fee)
+     */
+    fee_rate_applied?: number | null;
+    /**
+     * Manual fee per ticket in VND
+     */
+    manual_fee_per_ticket?: number;
+    /**
+     * VAT on fee %
+     */
+    fee_vat_rate?: number;
+    /**
+     * Manual payout adjustment in VND
+     */
+    manual_adjustment?: number;
+    /**
+     * Note for adjustment
+     */
+    adjustment_note?: string | null;
+    /**
+     * Signed date for DOCX display YYYY-MM-DD
+     */
+    signed_date_str?: string | null;
+    /**
+     * Generate XLSX file
+     */
+    generate_xlsx?: boolean;
+    /**
+     * Generate DOCX file
+     */
+    generate_docx?: boolean;
+    /**
+     * Admin user id (set from JWT in controller)
+     */
+    created_by?: number;
+};
+
+export type ExportZipByIdsDto = {
+    /**
+     * Array of reconciliation MongoDB IDs
+     */
+    ids: Array<string>;
+    /**
+     * Human-readable label for the ZIP
+     */
+    label?: string;
+};
+
+export type ExportZipByPeriodDto = {
+    /**
+     * Period start date YYYY-MM-DD
+     */
+    periodStart: string;
+    /**
+     * Period end date YYYY-MM-DD
+     */
+    periodEnd: string;
+    /**
+     * Human-readable label for the ZIP
+     */
+    label?: string;
+};
+
+export type UpdateReconciliationStatusDto = {
+    /**
+     * New status
+     */
+    status: 'draft' | 'flagged' | 'ready' | 'approved' | 'sent' | 'reviewed' | 'signed' | 'completed';
+    /**
+     * Admin user id (for reviewed status)
+     */
+    reviewed_by?: number;
+    /**
+     * Admin user id (for approved status)
+     */
+    approved_by?: number;
+    /**
+     * Signed date ISO string (for signed status)
+     */
+    signed_at?: string;
+    /**
+     * Optional note
+     */
+    note?: string;
+};
+
 export type CreateRaceDto = {
     /**
      * Race title
@@ -193,6 +394,15 @@ export type UpdateStatusDto = {
     status: 'draft' | 'pre_race' | 'live' | 'ended';
 };
 
+export type CheckpointServicesDto = {
+    water?: boolean;
+    food?: boolean;
+    sleep?: boolean;
+    dropBag?: boolean;
+    medical?: boolean;
+    notes?: string;
+};
+
 export type CourseCheckpointDto = {
     /**
      * Timing point key
@@ -206,6 +416,10 @@ export type CourseCheckpointDto = {
      * Distance label
      */
     distance?: string;
+    /**
+     * Aid station services available at this checkpoint
+     */
+    services?: CheckpointServicesDto;
 };
 
 export type AddCourseDto = {
@@ -233,6 +447,10 @@ export type AddCourseDto = {
      * RaceResult API URL for this course
      */
     apiUrl?: string;
+    /**
+     * API response format
+     */
+    apiFormat?: 'json' | 'csv';
     /**
      * Course cover image URL (S3)
      */
@@ -293,6 +511,10 @@ export type UpdateCourseDto = {
      */
     apiUrl?: string;
     /**
+     * API response format
+     */
+    apiFormat?: 'json' | 'csv';
+    /**
      * Course cover image URL (S3)
      */
     imageUrl?: string;
@@ -346,7 +568,7 @@ export type SubmitClaimDto = {
     /**
      * Claimant email
      */
-    email: string;
+    email?: string;
     /**
      * Phone number for contact
      */
@@ -361,6 +583,17 @@ export type SubmitClaimDto = {
     attachments?: Array<string>;
 };
 
+export type ResolveClaimV2Dto = {
+    /**
+     * Resolution action
+     */
+    action: 'approved' | 'rejected';
+    /**
+     * Resolution note (required, min 5 chars)
+     */
+    resolutionNote: string;
+};
+
 export type ResolveClaimDto = {
     /**
      * Claim resolution status
@@ -370,6 +603,33 @@ export type ResolveClaimDto = {
      * Admin note
      */
     adminNote?: string;
+};
+
+export type EditResultDto = {
+    /**
+     * Chip time (HH:MM:SS)
+     */
+    chipTime?: string;
+    /**
+     * Gun time (HH:MM:SS)
+     */
+    gunTime?: string;
+    /**
+     * Athlete name
+     */
+    name?: string;
+    /**
+     * Result status
+     */
+    status?: 'Finisher' | 'DNF' | 'DNS' | 'DSQ';
+    /**
+     * Override overall rank (use with caution)
+     */
+    overallRank?: number;
+    /**
+     * Reason for edit (min 10 chars, required per BR-03)
+     */
+    reason: string;
 };
 
 export type LoginDto = {
@@ -437,6 +697,1002 @@ export type UpdateSponsorDto = {
      * Active status
      */
     isActive?: boolean;
+};
+
+export type MerchantControllerFindAllData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Tìm theo tên, email, mã số thuế
+         */
+        q?: string;
+        approval?: 'all' | 'approved' | 'pending';
+        contract_status?: 'all' | 'pending' | 'active' | 'suspended' | 'terminated';
+        fee_status?: 'all' | 'has_fee' | 'no_fee';
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/merchants';
+};
+
+export type MerchantControllerFindAllResponses = {
+    /**
+     * Danh sách merchant
+     */
+    200: unknown;
+};
+
+export type MerchantControllerFindOneData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}';
+};
+
+export type MerchantControllerFindOneErrors = {
+    /**
+     * Merchant không tồn tại
+     */
+    404: unknown;
+};
+
+export type MerchantControllerFindOneResponses = {
+    200: unknown;
+};
+
+export type MerchantControllerUpdateFeeData = {
+    body: UpdateMerchantFeeDto;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/fee';
+};
+
+export type MerchantControllerUpdateFeeResponses = {
+    200: unknown;
+};
+
+export type MerchantControllerGetFeeHistoryData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/fee-history';
+};
+
+export type MerchantControllerGetFeeHistoryResponses = {
+    200: unknown;
+};
+
+export type MerchantControllerToggleStarData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/star';
+};
+
+export type MerchantControllerToggleStarResponses = {
+    200: unknown;
+};
+
+export type MerchantControllerUpdateCompanyData = {
+    body: UpdateMerchantCompanyDto;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/company';
+};
+
+export type MerchantControllerUpdateCompanyResponses = {
+    200: unknown;
+};
+
+export type MerchantControllerGetRacesData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/races';
+};
+
+export type MerchantControllerGetRacesResponses = {
+    200: unknown;
+};
+
+export type MerchantControllerApproveData = {
+    body: ApproveMerchantDto;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/approve';
+};
+
+export type MerchantControllerApproveResponses = {
+    200: unknown;
+};
+
+export type ReconciliationControllerPreflightData = {
+    body?: never;
+    path?: never;
+    query: {
+        merchant_id: number;
+        /**
+         * YYYY-MM
+         */
+        period: string;
+        race_id?: number;
+    };
+    url: '/api/reconciliations/preflight';
+};
+
+export type ReconciliationControllerPreflightResponses = {
+    /**
+     * Pre-flight result with warnings
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerPreflightBatchData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/preflight/batch';
+};
+
+export type ReconciliationControllerPreflightBatchResponses = {
+    /**
+     * Pre-flight results for all merchants
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerBatchCreateData = {
+    body: BatchCreateReconciliationDto;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/batch';
+};
+
+export type ReconciliationControllerBatchCreateResponses = {
+    201: unknown;
+};
+
+export type ReconciliationControllerPreviewData = {
+    body: PreviewReconciliationDto;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/preview';
+};
+
+export type ReconciliationControllerPreviewResponses = {
+    /**
+     * Preview data returned
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerFindAllData = {
+    body?: never;
+    path?: never;
+    query?: {
+        tenant_id?: number;
+        mysql_race_id?: number;
+        status?: string;
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/reconciliations';
+};
+
+export type ReconciliationControllerFindAllResponses = {
+    /**
+     * List of reconciliations
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerCreateData = {
+    body: CreateReconciliationDto;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations';
+};
+
+export type ReconciliationControllerCreateResponses = {
+    /**
+     * Reconciliation created
+     */
+    201: unknown;
+};
+
+export type ReconciliationControllerGetRacesData = {
+    body?: never;
+    path: {
+        tenantId: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/races/{tenantId}';
+};
+
+export type ReconciliationControllerGetRacesResponses = {
+    /**
+     * List of races
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerDownloadXlsxData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/{id}/download/xlsx';
+};
+
+export type ReconciliationControllerDownloadXlsxResponses = {
+    /**
+     * XLSX file stream
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerDownloadDocxData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/{id}/download/docx';
+};
+
+export type ReconciliationControllerDownloadDocxResponses = {
+    /**
+     * DOCX file stream
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerExportByIdsData = {
+    body: ExportZipByIdsDto;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/export/zip/by-ids';
+};
+
+export type ReconciliationControllerExportByIdsResponses = {
+    /**
+     * Export job created
+     */
+    201: unknown;
+};
+
+export type ReconciliationControllerExportByPeriodData = {
+    body: ExportZipByPeriodDto;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/export/zip/by-period';
+};
+
+export type ReconciliationControllerExportByPeriodResponses = {
+    /**
+     * Export job created
+     */
+    201: unknown;
+};
+
+export type ReconciliationControllerGetExportJobData = {
+    body?: never;
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/export-jobs/{jobId}';
+};
+
+export type ReconciliationControllerGetExportJobResponses = {
+    /**
+     * Job status with progress
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerDownloadExportJobData = {
+    body?: never;
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/export-jobs/{jobId}/download';
+};
+
+export type ReconciliationControllerDownloadExportJobResponses = {
+    /**
+     * ZIP file stream or redirect to S3
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerGetCronLogsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/cron-logs';
+};
+
+export type ReconciliationControllerGetCronLogsResponses = {
+    /**
+     * Recent cron logs
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerDeleteData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/{id}';
+};
+
+export type ReconciliationControllerDeleteResponses = {
+    /**
+     * Deleted successfully
+     */
+    204: void;
+};
+
+export type ReconciliationControllerDeleteResponse = ReconciliationControllerDeleteResponses[keyof ReconciliationControllerDeleteResponses];
+
+export type ReconciliationControllerFindOneData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/{id}';
+};
+
+export type ReconciliationControllerFindOneResponses = {
+    /**
+     * Reconciliation document
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerUpdateStatusData = {
+    body: UpdateReconciliationStatusDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/{id}/status';
+};
+
+export type ReconciliationControllerUpdateStatusResponses = {
+    /**
+     * Updated reconciliation
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerRegenerateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/reconciliations/{id}/regenerate';
+};
+
+export type ReconciliationControllerRegenerateResponses = {
+    /**
+     * Regenerated file URLs
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetOverviewData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/overview';
+};
+
+export type AnalyticsControllerGetOverviewResponses = {
+    /**
+     * Overview metrics for the given month
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetDailyRevenueData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/revenue/daily';
+};
+
+export type AnalyticsControllerGetDailyRevenueResponses = {
+    /**
+     * Array of daily revenue data points
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetTopRacesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/top-races';
+};
+
+export type AnalyticsControllerGetTopRacesResponses = {
+    /**
+     * List of top races ordered by gross GMV
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetRevenueByCategoryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/revenue-by-category';
+};
+
+export type AnalyticsControllerGetRevenueByCategoryResponses = {
+    /**
+     * Revenue grouped by order category
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetRacePerformanceData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/races';
+};
+
+export type AnalyticsControllerGetRacePerformanceResponses = {
+    /**
+     * Paginated list of race performance records
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetRaceDetailData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/races/{raceId}/detail';
+};
+
+export type AnalyticsControllerGetRaceDetailResponses = {
+    /**
+     * Race detail with category breakdown and daily revenue
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetMerchantComparisonData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/merchants';
+};
+
+export type AnalyticsControllerGetMerchantComparisonResponses = {
+    /**
+     * List of merchant analytics records
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetRunnerBehaviorData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/runners/behavior';
+};
+
+export type AnalyticsControllerGetRunnerBehaviorResponses = {
+    /**
+     * Runner behavior analytics
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetBookingPatternsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/runners/booking-patterns';
+};
+
+export type AnalyticsControllerGetBookingPatternsResponses = {
+    /**
+     * 7×24 order count matrix indexed by [dow][hour]
+     */
+    200: unknown;
+};
+
+export type AnalyticsControllerGetFunnelData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/funnel';
+};
+
+export type AnalyticsControllerGetFunnelResponses = {
+    /**
+     * Funnel data grouped by status and category
+     */
+    200: unknown;
 };
 
 export type RacesControllerSearchRacesData = {
@@ -785,7 +2041,11 @@ export type RaceResultControllerGetRaceDistancesResponses = {
 export type RaceResultControllerGetRaceResultsData = {
     body?: never;
     path?: never;
-    query?: {
+    query: {
+        /**
+         * Race ID (required to scope results to a single race)
+         */
+        raceId: string;
         /**
          * Course ID
          */
@@ -807,9 +2067,17 @@ export type RaceResultControllerGetRaceResultsData = {
          */
         pageNo?: number;
         /**
-         * Page size
+         * Page size (max 100)
          */
-        pageSize?: number;
+        pageSize?: 10 | 25 | 50 | 100;
+        /**
+         * Filter by result type
+         */
+        type?: 'finisher' | 'dnf' | 'dns' | 'dsq';
+        /**
+         * Filter by nationality code (e.g. VN, JP)
+         */
+        nationality?: string;
         /**
          * Sort field
          */
@@ -899,6 +2167,36 @@ export type RaceResultControllerGetAthleteDetailResponses = {
     200: unknown;
 };
 
+export type RaceResultControllerGetCertificateData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+        /**
+         * Bib number
+         */
+        bib: string;
+    };
+    query?: never;
+    url: '/api/race-results/certificate/{raceId}/{bib}';
+};
+
+export type RaceResultControllerGetCertificateErrors = {
+    /**
+     * Athlete or certificate not found
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerGetCertificateResponses = {
+    /**
+     * Returns certificate as PNG image
+     */
+    200: unknown;
+};
+
 export type RaceResultControllerCompareAthletesData = {
     body?: never;
     path: {
@@ -961,6 +2259,61 @@ export type RaceResultControllerGetCourseStatsResponses = {
     200: unknown;
 };
 
+export type RaceResultControllerRequestAvatarOtpData = {
+    body: {
+        raceId: string;
+        bib: string;
+        email: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/race-results/avatar/request-otp';
+};
+
+export type RaceResultControllerRequestAvatarOtpErrors = {
+    /**
+     * Email does not match or no email on record
+     */
+    400: unknown;
+    /**
+     * Athlete not found
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerRequestAvatarOtpResponses = {
+    /**
+     * OTP sent to registered email
+     */
+    201: unknown;
+};
+
+export type RaceResultControllerUploadAvatarData = {
+    body: {
+        raceId: string;
+        bib: string;
+        otp: string;
+        file: Blob | File;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/race-results/avatar/upload';
+};
+
+export type RaceResultControllerUploadAvatarErrors = {
+    /**
+     * Invalid OTP or upload failed
+     */
+    400: unknown;
+};
+
+export type RaceResultControllerUploadAvatarResponses = {
+    /**
+     * Avatar uploaded, returns avatarUrl
+     */
+    201: unknown;
+};
+
 export type RaceResultControllerUploadClaimAttachmentData = {
     body: {
         file?: Blob | File;
@@ -989,6 +2342,42 @@ export type RaceResultControllerSubmitClaimResponses = {
      * Claim created
      */
     201: unknown;
+};
+
+export type RaceResultControllerGenerateResultImageData = {
+    body: {
+        bg?: 'blue' | 'dark' | 'sunset' | 'forest' | 'purple';
+        /**
+         * Custom background image
+         */
+        customBg?: Blob | File;
+    };
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+        /**
+         * Bib number
+         */
+        bib: string;
+    };
+    query?: never;
+    url: '/api/race-results/result-image/{raceId}/{bib}';
+};
+
+export type RaceResultControllerGenerateResultImageErrors = {
+    /**
+     * Athlete not found
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerGenerateResultImageResponses = {
+    /**
+     * Returns result image as PNG
+     */
+    200: unknown;
 };
 
 export type RaceResultControllerManualSyncData = {
@@ -1087,6 +2476,7 @@ export type AdminControllerGetClaimsData = {
     query?: {
         page?: number;
         pageSize?: number;
+        status?: 'pending' | 'approved' | 'rejected';
     };
     url: '/api/admin/claims';
 };
@@ -1094,6 +2484,36 @@ export type AdminControllerGetClaimsData = {
 export type AdminControllerGetClaimsResponses = {
     /**
      * Returns paginated claims
+     */
+    200: unknown;
+};
+
+export type AdminControllerResolveClaimV2Data = {
+    body: ResolveClaimV2Dto;
+    path: {
+        /**
+         * Claim ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/claims/{id}/resolve';
+};
+
+export type AdminControllerResolveClaimV2Errors = {
+    /**
+     * Claim not found
+     */
+    404: unknown;
+    /**
+     * Claim already resolved/rejected
+     */
+    409: unknown;
+};
+
+export type AdminControllerResolveClaimV2Responses = {
+    /**
+     * Claim resolved
      */
     200: unknown;
 };
@@ -1124,6 +2544,36 @@ export type AdminControllerResolveClaimResponses = {
     200: unknown;
 };
 
+export type AdminControllerEditResultData = {
+    body: EditResultDto;
+    path: {
+        /**
+         * Result document _id
+         */
+        resultId: string;
+    };
+    query?: never;
+    url: '/api/admin/race-results/{resultId}';
+};
+
+export type AdminControllerEditResultErrors = {
+    /**
+     * Validation error (missing reason etc.)
+     */
+    400: unknown;
+    /**
+     * Result not found
+     */
+    404: unknown;
+};
+
+export type AdminControllerEditResultResponses = {
+    /**
+     * Result updated with audit log
+     */
+    200: unknown;
+};
+
 export type AdminControllerPurgeCacheData = {
     body?: never;
     path: {
@@ -1138,6 +2588,50 @@ export type AdminControllerPurgeCacheResponses = {
      * Cache purged
      */
     200: unknown;
+};
+
+export type AdminControllerGetAthleteDetailData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+        /**
+         * Bib number
+         */
+        bib: string;
+    };
+    query?: never;
+    url: '/api/admin/race-results/athlete/{raceId}/{bib}';
+};
+
+export type AdminControllerGetAthleteDetailErrors = {
+    /**
+     * Athlete not found
+     */
+    404: unknown;
+};
+
+export type AdminControllerGetAthleteDetailResponses = {
+    /**
+     * Returns full athlete result detail with _id, editHistory, isManuallyEdited
+     */
+    200: unknown;
+};
+
+export type AdminControllerTestOtpEmailData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/test-otp-email';
+};
+
+export type AdminControllerTestOtpEmailResponses = {
+    /**
+     * Test email sent
+     */
+    201: unknown;
 };
 
 export type AuthControllerLoginData = {

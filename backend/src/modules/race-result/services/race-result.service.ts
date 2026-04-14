@@ -372,7 +372,7 @@ export class RaceResultService {
 
   async getRaceResults(dto: GetRaceResultsDto) {
     // Try cache
-    const cacheKey = `results:${dto.course_id || 'all'}:${dto.pageNo}:${this.filtersHash(dto)}`;
+    const cacheKey = `results:${dto.raceId}:${dto.course_id || 'all'}:${dto.pageNo}:${this.filtersHash(dto)}`;
     const cached = await this.getFromCache<any>(cacheKey);
     if (cached) return cached;
 
@@ -395,6 +395,7 @@ export class RaceResultService {
 
     // Build filter
     const filter: Record<string, any> = {};
+    if (dto.raceId) filter.raceId = dto.raceId;
     if (dto.course_id) filter.courseId = dto.course_id;
     if (dto.gender) filter.gender = dto.gender;
     if (dto.category) filter.category = dto.category;

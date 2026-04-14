@@ -7,12 +7,14 @@ import {
   Query,
   Param,
   Body,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiOperation,
   ApiResponse,
   ApiTags,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { RacesService } from './races.service';
 import { SearchRacesDto } from './dto/search-races.dto';
@@ -21,6 +23,7 @@ import { UpdateRaceDto } from './dto/update-race.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Races')
 @Controller('races')
@@ -93,6 +96,8 @@ export class RacesController {
 
   // ─── Admin CRUD ───────────────────────────────────────────────
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post()
   @ApiOperation({ summary: 'Create a new race (admin)' })
   @ApiResponse({ status: 201, description: 'Race created' })
@@ -100,6 +105,8 @@ export class RacesController {
     return this.racesService.createRace(dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Patch(':id')
   @ApiOperation({ summary: 'Update a race (admin)' })
   @ApiParam({ name: 'id', type: 'string' })
@@ -109,6 +116,8 @@ export class RacesController {
     return this.racesService.updateRace(id, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a race (admin)' })
   @ApiParam({ name: 'id', type: 'string' })
@@ -118,6 +127,8 @@ export class RacesController {
     return this.racesService.deleteRace(id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update race lifecycle status (admin)' })
   @ApiParam({ name: 'id', type: 'string' })
@@ -129,6 +140,8 @@ export class RacesController {
 
   // ─── Course management ────────────────────────────────────────
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post(':id/courses')
   @ApiOperation({ summary: 'Add a course to a race (admin)' })
   @ApiParam({ name: 'id', type: 'string', description: 'Race ID' })
@@ -138,6 +151,8 @@ export class RacesController {
     return this.racesService.addCourse(id, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Patch(':id/courses/:courseId')
   @ApiOperation({ summary: 'Update a course in a race (admin)' })
   @ApiParam({ name: 'id', type: 'string', description: 'Race ID' })
@@ -152,6 +167,8 @@ export class RacesController {
     return this.racesService.updateCourse(id, courseId, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Delete(':id/courses/:courseId')
   @ApiOperation({ summary: 'Remove a course from a race (admin)' })
   @ApiParam({ name: 'id', type: 'string', description: 'Race ID' })
@@ -167,6 +184,8 @@ export class RacesController {
 
   // ─── Sync ─────────────────────────────────────────────────────
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post('sync')
   @ApiOperation({ summary: 'Manually sync races from source API' })
   @ApiResponse({

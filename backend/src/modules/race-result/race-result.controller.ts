@@ -110,7 +110,14 @@ export class RaceResultController {
     if (!result) {
       return { data: null, success: false, message: 'Athlete not found' };
     }
-    return { data: result, success: true };
+    // Strip internal/admin-only fields from public response (info disclosure fix)
+    const { _id, editHistory, isManuallyEdited, ...publicData } = result as typeof result & {
+      _id?: string;
+      editHistory?: unknown[];
+      isManuallyEdited?: boolean;
+    };
+    void _id; void editHistory; void isManuallyEdited;
+    return { data: publicData, success: true };
   }
 
   @Get('certificate/:raceId/:bib')

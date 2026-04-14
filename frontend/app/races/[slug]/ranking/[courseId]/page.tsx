@@ -200,6 +200,7 @@ export default function CourseRankingPage() {
   const isLive = race?.status === 'live';
 
   const { data: resultsRaw, isLoading: loadingResults } = useRaceResults({
+    raceId: race?.id !== undefined ? String(race.id) : undefined,
     course_id: courseId,
     name: searchQuery.trim() || undefined,
     gender: genderFilter || undefined,
@@ -211,7 +212,7 @@ export default function CourseRankingPage() {
     sortField: 'OverallRank',
     sortDirection: 'ASC',
   }, {
-    enabled: !!courseId,
+    enabled: !!courseId && !!race?.id,
     refetchInterval: isLive ? 30_000 : false,
   });
   const results: RaceResult[] = useMemo(() => (resultsRaw as any)?.data ?? [], [resultsRaw]);

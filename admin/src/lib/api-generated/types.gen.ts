@@ -394,6 +394,15 @@ export type UpdateStatusDto = {
     status: 'draft' | 'pre_race' | 'live' | 'ended';
 };
 
+export type CheckpointServicesDto = {
+    water?: boolean;
+    food?: boolean;
+    sleep?: boolean;
+    dropBag?: boolean;
+    medical?: boolean;
+    notes?: string;
+};
+
 export type CourseCheckpointDto = {
     /**
      * Timing point key
@@ -407,6 +416,10 @@ export type CourseCheckpointDto = {
      * Distance label
      */
     distance?: string;
+    /**
+     * Aid station services available at this checkpoint
+     */
+    services?: CheckpointServicesDto;
 };
 
 export type AddCourseDto = {
@@ -434,6 +447,10 @@ export type AddCourseDto = {
      * RaceResult API URL for this course
      */
     apiUrl?: string;
+    /**
+     * API response format
+     */
+    apiFormat?: 'json' | 'csv';
     /**
      * Course cover image URL (S3)
      */
@@ -493,6 +510,10 @@ export type UpdateCourseDto = {
      * RaceResult API URL for this course
      */
     apiUrl?: string;
+    /**
+     * API response format
+     */
+    apiFormat?: 'json' | 'csv';
     /**
      * Course cover image URL (S3)
      */
@@ -2020,7 +2041,11 @@ export type RaceResultControllerGetRaceDistancesResponses = {
 export type RaceResultControllerGetRaceResultsData = {
     body?: never;
     path?: never;
-    query?: {
+    query: {
+        /**
+         * Race ID (required to scope results to a single race)
+         */
+        raceId: string;
         /**
          * Course ID
          */
@@ -2561,6 +2586,36 @@ export type AdminControllerPurgeCacheData = {
 export type AdminControllerPurgeCacheResponses = {
     /**
      * Cache purged
+     */
+    200: unknown;
+};
+
+export type AdminControllerGetAthleteDetailData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+        /**
+         * Bib number
+         */
+        bib: string;
+    };
+    query?: never;
+    url: '/api/admin/race-results/athlete/{raceId}/{bib}';
+};
+
+export type AdminControllerGetAthleteDetailErrors = {
+    /**
+     * Athlete not found
+     */
+    404: unknown;
+};
+
+export type AdminControllerGetAthleteDetailResponses = {
+    /**
+     * Returns full athlete result detail with _id, editHistory, isManuallyEdited
      */
     200: unknown;
 };
