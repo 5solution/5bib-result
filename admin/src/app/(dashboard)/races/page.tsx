@@ -79,9 +79,9 @@ function StatusBadge({ status }: { status: RaceStatus }) {
   const c = config[status] || config.ended;
 
   return (
-    <Badge className={c.className}>
+    <Badge className={`${c.className} text-sm px-3 py-1`}>
       {status === "live" && (
-        <span className="mr-1 inline-block size-2 animate-pulse rounded-full bg-green-400" />
+        <span className="mr-1.5 inline-block size-2.5 animate-pulse rounded-full bg-green-400" />
       )}
       {c.label}
     </Badge>
@@ -220,8 +220,8 @@ export default function RacesPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Giải đấu</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-3xl font-bold">Giải đấu</h1>
+          <p className="text-base text-muted-foreground">
             {totalItems} giải chạy trong hệ thống
           </p>
         </div>
@@ -295,8 +295,8 @@ export default function RacesPage() {
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Tìm kiếm giải chạy..."
             value={search}
@@ -304,7 +304,7 @@ export default function RacesPage() {
               setSearch(e.target.value);
               setPage(0);
             }}
-            className="pl-9"
+            className="pl-11 h-12 text-base"
           />
         </div>
         <Select
@@ -314,7 +314,7 @@ export default function RacesPage() {
             setPage(0);
           }}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[200px] h-12 text-base">
             <SelectValue placeholder="Trạng thái" />
           </SelectTrigger>
           <SelectContent>
@@ -339,52 +339,52 @@ export default function RacesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Tên giải</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead className="hidden md:table-cell">Loại</TableHead>
-                <TableHead className="hidden lg:table-cell">Tỉnh</TableHead>
-                <TableHead className="hidden sm:table-cell">Cự ly</TableHead>
-                <TableHead className="text-right">Thao tác</TableHead>
+                <TableHead className="text-base py-4">Tên giải</TableHead>
+                <TableHead className="text-base py-4">Trạng thái</TableHead>
+                <TableHead className="hidden md:table-cell text-base py-4">Loại</TableHead>
+                <TableHead className="hidden lg:table-cell text-base py-4">Tỉnh</TableHead>
+                <TableHead className="hidden sm:table-cell text-base py-4">Cự ly</TableHead>
+                <TableHead className="text-right text-base py-4">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {races.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-10 text-base">
                     Không tìm thấy giải nào
                   </TableCell>
                 </TableRow>
               ) : (
                 races.map((race) => (
-                  <TableRow key={race._id}>
-                    <TableCell className="font-medium">
+                  <TableRow key={race._id} className="text-base">
+                    <TableCell className="font-semibold py-5">
                       <button
-                        className="text-left hover:underline"
+                        className="text-left hover:underline text-base"
                         onClick={() => router.push(`/races/${race._id}`)}
                       >
                         {race.title}
                       </button>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-5">
                       <StatusBadge status={race.status} />
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                    <TableCell className="hidden md:table-cell text-muted-foreground py-5">
                       {race.raceType || "-"}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
+                    <TableCell className="hidden lg:table-cell text-muted-foreground py-5">
                       {race.province || "-"}
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell text-muted-foreground">
+                    <TableCell className="hidden sm:table-cell text-muted-foreground py-5">
                       {race.courses?.length ?? 0}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <TableCell className="text-right py-5">
+                      <div className="flex items-center justify-end gap-2">
                         <Button
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => router.push(`/races/${race._id}`)}
                         >
-                          <Pencil className="size-3.5" />
+                          <Pencil className="size-5" />
                         </Button>
                         <Dialog
                           open={deleteId === race._id}
@@ -393,7 +393,7 @@ export default function RacesPage() {
                           }
                         >
                           <DialogTrigger render={<Button variant="ghost" size="icon-sm" />}>
-                            <Trash2 className="size-3.5 text-destructive" />
+                            <Trash2 className="size-5 text-destructive" />
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
