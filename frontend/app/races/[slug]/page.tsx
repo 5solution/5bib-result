@@ -689,11 +689,11 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
 
   return (
     <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${subBg}`}>
-      <div className="flex items-stretch h-14">
+      <div className="flex items-stretch h-20">
         {/* Race logo + name */}
         <div className="flex items-center gap-3 px-4 sm:px-6 flex-1 min-w-0">
           {race.logoUrl && (
-            <img src={race.logoUrl} alt="" className="h-7 w-auto object-contain shrink-0" />
+            <img src={race.logoUrl} alt="" className="h-10 w-auto object-contain shrink-0" />
           )}
           <span className={`text-sm font-bold hidden sm:inline truncate max-w-[220px] lg:max-w-[380px] transition-colors duration-300 ${textColor}`}>
             {race.name || ''}
@@ -716,9 +716,9 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
         {sponsors.length > 0 && (
           <div
             className={`hidden md:flex items-center justify-center shrink-0 relative overflow-hidden transition-colors duration-300 ${sponsorBg}`}
-            style={{ width: 200, clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)' }}
+            style={{ width: 240, clipPath: 'polygon(12% 0%, 100% 0%, 100% 100%, 0% 100%)' }}
           >
-            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 160, height: 44, paddingLeft: 20 }}>
+            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 200, height: 64, paddingLeft: 24 }}>
               {sponsors.map((s, i) => (
                 <div
                   key={s._id || s.name}
@@ -730,18 +730,18 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
                     <img
                       src={s.logoUrl}
                       alt={s.name}
-                      className="h-9 w-auto max-w-[140px] object-contain"
+                      className="h-14 w-auto max-w-[180px] object-contain"
                       style={{ filter: 'brightness(0) invert(1)' }}
                       draggable={false}
                     />
                   ) : (
-                    <span className="text-sm font-bold text-white tracking-wide">{s.name}</span>
+                    <span className="text-base font-bold text-white tracking-wide">{s.name}</span>
                   )}
                 </div>
               ))}
             </div>
             {sponsors.length > 1 && (
-              <div className="absolute bottom-1.5 right-3 flex gap-1">
+              <div className="absolute bottom-2 right-3 flex gap-1">
                 {sponsors.map((_, i) => (
                   <span key={i} className={`block rounded-full transition-all duration-300 ${i === currentSponsor ? 'w-3 h-1 bg-white' : 'w-1 h-1 bg-white/40'}`} />
                 ))}
