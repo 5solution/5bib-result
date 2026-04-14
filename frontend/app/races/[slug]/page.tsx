@@ -464,6 +464,32 @@ export default function RaceDetailPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Completion rate bar — only show when race has results */}
+                      {(() => {
+                        const s = courseStatsMap[course.id];
+                        if (!s || s.starters === 0) return null;
+                        const rate = Math.round((s.finishers / s.starters) * 100);
+                        const color = rate >= 80 ? 'bg-emerald-500' : rate >= 60 ? 'bg-amber-400' : 'bg-red-400';
+                        return (
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">{t('race.completionRate')}</span>
+                              <span className="text-sm font-black text-slate-800">{rate}%</span>
+                            </div>
+                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${color} rounded-full transition-all duration-700`}
+                                style={{ width: `${rate}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between mt-1">
+                              <span className="text-[10px] text-slate-400">{s.finishers} {t('race.finishers')}</span>
+                              <span className="text-[10px] text-slate-400">{s.starters} {t('race.starters')}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* GPX Map */}
