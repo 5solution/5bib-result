@@ -713,13 +713,13 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
         </div>
       </div>
 
-      {/* Sponsor tile — absolutely positioned, starts at top of row, extends below */}
+      {/* Sponsor tile — absolutely positioned, flush with row height */}
       {sponsors.length > 0 && (
         <div
           className="hidden md:block absolute top-0 right-0 bg-slate-100"
           style={{
             width: 200,
-            height: 110,
+            height: 65,
             clipPath: 'polygon(22% 0%, 100% 0%, 100% 100%, 0% 100%)',
           }}
         >
