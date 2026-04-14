@@ -687,9 +687,9 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
   const linkColor = scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white';
 
   return (
-    <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${subBg}`}>
-      {/* Row height matches sponsor tile — tile overflows downward */}
-      <div className="flex items-center" style={{ height: 65 }}>
+    <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 overflow-visible ${subBg}`}>
+      {/* Nav row — 65px */}
+      <div className="flex items-center pr-[200px]" style={{ height: 65 }}>
         {/* Race logo + name */}
         <div className="flex items-center gap-3 px-4 sm:px-6 flex-1 min-w-0">
           {race.logoUrl && (
@@ -711,51 +711,49 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
             {t('race.findAthletes')}
           </Link>
         </div>
+      </div>
 
-        {/* Sponsor tile — light gray bg, original logo colors, taller than row (overflows below) */}
-        {sponsors.length > 0 && (
-          <div
-            className="hidden md:flex items-center justify-center shrink-0 relative overflow-hidden bg-slate-100"
-            style={{
-              width: 200,
-              height: 110,
-              clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
-              marginTop: 'auto',
-              alignSelf: 'flex-end',
-            }}
-          >
-            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 200, height: 110, paddingLeft: 32, paddingRight: 12 }}>
-              {sponsors.map((s, i) => (
-                <div
-                  key={s._id || s.name}
-                  className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
-                    i === currentSponsor ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
-                  }`}
-                >
-                  {s.logoUrl ? (
-                    <img
-                      src={s.logoUrl}
-                      alt={s.name}
-                      className="w-auto object-contain"
-                      style={{ maxWidth: 150, maxHeight: 80 }}
-                      draggable={false}
-                    />
-                  ) : (
-                    <span className="text-lg font-bold text-slate-800 tracking-wide">{s.name}</span>
-                  )}
-                </div>
+      {/* Sponsor tile — absolutely positioned, starts at top of row, extends below */}
+      {sponsors.length > 0 && (
+        <div
+          className="hidden md:block absolute top-0 right-0 bg-slate-100"
+          style={{
+            width: 200,
+            height: 110,
+            clipPath: 'polygon(22% 0%, 100% 0%, 100% 100%, 0% 100%)',
+          }}
+        >
+          <div className="relative w-full h-full flex items-center justify-center" style={{ paddingLeft: 40, paddingRight: 12 }}>
+            {sponsors.map((s, i) => (
+              <div
+                key={s._id || s.name}
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
+                  i === currentSponsor ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+                }`}
+              >
+                {s.logoUrl ? (
+                  <img
+                    src={s.logoUrl}
+                    alt={s.name}
+                    className="w-auto h-auto object-contain"
+                    style={{ maxWidth: 140, maxHeight: 72 }}
+                    draggable={false}
+                  />
+                ) : (
+                  <span className="text-lg font-bold text-slate-800 tracking-wide">{s.name}</span>
+                )}
+              </div>
+            ))}
+          </div>
+          {sponsors.length > 1 && (
+            <div className="absolute bottom-2 right-3 flex gap-1">
+              {sponsors.map((_, i) => (
+                <span key={i} className={`block rounded-full transition-all duration-300 ${i === currentSponsor ? 'w-3 h-1 bg-slate-500' : 'w-1 h-1 bg-slate-300'}`} />
               ))}
             </div>
-            {sponsors.length > 1 && (
-              <div className="absolute bottom-2 right-3 flex gap-1">
-                {sponsors.map((_, i) => (
-                  <span key={i} className={`block rounded-full transition-all duration-300 ${i === currentSponsor ? 'w-3 h-1 bg-slate-500' : 'w-1 h-1 bg-slate-300'}`} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
