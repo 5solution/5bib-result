@@ -72,15 +72,8 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Sponsor logo — inline, before language/menu, desktop only */}
-          {sponsors.length > 0 && (
-            <div className="hidden md:flex items-center self-stretch border-l border-blue-600 ml-2">
-              <SponsorCarousel sponsors={sponsors} />
-            </div>
-          )}
-
           {/* Language + Mobile menu */}
-          <div className="flex items-center border-l border-blue-600">
+          <div className="flex items-center ml-auto">
             <LanguageSwitcher />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -90,6 +83,13 @@ export default function Header() {
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
+
+          {/* Sponsor tile — far right, full-height card, desktop only */}
+          {sponsors.length > 0 && (
+            <div className="hidden md:flex items-stretch self-stretch shrink-0">
+              <SponsorCarousel sponsors={sponsors} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -156,37 +156,54 @@ function SponsorCarousel({ sponsors }: { sponsors: Sponsor[] }) {
     resume();
   };
 
+  const sponsor = sponsors[current];
+
   return (
     <div
-      className="flex items-center h-full px-4 cursor-grab active:cursor-grabbing select-none"
-      style={{ width: 160 }}
+      className="relative flex items-center bg-white cursor-grab active:cursor-grabbing select-none overflow-hidden"
+      style={{ width: 180, clipPath: 'polygon(12% 0%, 100% 0%, 100% 100%, 0% 100%)' }}
       onPointerDown={onDown}
       onPointerUp={onUp}
       onPointerCancel={() => { setIsDragging(false); resume(); }}
       onMouseEnter={pause}
       onMouseLeave={resume}
     >
-      <div className="relative w-full h-8 overflow-hidden">
+      {/* Slide area */}
+      <div className="relative w-full h-full overflow-hidden" style={{ paddingLeft: 28 }}>
         {sponsors.map((s, i) => (
           <div
             key={s._id || s.name}
             className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
-              i === current ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+              i === current ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
             }`}
           >
             {s.logoUrl ? (
               <img
                 src={s.logoUrl}
                 alt={s.name}
-                className="h-7 w-auto max-w-[130px] object-contain pointer-events-none brightness-0 invert"
+                className="h-8 w-auto max-w-[120px] object-contain pointer-events-none"
                 draggable={false}
               />
             ) : (
-              <span className="text-xs font-bold text-blue-100 tracking-wide">{s.name}</span>
+              <span className="text-xs font-bold text-slate-700 tracking-wide px-2">{s.name}</span>
             )}
           </div>
         ))}
       </div>
+
+      {/* Dot indicators — only if multiple sponsors */}
+      {sponsors.length > 1 && (
+        <div className="absolute bottom-1.5 right-2 flex gap-1">
+          {sponsors.map((_, i) => (
+            <span
+              key={i}
+              className={`block rounded-full transition-all duration-300 ${
+                i === current ? 'w-3 h-1 bg-blue-600' : 'w-1 h-1 bg-slate-300'
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
