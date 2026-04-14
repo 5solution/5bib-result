@@ -689,7 +689,7 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
   return (
     <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 overflow-visible ${subBg}`}>
       {/* Nav row — 65px */}
-      <div className="flex items-center pr-[200px]" style={{ height: 65 }}>
+      <div className="flex items-center pr-[260px]" style={{ height: 65 }}>
         {/* Race logo + name */}
         <div className="flex items-center gap-3 px-4 sm:px-6 flex-1 min-w-0">
           {race.logoUrl && (
@@ -718,10 +718,10 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
         <div
           className="hidden md:block absolute top-0 right-0"
           style={{
-            width: 200,
+            width: 260,
             height: 65,
             clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
-            background: '#0f172a',
+            background: '#f1f5f9',
           }}
         >
           <div className="relative w-full h-full flex items-center justify-center" style={{ paddingLeft: 36, paddingRight: 12 }}>
