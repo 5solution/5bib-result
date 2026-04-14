@@ -689,7 +689,7 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
 
   return (
     <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${subBg}`}>
-      <div className="flex items-stretch h-20">
+      <div className="flex items-stretch" style={{ height: 65 }}>
         {/* Race logo + name */}
         <div className="flex items-center gap-3 px-4 sm:px-6 flex-1 min-w-0">
           {race.logoUrl && (
@@ -718,7 +718,7 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
             className={`hidden md:flex items-center justify-center shrink-0 relative overflow-hidden transition-colors duration-300 ${sponsorBg}`}
             style={{ width: 240, clipPath: 'polygon(12% 0%, 100% 0%, 100% 100%, 0% 100%)' }}
           >
-            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 200, height: 64, paddingLeft: 24 }}>
+            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 210, height: 57, paddingLeft: 24 }}>
               {sponsors.map((s, i) => (
                 <div
                   key={s._id || s.name}
@@ -730,8 +730,8 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
                     <img
                       src={s.logoUrl}
                       alt={s.name}
-                      className="h-14 w-auto max-w-[180px] object-contain"
-                      style={{ filter: 'brightness(0) invert(1)' }}
+                      className="w-auto object-contain"
+                      style={{ height: 52, maxWidth: 200, filter: 'brightness(0) invert(1)' }}
                       draggable={false}
                     />
                   ) : (
