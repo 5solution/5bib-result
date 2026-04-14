@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useTranslation } from 'react-i18next';
@@ -117,6 +117,7 @@ export default function RaceDetailPage() {
   const { t } = useTranslation();
   const params = useParams();
   const slug = params.slug as string;
+  const router = useRouter();
 
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const [courseResults, setCourseResults] = useState<Record<string, RaceResult[]>>({});
@@ -448,7 +449,7 @@ export default function RaceDetailPage() {
                       </p>
 
                       {/* Stats grid */}
-                      <div className={`grid ${course.elevation ? 'grid-cols-3' : 'grid-cols-2'} gap-4 mt-4`}>
+                      <div className="grid grid-cols-3 gap-4 mt-4">
                         <div>
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.startTime')}</p>
                           <p className="text-lg font-bold text-slate-900">{course.startTime || '-'}</p>
@@ -457,12 +458,10 @@ export default function RaceDetailPage() {
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">COT</p>
                           <p className="text-lg font-bold text-slate-900">{course.cutOffTime || '-'}</p>
                         </div>
-                        {course.elevation && (
-                          <div>
-                            <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.elevation')}</p>
-                            <p className="text-lg font-bold text-slate-900">{course.elevation}</p>
-                          </div>
-                        )}
+                        <div>
+                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.elevation')}</p>
+                          <p className="text-lg font-bold text-slate-900">{course.elevation || '-'}</p>
+                        </div>
                       </div>
 
                       {/* Completion rate bar — only show when race has results */}
@@ -577,13 +576,17 @@ export default function RaceDetailPage() {
                           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('race.top3Women')}</p>
                           <div className="space-y-2">
                             {women.length > 0 ? women.map((r, i) => (
-                              <div key={r.Bib} className="flex items-center gap-2.5">
+                              <div key={r.Bib} className="flex items-center gap-2.5 group/athlete">
                                 <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                                  {r.Name.charAt(0)}
+                                  {r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
                                 </div>
                                 <span className="text-sm font-bold text-slate-700 w-4">{i + 1}</span>
-                                <span className="text-sm text-slate-700 flex-1 truncate">{r.Name}</span>
-                                <span className="text-xs text-slate-400">{r.Nation}</span>
+                                <button
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/races/${slug}/${r.Bib}`); }}
+                                  className="text-sm text-slate-700 flex-1 truncate text-left hover:text-blue-600 hover:underline transition-colors cursor-pointer"
+                                >
+                                  {r.Name}
+                                </button>
                               </div>
                             )) : (
                               <p className="text-xs text-slate-400">{t('race.noData')}</p>
@@ -594,13 +597,17 @@ export default function RaceDetailPage() {
                           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('race.top3Men')}</p>
                           <div className="space-y-2">
                             {men.length > 0 ? men.map((r, i) => (
-                              <div key={r.Bib} className="flex items-center gap-2.5">
+                              <div key={r.Bib} className="flex items-center gap-2.5 group/athlete">
                                 <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                                  {r.Name.charAt(0)}
+                                  {r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
                                 </div>
                                 <span className="text-sm font-bold text-slate-700 w-4">{i + 1}</span>
-                                <span className="text-sm text-slate-700 flex-1 truncate">{r.Name}</span>
-                                <span className="text-xs text-slate-400">{r.Nation}</span>
+                                <button
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/races/${slug}/${r.Bib}`); }}
+                                  className="text-sm text-slate-700 flex-1 truncate text-left hover:text-blue-600 hover:underline transition-colors cursor-pointer"
+                                >
+                                  {r.Name}
+                                </button>
                               </div>
                             )) : (
                               <p className="text-xs text-slate-400">{t('race.noData')}</p>
