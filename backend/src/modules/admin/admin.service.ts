@@ -165,4 +165,14 @@ export class AdminService {
       success: true,
     };
   }
+
+  async sendTestOtpEmail(email: string) {
+    await this.mailService.sendAvatarOtpEmail({
+      toEmail: email,
+      name: 'Test User',
+      bib: '9999',
+      otp: '847291',
+    });
+    return { success: true, message: `Test OTP email sent to ${email}` };
+  }
 }

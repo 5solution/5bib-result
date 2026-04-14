@@ -49,7 +49,7 @@ export class MailService {
 
     try {
       await this.client.messages.sendTemplate({
-        template_name: 'sendAvatarOtpEmail',
+        template_name: 'sendavatarotpemail',
         template_content: [],
         message: {
           from_email: 'info@5bib.com',

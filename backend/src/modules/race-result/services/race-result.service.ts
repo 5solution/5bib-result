@@ -290,16 +290,27 @@ export class RaceResultService {
       return 0;
     }
 
-    const bulkOps = response.data.map((result) => {
+    const bulkOps = response.data.map((result, idx) => {
       const overallRank = this.normalizeRankValue(result.OverallRank, result.TimingPoint);
       const genderRank = this.normalizeRankValue(result.GenderRank, result.TimingPoint);
       const catRank = this.normalizeRankValue(result.CatRank, result.TimingPoint);
       const overrankLive = this.normalizeRankValue(result.OverrankLive, result.TimingPoint);
 
+      // Some APIs return Bib=0 for all athletes — extract participant ID from
+      // certificate URL (e.g. .../certificates/7254/70KM → "7254"),
+      // or fall back to 1-based index to guarantee uniqueness.
+      const bibValue = (result.Bib !== 0 && result.Bib != null)
+        ? String(result.Bib)
+        : (() => {
+            const certUrl = result.Certificate || result.Certi || '';
+            const match = certUrl.match(/\/certificates\/(\d+)\//);
+            return match ? match[1] : String(idx + 1);
+          })();
+
       const doc = {
         raceId,
         courseId,
-        bib: String(result.Bib),
+        bib: bibValue,
         name: result.Name,
         distance,
         overallRank: overallRank.original,
@@ -338,7 +349,7 @@ export class RaceResultService {
 
       return {
         updateOne: {
-          filter: { raceId, courseId, bib: String(result.Bib) },
+          filter: { raceId, courseId, bib: bibValue },
           update: { $set: doc },
           upsert: true,
         },

@@ -138,4 +138,11 @@ export class AdminController {
   async purgeCache(@Param('courseId') courseId: string) {
     return this.adminService.purgeCache(courseId);
   }
+
+  @Post('test-otp-email')
+  @ApiOperation({ summary: 'Send a test OTP email (dev/staging only)' })
+  @ApiResponse({ status: 201, description: 'Test email sent' })
+  async testOtpEmail(@Body('email') email: string) {
+    return this.adminService.sendTestOtpEmail(email);
+  }
 }
