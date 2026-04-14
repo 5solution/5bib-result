@@ -685,11 +685,11 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
   const subBg = scrolled ? 'bg-white border-b border-slate-200 shadow-sm' : 'bg-transparent border-b border-white/10';
   const textColor = scrolled ? 'text-slate-900' : 'text-white';
   const linkColor = scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white';
-  const sponsorBg = scrolled ? 'bg-slate-900' : 'bg-black/40 backdrop-blur-sm';
 
   return (
     <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${subBg}`}>
-      <div className="flex items-stretch" style={{ height: 65 }}>
+      {/* Row height matches sponsor tile — tile overflows downward */}
+      <div className="flex items-center" style={{ height: 65 }}>
         {/* Race logo + name */}
         <div className="flex items-center gap-3 px-4 sm:px-6 flex-1 min-w-0">
           {race.logoUrl && (
@@ -712,13 +712,19 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
           </Link>
         </div>
 
-        {/* Sponsor tile — far right, full height, angled left edge */}
+        {/* Sponsor tile — light gray bg, original logo colors, taller than row (overflows below) */}
         {sponsors.length > 0 && (
           <div
-            className={`hidden md:flex items-center justify-center shrink-0 relative overflow-hidden transition-colors duration-300 ${sponsorBg}`}
-            style={{ width: 200, clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)' }}
+            className="hidden md:flex items-center justify-center shrink-0 relative overflow-hidden bg-slate-100"
+            style={{
+              width: 200,
+              height: 110,
+              clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
+              marginTop: 'auto',
+              alignSelf: 'flex-end',
+            }}
           >
-            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 200, height: 65, paddingLeft: 32, paddingRight: 12 }}>
+            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 200, height: 110, paddingLeft: 32, paddingRight: 12 }}>
               {sponsors.map((s, i) => (
                 <div
                   key={s._id || s.name}
@@ -730,12 +736,12 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
                     <img
                       src={s.logoUrl}
                       alt={s.name}
-                      className="w-full h-auto object-contain"
-                      style={{ filter: 'brightness(0) invert(1)' }}
+                      className="w-auto object-contain"
+                      style={{ maxWidth: 150, maxHeight: 80 }}
                       draggable={false}
                     />
                   ) : (
-                    <span className="text-base font-bold text-white tracking-wide">{s.name}</span>
+                    <span className="text-lg font-bold text-slate-800 tracking-wide">{s.name}</span>
                   )}
                 </div>
               ))}
@@ -743,7 +749,7 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
             {sponsors.length > 1 && (
               <div className="absolute bottom-2 right-3 flex gap-1">
                 {sponsors.map((_, i) => (
-                  <span key={i} className={`block rounded-full transition-all duration-300 ${i === currentSponsor ? 'w-3 h-1 bg-white' : 'w-1 h-1 bg-white/40'}`} />
+                  <span key={i} className={`block rounded-full transition-all duration-300 ${i === currentSponsor ? 'w-3 h-1 bg-slate-500' : 'w-1 h-1 bg-slate-300'}`} />
                 ))}
               </div>
             )}
