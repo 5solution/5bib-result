@@ -38,6 +38,7 @@ const setMiddleware = (app: NestExpressApplication) => {
     new ValidationPipe({
       transform: true,
       whitelist: true,
+      forbidNonWhitelisted: true,
     }),
   );
 };

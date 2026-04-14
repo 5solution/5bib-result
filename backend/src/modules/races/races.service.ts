@@ -270,7 +270,7 @@ export class RacesService {
     return this.raceModel
       .find({
         'courses.apiUrl': { $exists: true, $ne: null },
-        status: { $in: ['pre_race', 'live'] },
+        status: { $in: ['pre_race', 'live', 'ended'] },
       })
       .exec();
   }
@@ -360,15 +360,26 @@ export class RacesService {
 
     // Build embedded courses from race_course_bases
     if (race_course_bases && Array.isArray(race_course_bases)) {
-      raceDoc.courses = race_course_bases.map((courseData: any) => ({
-        courseId: String(courseData.variant_id || courseData.id),
-        name: courseData.name,
-        distance: courseData.distance,
-        courseType: courseData.course_type,
-        apiUrl: courseData.race_result_url || null,
-        importStatus: courseData.race_result_import_status || 'idle',
-        checkpoints: [],
-      }));
+      // Load existing race to preserve manually-set apiUrl and checkpoints (H-02 fix)
+      const existingRace = await this.raceModel.findOne({ productId }).lean().exec();
+      const existingCourseMap = new Map(
+        (existingRace?.courses || []).map((c: any) => [c.courseId, c]),
+      );
+
+      raceDoc.courses = race_course_bases.map((courseData: any) => {
+        const courseId = String(courseData.variant_id || courseData.id);
+        const existing = existingCourseMap.get(courseId);
+        return {
+          courseId,
+          name: courseData.name,
+          distance: courseData.distance,
+          courseType: courseData.course_type,
+          // Preserve manually-set apiUrl if API returns null/empty
+          apiUrl: courseData.race_result_url || existing?.apiUrl || null,
+          importStatus: courseData.race_result_import_status || existing?.importStatus || 'idle',
+          checkpoints: existing?.checkpoints || [],
+        };
+      });
     }
 
     await this.raceModel.findOneAndUpdate(

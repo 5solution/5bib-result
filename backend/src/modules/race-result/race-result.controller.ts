@@ -10,6 +10,7 @@ import {
   NotFoundException,
   UploadedFile,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -29,6 +30,7 @@ import { RaceResultService } from './services/race-result.service';
 import { ResultImageService } from './services/result-image.service';
 import { RacesService } from '../races/races.service';
 import { UploadService } from '../upload/upload.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Race Results')
 @Controller('race-results')
@@ -393,6 +395,7 @@ export class RaceResultController {
     res.send(pngBuffer);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('sync')
   @ApiOperation({ summary: 'Manually trigger race results sync' })
   @ApiResponse({

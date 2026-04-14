@@ -12,7 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
-import { raceResultControllerGetAthleteDetail } from "@/lib/api-generated";
+import { raceResultControllerGetAthleteDetail, adminControllerEditResult, type EditResultDto } from "@/lib/api-generated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -131,22 +131,15 @@ export default function EditResultPage() {
 
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/race-results/${resultId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
+      const { error } = await adminControllerEditResult({
+        path: { resultId },
+        body: body as EditResultDto,
+        ...authHeaders(token),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Lưu thất bại");
-      }
-      const updated = await res.json();
+      if (error) throw new Error((error as any)?.message || "Lưu thất bại");
       toast.success("Đã lưu chỉnh sửa thành công!");
-      // Re-fetch to show updated audit trail
-      setResult(updated.updatedResult || result);
+      // Re-fetch athlete to show updated audit trail
+      await handleSearch();
       setReason("");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Lưu thất bại");

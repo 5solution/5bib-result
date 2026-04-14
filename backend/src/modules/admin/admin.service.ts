@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { RaceResultService } from '../race-result/services/race-result.service';
@@ -167,12 +167,27 @@ export class AdminService {
   }
 
   async sendTestOtpEmail(email: string) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('Test endpoint not available in production');
+    }
+
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const testRaceId = 'test-race';
+    const testBib = '9999';
+    await this.redis.set(`avatar-otp:${testRaceId}:${testBib}`, otp, 'EX', 600);
+
     await this.mailService.sendAvatarOtpEmail({
       toEmail: email,
       name: 'Test User',
-      bib: '9999',
-      otp: '847291',
+      bib: testBib,
+      otp,
     });
-    return { success: true, message: `Test OTP email sent to ${email}` };
+    return {
+      success: true,
+      message: `Test OTP sent to ${email}`,
+      __dev_otp: otp,
+      __dev_raceId: testRaceId,
+      __dev_bib: testBib,
+    };
   }
 }

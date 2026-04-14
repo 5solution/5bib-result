@@ -925,21 +925,32 @@ export class RaceResultService {
     resolutionNote: string,
     resolvedBy: string,
   ) {
-    const claim = await this.claimModel.findById(claimId).exec();
-    if (!claim) throw new NotFoundException('Claim not found');
-    if (claim.status !== 'pending') {
-      throw new ConflictException(`Claim already ${claim.status}`);
+    // Atomic: only transitions from 'pending' — prevents double-approval race condition
+    const claim = await this.claimModel.findOneAndUpdate(
+      { _id: claimId, status: 'pending' },
+      {
+        $set: {
+          status: action,
+          resolvedBy,
+          resolvedAt: new Date(),
+          resolutionNote,
+          adminNote: resolutionNote,
+        },
+      },
+      { new: true },
+    ).exec();
+
+    if (!claim) {
+      const existing = await this.claimModel.findById(claimId).lean().exec();
+      if (!existing) throw new NotFoundException('Claim not found');
+      throw new ConflictException(`Claim already ${existing.status}`);
     }
 
-    let autoUpdated = false;
-
     if (action === 'approved') {
-      // Find the result and update with claimed data
       const result = await this.resultModel
         .findOne({ raceId: claim.raceId, bib: claim.bib })
         .exec();
       if (result) {
-        // Build edit entries from the claim description (no specific claimed fields in schema)
         const entry = {
           editedBy: resolvedBy,
           editedAt: new Date(),
@@ -955,31 +966,12 @@ export class RaceResultService {
             $set: { isManuallyEdited: true },
           },
         ).exec();
-        // Invalidate cache
         await this.purgeCache(claim.courseId);
-        autoUpdated = true;
+        await this.claimModel.updateOne({ _id: claimId }, { $set: { autoUpdated: true } }).exec();
       }
     }
 
-    const updated = await this.claimModel
-      .findByIdAndUpdate(
-        claimId,
-        {
-          $set: {
-            status: action,
-            resolvedBy,
-            resolvedAt: new Date(),
-            resolutionNote,
-            adminNote: resolutionNote,
-            autoUpdated,
-          },
-        },
-        { new: true },
-      )
-      .lean()
-      .exec();
-
-    return updated;
+    return this.claimModel.findById(claimId).lean().exec();
   }
 
   /**
@@ -1091,6 +1083,9 @@ export class RaceResultService {
       await this.redis.expire(rateKey, 3600); // first increment sets TTL
     }
     if (count > 5) {
+      // Self-heal: if TTL was lost (crash between INCR and EXPIRE), restore it
+      const ttl = await this.redis.ttl(rateKey);
+      if (ttl < 0) await this.redis.expire(rateKey, 3600);
       throw new BadRequestException(
         'Too many OTP requests. Please try again in 1 hour',
       );
