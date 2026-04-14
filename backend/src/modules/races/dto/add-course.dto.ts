@@ -56,6 +56,11 @@ export class AddCourseDto {
   @IsString()
   apiUrl?: string;
 
+  @ApiPropertyOptional({ description: 'API response format', example: 'json', enum: ['json', 'csv'] })
+  @IsOptional()
+  @IsString()
+  apiFormat?: string;
+
   @ApiPropertyOptional({ description: 'Course cover image URL (S3)' })
   @IsOptional()
   @IsString()
