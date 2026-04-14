@@ -165,14 +165,26 @@ export default function RaceDetailPage() {
       const statsMap: Record<string, { starters: number; finishers: number; dnf: number; nationalityCount: number }> = {};
       for (const course of race.courses) {
         try {
-          const [res, statsRes] = await Promise.all([
+          const [menRes, womenRes, statsRes] = await Promise.all([
             raceResultControllerGetRaceResults({
               query: {
                 raceId: String(race.id),
                 course_id: course.id,
+                gender: 'Male',
                 pageNo: 1,
-                pageSize: 10,
-                sortField: 'OverallRank',
+                pageSize: 3,
+                sortField: 'GenderRank',
+                sortDirection: 'ASC',
+              },
+            }),
+            raceResultControllerGetRaceResults({
+              query: {
+                raceId: String(race.id),
+                course_id: course.id,
+                gender: 'Female',
+                pageNo: 1,
+                pageSize: 3,
+                sortField: 'GenderRank',
                 sortDirection: 'ASC',
               },
             }),
@@ -180,8 +192,12 @@ export default function RaceDetailPage() {
               path: { courseId: course.id },
             }),
           ]);
-          const list = (res.data as any)?.data ?? res.data;
-          const resultArr = Array.isArray(list) ? list : [];
+          const menList = (menRes.data as any)?.data ?? menRes.data;
+          const womenList = (womenRes.data as any)?.data ?? womenRes.data;
+          const resultArr = [
+            ...(Array.isArray(menList) ? menList : []),
+            ...(Array.isArray(womenList) ? womenList : []),
+          ];
           results[course.id] = resultArr;
           const stats = (statsRes.data as any)?.data ?? statsRes.data;
           statsMap[course.id] = {
