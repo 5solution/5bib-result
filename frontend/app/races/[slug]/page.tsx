@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 import { useTranslation } from 'react-i18next';
 import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route, Globe } from 'lucide-react';
 import LiveTimer from '@/components/LiveTimer';
-import { useRaceBySlug } from '@/lib/api-hooks';
+import { useRaceBySlug, useSponsors } from '@/lib/api-hooks';
 import { raceResultControllerGetRaceResults, raceResultControllerGetCourseStats } from '@/lib/api-generated';
 
 const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
@@ -657,58 +657,98 @@ function RaceDescription({ description, organizer }: { description?: string; org
 function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
   const { t } = useTranslation();
   const [scrolled, setScrolled] = useState(false);
+  const [currentSponsor, setCurrentSponsor] = useState(0);
+  const { data: sponsorsRaw } = useSponsors();
+
+  const sponsors = useMemo(() => {
+    const list = ((sponsorsRaw as any)?.data ?? sponsorsRaw ?? []) as Array<{
+      _id: string; name: string; logoUrl: string; level: string; order: number; website?: string;
+    }>;
+    if (!Array.isArray(list) || list.length === 0) return [];
+    const priority: Record<string, number> = { diamond: 0, gold: 1, silver: 2 };
+    return [...list].sort((a, b) => (priority[a.level] ?? 9) - (priority[b.level] ?? 9) || a.order - b.order);
+  }, [sponsorsRaw]);
 
   useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > 400);
-    };
+    const onScroll = () => setScrolled(window.scrollY > 400);
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    if (sponsors.length <= 1) return;
+    const id = setInterval(() => setCurrentSponsor(c => (c + 1) % sponsors.length), 3000);
+    return () => clearInterval(id);
+  }, [sponsors.length]);
+
+  const subBg = scrolled ? 'bg-white border-b border-slate-200 shadow-sm' : 'bg-transparent border-b border-white/10';
+  const textColor = scrolled ? 'text-slate-900' : 'text-white';
+  const linkColor = scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white';
+  const sponsorBg = scrolled ? 'bg-slate-900' : 'bg-black/40 backdrop-blur-sm';
+
   return (
-    <div
-      className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white border-b border-slate-200 shadow-sm'
-          : 'bg-transparent border-b border-white/10'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-12 gap-4">
+    <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${subBg}`}>
+      <div className="flex items-stretch h-14">
         {/* Race logo + name */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 px-4 sm:px-6 flex-1 min-w-0">
           {race.logoUrl && (
-            <img src={race.logoUrl} alt="" className="h-7 w-auto object-contain" />
+            <img src={race.logoUrl} alt="" className="h-7 w-auto object-contain shrink-0" />
           )}
-          <span className={`text-sm font-bold hidden sm:inline truncate max-w-[200px] lg:max-w-[300px] transition-colors duration-300 ${
-            scrolled ? 'text-slate-900' : 'text-white'
-          }`}>
+          <span className={`text-sm font-bold hidden sm:inline truncate max-w-[220px] lg:max-w-[380px] transition-colors duration-300 ${textColor}`}>
             {race.name || ''}
           </span>
         </div>
 
-        <div className="flex-1" />
+        {/* Nav actions */}
+        <div className="hidden md:flex items-center gap-1 px-4">
+          <Link href={`/races/${slug}?search=`} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded transition-colors duration-300 ${linkColor}`}>
+            <User className="w-4 h-4" />
+            {t('race.myAthletes')}
+          </Link>
+          <Link href={`/races/${slug}?search=`} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded transition-colors duration-300 ${linkColor}`}>
+            <Search className="w-4 h-4" />
+            {t('race.findAthletes')}
+          </Link>
+        </div>
 
-        {/* Find a runner */}
-        <Link
-          href={`/races/${slug}?search=`}
-          className={`hidden md:flex items-center gap-2 text-sm transition-colors duration-300 ${
-            scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white'
-          }`}
-        >
-          <User className="w-4 h-4" />
-          {t('race.myAthletes')}
-        </Link>
-        <Link
-          href={`/races/${slug}?search=`}
-          className={`hidden md:flex items-center gap-2 text-sm transition-colors duration-300 ${
-            scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white'
-          }`}
-        >
-          <Search className="w-4 h-4" />
-          {t('race.findAthletes')}
-        </Link>
+        {/* Sponsor tile — far right, full height, angled left edge */}
+        {sponsors.length > 0 && (
+          <div
+            className={`hidden md:flex items-center justify-center shrink-0 relative overflow-hidden transition-colors duration-300 ${sponsorBg}`}
+            style={{ width: 200, clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)' }}
+          >
+            <div className="relative overflow-hidden flex items-center justify-center" style={{ width: 160, height: 44, paddingLeft: 20 }}>
+              {sponsors.map((s, i) => (
+                <div
+                  key={s._id || s.name}
+                  className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
+                    i === currentSponsor ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+                  }`}
+                >
+                  {s.logoUrl ? (
+                    <img
+                      src={s.logoUrl}
+                      alt={s.name}
+                      className="h-9 w-auto max-w-[140px] object-contain"
+                      style={{ filter: 'brightness(0) invert(1)' }}
+                      draggable={false}
+                    />
+                  ) : (
+                    <span className="text-sm font-bold text-white tracking-wide">{s.name}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            {sponsors.length > 1 && (
+              <div className="absolute bottom-1.5 right-3 flex gap-1">
+                {sponsors.map((_, i) => (
+                  <span key={i} className={`block rounded-full transition-all duration-300 ${i === currentSponsor ? 'w-3 h-1 bg-white' : 'w-1 h-1 bg-white/40'}`} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
