@@ -618,6 +618,10 @@ export class RaceResultService {
    * Computes rankDelta + isPaceAlert on splits (BR-01, BR-02).
    */
   async getAthleteDetail(raceId: string, bib: string) {
+    const cacheKey = `athlete:${raceId}:${bib}`;
+    const cached = await this.getFromCache<any>(cacheKey);
+    if (cached) return cached;
+
     const result = await this.resultModel
       .findOne({ raceId, bib })
       .lean()
@@ -658,12 +662,16 @@ export class RaceResultService {
       });
     }
 
-    return {
+    const response = {
       ...mapped,
       _id: result._id?.toString(),
       editHistory: result.editHistory ?? [],
       isManuallyEdited: result.isManuallyEdited ?? false,
     };
+
+    // Cache 5 minutes — athlete detail is stable (cleared on edit)
+    await this.setCache(cacheKey, response, 300);
+    return response;
   }
 
   /**
@@ -973,6 +981,7 @@ export class RaceResultService {
           },
         ).exec();
         await this.purgeCache(claim.courseId);
+        await this.redis.del(`athlete:${result.raceId}:${claim.bib}`);
         await this.claimModel.updateOne({ _id: claimId }, { $set: { autoUpdated: true } }).exec();
       }
     }
@@ -1043,8 +1052,11 @@ export class RaceResultService {
       { new: true },
     ).lean().exec();
 
-    // Invalidate cache
-    if (updated) await this.purgeCache(updated.courseId);
+    // Invalidate course-level cache + athlete-level cache
+    if (updated) {
+      await this.purgeCache(updated.courseId);
+      await this.redis.del(`athlete:${updated.raceId}:${updated.bib}`);
+    }
 
     return {
       success: true,

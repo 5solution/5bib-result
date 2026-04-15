@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import { firstValueFrom } from 'rxjs';
 import { Race, RaceDocument } from './schemas/race.schema';
 import { SearchRacesDto } from './dto/search-races.dto';
@@ -18,7 +20,30 @@ export class RacesService {
   constructor(
     @InjectModel(Race.name) private readonly raceModel: Model<RaceDocument>,
     private readonly httpService: HttpService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
+
+  private async getRaceFromCache(key: string): Promise<any | null> {
+    try {
+      const raw = await this.redis.get(key);
+      if (raw) return JSON.parse(raw);
+    } catch { /* Redis down — fall through to DB */ }
+    return null;
+  }
+
+  private async setRaceCache(key: string, value: any, ttl = 300): Promise<void> {
+    try {
+      await this.redis.set(key, JSON.stringify(value), 'EX', ttl);
+    } catch { /* Redis down — non-fatal */ }
+  }
+
+  private async invalidateRaceCache(id: string, slug?: string): Promise<void> {
+    try {
+      const keys = [`race:id:${id}`];
+      if (slug) keys.push(`race:slug:${slug}`);
+      await this.redis.del(...keys);
+    } catch { /* ignore */ }
+  }
 
   // ─── Admin CRUD ──────────────────────────────────────────────
 
@@ -54,6 +79,7 @@ export class RacesService {
       throw new NotFoundException('Race not found');
     }
 
+    await this.invalidateRaceCache(id, race.slug);
     return { data: race, success: true };
   }
 
@@ -64,6 +90,7 @@ export class RacesService {
       throw new NotFoundException('Race not found');
     }
 
+    await this.invalidateRaceCache(id, race.slug);
     return { data: race, success: true, message: 'Race deleted' };
   }
 
@@ -94,6 +121,7 @@ export class RacesService {
       .lean()
       .exec();
 
+    if (updated) await this.invalidateRaceCache(id, updated.slug);
     return { data: updated, success: true };
   }
 
@@ -120,6 +148,7 @@ export class RacesService {
       throw new NotFoundException('Race not found');
     }
 
+    await this.invalidateRaceCache(raceId, race.slug);
     return { data: race, success: true };
   }
 
@@ -144,6 +173,7 @@ export class RacesService {
       throw new NotFoundException('Race or course not found');
     }
 
+    await this.invalidateRaceCache(raceId, race.slug);
     return { data: race, success: true };
   }
 
@@ -161,6 +191,7 @@ export class RacesService {
       throw new NotFoundException('Race not found');
     }
 
+    await this.invalidateRaceCache(raceId, race.slug);
     return { data: race, success: true, message: 'Course removed' };
   }
 
@@ -227,37 +258,44 @@ export class RacesService {
   }
 
   async getRaceById(id: string, allowDraft = false) {
+    const cacheKey = `race:id:${id}`;
+    const cached = await this.getRaceFromCache(cacheKey);
+    if (cached && (!cached.status || allowDraft || cached.status !== 'draft')) {
+      if (!allowDraft && cached.status === 'draft') {
+        return { data: null, success: false, message: 'Race not found' };
+      }
+      return { data: cached, success: true };
+    }
+
     const race = await this.raceModel.findById(id).lean().exec();
 
     if (!race || (!allowDraft && race.status === 'draft')) {
-      return {
-        data: null,
-        success: false,
-        message: 'Race not found',
-      };
+      return { data: null, success: false, message: 'Race not found' };
     }
 
-    return {
-      data: race,
-      success: true,
-    };
+    await this.setRaceCache(cacheKey, race, 300);
+    return { data: race, success: true };
   }
 
   async getRaceBySlug(slug: string, allowDraft = false) {
+    const cacheKey = `race:slug:${slug}`;
+    const cached = await this.getRaceFromCache(cacheKey);
+    if (cached) {
+      if (!allowDraft && cached.status === 'draft') {
+        return { data: null, success: false, message: 'Race not found' };
+      }
+      return { data: cached, success: true };
+    }
+
     const race = await this.raceModel.findOne({ slug }).lean().exec();
 
     if (!race || (!allowDraft && race.status === 'draft')) {
-      return {
-        data: null,
-        success: false,
-        message: 'Race not found',
-      };
+      return { data: null, success: false, message: 'Race not found' };
     }
 
-    return {
-      data: race,
-      success: true,
-    };
+    // Cache including draft races (allowDraft check is at read time)
+    await this.setRaceCache(cacheKey, race, 300);
+    return { data: race, success: true };
   }
 
   async getRaceByProductId(productId: string) {

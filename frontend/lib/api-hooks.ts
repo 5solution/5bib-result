@@ -47,6 +47,7 @@ export function useRaces(params?: {
       if (result.error) throw result.error;
       return result.data;
     },
+    staleTime: 60 * 1000, // 1 min — race list rarely changes mid-session
   });
 }
 
@@ -61,6 +62,7 @@ export function useRaceBySlug(slug: string, options?: { enabled?: boolean }) {
       return result.data;
     },
     enabled: options?.enabled ?? !!slug,
+    staleTime: 5 * 60 * 1000, // 5 min — race metadata is stable
   });
 }
 
@@ -90,6 +92,8 @@ export function useRaceResults(params: {
     },
     enabled: options?.enabled ?? (!!params.course_id && !!params.raceId),
     refetchInterval: options?.refetchInterval,
+    // Only cache when not polling (live race) — otherwise let refetchInterval drive freshness
+    staleTime: options?.refetchInterval ? 0 : 60 * 1000,
   });
 }
 
@@ -104,6 +108,7 @@ export function useAthleteDetail(raceId: string, bib: string, options?: { enable
       return result.data;
     },
     enabled: options?.enabled ?? (!!raceId && !!bib),
+    staleTime: 5 * 60 * 1000, // 5 min — athlete detail is stable
   });
 }
 
@@ -133,6 +138,7 @@ export function useFilterOptions(courseId: string, options?: { enabled?: boolean
       return result.data;
     },
     enabled: options?.enabled ?? !!courseId,
+    staleTime: 10 * 60 * 1000, // 10 min — filter options are very stable
   });
 }
 
@@ -148,6 +154,7 @@ export function useCourseStats(courseId: string, options?: { enabled?: boolean; 
     },
     enabled: options?.enabled ?? !!courseId,
     refetchInterval: options?.refetchInterval,
+    staleTime: options?.refetchInterval ? 0 : 60 * 1000,
   });
 }
 
@@ -163,6 +170,7 @@ export function useLeaderboard(courseId: string, limit?: number) {
       return result.data;
     },
     enabled: !!courseId,
+    staleTime: 30 * 1000, // 30s — leaderboard can change for live races
   });
 }
 
