@@ -394,6 +394,17 @@ export type UpdateStatusDto = {
     status: 'draft' | 'pre_race' | 'live' | 'ended';
 };
 
+export type ForceUpdateStatusDto = {
+    /**
+     * Target lifecycle status (admin override — bypasses forward-only rule)
+     */
+    status: 'draft' | 'pre_race' | 'live' | 'ended';
+    /**
+     * Reason for override (audit trail, min 10 chars). Required because this bypasses the state machine.
+     */
+    reason: string;
+};
+
 export type CheckpointServicesDto = {
     water?: boolean;
     food?: boolean;
@@ -745,6 +756,79 @@ export type UpdateSponsorDto = {
      * Active status
      */
     isActive?: boolean;
+};
+
+export type RaceCardDto = {
+    slug: string;
+    name: string;
+    coverImageUrl: string;
+    status: 'live' | 'upcoming' | 'ended';
+    /**
+     * ISO date string (from Race.startDate)
+     */
+    eventDate: string;
+    courses: Array<string>;
+    /**
+     * 0 if race has not ended yet
+     */
+    totalFinishers: number;
+};
+
+export type PaginatedRaceDto = {
+    items: Array<RaceCardDto>;
+    total: number;
+    page: number;
+    limit: number;
+};
+
+export type HomepageSummaryDto = {
+    totalRaces: number;
+    totalAthletes: number;
+    totalResults: number;
+    liveRaces: Array<RaceCardDto>;
+    upcomingRaces: Array<RaceCardDto>;
+    endedRaces: PaginatedRaceDto;
+};
+
+export type HomepageSummaryResponseDto = {
+    data: HomepageSummaryDto;
+    success: boolean;
+    /**
+     * Redis cache status for this request
+     */
+    cache: 'HIT' | 'MISS';
+};
+
+export type EndedRacesResponseDto = {
+    data: PaginatedRaceDto;
+    success: boolean;
+    cache: 'HIT' | 'MISS';
+};
+
+export type RaceSearchItemDto = {
+    slug: string;
+    name: string;
+    eventDate: string;
+    status: 'live' | 'upcoming' | 'ended';
+};
+
+export type BibSearchItemDto = {
+    raceSlug: string;
+    raceName: string;
+    raceDate: string;
+    course: string;
+    bib: string;
+    athleteName: string;
+};
+
+export type SearchResultDto = {
+    races: Array<RaceSearchItemDto>;
+    bibs: Array<BibSearchItemDto>;
+};
+
+export type SearchResponseDto = {
+    data: SearchResultDto;
+    success: boolean;
 };
 
 export type MerchantControllerFindAllData = {
@@ -1959,6 +2043,33 @@ export type RacesControllerUpdateStatusResponses = {
     200: unknown;
 };
 
+export type RacesControllerForceUpdateStatusData = {
+    body: ForceUpdateStatusDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/races/{id}/status/force';
+};
+
+export type RacesControllerForceUpdateStatusErrors = {
+    /**
+     * Invalid reason (min 10 chars)
+     */
+    400: unknown;
+    /**
+     * Race not found
+     */
+    404: unknown;
+};
+
+export type RacesControllerForceUpdateStatusResponses = {
+    /**
+     * Status overridden, audit entry appended
+     */
+    200: unknown;
+};
+
 export type RacesControllerAddCourseData = {
     body: AddCourseDto;
     path: {
@@ -2845,3 +2956,54 @@ export type SponsorsControllerUpdateResponses = {
      */
     200: unknown;
 };
+
+export type HomepageControllerGetSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/homepage/summary';
+};
+
+export type HomepageControllerGetSummaryResponses = {
+    200: HomepageSummaryResponseDto;
+};
+
+export type HomepageControllerGetSummaryResponse = HomepageControllerGetSummaryResponses[keyof HomepageControllerGetSummaryResponses];
+
+export type HomepageControllerGetEndedRacesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/homepage/ended';
+};
+
+export type HomepageControllerGetEndedRacesResponses = {
+    200: EndedRacesResponseDto;
+};
+
+export type HomepageControllerGetEndedRacesResponse = HomepageControllerGetEndedRacesResponses[keyof HomepageControllerGetEndedRacesResponses];
+
+export type SearchControllerSearchData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Query string — minimum 2 chars. For type=bib, must be digits only.
+         */
+        q: string;
+        /**
+         * Explicit search type. If omitted, the server auto-detects (digits → bib, else race).
+         */
+        type?: 'race' | 'bib';
+    };
+    url: '/api/search';
+};
+
+export type SearchControllerSearchResponses = {
+    200: SearchResponseDto;
+};
+
+export type SearchControllerSearchResponse = SearchControllerSearchResponses[keyof SearchControllerSearchResponses];

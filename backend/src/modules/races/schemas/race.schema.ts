@@ -117,3 +117,10 @@ export class Race {
 }
 
 export const RaceSchema = SchemaFactory.createForClass(Race);
+
+// Compound index for homepage queries: filter by status, sort by startDate desc.
+// Covers both "live/pre_race" lookups and "ended" grid pagination without full collection scan.
+RaceSchema.index({ status: 1, startDate: -1 });
+
+// Text search helper for global race name search (fuzzy name match on /api/search).
+RaceSchema.index({ title: 'text', slug: 'text' });

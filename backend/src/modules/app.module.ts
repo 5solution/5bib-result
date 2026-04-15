@@ -12,6 +12,8 @@ import { AuthModule } from './auth/auth.module';
 import { UploadModule } from './upload/upload.module';
 import { SponsorsModule } from './sponsors/sponsors.module';
 import { NotificationModule } from './notification/notification.module';
+import { HomepageModule } from './homepage/homepage.module';
+import { SearchModule } from './search/search.module';
 import { MerchantModule } from './merchant/merchant.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -59,6 +61,8 @@ const platformDbModules = env.platformDb.host
     UploadModule,
     SponsorsModule,
     NotificationModule,
+    HomepageModule,
+    SearchModule,
   ],
 })
 export class AppModule {}
