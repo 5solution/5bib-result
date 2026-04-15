@@ -36,10 +36,16 @@ describe('RacesController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should call searchRaces', async () => {
+  it('should call searchRaces (anonymous — isPrivileged=false)', async () => {
     const mockReq = { user: undefined } as any;
     await controller.searchRaces({ page: 0, pageSize: 10 }, mockReq);
-    expect(mockRacesService.searchRaces).toHaveBeenCalled();
+    expect(mockRacesService.searchRaces).toHaveBeenCalledWith({ page: 0, pageSize: 10 }, false);
+  });
+
+  it('should call searchRaces (admin — isPrivileged=true)', async () => {
+    const mockReq = { user: { userId: 'u1', sub: 'u1', email: 'a@b.c', role: 'admin' } } as any;
+    await controller.searchRaces({ page: 0, pageSize: 10 }, mockReq);
+    expect(mockRacesService.searchRaces).toHaveBeenCalledWith({ page: 0, pageSize: 10 }, true);
   });
 
   it('should call getRaceById', async () => {

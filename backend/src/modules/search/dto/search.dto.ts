@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { IsIn, IsOptional, IsString, Length, Matches, ValidateIf } from 'class-validator';
 
 export type SearchType = 'race' | 'bib';
 
@@ -13,6 +13,8 @@ export class SearchQueryDto {
   @Length(2, 64, {
     message: 'q must be between 2 and 64 characters',
   })
+  @ValidateIf((o: SearchQueryDto) => o.type === 'bib')
+  @Matches(/^\d+$/, { message: 'q must be digits only when type=bib' })
   q!: string;
 
   @ApiPropertyOptional({

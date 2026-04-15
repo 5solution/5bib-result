@@ -14,6 +14,29 @@ import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 
+/**
+ * Top-level fields stripped from public race responses.
+ * Extend here — the generic constraint and Omit type are derived automatically.
+ *
+ * - _id / __v          → Mongo internals
+ * - productId          → internal upstream ID (5BIB platform)
+ * - externalRaceId     → internal upstream ID
+ * - rawData            → raw timing-provider response
+ * - cacheTtlSeconds    → internal cache config
+ * - statusHistory      → admin audit trail (changedBy userIds + reasons)
+ */
+const STRIPPED_RACE_FIELDS = [
+  '_id', '__v',
+  'productId', 'externalRaceId',
+  'rawData', 'cacheTtlSeconds',
+  'statusHistory',
+] as const;
+
+type StrippedRaceKey = typeof STRIPPED_RACE_FIELDS[number];
+
+/** Course fields that are internal sync config — stripped from public courses[]. */
+const STRIPPED_COURSE_FIELDS = ['apiUrl', 'apiFormat', 'importStatus'] as const;
+
 @Injectable()
 export class RacesService {
   private readonly logger = new Logger(RacesService.name);
@@ -47,48 +70,29 @@ export class RacesService {
   }
 
   /**
-   * Strip internal + sensitive fields from a lean race object before returning
-   * on PUBLIC endpoints. Admin callers opt out via allowDraft=true (they need
-   * _id for edit/delete, statusHistory for audit UI, rawData for sync debug).
-   *
-   * Stripped for public:
-   *   - _id, __v            → Mongo internals
-   *   - productId           → internal upstream identifier (5BIB platform)
-   *   - externalRaceId      → internal upstream identifier
-   *   - rawData             → raw upstream timing provider response
-   *   - cacheTtlSeconds     → internal cache config
-   *   - statusHistory       → admin audit trail (contains changedBy userIds + reasons)
-   *   - apiUrl, apiFormat   → internal course-level sync config (on nested courses)
+   * Strip STRIPPED_RACE_FIELDS from a lean race object for PUBLIC endpoints.
+   * Admin callers pass isPrivileged=true to bypass (they need _id, rawData, etc.).
+   * Also scrubs STRIPPED_COURSE_FIELDS from nested courses[].
    */
-  private stripRacePrivateFields<
-    T extends {
-      _id?: unknown;
-      __v?: unknown;
-      productId?: unknown;
-      externalRaceId?: unknown;
-      rawData?: unknown;
-      cacheTtlSeconds?: unknown;
-      statusHistory?: unknown;
-      courses?: unknown;
-    },
-  >(race: T): Omit<T, '_id' | '__v' | 'productId' | 'externalRaceId' | 'rawData' | 'cacheTtlSeconds' | 'statusHistory'> {
-    const {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _id, __v, productId, externalRaceId, rawData, cacheTtlSeconds, statusHistory,
-      courses,
-      ...publicRace
-    } = race;
+  private stripRacePrivateFields<T extends Partial<Record<StrippedRaceKey, unknown>> & { courses?: unknown }>(
+    race: T,
+  ): Omit<T, StrippedRaceKey> {
+    const result = Object.fromEntries(
+      Object.entries(race).filter(([k]) => !(STRIPPED_RACE_FIELDS as readonly string[]).includes(k)),
+    ) as Omit<T, StrippedRaceKey>;
 
-    // Also scrub course-level apiUrl/apiFormat (internal sync config).
-    const publicCourses = Array.isArray(courses)
-      ? courses.map((c: Record<string, unknown>) => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { apiUrl, apiFormat, importStatus, ...publicCourse } = c;
-          return publicCourse;
-        })
-      : courses;
+    // Also scrub course-level internal fields.
+    if (Array.isArray((race as Record<string, unknown>).courses)) {
+      (result as Record<string, unknown>).courses = (
+        (race as Record<string, unknown>).courses as Record<string, unknown>[]
+      ).map((c) =>
+        Object.fromEntries(
+          Object.entries(c).filter(([k]) => !(STRIPPED_COURSE_FIELDS as readonly string[]).includes(k)),
+        ),
+      );
+    }
 
-    return { ...publicRace, courses: publicCourses } as Omit<T, '_id' | '__v' | 'productId' | 'externalRaceId' | 'rawData' | 'cacheTtlSeconds' | 'statusHistory'>;
+    return result;
   }
 
   // ─── Admin CRUD ──────────────────────────────────────────────
@@ -290,7 +294,7 @@ export class RacesService {
 
   // ─── Queries ─────────────────────────────────────────────────
 
-  async searchRaces(dto: SearchRacesDto, allowDraft = false) {
+  async searchRaces(dto: SearchRacesDto, isPrivileged = false) {
     const {
       title,
       status,
@@ -309,7 +313,7 @@ export class RacesService {
 
     // Draft visibility is ADMIN-ONLY. Public callers cannot enumerate drafts
     // regardless of what they pass in ?status=. (C-02 regression guard.)
-    if (!allowDraft) {
+    if (!isPrivileged) {
       if (status && status !== 'all' && status !== 'draft') {
         filter.status = status;
       } else {
@@ -349,7 +353,7 @@ export class RacesService {
     const totalPages = Math.ceil(totalItems / pageSize);
 
     // Strip internal/sensitive fields from every item on public responses.
-    const publicList = allowDraft ? list : list.map((r) => this.stripRacePrivateFields(r));
+    const publicList = isPrivileged ? list : list.map((r) => this.stripRacePrivateFields(r));
 
     return {
       data: {
@@ -362,48 +366,48 @@ export class RacesService {
     };
   }
 
-  async getRaceById(id: string, allowDraft = false) {
+  async getRaceById(id: string, isPrivileged = false) {
     const cacheKey = `race:id:${id}`;
     const cached = await this.getRaceFromCache(cacheKey);
-    if (cached && (!cached.status || allowDraft || cached.status !== 'draft')) {
-      if (!allowDraft && cached.status === 'draft') {
+    if (cached && (!cached.status || isPrivileged || cached.status !== 'draft')) {
+      if (!isPrivileged && cached.status === 'draft') {
         return { data: null, success: false, message: 'Race not found' };
       }
-      const payload = allowDraft ? cached : this.stripRacePrivateFields(cached);
+      const payload = isPrivileged ? cached : this.stripRacePrivateFields(cached);
       return { data: payload, success: true };
     }
 
     const race = await this.raceModel.findById(id).lean().exec();
 
-    if (!race || (!allowDraft && race.status === 'draft')) {
+    if (!race || (!isPrivileged && race.status === 'draft')) {
       return { data: null, success: false, message: 'Race not found' };
     }
 
     await this.setRaceCache(cacheKey, race, 300);
-    const payload = allowDraft ? race : this.stripRacePrivateFields(race);
+    const payload = isPrivileged ? race : this.stripRacePrivateFields(race);
     return { data: payload, success: true };
   }
 
-  async getRaceBySlug(slug: string, allowDraft = false) {
+  async getRaceBySlug(slug: string, isPrivileged = false) {
     const cacheKey = `race:slug:${slug}`;
     const cached = await this.getRaceFromCache(cacheKey);
     if (cached) {
-      if (!allowDraft && cached.status === 'draft') {
+      if (!isPrivileged && cached.status === 'draft') {
         return { data: null, success: false, message: 'Race not found' };
       }
-      const payload = allowDraft ? cached : this.stripRacePrivateFields(cached);
+      const payload = isPrivileged ? cached : this.stripRacePrivateFields(cached);
       return { data: payload, success: true };
     }
 
     const race = await this.raceModel.findOne({ slug }).lean().exec();
 
-    if (!race || (!allowDraft && race.status === 'draft')) {
+    if (!race || (!isPrivileged && race.status === 'draft')) {
       return { data: null, success: false, message: 'Race not found' };
     }
 
-    // Cache including draft races (allowDraft check is at read time)
+    // Cache including draft races (isPrivileged check is at read time)
     await this.setRaceCache(cacheKey, race, 300);
-    const payload = allowDraft ? race : this.stripRacePrivateFields(race);
+    const payload = isPrivileged ? race : this.stripRacePrivateFields(race);
     return { data: payload, success: true };
   }
 
