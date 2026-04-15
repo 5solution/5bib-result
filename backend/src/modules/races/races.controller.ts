@@ -10,7 +10,6 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
 import {
   ApiOperation,
   ApiResponse,
@@ -28,6 +27,7 @@ import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
 
 @ApiTags('Races')
 @Controller('races')
@@ -37,6 +37,7 @@ export class RacesController {
   // ─── Search / Read ────────────────────────────────────────────
 
   @Get()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: 'Search and list races with filters and pagination',
   })
@@ -59,8 +60,9 @@ export class RacesController {
       },
     },
   })
-  async searchRaces(@Query() dto: SearchRacesDto) {
-    return this.racesService.searchRaces(dto);
+  async searchRaces(@Query() dto: SearchRacesDto, @Req() req: AuthenticatedRequest) {
+    const isAdmin = !!req.user;
+    return this.racesService.searchRaces(dto, isAdmin);
   }
 
   @Get('slug/:slug')
@@ -69,8 +71,8 @@ export class RacesController {
   @ApiParam({ name: 'slug', type: 'string', description: 'Race slug' })
   @ApiResponse({ status: 200, description: 'Returns race details' })
   @ApiResponse({ status: 404, description: 'Race not found' })
-  async getRaceBySlug(@Param('slug') slug: string, @Req() req: Request) {
-    const isAdmin = !!(req as any).user;
+  async getRaceBySlug(@Param('slug') slug: string, @Req() req: AuthenticatedRequest) {
+    const isAdmin = !!req.user;
     return this.racesService.getRaceBySlug(slug, isAdmin);
   }
 
@@ -84,8 +86,8 @@ export class RacesController {
   })
   @ApiResponse({ status: 200, description: 'Returns race details with courses' })
   @ApiResponse({ status: 404, description: 'Race not found' })
-  async getRaceById(@Param('id') id: string, @Req() req: Request) {
-    const isAdmin = !!(req as any).user;
+  async getRaceById(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    const isAdmin = !!req.user;
     return this.racesService.getRaceById(id, isAdmin);
   }
 
@@ -160,10 +162,9 @@ export class RacesController {
   async forceUpdateStatus(
     @Param('id') id: string,
     @Body() dto: ForceUpdateStatusDto,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
-    const user = (req as any).user;
-    const adminId = user?.userId ?? user?.sub ?? 'unknown';
+    const adminId = req.user?.userId ?? req.user?.sub ?? 'unknown';
     return this.racesService.forceUpdateStatus(id, dto, adminId);
   }
 

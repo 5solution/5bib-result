@@ -35,7 +35,7 @@ export class RaceResult {
 
   @Prop({ required: true, index: true }) raceId: string;
   @Prop({ required: true, index: true }) courseId: string;
-  @Prop({ required: true }) bib: string;
+  @Prop({ required: true, index: true }) bib: string;
   @Prop() name: string;
   @Prop() distance: string;
 

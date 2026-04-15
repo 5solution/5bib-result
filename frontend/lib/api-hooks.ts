@@ -17,6 +17,9 @@ import {
   raceResultControllerUploadClaimAttachment,
   sponsorsControllerFindAllActive,
   sponsorsControllerFindByRaceId,
+  homepageControllerGetSummary,
+  homepageControllerGetEndedRaces,
+  searchControllerSearch,
 } from './api-generated';
 
 import type {
@@ -171,6 +174,66 @@ export function useLeaderboard(courseId: string, limit?: number) {
     },
     enabled: !!courseId,
     staleTime: 30 * 1000, // 30s — leaderboard can change for live races
+  });
+}
+
+// ─── Homepage (PRD v1.1) ────────────────────────────────────────
+
+/**
+ * Homepage summary — stats + live/upcoming/ended(page 1).
+ * Cached server-side (Redis 300s) + client-side (staleTime 5m) per PRD.
+ */
+export function useHomepageSummary() {
+  return useQuery({
+    queryKey: ['homepage', 'summary'],
+    queryFn: async () => {
+      const result = await homepageControllerGetSummary();
+      if (result.error) throw result.error;
+      return result.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Paginated ended races — used by "Xem thêm" button.
+ * `enabled` so page 1 doesn't double-fetch (summary covers it).
+ */
+export function useEndedRacesPage(page: number, limit = 9) {
+  return useQuery({
+    queryKey: ['homepage', 'ended', page, limit],
+    queryFn: async () => {
+      const result = await homepageControllerGetEndedRaces({
+        query: { page, limit },
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+    enabled: page >= 2,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+/**
+ * Global search — race name fuzzy OR exact BIB. Activates at ≥2 chars.
+ * The caller is responsible for debouncing (300ms per PRD).
+ */
+export function useHomepageSearch(
+  query: string,
+  type: 'race' | 'bib' | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['homepage-search', query, type],
+    queryFn: async () => {
+      const result = await searchControllerSearch({
+        query: { q: query, type },
+      });
+      if (result.error) throw result.error;
+      return result.data;
+    },
+    enabled: (options?.enabled ?? true) && query.trim().length >= 2,
+    staleTime: 60 * 1000,
   });
 }
 
