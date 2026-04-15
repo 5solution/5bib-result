@@ -68,8 +68,7 @@ export default function Header() {
             className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
             style={{ width: 200, clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)', paddingLeft: 36, paddingRight: 16 }}
           >
-              <Image src="/logo_5BIB_white.png" alt="5BIB" width={48} height={14} className="h-[14px] w-auto shrink-0" />
-            <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">Embracing Challenges</span>
+              <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">Embracing Challenges</span>
             <ChevronRight className="w-4 h-4 ml-auto shrink-0" strokeWidth={2.5} />
           </Link>
 
