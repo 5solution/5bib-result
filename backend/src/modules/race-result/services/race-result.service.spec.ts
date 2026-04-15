@@ -155,6 +155,7 @@ describe('RaceResultService', () => {
       mockResultModel.exec.mockResolvedValue([mockDoc, mockDoc2]);
 
       const result = await service.getRaceResults({
+        raceId: 'test-race',
         course_id: 'c708',
         pageNo: 1,
         pageSize: 10,
@@ -173,6 +174,7 @@ describe('RaceResultService', () => {
       mockResultModel.exec.mockResolvedValue([mockDoc2]);
 
       const result = await service.getRaceResults({
+        raceId: 'test-race',
         gender: 'Female',
         pageNo: 1,
         pageSize: 10,
@@ -190,6 +192,7 @@ describe('RaceResultService', () => {
       mockResultModel.exec.mockResolvedValue([mockDoc]);
 
       await service.getRaceResults({
+        raceId: 'test-race',
         category: 'Male 30-39',
         pageNo: 1,
         pageSize: 10,
@@ -206,6 +209,7 @@ describe('RaceResultService', () => {
       mockResultModel.exec.mockResolvedValue([mockDoc]);
 
       await service.getRaceResults({
+        raceId: 'test-race',
         name: 'Nguyen',
         pageNo: 1,
         pageSize: 10,
@@ -225,6 +229,7 @@ describe('RaceResultService', () => {
       mockResultModel.exec.mockResolvedValue(docs);
 
       const result = await service.getRaceResults({
+        raceId: 'test-race',
         pageNo: 1,
         pageSize: 2,
         sortField: 'OverallRank',
@@ -240,6 +245,7 @@ describe('RaceResultService', () => {
       mockResultModel.exec.mockResolvedValue([mockDoc]);
 
       await service.getRaceResults({
+        raceId: 'test-race',
         pageNo: 1,
         pageSize: 10,
         sortField: 'ChipTime',
@@ -254,6 +260,7 @@ describe('RaceResultService', () => {
       mockRedis.get.mockResolvedValue(JSON.stringify(cachedPayload));
 
       const result = await service.getRaceResults({
+        raceId: 'test-race',
         course_id: 'c708',
         pageNo: 1,
         pageSize: 10,
@@ -494,6 +501,7 @@ describe('RaceResultService', () => {
         courseId: 'c708',
         bib: '1001',
         name: 'Nguyen Van A',
+        phone: '0912345678',
         email: 'runner@example.com',
         description: 'My time is wrong',
       };

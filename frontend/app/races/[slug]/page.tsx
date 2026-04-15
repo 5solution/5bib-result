@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useTranslation } from 'react-i18next';
 import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock, Mountain, Timer, Route, Globe } from 'lucide-react';
 import LiveTimer from '@/components/LiveTimer';
-import { useRaceBySlug } from '@/lib/api-hooks';
+import { useRaceBySlug, useSponsors } from '@/lib/api-hooks';
 import { raceResultControllerGetRaceResults, raceResultControllerGetCourseStats } from '@/lib/api-generated';
 
 const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
@@ -62,6 +62,7 @@ interface RaceResult {
   race_id: number;
   course_id: string;
   distance: string;
+  avatarUrl?: string;
 }
 
 const COURSE_IMAGES = [
@@ -117,6 +118,7 @@ export default function RaceDetailPage() {
   const { t } = useTranslation();
   const params = useParams();
   const slug = params.slug as string;
+  const router = useRouter();
 
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const [courseResults, setCourseResults] = useState<Record<string, RaceResult[]>>({});
@@ -160,48 +162,59 @@ export default function RaceDetailPage() {
 
   useEffect(() => {
     if (!race || race.status === 'upcoming') return; // Don't fetch results for upcoming races
-    const fetchResults = async () => {
-      const results: Record<string, RaceResult[]> = {};
-      const statsMap: Record<string, { starters: number; finishers: number; dnf: number; nationalityCount: number }> = {};
-      for (const course of race.courses) {
-        try {
-          const [res, statsRes] = await Promise.all([
-            raceResultControllerGetRaceResults({
-              query: {
-                course_id: course.id,
-                pageNo: 1,
-                pageSize: 10,
-                sortField: 'OverallRank',
-                sortDirection: 'ASC',
-              },
-            }),
-            raceResultControllerGetCourseStats({
-              path: { courseId: course.id },
-            }),
-          ]);
-          const list = (res.data as any)?.data ?? res.data;
-          const resultArr = Array.isArray(list) ? list : [];
-          results[course.id] = resultArr;
-          const stats = (statsRes.data as any)?.data ?? statsRes.data;
-          // Use Started/Finished/DNF from first result record (provided by external API)
-          const firstResult = resultArr[0] as any;
-          const started = firstResult?.Started ?? 0;
-          const finished = firstResult?.Finished ?? 0;
-          const dnf = firstResult?.DNF ?? 0;
-          statsMap[course.id] = {
-            starters: started,
-            finishers: finished,
-            dnf,
+    const raceId = String(race.id);
+    const courses = race.courses;
+
+    courses.forEach(async (course) => {
+      try {
+        const [menRes, womenRes, statsRes] = await Promise.all([
+          raceResultControllerGetRaceResults({
+            query: {
+              raceId,
+              course_id: course.id,
+              gender: 'Male',
+              pageNo: 1,
+              pageSize: 3,
+              sortField: 'GenderRank',
+              sortDirection: 'ASC',
+            },
+          }),
+          raceResultControllerGetRaceResults({
+            query: {
+              raceId,
+              course_id: course.id,
+              gender: 'Female',
+              pageNo: 1,
+              pageSize: 3,
+              sortField: 'GenderRank',
+              sortDirection: 'ASC',
+            },
+          }),
+          raceResultControllerGetCourseStats({
+            path: { courseId: course.id },
+          }),
+        ]);
+        const menList = (menRes.data as any)?.data ?? menRes.data;
+        const womenList = (womenRes.data as any)?.data ?? womenRes.data;
+        const resultArr = [
+          ...(Array.isArray(menList) ? menList : []),
+          ...(Array.isArray(womenList) ? womenList : []),
+        ];
+        const stats = (statsRes.data as any)?.data ?? statsRes.data;
+        setCourseResults(prev => ({ ...prev, [course.id]: resultArr }));
+        setCourseStatsMap(prev => ({
+          ...prev,
+          [course.id]: {
+            starters: stats?.started ?? stats?.total ?? 0,
+            finishers: stats?.finished ?? 0,
+            dnf: stats?.dnf ?? 0,
             nationalityCount: stats?.nationalityCount ?? 0,
-          };
-        } catch {
-          results[course.id] = [];
-        }
+          },
+        }));
+      } catch {
+        setCourseResults(prev => ({ ...prev, [course.id]: [] }));
       }
-      setCourseResults(results);
-      setCourseStatsMap(statsMap);
-    };
-    fetchResults();
+    });
   }, [race]);
 
   const formatDateRange = (start: string, end?: string) => {
@@ -384,12 +397,28 @@ export default function RaceDetailPage() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
 
-                    {/* Race finished banner */}
+                    {/* Race status banner */}
                     <div className="absolute bottom-0 left-0 right-0">
-                      <div className={`px-4 py-2.5 text-center text-sm font-bold text-white uppercase ${
-                        race.status === 'live' ? 'bg-gradient-to-r from-rose-700 via-red-600 to-amber-600' : race.status === 'completed' ? 'bg-red-700' : 'bg-gradient-to-r from-[#2563eb] to-[#1faaff]'
+                      <div className={`px-4 py-2.5 text-center text-sm font-bold text-white uppercase tracking-wide ${
+                        race.status === 'live'
+                          ? 'bg-emerald-600'
+                          : race.status === 'completed'
+                            ? 'bg-red-700'
+                            : 'bg-slate-600'
                       }`}>
-                        {race.status === 'live' ? '🔴 ' + t('status.live') : race.status === 'completed' ? t('status.completed') : t('status.upcoming')}
+                        {race.status === 'live' && (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                            ĐANG DIỄN RA
+                          </span>
+                        )}
+                        {race.status === 'completed' && (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-white" />
+                            RACE FINISHED
+                          </span>
+                        )}
+                        {race.status === 'upcoming' && 'SẮP DIỄN RA'}
                       </div>
                       {courseStatsMap[course.id] && (courseStatsMap[course.id]?.starters ?? 0) > 0 && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">
@@ -420,7 +449,7 @@ export default function RaceDetailPage() {
                       </p>
 
                       {/* Stats grid */}
-                      <div className={`grid ${course.elevation ? 'grid-cols-3' : 'grid-cols-2'} gap-4 mt-4`}>
+                      <div className="grid grid-cols-3 gap-4 mt-4">
                         <div>
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.startTime')}</p>
                           <p className="text-lg font-bold text-slate-900">{course.startTime || '-'}</p>
@@ -429,13 +458,37 @@ export default function RaceDetailPage() {
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">COT</p>
                           <p className="text-lg font-bold text-slate-900">{course.cutOffTime || '-'}</p>
                         </div>
-                        {course.elevation && (
-                          <div>
-                            <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.elevation')}</p>
-                            <p className="text-lg font-bold text-slate-900">{course.elevation}</p>
-                          </div>
-                        )}
+                        <div>
+                          <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.elevation')}</p>
+                          <p className="text-lg font-bold text-slate-900">{course.elevation || '-'}</p>
+                        </div>
                       </div>
+
+                      {/* Completion rate bar — only show when race has results */}
+                      {(() => {
+                        const s = courseStatsMap[course.id];
+                        if (!s || s.starters === 0) return null;
+                        const rate = Math.round((s.finishers / s.starters) * 100);
+                        const color = rate >= 80 ? 'bg-emerald-500' : rate >= 60 ? 'bg-amber-400' : 'bg-red-400';
+                        return (
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">{t('race.completionRate')}</span>
+                              <span className="text-sm font-black text-slate-800">{rate}%</span>
+                            </div>
+                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${color} rounded-full transition-all duration-700`}
+                                style={{ width: `${rate}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between mt-1">
+                              <span className="text-[10px] text-slate-400">{s.finishers} {t('race.finishers')}</span>
+                              <span className="text-[10px] text-slate-400">{s.starters} {t('race.starters')}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* GPX Map */}
@@ -523,13 +576,19 @@ export default function RaceDetailPage() {
                           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('race.top3Women')}</p>
                           <div className="space-y-2">
                             {women.length > 0 ? women.map((r, i) => (
-                              <div key={r.Bib} className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                                  {r.Name.charAt(0)}
+                              <div key={r.Bib} className="flex items-center gap-2.5 group/athlete">
+                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0 overflow-hidden">
+                                  {r.avatarUrl
+                                    ? <img src={r.avatarUrl} alt={r.Name} className="w-full h-full object-cover" />
+                                    : r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
                                 </div>
                                 <span className="text-sm font-bold text-slate-700 w-4">{i + 1}</span>
-                                <span className="text-sm text-slate-700 flex-1 truncate">{r.Name}</span>
-                                <span className="text-xs text-slate-400">{r.Nation}</span>
+                                <button
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/races/${slug}/${r.Bib}`); }}
+                                  className="text-sm text-slate-700 flex-1 truncate text-left hover:text-blue-600 hover:underline transition-colors cursor-pointer"
+                                >
+                                  {r.Name}
+                                </button>
                               </div>
                             )) : (
                               <p className="text-xs text-slate-400">{t('race.noData')}</p>
@@ -540,13 +599,19 @@ export default function RaceDetailPage() {
                           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('race.top3Men')}</p>
                           <div className="space-y-2">
                             {men.length > 0 ? men.map((r, i) => (
-                              <div key={r.Bib} className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                                  {r.Name.charAt(0)}
+                              <div key={r.Bib} className="flex items-center gap-2.5 group/athlete">
+                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0 overflow-hidden">
+                                  {r.avatarUrl
+                                    ? <img src={r.avatarUrl} alt={r.Name} className="w-full h-full object-cover" />
+                                    : r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
                                 </div>
                                 <span className="text-sm font-bold text-slate-700 w-4">{i + 1}</span>
-                                <span className="text-sm text-slate-700 flex-1 truncate">{r.Name}</span>
-                                <span className="text-xs text-slate-400">{r.Nation}</span>
+                                <button
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/races/${slug}/${r.Bib}`); }}
+                                  className="text-sm text-slate-700 flex-1 truncate text-left hover:text-blue-600 hover:underline transition-colors cursor-pointer"
+                                >
+                                  {r.Name}
+                                </button>
                               </div>
                             )) : (
                               <p className="text-xs text-slate-400">{t('race.noData')}</p>
@@ -597,59 +662,104 @@ function RaceDescription({ description, organizer }: { description?: string; org
 function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
   const { t } = useTranslation();
   const [scrolled, setScrolled] = useState(false);
+  const [currentSponsor, setCurrentSponsor] = useState(0);
+  const { data: sponsorsRaw } = useSponsors();
+
+  const sponsors = useMemo(() => {
+    const list = ((sponsorsRaw as any)?.data ?? sponsorsRaw ?? []) as Array<{
+      _id: string; name: string; logoUrl: string; level: string; order: number; website?: string;
+    }>;
+    if (!Array.isArray(list) || list.length === 0) return [];
+    const priority: Record<string, number> = { diamond: 0, gold: 1, silver: 2 };
+    return [...list].sort((a, b) => (priority[a.level] ?? 9) - (priority[b.level] ?? 9) || a.order - b.order);
+  }, [sponsorsRaw]);
 
   useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > 400);
-    };
+    const onScroll = () => setScrolled(window.scrollY > 400);
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    if (sponsors.length <= 1) return;
+    const id = setInterval(() => setCurrentSponsor(c => (c + 1) % sponsors.length), 3000);
+    return () => clearInterval(id);
+  }, [sponsors.length]);
+
+  const subBg = scrolled ? 'bg-white border-b border-slate-200 shadow-sm' : 'bg-transparent border-b border-white/10';
+  const textColor = scrolled ? 'text-slate-900' : 'text-white';
+  const linkColor = scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white';
+
   return (
-    <div
-      className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white border-b border-slate-200 shadow-sm'
-          : 'bg-transparent border-b border-white/10'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-12 gap-4">
+    <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 overflow-visible ${subBg}`}>
+      {/* Nav row — 65px */}
+      <div className="flex items-center pr-[240px]" style={{ height: 65 }}>
         {/* Race logo + name */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 px-4 sm:px-6 flex-1 min-w-0">
           {race.logoUrl && (
-            <img src={race.logoUrl} alt="" className="h-7 w-auto object-contain" />
+            <img src={race.logoUrl} alt="" className="h-10 w-auto object-contain shrink-0" />
           )}
-          <span className={`text-sm font-bold hidden sm:inline truncate max-w-[200px] lg:max-w-[300px] transition-colors duration-300 ${
-            scrolled ? 'text-slate-900' : 'text-white'
-          }`}>
+          <span className={`text-sm font-bold hidden sm:inline truncate max-w-[220px] lg:max-w-[380px] transition-colors duration-300 ${textColor}`}>
             {race.name || ''}
           </span>
         </div>
 
-        <div className="flex-1" />
-
-        {/* Find a runner */}
-        <Link
-          href={`/races/${slug}?search=`}
-          className={`hidden md:flex items-center gap-2 text-sm transition-colors duration-300 ${
-            scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white'
-          }`}
-        >
-          <User className="w-4 h-4" />
-          {t('race.myAthletes')}
-        </Link>
-        <Link
-          href={`/races/${slug}?search=`}
-          className={`hidden md:flex items-center gap-2 text-sm transition-colors duration-300 ${
-            scrolled ? 'text-slate-600 hover:text-blue-700' : 'text-white/80 hover:text-white'
-          }`}
-        >
-          <Search className="w-4 h-4" />
-          {t('race.findAthletes')}
-        </Link>
+        {/* Nav actions */}
+        <div className="hidden md:flex items-center gap-1 px-4">
+          <Link href={`/races/${slug}?search=`} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded transition-colors duration-300 ${linkColor}`}>
+            <User className="w-4 h-4" />
+            {t('race.myAthletes')}
+          </Link>
+          <Link href={`/races/${slug}?search=`} className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded transition-colors duration-300 ${linkColor}`}>
+            <Search className="w-4 h-4" />
+            {t('race.findAthletes')}
+          </Link>
+        </div>
       </div>
+
+      {/* Sponsor tile — same width + angle as MY 5BIB tile to form one unified right block */}
+      {sponsors.length > 0 && (
+        <div
+          className="hidden md:block absolute top-0 right-0"
+          style={{
+            width: 240,
+            height: 65,
+            clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
+            background: '#f1f5f9',
+          }}
+        >
+          <div className="relative w-full h-full" style={{ paddingLeft: 42, paddingRight: 10 }}>
+            {sponsors.map((s, i) => (
+              <div
+                key={s._id || s.name}
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
+                  i === currentSponsor ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+                }`}
+                style={{ paddingLeft: 38, paddingRight: 8 }}
+              >
+                {s.logoUrl ? (
+                  <img
+                    src={s.logoUrl}
+                    alt={s.name}
+                    style={{ height: 62, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
+                    draggable={false}
+                  />
+                ) : (
+                  <span className="text-sm font-bold text-slate-800 tracking-wide">{s.name}</span>
+                )}
+              </div>
+            ))}
+          </div>
+          {sponsors.length > 1 && (
+            <div className="absolute bottom-2 right-3 flex gap-1">
+              {sponsors.map((_, i) => (
+                <span key={i} className={`block rounded-full transition-all duration-300 ${i === currentSponsor ? 'w-3 h-1 bg-slate-500' : 'w-1 h-1 bg-slate-300'}`} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

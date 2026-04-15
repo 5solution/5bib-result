@@ -2,11 +2,21 @@ import {
   IsString,
   IsOptional,
   IsNumber,
+  IsBoolean,
   IsArray,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class CheckpointServicesDto {
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() water?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() food?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() sleep?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() dropBag?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() medical?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
+}
 
 export class CourseCheckpointDto {
   @ApiProperty({ description: 'Timing point key', example: 'TM1' })
@@ -21,6 +31,12 @@ export class CourseCheckpointDto {
   @IsOptional()
   @IsString()
   distance?: string;
+
+  @ApiPropertyOptional({ description: 'Aid station services available at this checkpoint' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CheckpointServicesDto)
+  services?: CheckpointServicesDto;
 }
 
 export class AddCourseDto {
@@ -55,6 +71,11 @@ export class AddCourseDto {
   @IsOptional()
   @IsString()
   apiUrl?: string;
+
+  @ApiPropertyOptional({ description: 'API response format', example: 'json', enum: ['json', 'csv'] })
+  @IsOptional()
+  @IsString()
+  apiFormat?: string;
 
   @ApiPropertyOptional({ description: 'Course cover image URL (S3)' })
   @IsOptional()

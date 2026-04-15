@@ -4,6 +4,13 @@ import { env } from 'src/config';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const mailchimp = require('@mailchimp/mailchimp_transactional');
 
+export interface AvatarOtpEmailData {
+  toEmail: string;
+  name: string;
+  bib: string;
+  otp: string;
+}
+
 export interface ClaimResolvedEmailData {
   toEmail: string;
   registeredName: string;
@@ -32,6 +39,34 @@ export class MailService {
     const response = await this.client.users.ping();
     this.logger.log(`Mailchimp ping: ${JSON.stringify(response)}`);
     return response;
+  }
+
+  async sendAvatarOtpEmail(data: AvatarOtpEmailData) {
+    if (!this.client) {
+      this.logger.warn(`[DEV] Avatar OTP for BIB ${data.bib}: ${data.otp}`);
+      return;
+    }
+
+    try {
+      await this.client.messages.sendTemplate({
+        template_name: 'sendavatarotpemail',
+        template_content: [],
+        message: {
+          from_email: 'info@5bib.com',
+          from_name: '5BIB',
+          subject: `[5BIB] Mã xác thực đổi ảnh đại diện - Bib ${data.bib}`,
+          to: [{ email: data.toEmail, type: 'to' }],
+          global_merge_vars: [
+            { name: 'name', content: data.name },
+            { name: 'bib', content: data.bib },
+            { name: 'otp', content: data.otp },
+          ],
+        },
+      });
+      this.logger.log(`Avatar OTP email sent to ${data.toEmail} (BIB: ${data.bib})`);
+    } catch (error) {
+      this.logger.error(`Failed to send OTP email: ${error.message}`);
+    }
   }
 
   async sendClaimResolvedEmail(data: ClaimResolvedEmailData) {

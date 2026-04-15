@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRaces } from '@/lib/api-hooks';
 import Link from 'next/link';
@@ -14,6 +14,7 @@ import {
   Award,
   Share2,
   ChevronRight,
+  ChevronLeft,
   Bell,
   Users,
 } from 'lucide-react';
@@ -141,42 +142,76 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
-  const { data: racesRaw, isLoading: loading } = useRaces();
+  // Fetch live/upcoming races for the hero slider
+  const { data: racesRaw, isLoading: loading } = useRaces({ pageSize: 20 });
 
-  const races = useMemo<Race[]>(() => {
-    const apiList: ApiRace[] = (racesRaw as any)?.data?.list ?? (racesRaw as any)?.data ?? (racesRaw as any) ?? [];
-    if (!Array.isArray(apiList)) return [];
-    return apiList
-      .filter((r) => r.status !== 'draft')
-      .map((r) => ({
-        id: r._id,
-        name: r.title,
-        slug: r.slug,
-        startDate: r.startDate || null,
-        endDate: r.endDate || null,
-        location: r.province || '',
-        imageUrl: r.imageUrl || null,
-        bannerUrl: r.bannerUrl || null,
-        status:
-          r.status === 'live'
-            ? 'live'
-            : r.status === 'pre_race'
-              ? 'upcoming'
-              : 'completed',
-        distances:
-          r.courses?.map((c) => c.distance || c.name).filter(Boolean) || [],
-        totalResults: r.total_results || 0,
-      }));
-  }, [racesRaw]);
+  // Fetch ended races via raw fetch against the runtime proxy.
+  // Bypasses SDK to avoid any query-param serialization edge cases in hey-api
+  // and guarantees we get ~48 ended races even when the default list is paged out.
+  const [endedList, setEndedList] = useState<ApiRace[]>([]);
+  const [loadingEnded, setLoadingEnded] = useState(true);
 
-  const stats = useMemo<StatsData>(() => {
-    const totalResults = races.reduce((sum, r) => sum + r.totalResults, 0);
-    return {
-      totalRaces: races.length,
-      totalResults: totalResults || races.length * 500,
-      totalAthletes: Math.round((totalResults || races.length * 500) * 0.85),
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/races?status=ended&pageSize=50', {
+          headers: { Accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { data?: { list?: ApiRace[] } };
+        if (!cancelled) {
+          setEndedList(Array.isArray(json?.data?.list) ? json.data!.list! : []);
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[home] ended races fetch failed:', err);
+        }
+      } finally {
+        if (!cancelled) setLoadingEnded(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-  }, [races]);
+  }, []);
+
+  // Read real totals from API meta, not from the partial list
+  const apiMeta = (racesRaw as { data?: { totalItems?: number; totalPages?: number; list?: ApiRace[] } } | undefined)?.data;
+
+  const mapApiRace = (r: ApiRace): Race => ({
+    id: r._id,
+    name: r.title,
+    slug: r.slug,
+    startDate: r.startDate || null,
+    endDate: r.endDate || null,
+    location: r.province || '',
+    imageUrl: r.imageUrl || null,
+    bannerUrl: r.bannerUrl || null,
+    status:
+      r.status === 'live'
+        ? 'live'
+        : r.status === 'pre_race'
+          ? 'upcoming'
+          : 'completed',
+    distances:
+      r.courses?.map((c) => c.distance || c.name).filter(Boolean) || [],
+    totalResults: r.total_results || 0,
+  });
+
+  const apiList: ApiRace[] = Array.isArray(apiMeta?.list) ? (apiMeta!.list as ApiRace[]) : [];
+  const races: Race[] = apiList.filter((r) => r.status !== 'draft').map(mapApiRace);
+
+  const totalRaces = apiMeta?.totalItems ?? races.length;
+  const allKnown = [...apiList, ...endedList];
+  const knownResults = allKnown.reduce((sum, r) => sum + (r.total_results || 0), 0);
+  const ratio = allKnown.length > 0 ? knownResults / allKnown.length : 500;
+  const totalResultsCount = knownResults > 0 ? Math.round(ratio * totalRaces) : totalRaces * 500;
+  const stats: StatsData = {
+    totalRaces,
+    totalResults: totalResultsCount,
+    totalAthletes: Math.round(totalResultsCount * 0.85),
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,8 +229,13 @@ export default function HomePage() {
         (new Date(a.startDate || 0).getTime() || 0) -
         (new Date(b.startDate || 0).getTime() || 0),
     );
-  const completedRaces = races
-    .filter((r) => r.status === 'completed')
+  // Past events from the dedicated ended-races fetch. If that came back empty
+  // for any reason, fall back to ended races in the main list so the section
+  // is never blank when ended races exist in the backend.
+  const endedFromMain = apiList.filter((r) => r.status === 'ended');
+  const endedSource = endedList.length > 0 ? endedList : endedFromMain;
+  const completedRaces: Race[] = endedSource
+    .map(mapApiRace)
     .sort(
       (a, b) =>
         (new Date(b.startDate || 0).getTime() || 0) -
@@ -336,11 +376,11 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl md:text-2xl font-bold text-white">
-                {liveAndUpcoming.length === 0 && completedRaces.length > 0
-                  ? t('home.recentEvents')
-                  : liveRaces.length > 0
-                    ? `Live & ${t('home.upcomingEvents')}`
-                    : t('home.upcomingEvents')}
+                {liveRaces.length > 0
+                  ? `Live & ${t('home.upcomingEvents')}`
+                  : liveAndUpcoming.length > 0
+                    ? t('home.upcomingEvents')
+                    : t('home.recentEvents')}
               </h2>
               <Link
                 href="/calendar"
@@ -376,19 +416,22 @@ export default function HomePage() {
                     </div>
                   </div>
                 ))
-                : liveAndUpcoming.length > 0
-                  ? liveAndUpcoming.map((race) => (
-                    <EventCard key={race.id} race={race} />
-                  ))
-                  : completedRaces.length > 0
-                    ? completedRaces.slice(0, 8).map((race) => (
-                      <PastEventCard key={race.id} race={race} />
-                    ))
-                    : (
-                      <div className="flex items-center justify-center w-full min-w-[300px] h-[400px] text-white/50 text-sm">
-                        {t('home.noEvents')}
-                      </div>
-                    )}
+                : (liveAndUpcoming.length > 0 || completedRaces.length > 0)
+                  ? (
+                    <>
+                      {liveAndUpcoming.map((race) => (
+                        <EventCard key={race.id} race={race} />
+                      ))}
+                      {completedRaces.slice(0, 8).map((race) => (
+                        <PastEventCard key={`past-${race.id}`} race={race} />
+                      ))}
+                    </>
+                  )
+                  : (
+                    <div className="flex items-center justify-center w-full min-w-[300px] h-[400px] text-white/50 text-sm">
+                      {t('home.noEvents')}
+                    </div>
+                  )}
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
@@ -460,74 +503,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <ScrollArea className="w-full whitespace-nowrap">
-          <div
-            className="flex w-max gap-3 pb-4"
-            style={{
-              paddingLeft: 'max(1rem, calc((100vw - 1280px) / 2))',
-              paddingRight: '1rem',
-            }}
-          >
-            {loading
-              ? Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="shrink-0 w-[280px] md:w-[300px] h-[380px] md:h-[420px] bg-slate-100 animate-pulse rounded-lg overflow-hidden"
-                >
-                  <div className="h-full flex flex-col justify-end p-4 gap-2">
-                    <div className="h-3 w-20 bg-slate-200 rounded" />
-                    <div className="h-5 w-3/4 bg-slate-200 rounded" />
-                    <div className="h-3 w-1/2 bg-slate-200 rounded" />
-                    <div className="h-3 w-2/3 bg-slate-200 rounded mt-1" />
-                  </div>
-                </div>
-              ))
-              : completedRaces.length > 0
-                ? completedRaces.map((race) => (
-                  <PastEventCard key={race.id} race={race} />
-                ))
-                : (
-                  <div className="flex items-center justify-center w-full min-w-[300px] h-[380px] text-[var(--5bib-text-muted)] text-sm">
-                    {t('home.noPastEvents')}
-                  </div>
-                )}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
-        {/* ================================================================= */}
-        {/* FEATURES SECTION                                                   */}
-        {/* ================================================================= */}
-        <section className="py-16 md:py-20 bg-[var(--5bib-surface)]">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12 md:mb-16">
-              <h2 className="text-2xl md:text-3xl font-black text-[var(--5bib-text)] mb-3">
-                {t('home.features')}
-              </h2>
-              <p className="text-[var(--5bib-text-muted)] max-w-lg mx-auto">
-                {t('home.featuresSubtitle')}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {features.map((feature, i) => (
-                <div
-                  key={i}
-                  className="p-6 bg-white border border-[var(--5bib-border)] rounded-xl card-hover group shadow-sm"
-                >
-                  <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-[var(--5bib-accent)] mb-4 group-hover:bg-blue-100 transition-colors">
-                    {feature.icon}
-                  </div>
-                  <h3 className="text-lg font-bold text-[var(--5bib-text)] mb-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm text-[var(--5bib-text-muted)] leading-relaxed">
-                    {feature.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <PastEventsSlider races={completedRaces} loading={loadingEnded} />
 
         <div className="mt-6 text-center md:hidden">
           <Link
@@ -536,6 +512,41 @@ export default function HomePage() {
           >
             {t('home.viewAllPast')} <ChevronRight className="w-4 h-4" />
           </Link>
+        </div>
+      </section>
+
+      {/* ================================================================= */}
+      {/* FEATURES SECTION                                                   */}
+      {/* ================================================================= */}
+      <section className="py-16 md:py-20 bg-[var(--5bib-surface)]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12 md:mb-16">
+            <h2 className="text-2xl md:text-3xl font-black text-[var(--5bib-text)] mb-3">
+              {t('home.features')}
+            </h2>
+            <p className="text-[var(--5bib-text-muted)] max-w-lg mx-auto">
+              {t('home.featuresSubtitle')}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((feature, i) => (
+              <div
+                key={i}
+                className="p-6 bg-white border border-[var(--5bib-border)] rounded-xl card-hover group shadow-sm"
+              >
+                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-[var(--5bib-accent)] mb-4 group-hover:bg-blue-100 transition-colors">
+                  {feature.icon}
+                </div>
+                <h3 className="text-lg font-bold text-[var(--5bib-text)] mb-2">
+                  {feature.title}
+                </h3>
+                <p className="text-sm text-[var(--5bib-text-muted)] leading-relaxed">
+                  {feature.description}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </div>
@@ -645,6 +656,102 @@ function EventCard({ race }: { race: Race }) {
 }
 
 // ---------------------------------------------------------------------------
+// Past Events Slider — scroll strip with prev/next arrow buttons
+// ---------------------------------------------------------------------------
+
+function PastEventsSlider({ races, loading }: { races: Race[]; loading: boolean }) {
+  const { t } = useTranslation();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const CARD_WIDTH = 312; // 300px card + 12px gap
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 8);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener('scroll', updateScrollState, { passive: true });
+    return () => el.removeEventListener('scroll', updateScrollState);
+  }, [updateScrollState, races]);
+
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -CARD_WIDTH * 3 : CARD_WIDTH * 3, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative">
+      {/* Prev button */}
+      {canScrollLeft && (
+        <button
+          onClick={() => scroll('left')}
+          aria-label="Previous"
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-all border border-slate-100"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Scroll container */}
+      <div
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-auto scrollbar-hide pb-4"
+        style={{
+          paddingLeft: 'max(1rem, calc((100vw - 1280px) / 2))',
+          paddingRight: '1rem',
+          scrollSnapType: 'x mandatory',
+        }}
+      >
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="shrink-0 w-[280px] md:w-[300px] h-[380px] md:h-[420px] bg-slate-100 animate-pulse rounded-lg overflow-hidden"
+              style={{ scrollSnapAlign: 'start' }}
+            >
+              <div className="h-full flex flex-col justify-end p-4 gap-2">
+                <div className="h-3 w-20 bg-slate-200 rounded" />
+                <div className="h-5 w-3/4 bg-slate-200 rounded" />
+                <div className="h-3 w-1/2 bg-slate-200 rounded" />
+              </div>
+            </div>
+          ))
+          : races.length > 0
+            ? races.map((race) => (
+              <div key={race.id} style={{ scrollSnapAlign: 'start' }}>
+                <PastEventCard race={race} />
+              </div>
+            ))
+            : (
+              <div className="flex flex-col items-center justify-center w-full min-w-[300px] h-[380px] gap-3 rounded-xl border border-dashed border-[var(--5bib-border)] bg-white text-[var(--5bib-text)]">
+                <Trophy className="w-8 h-8 text-[var(--5bib-text-muted)]" />
+                <p className="text-sm font-medium">{t('home.noPastEvents')}</p>
+              </div>
+            )}
+      </div>
+
+      {/* Next button */}
+      {canScrollRight && races.length > 0 && !loading && (
+        <button
+          onClick={() => scroll('right')}
+          aria-label="Next"
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-all border border-slate-100"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Past Event Card
 // ---------------------------------------------------------------------------
 
@@ -683,6 +790,16 @@ function PastEventCard({ race }: { race: Race }) {
           <p className="text-white/90 text-xs font-medium">
             {formatDateVN(race.startDate, t('common.unknown'))}
           </p>
+
+          {race.distances.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {race.distances.map((d) => (
+                <span key={d} className="px-2 py-0.5 bg-blue-500/60 backdrop-blur-sm rounded text-[10px] font-bold text-white">
+                  {d}
+                </span>
+              ))}
+            </div>
+          )}
 
           {race.totalResults > 0 && (
             <div className="mt-2 px-2 py-1 bg-white/15 backdrop-blur-sm rounded text-[10px] font-bold text-white inline-block">

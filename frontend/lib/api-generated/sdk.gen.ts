@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AdminControllerForceSyncData, AdminControllerForceSyncErrors, AdminControllerForceSyncResponses, AdminControllerGetClaimsData, AdminControllerGetClaimsResponses, AdminControllerGetSyncLogsData, AdminControllerGetSyncLogsResponses, AdminControllerPurgeCacheData, AdminControllerPurgeCacheResponses, AdminControllerResetDataData, AdminControllerResetDataResponses, AdminControllerResolveClaimData, AdminControllerResolveClaimErrors, AdminControllerResolveClaimResponses, AuthControllerLoginData, AuthControllerLoginErrors, AuthControllerLoginResponses, AuthControllerProfileData, AuthControllerProfileErrors, AuthControllerProfileResponses, RaceResultControllerCompareAthletesData, RaceResultControllerCompareAthletesResponses, RaceResultControllerGetAthleteDetailData, RaceResultControllerGetAthleteDetailResponses, RaceResultControllerGetCourseStatsData, RaceResultControllerGetCourseStatsResponses, RaceResultControllerGetFilterOptionsData, RaceResultControllerGetFilterOptionsResponses, RaceResultControllerGetLeaderboardData, RaceResultControllerGetLeaderboardResponses, RaceResultControllerGetRaceDistancesData, RaceResultControllerGetRaceDistancesResponses, RaceResultControllerGetRaceResultsData, RaceResultControllerGetRaceResultsResponses, RaceResultControllerGlobalSearchData, RaceResultControllerGlobalSearchResponses, RaceResultControllerManualSyncData, RaceResultControllerManualSyncErrors, RaceResultControllerManualSyncResponses, RaceResultControllerSubmitClaimData, RaceResultControllerSubmitClaimResponses, RaceResultControllerUploadClaimAttachmentData, RaceResultControllerUploadClaimAttachmentResponses, RacesControllerAddCourseData, RacesControllerAddCourseErrors, RacesControllerAddCourseResponses, RacesControllerCreateRaceData, RacesControllerCreateRaceResponses, RacesControllerDeleteRaceData, RacesControllerDeleteRaceErrors, RacesControllerDeleteRaceResponses, RacesControllerGetRaceByIdData, RacesControllerGetRaceByIdErrors, RacesControllerGetRaceByIdResponses, RacesControllerGetRaceByProductIdData, RacesControllerGetRaceByProductIdErrors, RacesControllerGetRaceByProductIdResponses, RacesControllerGetRaceBySlugData, RacesControllerGetRaceBySlugErrors, RacesControllerGetRaceBySlugResponses, RacesControllerRemoveCourseData, RacesControllerRemoveCourseErrors, RacesControllerRemoveCourseResponses, RacesControllerSearchRacesData, RacesControllerSearchRacesResponses, RacesControllerSyncRacesData, RacesControllerSyncRacesErrors, RacesControllerSyncRacesResponses, RacesControllerUpdateCourseData, RacesControllerUpdateCourseErrors, RacesControllerUpdateCourseResponses, RacesControllerUpdateRaceData, RacesControllerUpdateRaceErrors, RacesControllerUpdateRaceResponses, RacesControllerUpdateStatusData, RacesControllerUpdateStatusErrors, RacesControllerUpdateStatusResponses, SponsorsControllerCreateData, SponsorsControllerCreateResponses, SponsorsControllerFindAllActiveData, SponsorsControllerFindAllActiveResponses, SponsorsControllerFindAllData, SponsorsControllerFindAllResponses, SponsorsControllerFindByRaceIdData, SponsorsControllerFindByRaceIdResponses, SponsorsControllerRemoveData, SponsorsControllerRemoveErrors, SponsorsControllerRemoveResponses, SponsorsControllerUpdateData, SponsorsControllerUpdateErrors, SponsorsControllerUpdateResponses, UploadControllerUploadFileData, UploadControllerUploadFileResponses } from './types.gen';
+import type { AdminControllerEditResultData, AdminControllerEditResultErrors, AdminControllerEditResultResponses, AdminControllerForceSyncData, AdminControllerForceSyncErrors, AdminControllerForceSyncResponses, AdminControllerGetAthleteDetailData, AdminControllerGetAthleteDetailErrors, AdminControllerGetAthleteDetailResponses, AdminControllerGetClaimsData, AdminControllerGetClaimsResponses, AdminControllerGetSyncLogsData, AdminControllerGetSyncLogsResponses, AdminControllerPurgeCacheData, AdminControllerPurgeCacheResponses, AdminControllerResetDataData, AdminControllerResetDataResponses, AdminControllerResolveClaimData, AdminControllerResolveClaimErrors, AdminControllerResolveClaimResponses, AdminControllerResolveClaimV2Data, AdminControllerResolveClaimV2Errors, AdminControllerResolveClaimV2Responses, AdminControllerTestOtpEmailData, AdminControllerTestOtpEmailResponses, AnalyticsControllerGetBookingPatternsData, AnalyticsControllerGetBookingPatternsResponses, AnalyticsControllerGetDailyRevenueData, AnalyticsControllerGetDailyRevenueResponses, AnalyticsControllerGetFunnelData, AnalyticsControllerGetFunnelResponses, AnalyticsControllerGetMerchantComparisonData, AnalyticsControllerGetMerchantComparisonResponses, AnalyticsControllerGetOverviewData, AnalyticsControllerGetOverviewResponses, AnalyticsControllerGetRaceDetailData, AnalyticsControllerGetRaceDetailResponses, AnalyticsControllerGetRacePerformanceData, AnalyticsControllerGetRacePerformanceResponses, AnalyticsControllerGetRevenueByCategoryData, AnalyticsControllerGetRevenueByCategoryResponses, AnalyticsControllerGetRunnerBehaviorData, AnalyticsControllerGetRunnerBehaviorResponses, AnalyticsControllerGetTopRacesData, AnalyticsControllerGetTopRacesResponses, AuthControllerLoginData, AuthControllerLoginErrors, AuthControllerLoginResponses, AuthControllerProfileData, AuthControllerProfileErrors, AuthControllerProfileResponses, MerchantControllerApproveData, MerchantControllerApproveResponses, MerchantControllerFindAllData, MerchantControllerFindAllResponses, MerchantControllerFindOneData, MerchantControllerFindOneErrors, MerchantControllerFindOneResponses, MerchantControllerGetFeeHistoryData, MerchantControllerGetFeeHistoryResponses, MerchantControllerGetRacesData, MerchantControllerGetRacesResponses, MerchantControllerToggleStarData, MerchantControllerToggleStarResponses, MerchantControllerUpdateCompanyData, MerchantControllerUpdateCompanyResponses, MerchantControllerUpdateFeeData, MerchantControllerUpdateFeeResponses, RaceResultControllerCompareAthletesData, RaceResultControllerCompareAthletesResponses, RaceResultControllerGenerateResultImageData, RaceResultControllerGenerateResultImageErrors, RaceResultControllerGenerateResultImageResponses, RaceResultControllerGetAthleteDetailData, RaceResultControllerGetAthleteDetailResponses, RaceResultControllerGetCertificateData, RaceResultControllerGetCertificateErrors, RaceResultControllerGetCertificateResponses, RaceResultControllerGetCourseStatsData, RaceResultControllerGetCourseStatsResponses, RaceResultControllerGetFilterOptionsData, RaceResultControllerGetFilterOptionsResponses, RaceResultControllerGetLeaderboardData, RaceResultControllerGetLeaderboardResponses, RaceResultControllerGetRaceDistancesData, RaceResultControllerGetRaceDistancesResponses, RaceResultControllerGetRaceResultsData, RaceResultControllerGetRaceResultsResponses, RaceResultControllerGlobalSearchData, RaceResultControllerGlobalSearchResponses, RaceResultControllerManualSyncData, RaceResultControllerManualSyncErrors, RaceResultControllerManualSyncResponses, RaceResultControllerRequestAvatarOtpData, RaceResultControllerRequestAvatarOtpErrors, RaceResultControllerRequestAvatarOtpResponses, RaceResultControllerSubmitClaimData, RaceResultControllerSubmitClaimResponses, RaceResultControllerUploadAvatarData, RaceResultControllerUploadAvatarErrors, RaceResultControllerUploadAvatarResponses, RaceResultControllerUploadClaimAttachmentData, RaceResultControllerUploadClaimAttachmentResponses, RacesControllerAddCourseData, RacesControllerAddCourseErrors, RacesControllerAddCourseResponses, RacesControllerCreateRaceData, RacesControllerCreateRaceResponses, RacesControllerDeleteRaceData, RacesControllerDeleteRaceErrors, RacesControllerDeleteRaceResponses, RacesControllerGetRaceByIdData, RacesControllerGetRaceByIdErrors, RacesControllerGetRaceByIdResponses, RacesControllerGetRaceByProductIdData, RacesControllerGetRaceByProductIdErrors, RacesControllerGetRaceByProductIdResponses, RacesControllerGetRaceBySlugData, RacesControllerGetRaceBySlugErrors, RacesControllerGetRaceBySlugResponses, RacesControllerRemoveCourseData, RacesControllerRemoveCourseErrors, RacesControllerRemoveCourseResponses, RacesControllerSearchRacesData, RacesControllerSearchRacesResponses, RacesControllerSyncRacesData, RacesControllerSyncRacesErrors, RacesControllerSyncRacesResponses, RacesControllerUpdateCourseData, RacesControllerUpdateCourseErrors, RacesControllerUpdateCourseResponses, RacesControllerUpdateRaceData, RacesControllerUpdateRaceErrors, RacesControllerUpdateRaceResponses, RacesControllerUpdateStatusData, RacesControllerUpdateStatusErrors, RacesControllerUpdateStatusResponses, ReconciliationControllerBatchCreateData, ReconciliationControllerBatchCreateResponses, ReconciliationControllerCreateData, ReconciliationControllerCreateResponses, ReconciliationControllerDeleteData, ReconciliationControllerDeleteResponses, ReconciliationControllerDownloadDocxData, ReconciliationControllerDownloadDocxResponses, ReconciliationControllerDownloadExportJobData, ReconciliationControllerDownloadExportJobResponses, ReconciliationControllerDownloadXlsxData, ReconciliationControllerDownloadXlsxResponses, ReconciliationControllerExportByIdsData, ReconciliationControllerExportByIdsResponses, ReconciliationControllerExportByPeriodData, ReconciliationControllerExportByPeriodResponses, ReconciliationControllerFindAllData, ReconciliationControllerFindAllResponses, ReconciliationControllerFindOneData, ReconciliationControllerFindOneResponses, ReconciliationControllerGetCronLogsData, ReconciliationControllerGetCronLogsResponses, ReconciliationControllerGetExportJobData, ReconciliationControllerGetExportJobResponses, ReconciliationControllerGetRacesData, ReconciliationControllerGetRacesResponses, ReconciliationControllerPreflightBatchData, ReconciliationControllerPreflightBatchResponses, ReconciliationControllerPreflightData, ReconciliationControllerPreflightResponses, ReconciliationControllerPreviewData, ReconciliationControllerPreviewResponses, ReconciliationControllerRegenerateData, ReconciliationControllerRegenerateResponses, ReconciliationControllerUpdateStatusData, ReconciliationControllerUpdateStatusResponses, SponsorsControllerCreateData, SponsorsControllerCreateResponses, SponsorsControllerFindAllActiveData, SponsorsControllerFindAllActiveResponses, SponsorsControllerFindAllData, SponsorsControllerFindAllResponses, SponsorsControllerFindByRaceIdData, SponsorsControllerFindByRaceIdResponses, SponsorsControllerRemoveData, SponsorsControllerRemoveErrors, SponsorsControllerRemoveResponses, SponsorsControllerUpdateData, SponsorsControllerUpdateErrors, SponsorsControllerUpdateResponses, UploadControllerUploadFileData, UploadControllerUploadFileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -19,6 +19,249 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 };
 
 /**
+ * Danh sách merchant từ platform MySQL (kèm config phí từ MongoDB)
+ */
+export const merchantControllerFindAll = <ThrowOnError extends boolean = false>(options?: Options<MerchantControllerFindAllData, ThrowOnError>) => (options?.client ?? client).get<MerchantControllerFindAllResponses, unknown, ThrowOnError>({ url: '/api/merchants', ...options });
+
+/**
+ * Chi tiết một merchant
+ */
+export const merchantControllerFindOne = <ThrowOnError extends boolean = false>(options: Options<MerchantControllerFindOneData, ThrowOnError>) => (options.client ?? client).get<MerchantControllerFindOneResponses, MerchantControllerFindOneErrors, ThrowOnError>({ url: '/api/merchants/{id}', ...options });
+
+/**
+ * Cập nhật cấu hình phí (lưu vào MongoDB)
+ */
+export const merchantControllerUpdateFee = <ThrowOnError extends boolean = false>(options: Options<MerchantControllerUpdateFeeData, ThrowOnError>) => (options.client ?? client).patch<MerchantControllerUpdateFeeResponses, unknown, ThrowOnError>({
+    url: '/api/merchants/{id}/fee',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Lịch sử thay đổi phí của merchant (từ MongoDB)
+ */
+export const merchantControllerGetFeeHistory = <ThrowOnError extends boolean = false>(options: Options<MerchantControllerGetFeeHistoryData, ThrowOnError>) => (options.client ?? client).get<MerchantControllerGetFeeHistoryResponses, unknown, ThrowOnError>({ url: '/api/merchants/{id}/fee-history', ...options });
+
+/**
+ * Toggle đánh dấu merchant quan trọng
+ */
+export const merchantControllerToggleStar = <ThrowOnError extends boolean = false>(options: Options<MerchantControllerToggleStarData, ThrowOnError>) => (options.client ?? client).patch<MerchantControllerToggleStarResponses, unknown, ThrowOnError>({ url: '/api/merchants/{id}/star', ...options });
+
+/**
+ * Cập nhật thông tin công ty đối tác (lưu vào MongoDB)
+ */
+export const merchantControllerUpdateCompany = <ThrowOnError extends boolean = false>(options: Options<MerchantControllerUpdateCompanyData, ThrowOnError>) => (options.client ?? client).patch<MerchantControllerUpdateCompanyResponses, unknown, ThrowOnError>({
+    url: '/api/merchants/{id}/company',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Danh sách giải đấu của merchant (từ MySQL platform)
+ */
+export const merchantControllerGetRaces = <ThrowOnError extends boolean = false>(options: Options<MerchantControllerGetRacesData, ThrowOnError>) => (options.client ?? client).get<MerchantControllerGetRacesResponses, unknown, ThrowOnError>({ url: '/api/merchants/{id}/races', ...options });
+
+/**
+ * Cập nhật contract status / approval tracking (lưu vào MongoDB)
+ */
+export const merchantControllerApprove = <ThrowOnError extends boolean = false>(options: Options<MerchantControllerApproveData, ThrowOnError>) => (options.client ?? client).patch<MerchantControllerApproveResponses, unknown, ThrowOnError>({
+    url: '/api/merchants/{id}/approve',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Pre-flight check for a single merchant + period
+ */
+export const reconciliationControllerPreflight = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerPreflightData, ThrowOnError>) => (options.client ?? client).get<ReconciliationControllerPreflightResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/preflight', ...options });
+
+/**
+ * Batch pre-flight check for multiple merchants
+ */
+export const reconciliationControllerPreflightBatch = <ThrowOnError extends boolean = false>(options?: Options<ReconciliationControllerPreflightBatchData, ThrowOnError>) => (options?.client ?? client).post<ReconciliationControllerPreflightBatchResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/preflight/batch', ...options });
+
+/**
+ * Batch create reconciliations for multiple merchants
+ */
+export const reconciliationControllerBatchCreate = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerBatchCreateData, ThrowOnError>) => (options.client ?? client).post<ReconciliationControllerBatchCreateResponses, unknown, ThrowOnError>({
+    url: '/api/reconciliations/batch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Preview reconciliation data from MySQL without saving
+ */
+export const reconciliationControllerPreview = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerPreviewData, ThrowOnError>) => (options.client ?? client).post<ReconciliationControllerPreviewResponses, unknown, ThrowOnError>({
+    url: '/api/reconciliations/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List reconciliations with optional filters
+ */
+export const reconciliationControllerFindAll = <ThrowOnError extends boolean = false>(options?: Options<ReconciliationControllerFindAllData, ThrowOnError>) => (options?.client ?? client).get<ReconciliationControllerFindAllResponses, unknown, ThrowOnError>({ url: '/api/reconciliations', ...options });
+
+/**
+ * Create a new reconciliation, generate XLSX/DOCX, upload to S3
+ */
+export const reconciliationControllerCreate = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerCreateData, ThrowOnError>) => (options.client ?? client).post<ReconciliationControllerCreateResponses, unknown, ThrowOnError>({
+    url: '/api/reconciliations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get races for a tenant from MySQL
+ */
+export const reconciliationControllerGetRaces = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerGetRacesData, ThrowOnError>) => (options.client ?? client).get<ReconciliationControllerGetRacesResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/races/{tenantId}', ...options });
+
+/**
+ * Download XLSX file for a reconciliation
+ */
+export const reconciliationControllerDownloadXlsx = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerDownloadXlsxData, ThrowOnError>) => (options.client ?? client).get<ReconciliationControllerDownloadXlsxResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/{id}/download/xlsx', ...options });
+
+/**
+ * Download DOCX file for a reconciliation
+ */
+export const reconciliationControllerDownloadDocx = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerDownloadDocxData, ThrowOnError>) => (options.client ?? client).get<ReconciliationControllerDownloadDocxResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/{id}/download/docx', ...options });
+
+/**
+ * Trigger async ZIP export for selected reconciliation IDs
+ */
+export const reconciliationControllerExportByIds = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerExportByIdsData, ThrowOnError>) => (options.client ?? client).post<ReconciliationControllerExportByIdsResponses, unknown, ThrowOnError>({
+    url: '/api/reconciliations/export/zip/by-ids',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Trigger async ZIP export for all reconciliations in a period
+ */
+export const reconciliationControllerExportByPeriod = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerExportByPeriodData, ThrowOnError>) => (options.client ?? client).post<ReconciliationControllerExportByPeriodResponses, unknown, ThrowOnError>({
+    url: '/api/reconciliations/export/zip/by-period',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get export job status
+ */
+export const reconciliationControllerGetExportJob = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerGetExportJobData, ThrowOnError>) => (options.client ?? client).get<ReconciliationControllerGetExportJobResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/export-jobs/{jobId}', ...options });
+
+/**
+ * Download ZIP file
+ */
+export const reconciliationControllerDownloadExportJob = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerDownloadExportJobData, ThrowOnError>) => (options.client ?? client).get<ReconciliationControllerDownloadExportJobResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/export-jobs/{jobId}/download', ...options });
+
+/**
+ * Get recent reconciliation cron run logs
+ */
+export const reconciliationControllerGetCronLogs = <ThrowOnError extends boolean = false>(options?: Options<ReconciliationControllerGetCronLogsData, ThrowOnError>) => (options?.client ?? client).get<ReconciliationControllerGetCronLogsResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/cron-logs', ...options });
+
+/**
+ * Delete a reconciliation record
+ */
+export const reconciliationControllerDelete = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerDeleteData, ThrowOnError>) => (options.client ?? client).delete<ReconciliationControllerDeleteResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/{id}', ...options });
+
+/**
+ * Get reconciliation by id
+ */
+export const reconciliationControllerFindOne = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerFindOneData, ThrowOnError>) => (options.client ?? client).get<ReconciliationControllerFindOneResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/{id}', ...options });
+
+/**
+ * Update reconciliation status
+ */
+export const reconciliationControllerUpdateStatus = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerUpdateStatusData, ThrowOnError>) => (options.client ?? client).patch<ReconciliationControllerUpdateStatusResponses, unknown, ThrowOnError>({
+    url: '/api/reconciliations/{id}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Regenerate XLSX and/or DOCX files
+ */
+export const reconciliationControllerRegenerate = <ThrowOnError extends boolean = false>(options: Options<ReconciliationControllerRegenerateData, ThrowOnError>) => (options.client ?? client).post<ReconciliationControllerRegenerateResponses, unknown, ThrowOnError>({ url: '/api/reconciliations/{id}/regenerate', ...options });
+
+/**
+ * Platform overview — GMV, orders, platform fee, vs last month
+ */
+export const analyticsControllerGetOverview = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetOverviewData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetOverviewResponses, unknown, ThrowOnError>({ url: '/api/analytics/overview', ...options });
+
+/**
+ * Daily revenue breakdown (GMV + orders per day)
+ */
+export const analyticsControllerGetDailyRevenue = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetDailyRevenueData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetDailyRevenueResponses, unknown, ThrowOnError>({ url: '/api/analytics/revenue/daily', ...options });
+
+/**
+ * Top races by GMV in the given period
+ */
+export const analyticsControllerGetTopRaces = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetTopRacesData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetTopRacesResponses, unknown, ThrowOnError>({ url: '/api/analytics/top-races', ...options });
+
+/**
+ * Revenue breakdown by order category (ORDINARY, MANUAL, GROUP_BUY, etc.)
+ */
+export const analyticsControllerGetRevenueByCategory = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetRevenueByCategoryData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetRevenueByCategoryResponses, unknown, ThrowOnError>({ url: '/api/analytics/revenue-by-category', ...options });
+
+/**
+ * Race performance list — paid/voided orders, runners, GMV, platform fee
+ */
+export const analyticsControllerGetRacePerformance = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetRacePerformanceData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetRacePerformanceResponses, unknown, ThrowOnError>({ url: '/api/analytics/races', ...options });
+
+/**
+ * Detailed analytics for a single race
+ */
+export const analyticsControllerGetRaceDetail = <ThrowOnError extends boolean = false>(options: Options<AnalyticsControllerGetRaceDetailData, ThrowOnError>) => (options.client ?? client).get<AnalyticsControllerGetRaceDetailResponses, unknown, ThrowOnError>({ url: '/api/analytics/races/{raceId}/detail', ...options });
+
+/**
+ * Merchant comparison — GMV, orders, estimated platform fee per tenant
+ */
+export const analyticsControllerGetMerchantComparison = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetMerchantComparisonData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetMerchantComparisonResponses, unknown, ThrowOnError>({ url: '/api/analytics/merchants', ...options });
+
+/**
+ * Runner behavior — repeat rate, booking lead time, peak hours/days
+ */
+export const analyticsControllerGetRunnerBehavior = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetRunnerBehaviorData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetRunnerBehaviorResponses, unknown, ThrowOnError>({ url: '/api/analytics/runners/behavior', ...options });
+
+/**
+ * Booking heatmap — 7 days × 24 hours grid of order counts
+ */
+export const analyticsControllerGetBookingPatterns = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetBookingPatternsData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetBookingPatternsResponses, unknown, ThrowOnError>({ url: '/api/analytics/runners/booking-patterns', ...options });
+
+/**
+ * Order funnel — paid/voided counts by category, avg time to pay
+ */
+export const analyticsControllerGetFunnel = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetFunnelData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetFunnelResponses, unknown, ThrowOnError>({ url: '/api/analytics/funnel', ...options });
+
+/**
  * Search and list races with filters and pagination
  */
 export const racesControllerSearchRaces = <ThrowOnError extends boolean = false>(options?: Options<RacesControllerSearchRacesData, ThrowOnError>) => (options?.client ?? client).get<RacesControllerSearchRacesResponses, unknown, ThrowOnError>({ url: '/api/races', ...options });
@@ -27,6 +270,7 @@ export const racesControllerSearchRaces = <ThrowOnError extends boolean = false>
  * Create a new race (admin)
  */
 export const racesControllerCreateRace = <ThrowOnError extends boolean = false>(options: Options<RacesControllerCreateRaceData, ThrowOnError>) => (options.client ?? client).post<RacesControllerCreateRaceResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races',
     ...options,
     headers: {
@@ -43,7 +287,11 @@ export const racesControllerGetRaceBySlug = <ThrowOnError extends boolean = fals
 /**
  * Delete a race (admin)
  */
-export const racesControllerDeleteRace = <ThrowOnError extends boolean = false>(options: Options<RacesControllerDeleteRaceData, ThrowOnError>) => (options.client ?? client).delete<RacesControllerDeleteRaceResponses, RacesControllerDeleteRaceErrors, ThrowOnError>({ url: '/api/races/{id}', ...options });
+export const racesControllerDeleteRace = <ThrowOnError extends boolean = false>(options: Options<RacesControllerDeleteRaceData, ThrowOnError>) => (options.client ?? client).delete<RacesControllerDeleteRaceResponses, RacesControllerDeleteRaceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/races/{id}',
+    ...options
+});
 
 /**
  * Get race by ID
@@ -54,6 +302,7 @@ export const racesControllerGetRaceById = <ThrowOnError extends boolean = false>
  * Update a race (admin)
  */
 export const racesControllerUpdateRace = <ThrowOnError extends boolean = false>(options: Options<RacesControllerUpdateRaceData, ThrowOnError>) => (options.client ?? client).patch<RacesControllerUpdateRaceResponses, RacesControllerUpdateRaceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races/{id}',
     ...options,
     headers: {
@@ -71,6 +320,7 @@ export const racesControllerGetRaceByProductId = <ThrowOnError extends boolean =
  * Update race lifecycle status (admin)
  */
 export const racesControllerUpdateStatus = <ThrowOnError extends boolean = false>(options: Options<RacesControllerUpdateStatusData, ThrowOnError>) => (options.client ?? client).patch<RacesControllerUpdateStatusResponses, RacesControllerUpdateStatusErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races/{id}/status',
     ...options,
     headers: {
@@ -83,6 +333,7 @@ export const racesControllerUpdateStatus = <ThrowOnError extends boolean = false
  * Add a course to a race (admin)
  */
 export const racesControllerAddCourse = <ThrowOnError extends boolean = false>(options: Options<RacesControllerAddCourseData, ThrowOnError>) => (options.client ?? client).post<RacesControllerAddCourseResponses, RacesControllerAddCourseErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races/{id}/courses',
     ...options,
     headers: {
@@ -94,12 +345,17 @@ export const racesControllerAddCourse = <ThrowOnError extends boolean = false>(o
 /**
  * Remove a course from a race (admin)
  */
-export const racesControllerRemoveCourse = <ThrowOnError extends boolean = false>(options: Options<RacesControllerRemoveCourseData, ThrowOnError>) => (options.client ?? client).delete<RacesControllerRemoveCourseResponses, RacesControllerRemoveCourseErrors, ThrowOnError>({ url: '/api/races/{id}/courses/{courseId}', ...options });
+export const racesControllerRemoveCourse = <ThrowOnError extends boolean = false>(options: Options<RacesControllerRemoveCourseData, ThrowOnError>) => (options.client ?? client).delete<RacesControllerRemoveCourseResponses, RacesControllerRemoveCourseErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/races/{id}/courses/{courseId}',
+    ...options
+});
 
 /**
  * Update a course in a race (admin)
  */
 export const racesControllerUpdateCourse = <ThrowOnError extends boolean = false>(options: Options<RacesControllerUpdateCourseData, ThrowOnError>) => (options.client ?? client).patch<RacesControllerUpdateCourseResponses, RacesControllerUpdateCourseErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/races/{id}/courses/{courseId}',
     ...options,
     headers: {
@@ -111,7 +367,11 @@ export const racesControllerUpdateCourse = <ThrowOnError extends boolean = false
 /**
  * Manually sync races from source API
  */
-export const racesControllerSyncRaces = <ThrowOnError extends boolean = false>(options?: Options<RacesControllerSyncRacesData, ThrowOnError>) => (options?.client ?? client).post<RacesControllerSyncRacesResponses, RacesControllerSyncRacesErrors, ThrowOnError>({ url: '/api/races/sync', ...options });
+export const racesControllerSyncRaces = <ThrowOnError extends boolean = false>(options?: Options<RacesControllerSyncRacesData, ThrowOnError>) => (options?.client ?? client).post<RacesControllerSyncRacesResponses, RacesControllerSyncRacesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/races/sync',
+    ...options
+});
 
 /**
  * Get available race distances/types
@@ -121,7 +381,7 @@ export const raceResultControllerGetRaceDistances = <ThrowOnError extends boolea
 /**
  * Get race results with filters and pagination
  */
-export const raceResultControllerGetRaceResults = <ThrowOnError extends boolean = false>(options?: Options<RaceResultControllerGetRaceResultsData, ThrowOnError>) => (options?.client ?? client).get<RaceResultControllerGetRaceResultsResponses, unknown, ThrowOnError>({ url: '/api/race-results', ...options });
+export const raceResultControllerGetRaceResults = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetRaceResultsData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetRaceResultsResponses, unknown, ThrowOnError>({ url: '/api/race-results', ...options });
 
 /**
  * Global search by name or bib across all races
@@ -139,6 +399,11 @@ export const raceResultControllerGetLeaderboard = <ThrowOnError extends boolean 
 export const raceResultControllerGetAthleteDetail = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetAthleteDetailData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetAthleteDetailResponses, unknown, ThrowOnError>({ url: '/api/race-results/athlete/{raceId}/{bib}', ...options });
 
 /**
+ * Get certificate as PNG image for an athlete
+ */
+export const raceResultControllerGetCertificate = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetCertificateData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetCertificateResponses, RaceResultControllerGetCertificateErrors, ThrowOnError>({ url: '/api/race-results/certificate/{raceId}/{bib}', ...options });
+
+/**
  * Compare multiple athletes by bibs
  */
 export const raceResultControllerCompareAthletes = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerCompareAthletesData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerCompareAthletesResponses, unknown, ThrowOnError>({ url: '/api/race-results/compare/{raceId}', ...options });
@@ -152,6 +417,31 @@ export const raceResultControllerGetFilterOptions = <ThrowOnError extends boolea
  * Get aggregated course stats (avg time, finishers, etc.)
  */
 export const raceResultControllerGetCourseStats = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetCourseStatsData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetCourseStatsResponses, unknown, ThrowOnError>({ url: '/api/race-results/stats/{courseId}', ...options });
+
+/**
+ * Request OTP to verify email before avatar upload
+ */
+export const raceResultControllerRequestAvatarOtp = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerRequestAvatarOtpData, ThrowOnError>) => (options.client ?? client).post<RaceResultControllerRequestAvatarOtpResponses, RaceResultControllerRequestAvatarOtpErrors, ThrowOnError>({
+    url: '/api/race-results/avatar/request-otp',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Upload avatar after OTP verification
+ */
+export const raceResultControllerUploadAvatar = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerUploadAvatarData, ThrowOnError>) => (options.client ?? client).post<RaceResultControllerUploadAvatarResponses, RaceResultControllerUploadAvatarErrors, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/race-results/avatar/upload',
+    ...options,
+    headers: {
+        'Content-Type': null,
+        ...options.headers
+    }
+});
 
 /**
  * Upload attachment for a claim (tracklog, screenshot)
@@ -174,6 +464,19 @@ export const raceResultControllerSubmitClaim = <ThrowOnError extends boolean = f
     ...options,
     headers: {
         'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Generate result image for an athlete
+ */
+export const raceResultControllerGenerateResultImage = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGenerateResultImageData, ThrowOnError>) => (options.client ?? client).post<RaceResultControllerGenerateResultImageResponses, RaceResultControllerGenerateResultImageErrors, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/race-results/result-image/{raceId}/{bib}',
+    ...options,
+    headers: {
+        'Content-Type': null,
         ...options.headers
     }
 });
@@ -211,7 +514,7 @@ export const adminControllerResetData = <ThrowOnError extends boolean = false>(o
 });
 
 /**
- * List all claims (paginated)
+ * List all claims (paginated, optional status filter)
  */
 export const adminControllerGetClaims = <ThrowOnError extends boolean = false>(options?: Options<AdminControllerGetClaimsData, ThrowOnError>) => (options?.client ?? client).get<AdminControllerGetClaimsResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -220,11 +523,37 @@ export const adminControllerGetClaims = <ThrowOnError extends boolean = false>(o
 });
 
 /**
- * Resolve or reject a claim
+ * Resolve or reject a claim (BR-04)
+ */
+export const adminControllerResolveClaimV2 = <ThrowOnError extends boolean = false>(options: Options<AdminControllerResolveClaimV2Data, ThrowOnError>) => (options.client ?? client).patch<AdminControllerResolveClaimV2Responses, AdminControllerResolveClaimV2Errors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/claims/{id}/resolve',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Resolve or reject a claim (legacy endpoint)
  */
 export const adminControllerResolveClaim = <ThrowOnError extends boolean = false>(options: Options<AdminControllerResolveClaimData, ThrowOnError>) => (options.client ?? client).patch<AdminControllerResolveClaimResponses, AdminControllerResolveClaimErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/claims/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Manually edit a race result with audit trail (BR-03)
+ */
+export const adminControllerEditResult = <ThrowOnError extends boolean = false>(options: Options<AdminControllerEditResultData, ThrowOnError>) => (options.client ?? client).patch<AdminControllerEditResultResponses, AdminControllerEditResultErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/race-results/{resultId}',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -238,6 +567,24 @@ export const adminControllerResolveClaim = <ThrowOnError extends boolean = false
 export const adminControllerPurgeCache = <ThrowOnError extends boolean = false>(options: Options<AdminControllerPurgeCacheData, ThrowOnError>) => (options.client ?? client).post<AdminControllerPurgeCacheResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/admin/cache/purge/{courseId}',
+    ...options
+});
+
+/**
+ * Get full athlete detail including _id and editHistory (admin only)
+ */
+export const adminControllerGetAthleteDetail = <ThrowOnError extends boolean = false>(options: Options<AdminControllerGetAthleteDetailData, ThrowOnError>) => (options.client ?? client).get<AdminControllerGetAthleteDetailResponses, AdminControllerGetAthleteDetailErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/race-results/athlete/{raceId}/{bib}',
+    ...options
+});
+
+/**
+ * Send a test OTP email (dev/staging only)
+ */
+export const adminControllerTestOtpEmail = <ThrowOnError extends boolean = false>(options?: Options<AdminControllerTestOtpEmailData, ThrowOnError>) => (options?.client ?? client).post<AdminControllerTestOtpEmailResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/test-otp-email',
     ...options
 });
 

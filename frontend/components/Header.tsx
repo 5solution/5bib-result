@@ -1,55 +1,35 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useSponsors } from '@/lib/api-hooks';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-
-interface Sponsor {
-  _id: string;
-  name: string;
-  logoUrl: string;
-  website?: string;
-  level: 'silver' | 'gold' | 'diamond';
-  order: number;
-}
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { t } = useTranslation();
-  const { data: sponsorsRaw } = useSponsors();
 
   const navLinks = [
     { href: '/', label: t('nav.home') },
     { href: '/calendar', label: t('nav.calendar') },
   ];
 
-  const sponsors = useMemo(() => {
-    const list: Sponsor[] = (sponsorsRaw as any)?.data ?? sponsorsRaw ?? [];
-    if (!Array.isArray(list) || list.length === 0) return [];
-    const priority: Record<string, number> = { diamond: 0, gold: 1, silver: 2 };
-    return [...list].sort(
-      (a, b) => (priority[a.level] ?? 9) - (priority[b.level] ?? 9) || a.order - b.order,
-    );
-  }, [sponsorsRaw]);
-
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
-      {/* Single row: Logo left — Nav + Sponsor right */}
       <div className="bg-blue-700">
         <div className="flex items-stretch h-14">
+
           {/* Logo — flush left */}
           <Link href="/" className="relative flex items-center group overflow-hidden px-5 shrink-0">
             <Image src="/logo_5BIB_white.png" alt="5BIB" width={120} height={36} className="h-9 w-auto" priority />
             <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/25 to-transparent pointer-events-none" />
           </Link>
 
-          {/* Desktop Nav — centered, underline hover */}
+          {/* Desktop Nav — centered */}
           <nav className="hidden md:flex items-stretch flex-1 justify-center">
             {navLinks.map((link) => {
               const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href.split('?')[0]);
@@ -62,36 +42,38 @@ export default function Header() {
                   }`}
                 >
                   {link.label}
-                  <span
-                    className={`absolute bottom-0 left-0 h-[3px] bg-white transition-all duration-300 ${
-                      isActive ? 'w-full' : 'w-0 group-hover/nav:w-full'
-                    }`}
-                  />
+                  <span className={`absolute bottom-0 left-0 h-[3px] bg-white transition-all duration-300 ${isActive ? 'w-full' : 'w-0 group-hover/nav:w-full'}`} />
                 </Link>
               );
             })}
           </nav>
 
-          {/* Language + Mobile menu */}
-          <div className="flex items-center ml-auto">
+          {/* Language switcher — right side, before account tile */}
+          <div className="hidden md:flex items-center ml-auto pr-1">
             <LanguageSwitcher />
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden px-3 text-blue-100 hover:text-white"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
           </div>
+
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden flex items-center ml-auto px-4 text-blue-100 hover:text-white"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+
+          {/* MY 5BIB — cyan accent tile, far right, angled left edge (like UTMB "MY UTMB") */}
+          <Link
+            href="/account"
+            className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
+            style={{ width: 200, clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)', paddingLeft: 36, paddingRight: 16 }}
+          >
+              <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">Embracing Challenges</span>
+            <ChevronRight className="w-4 h-4 ml-auto shrink-0" strokeWidth={2.5} />
+          </Link>
+
         </div>
       </div>
-
-      {/* Sponsor trapezoid — absolute, top-right, extends below header */}
-      {sponsors.length > 0 && (
-        <div className="hidden md:block absolute top-0 right-0 z-50" style={{ height: 90 }}>
-          <SponsorCarousel sponsors={sponsors} />
-        </div>
-      )}
 
       {/* Mobile Nav */}
       {mobileMenuOpen && (
@@ -105,96 +87,19 @@ export default function Header() {
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={`block px-4 py-3 text-sm font-semibold transition-all duration-200 ${
-                    isActive
-                      ? 'text-white border-l-2 border-white'
-                      : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
+                    isActive ? 'text-white border-l-2 border-white' : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
                   }`}
                 >
                   {link.label}
                 </Link>
               );
             })}
+            <div className="pt-1 pb-1">
+              <LanguageSwitcher />
+            </div>
           </nav>
         </div>
       )}
     </header>
-  );
-}
-
-function SponsorCarousel({ sponsors }: { sponsors: Sponsor[] }) {
-  const [current, setCurrent] = useState(0);
-  const [startX, setStartX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const next = useCallback(() => {
-    setCurrent((c) => (c + 1) % sponsors.length);
-  }, [sponsors.length]);
-
-  const prev = useCallback(() => {
-    setCurrent((c) => (c - 1 + sponsors.length) % sponsors.length);
-  }, [sponsors.length]);
-
-  useEffect(() => {
-    intervalRef.current = setInterval(next, 3000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [next]);
-
-  const pause = () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  const resume = () => { pause(); intervalRef.current = setInterval(next, 3000); };
-
-  const onDown = (e: React.PointerEvent) => {
-    setIsDragging(true);
-    setStartX(e.clientX);
-    pause();
-  };
-  const onUp = (e: React.PointerEvent) => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    const diff = e.clientX - startX;
-    if (Math.abs(diff) > 30) { diff < 0 ? next() : prev(); }
-    resume();
-  };
-
-  return (
-    <div
-      className="h-full cursor-grab active:cursor-grabbing select-none"
-      onPointerDown={onDown}
-      onPointerUp={onUp}
-      onPointerCancel={() => { setIsDragging(false); resume(); }}
-      onMouseEnter={pause}
-      onMouseLeave={resume}
-    >
-      <div
-        className="bg-white h-full flex items-center justify-center shadow-lg"
-        style={{
-          width: 220,
-          clipPath: 'polygon(16% 0%, 100% 0%, 100% 100%, 0% 100%)',
-          paddingLeft: 32,
-        }}
-      >
-        <div className="relative w-full h-full overflow-hidden">
-          {sponsors.map((s, i) => (
-            <div
-              key={s._id || s.name}
-              className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
-                i === current ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
-              }`}
-            >
-              {s.logoUrl ? (
-                <img
-                  src={s.logoUrl}
-                  alt={s.name}
-                  className="h-14 w-auto max-w-[150px] object-contain pointer-events-none"
-                  draggable={false}
-                />
-              ) : (
-                <span className="text-xs font-bold text-slate-500 tracking-wide">{s.name}</span>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }

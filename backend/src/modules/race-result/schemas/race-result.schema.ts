@@ -8,9 +8,23 @@ export class SplitTime {
   @Prop() name: string; // "5km", "10km", "Half"
   @Prop() time: string; // "00:25:30"
   @Prop() pace: string; // "5:06/km"
+  @Prop() rank: number; // rank at this checkpoint (from API)
+  @Prop() speed: number; // km/h at this segment
 }
 
 export const SplitTimeSchema = SchemaFactory.createForClass(SplitTime);
+
+@Schema({ _id: false })
+export class EditHistoryEntry {
+  @Prop({ required: true }) editedBy: string; // userId admin
+  @Prop({ required: true }) editedAt: Date;
+  @Prop({ required: true }) field: string; // field name changed
+  @Prop({ type: Object }) oldValue: unknown;
+  @Prop({ type: Object }) newValue: unknown;
+  @Prop({ required: true }) reason: string;
+}
+
+export const EditHistoryEntrySchema = SchemaFactory.createForClass(EditHistoryEntry);
 
 @Schema({
   collection: 'race_results',
@@ -67,6 +81,13 @@ export class RaceResult {
   // Team relay member mapping (JSON string: lap → member name)
   @Prop() member: string;
 
+  // Manual edit audit trail (BR-03)
+  @Prop({ type: [EditHistoryEntrySchema], default: [] })
+  editHistory: EditHistoryEntry[];
+
+  @Prop({ default: false, index: true })
+  isManuallyEdited: boolean;
+
   // Course-level counters (from external API)
   @Prop() started: number;
   @Prop() finished: number;
@@ -74,6 +95,10 @@ export class RaceResult {
 
   // Raw data from API (flexible)
   @Prop({ type: Object }) rawData: Record<string, any>;
+
+  // Avatar (P2-B-ii)
+  @Prop() email?: string;
+  @Prop() avatarUrl?: string;
 
   @Prop() syncedAt: Date;
 

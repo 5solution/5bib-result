@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import "@/lib/api"; // ensure client baseUrl is configured
 import { authHeaders } from "@/lib/api";
@@ -9,6 +10,7 @@ import {
   racesControllerGetRaceById,
   racesControllerUpdateRace,
   racesControllerUpdateStatus,
+  racesControllerForceUpdateStatus,
   racesControllerAddCourse,
   racesControllerUpdateCourse,
   racesControllerRemoveCourse,
@@ -27,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import ImageUpload from "@/components/ImageUpload";
 import SponsorBanners from "@/components/SponsorBanners";
 import {
@@ -74,14 +77,27 @@ import {
   MapPin,
   Image as ImageIcon,
   Download,
+  Copy,
+  ShieldAlert,
+  History,
 } from "lucide-react";
 
 type RaceStatus = "draft" | "pre_race" | "live" | "ended";
+
+interface CheckpointServices {
+  water: boolean;
+  food: boolean;
+  sleep: boolean;
+  dropBag: boolean;
+  medical: boolean;
+  notes?: string;
+}
 
 interface Checkpoint {
   key: string;
   name: string;
   distance?: string;
+  services?: CheckpointServices;
 }
 
 interface Course {
@@ -100,6 +116,14 @@ interface Course {
   mapUrl?: string;
   gpxUrl?: string;
   checkpoints?: Checkpoint[];
+}
+
+interface StatusHistoryEntry {
+  from: string;
+  to: string;
+  reason: string;
+  changedBy: string;
+  changedAt: string;
 }
 
 interface Race {
@@ -127,6 +151,7 @@ interface Race {
   pixEventUrl?: string;
   cacheTtlSeconds?: number;
   courses?: Course[];
+  statusHistory?: StatusHistoryEntry[];
 }
 
 function StatusBadge({ status }: { status: RaceStatus }) {
@@ -363,6 +388,38 @@ export default function RaceDetailPage() {
     }
   }
 
+  // Admin force override — bypass forward-only state machine (audit logged)
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideStatus, setOverrideStatus] = useState<RaceStatus>("pre_race");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overriding, setOverriding] = useState(false);
+
+  async function handleForceStatus() {
+    if (!token) return;
+    const reason = overrideReason.trim();
+    if (reason.length < 10) {
+      toast.error("Lý do phải có ít nhất 10 ký tự");
+      return;
+    }
+    setOverriding(true);
+    try {
+      const { error } = await racesControllerForceUpdateStatus({
+        path: { id: raceId },
+        body: { status: overrideStatus, reason },
+        ...authHeaders(token),
+      });
+      if (error) throw error;
+      toast.success(`Đã override trạng thái sang "${overrideStatus}"`);
+      setOverrideOpen(false);
+      setOverrideReason("");
+      fetchRace();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Override thất bại");
+    } finally {
+      setOverriding(false);
+    }
+  }
+
   async function handleSaveCourse() {
     if (!token || !courseForm.name) return;
     setSavingCourse(true);
@@ -493,7 +550,7 @@ export default function RaceDetailPage() {
     try {
       // Fetch all results (large page)
       const { data: body, error } = await raceResultControllerGetRaceResults({
-        query: { course_id: courseId, pageNo: 1, pageSize: 10000, sortField: 'OverallRank', sortDirection: 'ASC' },
+        query: { raceId, course_id: courseId, pageNo: 1, pageSize: 100, sortField: 'OverallRank', sortDirection: 'ASC' },
       });
       if (error) { toast.error("Không thể tải dữ liệu"); return; }
       const results = (body as any)?.data ?? [];
@@ -549,6 +606,28 @@ export default function RaceDetailPage() {
     setCourseDialogOpen(true);
   }
 
+  function openCloneCourse(course: Course) {
+    setEditingCourse(null); // clone = create new
+    setCourseForm({
+      courseId: "",
+      name: course.name + " (Copy)",
+      distance: course.distance,
+      distanceKm: course.distanceKm,
+      courseType: course.courseType || "split",
+      apiFormat: course.apiFormat || "json",
+      apiUrl: course.apiUrl || "",
+      imageUrl: course.imageUrl || "",
+      elevationGain: course.elevationGain,
+      cutOffTime: course.cutOffTime || "",
+      startTime: course.startTime || "",
+      startLocation: course.startLocation || "",
+      mapUrl: course.mapUrl || "",
+      gpxUrl: course.gpxUrl || "",
+      checkpoints: course.checkpoints ? JSON.parse(JSON.stringify(course.checkpoints)) : [],
+    });
+    setCourseDialogOpen(true);
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col gap-6">
@@ -582,6 +661,12 @@ export default function RaceDetailPage() {
           <p className="text-sm text-muted-foreground">{race.slug}</p>
         </div>
         <StatusBadge status={race.status} />
+        <Link href={`/races/${raceId}/results`}>
+          <Button variant="outline" size="sm">
+            <Pencil className="size-4 mr-1.5" />
+            Sửa kết quả
+          </Button>
+        </Link>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -608,8 +693,16 @@ export default function RaceDetailPage() {
               {/* Status Controls — Clear Lifecycle */}
               <div className="flex flex-col gap-3">
                 <Label>Trạng thái giải đấu</Label>
+                {race.status === "ended" && (
+                  <p className="text-xs text-muted-foreground">
+                    Giải đã kết thúc — không thể đổi trạng thái. Liên hệ dev nếu cần mở lại.
+                  </p>
+                )}
                 <div className="grid grid-cols-4 gap-3">
-                  {([
+                  {(() => {
+                    const ORDER: Record<RaceStatus, number> = { draft: 0, pre_race: 1, live: 2, ended: 3 };
+                    const currentOrder = ORDER[race.status as RaceStatus] ?? 0;
+                    return [
                     {
                       key: "draft" as RaceStatus,
                       label: "Nháp",
@@ -642,13 +735,30 @@ export default function RaceDetailPage() {
                       activeClass: "border-zinc-400 bg-zinc-50 text-zinc-700",
                       dotClass: "bg-zinc-400",
                     },
-                  ]).map((step) => {
+                  ].map((step) => {
                     const isCurrent = race.status === step.key;
+                    // Forward-only state machine: can only go to steps with higher order
+                    // Once ended, cannot go anywhere
+                    const isValidTransition =
+                      !isCurrent &&
+                      race.status !== "ended" &&
+                      ORDER[step.key] > currentOrder;
+                    const isDisabled = !isCurrent && !isValidTransition;
                     return (
                       <button
                         key={step.key}
+                        disabled={isDisabled}
+                        title={
+                          isCurrent
+                            ? "Trạng thái hiện tại"
+                            : isDisabled
+                            ? race.status === "ended"
+                              ? "Giải đã kết thúc — không thể đổi trạng thái"
+                              : `Không thể quay lại '${step.label}' — chỉ được chuyển tiến`
+                            : `Chuyển sang '${step.label}'`
+                        }
                         onClick={() => {
-                          if (isCurrent) return;
+                          if (isCurrent || isDisabled) return;
                           if (confirm(`Chuyển trạng thái giải sang "${step.label}"?`)) {
                             handleUpdateStatus(step.key);
                           }
@@ -657,6 +767,8 @@ export default function RaceDetailPage() {
                           relative flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all text-center
                           ${isCurrent
                             ? step.activeClass
+                            : isDisabled
+                            ? "border-transparent bg-muted/30 text-muted-foreground/50 cursor-not-allowed opacity-50"
                             : "border-transparent bg-muted/50 text-muted-foreground hover:bg-muted hover:border-muted-foreground/20 cursor-pointer"
                           }
                         `}
@@ -678,9 +790,135 @@ export default function RaceDetailPage() {
                         )}
                       </button>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
+
+                {/* Admin override — bypass forward-only state machine */}
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-50/50 px-3 py-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <ShieldAlert className="size-4 shrink-0 text-orange-600 mt-0.5" />
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="text-xs font-semibold text-orange-900">
+                        Override trạng thái (admin)
+                      </span>
+                      <span className="text-[11px] text-orange-700/80">
+                        Bỏ qua luật forward-only khi cần sửa nhầm — bắt buộc nhập lý do, có audit log.
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-orange-300 text-orange-700 hover:bg-orange-100 hover:text-orange-800 shrink-0"
+                    onClick={() => {
+                      setOverrideStatus(race.status as RaceStatus);
+                      setOverrideReason("");
+                      setOverrideOpen(true);
+                    }}
+                  >
+                    Override
+                  </Button>
+                </div>
+
+                {/* Status history audit trail */}
+                {race.statusHistory && race.statusHistory.length > 0 && (
+                  <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 px-3 py-2.5">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                      <History className="size-3.5" />
+                      Lịch sử override ({race.statusHistory.length})
+                    </div>
+                    <ul className="flex flex-col gap-1 text-[11px]">
+                      {[...race.statusHistory].reverse().slice(0, 5).map((h, i) => (
+                        <li key={`${h.changedAt}-${i}`} className="flex flex-col gap-0.5 rounded border bg-background px-2 py-1.5">
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <span className="text-muted-foreground">{h.from}</span>
+                            <span>→</span>
+                            <span className="font-semibold">{h.to}</span>
+                            <span className="ml-auto text-muted-foreground">
+                              {new Date(h.changedAt).toLocaleString("vi-VN")}
+                            </span>
+                          </div>
+                          <div className="text-muted-foreground truncate" title={h.reason}>
+                            {h.reason}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
+
+              {/* Override dialog */}
+              <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <ShieldAlert className="size-5 text-orange-600" />
+                      Override trạng thái giải
+                    </DialogTitle>
+                    <DialogDescription>
+                      Thao tác này bỏ qua luật forward-only và được ghi vào audit log.
+                      Chỉ dùng khi thật sự cần (sync nhầm, sửa sai, mở lại giải để edit).
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-4 py-2">
+                    <div className="flex flex-col gap-2">
+                      <Label>Trạng thái mới</Label>
+                      <Select
+                        value={overrideStatus}
+                        onValueChange={(v) => setOverrideStatus((v ?? "pre_race") as RaceStatus)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="draft">Nháp (ẩn khỏi public)</SelectItem>
+                          <SelectItem value="pre_race">Chuẩn bị</SelectItem>
+                          <SelectItem value="live">Đang diễn ra</SelectItem>
+                          <SelectItem value="ended">Đã kết thúc</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Hiện tại: <span className="font-semibold">{race.status}</span>
+                        {overrideStatus === race.status && " (không thay đổi)"}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="override-reason">
+                        Lý do <span className="text-destructive">*</span>
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">
+                          ({overrideReason.trim().length}/10 ký tự tối thiểu)
+                        </span>
+                      </Label>
+                      <Textarea
+                        id="override-reason"
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                        placeholder="VD: Giải bị sync nhầm sang ended, cần mở lại để sửa result bib 1234..."
+                        rows={3}
+                        maxLength={500}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setOverrideOpen(false)} disabled={overriding}>
+                      Hủy
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleForceStatus}
+                      disabled={
+                        overriding ||
+                        overrideReason.trim().length < 10 ||
+                        overrideStatus === race.status
+                      }
+                    >
+                      {overriding ? "Đang override..." : "Xác nhận override"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               <Separator />
 
@@ -850,283 +1088,277 @@ export default function RaceDetailPage() {
                   setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [], imageUrl: "", elevationGain: undefined, cutOffTime: "", startTime: "", startLocation: "", mapUrl: "", gpxUrl: "" });
                 }
               }}>
-                <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-2xl">
                   <DialogHeader>
                     <DialogTitle>
                       {editingCourse ? "Sửa cự ly" : "Thêm cự ly"}
                     </DialogTitle>
                     <DialogDescription>
-                      Nhập thông tin cự ly
+                      {editingCourse ? editingCourse.name : "Nhập thông tin cự ly mới"}
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="flex flex-col gap-4 py-4">
-                    <div className="flex flex-col gap-2">
-                      <Label>Tên cự ly *</Label>
-                      <Input
-                        value={courseForm.name ?? ""}
-                        onChange={(e) =>
-                          setCourseForm((p: any) => ({ ...p, name: e.target.value }))
-                        }
-                        placeholder="42km Full Marathon"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Label>Khoảng cách</Label>
-                        <Input
-                          value={courseForm.distance ?? ""}
-                          onChange={(e) =>
-                            setCourseForm((p: any) => ({ ...p, distance: e.target.value }))
-                          }
-                          placeholder="42km"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Km</Label>
-                        <Input
-                          type="number"
-                          value={courseForm.distanceKm ?? ""}
-                          onChange={(e) =>
-                            setCourseForm((p: any) => ({
-                              ...p,
-                              distanceKm: parseFloat(e.target.value) || undefined,
-                            }))
-                          }
-                          placeholder="42.195"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Label>Loại cự ly</Label>
-                        <Select
-                          value={courseForm.courseType ?? "split"}
-                          onValueChange={(val) =>
-                            setCourseForm((p: any) => ({ ...p, courseType: val }))
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="split">Split Race</SelectItem>
-                            <SelectItem value="lap">Lap Race</SelectItem>
-                            <SelectItem value="team_relay">Team Relay</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Định dạng API</Label>
-                        <Select
-                          value={courseForm.apiFormat ?? "json"}
-                          onValueChange={(val) =>
-                            setCourseForm((p: any) => ({ ...p, apiFormat: val }))
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="json">JSON</SelectItem>
-                            <SelectItem value="csv">CSV</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>API URL</Label>
-                      <Input
-                        value={courseForm.apiUrl ?? ""}
-                        onChange={(e) =>
-                          setCourseForm((p: any) => ({ ...p, apiUrl: e.target.value }))
-                        }
-                        placeholder="https://my.raceresult.com/api/results?contest=708"
-                      />
-                    </div>
 
-                    <Separator />
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Thông tin bổ sung</p>
+                  <Tabs defaultValue="basic" className="mt-1">
+                    <TabsList className="w-full grid grid-cols-4">
+                      <TabsTrigger value="basic">Cơ bản</TabsTrigger>
+                      <TabsTrigger value="info">Thông tin</TabsTrigger>
+                      <TabsTrigger value="media">Hình ảnh</TabsTrigger>
+                      <TabsTrigger value="checkpoints">
+                        Checkpoints
+                        {(courseForm.checkpoints as Checkpoint[])?.length > 0 && (
+                          <span className="ml-1.5 bg-blue-500/20 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {(courseForm.checkpoints as Checkpoint[]).length}
+                          </span>
+                        )}
+                      </TabsTrigger>
+                    </TabsList>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* ── Tab 1: Cơ bản ── */}
+                    <TabsContent value="basic" className="mt-4 flex flex-col gap-4">
                       <div className="flex flex-col gap-2">
-                        <Label className="flex items-center gap-1.5">
-                          <Mountain className="size-3.5" /> Tổng leo cao (m)
-                        </Label>
+                        <Label>Tên cự ly *</Label>
                         <Input
-                          type="number"
-                          value={courseForm.elevationGain ?? ""}
-                          onChange={(e) =>
-                            setCourseForm((p: any) => ({
-                              ...p,
-                              elevationGain: parseInt(e.target.value) || undefined,
-                            }))
-                          }
-                          placeholder="1500"
+                          value={courseForm.name ?? ""}
+                          onChange={(e) => setCourseForm((p: any) => ({ ...p, name: e.target.value }))}
+                          placeholder="42km Full Marathon"
+                          autoFocus
                         />
                       </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2">
+                          <Label>Nhãn khoảng cách</Label>
+                          <Input
+                            value={courseForm.distance ?? ""}
+                            onChange={(e) => setCourseForm((p: any) => ({ ...p, distance: e.target.value }))}
+                            placeholder="42km"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label>Km (số)</Label>
+                          <Input
+                            type="number"
+                            value={courseForm.distanceKm ?? ""}
+                            onChange={(e) => setCourseForm((p: any) => ({ ...p, distanceKm: parseFloat(e.target.value) || undefined }))}
+                            placeholder="42.195"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2">
+                          <Label>Loại cự ly</Label>
+                          <Select value={courseForm.courseType ?? "split"} onValueChange={(val) => setCourseForm((p: any) => ({ ...p, courseType: val }))}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="split">Split Race</SelectItem>
+                              <SelectItem value="lap">Lap Race</SelectItem>
+                              <SelectItem value="team_relay">Team Relay</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label>Định dạng API</Label>
+                          <Select value={courseForm.apiFormat ?? "json"} onValueChange={(val) => setCourseForm((p: any) => ({ ...p, apiFormat: val }))}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="json">JSON</SelectItem>
+                              <SelectItem value="csv">CSV</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                       <div className="flex flex-col gap-2">
-                        <Label className="flex items-center gap-1.5">
-                          <Clock className="size-3.5" /> Giờ xuất phát
-                        </Label>
+                        <Label>API URL</Label>
                         <Input
-                          value={courseForm.startTime ?? ""}
-                          onChange={(e) =>
-                            setCourseForm((p: any) => ({ ...p, startTime: e.target.value }))
-                          }
-                          placeholder="05:00"
+                          value={courseForm.apiUrl ?? ""}
+                          onChange={(e) => setCourseForm((p: any) => ({ ...p, apiUrl: e.target.value }))}
+                          placeholder="https://my.raceresult.com/api/results?contest=708"
                         />
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Label className="flex items-center gap-1.5">
-                          <MapPin className="size-3.5" /> Địa điểm xuất phát
-                        </Label>
-                        <Input
-                          value={courseForm.startLocation ?? ""}
-                          onChange={(e) =>
-                            setCourseForm((p: any) => ({ ...p, startLocation: e.target.value }))
-                          }
-                          placeholder="Quảng trường Lâm Viên"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label className="flex items-center gap-1.5">
-                          <Clock className="size-3.5" /> Cut-off time (COT)
-                        </Label>
-                        <Input
-                          value={courseForm.cutOffTime ?? ""}
-                          onChange={(e) =>
-                            setCourseForm((p: any) => ({ ...p, cutOffTime: e.target.value }))
-                          }
-                          placeholder="12:00:00"
-                        />
-                      </div>
-                    </div>
+                    </TabsContent>
 
-                    <Separator />
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hình ảnh</p>
+                    {/* ── Tab 2: Thông tin ── */}
+                    <TabsContent value="info" className="mt-4 flex flex-col gap-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2">
+                          <Label className="flex items-center gap-1.5"><Mountain className="size-3.5" /> Tổng leo cao (m)</Label>
+                          <Input
+                            type="number"
+                            value={courseForm.elevationGain ?? ""}
+                            onChange={(e) => setCourseForm((p: any) => ({ ...p, elevationGain: parseInt(e.target.value) || undefined }))}
+                            placeholder="1500"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label className="flex items-center gap-1.5"><Clock className="size-3.5" /> Giờ xuất phát</Label>
+                          <Input
+                            value={courseForm.startTime ?? ""}
+                            onChange={(e) => setCourseForm((p: any) => ({ ...p, startTime: e.target.value }))}
+                            placeholder="05:00"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2">
+                          <Label className="flex items-center gap-1.5"><MapPin className="size-3.5" /> Địa điểm xuất phát</Label>
+                          <Input
+                            value={courseForm.startLocation ?? ""}
+                            onChange={(e) => setCourseForm((p: any) => ({ ...p, startLocation: e.target.value }))}
+                            placeholder="Quảng trường Lâm Viên"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label className="flex items-center gap-1.5"><Clock className="size-3.5" /> Cut-off time (COT)</Label>
+                          <Input
+                            value={courseForm.cutOffTime ?? ""}
+                            onChange={(e) => setCourseForm((p: any) => ({ ...p, cutOffTime: e.target.value }))}
+                            placeholder="12:00:00"
+                          />
+                        </div>
+                      </div>
+                    </TabsContent>
 
-                    <div className="flex flex-col gap-2">
-                      <Label className="flex items-center gap-1.5">
-                        <ImageIcon className="size-3.5" /> Ảnh cự ly
-                      </Label>
-                      <ImageUpload
-                        value={courseForm.imageUrl}
-                        onChange={(url) =>
-                          setCourseForm((p: any) => ({ ...p, imageUrl: url }))
-                        }
-                        folder={`races/${raceId}/courses`}
-                        token={token || undefined}
-                        label="Tải ảnh cự ly"
-                        previewHeight="h-28"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>Bản đồ cự ly</Label>
-                      <ImageUpload
-                        value={courseForm.mapUrl}
-                        onChange={(url) =>
-                          setCourseForm((p: any) => ({ ...p, mapUrl: url }))
-                        }
-                        folder={`races/${raceId}/maps`}
-                        token={token || undefined}
-                        label="Tải bản đồ"
-                        previewHeight="h-28"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>File GPX</Label>
-                      <div className="flex gap-2">
+                    {/* ── Tab 3: Hình ảnh ── */}
+                    <TabsContent value="media" className="mt-4 flex flex-col gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label className="flex items-center gap-1.5"><ImageIcon className="size-3.5" /> Ảnh cự ly</Label>
+                        <ImageUpload
+                          value={courseForm.imageUrl}
+                          onChange={(url) => setCourseForm((p: any) => ({ ...p, imageUrl: url }))}
+                          folder={`races/${raceId}/courses`}
+                          token={token || undefined}
+                          label="Tải ảnh cự ly"
+                          previewHeight="h-28"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>Bản đồ cự ly</Label>
+                        <ImageUpload
+                          value={courseForm.mapUrl}
+                          onChange={(url) => setCourseForm((p: any) => ({ ...p, mapUrl: url }))}
+                          folder={`races/${raceId}/maps`}
+                          token={token || undefined}
+                          label="Tải bản đồ"
+                          previewHeight="h-28"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>File GPX</Label>
                         <Input
                           value={courseForm.gpxUrl ?? ""}
-                          onChange={(e) =>
-                            setCourseForm((p: any) => ({ ...p, gpxUrl: e.target.value }))
-                          }
+                          onChange={(e) => setCourseForm((p: any) => ({ ...p, gpxUrl: e.target.value }))}
                           placeholder="URL file GPX"
                         />
                       </div>
-                    </div>
+                    </TabsContent>
 
-                    <Separator />
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Checkpoints</p>
-
-                    <div className="flex flex-col gap-3">
-                      {(courseForm.checkpoints as Checkpoint[] || []).map(
-                        (cp: Checkpoint, idx: number) => (
-                          <div key={idx} className="flex items-start gap-2">
-                            <div className="grid flex-1 grid-cols-3 gap-2">
-                              <Input
-                                value={cp.key}
-                                onChange={(e) => {
-                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                  updated[idx] = { ...updated[idx], key: e.target.value };
+                    {/* ── Tab 4: Checkpoints ── */}
+                    <TabsContent value="checkpoints" className="mt-4">
+                      <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-1">
+                        {(courseForm.checkpoints as Checkpoint[] || []).map((cp: Checkpoint, idx: number) => (
+                          <div key={idx} className="border border-zinc-700 rounded-lg p-3 space-y-2">
+                            <div className="flex items-start gap-2">
+                              <div className="grid flex-1 grid-cols-3 gap-2">
+                                <Input
+                                  value={cp.key}
+                                  onChange={(e) => {
+                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                    updated[idx] = { ...updated[idx], key: e.target.value };
+                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                  }}
+                                  placeholder="Key (TM1)"
+                                  className="text-sm"
+                                />
+                                <Input
+                                  value={cp.name}
+                                  onChange={(e) => {
+                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                    updated[idx] = { ...updated[idx], name: e.target.value };
+                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                  }}
+                                  placeholder="Tên CP"
+                                  className="text-sm"
+                                />
+                                <Input
+                                  value={cp.distance ?? ""}
+                                  onChange={(e) => {
+                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                    updated[idx] = { ...updated[idx], distance: e.target.value || undefined };
+                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                  }}
+                                  placeholder="Km"
+                                  className="text-sm"
+                                />
+                              </div>
+                              <Button
+                                type="button" variant="ghost" size="icon-xs"
+                                onClick={() => {
+                                  const updated = (courseForm.checkpoints as Checkpoint[]).filter((_: Checkpoint, i: number) => i !== idx);
                                   setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
                                 }}
-                                placeholder="Key (VD: TM1)"
-                                className="text-sm"
-                              />
-                              <Input
-                                value={cp.name}
-                                onChange={(e) => {
-                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                  updated[idx] = { ...updated[idx], name: e.target.value };
-                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                }}
-                                placeholder="Tên (VD: CP1 - Suối Vàng)"
-                                className="text-sm"
-                              />
-                              <Input
-                                value={cp.distance ?? ""}
-                                onChange={(e) => {
-                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                  updated[idx] = { ...updated[idx], distance: e.target.value || undefined };
-                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                }}
-                                placeholder="Khoảng cách (VD: 10K)"
-                                className="text-sm"
-                              />
+                                title="Xóa checkpoint"
+                              >
+                                <Trash2 className="size-3 text-destructive" />
+                              </Button>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={() => {
-                                const updated = (courseForm.checkpoints as Checkpoint[]).filter(
-                                  (_: Checkpoint, i: number) => i !== idx
-                                );
-                                setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                              }}
-                              title="Xóa checkpoint"
-                            >
-                              <Trash2 className="size-3 text-destructive" />
-                            </Button>
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Dịch vụ:</span>
+                              {([
+                                { key: 'water', label: '💧 Nước' },
+                                { key: 'food', label: '🍌 Đồ ăn' },
+                                { key: 'sleep', label: '🛏 Ngủ nghỉ' },
+                                { key: 'dropBag', label: '🎒 Drop Bag' },
+                                { key: 'medical', label: '🏥 Y tế' },
+                              ] as { key: keyof CheckpointServices; label: string }[]).map(({ key, label }) => (
+                                <button
+                                  key={key} type="button"
+                                  onClick={() => {
+                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                    const svc = updated[idx].services || { water: false, food: false, sleep: false, dropBag: false, medical: false };
+                                    updated[idx] = { ...updated[idx], services: { ...svc, [key]: !svc[key as keyof CheckpointServices] } };
+                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors border ${
+                                    cp.services?.[key as keyof CheckpointServices]
+                                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                                      : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-500'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            {(cp.services?.water || cp.services?.food || cp.services?.sleep || cp.services?.dropBag || cp.services?.medical) && (
+                              <Input
+                                value={cp.services?.notes ?? ""}
+                                onChange={(e) => {
+                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
+                                  const svc = updated[idx].services || { water: false, food: false, sleep: false, dropBag: false, medical: false };
+                                  updated[idx] = { ...updated[idx], services: { ...svc, notes: e.target.value || undefined } };
+                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                                }}
+                                placeholder="Ghi chú dịch vụ (VD: Nước + gel + chuối)"
+                                className="text-xs"
+                              />
+                            )}
                           </div>
-                        )
-                      )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const updated = [
-                            ...(courseForm.checkpoints as Checkpoint[] || []),
-                            { key: "", name: "", distance: "" },
-                          ];
-                          setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                        }}
-                      >
-                        <Plus className="size-4 mr-1" />
-                        Thêm checkpoint
-                      </Button>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      onClick={handleSaveCourse}
-                      disabled={savingCourse || !courseForm.name}
-                    >
-                      {savingCourse ? "Đang lưu..." : "Lưu"}
+                        ))}
+                        <Button
+                          type="button" variant="outline" size="sm"
+                          onClick={() => {
+                            const updated = [...(courseForm.checkpoints as Checkpoint[] || []), { key: "", name: "", distance: "" }];
+                            setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
+                          }}
+                        >
+                          <Plus className="size-4 mr-1" /> Thêm checkpoint
+                        </Button>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+
+                  <DialogFooter className="mt-4">
+                    <Button variant="outline" onClick={() => setCourseDialogOpen(false)}>Hủy</Button>
+                    <Button onClick={handleSaveCourse} disabled={savingCourse || !courseForm.name}>
+                      {savingCourse ? "Đang lưu..." : "Lưu cự ly"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -1140,86 +1372,91 @@ export default function RaceDetailPage() {
               ) : (
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Tên</TableHead>
-                      <TableHead className="hidden sm:table-cell">Khoảng cách</TableHead>
-                      <TableHead className="hidden md:table-cell">Giờ xuất phát</TableHead>
-                      <TableHead className="hidden lg:table-cell">Đường dẫn API</TableHead>
-                      <TableHead className="text-right">Thao tác</TableHead>
+                    <TableRow className="text-base">
+                      <TableHead className="text-base py-4">Tên</TableHead>
+                      <TableHead className="hidden sm:table-cell text-base py-4">Khoảng cách</TableHead>
+                      <TableHead className="hidden md:table-cell text-base py-4">Giờ xuất phát</TableHead>
+                      <TableHead className="hidden lg:table-cell text-base py-4">Đường dẫn API</TableHead>
+                      <TableHead className="text-right text-base py-4">Thao tác</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {race.courses.map((course) => (
-                      <TableRow key={course.courseId}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
+                      <TableRow key={course.courseId} className="text-base">
+                        <TableCell className="font-medium py-4">
+                          <div className="flex items-center gap-3">
                             {course.imageUrl && (
-                              <img src={course.imageUrl} alt="" className="size-8 rounded object-cover" />
+                              <img src={course.imageUrl} alt="" className="size-14 rounded-lg object-cover flex-shrink-0" />
                             )}
                             <div>
-                              <div>{course.name}</div>
-                              {course.startTime && (
-                                <span className="text-xs text-muted-foreground">{course.startTime}</span>
-                              )}
+                              <div className="text-base font-semibold">{course.name}</div>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="hidden sm:table-cell text-muted-foreground">
+                        <TableCell className="hidden sm:table-cell text-base text-muted-foreground py-4">
                           {course.distance || "-"}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-muted-foreground">
+                        <TableCell className="hidden md:table-cell text-base text-muted-foreground py-4">
                           {course.startTime || "-"}
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-muted-foreground max-w-[200px] truncate">
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[240px] truncate py-4">
                           {course.apiUrl || "-"}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
+                        <TableCell className="text-right py-4">
+                          <div className="flex items-center justify-end gap-2">
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => handleExportCSV(course.courseId, course.name)}
                               title="Xuất CSV"
                             >
-                              <Download className="size-3" />
+                              <Download className="size-4" />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => handleForceSync(course.courseId)}
                               disabled={syncingCourseId === course.courseId}
                               title="Ép đồng bộ"
                             >
                               <RefreshCw
-                                className={`size-3 ${
+                                className={`size-4 ${
                                   syncingCourseId === course.courseId ? "animate-spin" : ""
                                 }`}
                               />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => handleResetData(course.courseId)}
                               disabled={resettingCourseId === course.courseId}
                               title="Xóa dữ liệu"
                             >
-                              <RotateCcw className="size-3" />
+                              <RotateCcw className="size-4" />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
+                              onClick={() => openCloneCourse(course)}
+                              title="Nhân bản cự ly"
+                            >
+                              <Copy className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
                               onClick={() => openEditCourse(course)}
                               title="Sửa"
                             >
-                              <Pencil className="size-3" />
+                              <Pencil className="size-4" />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon-sm"
                               onClick={() => handleRemoveCourse(course.courseId)}
                               title="Xóa"
                             >
-                              <Trash2 className="size-3 text-destructive" />
+                              <Trash2 className="size-4 text-destructive" />
                             </Button>
                           </div>
                         </TableCell>

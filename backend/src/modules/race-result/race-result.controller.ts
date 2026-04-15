@@ -10,6 +10,7 @@ import {
   NotFoundException,
   UploadedFile,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -24,11 +25,13 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { GetRaceResultsDto } from './dto/get-race-results.dto';
+import { RaceResultsPaginatedDto } from './dto/race-result-response.dto';
 import { SubmitClaimDto } from './dto/submit-claim.dto';
 import { RaceResultService } from './services/race-result.service';
 import { ResultImageService } from './services/result-image.service';
 import { RacesService } from '../races/races.service';
 import { UploadService } from '../upload/upload.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Race Results')
 @Controller('race-results')
@@ -55,6 +58,7 @@ export class RaceResultController {
   @ApiResponse({
     status: 200,
     description: 'Returns paginated race results',
+    type: RaceResultsPaginatedDto,
   })
   async getRaceResults(@Query() dto: GetRaceResultsDto) {
     return this.raceResultService.getRaceResults(dto);
@@ -108,7 +112,14 @@ export class RaceResultController {
     if (!result) {
       return { data: null, success: false, message: 'Athlete not found' };
     }
-    return { data: result, success: true };
+    // Strip internal/admin-only fields from public response (info disclosure fix)
+    const { _id, editHistory, isManuallyEdited, ...publicData } = result as typeof result & {
+      _id?: string;
+      editHistory?: unknown[];
+      isManuallyEdited?: boolean;
+    };
+    void _id; void editHistory; void isManuallyEdited;
+    return { data: publicData, success: true };
   }
 
   @Get('certificate/:raceId/:bib')
@@ -197,6 +208,73 @@ export class RaceResultController {
   async getCourseStats(@Param('courseId') courseId: string) {
     const stats = await this.raceResultService.getCourseStats(courseId);
     return { data: stats, success: true };
+  }
+
+  @Post('avatar/request-otp')
+  @ApiOperation({ summary: 'Request OTP to verify email before avatar upload' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['raceId', 'bib', 'email'],
+      properties: {
+        raceId: { type: 'string' },
+        bib: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'OTP sent to registered email' })
+  @ApiResponse({ status: 400, description: 'Email does not match or no email on record' })
+  @ApiResponse({ status: 404, description: 'Athlete not found' })
+  async requestAvatarOtp(
+    @Body('raceId') raceId: string,
+    @Body('bib') bib: string,
+    @Body('email') email: string,
+  ) {
+    if (!raceId || !bib || !email) {
+      throw new BadRequestException('raceId, bib and email are required');
+    }
+    return this.raceResultService.requestAvatarOtp(raceId, bib, email);
+  }
+
+  @Post('avatar/upload')
+  @ApiOperation({ summary: 'Upload avatar after OTP verification' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['raceId', 'bib', 'otp', 'file'],
+      properties: {
+        raceId: { type: 'string' },
+        bib: { type: 'string' },
+        otp: { type: 'string' },
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Avatar uploaded, returns avatarUrl' })
+  @ApiResponse({ status: 400, description: 'Invalid OTP or upload failed' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  async uploadAvatar(
+    @Body('raceId') raceId: string,
+    @Body('bib') bib: string,
+    @Body('otp') otp: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!raceId || !bib || !otp) {
+      throw new BadRequestException('raceId, bib and otp are required');
+    }
+    if (!file) throw new BadRequestException('No file uploaded');
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException('Only JPG, PNG or WebP images allowed');
+    }
+    return this.raceResultService.uploadAvatar(raceId, bib, otp, file);
   }
 
   @Post('claims/upload')
@@ -326,6 +404,7 @@ export class RaceResultController {
     res.send(pngBuffer);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('sync')
   @ApiOperation({ summary: 'Manually trigger race results sync' })
   @ApiResponse({

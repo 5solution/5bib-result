@@ -135,7 +135,10 @@ describe('RacesService', () => {
 
   describe('updateStatus', () => {
     it('should update status to live', async () => {
-      mockModel.exec.mockResolvedValue({ ...mockRace, status: 'live' });
+      // findById returns current status (pre_race), findByIdAndUpdate returns updated status (live)
+      mockModel.exec
+        .mockResolvedValueOnce({ ...mockRace, status: 'pre_race' })
+        .mockResolvedValueOnce({ ...mockRace, status: 'live' });
 
       const result = await service.updateStatus('665abc123', {
         status: 'live',
@@ -151,13 +154,32 @@ describe('RacesService', () => {
     });
 
     it('should update status to ended', async () => {
-      mockModel.exec.mockResolvedValue({ ...mockRace, status: 'ended' });
+      // findById returns current status (live), findByIdAndUpdate returns updated status (ended)
+      mockModel.exec
+        .mockResolvedValueOnce({ ...mockRace, status: 'live' })
+        .mockResolvedValueOnce({ ...mockRace, status: 'ended' });
 
       const result = await service.updateStatus('665abc123', {
         status: 'ended',
       });
 
       expect(result.data.status).toBe('ended');
+    });
+
+    it('should reject transition from ended to any status', async () => {
+      mockModel.exec.mockResolvedValueOnce({ ...mockRace, status: 'ended' });
+
+      await expect(
+        service.updateStatus('665abc123', { status: 'live' }),
+      ).rejects.toThrow('Cannot transition from');
+    });
+
+    it('should reject backward transition (live → pre_race)', async () => {
+      mockModel.exec.mockResolvedValueOnce({ ...mockRace, status: 'live' });
+
+      await expect(
+        service.updateStatus('665abc123', { status: 'pre_race' }),
+      ).rejects.toThrow('Invalid status transition');
     });
 
     it('should throw NotFoundException when race does not exist', async () => {

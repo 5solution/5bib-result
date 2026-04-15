@@ -7,20 +7,27 @@ import {
   Query,
   Param,
   Body,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import {
   ApiOperation,
   ApiResponse,
   ApiTags,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { RacesService } from './races.service';
 import { SearchRacesDto } from './dto/search-races.dto';
 import { CreateRaceDto } from './dto/create-race.dto';
 import { UpdateRaceDto } from './dto/update-race.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 
 @ApiTags('Races')
 @Controller('races')
@@ -57,15 +64,18 @@ export class RacesController {
   }
 
   @Get('slug/:slug')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get race by slug (SEO-friendly)' })
   @ApiParam({ name: 'slug', type: 'string', description: 'Race slug' })
   @ApiResponse({ status: 200, description: 'Returns race details' })
   @ApiResponse({ status: 404, description: 'Race not found' })
-  async getRaceBySlug(@Param('slug') slug: string) {
-    return this.racesService.getRaceBySlug(slug);
+  async getRaceBySlug(@Param('slug') slug: string, @Req() req: Request) {
+    const isAdmin = !!(req as any).user;
+    return this.racesService.getRaceBySlug(slug, isAdmin);
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get race by ID' })
   @ApiParam({
     name: 'id',
@@ -74,8 +84,9 @@ export class RacesController {
   })
   @ApiResponse({ status: 200, description: 'Returns race details with courses' })
   @ApiResponse({ status: 404, description: 'Race not found' })
-  async getRaceById(@Param('id') id: string) {
-    return this.racesService.getRaceById(id);
+  async getRaceById(@Param('id') id: string, @Req() req: Request) {
+    const isAdmin = !!(req as any).user;
+    return this.racesService.getRaceById(id, isAdmin);
   }
 
   @Get('product/:productId')
@@ -93,6 +104,8 @@ export class RacesController {
 
   // ─── Admin CRUD ───────────────────────────────────────────────
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post()
   @ApiOperation({ summary: 'Create a new race (admin)' })
   @ApiResponse({ status: 201, description: 'Race created' })
@@ -100,6 +113,8 @@ export class RacesController {
     return this.racesService.createRace(dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Patch(':id')
   @ApiOperation({ summary: 'Update a race (admin)' })
   @ApiParam({ name: 'id', type: 'string' })
@@ -109,6 +124,8 @@ export class RacesController {
     return this.racesService.updateRace(id, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a race (admin)' })
   @ApiParam({ name: 'id', type: 'string' })
@@ -118,6 +135,8 @@ export class RacesController {
     return this.racesService.deleteRace(id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update race lifecycle status (admin)' })
   @ApiParam({ name: 'id', type: 'string' })
@@ -127,8 +146,31 @@ export class RacesController {
     return this.racesService.updateStatus(id, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Patch(':id/status/force')
+  @ApiOperation({
+    summary:
+      'Admin override — bypass forward-only state machine (requires reason, audit logged)',
+  })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiResponse({ status: 200, description: 'Status overridden, audit entry appended' })
+  @ApiResponse({ status: 400, description: 'Invalid reason (min 10 chars)' })
+  @ApiResponse({ status: 404, description: 'Race not found' })
+  async forceUpdateStatus(
+    @Param('id') id: string,
+    @Body() dto: ForceUpdateStatusDto,
+    @Req() req: Request,
+  ) {
+    const user = (req as any).user;
+    const adminId = user?.userId ?? user?.sub ?? 'unknown';
+    return this.racesService.forceUpdateStatus(id, dto, adminId);
+  }
+
   // ─── Course management ────────────────────────────────────────
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post(':id/courses')
   @ApiOperation({ summary: 'Add a course to a race (admin)' })
   @ApiParam({ name: 'id', type: 'string', description: 'Race ID' })
@@ -138,6 +180,8 @@ export class RacesController {
     return this.racesService.addCourse(id, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Patch(':id/courses/:courseId')
   @ApiOperation({ summary: 'Update a course in a race (admin)' })
   @ApiParam({ name: 'id', type: 'string', description: 'Race ID' })
@@ -152,6 +196,8 @@ export class RacesController {
     return this.racesService.updateCourse(id, courseId, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Delete(':id/courses/:courseId')
   @ApiOperation({ summary: 'Remove a course from a race (admin)' })
   @ApiParam({ name: 'id', type: 'string', description: 'Race ID' })
@@ -167,6 +213,8 @@ export class RacesController {
 
   // ─── Sync ─────────────────────────────────────────────────────
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post('sync')
   @ApiOperation({ summary: 'Manually sync races from source API' })
   @ApiResponse({

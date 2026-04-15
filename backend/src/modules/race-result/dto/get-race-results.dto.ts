@@ -1,8 +1,13 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsOptional, IsString, IsInt, Min, IsIn } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsInt, Min, IsIn, Max } from 'class-validator';
 
 export class GetRaceResultsDto {
+  @ApiProperty({ description: 'Race ID (required to scope results to a single race)', example: '69de58ec491b72f9dc18ea81' })
+  @IsNotEmpty()
+  @IsString()
+  raceId: string;
+
   @ApiPropertyOptional({ description: 'Course ID', example: '708' })
   @IsOptional()
   @IsString()
@@ -38,15 +43,34 @@ export class GetRaceResultsDto {
   pageNo?: number = 1;
 
   @ApiPropertyOptional({
-    description: 'Page size',
+    description: 'Page size (max 100)',
     default: 10,
     minimum: 1,
+    maximum: 100,
+    example: 25,
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(100)
   pageSize?: number = 10;
+
+  @ApiPropertyOptional({
+    description: 'Filter by result type',
+    enum: ['finisher', 'dnf', 'dns', 'dsq'],
+  })
+  @IsOptional()
+  @IsIn(['finisher', 'dnf', 'dns', 'dsq'])
+  type?: 'finisher' | 'dnf' | 'dns' | 'dsq';
+
+  @ApiPropertyOptional({
+    description: 'Filter by nationality code (e.g. VN, JP)',
+    example: 'VN',
+  })
+  @IsOptional()
+  @IsString()
+  nationality?: string;
 
   @ApiPropertyOptional({
     description: 'Sort field',

@@ -79,7 +79,7 @@ function StatusBadge({ status }: { status: RaceStatus }) {
   const c = config[status] || config.ended;
 
   return (
-    <Badge className={c.className}>
+    <Badge className={`${c.className} text-xs px-2 py-0.5 whitespace-nowrap`}>
       {status === "live" && (
         <span className="mr-1 inline-block size-2 animate-pulse rounded-full bg-green-400" />
       )}
@@ -217,8 +217,8 @@ export default function RacesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Giải đấu</h1>
           <p className="text-sm text-muted-foreground">
@@ -226,8 +226,8 @@ export default function RacesPage() {
           </p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger render={<Button />}>
-            <Plus className="size-4 mr-2" />
+          <DialogTrigger render={<Button size="sm" />}>
+            <Plus className="size-4 mr-1.5" />
             Tạo giải mới
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
@@ -294,8 +294,8 @@ export default function RacesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Tìm kiếm giải chạy..."
@@ -304,7 +304,7 @@ export default function RacesPage() {
               setSearch(e.target.value);
               setPage(0);
             }}
-            className="pl-9"
+            className="pl-9 h-9 text-sm"
           />
         </div>
         <Select
@@ -314,7 +314,7 @@ export default function RacesPage() {
             setPage(0);
           }}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[160px] h-9 text-sm">
             <SelectValue placeholder="Trạng thái" />
           </SelectTrigger>
           <SelectContent>
@@ -329,62 +329,64 @@ export default function RacesPage() {
 
       {/* Table */}
       {loading ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
+            <Skeleton key={i} className="h-9 w-full" />
           ))}
         </div>
       ) : (
         <>
-          <Table>
+          <div className="w-full overflow-hidden rounded-md border">
+          <Table className="table-fixed w-full">
             <TableHeader>
               <TableRow>
-                <TableHead>Tên giải</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead className="hidden md:table-cell">Loại</TableHead>
-                <TableHead className="hidden lg:table-cell">Tỉnh</TableHead>
-                <TableHead className="hidden sm:table-cell">Cự ly</TableHead>
-                <TableHead className="text-right">Thao tác</TableHead>
+                <TableHead className="text-sm py-2.5 w-auto">Tên giải</TableHead>
+                <TableHead className="text-sm py-2.5 w-[120px]">Trạng thái</TableHead>
+                <TableHead className="hidden md:table-cell text-sm py-2.5 w-[100px]">Loại</TableHead>
+                <TableHead className="hidden lg:table-cell text-sm py-2.5 w-[140px]">Tỉnh</TableHead>
+                <TableHead className="hidden sm:table-cell text-sm py-2.5 w-[70px] text-center">Cự ly</TableHead>
+                <TableHead className="text-right text-sm py-2.5 w-[96px]">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {races.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-7 text-sm">
                     Không tìm thấy giải nào
                   </TableCell>
                 </TableRow>
               ) : (
                 races.map((race) => (
-                  <TableRow key={race._id}>
-                    <TableCell className="font-medium">
+                  <TableRow key={race._id} className="text-sm">
+                    <TableCell className="font-semibold py-3 min-w-0">
                       <button
-                        className="text-left hover:underline"
+                        className="text-left hover:underline text-sm truncate block w-full"
+                        title={race.title}
                         onClick={() => router.push(`/races/${race._id}`)}
                       >
                         {race.title}
                       </button>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-3">
                       <StatusBadge status={race.status} />
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                    <TableCell className="hidden md:table-cell text-muted-foreground py-3 truncate">
                       {race.raceType || "-"}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
+                    <TableCell className="hidden lg:table-cell text-muted-foreground py-3 truncate">
                       {race.province || "-"}
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell text-muted-foreground">
+                    <TableCell className="hidden sm:table-cell text-muted-foreground py-3 text-center">
                       {race.courses?.length ?? 0}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right py-3">
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => router.push(`/races/${race._id}`)}
                         >
-                          <Pencil className="size-3.5" />
+                          <Pencil className="size-4" />
                         </Button>
                         <Dialog
                           open={deleteId === race._id}
@@ -393,7 +395,7 @@ export default function RacesPage() {
                           }
                         >
                           <DialogTrigger render={<Button variant="ghost" size="icon-sm" />}>
-                            <Trash2 className="size-3.5 text-destructive" />
+                            <Trash2 className="size-4 text-destructive" />
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader>
@@ -426,6 +428,7 @@ export default function RacesPage() {
               )}
             </TableBody>
           </Table>
+          </div>
 
           {/* Pagination */}
           {totalPages > 1 && (

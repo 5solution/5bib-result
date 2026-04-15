@@ -61,6 +61,7 @@ interface RaceResult {
   course_id: string;
   distance: string;
   TimingPoint?: string;
+  avatarUrl?: string;
 }
 
 /* ─── Demo data ─── */
@@ -148,6 +149,9 @@ export default function CourseRankingPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [nationalityFilter, setNationalityFilter] = useState('');
+  const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
   const rankingRef = useRef<HTMLDivElement>(null);
 
@@ -197,16 +201,19 @@ export default function CourseRankingPage() {
   const isLive = race?.status === 'live';
 
   const { data: resultsRaw, isLoading: loadingResults } = useRaceResults({
+    raceId: race?.id !== undefined ? String(race.id) : undefined,
     course_id: courseId,
     name: searchQuery.trim() || undefined,
     gender: genderFilter || undefined,
     category: categoryFilter || undefined,
+    type: (typeFilter as any) || undefined,
+    nationality: nationalityFilter || undefined,
     pageNo: currentPage,
-    pageSize: ITEMS_PER_PAGE,
+    pageSize,
     sortField: 'OverallRank',
     sortDirection: 'ASC',
   }, {
-    enabled: !!courseId,
+    enabled: !!courseId && !!race?.id,
     refetchInterval: isLive ? 30_000 : false,
   });
   const results: RaceResult[] = useMemo(() => (resultsRaw as any)?.data ?? [], [resultsRaw]);
@@ -247,12 +254,12 @@ export default function CourseRankingPage() {
     router.push(`/races/${slug}/compare/${courseId}?bibs=${bibs}`);
   };
 
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(totalItems / pageSize);
   const paginatedResults = results;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, genderFilter, categoryFilter]);
+  }, [searchQuery, genderFilter, categoryFilter, typeFilter, nationalityFilter, pageSize]);
 
   const formatDateRange = (start: string, end?: string) => {
     if (!start) return t('common.unknown');
@@ -468,60 +475,106 @@ export default function CourseRankingPage() {
             </div>
 
             {/* Filters */}
-            {(availableGenders.length > 0 || availableCategories.length > 0) && (
-              <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-                {availableGenders.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('ranking.genderFilter')}</span>
-                    <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-                      <button
-                        onClick={() => setGenderFilter('')}
-                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${!genderFilter ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-                      >
-                        {t('common.all')}
-                      </button>
-                      {availableGenders.map((g: string) => (
-                        <button
-                          key={g}
-                          onClick={() => setGenderFilter(g === genderFilter ? '' : g)}
-                          className={`px-3 py-1.5 text-xs font-semibold transition-colors border-l border-slate-200 ${genderFilter === g ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-                        >
-                          {g === 'Male' ? t('common.male') : g === 'Female' ? t('common.female') : g}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {availableCategories.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('ranking.ageGroup')}</span>
-                    <select
-                      value={categoryFilter}
-                      onChange={(e) => setCategoryFilter(e.target.value)}
-                      className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 cursor-pointer"
+            <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+              {/* Type filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Loại</span>
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                  {[
+                    { value: '', label: 'Tất cả' },
+                    { value: 'finisher', label: 'Hoàn thành' },
+                    { value: 'dnf', label: 'DNF' },
+                    { value: 'dns', label: 'DNS' },
+                  ].map(({ value, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => setTypeFilter(value)}
+                      className={`px-3 py-1.5 text-xs font-semibold transition-colors border-l first:border-l-0 border-slate-200 ${typeFilter === value ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
                     >
-                      <option value="">{t('common.all')}</option>
-                      {availableCategories.map((c: string) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {(genderFilter || categoryFilter) && (
-                  <button
-                    onClick={() => { setGenderFilter(''); setCategoryFilter(''); }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    {t('common.clearFilters')}
-                  </button>
-                )}
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
 
-            {(searchQuery || genderFilter || categoryFilter) && (
+              {availableGenders.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('ranking.genderFilter')}</span>
+                  <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                    <button
+                      onClick={() => setGenderFilter('')}
+                      className={`px-3 py-1.5 text-xs font-semibold transition-colors ${!genderFilter ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      {t('common.all')}
+                    </button>
+                    {availableGenders.map((g: string) => (
+                      <button
+                        key={g}
+                        onClick={() => setGenderFilter(g === genderFilter ? '' : g)}
+                        className={`px-3 py-1.5 text-xs font-semibold transition-colors border-l border-slate-200 ${genderFilter === g ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        {g === 'Male' ? t('common.male') : g === 'Female' ? t('common.female') : g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {availableCategories.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('ranking.ageGroup')}</span>
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 cursor-pointer"
+                  >
+                    <option value="">{t('common.all')}</option>
+                    {availableCategories.map((c: string) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Nationality filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Quốc tịch</span>
+                <input
+                  type="text"
+                  placeholder="VN, JP..."
+                  value={nationalityFilter}
+                  onChange={(e) => setNationalityFilter(e.target.value)}
+                  maxLength={5}
+                  className="w-20 px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-500 uppercase"
+                />
+              </div>
+
+              {/* PageSize selector */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hiển thị</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="px-2.5 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg text-slate-600 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  {[10, 25, 50, 100].map((n) => (
+                    <option key={n} value={n}>{n}/trang</option>
+                  ))}
+                </select>
+              </div>
+
+              {(typeFilter || genderFilter || categoryFilter || nationalityFilter) && (
+                <button
+                  onClick={() => { setTypeFilter(''); setGenderFilter(''); setCategoryFilter(''); setNationalityFilter(''); }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  {t('common.clearFilters')}
+                </button>
+              )}
+            </div>
+
+            {(searchQuery || genderFilter || categoryFilter || typeFilter || nationalityFilter) && (
               <p className="text-center text-sm text-slate-500 mb-4">
                 {t('common.resultsFound')} <strong className="text-slate-700">{totalItems}</strong> {t('common.results')}
               </p>
@@ -552,12 +605,13 @@ export default function CourseRankingPage() {
                         <tr className="bg-slate-50 border-b-2 border-slate-200">
                           <th className="px-2 py-3.5 w-10"></th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">
-                            {categoryFilter ? t('ranking.catRank') : genderFilter ? t('ranking.genderRank') : t('ranking.rank')}
+                            {t('ranking.rank')}
                           </th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('ranking.athlete')}</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-36">{t('ranking.time')}</th>
-                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Pace</th>
-                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">Gap</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-24">Pace</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Tốc độ</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">Cách 1st</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -693,13 +747,41 @@ export default function CourseRankingPage() {
   );
 }
 
+/* ─── Speed helper ─── */
+function computeSpeed(result: RaceResult): string | null {
+  const distKm = result.distance ? parseFloat(result.distance) : null;
+  if (!distKm || !result.ChipTime) return null;
+  const parts = result.ChipTime.split(':').map(Number);
+  const hours = parts.length === 3
+    ? parts[0] + parts[1] / 60 + parts[2] / 3600
+    : parts.length === 2
+      ? parts[0] / 60 + parts[1] / 3600
+      : null;
+  if (!hours || hours <= 0) return null;
+  return (distKm / hours).toFixed(1);
+}
+
 /* ─── RankingRow — desktop table row ─── */
+
+function simpleHash(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+  return Math.abs(h);
+}
+const AVATAR_COLORS = ['#EF4444','#F97316','#EAB308','#22C55E','#3B82F6','#8B5CF6'];
+function getAvatarColor(bib: number | string, raceId: number | string): string {
+  return AVATAR_COLORS[simpleHash(`${raceId}-${bib}`) % AVATAR_COLORS.length];
+}
+function getInitials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  return name.substring(0, 2).toUpperCase();
+}
 
 function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string }) {
   const { t } = useTranslation();
   const isUpcoming = raceStatus === 'upcoming';
-  const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
-  const rankStr = (rawRank || '').trim();
+  const rankStr = (result.OverallRank || '').trim();
   const rankNum = parseInt(rankStr);
   const rank = !rankStr ? '' : isNaN(rankNum) ? rankStr : rankNum;
 
@@ -763,8 +845,13 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
       <td className="px-4 py-3.5">
         <Link href={`/races/${slug}/${result.Bib}`} className="block">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center text-sm font-bold text-slate-500 group-hover:text-blue-600 transition-colors shrink-0">
-              {result.Name.charAt(0)}
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0 shadow-sm overflow-hidden"
+              style={{ background: result.avatarUrl ? 'transparent' : getAvatarColor(result.Bib, result.race_id) }}
+            >
+              {result.avatarUrl
+                ? <img src={result.avatarUrl} alt={result.Name} className="w-full h-full object-cover" />
+                : getInitials(result.Name)}
             </div>
             <div className="min-w-0">
               <p className={`text-sm font-bold group-hover:text-blue-700 truncate transition-colors ${isTop3 ? 'text-slate-950 font-black' : 'text-slate-900'}`}>
@@ -772,12 +859,21 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
               </p>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs font-mono font-black text-blue-600">BIB: {result.Bib}</span>
-                <span className={`inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${result.Gender === 'Male' ? 'bg-blue-500' : 'bg-pink-500'
-                  }`}>
+                <span className={`inline-flex w-5 h-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${result.Gender === 'Male' ? 'bg-blue-500' : 'bg-pink-500'}`}>
                   {result.Gender === 'Male' ? '♂' : '♀'}
                 </span>
                 <span className="text-xs text-slate-400">{countryToFlag(result.Nationality) || countryToFlag(result.Nation) || result.Nation} {result.Category}</span>
               </div>
+              {/* Multi-rank sub-row (PRD) */}
+              {!isUpcoming && result.OverallRank && (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[10px] text-slate-400">Tổng: <strong className="text-slate-600">{result.OverallRank || '—'}</strong></span>
+                  <span className="text-slate-200">·</span>
+                  <span className="text-[10px] text-slate-400">{result.Gender === 'Female' ? 'Nữ' : 'Nam'}: <strong className="text-slate-600">{result.GenderRank || '—'}</strong></span>
+                  <span className="text-slate-200">·</span>
+                  <span className="text-[10px] text-slate-400">Nhóm: <strong className="text-slate-600">{result.CatRank || '—'}</strong></span>
+                </div>
+              )}
             </div>
           </div>
         </Link>
@@ -804,12 +900,24 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
         )}
       </td>
 
+      {/* Speed column (PRD) */}
       <td className="px-4 py-3.5">
         {isUpcoming ? (
           <p className="text-xs text-slate-400 italic">-</p>
         ) : (
-          <p className={`text-sm font-mono ${result.Gap === '-' ? 'text-slate-300' : 'text-slate-500'}`}>
-            {result.Gap}
+          <p className="text-sm text-slate-600 font-mono">
+            {computeSpeed(result) ? `${computeSpeed(result)} km/h` : '—'}
+          </p>
+        )}
+      </td>
+
+      {/* Gap column (BR-06) */}
+      <td className="px-4 py-3.5">
+        {isUpcoming ? (
+          <p className="text-xs text-slate-400 italic">-</p>
+        ) : (
+          <p className={`text-sm font-mono ${!result.Gap || result.Gap === '-' || result.Gap === '--' ? 'text-slate-300' : 'text-slate-500'}`}>
+            {result.Gap && result.Gap !== '-' && result.Gap !== '--' ? `+${result.Gap.replace(/^\+/, '')}` : '00:00:00'}
           </p>
         )}
       </td>

@@ -4,10 +4,23 @@ import { HydratedDocument } from 'mongoose';
 export type RaceDocument = HydratedDocument<Race>;
 
 @Schema({ _id: false })
+export class CheckpointServices {
+  @Prop({ default: false }) water: boolean;
+  @Prop({ default: false }) food: boolean;
+  @Prop({ default: false }) sleep: boolean;
+  @Prop({ default: false }) dropBag: boolean;
+  @Prop({ default: false }) medical: boolean;
+  @Prop() notes?: string;
+}
+export const CheckpointServicesSchema =
+  SchemaFactory.createForClass(CheckpointServices);
+
+@Schema({ _id: false })
 export class CourseCheckpoint {
   @Prop({ required: true }) key: string; // timing point key, e.g. "TM1", "TM2", "Finish"
   @Prop({ required: true }) name: string; // display name, e.g. "Trạm 1 - Suối Vàng"
   @Prop() distance?: string; // e.g. "5K"
+  @Prop({ type: CheckpointServicesSchema }) services?: CheckpointServices;
 }
 
 export const CourseCheckpointSchema =
@@ -37,6 +50,18 @@ export class RaceCourse {
 }
 
 export const RaceCourseSchema = SchemaFactory.createForClass(RaceCourse);
+
+@Schema({ _id: false })
+export class RaceStatusHistoryEntry {
+  @Prop({ required: true }) from: string;
+  @Prop({ required: true }) to: string;
+  @Prop({ required: true }) reason: string;
+  @Prop({ required: true }) changedBy: string; // admin userId
+  @Prop({ default: () => new Date() }) changedAt: Date;
+}
+
+export const RaceStatusHistoryEntrySchema =
+  SchemaFactory.createForClass(RaceStatusHistoryEntry);
 
 @Schema({
   collection: 'races',
@@ -79,6 +104,10 @@ export class Race {
 
   // External IDs
   @Prop() externalRaceId: string; // RaceResult race ID
+
+  // Status override audit trail (BR: forward-only normally; admin can override with reason)
+  @Prop({ type: [RaceStatusHistoryEntrySchema], default: [] })
+  statusHistory: RaceStatusHistoryEntry[];
 
   // Raw data from 5bib API (preserve all original fields)
   @Prop({ type: Object }) rawData: Record<string, any>;

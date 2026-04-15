@@ -1,6 +1,7 @@
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import * as express from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as compression from 'compression';
 import * as cookieParser from 'cookie-parser';
@@ -13,6 +14,9 @@ import { env } from './config';
 import { AppModule } from './modules/app.module';
 
 const setMiddleware = (app: NestExpressApplication) => {
+  app.use(express.json({ limit: '512kb' }));
+  app.use(express.urlencoded({ extended: true, limit: '512kb' }));
+
   app.use(helmet());
 
   app.enableCors({
@@ -38,6 +42,7 @@ const setMiddleware = (app: NestExpressApplication) => {
     new ValidationPipe({
       transform: true,
       whitelist: true,
+      forbidNonWhitelisted: true,
     }),
   );
 };
