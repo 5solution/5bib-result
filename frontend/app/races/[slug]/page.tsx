@@ -728,16 +728,16 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
             {sponsors.map((s, i) => (
               <div
                 key={s._id || s.name}
-                className={`absolute inset-0 flex items-center transition-all duration-500 ${
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
                   i === currentSponsor ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
                 }`}
-                style={{ paddingLeft: 42, paddingRight: 10 }}
+                style={{ paddingLeft: 38, paddingRight: 8 }}
               >
                 {s.logoUrl ? (
                   <img
                     src={s.logoUrl}
                     alt={s.name}
-                    style={{ height: 56, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
+                    style={{ height: 62, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
                     draggable={false}
                   />
                 ) : (
