@@ -10,7 +10,9 @@ export class SearchQueryDto {
       'Query string — minimum 2 chars. For type=bib, must be digits only.',
   })
   @IsString()
-  @Length(1, 64)
+  @Length(2, 64, {
+    message: 'q must be between 2 and 64 characters',
+  })
   q!: string;
 
   @ApiPropertyOptional({

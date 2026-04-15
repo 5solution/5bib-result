@@ -46,6 +46,19 @@ export class RacesService {
     } catch { /* ignore */ }
   }
 
+  /**
+   * Strip internal Mongo fields (_id, __v) from a lean race object before
+   * returning on PUBLIC endpoints. Admin callers opt out via allowDraft=true.
+   * Keeps the rest of the payload intact.
+   */
+  private stripRacePrivateFields<T extends { _id?: unknown; __v?: unknown }>(
+    race: T,
+  ): Omit<T, '_id' | '__v'> {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _id, __v, ...publicRace } = race;
+    return publicRace;
+  }
+
   // ─── Admin CRUD ──────────────────────────────────────────────
 
   async createRace(dto: CreateRaceDto) {
@@ -312,7 +325,8 @@ export class RacesService {
       if (!allowDraft && cached.status === 'draft') {
         return { data: null, success: false, message: 'Race not found' };
       }
-      return { data: cached, success: true };
+      const payload = allowDraft ? cached : this.stripRacePrivateFields(cached);
+      return { data: payload, success: true };
     }
 
     const race = await this.raceModel.findById(id).lean().exec();
@@ -322,7 +336,8 @@ export class RacesService {
     }
 
     await this.setRaceCache(cacheKey, race, 300);
-    return { data: race, success: true };
+    const payload = allowDraft ? race : this.stripRacePrivateFields(race);
+    return { data: payload, success: true };
   }
 
   async getRaceBySlug(slug: string, allowDraft = false) {
@@ -332,7 +347,8 @@ export class RacesService {
       if (!allowDraft && cached.status === 'draft') {
         return { data: null, success: false, message: 'Race not found' };
       }
-      return { data: cached, success: true };
+      const payload = allowDraft ? cached : this.stripRacePrivateFields(cached);
+      return { data: payload, success: true };
     }
 
     const race = await this.raceModel.findOne({ slug }).lean().exec();
@@ -343,7 +359,8 @@ export class RacesService {
 
     // Cache including draft races (allowDraft check is at read time)
     await this.setRaceCache(cacheKey, race, 300);
-    return { data: race, success: true };
+    const payload = allowDraft ? race : this.stripRacePrivateFields(race);
+    return { data: payload, success: true };
   }
 
   async getRaceByProductId(productId: string) {
@@ -361,7 +378,7 @@ export class RacesService {
     }
 
     return {
-      data: race,
+      data: this.stripRacePrivateFields(race),
       success: true,
     };
   }

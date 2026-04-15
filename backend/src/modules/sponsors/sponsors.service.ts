@@ -7,6 +7,17 @@ import { UpdateSponsorDto } from './dto/update-sponsor.dto';
 
 const LEVEL_ORDER: Record<string, number> = { diamond: 0, gold: 1, silver: 2 };
 
+/**
+ * Strip Mongoose internal fields from public sponsor responses.
+ * Keeps `_id` — admin UI still uses it for edit/delete operations on the
+ * race-sponsors tab via the shared endpoint. Drops only `__v`.
+ */
+function stripSponsorInternals<T extends { __v?: unknown }>(sponsor: T): Omit<T, '__v'> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { __v, ...rest } = sponsor;
+  return rest;
+}
+
 @Injectable()
 export class SponsorsService {
   private readonly logger = new Logger(SponsorsService.name);
@@ -31,7 +42,7 @@ export class SponsorsService {
       return (a.order ?? 0) - (b.order ?? 0);
     });
 
-    return { data: list, success: true };
+    return { data: list.map(stripSponsorInternals), success: true };
   }
 
   async findByRaceId(raceId: string) {
@@ -46,7 +57,7 @@ export class SponsorsService {
       return (a.order ?? 0) - (b.order ?? 0);
     });
 
-    return { data: list, success: true };
+    return { data: list.map(stripSponsorInternals), success: true };
   }
 
   // ─── Admin CRUD ──────────────────────────────────────────────
