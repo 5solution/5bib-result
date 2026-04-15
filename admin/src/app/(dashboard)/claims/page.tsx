@@ -240,7 +240,7 @@ export default function ClaimsPage() {
                 </TableRow>
               ) : (
                 claims.map((claim) => (
-                  <TableRow key={claim._id} className="cursor-pointer" onClick={() => openResolve(claim, claim.status === 'pending' ? 'resolved' : claim.status as any)}>
+                  <TableRow key={claim._id} className="cursor-pointer" onClick={() => openResolve(claim, claim.status === 'pending' ? 'approved' : claim.status as 'approved' | 'rejected')}>
                     <TableCell className="text-xs">
                       {formatDate(claim.created_at || claim.createdAt || '')}
                     </TableCell>

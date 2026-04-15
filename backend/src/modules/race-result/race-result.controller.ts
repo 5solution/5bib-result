@@ -25,6 +25,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { GetRaceResultsDto } from './dto/get-race-results.dto';
+import { RaceResultsPaginatedDto } from './dto/race-result-response.dto';
 import { SubmitClaimDto } from './dto/submit-claim.dto';
 import { RaceResultService } from './services/race-result.service';
 import { ResultImageService } from './services/result-image.service';
@@ -57,6 +58,7 @@ export class RaceResultController {
   @ApiResponse({
     status: 200,
     description: 'Returns paginated race results',
+    type: RaceResultsPaginatedDto,
   })
   async getRaceResults(@Query() dto: GetRaceResultsDto) {
     return this.raceResultService.getRaceResults(dto);

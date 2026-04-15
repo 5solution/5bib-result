@@ -62,6 +62,7 @@ interface RaceResult {
   race_id: number;
   course_id: string;
   distance: string;
+  avatarUrl?: string;
 }
 
 const COURSE_IMAGES = [

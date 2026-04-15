@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
@@ -68,16 +68,33 @@ export class RacesService {
   }
 
   async updateStatus(id: string, dto: UpdateStatusDto) {
-    const race = await this.raceModel
-      .findByIdAndUpdate(id, { $set: { status: dto.status } }, { new: true })
-      .lean()
-      .exec();
+    const race = await this.raceModel.findById(id).lean().exec();
 
     if (!race) {
       throw new NotFoundException('Race not found');
     }
 
-    return { data: race, success: true };
+    // State machine: enforce valid transitions
+    type RaceStatus = 'draft' | 'pre_race' | 'live' | 'ended';
+    const ORDER: Record<RaceStatus, number> = { draft: 0, pre_race: 1, live: 2, ended: 3 };
+    const current = race.status as RaceStatus;
+    const next = dto.status as RaceStatus;
+
+    if (current === 'ended') {
+      throw new BadRequestException(`Cannot transition from 'ended' to any other status`);
+    }
+    if (ORDER[next] < ORDER[current]) {
+      throw new BadRequestException(
+        `Invalid status transition: '${current}' → '${next}'. Only forward transitions are allowed.`,
+      );
+    }
+
+    const updated = await this.raceModel
+      .findByIdAndUpdate(id, { $set: { status: dto.status } }, { new: true })
+      .lean()
+      .exec();
+
+    return { data: updated, success: true };
   }
 
   // ─── Course management ───────────────────────────────────────

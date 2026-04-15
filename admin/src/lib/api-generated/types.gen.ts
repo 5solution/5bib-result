@@ -548,6 +548,54 @@ export type UpdateCourseDto = {
     checkpoints?: Array<CourseCheckpointDto>;
 };
 
+export type RaceResultItemDto = {
+    Bib: string;
+    Name: string;
+    OverallRank: string;
+    GenderRank: string;
+    CatRank: string;
+    Gender: string;
+    Category: string;
+    ChipTime: string;
+    GunTime: string;
+    TimingPoint: string;
+    Pace: string;
+    Certi?: string;
+    Certificate?: string;
+    OverallRanks?: string;
+    GenderRanks?: string;
+    Chiptimes?: string;
+    Guntimes?: string;
+    Paces?: string;
+    TODs?: string;
+    Sectors?: string;
+    OverrankLive?: string;
+    Gap?: string;
+    Nationality?: string;
+    Nation?: string;
+    Member?: string;
+    Started?: number;
+    Finished?: number;
+    DNF?: number;
+    race_id: string;
+    course_id: string;
+    distance: string;
+    synced_at?: string;
+    avatarUrl?: string;
+};
+
+export type PaginationMeta = {
+    pageNo: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+};
+
+export type RaceResultsPaginatedDto = {
+    data: Array<RaceResultItemDto>;
+    pagination: PaginationMeta;
+};
+
 export type SubmitClaimDto = {
     /**
      * Race ID
@@ -2069,7 +2117,7 @@ export type RaceResultControllerGetRaceResultsData = {
         /**
          * Page size (max 100)
          */
-        pageSize?: 10 | 25 | 50 | 100;
+        pageSize?: number;
         /**
          * Filter by result type
          */
@@ -2094,8 +2142,10 @@ export type RaceResultControllerGetRaceResultsResponses = {
     /**
      * Returns paginated race results
      */
-    200: unknown;
+    200: RaceResultsPaginatedDto;
 };
+
+export type RaceResultControllerGetRaceResultsResponse = RaceResultControllerGetRaceResultsResponses[keyof RaceResultControllerGetRaceResultsResponses];
 
 export type RaceResultControllerGlobalSearchData = {
     body?: never;

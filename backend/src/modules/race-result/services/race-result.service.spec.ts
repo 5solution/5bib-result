@@ -501,6 +501,7 @@ describe('RaceResultService', () => {
         courseId: 'c708',
         bib: '1001',
         name: 'Nguyen Van A',
+        phone: '0912345678',
         email: 'runner@example.com',
         description: 'My time is wrong',
       };

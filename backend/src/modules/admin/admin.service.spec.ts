@@ -180,14 +180,16 @@ describe('AdminService', () => {
 
       const result = await service.resolveClaim(
         'claim1',
-        'resolved',
+        'approved',
         'Verified',
+        'admin-test',
       );
 
       expect(mockRaceResultService.resolveClaim).toHaveBeenCalledWith(
         'claim1',
-        'resolved',
+        'approved',
         'Verified',
+        'admin-test',
       );
       expect(result.data.status).toBe('resolved');
       expect(result.success).toBe(true);
@@ -205,6 +207,7 @@ describe('AdminService', () => {
         'claim2',
         'rejected',
         'Invalid claim',
+        'admin-test',
       );
 
       expect(result.data.status).toBe('rejected');
@@ -214,7 +217,7 @@ describe('AdminService', () => {
       mockRaceResultService.resolveClaim.mockResolvedValue(null);
 
       await expect(
-        service.resolveClaim('nonexistent', 'resolved'),
+        service.resolveClaim('nonexistent', 'approved', '', 'admin-test'),
       ).rejects.toThrow(NotFoundException);
     });
   });

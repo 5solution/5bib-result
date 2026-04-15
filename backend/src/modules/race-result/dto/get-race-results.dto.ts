@@ -47,7 +47,7 @@ export class GetRaceResultsDto {
     default: 10,
     minimum: 1,
     maximum: 100,
-    enum: [10, 25, 50, 100],
+    example: 25,
   })
   @IsOptional()
   @Type(() => Number)

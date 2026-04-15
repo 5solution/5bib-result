@@ -8,6 +8,7 @@ import {
   Body,
   UseGuards,
   Request,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -102,7 +103,8 @@ export class AdminController {
     @Body() dto: ResolveClaimV2Dto,
     @Request() req: { user?: { userId?: string; sub?: string } },
   ) {
-    const adminId = req.user?.userId ?? req.user?.sub ?? 'unknown';
+    const adminId = req.user?.userId ?? req.user?.sub;
+    if (!adminId) throw new UnauthorizedException('Cannot identify admin user');
     return this.adminService.resolveClaim(id, dto.action, dto.resolutionNote, adminId);
   }
 
@@ -130,7 +132,8 @@ export class AdminController {
     @Body() dto: EditResultDto,
     @Request() req: { user?: { userId?: string; sub?: string } },
   ) {
-    const adminId = req.user?.userId ?? req.user?.sub ?? 'unknown';
+    const adminId = req.user?.userId ?? req.user?.sub;
+    if (!adminId) throw new UnauthorizedException('Cannot identify admin user');
     const { reason, ...fields } = dto;
     return this.adminService.editResult(resultId, fields, reason, adminId);
   }
