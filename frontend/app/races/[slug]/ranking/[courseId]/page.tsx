@@ -61,6 +61,7 @@ interface RaceResult {
   course_id: string;
   distance: string;
   TimingPoint?: string;
+  avatarUrl?: string;
 }
 
 /* ─── Demo data ─── */
@@ -845,10 +846,12 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
         <Link href={`/races/${slug}/${result.Bib}`} className="block">
           <div className="flex items-center gap-3">
             <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0 shadow-sm"
-              style={{ background: getAvatarColor(result.Bib, result.race_id) }}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0 shadow-sm overflow-hidden"
+              style={{ background: result.avatarUrl ? 'transparent' : getAvatarColor(result.Bib, result.race_id) }}
             >
-              {getInitials(result.Name)}
+              {result.avatarUrl
+                ? <img src={result.avatarUrl} alt={result.Name} className="w-full h-full object-cover" />
+                : getInitials(result.Name)}
             </div>
             <div className="min-w-0">
               <p className={`text-sm font-bold group-hover:text-blue-700 truncate transition-colors ${isTop3 ? 'text-slate-950 font-black' : 'text-slate-900'}`}>
