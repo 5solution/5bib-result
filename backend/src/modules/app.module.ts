@@ -17,6 +17,7 @@ import { SearchModule } from './search/search.module';
 import { MerchantModule } from './merchant/merchant.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { RaceOpsModule } from './race-ops/race-ops.module';
 import { Tenant } from './merchant/entities/tenant.entity';
 
 // Conditional: chỉ khởi tạo Platform DB nếu PLATFORM_DB_HOST được cung cấp
@@ -63,6 +64,7 @@ const platformDbModules = env.platformDb.host
     NotificationModule,
     HomepageModule,
     SearchModule,
+    RaceOpsModule,
   ],
 })
 export class AppModule {}
