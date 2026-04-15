@@ -144,12 +144,24 @@ export default function HomePage() {
 
   // Fetch live/upcoming races for the hero slider
   const { data: racesRaw, isLoading: loading } = useRaces({ pageSize: 20 });
-  // Fetch ended races separately so they always show regardless of sort order
-  const { data: endedRaw, isLoading: loadingEnded } = useRaces({ status: 'ended', pageSize: 20 });
+  // Fetch ended races separately so they always show regardless of sort order.
+  // pageSize 50 → covers the ~48 ended races we have so the slider isn't sparse.
+  const { data: endedRaw, isLoading: loadingEnded, error: endedError } = useRaces({ status: 'ended', pageSize: 50 });
 
   // Read real totals from API meta, not from the partial list
-  const apiMeta = (racesRaw as any)?.data as { totalItems?: number; totalPages?: number; list?: ApiRace[] } | undefined;
-  const endedMeta = (endedRaw as any)?.data as { totalItems?: number; list?: ApiRace[] } | undefined;
+  const apiMeta = (racesRaw as { data?: { totalItems?: number; totalPages?: number; list?: ApiRace[] } } | undefined)?.data;
+  const endedMeta = (endedRaw as { data?: { totalItems?: number; list?: ApiRace[] } } | undefined)?.data;
+
+  // Dev-time diagnostic: when ended fetch succeeds but list is empty, surface it loudly
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' && !loadingEnded) {
+      if (endedError) {
+        console.error('[home] ended races fetch failed:', endedError);
+      } else if (endedMeta && (!endedMeta.list || endedMeta.list.length === 0)) {
+        console.warn('[home] ended races returned empty list. totalItems=', endedMeta.totalItems);
+      }
+    }
+  }, [endedError, endedMeta, loadingEnded]);
 
   const mapApiRace = (r: ApiRace): Race => ({
     id: r._id,
@@ -345,11 +357,11 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl md:text-2xl font-bold text-white">
-                {liveAndUpcoming.length === 0 && completedRaces.length > 0
-                  ? t('home.recentEvents')
-                  : liveRaces.length > 0
-                    ? `Live & ${t('home.upcomingEvents')}`
-                    : t('home.upcomingEvents')}
+                {liveRaces.length > 0
+                  ? `Live & ${t('home.upcomingEvents')}`
+                  : liveAndUpcoming.length > 0
+                    ? t('home.upcomingEvents')
+                    : t('home.recentEvents')}
               </h2>
               <Link
                 href="/calendar"
@@ -385,19 +397,22 @@ export default function HomePage() {
                     </div>
                   </div>
                 ))
-                : liveAndUpcoming.length > 0
-                  ? liveAndUpcoming.map((race) => (
-                    <EventCard key={race.id} race={race} />
-                  ))
-                  : completedRaces.length > 0
-                    ? completedRaces.slice(0, 8).map((race) => (
-                      <PastEventCard key={race.id} race={race} />
-                    ))
-                    : (
-                      <div className="flex items-center justify-center w-full min-w-[300px] h-[400px] text-white/50 text-sm">
-                        {t('home.noEvents')}
-                      </div>
-                    )}
+                : (liveAndUpcoming.length > 0 || completedRaces.length > 0)
+                  ? (
+                    <>
+                      {liveAndUpcoming.map((race) => (
+                        <EventCard key={race.id} race={race} />
+                      ))}
+                      {completedRaces.slice(0, 8).map((race) => (
+                        <PastEventCard key={`past-${race.id}`} race={race} />
+                      ))}
+                    </>
+                  )
+                  : (
+                    <div className="flex items-center justify-center w-full min-w-[300px] h-[400px] text-white/50 text-sm">
+                      {t('home.noEvents')}
+                    </div>
+                  )}
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
@@ -470,40 +485,6 @@ export default function HomePage() {
         </div>
 
         <PastEventsSlider races={completedRaces} loading={loadingEnded} />
-        {/* ================================================================= */}
-        {/* FEATURES SECTION                                                   */}
-        {/* ================================================================= */}
-        <section className="py-16 md:py-20 bg-[var(--5bib-surface)]">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12 md:mb-16">
-              <h2 className="text-2xl md:text-3xl font-black text-[var(--5bib-text)] mb-3">
-                {t('home.features')}
-              </h2>
-              <p className="text-[var(--5bib-text-muted)] max-w-lg mx-auto">
-                {t('home.featuresSubtitle')}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {features.map((feature, i) => (
-                <div
-                  key={i}
-                  className="p-6 bg-white border border-[var(--5bib-border)] rounded-xl card-hover group shadow-sm"
-                >
-                  <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-[var(--5bib-accent)] mb-4 group-hover:bg-blue-100 transition-colors">
-                    {feature.icon}
-                  </div>
-                  <h3 className="text-lg font-bold text-[var(--5bib-text)] mb-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm text-[var(--5bib-text-muted)] leading-relaxed">
-                    {feature.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
         <div className="mt-6 text-center md:hidden">
           <Link
@@ -512,6 +493,41 @@ export default function HomePage() {
           >
             {t('home.viewAllPast')} <ChevronRight className="w-4 h-4" />
           </Link>
+        </div>
+      </section>
+
+      {/* ================================================================= */}
+      {/* FEATURES SECTION                                                   */}
+      {/* ================================================================= */}
+      <section className="py-16 md:py-20 bg-[var(--5bib-surface)]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12 md:mb-16">
+            <h2 className="text-2xl md:text-3xl font-black text-[var(--5bib-text)] mb-3">
+              {t('home.features')}
+            </h2>
+            <p className="text-[var(--5bib-text-muted)] max-w-lg mx-auto">
+              {t('home.featuresSubtitle')}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((feature, i) => (
+              <div
+                key={i}
+                className="p-6 bg-white border border-[var(--5bib-border)] rounded-xl card-hover group shadow-sm"
+              >
+                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-[var(--5bib-accent)] mb-4 group-hover:bg-blue-100 transition-colors">
+                  {feature.icon}
+                </div>
+                <h3 className="text-lg font-bold text-[var(--5bib-text)] mb-2">
+                  {feature.title}
+                </h3>
+                <p className="text-sm text-[var(--5bib-text-muted)] leading-relaxed">
+                  {feature.description}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </div>
@@ -695,8 +711,9 @@ function PastEventsSlider({ races, loading }: { races: Race[]; loading: boolean 
               </div>
             ))
             : (
-              <div className="flex items-center justify-center w-full min-w-[300px] h-[380px] text-[var(--5bib-text-muted)] text-sm">
-                {t('home.noPastEvents')}
+              <div className="flex flex-col items-center justify-center w-full min-w-[300px] h-[380px] gap-3 rounded-xl border border-dashed border-[var(--5bib-border)] bg-white text-[var(--5bib-text)]">
+                <Trophy className="w-8 h-8 text-[var(--5bib-text-muted)]" />
+                <p className="text-sm font-medium">{t('home.noPastEvents')}</p>
               </div>
             )}
       </div>
