@@ -180,3 +180,43 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 - **CI deploy SSH refused**: VPS uses port 6060, need `VPS_PORT` secret
 - **Frontend build errors**: Check for unused imports from `@/lib/api` (legacy exports removed)
 - **Admin build errors**: Race creation needs `enableEcert`, `enableClaim`, `enableLiveTracking`, `enable5pix` booleans
+
+## Pre-Deploy Checklist — LUÔN kiểm tra trước khi push/deploy
+
+> Bài học từ bug thực tế: security fix strip `_id` → frontend mất `raceId` → toàn bộ race results trả về empty array âm thầm (không có 4xx error).
+
+### 1. API Response Shape Changed?
+Khi thêm/xóa/đổi tên field trong response DTO hoặc strip logic:
+```bash
+# Grep toàn bộ frontend + admin tìm consumer của field đó
+grep -rn "field_name" frontend/ admin/ --include="*.tsx" --include="*.ts"
+```
+Đặc biệt nguy hiểm: `_id`, `id`, `slug`, `courseId`, `raceId` — những field dùng làm input cho API call tiếp theo.
+
+### 2. Strip / Scrub Fields khỏi Public API?
+- Kiểm tra field đó có được frontend dùng làm key để gọi API downstream không
+- Nếu strip `_id` → **phải inject alias `id = _id.toString()`** trước khi strip
+- Pattern an toàn trong `stripRacePrivateFields`: inject `id` → filter ra `_id`
+
+### 3. DTO thêm Required Field?
+- Chạy `pnpm generate:api` trong admin/frontend
+- Kiểm tra tất cả call site của SDK function đó có truyền đủ field mới chưa
+- Call cũ thiếu required field → backend trả 400, frontend im lặng trả empty
+
+### 4. Redis Cache?
+- Cache stores **raw DB document** (có `_id`), transform **khi đọc ra** — không cache transformed result
+- Sau deploy backend mới có thay đổi response shape, cache cũ vẫn valid vì transform chạy lại
+- Nếu cần flush: `ssh -o "ExitOnForwardFailure no" 5solution-vps "docker exec 5bib-result-backend node -e \"require('ioredis').createClient(process.env.REDIS_URL).flushdb()\""`
+
+### 5. Verify End-to-End Trước Khi Báo Done
+Không chỉ test endpoint vừa sửa — test cả **flow downstream**:
+1. `GET /api/races/slug/:slug` → kiểm tra `id` có trong response
+2. Lấy `id` → gọi `GET /api/race-results?raceId={id}&course_id={x}`
+3. Confirm athletes trả về > 0
+
+### Fields Nguy Hiểm Trong 5BIB Frontend
+| Field | Dùng ở đâu | Downstream call |
+|-------|-----------|----------------|
+| `race.id` / `race._id` | `races/[slug]/page.tsx`, `[bib]/page.tsx`, `ranking/page.tsx`, `compare/page.tsx` | `/api/race-results?raceId=` |
+| `course.courseId` | tất cả result pages | `/api/race-results?course_id=` + stats |
+| `result._id` | admin `results/page.tsx` | PATCH `/api/race-results/:id` |
