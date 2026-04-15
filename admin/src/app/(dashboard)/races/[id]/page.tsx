@@ -10,6 +10,7 @@ import {
   racesControllerGetRaceById,
   racesControllerUpdateRace,
   racesControllerUpdateStatus,
+  racesControllerForceUpdateStatus,
   racesControllerAddCourse,
   racesControllerUpdateCourse,
   racesControllerRemoveCourse,
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import ImageUpload from "@/components/ImageUpload";
 import SponsorBanners from "@/components/SponsorBanners";
 import {
@@ -76,6 +78,8 @@ import {
   Image as ImageIcon,
   Download,
   Copy,
+  ShieldAlert,
+  History,
 } from "lucide-react";
 
 type RaceStatus = "draft" | "pre_race" | "live" | "ended";
@@ -114,6 +118,14 @@ interface Course {
   checkpoints?: Checkpoint[];
 }
 
+interface StatusHistoryEntry {
+  from: string;
+  to: string;
+  reason: string;
+  changedBy: string;
+  changedAt: string;
+}
+
 interface Race {
   _id: string;
   title: string;
@@ -139,6 +151,7 @@ interface Race {
   pixEventUrl?: string;
   cacheTtlSeconds?: number;
   courses?: Course[];
+  statusHistory?: StatusHistoryEntry[];
 }
 
 function StatusBadge({ status }: { status: RaceStatus }) {
@@ -372,6 +385,38 @@ export default function RaceDetailPage() {
       fetchRace();
     } catch {
       toast.error("Cập nhật trạng thái thất bại");
+    }
+  }
+
+  // Admin force override — bypass forward-only state machine (audit logged)
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideStatus, setOverrideStatus] = useState<RaceStatus>("pre_race");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overriding, setOverriding] = useState(false);
+
+  async function handleForceStatus() {
+    if (!token) return;
+    const reason = overrideReason.trim();
+    if (reason.length < 10) {
+      toast.error("Lý do phải có ít nhất 10 ký tự");
+      return;
+    }
+    setOverriding(true);
+    try {
+      const { error } = await racesControllerForceUpdateStatus({
+        path: { id: raceId },
+        body: { status: overrideStatus, reason },
+        ...authHeaders(token),
+      });
+      if (error) throw error;
+      toast.success(`Đã override trạng thái sang "${overrideStatus}"`);
+      setOverrideOpen(false);
+      setOverrideReason("");
+      fetchRace();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Override thất bại");
+    } finally {
+      setOverriding(false);
     }
   }
 
@@ -648,8 +693,16 @@ export default function RaceDetailPage() {
               {/* Status Controls — Clear Lifecycle */}
               <div className="flex flex-col gap-3">
                 <Label>Trạng thái giải đấu</Label>
+                {race.status === "ended" && (
+                  <p className="text-xs text-muted-foreground">
+                    Giải đã kết thúc — không thể đổi trạng thái. Liên hệ dev nếu cần mở lại.
+                  </p>
+                )}
                 <div className="grid grid-cols-4 gap-3">
-                  {([
+                  {(() => {
+                    const ORDER: Record<RaceStatus, number> = { draft: 0, pre_race: 1, live: 2, ended: 3 };
+                    const currentOrder = ORDER[race.status as RaceStatus] ?? 0;
+                    return [
                     {
                       key: "draft" as RaceStatus,
                       label: "Nháp",
@@ -682,13 +735,30 @@ export default function RaceDetailPage() {
                       activeClass: "border-zinc-400 bg-zinc-50 text-zinc-700",
                       dotClass: "bg-zinc-400",
                     },
-                  ]).map((step) => {
+                  ].map((step) => {
                     const isCurrent = race.status === step.key;
+                    // Forward-only state machine: can only go to steps with higher order
+                    // Once ended, cannot go anywhere
+                    const isValidTransition =
+                      !isCurrent &&
+                      race.status !== "ended" &&
+                      ORDER[step.key] > currentOrder;
+                    const isDisabled = !isCurrent && !isValidTransition;
                     return (
                       <button
                         key={step.key}
+                        disabled={isDisabled}
+                        title={
+                          isCurrent
+                            ? "Trạng thái hiện tại"
+                            : isDisabled
+                            ? race.status === "ended"
+                              ? "Giải đã kết thúc — không thể đổi trạng thái"
+                              : `Không thể quay lại '${step.label}' — chỉ được chuyển tiến`
+                            : `Chuyển sang '${step.label}'`
+                        }
                         onClick={() => {
-                          if (isCurrent) return;
+                          if (isCurrent || isDisabled) return;
                           if (confirm(`Chuyển trạng thái giải sang "${step.label}"?`)) {
                             handleUpdateStatus(step.key);
                           }
@@ -697,6 +767,8 @@ export default function RaceDetailPage() {
                           relative flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all text-center
                           ${isCurrent
                             ? step.activeClass
+                            : isDisabled
+                            ? "border-transparent bg-muted/30 text-muted-foreground/50 cursor-not-allowed opacity-50"
                             : "border-transparent bg-muted/50 text-muted-foreground hover:bg-muted hover:border-muted-foreground/20 cursor-pointer"
                           }
                         `}
@@ -718,9 +790,135 @@ export default function RaceDetailPage() {
                         )}
                       </button>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
+
+                {/* Admin override — bypass forward-only state machine */}
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-50/50 px-3 py-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <ShieldAlert className="size-4 shrink-0 text-orange-600 mt-0.5" />
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="text-xs font-semibold text-orange-900">
+                        Override trạng thái (admin)
+                      </span>
+                      <span className="text-[11px] text-orange-700/80">
+                        Bỏ qua luật forward-only khi cần sửa nhầm — bắt buộc nhập lý do, có audit log.
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-orange-300 text-orange-700 hover:bg-orange-100 hover:text-orange-800 shrink-0"
+                    onClick={() => {
+                      setOverrideStatus(race.status as RaceStatus);
+                      setOverrideReason("");
+                      setOverrideOpen(true);
+                    }}
+                  >
+                    Override
+                  </Button>
+                </div>
+
+                {/* Status history audit trail */}
+                {race.statusHistory && race.statusHistory.length > 0 && (
+                  <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 px-3 py-2.5">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                      <History className="size-3.5" />
+                      Lịch sử override ({race.statusHistory.length})
+                    </div>
+                    <ul className="flex flex-col gap-1 text-[11px]">
+                      {[...race.statusHistory].reverse().slice(0, 5).map((h, i) => (
+                        <li key={`${h.changedAt}-${i}`} className="flex flex-col gap-0.5 rounded border bg-background px-2 py-1.5">
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <span className="text-muted-foreground">{h.from}</span>
+                            <span>→</span>
+                            <span className="font-semibold">{h.to}</span>
+                            <span className="ml-auto text-muted-foreground">
+                              {new Date(h.changedAt).toLocaleString("vi-VN")}
+                            </span>
+                          </div>
+                          <div className="text-muted-foreground truncate" title={h.reason}>
+                            {h.reason}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
+
+              {/* Override dialog */}
+              <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <ShieldAlert className="size-5 text-orange-600" />
+                      Override trạng thái giải
+                    </DialogTitle>
+                    <DialogDescription>
+                      Thao tác này bỏ qua luật forward-only và được ghi vào audit log.
+                      Chỉ dùng khi thật sự cần (sync nhầm, sửa sai, mở lại giải để edit).
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-4 py-2">
+                    <div className="flex flex-col gap-2">
+                      <Label>Trạng thái mới</Label>
+                      <Select
+                        value={overrideStatus}
+                        onValueChange={(v) => setOverrideStatus((v ?? "pre_race") as RaceStatus)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="draft">Nháp (ẩn khỏi public)</SelectItem>
+                          <SelectItem value="pre_race">Chuẩn bị</SelectItem>
+                          <SelectItem value="live">Đang diễn ra</SelectItem>
+                          <SelectItem value="ended">Đã kết thúc</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Hiện tại: <span className="font-semibold">{race.status}</span>
+                        {overrideStatus === race.status && " (không thay đổi)"}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="override-reason">
+                        Lý do <span className="text-destructive">*</span>
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">
+                          ({overrideReason.trim().length}/10 ký tự tối thiểu)
+                        </span>
+                      </Label>
+                      <Textarea
+                        id="override-reason"
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                        placeholder="VD: Giải bị sync nhầm sang ended, cần mở lại để sửa result bib 1234..."
+                        rows={3}
+                        maxLength={500}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setOverrideOpen(false)} disabled={overriding}>
+                      Hủy
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleForceStatus}
+                      disabled={
+                        overriding ||
+                        overrideReason.trim().length < 10 ||
+                        overrideStatus === race.status
+                      }
+                    >
+                      {overriding ? "Đang override..." : "Xác nhận override"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               <Separator />
 

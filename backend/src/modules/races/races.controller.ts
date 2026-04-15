@@ -23,6 +23,7 @@ import { SearchRacesDto } from './dto/search-races.dto';
 import { CreateRaceDto } from './dto/create-race.dto';
 import { UpdateRaceDto } from './dto/update-race.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -143,6 +144,27 @@ export class RacesController {
   @ApiResponse({ status: 404, description: 'Race not found' })
   async updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto) {
     return this.racesService.updateStatus(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Patch(':id/status/force')
+  @ApiOperation({
+    summary:
+      'Admin override — bypass forward-only state machine (requires reason, audit logged)',
+  })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiResponse({ status: 200, description: 'Status overridden, audit entry appended' })
+  @ApiResponse({ status: 400, description: 'Invalid reason (min 10 chars)' })
+  @ApiResponse({ status: 404, description: 'Race not found' })
+  async forceUpdateStatus(
+    @Param('id') id: string,
+    @Body() dto: ForceUpdateStatusDto,
+    @Req() req: Request,
+  ) {
+    const user = (req as any).user;
+    const adminId = user?.userId ?? user?.sub ?? 'unknown';
+    return this.racesService.forceUpdateStatus(id, dto, adminId);
   }
 
   // ─── Course management ────────────────────────────────────────

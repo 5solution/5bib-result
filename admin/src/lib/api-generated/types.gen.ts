@@ -394,6 +394,17 @@ export type UpdateStatusDto = {
     status: 'draft' | 'pre_race' | 'live' | 'ended';
 };
 
+export type ForceUpdateStatusDto = {
+    /**
+     * Target lifecycle status (admin override — bypasses forward-only rule)
+     */
+    status: 'draft' | 'pre_race' | 'live' | 'ended';
+    /**
+     * Reason for override (audit trail, min 10 chars). Required because this bypasses the state machine.
+     */
+    reason: string;
+};
+
 export type CheckpointServicesDto = {
     water?: boolean;
     food?: boolean;
@@ -1955,6 +1966,33 @@ export type RacesControllerUpdateStatusErrors = {
 export type RacesControllerUpdateStatusResponses = {
     /**
      * Status updated
+     */
+    200: unknown;
+};
+
+export type RacesControllerForceUpdateStatusData = {
+    body: ForceUpdateStatusDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/races/{id}/status/force';
+};
+
+export type RacesControllerForceUpdateStatusErrors = {
+    /**
+     * Invalid reason (min 10 chars)
+     */
+    400: unknown;
+    /**
+     * Race not found
+     */
+    404: unknown;
+};
+
+export type RacesControllerForceUpdateStatusResponses = {
+    /**
+     * Status overridden, audit entry appended
      */
     200: unknown;
 };

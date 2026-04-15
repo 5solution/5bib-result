@@ -10,6 +10,7 @@ import { SearchRacesDto } from './dto/search-races.dto';
 import { CreateRaceDto } from './dto/create-race.dto';
 import { UpdateRaceDto } from './dto/update-race.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 
@@ -122,6 +123,53 @@ export class RacesService {
       .exec();
 
     if (updated) await this.invalidateRaceCache(id, updated.slug);
+    return { data: updated, success: true };
+  }
+
+  /**
+   * Admin override: bypass forward-only state machine. Requires reason (audit).
+   * Every override is appended to race.statusHistory.
+   */
+  async forceUpdateStatus(id: string, dto: ForceUpdateStatusDto, adminId: string) {
+    const race = await this.raceModel.findById(id).lean().exec();
+    if (!race) {
+      throw new NotFoundException('Race not found');
+    }
+
+    const from = race.status;
+    const to = dto.status;
+
+    // No-op: target equals current → don't pollute history
+    if (from === to) {
+      return { data: race, success: true, message: 'Status unchanged' };
+    }
+
+    const historyEntry = {
+      from,
+      to,
+      reason: dto.reason.trim(),
+      changedBy: adminId,
+      changedAt: new Date(),
+    };
+
+    const updated = await this.raceModel
+      .findByIdAndUpdate(
+        id,
+        {
+          $set: { status: to },
+          $push: { statusHistory: historyEntry },
+        },
+        { new: true },
+      )
+      .lean()
+      .exec();
+
+    if (updated) {
+      await this.invalidateRaceCache(id, updated.slug);
+      this.logger.warn(
+        `Admin status override: race=${id} ${from}→${to} by=${adminId} reason="${dto.reason.slice(0, 80)}"`,
+      );
+    }
     return { data: updated, success: true };
   }
 
