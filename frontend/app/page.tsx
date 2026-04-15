@@ -90,8 +90,11 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
+      {/* Unified Hero — video background covers text + search + stats + live/upcoming cards */}
       <HeroSection
         liveCount={liveRaces.length}
+        liveRaces={liveRaces}
+        upcomingRaces={upcomingRaces}
         stats={{
           totalRaces: summary?.totalRaces ?? 0,
           totalAthletes: summary?.totalAthletes ?? 0,
@@ -101,15 +104,7 @@ export default function HomePage() {
         statsError={isError}
       />
 
-      {/* LIVE — only render when there are live races (BR-01, PRD §Screen 2) */}
-      {liveRaces.length > 0 && <LiveRacesSection races={liveRaces} />}
-
-      {/* UPCOMING — only render when populated (PRD §Screen 3) */}
-      {upcomingRaces.length > 0 && (
-        <UpcomingRacesSection races={upcomingRaces} />
-      )}
-
-      {/* ENDED — grid + Xem thêm (PRD §Screen 4, BR-02) */}
+      {/* ENDED — separate white section below hero (PRD §Screen 4, BR-02) */}
       <EndedRacesSection initialPage={endedPage1} />
 
       {/* Race Alert moved to end (BR-06) */}
@@ -130,11 +125,15 @@ interface StatsProps {
 
 function HeroSection({
   liveCount,
+  liveRaces,
+  upcomingRaces,
   stats,
   statsLoading,
   statsError,
 }: {
   liveCount: number;
+  liveRaces: RaceCardDto[];
+  upcomingRaces: RaceCardDto[];
   stats: StatsProps;
   statsLoading: boolean;
   statsError: boolean;
@@ -142,7 +141,7 @@ function HeroSection({
   const { t } = useTranslation();
 
   return (
-    <section className="relative pt-14 overflow-hidden">
+    <section className="relative pt-14 pb-16 md:pb-20 overflow-hidden">
       {/* Video background — PRD §Screen 1 */}
       <div className="absolute inset-0 -z-10">
         <video
@@ -165,10 +164,10 @@ function HeroSection({
           className="absolute inset-0 bg-cover bg-center bg-no-repeat -z-10"
           style={{ backgroundImage: `url(${HERO_FALLBACK_BG})` }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-900/90 via-slate-900/70 to-slate-900/95" />
+        <div className="absolute inset-0 bg-black/55" />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 md:pt-24 pb-16 md:pb-20">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 md:pt-24 pb-8 md:pb-12">
         <div className="max-w-3xl mx-auto text-center md:text-left md:mx-0">
           {/* LIVE badge — clickable anchor to #live-section (hidden when 0 live) */}
           {liveCount > 0 && (
@@ -243,6 +242,46 @@ function HeroSection({
             </div>
           )}
         </div>
+
+        {/* LIVE races — inside hero, cards on video background (BR-01) */}
+        {liveRaces.length > 0 && (
+          <div id="live-section" className="mt-12 md:mt-16">
+            <div className="flex items-center gap-3 mb-5">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+              </span>
+              <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">
+                Đang diễn ra
+              </h2>
+            </div>
+            <p className="text-white/70 mb-5">
+              Kết quả cập nhật theo thời gian thực.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+              {liveRaces.map((r) => (
+                <LiveRaceCard key={r.slug} race={r} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* UPCOMING races — inside hero, cards on video background */}
+        {upcomingRaces.length > 0 && (
+          <div className="mt-12 md:mt-16">
+            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mb-1">
+              {t('home.upcomingEvents')}
+            </h2>
+            <p className="text-white/70 mb-5">
+              Chuẩn bị theo dõi kết quả các giải sắp diễn ra.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+              {upcomingRaces.map((r) => (
+                <UpcomingRaceCard key={r.slug} race={r} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -486,37 +525,8 @@ function StatusChip({ status }: { status: 'live' | 'upcoming' | 'ended' }) {
 }
 
 // ---------------------------------------------------------------------------
-// LIVE Section (PRD §Screen 2)
+// LIVE Card (rendered inside HeroSection on dark video background)
 // ---------------------------------------------------------------------------
-
-function LiveRacesSection({ races }: { races: RaceCardDto[] }) {
-  return (
-    <section id="live-section" className="py-12 md:py-16 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-5">
-        <div className="flex items-center gap-3">
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-          </span>
-          <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
-            Đang diễn ra
-          </h2>
-        </div>
-        <p className="text-slate-500 mt-1">
-          Kết quả cập nhật theo thời gian thực.
-        </p>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
-          {races.map((r) => (
-            <LiveRaceCard key={r.slug} race={r} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function LiveRaceCard({ race }: { race: RaceCardDto }) {
   return (
@@ -568,32 +578,8 @@ function LiveRaceCard({ race }: { race: RaceCardDto }) {
 }
 
 // ---------------------------------------------------------------------------
-// UPCOMING Section (PRD §Screen 3)
+// UPCOMING Card (rendered inside HeroSection on dark video background)
 // ---------------------------------------------------------------------------
-
-function UpcomingRacesSection({ races }: { races: RaceCardDto[] }) {
-  const { t } = useTranslation();
-  return (
-    <section className="py-12 md:py-16 bg-slate-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-5">
-        <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
-          {t('home.upcomingEvents')}
-        </h2>
-        <p className="text-slate-500 mt-1">
-          Chuẩn bị theo dõi kết quả các giải sắp diễn ra.
-        </p>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
-          {races.map((r) => (
-            <UpcomingRaceCard key={r.slug} race={r} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function UpcomingRaceCard({ race }: { race: RaceCardDto }) {
   return (
