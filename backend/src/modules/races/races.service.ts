@@ -226,10 +226,10 @@ export class RacesService {
     };
   }
 
-  async getRaceById(id: string) {
+  async getRaceById(id: string, allowDraft = false) {
     const race = await this.raceModel.findById(id).lean().exec();
 
-    if (!race) {
+    if (!race || (!allowDraft && race.status === 'draft')) {
       return {
         data: null,
         success: false,
@@ -243,10 +243,10 @@ export class RacesService {
     };
   }
 
-  async getRaceBySlug(slug: string) {
+  async getRaceBySlug(slug: string, allowDraft = false) {
     const race = await this.raceModel.findOne({ slug }).lean().exec();
 
-    if (!race) {
+    if (!race || (!allowDraft && race.status === 'draft')) {
       return {
         data: null,
         success: false,
@@ -338,6 +338,23 @@ export class RacesService {
     }
   }
 
+  /** Map upstream status enums (from 5BIB platform) to our lowercase schema values */
+  private normalizeUpstreamStatus(raw: string): 'draft' | 'pre_race' | 'live' | 'ended' {
+    const map: Record<string, 'draft' | 'pre_race' | 'live' | 'ended'> = {
+      draft: 'draft',
+      DRAFT: 'draft',
+      GENERATED_CODE: 'draft',
+      pre_race: 'pre_race',
+      PRE_RACE: 'pre_race',
+      live: 'live',
+      LIVE: 'live',
+      ended: 'ended',
+      COMPLETE: 'ended',
+      CANCEL: 'ended',
+    };
+    return map[raw] ?? 'draft';
+  }
+
   private async saveRaceData(raceData: any) {
     const {
       race_course_bases,
@@ -358,7 +375,7 @@ export class RacesService {
     const raceDoc: Partial<Race> = {
       productId,
       title: raceFields.title,
-      status: raceFields.status,
+      status: this.normalizeUpstreamStatus(raceFields.status),
       season: raceFields.season,
       province: raceFields.province,
       raceType: raceFields.race_type,

@@ -35,6 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('User not found');
     }
 
-    return user;
+    // Attach userId/sub so controllers can identify the admin (req.user.userId)
+    return { ...user, userId: String(user._id), sub: String(user._id) };
   }
 }

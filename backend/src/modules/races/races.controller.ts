@@ -7,8 +7,10 @@ import {
   Query,
   Param,
   Body,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import {
   ApiOperation,
   ApiResponse,
@@ -24,6 +26,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 
 @ApiTags('Races')
 @Controller('races')
@@ -60,15 +63,18 @@ export class RacesController {
   }
 
   @Get('slug/:slug')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get race by slug (SEO-friendly)' })
   @ApiParam({ name: 'slug', type: 'string', description: 'Race slug' })
   @ApiResponse({ status: 200, description: 'Returns race details' })
   @ApiResponse({ status: 404, description: 'Race not found' })
-  async getRaceBySlug(@Param('slug') slug: string) {
-    return this.racesService.getRaceBySlug(slug);
+  async getRaceBySlug(@Param('slug') slug: string, @Req() req: Request) {
+    const isAdmin = !!(req as any).user;
+    return this.racesService.getRaceBySlug(slug, isAdmin);
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get race by ID' })
   @ApiParam({
     name: 'id',
@@ -77,8 +83,9 @@ export class RacesController {
   })
   @ApiResponse({ status: 200, description: 'Returns race details with courses' })
   @ApiResponse({ status: 404, description: 'Race not found' })
-  async getRaceById(@Param('id') id: string) {
-    return this.racesService.getRaceById(id);
+  async getRaceById(@Param('id') id: string, @Req() req: Request) {
+    const isAdmin = !!(req as any).user;
+    return this.racesService.getRaceById(id, isAdmin);
   }
 
   @Get('product/:productId')

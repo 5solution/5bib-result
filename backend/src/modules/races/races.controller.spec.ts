@@ -42,13 +42,15 @@ describe('RacesController', () => {
   });
 
   it('should call getRaceById', async () => {
-    await controller.getRaceById('123');
-    expect(mockRacesService.getRaceById).toHaveBeenCalledWith('123');
+    const mockReq = { user: undefined } as any;
+    await controller.getRaceById('123', mockReq);
+    expect(mockRacesService.getRaceById).toHaveBeenCalledWith('123', false);
   });
 
   it('should call getRaceBySlug', async () => {
-    await controller.getRaceBySlug('my-race');
-    expect(mockRacesService.getRaceBySlug).toHaveBeenCalledWith('my-race');
+    const mockReq = { user: undefined } as any;
+    await controller.getRaceBySlug('my-race', mockReq);
+    expect(mockRacesService.getRaceBySlug).toHaveBeenCalledWith('my-race', false);
   });
 
   it('should call createRace', async () => {
