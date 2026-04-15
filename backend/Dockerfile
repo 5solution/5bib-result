@@ -15,10 +15,11 @@ WORKDIR /app
 
 RUN npm install -g pnpm && apk add --no-cache curl fontconfig font-noto
 
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
 COPY --from=builder /app/assets ./assets
+
+RUN pnpm install --frozen-lockfile --prod
 
 EXPOSE 8081
 
