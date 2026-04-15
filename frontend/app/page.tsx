@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRaces } from '@/lib/api-hooks';
 import Link from 'next/link';
@@ -171,27 +171,20 @@ export default function HomePage() {
     totalResults: r.total_results || 0,
   });
 
-  const races = useMemo<Race[]>(() => {
-    const apiList: ApiRace[] = apiMeta?.list ?? [];
-    if (!Array.isArray(apiList)) return [];
-    return apiList.filter((r) => r.status !== 'draft').map(mapApiRace);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiMeta]);
+  const apiList: ApiRace[] = Array.isArray(apiMeta?.list) ? (apiMeta!.list as ApiRace[]) : [];
+  const endedList: ApiRace[] = Array.isArray(endedMeta?.list) ? (endedMeta!.list as ApiRace[]) : [];
+  const races: Race[] = apiList.filter((r) => r.status !== 'draft').map(mapApiRace);
 
-  const stats = useMemo<StatsData>(() => {
-    // Use API totalItems for race count (accurate even with pagination)
-    const totalRaces = apiMeta?.totalItems ?? races.length;
-    const allKnown = [...(apiMeta?.list ?? []), ...(endedMeta?.list ?? [])];
-    const knownResults = allKnown.reduce((sum, r) => sum + (r.total_results || 0), 0);
-    // Extrapolate results/athletes from known ratio if we only have a partial list
-    const ratio = allKnown.length > 0 ? knownResults / allKnown.length : 500;
-    const totalResults = knownResults > 0 ? Math.round(ratio * totalRaces) : totalRaces * 500;
-    return {
-      totalRaces,
-      totalResults,
-      totalAthletes: Math.round(totalResults * 0.85),
-    };
-  }, [races, apiMeta, endedMeta]);
+  const totalRaces = apiMeta?.totalItems ?? races.length;
+  const allKnown = [...apiList, ...endedList];
+  const knownResults = allKnown.reduce((sum, r) => sum + (r.total_results || 0), 0);
+  const ratio = allKnown.length > 0 ? knownResults / allKnown.length : 500;
+  const totalResultsCount = knownResults > 0 ? Math.round(ratio * totalRaces) : totalRaces * 500;
+  const stats: StatsData = {
+    totalRaces,
+    totalResults: totalResultsCount,
+    totalAthletes: Math.round(totalResultsCount * 0.85),
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,18 +202,14 @@ export default function HomePage() {
         (new Date(a.startDate || 0).getTime() || 0) -
         (new Date(b.startDate || 0).getTime() || 0),
     );
-  // Use dedicated ended-races fetch so we always have past events regardless of homepage sort
-  const completedRaces = useMemo<Race[]>(() => {
-    const list: ApiRace[] = endedMeta?.list ?? [];
-    return list
-      .map(mapApiRace)
-      .sort(
-        (a, b) =>
-          (new Date(b.startDate || 0).getTime() || 0) -
-          (new Date(a.startDate || 0).getTime() || 0),
-      );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endedMeta]);
+  // Past events from dedicated ended-races fetch
+  const completedRaces: Race[] = endedList
+    .map(mapApiRace)
+    .sort(
+      (a, b) =>
+        (new Date(b.startDate || 0).getTime() || 0) -
+        (new Date(a.startDate || 0).getTime() || 0),
+    );
 
   const liveAndUpcoming = [...liveRaces, ...upcomingRaces];
 
