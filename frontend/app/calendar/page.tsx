@@ -60,7 +60,7 @@ function CalendarContent() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
   const [page, setPage] = useState(1);
 
-  const { data: racesRaw, isLoading: loading } = useRaces();
+  const { data: racesRaw, isLoading: loading } = useRaces({ pageSize: 200 });
 
   const races = useMemo<Race[]>(() => {
     const apiList = (racesRaw as any)?.data?.list ?? (racesRaw as any)?.data ?? (racesRaw as any) ?? [];
