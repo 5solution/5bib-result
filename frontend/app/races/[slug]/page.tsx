@@ -576,8 +576,10 @@ export default function RaceDetailPage() {
                           <div className="space-y-2">
                             {women.length > 0 ? women.map((r, i) => (
                               <div key={r.Bib} className="flex items-center gap-2.5 group/athlete">
-                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                                  {r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
+                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0 overflow-hidden">
+                                  {r.avatarUrl
+                                    ? <img src={r.avatarUrl} alt={r.Name} className="w-full h-full object-cover" />
+                                    : r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
                                 </div>
                                 <span className="text-sm font-bold text-slate-700 w-4">{i + 1}</span>
                                 <button
@@ -597,8 +599,10 @@ export default function RaceDetailPage() {
                           <div className="space-y-2">
                             {men.length > 0 ? men.map((r, i) => (
                               <div key={r.Bib} className="flex items-center gap-2.5 group/athlete">
-                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                                  {r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
+                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0 overflow-hidden">
+                                  {r.avatarUrl
+                                    ? <img src={r.avatarUrl} alt={r.Name} className="w-full h-full object-cover" />
+                                    : r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
                                 </div>
                                 <span className="text-sm font-bold text-slate-700 w-4">{i + 1}</span>
                                 <button
