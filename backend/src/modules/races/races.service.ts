@@ -76,10 +76,17 @@ export class RacesService {
    */
   private stripRacePrivateFields<T extends Partial<Record<StrippedRaceKey, unknown>> & { courses?: unknown }>(
     race: T,
-  ): Omit<T, StrippedRaceKey> {
+  ): Omit<T, StrippedRaceKey> & { id: string } {
+    // Expose `id` (string) before stripping `_id` so the public API has a stable identifier
+    // that the frontend can use as raceId when querying /race-results.
+    const rawId = (race as Record<string, unknown>)['_id'];
+    const publicId: string = rawId != null ? String(rawId) : '';
+
     const result = Object.fromEntries(
       Object.entries(race).filter(([k]) => !(STRIPPED_RACE_FIELDS as readonly string[]).includes(k)),
-    ) as Omit<T, StrippedRaceKey>;
+    ) as Omit<T, StrippedRaceKey> & { id: string };
+
+    result.id = publicId;
 
     // Also scrub course-level internal fields.
     if (Array.isArray((race as Record<string, unknown>).courses)) {

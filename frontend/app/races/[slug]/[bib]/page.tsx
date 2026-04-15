@@ -166,7 +166,7 @@ export default function AthleteDetailPage() {
   // Data fetching via react-query hooks
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const raceData = useMemo(() => (raceRaw as any)?.data ?? raceRaw, [raceRaw]);
-  const raceId = raceData?._id || '';
+  const raceId = raceData?._id || raceData?.id || '';
 
   const { data: athleteRaw, isLoading: loadingAthlete } = useAthleteDetail(raceId, bib, { enabled: !!raceId });
 
