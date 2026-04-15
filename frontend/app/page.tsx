@@ -144,24 +144,40 @@ export default function HomePage() {
 
   // Fetch live/upcoming races for the hero slider
   const { data: racesRaw, isLoading: loading } = useRaces({ pageSize: 20 });
-  // Fetch ended races separately so they always show regardless of sort order.
-  // pageSize 50 → covers the ~48 ended races we have so the slider isn't sparse.
-  const { data: endedRaw, isLoading: loadingEnded, error: endedError } = useRaces({ status: 'ended', pageSize: 50 });
+
+  // Fetch ended races via raw fetch against the runtime proxy.
+  // Bypasses SDK to avoid any query-param serialization edge cases in hey-api
+  // and guarantees we get ~48 ended races even when the default list is paged out.
+  const [endedList, setEndedList] = useState<ApiRace[]>([]);
+  const [loadingEnded, setLoadingEnded] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/races?status=ended&pageSize=50', {
+          headers: { Accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { data?: { list?: ApiRace[] } };
+        if (!cancelled) {
+          setEndedList(Array.isArray(json?.data?.list) ? json.data!.list! : []);
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[home] ended races fetch failed:', err);
+        }
+      } finally {
+        if (!cancelled) setLoadingEnded(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Read real totals from API meta, not from the partial list
   const apiMeta = (racesRaw as { data?: { totalItems?: number; totalPages?: number; list?: ApiRace[] } } | undefined)?.data;
-  const endedMeta = (endedRaw as { data?: { totalItems?: number; list?: ApiRace[] } } | undefined)?.data;
-
-  // Dev-time diagnostic: when ended fetch succeeds but list is empty, surface it loudly
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'production' && !loadingEnded) {
-      if (endedError) {
-        console.error('[home] ended races fetch failed:', endedError);
-      } else if (endedMeta && (!endedMeta.list || endedMeta.list.length === 0)) {
-        console.warn('[home] ended races returned empty list. totalItems=', endedMeta.totalItems);
-      }
-    }
-  }, [endedError, endedMeta, loadingEnded]);
 
   const mapApiRace = (r: ApiRace): Race => ({
     id: r._id,
@@ -184,7 +200,6 @@ export default function HomePage() {
   });
 
   const apiList: ApiRace[] = Array.isArray(apiMeta?.list) ? (apiMeta!.list as ApiRace[]) : [];
-  const endedList: ApiRace[] = Array.isArray(endedMeta?.list) ? (endedMeta!.list as ApiRace[]) : [];
   const races: Race[] = apiList.filter((r) => r.status !== 'draft').map(mapApiRace);
 
   const totalRaces = apiMeta?.totalItems ?? races.length;
@@ -214,8 +229,12 @@ export default function HomePage() {
         (new Date(a.startDate || 0).getTime() || 0) -
         (new Date(b.startDate || 0).getTime() || 0),
     );
-  // Past events from dedicated ended-races fetch
-  const completedRaces: Race[] = endedList
+  // Past events from the dedicated ended-races fetch. If that came back empty
+  // for any reason, fall back to ended races in the main list so the section
+  // is never blank when ended races exist in the backend.
+  const endedFromMain = apiList.filter((r) => r.status === 'ended');
+  const endedSource = endedList.length > 0 ? endedList : endedFromMain;
+  const completedRaces: Race[] = endedSource
     .map(mapApiRace)
     .sort(
       (a, b) =>
