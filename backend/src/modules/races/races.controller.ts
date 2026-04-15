@@ -37,6 +37,7 @@ export class RacesController {
   // ─── Search / Read ────────────────────────────────────────────
 
   @Get()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: 'Search and list races with filters and pagination',
   })
@@ -59,8 +60,9 @@ export class RacesController {
       },
     },
   })
-  async searchRaces(@Query() dto: SearchRacesDto) {
-    return this.racesService.searchRaces(dto);
+  async searchRaces(@Query() dto: SearchRacesDto, @Req() req: Request) {
+    const isAdmin = !!(req as any).user;
+    return this.racesService.searchRaces(dto, isAdmin);
   }
 
   @Get('slug/:slug')

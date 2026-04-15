@@ -37,7 +37,8 @@ describe('RacesController', () => {
   });
 
   it('should call searchRaces', async () => {
-    await controller.searchRaces({ page: 0, pageSize: 10 });
+    const mockReq = { user: undefined } as any;
+    await controller.searchRaces({ page: 0, pageSize: 10 }, mockReq);
     expect(mockRacesService.searchRaces).toHaveBeenCalled();
   });
 

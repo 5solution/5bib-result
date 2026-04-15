@@ -47,16 +47,48 @@ export class RacesService {
   }
 
   /**
-   * Strip internal Mongo fields (_id, __v) from a lean race object before
-   * returning on PUBLIC endpoints. Admin callers opt out via allowDraft=true.
-   * Keeps the rest of the payload intact.
+   * Strip internal + sensitive fields from a lean race object before returning
+   * on PUBLIC endpoints. Admin callers opt out via allowDraft=true (they need
+   * _id for edit/delete, statusHistory for audit UI, rawData for sync debug).
+   *
+   * Stripped for public:
+   *   - _id, __v            → Mongo internals
+   *   - productId           → internal upstream identifier (5BIB platform)
+   *   - externalRaceId      → internal upstream identifier
+   *   - rawData             → raw upstream timing provider response
+   *   - cacheTtlSeconds     → internal cache config
+   *   - statusHistory       → admin audit trail (contains changedBy userIds + reasons)
+   *   - apiUrl, apiFormat   → internal course-level sync config (on nested courses)
    */
-  private stripRacePrivateFields<T extends { _id?: unknown; __v?: unknown }>(
-    race: T,
-  ): Omit<T, '_id' | '__v'> {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { _id, __v, ...publicRace } = race;
-    return publicRace;
+  private stripRacePrivateFields<
+    T extends {
+      _id?: unknown;
+      __v?: unknown;
+      productId?: unknown;
+      externalRaceId?: unknown;
+      rawData?: unknown;
+      cacheTtlSeconds?: unknown;
+      statusHistory?: unknown;
+      courses?: unknown;
+    },
+  >(race: T): Omit<T, '_id' | '__v' | 'productId' | 'externalRaceId' | 'rawData' | 'cacheTtlSeconds' | 'statusHistory'> {
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      _id, __v, productId, externalRaceId, rawData, cacheTtlSeconds, statusHistory,
+      courses,
+      ...publicRace
+    } = race;
+
+    // Also scrub course-level apiUrl/apiFormat (internal sync config).
+    const publicCourses = Array.isArray(courses)
+      ? courses.map((c: Record<string, unknown>) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { apiUrl, apiFormat, importStatus, ...publicCourse } = c;
+          return publicCourse;
+        })
+      : courses;
+
+    return { ...publicRace, courses: publicCourses } as Omit<T, '_id' | '__v' | 'productId' | 'externalRaceId' | 'rawData' | 'cacheTtlSeconds' | 'statusHistory'>;
   }
 
   // ─── Admin CRUD ──────────────────────────────────────────────
@@ -258,7 +290,7 @@ export class RacesService {
 
   // ─── Queries ─────────────────────────────────────────────────
 
-  async searchRaces(dto: SearchRacesDto) {
+  async searchRaces(dto: SearchRacesDto, allowDraft = false) {
     const {
       title,
       status,
@@ -275,12 +307,21 @@ export class RacesService {
       filter.title = { $regex: title, $options: 'i' };
     }
 
-    if (status && status !== 'all') {
-      filter.status = status;
-    } else if (!status) {
-      filter.status = { $ne: 'draft' };
+    // Draft visibility is ADMIN-ONLY. Public callers cannot enumerate drafts
+    // regardless of what they pass in ?status=. (C-02 regression guard.)
+    if (!allowDraft) {
+      if (status && status !== 'all' && status !== 'draft') {
+        filter.status = status;
+      } else {
+        // status omitted | 'all' | 'draft' (attempted bypass) → never expose drafts
+        filter.status = { $ne: 'draft' };
+      }
+    } else {
+      // Admin: honor status filter as provided (including 'draft'); 'all' = no filter
+      if (status && status !== 'all') {
+        filter.status = status;
+      }
     }
-    // status === 'all' → no filter, include drafts
 
     if (province) {
       filter.province = province;
@@ -307,12 +348,15 @@ export class RacesService {
 
     const totalPages = Math.ceil(totalItems / pageSize);
 
+    // Strip internal/sensitive fields from every item on public responses.
+    const publicList = allowDraft ? list : list.map((r) => this.stripRacePrivateFields(r));
+
     return {
       data: {
         totalPages,
         currentPage: page,
         totalItems,
-        list,
+        list: publicList,
       },
       success: true,
     };
