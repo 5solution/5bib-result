@@ -561,7 +561,7 @@ export default function AthleteDetailPage() {
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-4">
           <div className="flex items-center justify-between">
             <Link
-              href={`/races/${slug}`}
+              href={`/races/${slug}/ranking/${athlete.course_id}`}
               className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors font-medium"
             >
               <ChevronLeft className="w-4 h-4" />
