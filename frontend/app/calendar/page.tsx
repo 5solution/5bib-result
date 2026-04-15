@@ -57,14 +57,45 @@ function CalendarContent() {
   const initialSearch = searchParams.get('search') || '';
   const initialStatus = (searchParams.get('status') as StatusFilter) || 'all';
   const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
   const [page, setPage] = useState(1);
 
-  const { data: racesRaw, isLoading: loading } = useRaces({ pageSize: 200 });
+  // Debounce search — avoid firing API on every keystroke
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { setDebouncedSearch(val); setPage(1); }, 400);
+  };
 
-  const races = useMemo<Race[]>(() => {
-    const apiList = (racesRaw as any)?.data?.list ?? (racesRaw as any)?.data ?? (racesRaw as any) ?? [];
-    return apiList.map((r: any) => ({
+  // Map UI status filter → API status value
+  const apiStatus = statusFilter === 'all' ? undefined
+    : statusFilter === 'upcoming' ? 'pre_race'
+    : statusFilter === 'completed' ? 'ended'
+    : 'live';
+
+  // Reset page on status change
+  const prevStatus = useRef(statusFilter);
+  if (prevStatus.current !== statusFilter) {
+    prevStatus.current = statusFilter;
+    if (page !== 1) setPage(1);
+  }
+
+  // Server-side pagination — API handles filtering + sorting
+  const { data: racesRaw, isLoading: loading } = useRaces({
+    title: debouncedSearch || undefined,
+    status: apiStatus,
+    page: page - 1,   // API is 0-indexed (pageNo)
+    pageSize: PAGE_SIZE,
+  });
+
+  const apiData = (racesRaw as any)?.data as { totalItems?: number; totalPages?: number; list?: any[] } | undefined;
+  const totalPages = apiData?.totalPages ?? 0;
+  const totalItems = apiData?.totalItems ?? 0;
+
+  const pagedRaces = useMemo<Race[]>(() => {
+    return (apiData?.list ?? []).map((r: any) => ({
       id: r._id || r.id,
       name: r.title || r.name,
       slug: r.slug,
@@ -77,22 +108,7 @@ function CalendarContent() {
       imageUrl: r.imageUrl || null,
       bannerUrl: r.bannerUrl || null,
     }));
-  }, [racesRaw]);
-
-  const filteredRaces = races.filter((race) => {
-    const matchesSearch =
-      !searchQuery ||
-      race.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      race.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || race.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  }).sort((a, b) => {
-    const statusOrder = { live: 0, upcoming: 1, completed: 2 };
-    const orderDiff = statusOrder[a.status] - statusOrder[b.status];
-    if (orderDiff !== 0) return orderDiff;
-    if (a.status === 'completed') return new Date(b.date).getTime() - new Date(a.date).getTime();
-    return new Date(a.date).getTime() - new Date(b.date).getTime();
-  });
+  }, [apiData]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return t('common.unknown');
@@ -132,18 +148,6 @@ function CalendarContent() {
     ];
   };
 
-  // Reset to page 1 when filters change
-  const prevSearch = useRef(searchQuery);
-  const prevStatus = useRef(statusFilter);
-  if (prevSearch.current !== searchQuery || prevStatus.current !== statusFilter) {
-    prevSearch.current = searchQuery;
-    prevStatus.current = statusFilter;
-    if (page !== 1) setPage(1);
-  }
-
-  const totalPages = Math.ceil(filteredRaces.length / PAGE_SIZE);
-  const pagedRaces = filteredRaces.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
   const getRaceImage = (race: Race, index: number) => {
     return race.imageUrl || race.bannerUrl || race.image || RACE_IMAGES[index % RACE_IMAGES.length];
   };
@@ -177,11 +181,11 @@ function CalendarContent() {
                 type="text"
                 placeholder={t('calendar.searchPlaceholder')}
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-11 pr-10 py-3 bg-white rounded-full text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm shadow-lg"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <button onClick={() => { setSearchQuery(''); handleSearchChange(''); }} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                   <X className="w-4 h-4" />
                 </button>
               )}
@@ -210,7 +214,7 @@ function CalendarContent() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex items-center justify-between mb-6">
           <p className="text-sm text-slate-500">
-            {loading ? t('common.loading') : t('calendar.resultsCount', { count: filteredRaces.length })}
+            {loading ? t('common.loading') : t('calendar.resultsCount', { count: totalItems })}
           </p>
         </div>
 
@@ -231,7 +235,7 @@ function CalendarContent() {
               </div>
             ))}
           </div>
-        ) : filteredRaces.length === 0 ? (
+        ) : pagedRaces.length === 0 ? (
           <div className="text-center py-24">
             <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center shadow-inner">
               <Search className="w-9 h-9 text-slate-300" />
@@ -239,7 +243,7 @@ function CalendarContent() {
             <h3 className="text-xl font-bold text-slate-900 mb-2">{t('calendar.noEvents')}</h3>
             <p className="text-slate-500 text-sm max-w-sm mx-auto">{t('calendar.noEventsHint')}</p>
             {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="mt-4 px-5 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 transition-colors">
+              <button onClick={() => { setSearchQuery(''); handleSearchChange(''); }} className="mt-4 px-5 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 transition-colors">
                 {t('common.clearFilters')}
               </button>
             )}
