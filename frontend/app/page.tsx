@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRaces } from '@/lib/api-hooks';
 import Link from 'next/link';
@@ -14,6 +14,7 @@ import {
   Award,
   Share2,
   ChevronRight,
+  ChevronLeft,
   Bell,
   Users,
 } from 'lucide-react';
@@ -460,40 +461,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <ScrollArea className="w-full whitespace-nowrap">
-          <div
-            className="flex w-max gap-3 pb-4"
-            style={{
-              paddingLeft: 'max(1rem, calc((100vw - 1280px) / 2))',
-              paddingRight: '1rem',
-            }}
-          >
-            {loading
-              ? Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="shrink-0 w-[280px] md:w-[300px] h-[380px] md:h-[420px] bg-slate-100 animate-pulse rounded-lg overflow-hidden"
-                >
-                  <div className="h-full flex flex-col justify-end p-4 gap-2">
-                    <div className="h-3 w-20 bg-slate-200 rounded" />
-                    <div className="h-5 w-3/4 bg-slate-200 rounded" />
-                    <div className="h-3 w-1/2 bg-slate-200 rounded" />
-                    <div className="h-3 w-2/3 bg-slate-200 rounded mt-1" />
-                  </div>
-                </div>
-              ))
-              : completedRaces.length > 0
-                ? completedRaces.map((race) => (
-                  <PastEventCard key={race.id} race={race} />
-                ))
-                : (
-                  <div className="flex items-center justify-center w-full min-w-[300px] h-[380px] text-[var(--5bib-text-muted)] text-sm">
-                    {t('home.noPastEvents')}
-                  </div>
-                )}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+        <PastEventsSlider races={completedRaces} loading={loading} />
         {/* ================================================================= */}
         {/* FEATURES SECTION                                                   */}
         {/* ================================================================= */}
@@ -645,6 +613,101 @@ function EventCard({ race }: { race: Race }) {
 }
 
 // ---------------------------------------------------------------------------
+// Past Events Slider — scroll strip with prev/next arrow buttons
+// ---------------------------------------------------------------------------
+
+function PastEventsSlider({ races, loading }: { races: Race[]; loading: boolean }) {
+  const { t } = useTranslation();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const CARD_WIDTH = 312; // 300px card + 12px gap
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 8);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener('scroll', updateScrollState, { passive: true });
+    return () => el.removeEventListener('scroll', updateScrollState);
+  }, [updateScrollState, races]);
+
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -CARD_WIDTH * 3 : CARD_WIDTH * 3, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="relative">
+      {/* Prev button */}
+      {canScrollLeft && (
+        <button
+          onClick={() => scroll('left')}
+          aria-label="Previous"
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-all border border-slate-100"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Scroll container */}
+      <div
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-auto scrollbar-hide pb-4"
+        style={{
+          paddingLeft: 'max(1rem, calc((100vw - 1280px) / 2))',
+          paddingRight: '1rem',
+          scrollSnapType: 'x mandatory',
+        }}
+      >
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="shrink-0 w-[280px] md:w-[300px] h-[380px] md:h-[420px] bg-slate-100 animate-pulse rounded-lg overflow-hidden"
+              style={{ scrollSnapAlign: 'start' }}
+            >
+              <div className="h-full flex flex-col justify-end p-4 gap-2">
+                <div className="h-3 w-20 bg-slate-200 rounded" />
+                <div className="h-5 w-3/4 bg-slate-200 rounded" />
+                <div className="h-3 w-1/2 bg-slate-200 rounded" />
+              </div>
+            </div>
+          ))
+          : races.length > 0
+            ? races.map((race) => (
+              <div key={race.id} style={{ scrollSnapAlign: 'start' }}>
+                <PastEventCard race={race} />
+              </div>
+            ))
+            : (
+              <div className="flex items-center justify-center w-full min-w-[300px] h-[380px] text-[var(--5bib-text-muted)] text-sm">
+                {t('home.noPastEvents')}
+              </div>
+            )}
+      </div>
+
+      {/* Next button */}
+      {canScrollRight && races.length > 0 && !loading && (
+        <button
+          onClick={() => scroll('right')}
+          aria-label="Next"
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-all border border-slate-100"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Past Event Card
 // ---------------------------------------------------------------------------
 
@@ -683,6 +746,16 @@ function PastEventCard({ race }: { race: Race }) {
           <p className="text-white/90 text-xs font-medium">
             {formatDateVN(race.startDate, t('common.unknown'))}
           </p>
+
+          {race.distances.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {race.distances.map((d) => (
+                <span key={d} className="px-2 py-0.5 bg-blue-500/60 backdrop-blur-sm rounded text-[10px] font-bold text-white">
+                  {d}
+                </span>
+              ))}
+            </div>
+          )}
 
           {race.totalResults > 0 && (
             <div className="mt-2 px-2 py-1 bg-white/15 backdrop-blur-sm rounded text-[10px] font-bold text-white inline-block">

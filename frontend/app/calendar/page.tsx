@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useMemo, Suspense } from 'react';
+import { useState, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { Search, MapPin, Calendar, ChevronRight, X } from 'lucide-react';
+import { Search, MapPin, Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useRaces } from '@/lib/api-hooks';
+
+const PAGE_SIZE = 9;
 
 interface Race {
   id: number;
@@ -19,6 +21,8 @@ interface Race {
   total_results?: number;
   description?: string;
   image?: string;
+  imageUrl?: string;
+  bannerUrl?: string;
 }
 
 const RACE_IMAGES = [
@@ -54,6 +58,7 @@ function CalendarContent() {
   const initialStatus = (searchParams.get('status') as StatusFilter) || 'all';
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
+  const [page, setPage] = useState(1);
 
   const { data: racesRaw, isLoading: loading } = useRaces();
 
@@ -69,6 +74,8 @@ function CalendarContent() {
       status: r.status === 'pre_race' ? 'upcoming' : r.status === 'live' ? 'live' : 'completed',
       distances: r.courses?.map((c: any) => c.distance || c.name) || r.distances || [],
       total_results: r.total_results || 0,
+      imageUrl: r.imageUrl || null,
+      bannerUrl: r.bannerUrl || null,
     }));
   }, [racesRaw]);
 
@@ -125,8 +132,20 @@ function CalendarContent() {
     ];
   };
 
+  // Reset to page 1 when filters change
+  const prevSearch = useRef(searchQuery);
+  const prevStatus = useRef(statusFilter);
+  if (prevSearch.current !== searchQuery || prevStatus.current !== statusFilter) {
+    prevSearch.current = searchQuery;
+    prevStatus.current = statusFilter;
+    if (page !== 1) setPage(1);
+  }
+
+  const totalPages = Math.ceil(filteredRaces.length / PAGE_SIZE);
+  const pagedRaces = filteredRaces.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const getRaceImage = (race: Race, index: number) => {
-    return race.image || RACE_IMAGES[index % RACE_IMAGES.length];
+    return race.imageUrl || race.bannerUrl || race.image || RACE_IMAGES[index % RACE_IMAGES.length];
   };
 
   const statusTabs: { key: StatusFilter; label: string }[] = [
@@ -227,7 +246,7 @@ function CalendarContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredRaces.map((race, index) => {
+            {pagedRaces.map((race, index) => {
               const countdown = race.status === 'upcoming' ? getCountdown(race.date) : null;
               return (
                 <Link key={race.id} href={`/races/${race.slug}`}>
@@ -308,6 +327,48 @@ function CalendarContent() {
                 </Link>
               );
             })}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-10">
+            <button
+              onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              disabled={page === 1}
+              className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+              const isEllipsis = totalPages > 7 && Math.abs(p - page) > 2 && p !== 1 && p !== totalPages;
+              if (isEllipsis) {
+                if (p === page - 3 || p === page + 3) return <span key={p} className="text-slate-300 px-1">…</span>;
+                return null;
+              }
+              return (
+                <button
+                  key={p}
+                  onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className={`w-9 h-9 rounded-full text-sm font-semibold transition-colors ${
+                    p === page
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {p}
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => { setPage((p) => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              disabled={page === totalPages}
+              className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         )}
       </div>
