@@ -142,42 +142,56 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
-  const { data: racesRaw, isLoading: loading } = useRaces({ pageSize: 200 });
+  // Fetch live/upcoming races for the hero slider
+  const { data: racesRaw, isLoading: loading } = useRaces({ pageSize: 20 });
+  // Fetch ended races separately so they always show regardless of sort order
+  const { data: endedRaw, isLoading: loadingEnded } = useRaces({ status: 'ended', pageSize: 20 });
+
+  // Read real totals from API meta, not from the partial list
+  const apiMeta = (racesRaw as any)?.data as { totalItems?: number; totalPages?: number; list?: ApiRace[] } | undefined;
+  const endedMeta = (endedRaw as any)?.data as { totalItems?: number; list?: ApiRace[] } | undefined;
+
+  const mapApiRace = (r: ApiRace): Race => ({
+    id: r._id,
+    name: r.title,
+    slug: r.slug,
+    startDate: r.startDate || null,
+    endDate: r.endDate || null,
+    location: r.province || '',
+    imageUrl: r.imageUrl || null,
+    bannerUrl: r.bannerUrl || null,
+    status:
+      r.status === 'live'
+        ? 'live'
+        : r.status === 'pre_race'
+          ? 'upcoming'
+          : 'completed',
+    distances:
+      r.courses?.map((c) => c.distance || c.name).filter(Boolean) || [],
+    totalResults: r.total_results || 0,
+  });
 
   const races = useMemo<Race[]>(() => {
-    const apiList: ApiRace[] = (racesRaw as any)?.data?.list ?? (racesRaw as any)?.data ?? (racesRaw as any) ?? [];
+    const apiList: ApiRace[] = apiMeta?.list ?? [];
     if (!Array.isArray(apiList)) return [];
-    return apiList
-      .filter((r) => r.status !== 'draft')
-      .map((r) => ({
-        id: r._id,
-        name: r.title,
-        slug: r.slug,
-        startDate: r.startDate || null,
-        endDate: r.endDate || null,
-        location: r.province || '',
-        imageUrl: r.imageUrl || null,
-        bannerUrl: r.bannerUrl || null,
-        status:
-          r.status === 'live'
-            ? 'live'
-            : r.status === 'pre_race'
-              ? 'upcoming'
-              : 'completed',
-        distances:
-          r.courses?.map((c) => c.distance || c.name).filter(Boolean) || [],
-        totalResults: r.total_results || 0,
-      }));
-  }, [racesRaw]);
+    return apiList.filter((r) => r.status !== 'draft').map(mapApiRace);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiMeta]);
 
   const stats = useMemo<StatsData>(() => {
-    const totalResults = races.reduce((sum, r) => sum + r.totalResults, 0);
+    // Use API totalItems for race count (accurate even with pagination)
+    const totalRaces = apiMeta?.totalItems ?? races.length;
+    const allKnown = [...(apiMeta?.list ?? []), ...(endedMeta?.list ?? [])];
+    const knownResults = allKnown.reduce((sum, r) => sum + (r.total_results || 0), 0);
+    // Extrapolate results/athletes from known ratio if we only have a partial list
+    const ratio = allKnown.length > 0 ? knownResults / allKnown.length : 500;
+    const totalResults = knownResults > 0 ? Math.round(ratio * totalRaces) : totalRaces * 500;
     return {
-      totalRaces: races.length,
-      totalResults: totalResults || races.length * 500,
-      totalAthletes: Math.round((totalResults || races.length * 500) * 0.85),
+      totalRaces,
+      totalResults,
+      totalAthletes: Math.round(totalResults * 0.85),
     };
-  }, [races]);
+  }, [races, apiMeta, endedMeta]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,13 +209,18 @@ export default function HomePage() {
         (new Date(a.startDate || 0).getTime() || 0) -
         (new Date(b.startDate || 0).getTime() || 0),
     );
-  const completedRaces = races
-    .filter((r) => r.status === 'completed')
-    .sort(
-      (a, b) =>
-        (new Date(b.startDate || 0).getTime() || 0) -
-        (new Date(a.startDate || 0).getTime() || 0),
-    );
+  // Use dedicated ended-races fetch so we always have past events regardless of homepage sort
+  const completedRaces = useMemo<Race[]>(() => {
+    const list: ApiRace[] = endedMeta?.list ?? [];
+    return list
+      .map(mapApiRace)
+      .sort(
+        (a, b) =>
+          (new Date(b.startDate || 0).getTime() || 0) -
+          (new Date(a.startDate || 0).getTime() || 0),
+      );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endedMeta]);
 
   const liveAndUpcoming = [...liveRaces, ...upcomingRaces];
 
@@ -461,7 +480,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <PastEventsSlider races={completedRaces} loading={loading} />
+        <PastEventsSlider races={completedRaces} loading={loadingEnded} />
         {/* ================================================================= */}
         {/* FEATURES SECTION                                                   */}
         {/* ================================================================= */}
