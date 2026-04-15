@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { Menu, X, User, ChevronRight } from 'lucide-react';
+import { Menu, X, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
@@ -68,8 +68,7 @@ export default function Header() {
             className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
             style={{ width: 200, clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)', paddingLeft: 36, paddingRight: 16 }}
           >
-            <User className="w-5 h-5 shrink-0" strokeWidth={2.5} />
-            <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">MY 5BIB</span>
+              <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">Embracing Challenges</span>
             <ChevronRight className="w-4 h-4 ml-auto shrink-0" strokeWidth={2.5} />
           </Link>
 
