@@ -7,6 +7,7 @@ import { authHeaders } from "@/lib/api";
 import {
   adminControllerGetClaims,
   adminControllerResolveClaim,
+  adminControllerResolveClaimV2,
 } from "@/lib/api-generated";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -150,21 +151,18 @@ export default function ClaimsPage() {
     }
     setResolving(true);
     try {
-      // Call new /resolve endpoint (BR-04)
-      const res = await fetch(`/api/admin/claims/${activeClaim._id}/resolve`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ action: resolveAction, resolutionNote: resolutionNote.trim() }),
+      const { error } = await adminControllerResolveClaimV2({
+        path: { id: activeClaim._id },
+        body: { action: resolveAction, resolutionNote: resolutionNote.trim() },
+        ...authHeaders(token),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (res.status === 409) {
+      if (error) {
+        const status = (error as { status?: number })?.status;
+        if (status === 409) {
           toast.error("Khiếu nại này đã được xử lý rồi");
         } else {
-          throw new Error(err.message || "Lỗi xử lý khiếu nại");
+          const msg = (error as { message?: string })?.message;
+          throw new Error(msg || "Lỗi xử lý khiếu nại");
         }
         return;
       }
