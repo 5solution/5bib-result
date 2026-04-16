@@ -12,6 +12,7 @@ export interface OpsJwtPayload {
   sub: string; // ops_users._id
   token_type: 'ops';
   role: OpsRole;
+  tenant_id: string; // resolved từ event.tenant_id tại login time
   event_id: string;
   team_id?: string; // optional cho ops_admin
   email?: string;
@@ -24,6 +25,7 @@ export interface OpsUserContext {
   sub: string;
   token_type: 'ops';
   role: OpsRole;
+  tenant_id: string;
   event_id: string;
   team_id?: string;
   email?: string;

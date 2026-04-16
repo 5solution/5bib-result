@@ -58,11 +58,16 @@ export class OpsJwtStrategy extends PassportStrategy(Strategy, 'jwt-ops') {
       throw new UnauthorizedException('Account rejected');
     }
 
+    if (!payload.tenant_id) {
+      throw new UnauthorizedException('Missing tenant_id in token');
+    }
+
     const ctx: OpsUserContext = {
       userId: String(user._id),
       sub: String(user._id),
       token_type: 'ops',
       role: user.role,
+      tenant_id: payload.tenant_id,
       event_id: String(user.event_id),
       team_id: user.team_id ? String(user.team_id) : undefined,
       email: user.email,

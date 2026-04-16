@@ -31,9 +31,23 @@ import { OpsJwtStrategy } from './common/strategies/ops-jwt.strategy';
 // Services
 import { OpsAuthService } from './users/ops-auth.service';
 import { AuditService } from './audit/audit.service';
+import { EventsService } from './events/events.service';
+import { TeamsService } from './teams/teams.service';
+import { ApplicationsService } from './users/applications.service';
+import { SupplyService } from './supply/supply.service';
 
 // Controllers
 import { OpsAuthController } from './users/ops-auth.controller';
+import { EventsController } from './events/events.controller';
+import { TeamsController } from './teams/teams.controller';
+import {
+  AdminUsersController,
+  PublicApplicationController,
+} from './users/applications.controller';
+import {
+  SupplyItemsController,
+  SupplyOrdersController,
+} from './supply/supply.controller';
 
 /**
  * RaceOpsModule — Sprint 1 Foundation.
@@ -66,8 +80,24 @@ import { OpsAuthController } from './users/ops-auth.controller';
       signOptions: { expiresIn: '7d' },
     }),
   ],
-  controllers: [OpsAuthController],
-  providers: [OpsJwtStrategy, OpsAuthService, AuditService],
-  exports: [AuditService, MongooseModule],
+  controllers: [
+    OpsAuthController,
+    EventsController,
+    TeamsController,
+    AdminUsersController,
+    PublicApplicationController,
+    SupplyItemsController,
+    SupplyOrdersController,
+  ],
+  providers: [
+    OpsJwtStrategy,
+    OpsAuthService,
+    AuditService,
+    EventsService,
+    TeamsService,
+    ApplicationsService,
+    SupplyService,
+  ],
+  exports: [AuditService, EventsService, TeamsService, MongooseModule],
 })
 export class RaceOpsModule {}

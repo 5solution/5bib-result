@@ -25,6 +25,8 @@ const envVarsSchema = Joi.object()
     PLATFORM_DB_NAME: Joi.string().optional().allow(''),
     PLATFORM_DB_USER: Joi.string().optional().allow(''),
     PLATFORM_DB_PASS: Joi.string().optional().allow(''),
+    // Race Ops — default tenant cho public endpoints (single-tenant MVP).
+    OPS_DEFAULT_TENANT_ID: Joi.string().default('5bib-default'),
   })
   .unknown();
 
@@ -63,5 +65,8 @@ export const env = {
     name: envVars.PLATFORM_DB_NAME as string | undefined,
     user: envVars.PLATFORM_DB_USER as string | undefined,
     pass: envVars.PLATFORM_DB_PASS as string | undefined,
+  },
+  ops: {
+    defaultTenantId: envVars.OPS_DEFAULT_TENANT_ID as string,
   },
 };

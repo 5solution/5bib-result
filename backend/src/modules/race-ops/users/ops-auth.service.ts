@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { OpsUser, OpsUserDocument } from '../schemas/ops-user.schema';
+import { OpsEvent, OpsEventDocument } from '../schemas/ops-event.schema';
 import { OpsJwtPayload } from '../common/types/ops-jwt-payload.type';
 import { OpsLoginDto, OpsLoginResponseDto } from './dto/ops-auth.dto';
 
@@ -19,6 +20,8 @@ export class OpsAuthService {
   constructor(
     @InjectModel(OpsUser.name)
     private readonly opsUserModel: Model<OpsUserDocument>,
+    @InjectModel(OpsEvent.name)
+    private readonly opsEventModel: Model<OpsEventDocument>,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -47,10 +50,20 @@ export class OpsAuthService {
       throw new UnauthorizedException('Role not allowed for password login');
     }
 
+    // Resolve tenant_id từ event (single lookup tại login)
+    const event = await this.opsEventModel
+      .findById(user.event_id)
+      .select('tenant_id')
+      .lean();
+    if (!event) {
+      throw new UnauthorizedException('Event not found for user');
+    }
+
     const payload: OpsJwtPayload = {
       sub: String(user._id),
       token_type: 'ops',
       role: user.role,
+      tenant_id: String(event.tenant_id),
       event_id: String(user.event_id),
       team_id: user.team_id ? String(user.team_id) : undefined,
       email: user.email,
