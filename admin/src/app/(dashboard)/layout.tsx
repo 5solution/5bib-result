@@ -24,6 +24,7 @@ import {
   Store,
   ReceiptText,
   BarChart2,
+  RadioTower,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
@@ -37,6 +38,7 @@ const navItems = [
   { href: "/sponsors", label: "Nhà tài trợ", icon: Handshake },
   { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
   { href: "/claims", label: "Khiếu nại", icon: FileWarning },
+  { href: "/ops-events", label: "Race Ops", icon: RadioTower },
 ];
 
 function NavLink({
