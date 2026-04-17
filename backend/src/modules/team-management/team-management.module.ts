@@ -12,8 +12,13 @@ import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamPhotoService } from './services/team-photo.service';
 import { TeamCacheService } from './services/team-cache.service';
+import { TeamContractService } from './services/team-contract.service';
+import { TeamCheckinService } from './services/team-checkin.service';
+import { TeamReminderService } from './services/team-reminder.service';
 import { TeamManagementController } from './team-management.controller';
 import { TeamRegistrationController } from './team-registration.controller';
+import { TeamContractTemplateController } from './team-contract-template.controller';
+import { TeamCheckinController } from './team-checkin.controller';
 import { env } from 'src/config';
 
 @Module({
@@ -29,17 +34,25 @@ import { env } from 'src/config';
       },
     ]),
   ],
-  controllers: [TeamManagementController, TeamRegistrationController],
+  controllers: [
+    TeamManagementController,
+    TeamRegistrationController,
+    TeamContractTemplateController,
+    TeamCheckinController,
+  ],
   providers: [
     TeamEventService,
     TeamRegistrationService,
     TeamPhotoService,
     TeamCacheService,
+    TeamContractService,
+    TeamCheckinService,
+    TeamReminderService,
     s3ClientProvider,
     // Make every route within this module subject to @Throttle decorators.
     // Without this provider the @Throttle calls on public endpoints are no-ops.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
-  exports: [TeamEventService, TeamRegistrationService],
+  exports: [TeamEventService, TeamRegistrationService, TeamContractService],
 })
 export class TeamManagementModule {}

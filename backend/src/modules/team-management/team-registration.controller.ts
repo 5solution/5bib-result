@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Ip,
   Param,
   ParseIntPipe,
   Post,
@@ -28,9 +29,20 @@ import {
   RegisterResponseDto,
   StatusResponseDto,
 } from './dto/response.dto';
+import {
+  ContractViewDto,
+  SignContractDto,
+  SignContractResponseDto,
+} from './dto/sign-contract.dto';
+import {
+  CheckinResponseDto,
+  SelfCheckinDto,
+} from './dto/checkin.dto';
 import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamPhotoService } from './services/team-photo.service';
+import { TeamContractService } from './services/team-contract.service';
+import { TeamCheckinService } from './services/team-checkin.service';
 import { VolRole } from './entities/vol-role.entity';
 
 @ApiTags('Team Management (public)')
@@ -40,6 +52,8 @@ export class TeamRegistrationController {
     private readonly events: TeamEventService,
     private readonly registrations: TeamRegistrationService,
     private readonly photos: TeamPhotoService,
+    private readonly contracts: TeamContractService,
+    private readonly checkin: TeamCheckinService,
   ) {}
 
   @Get('team-events')
@@ -74,6 +88,37 @@ export class TeamRegistrationController {
   @ApiResponse({ status: 200, type: StatusResponseDto })
   status(@Param('token') token: string): Promise<StatusResponseDto> {
     return this.registrations.getStatus(token);
+  }
+
+  @Get('team-contract/:token')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'View contract HTML for signing (magic token)' })
+  @ApiResponse({ status: 200, type: ContractViewDto })
+  viewContract(@Param('token') token: string): Promise<ContractViewDto> {
+    return this.contracts.viewContract(token);
+  }
+
+  @Post('team-contract/:token/sign')
+  @Throttle({ default: { limit: 3, ttl: 300_000 } })
+  @ApiOperation({ summary: 'Sign contract — generates PDF, stores hash' })
+  @ApiResponse({ status: 201, type: SignContractResponseDto })
+  signContract(
+    @Param('token') token: string,
+    @Body() dto: SignContractDto,
+    @Ip() ip: string,
+  ): Promise<SignContractResponseDto> {
+    return this.contracts.signContract(token, dto.confirmed_name, dto.ip ?? ip);
+  }
+
+  @Post('team-checkin/:token')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Self check-in via GPS (magic token)' })
+  @ApiResponse({ status: 201, type: CheckinResponseDto })
+  selfCheckin(
+    @Param('token') token: string,
+    @Body() dto: SelfCheckinDto,
+  ): Promise<CheckinResponseDto> {
+    return this.checkin.selfCheckin(token, dto);
   }
 
   @Post('team-upload-photo')

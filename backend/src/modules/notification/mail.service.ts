@@ -40,6 +40,42 @@ export interface TeamWaitlistedData {
   magicLink: string;
 }
 
+export interface TeamContractSentData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  roleName: string;
+  magicLink: string;
+}
+
+export interface TeamContractSignedData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  roleName: string;
+  totalCompensation: string;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+}
+
+export interface TeamReminderT3Data {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  roleName: string;
+  eventStartDate: string;
+  eventLocation: string;
+  magicLink: string;
+}
+
+export interface TeamCancelledData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  roleName: string;
+  reason?: string;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -168,6 +204,161 @@ export class MailService {
     } catch (error) {
       this.logger.error(
         `Failed to send team approved email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTeamContractSent(data: TeamContractSentData): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(`[DEV] Contract sent: ${data.fullName} → ${data.magicLink}`);
+      return;
+    }
+    const subject = `Hợp đồng cộng tác — ${data.eventName}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #1d4ed8;">Chào ${escapeHtml(data.fullName)},</h2>
+        <p>Ban tổ chức <strong>${escapeHtml(data.eventName)}</strong> đã gửi hợp đồng cộng tác cho vai trò <strong>${escapeHtml(data.roleName)}</strong>.</p>
+        <p>Vui lòng xem và xác nhận tại liên kết dưới:</p>
+        <p style="text-align:center;">
+          <a href="${data.magicLink.replace('/status/', '/contract/')}"
+             style="display:inline-block; background:#1d4ed8; color:white; padding:12px 22px; border-radius:8px; text-decoration:none; font-weight:600;">
+            Xem và ký hợp đồng
+          </a>
+        </p>
+        <p style="color:#78716c; font-size:12px;">Liên kết này chỉ sử dụng được một lần. Sau khi ký, bạn sẽ nhận bản PDF qua email.</p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB Team',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+        },
+      });
+      this.logger.log(`Team contract-sent email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed contract-sent email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTeamContractSigned(data: TeamContractSignedData): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Contract signed: ${data.fullName} total=${data.totalCompensation}`,
+      );
+      return;
+    }
+    const subject = `Xác nhận ký hợp đồng — ${data.eventName}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #166534;">Đã ký hợp đồng thành công</h2>
+        <p>Chào ${escapeHtml(data.fullName)},</p>
+        <p>Hợp đồng cộng tác vai trò <strong>${escapeHtml(data.roleName)}</strong> cho sự kiện <strong>${escapeHtml(data.eventName)}</strong> đã được ký thành công.</p>
+        <p>Tổng thù lao dự kiến: <strong>${escapeHtml(data.totalCompensation)} VNĐ</strong></p>
+        <p>Bản PDF được đính kèm trong email này.</p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB Team',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+          attachments: [
+            {
+              type: 'application/pdf',
+              name: data.pdfFilename,
+              content: data.pdfBuffer.toString('base64'),
+            },
+          ],
+        },
+      });
+      this.logger.log(`Team contract-signed email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed contract-signed email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTeamReminderT3(data: TeamReminderT3Data): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Reminder T-3: ${data.fullName} event=${data.eventName} start=${data.eventStartDate}`,
+      );
+      return;
+    }
+    const subject = `Nhắc nhở sự kiện ${data.eventName} — còn 3 ngày`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #ea580c;">Chào ${escapeHtml(data.fullName)},</h2>
+        <p>Sự kiện <strong>${escapeHtml(data.eventName)}</strong> sẽ diễn ra sau 3 ngày.</p>
+        <ul>
+          <li><strong>Ngày:</strong> ${escapeHtml(data.eventStartDate)}</li>
+          <li><strong>Địa điểm:</strong> ${escapeHtml(data.eventLocation || 'Xem trên trang sự kiện')}</li>
+          <li><strong>Vai trò của bạn:</strong> ${escapeHtml(data.roleName)}</li>
+        </ul>
+        <p>Xem mã QR check-in tại: <a href="${data.magicLink}">${data.magicLink}</a></p>
+        <p style="color:#78716c; font-size:12px;">Vui lòng mang theo CCCD gốc để đối chiếu khi check-in.</p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB Team',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+        },
+      });
+      this.logger.log(`Team reminder-T3 email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed reminder email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTeamCancelled(data: TeamCancelledData): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(`[DEV] Cancelled: ${data.fullName} event=${data.eventName}`);
+      return;
+    }
+    const subject = `Hủy đăng ký — ${data.eventName}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2>Chào ${escapeHtml(data.fullName)},</h2>
+        <p>Ban tổ chức đã hủy đăng ký của bạn cho vai trò <strong>${escapeHtml(data.roleName)}</strong> tại <strong>${escapeHtml(data.eventName)}</strong>.</p>
+        ${
+          data.reason
+            ? `<p><strong>Lý do:</strong> ${escapeHtml(data.reason)}</p>`
+            : ''
+        }
+        <p>Cảm ơn bạn đã quan tâm tham gia. Hẹn gặp ở các sự kiện sau!</p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB Team',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+        },
+      });
+      this.logger.log(`Team cancelled email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed cancelled email to ${data.toEmail}: ${(error as Error).message}`,
       );
     }
   }

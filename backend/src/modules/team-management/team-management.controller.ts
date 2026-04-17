@@ -31,8 +31,13 @@ import {
   PaginationQueryDto,
 } from './dto/pagination-query.dto';
 import { ListRegistrationsResponseDto } from './dto/registration-row.dto';
+import {
+  SendContractsDto,
+  SendContractsResponseDto,
+} from './dto/sign-contract.dto';
 import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
+import { TeamContractService } from './services/team-contract.service';
 
 @ApiTags('Team Management (admin)')
 @ApiBearerAuth()
@@ -42,6 +47,7 @@ export class TeamManagementController {
   constructor(
     private readonly events: TeamEventService,
     private readonly registrations: TeamRegistrationService,
+    private readonly contracts: TeamContractService,
   ) {}
 
   // -------- Events --------
@@ -123,6 +129,19 @@ export class TeamManagementController {
   async deleteRole(@Param('id', ParseIntPipe) id: number): Promise<{ success: true }> {
     await this.events.deleteRole(id);
     return { success: true };
+  }
+
+  @Post('roles/:id/send-contracts')
+  @ApiOperation({
+    summary:
+      'Batch-send contract magic links to all approved registrants of a role',
+  })
+  @ApiResponse({ status: 201, type: SendContractsResponseDto })
+  sendContracts(
+    @Param('id', ParseIntPipe) roleId: number,
+    @Body() dto: SendContractsDto,
+  ): Promise<SendContractsResponseDto> {
+    return this.contracts.sendContractsForRole(roleId, dto.dry_run ?? false);
   }
 
   // -------- Registrations (admin view) --------
