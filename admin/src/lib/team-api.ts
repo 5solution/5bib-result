@@ -253,6 +253,242 @@ export async function importDocxToHtml(
   return res.json();
 }
 
+export interface ShirtStockRow {
+  id: number;
+  event_id: number;
+  size: "XS" | "S" | "M" | "L" | "XL" | "XXL" | "XXXL";
+  quantity_planned: number;
+  quantity_ordered: number;
+  quantity_received: number;
+  notes: string | null;
+}
+
+export interface ShirtAggregateRow {
+  size: string;
+  registered: number;
+  planned: number;
+  ordered: number;
+  received: number;
+  surplus: number;
+  notes: string | null;
+}
+
+export interface ShirtAggregate {
+  by_size: ShirtAggregateRow[];
+  total_registered: number;
+  total_planned: number;
+  total_ordered: number;
+  total_received: number;
+  last_updated: string;
+}
+
+export interface DashboardPerson {
+  id: number;
+  full_name: string;
+  role_id: number;
+  role_name: string;
+  shirt_size: string | null;
+  contract_status: string;
+  checked_in_at: string | null;
+  payment_status: string;
+  avatar_photo_url: string | null;
+}
+
+export interface DashboardResponse {
+  event_id: number;
+  event_name: string;
+  last_updated: string;
+  total_roles: number;
+  total_approved: number;
+  total_checked_in: number;
+  checkin_rate: number;
+  total_contract_signed: number;
+  total_contract_unsigned: number;
+  total_paid: number;
+  by_role: Array<{
+    role_id: number;
+    role_name: string;
+    headcount: number;
+    checked_in: number;
+    contract_signed: number;
+    paid: number;
+  }>;
+  shirt_sizes: Array<{ size: string | null; count: number }>;
+  total_shirt_registered: number;
+  shirt_stock: Array<{
+    size: string;
+    registered: number;
+    planned: number;
+    ordered: number;
+    received: number;
+  }>;
+  people: DashboardPerson[];
+  people_total: number;
+}
+
+export interface RegistrationListRow {
+  id: number;
+  role_id: number;
+  role_name: string | null;
+  event_id: number;
+  full_name: string;
+  email: string;
+  phone: string;
+  shirt_size: string | null;
+  avatar_photo_url: string | null;
+  status: string;
+  waitlist_position: number | null;
+  contract_status: string;
+  checked_in_at: string | null;
+  payment_status: string;
+  actual_working_days: number | null;
+  actual_compensation: string | null;
+  form_data: Record<string, unknown>;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface RegistrationDetail extends RegistrationListRow {
+  cccd_photo_url: string | null;
+  event_name: string;
+  checkin_method: string | null;
+  contract_signed_at: string | null;
+  contract_pdf_url: string | null;
+}
+
+export async function getDashboard(
+  token: string,
+  eventId: number,
+  page = 1,
+  limit = 100,
+): Promise<DashboardResponse> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/dashboard?page=${page}&limit=${limit}`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getShirtAggregate(
+  token: string,
+  eventId: number,
+): Promise<ShirtAggregate> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/shirt-aggregate`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function upsertShirtStock(
+  token: string,
+  eventId: number,
+  sizes: Array<{
+    size: string;
+    quantity_planned: number;
+    quantity_ordered: number;
+    quantity_received: number;
+    notes?: string;
+  }>,
+): Promise<{ updated: number }> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/shirt-stock`,
+    {
+      method: "PUT",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ sizes }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function listRegistrations(
+  token: string,
+  eventId: number,
+  params: {
+    status?: string;
+    role_id?: number;
+    search?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+): Promise<{ data: RegistrationListRow[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.role_id) qs.set("role_id", String(params.role_id));
+  if (params.search) qs.set("search", params.search);
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/registrations?${qs.toString()}`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getRegistrationDetail(
+  token: string,
+  id: number,
+): Promise<RegistrationDetail> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/detail`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function patchRegistration(
+  token: string,
+  id: number,
+  patch: {
+    status?: string;
+    notes?: string;
+    payment_status?: string;
+    actual_working_days?: number;
+  },
+): Promise<RegistrationListRow> {
+  const res = await fetch(`/api/team-management/registrations/${id}`, {
+    method: "PATCH",
+    headers: authedHeaders(token),
+    body: JSON.stringify(patch),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function bulkUpdateRegistrations(
+  token: string,
+  payload: { ids: number[]; status: string; notes?: string },
+): Promise<{ updated: number; skipped: number; failed_ids: number[] }> {
+  const res = await fetch(
+    "/api/team-management/registrations/bulk-update",
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(payload),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function exportPaymentReport(
+  token: string,
+  eventId: number,
+): Promise<{ download_url: string; row_count: number }> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/export`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
 export async function sendContracts(
   token: string,
   roleId: number,
