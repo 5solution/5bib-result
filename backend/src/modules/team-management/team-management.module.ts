@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { s3ClientProvider } from '../aws.config';
 import { VolEvent } from './entities/vol-event.entity';
 import { VolRole } from './entities/vol-role.entity';
@@ -35,6 +36,9 @@ import { env } from 'src/config';
     TeamPhotoService,
     TeamCacheService,
     s3ClientProvider,
+    // Make every route within this module subject to @Throttle decorators.
+    // Without this provider the @Throttle calls on public endpoints are no-ops.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
   exports: [TeamEventService, TeamRegistrationService],
 })

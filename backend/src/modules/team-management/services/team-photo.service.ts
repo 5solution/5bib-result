@@ -89,14 +89,17 @@ export class TeamPhotoService {
     }
 
     const key = `team-photos/${photoType}/${uuidv4()}.webp`;
+    // NOTE: Do NOT set object ACL. Most S3 buckets have Block Public Access
+    // enabled and will reject `public-read`. Access is controlled by bucket
+    // policy configured out-of-band:
+    //   - `team-photos/avatar/*`  → public GET allowed via bucket policy
+    //   - `team-photos/cccd/*`    → private; served via presignCccd() only
     await this.s3.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
         Body: processed,
         ContentType: 'image/webp',
-        // CCCD photos must be private; avatars are public.
-        ACL: photoType === 'avatar' ? 'public-read' : 'private',
       }),
     );
 

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -52,8 +53,10 @@ export class TeamRegistrationController {
   @Get('team-events/:id')
   @ApiOperation({ summary: 'Get open event with available roles' })
   @ApiResponse({ status: 200, type: PublicEventSummaryDto })
-  async getPublicEvent(@Param('id') id: string): Promise<PublicEventSummaryDto> {
-    const detail = await this.events.getEvent(Number(id));
+  async getPublicEvent(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<PublicEventSummaryDto> {
+    const detail = await this.events.getPublicEvent(id);
     return this.toPublicEventSummary(detail, detail.roles);
   }
 

@@ -26,6 +26,11 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateRegistrationDto } from './dto/update-registration.dto';
+import {
+  ListRegistrationsQueryDto,
+  PaginationQueryDto,
+} from './dto/pagination-query.dto';
+import { ListRegistrationsResponseDto } from './dto/registration-row.dto';
 import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 
@@ -51,14 +56,12 @@ export class TeamManagementController {
   @Get('events')
   @ApiOperation({ summary: 'List events' })
   listEvents(
-    @Query('status') status?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query() query: PaginationQueryDto,
   ): Promise<{ data: VolEvent[]; total: number; page: number }> {
     return this.events.listEvents({
-      status,
-      page: page ? Number(page) : undefined,
-      limit: limit ? Number(limit) : undefined,
+      status: query.status,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
     });
   }
 
@@ -126,21 +129,18 @@ export class TeamManagementController {
 
   @Get('events/:id/registrations')
   @ApiOperation({ summary: 'List registrations for event' })
+  @ApiResponse({ status: 200, type: ListRegistrationsResponseDto })
   listRegistrations(
     @Param('id', ParseIntPipe) eventId: number,
-    @Query('status') status?: string,
-    @Query('role_id') roleId?: string,
-    @Query('search') search?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ): Promise<{ data: VolRegistration[]; total: number }> {
+    @Query() query: ListRegistrationsQueryDto,
+  ): Promise<ListRegistrationsResponseDto> {
     return this.registrations.listForEvent({
       eventId,
-      status,
-      roleId: roleId ? Number(roleId) : undefined,
-      search,
-      page: page ? Number(page) : undefined,
-      limit: limit ? Number(limit) : undefined,
+      status: query.status,
+      roleId: query.role_id,
+      search: query.search,
+      page: query.page ?? 1,
+      limit: query.limit ?? 50,
     });
   }
 

@@ -11,12 +11,10 @@ import type {
   RegistrationStatus,
 } from '../entities/vol-registration.entity';
 
-const ADMIN_SETTABLE_STATUS = [
-  'approved',
-  'rejected',
-  'cancelled',
-  'pending',
-] as const;
+// Admins can only drive the three terminal transitions. To "revert" an
+// approval, cancel it first and let the user register again — otherwise
+// filled_slots drifts and the waitlist invariants break.
+const ADMIN_SETTABLE_STATUS = ['approved', 'rejected', 'cancelled'] as const;
 
 export class UpdateRegistrationDto {
   @ApiProperty({ enum: ADMIN_SETTABLE_STATUS, required: false })

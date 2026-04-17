@@ -44,19 +44,17 @@ export class TeamEventService {
 
   async listEvents(params: {
     status?: string;
-    page?: number;
-    limit?: number;
+    page: number;
+    limit: number;
   }): Promise<{ data: VolEvent[]; total: number; page: number }> {
-    const page = Math.max(1, params.page ?? 1);
-    const limit = Math.min(100, Math.max(1, params.limit ?? 20));
     const qb = this.eventRepo
       .createQueryBuilder('e')
       .orderBy('e.event_start_date', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+      .skip((params.page - 1) * params.limit)
+      .take(params.limit);
     if (params.status) qb.andWhere('e.status = :status', { status: params.status });
     const [data, total] = await qb.getManyAndCount();
-    return { data, total, page };
+    return { data, total, page: params.page };
   }
 
   async getEvent(id: number): Promise<VolEvent & { roles: VolRole[] }> {
@@ -159,5 +157,28 @@ export class TeamEventService {
       .andWhere('e.registration_close >= :now', { now })
       .orderBy('e.event_start_date', 'ASC')
       .getMany();
+  }
+
+  /**
+   * Public event detail — 404 for drafts / closed / completed events OR
+   * events whose registration window is not currently active. Draft events
+   * must not leak through the public endpoint.
+   */
+  async getPublicEvent(id: number): Promise<VolEvent & { roles: VolRole[] }> {
+    const event = await this.eventRepo.findOne({ where: { id } });
+    if (!event) throw new NotFoundException('Event not found');
+    const now = new Date();
+    const isVisible =
+      event.status === 'open' &&
+      event.registration_open <= now &&
+      event.registration_close >= now;
+    if (!isVisible) {
+      throw new NotFoundException('Event not found');
+    }
+    const roles = await this.roleRepo.find({
+      where: { event_id: id },
+      order: { sort_order: 'ASC', id: 'ASC' },
+    });
+    return { ...event, roles };
   }
 }

@@ -14,6 +14,16 @@ import { env } from 'src/config';
 import { MailService } from 'src/modules/notification/mail.service';
 import { VolEvent } from '../entities/vol-event.entity';
 import { VolRole, FormFieldConfig } from '../entities/vol-role.entity';
+
+const OUR_S3_PREFIXES = (() => {
+  const bucket = env.teamManagement.s3Bucket;
+  const region = env.s3.region;
+  return [
+    `https://${bucket}.s3.${region}.amazonaws.com/team-photos/`,
+    `https://${bucket}.s3.amazonaws.com/team-photos/`,
+    env.s3.cdnUrl ? `${env.s3.cdnUrl.replace(/\/$/, '')}/team-photos/` : null,
+  ].filter((s): s is string => !!s);
+})();
 import {
   ShirtSize,
   VolRegistration,
@@ -23,6 +33,10 @@ import {
   RegisterResponseDto,
   StatusResponseDto,
 } from '../dto/response.dto';
+import {
+  ListRegistrationsResponseDto,
+  RegistrationListRowDto,
+} from '../dto/registration-row.dto';
 import { UpdateRegistrationDto } from '../dto/update-registration.dto';
 import { TeamCacheService } from './team-cache.service';
 
@@ -49,7 +63,7 @@ export class TeamRegistrationService {
    * the role row to prevent two users grabbing the same last slot.
    */
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
-    const { regId, outcome } = await this.dataSource.transaction(async (m) => {
+    const { regId, eventId, outcome } = await this.dataSource.transaction(async (m) => {
       const role = await m
         .getRepository(VolRole)
         .createQueryBuilder('r')
@@ -58,9 +72,14 @@ export class TeamRegistrationService {
         .getOne();
       if (!role) throw new NotFoundException('Role not found');
 
+      // Lock the event row too — otherwise an admin closing the event
+      // concurrently is invisible under REPEATABLE READ snapshot.
       const event = await m
         .getRepository(VolEvent)
-        .findOne({ where: { id: role.event_id } });
+        .createQueryBuilder('e')
+        .setLock('pessimistic_write')
+        .where('e.id = :id', { id: role.event_id })
+        .getOne();
       if (!event) throw new NotFoundException('Event not found');
       if (event.status !== 'open') {
         throw new BadRequestException('Event not open for registration');
@@ -71,6 +90,7 @@ export class TeamRegistrationService {
       }
 
       this.validateFormData(role.form_fields, dto.form_data);
+      this.validatePhotoUrls(dto.form_data);
 
       const existing = await m.getRepository(VolRegistration).findOne({
         where: { email: dto.email, role_id: dto.role_id },
@@ -141,6 +161,7 @@ export class TeamRegistrationService {
 
       return {
         regId: saved.id,
+        eventId: role.event_id,
         outcome: {
           status: saved.status as 'approved' | 'waitlisted',
           waitlist_position: saved.waitlist_position,
@@ -151,10 +172,7 @@ export class TeamRegistrationService {
       };
     });
 
-    await this.cache.invalidateEvent(
-      (await this.regRepo.findOne({ where: { id: regId } }))!.event_id,
-      [dto.role_id],
-    );
+    await this.cache.invalidateEvent(eventId, [dto.role_id]);
 
     // Fire-and-forget side effects: QR + email. Failures must not roll back the DB.
     void this.sendPostRegisterEmail(regId, outcome).catch((err) =>
@@ -203,18 +221,16 @@ export class TeamRegistrationService {
     status?: string;
     roleId?: number;
     search?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<{ data: VolRegistration[]; total: number }> {
-    const page = Math.max(1, params.page ?? 1);
-    const limit = Math.min(200, Math.max(1, params.limit ?? 50));
+    page: number;
+    limit: number;
+  }): Promise<ListRegistrationsResponseDto> {
     const qb = this.regRepo
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.role', 'role')
       .where('r.event_id = :eid', { eid: params.eventId })
       .orderBy('r.created_at', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+      .skip((params.page - 1) * params.limit)
+      .take(params.limit);
     if (params.status) qb.andWhere('r.status = :s', { s: params.status });
     if (params.roleId) qb.andWhere('r.role_id = :rid', { rid: params.roleId });
     if (params.search) {
@@ -222,8 +238,46 @@ export class TeamRegistrationService {
         q: `%${params.search}%`,
       });
     }
-    const [data, total] = await qb.getManyAndCount();
-    return { data, total };
+    const [rows, total] = await qb.getManyAndCount();
+    return { data: rows.map((r) => this.toListRow(r)), total };
+  }
+
+  private toListRow(r: VolRegistration): RegistrationListRowDto {
+    return {
+      id: r.id,
+      role_id: r.role_id,
+      role_name: r.role?.role_name ?? null,
+      event_id: r.event_id,
+      full_name: r.full_name,
+      email: r.email,
+      phone: r.phone,
+      shirt_size: r.shirt_size,
+      avatar_photo_url: r.avatar_photo_url,
+      status: r.status,
+      waitlist_position: r.waitlist_position,
+      contract_status: r.contract_status,
+      checked_in_at: r.checked_in_at ? r.checked_in_at.toISOString() : null,
+      payment_status: r.payment_status,
+      actual_working_days: r.actual_working_days,
+      actual_compensation: r.actual_compensation,
+      form_data: this.sanitizeFormData(r.form_data),
+      notes: r.notes,
+      created_at: r.created_at.toISOString(),
+    };
+  }
+
+  /**
+   * Strip / mask sensitive fields before returning to admin list views.
+   *   - `cccd` (ID number) → `***<last4>`
+   *   - `cccd_photo` URL → omitted (admins fetch presigned via /detail)
+   */
+  private sanitizeFormData(input: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...input };
+    if (typeof out.cccd === 'string' && out.cccd.length >= 4) {
+      out.cccd = `***${out.cccd.slice(-4)}`;
+    }
+    delete out.cccd_photo;
+    return out;
   }
 
   /**
@@ -405,10 +459,45 @@ export class TeamRegistrationService {
     data: Record<string, unknown>,
   ): void {
     for (const f of fields) {
-      if (!f.required) continue;
       const v = data[f.key];
-      if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) {
+      const isEmpty =
+        v == null || v === '' || (Array.isArray(v) && v.length === 0);
+      if (f.required && isEmpty) {
         throw new BadRequestException(`Missing required field: ${f.key}`);
+      }
+      if (isEmpty) continue;
+      // If the field has an `options` whitelist, enforce it — otherwise an
+      // out-of-list value is silently dropped by the DB enum cast.
+      if (f.type === 'shirt_size' || f.type === 'select') {
+        const opts = f.options ?? [];
+        if (opts.length > 0 && typeof v === 'string' && !opts.includes(v)) {
+          throw new BadRequestException(
+            `Field "${f.key}" value "${v}" is not in allowed options`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Reject attacker-controlled URLs in form_data photo fields. Only URLs that
+   * point into our S3 bucket under the `team-photos/` prefix are acceptable.
+   */
+  private validatePhotoUrls(data: Record<string, unknown>): void {
+    for (const key of ['avatar_photo', 'cccd_photo']) {
+      const v = data[key];
+      if (v == null || v === '') continue;
+      if (typeof v !== 'string') {
+        throw new BadRequestException(`Field "${key}" must be a string URL`);
+      }
+      // Uploads store CCCD as the raw S3 key (no host), so accept either
+      // `team-photos/...` keys OR a full URL pointing to our bucket/CDN.
+      if (v.startsWith('team-photos/')) continue;
+      const ok = OUR_S3_PREFIXES.some((prefix) => v.startsWith(prefix));
+      if (!ok) {
+        throw new BadRequestException(
+          `Field "${key}" URL is not from our S3 bucket. Upload via /api/public/team-upload-photo first.`,
+        );
       }
     }
   }
