@@ -5,6 +5,10 @@ import { PassportModule } from '@nestjs/passport';
 import { env } from 'src/config';
 
 // Schemas
+import {
+  AdminUser,
+  AdminUserSchema,
+} from '../auth/schemas/admin-user.schema';
 import { OpsEvent, OpsEventSchema } from './schemas/ops-event.schema';
 import { OpsTeam, OpsTeamSchema } from './schemas/ops-team.schema';
 import { OpsUser, OpsUserSchema } from './schemas/ops-user.schema';
@@ -35,6 +39,9 @@ import { EventsService } from './events/events.service';
 import { TeamsService } from './teams/teams.service';
 import { ApplicationsService } from './users/applications.service';
 import { SupplyService } from './supply/supply.service';
+import { CheckInsService } from './check-ins/check-ins.service';
+import { TasksService } from './tasks/tasks.service';
+import { IncidentsService } from './incidents/incidents.service';
 
 // Controllers
 import { OpsAuthController } from './users/ops-auth.controller';
@@ -48,6 +55,9 @@ import {
   SupplyItemsController,
   SupplyOrdersController,
 } from './supply/supply.controller';
+import { CheckInsController } from './check-ins/check-ins.controller';
+import { TasksController } from './tasks/tasks.controller';
+import { IncidentsController } from './incidents/incidents.controller';
 
 /**
  * RaceOpsModule — Sprint 1 Foundation.
@@ -73,6 +83,8 @@ import {
       { name: OpsTask.name, schema: OpsTaskSchema },
       { name: OpsIncident.name, schema: OpsIncidentSchema },
       { name: OpsAuditLog.name, schema: OpsAuditLogSchema },
+      // Admin bridge: OpsJwtStrategy cần load admin_users để accept admin token
+      { name: AdminUser.name, schema: AdminUserSchema },
     ]),
     PassportModule.register({ defaultStrategy: 'jwt-ops' }),
     JwtModule.register({
@@ -88,6 +100,9 @@ import {
     PublicApplicationController,
     SupplyItemsController,
     SupplyOrdersController,
+    CheckInsController,
+    TasksController,
+    IncidentsController,
   ],
   providers: [
     OpsJwtStrategy,
@@ -97,6 +112,9 @@ import {
     TeamsService,
     ApplicationsService,
     SupplyService,
+    CheckInsService,
+    TasksService,
+    IncidentsService,
   ],
   exports: [AuditService, EventsService, TeamsService, MongooseModule],
 })

@@ -9,13 +9,15 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { OPS_ROLES_KEY } from '../decorators/ops-roles.decorator';
 import { OpsRole, isOpsRole } from '../types/ops-role.type';
+import { isOpsAuthenticated } from '../utils/is-ops-authenticated.util';
 
 /**
  * Role gate. Phải đặt SAU `JwtAuthGuard` trong `@UseGuards(...)`.
  *
  * - Đọc `@OpsRoles(...)` metadata.
- * - Kiểm `req.user.token_type === 'ops'` và `req.user.role ∈ roles`.
- * - Admin token (không có `token_type='ops'`) → 403 (isolation).
+ * - Kiểm `req.user` là authenticated ops context (qua `isOpsAuthenticated`)
+ *   và `req.user.role ∈ roles`.
+ * - Token không có `token_type ∈ OPS_TOKEN_TYPES` → 403 (isolation).
  */
 @Injectable()
 export class OpsRoleGuard implements CanActivate {
@@ -39,15 +41,13 @@ export class OpsRoleGuard implements CanActivate {
       throw new UnauthorizedException('Missing auth');
     }
 
-    const u = user as { token_type?: unknown; role?: unknown };
-
-    if (u.token_type !== 'ops') {
+    if (!isOpsAuthenticated(user)) {
       throw new ForbiddenException('Not an ops token');
     }
 
-    if (!isOpsRole(u.role) || !requiredRoles.includes(u.role)) {
+    if (!isOpsRole(user.role) || !requiredRoles.includes(user.role)) {
       throw new ForbiddenException(
-        `Role ${String(u.role)} not allowed. Required: ${requiredRoles.join(', ')}`,
+        `Role ${String(user.role)} not allowed. Required: ${requiredRoles.join(', ')}`,
       );
     }
 

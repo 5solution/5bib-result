@@ -18,5 +18,6 @@ export * from './types/ops-jwt-payload.type';
 export * from './constants';
 
 // Utils
+export * from './utils/is-ops-authenticated.util';
 export * from './utils/order-code.util';
 export * from './utils/qr-token.util';

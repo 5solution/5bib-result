@@ -64,6 +64,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 import {
   ArrowLeft,
   Plus,
@@ -176,6 +177,7 @@ export default function RaceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { token } = useAuth();
+  const confirm = useConfirm();
   const raceId = params.id as string;
 
   const [race, setRace] = useState<Race | null>(null);
@@ -757,11 +759,14 @@ export default function RaceDetailPage() {
                               : `Không thể quay lại '${step.label}' — chỉ được chuyển tiến`
                             : `Chuyển sang '${step.label}'`
                         }
-                        onClick={() => {
+                        onClick={async () => {
                           if (isCurrent || isDisabled) return;
-                          if (confirm(`Chuyển trạng thái giải sang "${step.label}"?`)) {
-                            handleUpdateStatus(step.key);
-                          }
+                          const ok = await confirm({
+                            title: "Chuyển trạng thái giải?",
+                            description: `Giải sẽ chuyển sang "${step.label}".`,
+                            confirmLabel: "Chuyển",
+                          });
+                          if (ok) handleUpdateStatus(step.key);
                         }}
                         className={`
                           relative flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all text-center

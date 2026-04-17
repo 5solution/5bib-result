@@ -44,7 +44,8 @@ export class OpsSupplyOrder {
   @Prop({ type: Types.ObjectId, required: true, index: true })
   team_id: Types.ObjectId;
 
-  @Prop({ required: true, unique: true })
+  // Unique index declared below với partialFilterExpression (soft-delete aware)
+  @Prop({ required: true })
   order_code: string; // "ORD-WATER-20260415-001"
 
   @Prop({ type: Types.ObjectId, required: true })
@@ -100,3 +101,8 @@ export const OpsSupplyOrderSchema = SchemaFactory.createForClass(OpsSupplyOrder)
 OpsSupplyOrderSchema.index({ event_id: 1, team_id: 1, status: 1 });
 OpsSupplyOrderSchema.index({ event_id: 1, status: 1 });
 OpsSupplyOrderSchema.index({ event_id: 1, created_at: -1 });
+// Order code globally unique nhưng chỉ enforce trên doc chưa soft-delete
+OpsSupplyOrderSchema.index(
+  { order_code: 1 },
+  { unique: true, partialFilterExpression: { deleted_at: null } },
+);

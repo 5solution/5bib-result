@@ -107,6 +107,16 @@ export class AdminCreateUserDto extends PublicApplyDto {
 
 /* ───── Admin: approve/reject ───── */
 
+export class ApproveApplicationDto {
+  @ApiPropertyOptional({
+    description: 'Optional — gán team cho user lúc duyệt (nếu chưa có)',
+    example: '507f1f77bcf86cd799439011',
+  })
+  @IsOptional()
+  @IsMongoId()
+  team_id?: string;
+}
+
 export class RejectApplicationDto {
   @ApiProperty({ example: 'Thông tin liên lạc không hợp lệ' })
   @IsString()
@@ -170,4 +180,69 @@ export class PublicApplyResponseDto {
   @ApiProperty({ example: 'ok' }) status: 'ok';
   @ApiProperty() user_id: string;
   @ApiProperty({ example: 'PENDING' }) application_status: string;
+}
+
+/* ───── Admin: update user (reassign team, edit profile) ───── */
+
+export class AdminUpdateUserDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  full_name?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiPropertyOptional({ example: '0987654321' })
+  @IsOptional()
+  @IsString()
+  @MinLength(9)
+  @MaxLength(15)
+  phone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  dob?: string;
+
+  @ApiPropertyOptional({
+    description: 'Gán lại team (null = gỡ khỏi team, nhưng chỉ cho crew/tnv).',
+    nullable: true,
+  })
+  @IsOptional()
+  team_id?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EmergencyContactDto)
+  emergency_contact?: EmergencyContactDto;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  experience?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  shift_preferences?: string;
+}
+
+/* ───── QR badge ───── */
+
+export class UserQrBadgeResponseDto {
+  @ApiProperty() user_id: string;
+  @ApiProperty() full_name: string;
+  @ApiProperty() phone: string;
+  @ApiProperty() role: string;
+  @ApiProperty({ description: 'QR plain token — render thành QR code phía client' })
+  qr_token: string;
+  @ApiProperty({ nullable: true, type: String }) team_name: string | null;
 }

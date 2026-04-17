@@ -99,7 +99,11 @@ export class OpsUser {
 
 export const OpsUserSchema = SchemaFactory.createForClass(OpsUser);
 
-OpsUserSchema.index({ event_id: 1, phone: 1 }, { unique: true });
+// Unique chỉ enforce trên doc chưa soft-delete — reject cùng phone nếu user chưa bị delete
+OpsUserSchema.index(
+  { event_id: 1, phone: 1 },
+  { unique: true, partialFilterExpression: { deleted_at: null } },
+);
 OpsUserSchema.index({ event_id: 1, team_id: 1, role: 1 });
 OpsUserSchema.index({ event_id: 1, status: 1 });
 OpsUserSchema.index({ qr_token_hash: 1 }, { sparse: true, unique: true });

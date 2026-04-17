@@ -37,12 +37,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  // Global fetch interceptor: auto-redirect to /login on 401
+  // Global fetch interceptor: auto-redirect to /login on 401 for admin API calls.
+  // IMPORTANT: race-ops endpoints accept admin JWT via backend bridge; a transient
+  // 401 on /api/race-ops/* (e.g., user not yet resolved, expired ops cache) should
+  // NOT force logout — otherwise navigating between admin + ops pages traps the
+  // user in an infinite login loop. Scope interceptor to non-race-ops paths only.
   useEffect(() => {
     const originalFetch = window.fetch.bind(window);
     window.fetch = async (...args: Parameters<typeof fetch>) => {
       const res = await originalFetch(...args);
-      if (res.status === 401 && !window.location.pathname.startsWith("/login")) {
+
+      // Extract URL (string or Request/URL object)
+      let url = "";
+      const input = args[0];
+      if (typeof input === "string") url = input;
+      else if (input instanceof URL) url = input.toString();
+      else if (input instanceof Request) url = input.url;
+
+      const isRaceOpsCall =
+        url.includes("/api/race-ops/") ||
+        url.includes("/race-ops/");
+
+      if (
+        res.status === 401 &&
+        !window.location.pathname.startsWith("/login") &&
+        !isRaceOpsCall
+      ) {
         logoutRef.current();
         window.location.href = "/login";
       }

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -11,6 +12,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { resolveScopeTeamId } from '../common/utils/resolve-scope-team.util';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -109,6 +111,12 @@ export class SupplyItemsController {
 
 /* ═══════════ SUPPLY ORDERS ═══════════ */
 
+/**
+ * BR-02 enforcement moved to `common/utils/resolve-scope-team.util.ts` để
+ * applications.controller.ts có thể reuse cùng logic (tránh lệch policy giữa
+ * supply và applications modules).
+ */
+
 @ApiTags('race-ops/supply-orders')
 @Controller('race-ops/admin/events/:eventId/supply-orders')
 @UseGuards(OpsJwtAuthGuard, OpsRoleGuard)
@@ -126,6 +134,15 @@ export class SupplyOrdersController {
     @Body() dto: CreateSupplyOrderDto,
     @Req() req: Request,
   ): Promise<SupplyOrderResponseDto> {
+    // BR-02: Leader chỉ được tạo order cho team mình (không để leader gán team_id khác).
+    if (user.role !== 'ops_admin') {
+      const scopeTeamId = resolveScopeTeamId(user);
+      if (scopeTeamId && dto.team_id !== scopeTeamId) {
+        throw new ForbiddenException(
+          'Leader can only create orders for their own team',
+        );
+      }
+    }
     return this.supplyService.createOrder(
       user.tenant_id,
       eventId,
@@ -147,9 +164,8 @@ export class SupplyOrdersController {
     @Param('eventId') eventId: string,
     @Query() query: SupplyOrderQueryDto,
   ): Promise<SupplyOrderListResponseDto> {
-    // BR-02: leader scope to own team
-    const scopeTeamId =
-      user.role !== 'ops_admin' ? user.team_id : undefined;
+    // BR-02: leader scope to own team; leader without team_id → 403
+    const scopeTeamId = resolveScopeTeamId(user);
     return this.supplyService.listOrders(
       user.tenant_id,
       eventId,
@@ -180,7 +196,13 @@ export class SupplyOrdersController {
     @Param('eventId') eventId: string,
     @Param('orderId') orderId: string,
   ): Promise<SupplyOrderResponseDto> {
-    return this.supplyService.findOrder(user.tenant_id, eventId, orderId);
+    const scopeTeamId = resolveScopeTeamId(user);
+    return this.supplyService.findOrder(
+      user.tenant_id,
+      eventId,
+      orderId,
+      scopeTeamId,
+    );
   }
 
   @Patch(':orderId/items')
@@ -193,11 +215,13 @@ export class SupplyOrdersController {
     @Param('orderId') orderId: string,
     @Body() dto: UpdateSupplyOrderItemsDto,
   ): Promise<SupplyOrderResponseDto> {
+    const scopeTeamId = resolveScopeTeamId(user);
     return this.supplyService.updateOrderItems(
       user.tenant_id,
       eventId,
       orderId,
       dto,
+      scopeTeamId,
     );
   }
 
@@ -211,12 +235,14 @@ export class SupplyOrdersController {
     @Param('orderId') orderId: string,
     @Req() req: Request,
   ): Promise<SupplyOrderResponseDto> {
+    const scopeTeamId = resolveScopeTeamId(user);
     return this.supplyService.submitOrder(
       user.tenant_id,
       eventId,
       orderId,
       user.userId,
       req,
+      scopeTeamId,
     );
   }
 
@@ -289,12 +315,14 @@ export class SupplyOrdersController {
     @Param('orderId') orderId: string,
     @Req() req: Request,
   ): Promise<SupplyOrderResponseDto> {
+    const scopeTeamId = resolveScopeTeamId(user);
     return this.supplyService.receiveOrder(
       user.tenant_id,
       eventId,
       orderId,
       user.userId,
       req,
+      scopeTeamId,
     );
   }
 }

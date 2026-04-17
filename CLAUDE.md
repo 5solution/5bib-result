@@ -1,182 +1,146 @@
-# 5BIB Result - Project Context
+# 5BIB Result — Claude Code Context
 
-## Overview
-Race result management system for running events in Vietnam. 3 services: backend API, public frontend, admin dashboard.
+## Đọc ngay trước khi làm bất kỳ điều gì
 
-## Tech Stack
-- **Backend**: NestJS 10, MongoDB (Mongoose), Redis, JWT auth, AWS S3 uploads — port 8081
-- **Frontend**: Next.js 16 (App Router), React 19, TypeScript 5.9, Tailwind CSS — port 3002
-- **Admin**: Next.js 16 (App Router), React 19, shadcn/ui — port 3000
-- **Infra**: Docker multi-stage builds (Node 22 Alpine), GitHub Actions CI/CD, nginx reverse proxy, Let's Encrypt SSL
+- Đọc file này toàn bộ
+- Đọc `TODO.md` để biết task hiện tại
+- Đọc `admin/AGENTS.md` trước khi viết code cho admin frontend
+- Đọc `backend/` module liên quan trước khi viết backend code
 
-## Repository Structure
+---
+
+## Project Overview
+
+Platform quản lý kết quả chạy bộ & admin 5BIB.
+
+| Layer | Path | Stack |
+|---|---|---|
+| Admin Frontend | `admin/` | Next.js 16.2.1, React 19, TypeScript, shadcn/ui, pnpm |
+| Backend API | `backend/` | NestJS, MongoDB (Mongoose), Redis, JWT auth |
+| Frontend (public) | `frontend/` | React/Vite (race result website) |
+
+Backend chạy ở port `8081`. Admin frontend proxy mọi `/api/*` request → `BACKEND_URL`.
+
+---
+
+## Active Feature Specs (đọc trước khi code P3 hoặc P2)
+
+- **P3 Merchant Management**: `~/Desktop/Claude/5BIB_Spec_MerchantManagement.md`
+- **P2 Đối soát tự động**: `~/Desktop/Claude/5BIB_Spec_DoiSoat.md`
+- **Mockup P3**: `~/Desktop/Claude/5BIB_Merchant_Mockup.html`
+- **Mockup P2**: `~/Desktop/Claude/5BIB_DoiSoat_Mockup.html`
+
+---
+
+## Database Architecture
+
+### Backend DB (MongoDB — `5bib_result`)
+Dùng cho race results, claims, sync logs, admin users, sponsors, races.
+Schemas ở `backend/src/modules/*/schemas/*.schema.ts`.
+
+### 5BIB Platform DB (PostgreSQL — `5bib_platform_live`)
+**Database riêng** của hệ thống 5BIB. Backend cần kết nối qua TypeORM/pg để đọc/ghi.
+Connection string lấy từ env var `PLATFORM_DB_URL` (cần add vào `.env`).
+
+#### Tables hiện có trên Platform DB:
+- `tenant` — merchant; cần add: `service_fee_rate`, `manual_fee_per_ticket`, `fee_vat_rate`
+- `order_line_item` — dòng đơn hàng
+- `order_metadata` — đơn hàng (order_category: ORDINARY/PERSONAL_GROUP/CHANGE_COURSE/MANUAL)
+- `ticket_type`, `race_course`, `discount_code`, `races`
+
+#### Tables cần tạo mới (migration SQL):
+- `tenant_fee_history` — audit log thay đổi phí (fee_field VARCHAR để phân biệt 3 loại phí)
+- `reconciliation` — bản đối soát doanh thu
+- `reconciliation_line_item` — chi tiết đơn 5BIB (ORDINARY/GROUP/CHANGE_COURSE)
+- `reconciliation_manual_order` — chi tiết đơn thủ công (MANUAL)
+
+---
+
+## Key Business Logic (P2/P3)
+
 ```
-5bib-result/
-├── backend/           # NestJS API
-│   └── src/modules/
-│       ├── races/     # Race CRUD, course management, checkpoints
-│       ├── race-result/ # Athlete results, split times
-│       ├── sponsors/  # Sponsor CRUD (silver/gold/diamond levels)
-│       ├── auth/      # JWT authentication
-│       ├── upload/    # S3 file uploads
-│       └── admin/     # Admin-specific endpoints
-├── frontend/          # Public-facing Next.js app
-│   └── app/
-│       ├── page.tsx           # Homepage (UTMB-inspired design)
-│       ├── races/[slug]/      # Race results listing
-│       ├── races/[slug]/[bib]/ # Athlete detail page
-│       ├── races/[slug]/ranking/[courseId]/ # Course ranking
-│       ├── api/[...proxy]/    # Runtime proxy to backend (NOT build-time rewrites)
-│       ├── calendar/          # Race calendar
-│       └── landing/           # Landing page
-├── admin/             # Admin dashboard Next.js app
-│   └── src/app/(dashboard)/
-│       ├── races/             # Race management + course + checkpoints
-│       ├── sponsors/          # Sponsor management
-│       ├── claims/            # Result claims
-│       ├── sync-logs/         # Data sync logs
-│       └── api/[...proxy]/    # Runtime proxy to backend
-├── .github/workflows/
-│   └── build-and-deploy.yml  # CI/CD: build Docker images → GHCR → deploy VPS
-└── docker-compose.yml         # Local development
+order_category = MANUAL       → phí cố định manual_fee_per_ticket VNĐ/vé
+order_category = ORDINARY     → phí % service_fee_rate; không có payment_ref = LỖI
+order_category = PERSONAL_GROUP / CHANGE_COURSE → phí % service_fee_rate (bình thường)
+fee_vat_rate                  → VAT trên tiền phí (không phải doanh thu); 0% hoặc 8%
+fee snapshot                  → snapshot tất cả 3 fee fields khi tạo đối soát
 ```
 
-## Deployment
+---
 
-### Environments
-| Service | Dev URL | VPS Port |
-|---------|---------|----------|
-| Backend | https://result-dev.5bib.com | 8081 |
-| Frontend | https://result-fe-dev.5bib.com | 3082 → 3002 |
-| Admin | https://result-admin-dev.5bib.com | 3083 → 3000 |
+## Admin Frontend Conventions
 
-### VPS: 5solution-vps (157.10.42.171)
-- **SSH port**: 6060 (NOT default 22)
-- **SSH alias**: `ssh 5solution-vps` (configured in ~/.ssh/config)
-- **Deploy path**: `/opt/5bib-result/`
-- **Docker Compose**: pulls from `ghcr.io/5solution/5bib-result/{backend,frontend,admin}:latest`
-- **MongoDB**: runs on host, containers access via `host.docker.internal:27018`
-- **nginx**: reverse proxy at `/etc/nginx/sites-enabled/result-*.5bib.com`
-- **SSL**: certbot (Let's Encrypt)
-- **DNS**: GoDaddy → A records pointing to 157.10.42.171
+### Pattern chuẩn cho mỗi page mới
 
-### CI/CD (GitHub Actions)
-- Triggers on push to `main` + manual `workflow_dispatch`
-- Uses `dorny/paths-filter` to detect which services changed
-- Builds Docker images → pushes to GHCR
-- Deploys via `appleboy/ssh-action` (requires GitHub secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_PORT=6060`)
-- GitHub repo: `github.com:5solution/5bib-result.git` (remote shows old URL `0xaldric/5bib-result` but redirects)
+```
+admin/src/app/(dashboard)/<feature>/page.tsx   ← page chính
+admin/src/app/(dashboard)/<feature>/[id]/page.tsx  ← detail page (nếu cần)
+```
 
-### Manual Deploy Command
+**Imports bắt buộc:**
+```ts
+"use client";
+import { useAuth } from "@/lib/auth-context";          // lấy token
+import { authHeaders } from "@/lib/api";               // { headers: { Authorization: ... } }
+import { featureControllerXxx } from "@/lib/api-generated";  // generated SDK
+import { toast } from "sonner";                         // notifications
+```
+
+**Auth pattern:**
+```ts
+const { token } = useAuth();
+const { data, error } = await someControllerMethod({
+  query: { ... },
+  ...authHeaders(token!),
+});
+```
+
+**Thêm nav item** vào `admin/src/app/(dashboard)/layout.tsx` trong mảng `navItems`.
+
+### Sau khi backend thêm endpoint mới
 ```bash
-ssh 5solution-vps "cd /opt/5bib-result && docker compose pull && docker compose up -d --remove-orphans && docker image prune -f"
+cd admin && pnpm run generate:api
+# → regenerate src/lib/api-generated/ từ http://localhost:8081/swagger/json
 ```
 
-## Key Architecture Decisions
+---
 
-### Runtime Proxy (NOT build-time rewrites)
-Both frontend and admin use `app/api/[...proxy]/route.ts` to proxy API requests to backend at runtime. This allows `BACKEND_URL` to be set as environment variable in Docker without rebuilding.
+## Backend Conventions (NestJS)
+
+### Module structure chuẩn
 ```
-Frontend/Admin → /api/* → proxy route → BACKEND_URL (e.g., http://5bib-result-backend:8081)
-```
-
-### Race Status Lifecycle
-`draft` → `pre_race` → `live` → `ended`
-- `draft` races are auto-excluded from public API (frontend homepage)
-- Admin can see all statuses
-
-### Athlete Result Data Format
-API returns timing data as JSON strings that need parsing:
-```json
-{
-  "Chiptimes": "{\"Start\":\"00:00\",\"TM1\":\"24:29\",\"Finish\":\"1:12:13\"}",
-  "Paces": "{\"Start\":\"\",\"TM1\":\"4:53\",\"Finish\":\"7:17\"}",
-  "OverallRanks": "{\"Start\":\"1\",\"TM1\":\"5\",\"Finish\":\"5\"}"
-}
-```
-Frontend parses these into split times array, using course checkpoint config for display names.
-
-### Course Checkpoints
-Each course has optional `checkpoints[]` config: `{ key, name, distance }`.
-- `key` matches timing point keys (Start, TM1, TM2, Finish)
-- `name` is display name (e.g., "CP1 - Suoi Vang")
-- `distance` is optional (e.g., "5K")
-- Configured in admin → Race → Course dialog
-
-### Sponsors
-Levels: silver, gold, diamond. Sorted by level priority (diamond first) then custom order.
-- Backend: `/api/sponsors` (public), `/api/sponsors/all` (admin)
-- Admin: full CRUD with S3 logo upload
-- Frontend: floating sidebar with scrolling logos (hidden on mobile)
-
-## Build Commands
-```bash
-# Backend
-cd backend && npm run build    # NestJS build
-
-# Frontend
-cd frontend && npx next build  # Next.js build
-
-# Admin
-cd admin && npx next build     # Next.js build
+backend/src/modules/<feature>/
+  <feature>.module.ts
+  <feature>.controller.ts
+  <feature>.service.ts
+  dto/
+    create-<feature>.dto.ts
+    response-<feature>.dto.ts
+  schemas/           ← nếu có MongoDB schema
 ```
 
-## Environment Variables
-
-### Backend (.env)
-```
-NODE_ENV, PORT=8081, MONGODB_URL, MONGODB_DB_NAME, REDIS_URL, JWT_SECRET
-AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET
+### Auth guard
+```ts
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+@UseGuards(JwtAuthGuard)
 ```
 
-### Frontend / Admin (runtime)
+### Swagger decorators bắt buộc (để generate:api hoạt động)
+```ts
+@ApiTags('feature-name')
+@ApiBearerAuth()
+@ApiOperation({ summary: '...' })
+@ApiResponse({ status: 200, type: ResponseDto })
 ```
-BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at build time
-```
 
-## Development Rules
+---
 
-### Backend API Rules
-- Every new API endpoint MUST have full `@ApiResponse({ type: DtoClass })` decorator with proper response DTO
-- All controller methods must define `@ApiOperation`, `@ApiResponse` (success), and `@ApiTags`
-- Response DTOs must use `@ApiProperty()` on every field for proper OpenAPI schema generation
-- This ensures `@hey-api/openapi-ts` can generate correct TypeScript types for frontend/admin
+## Build & Test Order cho P3 + P2
 
-### Frontend/Admin API Rules
-- All API calls use `@hey-api/openapi-ts` generated SDK from `lib/api-generated/`
-- TanStack Query hooks in `lib/api-hooks.ts` wrap SDK calls for React components
-- Run `pnpm generate:api` to regenerate types after backend API changes
-- Never use raw `fetch()` for API calls — always use generated SDK functions or hooks
+1. **P3 trước** (Merchant Management) — vì P2 phụ thuộc vào `service_fee_rate` và `manual_fee_per_ticket`
+2. Backend P3 → Admin Frontend P3 → Verify → P2 backend → P2 frontend
 
-## Frontend Design System ("Velocity" — Athletic Editorial)
-- **Theme file**: `frontend/app/globals.css`
-- **Palette**: Warm stone base (`#fafaf9` bg, `#1c1917` text), blue accent `#1d4ed8`, energy orange `--5bib-energy: #ea580c`, trail green `--5bib-trail: #166534`
-- **Fonts**: Be Vietnam Pro (headings, `--font-heading`) + Inter (body, `--font-sans`). Monospace: JetBrains Mono / SF Mono (`--font-mono`)
-- **Motion tokens**: `--ease-out-expo`, `--ease-spring`, `--duration-fast/normal/slow`
-- **Shadow system**: `--shadow-xs` → `--shadow-xl`, `--shadow-glow`
-- **Key utilities**:
-  - Animation: `stagger-in`, `slide-up`, `scale-in`, `shimmer`
-  - Texture: `grain`, `topo-lines`, `hero-pattern`, `diagonal-lines`
-  - Glass: `glass-light`, `glass-dark`
-  - Typography: `text-gradient`, `text-gradient-warm`, `mono-data`, `accent-underline`
-  - Athletic: `rank-gold`, `rank-silver`, `rank-bronze`
-  - Interactive: `card-hover`, `result-row-hover`, `glow-accent`, `focus-ring`
-  - Layout: `scrollbar-hide`, `scrollbar-thin`, `sep`
-
-## Result Image Generation
-- **Backend service**: `backend/src/modules/race-result/services/result-image.service.ts`
-- **Library**: `@napi-rs/canvas` — canvas-based, no headless browser
-- **Output**: 1080×1350px PNG (4:5 ratio, Instagram-ready)
-- **Endpoint**: `POST /race-results/result-image/:raceId/:bib` (multipart/form-data)
-  - `bg`: preset gradient key (`blue|dark|sunset|forest|purple`)
-  - `customBg`: optional image file upload for custom background
-- **Fonts**: Inter + Be Vietnam Pro TTFs bundled in `backend/assets/fonts/`
-- **Frontend**: `ResultImageEditor` component previews with DOM, calls backend API for download/share
-- **Logo**: `backend/assets/logo_5BIB_white.png`
-
-## Common Issues & Solutions
-- **MongoDB ECONNREFUSED in Docker**: Use `host.docker.internal:27018` + `extra_hosts` in docker-compose
-- **nginx 502**: Check escaped `$http_upgrade` in nginx config
-- **CI deploy SSH refused**: VPS uses port 6060, need `VPS_PORT` secret
-- **Frontend build errors**: Check for unused imports from `@/lib/api` (legacy exports removed)
-- **Admin build errors**: Race creation needs `enableEcert`, `enableClaim`, `enableLiveTracking`, `enable5pix` booleans
+### PAUSE trước khi:
+- Chạy migration SQL trên Platform DB
+- Thêm dependency mới (TypeORM, pg, xlsx)
+- Thay đổi auth hay security

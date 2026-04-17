@@ -5,10 +5,14 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { OpsUserContext } from '../types/ops-jwt-payload.type';
+import { isOpsAuthenticated } from '../utils/is-ops-authenticated.util';
 
 /**
  * Extract ops user context từ `req.user`.
- * Throw 401 nếu không có (không pass JwtAuthGuard), hoặc không phải ops token.
+ * Throw 401 nếu không có (không pass JwtAuthGuard), hoặc `token_type` không
+ * thuộc `OPS_TOKEN_TYPES` (native ops hoặc admin-bridge).
+ *
+ * Dùng chung `isOpsAuthenticated` với {@link OpsRoleGuard} để tránh drift.
  *
  * @example
  * @Get('my-team/overview')
@@ -17,16 +21,11 @@ import { OpsUserContext } from '../types/ops-jwt-payload.type';
 export const OpsUserCtx = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): OpsUserContext => {
     const req = ctx.switchToHttp().getRequest<Request & { user?: unknown }>();
-    const user = req.user;
 
-    if (
-      !user ||
-      typeof user !== 'object' ||
-      (user as { token_type?: unknown }).token_type !== 'ops'
-    ) {
+    if (!isOpsAuthenticated(req.user)) {
       throw new UnauthorizedException('Not an ops token');
     }
 
-    return user as OpsUserContext;
+    return req.user;
   },
 );

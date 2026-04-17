@@ -57,5 +57,9 @@ export class OpsTeam {
 
 export const OpsTeamSchema = SchemaFactory.createForClass(OpsTeam);
 
-OpsTeamSchema.index({ event_id: 1, code: 1 }, { unique: true });
+// Unique chỉ enforce trên doc chưa soft-delete — cho phép reuse code sau archive.
+OpsTeamSchema.index(
+  { event_id: 1, code: 1 },
+  { unique: true, partialFilterExpression: { deleted_at: null } },
+);
 OpsTeamSchema.index({ event_id: 1, order: 1 });

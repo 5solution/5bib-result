@@ -157,9 +157,14 @@ export class EventsService {
       patch.status = dto.status;
     }
 
-    // Slug change: chặn nếu đã có teams/users để tránh leak path cũ
+    // Slug change: chặn nếu đã có teams/users active (chưa bị soft-delete) để
+    // tránh leak path cũ. R9 fix: filter deleted_at:null, nếu không user cũ đã
+    // archive vẫn block slug edit.
     if (dto.slug !== undefined && dto.slug !== doc.slug) {
-      const hasDependents = await this.userModel.exists({ event_id: doc._id });
+      const hasDependents = await this.userModel.exists({
+        event_id: doc._id,
+        deleted_at: null,
+      });
       if (hasDependents) {
         throw new ForbiddenException(
           'Cannot change slug after users exist — creates broken public links',

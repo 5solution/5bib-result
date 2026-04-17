@@ -17,11 +17,13 @@ import { genQrToken } from '../common/utils/qr-token.util';
 import { OpsAuthService } from './ops-auth.service';
 import {
   AdminCreateUserDto,
+  AdminUpdateUserDto,
   ApplicationListQueryDto,
   PublicApplyDto,
   PublicApplyResponseDto,
   RejectApplicationDto,
   UserListResponseDto,
+  UserQrBadgeResponseDto,
   UserResponseDto,
 } from './dto/application.dto';
 
@@ -232,10 +234,16 @@ export class ApplicationsService {
 
   /* ─────────── ADMIN: list users ─────────── */
 
+  /**
+   * BR-02: `scopeTeamId` truthy → hard-filter filter.team_id = scopeTeamId,
+   * bỏ qua query.team_id do client gửi (ngăn leader thử nhìn team khác bằng
+   * query string). scopeTeamId undefined = ops_admin, cho phép query.team_id.
+   */
   async list(
     tenantId: string,
     eventId: string,
     query: ApplicationListQueryDto,
+    scopeTeamId?: string,
   ): Promise<UserListResponseDto> {
     const event = await this.findEvent(tenantId, eventId);
 
@@ -244,9 +252,17 @@ export class ApplicationsService {
       deleted_at: null,
     };
     if (query.status) filter.status = query.status;
-    if (query.team_id)
-      filter.team_id = new Types.ObjectId(query.team_id);
     if (query.role) filter.role = query.role;
+
+    if (scopeTeamId) {
+      if (!Types.ObjectId.isValid(scopeTeamId)) {
+        // JWT team_id malformed → treat as no access thay vì 500
+        return { items: [], total: 0 };
+      }
+      filter.team_id = new Types.ObjectId(scopeTeamId);
+    } else if (query.team_id) {
+      filter.team_id = new Types.ObjectId(query.team_id);
+    }
 
     const [items, total] = await Promise.all([
       this.userModel
@@ -265,16 +281,50 @@ export class ApplicationsService {
 
   /* ─────────── ADMIN: approve ─────────── */
 
+  /**
+   * BR-02: `scopeTeamId` truthy (leader) →
+   *  1. Target user hiện phải thuộc team của leader (user.team_id === scopeTeamId).
+   *     Null/khác team → 404 (giấu existence, không leak cross-team).
+   *  2. Nếu body.team_id có, phải bằng scopeTeamId (leader không được "gán lại"
+   *     TNV sang team khác).
+   * scopeTeamId undefined (admin) → bypass cả 2 check.
+   */
   async approve(
     tenantId: string,
     eventId: string,
     userId: string,
     approvedBy: string,
     teamId?: string,
+    scopeTeamId?: string,
     request?: Request,
   ): Promise<UserResponseDto> {
     const event = await this.findEvent(tenantId, eventId);
     const user = await this.findUser(event._id, userId);
+
+    // BR-02 enforcement — trước status check để không leak trạng thái user cross-team
+    if (scopeTeamId) {
+      if (
+        !user.team_id ||
+        String(user.team_id) !== scopeTeamId
+      ) {
+        // 404 thay vì 403 để không confirm user tồn tại ở team khác
+        throw new NotFoundException('User not found');
+      }
+      if (teamId && teamId !== scopeTeamId) {
+        throw new ForbiddenException(
+          'Leader can only approve into their own team',
+        );
+      }
+    }
+
+    // Defense-in-depth: chỉ TNV mới được approve qua endpoint này. Crew/leader
+    // phải tạo bằng adminCreateUser (auto-APPROVED). Ngăn privilege escalation
+    // nếu migration/bug tạo PENDING user role khác ops_tnv.
+    if (user.role !== 'ops_tnv') {
+      throw new ForbiddenException(
+        'Only TNV applications can be approved via this endpoint',
+      );
+    }
 
     if (user.status !== 'PENDING') {
       throw new ForbiddenException(
@@ -329,16 +379,28 @@ export class ApplicationsService {
 
   /* ─────────── ADMIN: reject ─────────── */
 
+  /**
+   * BR-02: `scopeTeamId` truthy (leader) → target user phải thuộc team của leader.
+   * Khác team / null team → 404 (giấu existence, same rationale như approve()).
+   */
   async reject(
     tenantId: string,
     eventId: string,
     userId: string,
     rejectedBy: string,
     dto: RejectApplicationDto,
+    scopeTeamId?: string,
     request?: Request,
   ): Promise<UserResponseDto> {
     const event = await this.findEvent(tenantId, eventId);
     const user = await this.findUser(event._id, userId);
+
+    // BR-02 enforcement — trước status check
+    if (scopeTeamId) {
+      if (!user.team_id || String(user.team_id) !== scopeTeamId) {
+        throw new NotFoundException('User not found');
+      }
+    }
 
     if (user.status !== 'PENDING') {
       throw new ForbiddenException(
@@ -374,6 +436,247 @@ export class ApplicationsService {
       .lean();
     if (!fresh) throw new NotFoundException('User disappeared');
     return this.toResponse(fresh);
+  }
+
+  /* ─────────── ADMIN: update profile / reassign team ─────────── */
+
+  async adminUpdateUser(
+    tenantId: string,
+    eventId: string,
+    userId: string,
+    updatedBy: string,
+    dto: AdminUpdateUserDto,
+    request?: Request,
+  ): Promise<UserResponseDto> {
+    const event = await this.findEvent(tenantId, eventId);
+    const user = await this.findUser(event._id, userId);
+
+    const patch: Record<string, unknown> = {};
+    if (dto.full_name !== undefined) patch.full_name = dto.full_name.trim();
+    if (dto.email !== undefined) {
+      patch.email = dto.email ? dto.email.trim().toLowerCase() : undefined;
+    }
+    if (dto.dob !== undefined) {
+      patch.dob = dto.dob ? new Date(dto.dob) : undefined;
+    }
+    if (dto.emergency_contact !== undefined) {
+      patch.emergency_contact = dto.emergency_contact;
+    }
+    if (dto.experience !== undefined) patch.experience = dto.experience;
+    if (dto.shift_preferences !== undefined) {
+      patch.shift_preferences = dto.shift_preferences;
+    }
+
+    // Phone change: enforce uniqueness per event
+    if (dto.phone !== undefined && dto.phone.trim() !== user.phone) {
+      const normalized = dto.phone.trim();
+      const conflict = await this.userModel
+        .findOne({
+          event_id: event._id,
+          phone: normalized,
+          _id: { $ne: user._id },
+          deleted_at: null,
+        })
+        .lean();
+      if (conflict) {
+        throw new ConflictException(
+          'Số điện thoại đã tồn tại trong event',
+        );
+      }
+      patch.phone = normalized;
+    }
+
+    // Team reassignment rules:
+    //  - admin (leader role): không cho unassign (leader luôn phải có team)
+    //  - tnv: cho phép unassign (null) hoặc gán team mới
+    //  - crew: cho phép
+    if (dto.team_id !== undefined) {
+      if (dto.team_id === null || dto.team_id === '') {
+        if (user.role === 'ops_leader') {
+          throw new BadRequestException(
+            'Leader không được unassign team (phải có team trách nhiệm)',
+          );
+        }
+        patch.team_id = null;
+      } else {
+        if (!Types.ObjectId.isValid(dto.team_id)) {
+          throw new NotFoundException('Team not found');
+        }
+        const team = await this.teamModel
+          .findOne({
+            _id: new Types.ObjectId(dto.team_id),
+            event_id: event._id,
+            deleted_at: null,
+          })
+          .lean();
+        if (!team) throw new NotFoundException('Team not found');
+        patch.team_id = team._id;
+      }
+    }
+
+    await this.userModel.updateOne({ _id: user._id }, { $set: patch });
+
+    await this.auditService.log({
+      event_id: event._id,
+      user_id: updatedBy,
+      action: 'UPDATE_USER',
+      entity_type: 'ops_users',
+      entity_id: user._id,
+      payload: patch,
+      request,
+    });
+
+    const fresh = await this.userModel
+      .findById(user._id)
+      .select('-password_hash -qr_token_hash')
+      .lean();
+    if (!fresh) throw new NotFoundException('User disappeared');
+    return this.toResponse(fresh);
+  }
+
+  /* ─────────── ADMIN: issue/rotate QR badge ─────────── */
+
+  /**
+   * Rotates QR token — returns plain once (for printing badge). Previous
+   * physical badge becomes invalid. Chỉ hoạt động với user đã APPROVED/ACTIVE.
+   * Leader không có qr_token_hash (login password); chỉ crew/tnv dùng QR.
+   */
+  async issueQrBadge(
+    tenantId: string,
+    eventId: string,
+    userId: string,
+    issuedBy: string,
+    request?: Request,
+  ): Promise<UserQrBadgeResponseDto> {
+    const event = await this.findEvent(tenantId, eventId);
+    const user = await this.findUser(event._id, userId);
+
+    if (!['APPROVED', 'ACTIVE'].includes(user.status)) {
+      throw new BadRequestException(
+        `User status is ${user.status} — phải APPROVED/ACTIVE mới issue QR`,
+      );
+    }
+    if (!['ops_crew', 'ops_tnv'].includes(user.role)) {
+      throw new BadRequestException(
+        `Role ${user.role} không dùng QR badge (chỉ crew/tnv)`,
+      );
+    }
+
+    const qr = genQrToken();
+    await this.userModel.updateOne(
+      { _id: user._id },
+      { $set: { qr_token_hash: qr.hash } },
+    );
+
+    await this.auditService.log({
+      event_id: event._id,
+      user_id: issuedBy,
+      action: 'ISSUE_QR_BADGE',
+      entity_type: 'ops_users',
+      entity_id: user._id,
+      payload: { role: user.role },
+      request,
+    });
+
+    let teamName: string | null = null;
+    if (user.team_id) {
+      const team = await this.teamModel
+        .findById(user.team_id)
+        .select('name')
+        .lean();
+      if (team) teamName = team.name;
+    }
+
+    return {
+      user_id: String(user._id),
+      full_name: user.full_name,
+      phone: user.phone,
+      role: user.role,
+      qr_token: qr.plain,
+      team_name: teamName,
+    };
+  }
+
+  /* ─────────── ADMIN: CSV export ─────────── */
+
+  /**
+   * Export CSV users trong event. Columns:
+   *   id,phone,full_name,email,role,status,team_name,team_code,
+   *   approved_at,created_at,experience,shift_preferences
+   * Encode UTF-8 BOM để Excel hiện tiếng Việt đúng.
+   */
+  async exportCsv(
+    tenantId: string,
+    eventId: string,
+    filter?: { status?: string; role?: string; team_id?: string },
+  ): Promise<string> {
+    const event = await this.findEvent(tenantId, eventId);
+
+    const mongoFilter: Record<string, unknown> = {
+      event_id: event._id,
+      deleted_at: null,
+    };
+    if (filter?.status) mongoFilter.status = filter.status;
+    if (filter?.role) mongoFilter.role = filter.role;
+    if (filter?.team_id && Types.ObjectId.isValid(filter.team_id)) {
+      mongoFilter.team_id = new Types.ObjectId(filter.team_id);
+    }
+
+    const [users, teams] = await Promise.all([
+      this.userModel
+        .find(mongoFilter)
+        .select('-password_hash -qr_token_hash')
+        .sort({ created_at: -1 })
+        .lean(),
+      this.teamModel
+        .find({ event_id: event._id, deleted_at: null })
+        .select('_id name code')
+        .lean(),
+    ]);
+    const teamMap = new Map(teams.map((t) => [String(t._id), t]));
+
+    const header = [
+      'id',
+      'phone',
+      'full_name',
+      'email',
+      'role',
+      'status',
+      'team_name',
+      'team_code',
+      'approved_at',
+      'created_at',
+      'experience',
+      'shift_preferences',
+    ];
+
+    const escape = (v: unknown): string => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).replace(/\r?\n/g, ' ');
+      if (/[",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+
+    const rows = users.map((u) => {
+      const t = u.team_id ? teamMap.get(String(u.team_id)) : undefined;
+      return [
+        String(u._id),
+        u.phone,
+        u.full_name,
+        u.email ?? '',
+        u.role,
+        u.status,
+        t?.name ?? '',
+        t?.code ?? '',
+        u.approved_at ? new Date(u.approved_at).toISOString() : '',
+        u.created_at ? new Date(u.created_at).toISOString() : '',
+        u.experience ?? '',
+        u.shift_preferences ?? '',
+      ].map(escape).join(',');
+    });
+
+    // UTF-8 BOM → Excel mở đúng tiếng Việt
+    return '\uFEFF' + header.join(',') + '\n' + rows.join('\n') + '\n';
   }
 
   /* ─────────── HELPERS ─────────── */

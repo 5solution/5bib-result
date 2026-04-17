@@ -206,18 +206,38 @@ export class SupplyService {
       };
     });
 
-    const orderCode = genOrderCode(team.code);
-
-    const created = await this.orderModel.create({
-      event_id: event._id,
-      team_id: team._id,
-      order_code: orderCode,
-      created_by: new Types.ObjectId(createdBy),
-      items: orderItems,
-      status: 'DRAFT',
-    });
-
-    return this.toOrderResponse(created);
+    // R5: retry-on-E11000 vì order_code là random 4-digit seq có thể trùng khi
+    // 2 leader cùng team submit concurrent. Thử tối đa 5 lần rồi bail out.
+    const MAX_ATTEMPTS = 5;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const orderCode = genOrderCode(team.code);
+      try {
+        const created = await this.orderModel.create({
+          event_id: event._id,
+          team_id: team._id,
+          order_code: orderCode,
+          created_by: new Types.ObjectId(createdBy),
+          items: orderItems,
+          status: 'DRAFT',
+        });
+        return this.toOrderResponse(created);
+      } catch (err) {
+        const mongoErr = err as {
+          code?: number;
+          keyPattern?: Record<string, unknown>;
+        };
+        const isDup =
+          mongoErr?.code === 11000 &&
+          (mongoErr.keyPattern?.order_code !== undefined ||
+            // legacy global index path — also retry
+            Object.keys(mongoErr.keyPattern ?? {}).includes('order_code'));
+        if (!isDup) throw err;
+        // loop: regenerate code and retry
+      }
+    }
+    throw new ConflictException(
+      'Unable to generate unique order code after retries — please retry',
+    );
   }
 
   async listOrders(
@@ -253,8 +273,14 @@ export class SupplyService {
     tenantId: string,
     eventId: string,
     orderId: string,
+    scopeTeamId?: string,
   ): Promise<SupplyOrderResponseDto> {
-    const doc = await this.findOrderEntity(tenantId, eventId, orderId);
+    const doc = await this.findOrderEntity(
+      tenantId,
+      eventId,
+      orderId,
+      scopeTeamId,
+    );
     return this.toOrderResponse(doc);
   }
 
@@ -265,8 +291,14 @@ export class SupplyService {
     orderId: string,
     userId: string,
     request?: Request,
+    scopeTeamId?: string,
   ): Promise<SupplyOrderResponseDto> {
-    const doc = await this.findOrderEntity(tenantId, eventId, orderId);
+    const doc = await this.findOrderEntity(
+      tenantId,
+      eventId,
+      orderId,
+      scopeTeamId,
+    );
     this.assertOrderTransition(doc.status, 'SUBMITTED');
 
     await this.orderModel.updateOne(
@@ -415,8 +447,14 @@ export class SupplyService {
     orderId: string,
     userId: string,
     request?: Request,
+    scopeTeamId?: string,
   ): Promise<SupplyOrderResponseDto> {
-    const doc = await this.findOrderEntity(tenantId, eventId, orderId);
+    const doc = await this.findOrderEntity(
+      tenantId,
+      eventId,
+      orderId,
+      scopeTeamId,
+    );
     this.assertOrderTransition(doc.status, 'RECEIVED');
 
     await this.orderModel.updateOne(
@@ -453,9 +491,15 @@ export class SupplyService {
     eventId: string,
     orderId: string,
     dto: UpdateSupplyOrderItemsDto,
+    scopeTeamId?: string,
   ): Promise<SupplyOrderResponseDto> {
     const event = await this.eventsService.findEntity(tenantId, eventId);
-    const doc = await this.findOrderEntity(tenantId, eventId, orderId);
+    const doc = await this.findOrderEntity(
+      tenantId,
+      eventId,
+      orderId,
+      scopeTeamId,
+    );
     if (doc.status !== 'DRAFT') {
       throw new ForbiddenException('Can only edit items in DRAFT status');
     }
@@ -576,19 +620,31 @@ export class SupplyService {
 
   /* ═══════════ HELPERS ═══════════ */
 
+  /**
+   * Load order with tenant + event scope. Khi `scopeTeamId` truthy → chỉ trả
+   * về order thuộc team đó (BR-02: leader không thấy order team khác). Scope
+   * mismatch = 404 (không leak existence cho user không có quyền).
+   */
   private async findOrderEntity(
     tenantId: string,
     eventId: string,
     orderId: string,
+    scopeTeamId?: string,
   ): Promise<OpsSupplyOrderDocument> {
     const event = await this.eventsService.findEntity(tenantId, eventId);
     if (!Types.ObjectId.isValid(orderId))
       throw new NotFoundException('Order not found');
-    const doc = await this.orderModel.findOne({
+    const filter: Record<string, unknown> = {
       _id: new Types.ObjectId(orderId),
       event_id: event._id,
       deleted_at: null,
-    });
+    };
+    if (scopeTeamId) {
+      if (!Types.ObjectId.isValid(scopeTeamId))
+        throw new NotFoundException('Order not found');
+      filter.team_id = new Types.ObjectId(scopeTeamId);
+    }
+    const doc = await this.orderModel.findOne(filter);
     if (!doc) throw new NotFoundException('Order not found');
     return doc;
   }

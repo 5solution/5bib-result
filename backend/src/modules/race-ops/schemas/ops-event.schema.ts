@@ -103,6 +103,10 @@ export class OpsEvent {
 export const OpsEventSchema = SchemaFactory.createForClass(OpsEvent);
 
 // Compound indexes per PRD §4.2
-OpsEventSchema.index({ tenant_id: 1, slug: 1 }, { unique: true });
+// Unique chỉ enforce trên doc chưa soft-delete — cho phép reuse slug sau khi archive.
+OpsEventSchema.index(
+  { tenant_id: 1, slug: 1 },
+  { unique: true, partialFilterExpression: { deleted_at: null } },
+);
 OpsEventSchema.index({ date: -1 });
 OpsEventSchema.index({ status: 1, deleted_at: 1 });

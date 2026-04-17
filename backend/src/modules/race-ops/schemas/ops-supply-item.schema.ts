@@ -44,5 +44,9 @@ export class OpsSupplyItem {
 
 export const OpsSupplyItemSchema = SchemaFactory.createForClass(OpsSupplyItem);
 
-OpsSupplyItemSchema.index({ event_id: 1, sku: 1 }, { unique: true });
+// Unique chỉ enforce trên SKU chưa soft-delete — cho phép recreate sau khi archive.
+OpsSupplyItemSchema.index(
+  { event_id: 1, sku: 1 },
+  { unique: true, partialFilterExpression: { deleted_at: null } },
+);
 OpsSupplyItemSchema.index({ event_id: 1, category: 1 });

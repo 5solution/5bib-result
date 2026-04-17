@@ -205,6 +205,22 @@ export class TeamsService {
       leaderObjId = leader._id;
     }
 
+    // R6 fix: Nếu team đang có leader cũ (≠ leader mới) → unset team_id của leader cũ
+    // trước khi assign mới. Tránh orphan: leader cũ vẫn giữ team_id trỏ về team này.
+    const previousLeaderId = doc.leader_user_id
+      ? new Types.ObjectId(String(doc.leader_user_id))
+      : null;
+    const isChangingLeader =
+      previousLeaderId &&
+      (!leaderObjId || !previousLeaderId.equals(leaderObjId));
+
+    if (isChangingLeader) {
+      await this.userModel.updateOne(
+        { _id: previousLeaderId, team_id: doc._id },
+        { $set: { team_id: null } },
+      );
+    }
+
     await this.teamModel.updateOne(
       { _id: doc._id },
       { $set: { leader_user_id: leaderObjId } },
