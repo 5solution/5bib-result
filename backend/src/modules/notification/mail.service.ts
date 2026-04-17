@@ -21,6 +21,25 @@ export interface ClaimResolvedEmailData {
   eventTitle: string;
 }
 
+export interface TeamRegistrationApprovedData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  roleName: string;
+  magicLink: string;
+  /** base64 data-URL (image/png) of the QR code. */
+  qrDataUrl: string;
+}
+
+export interface TeamWaitlistedData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  roleName: string;
+  waitlistPosition: number;
+  magicLink: string;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -110,4 +129,89 @@ export class MailService {
       // Don't re-throw — fire and forget
     }
   }
+
+  async sendTeamRegistrationApproved(
+    data: TeamRegistrationApprovedData,
+  ): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Team approved: ${data.fullName} (${data.roleName}) → ${data.magicLink}`,
+      );
+      return;
+    }
+    const subject = `Đăng ký thành công — ${data.eventName}`;
+    const base64 = data.qrDataUrl.replace(/^data:image\/png;base64,/, '');
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #1d4ed8;">Chào ${escapeHtml(data.fullName)},</h2>
+        <p>Bạn đã đăng ký thành công vai trò <strong>${escapeHtml(data.roleName)}</strong> cho sự kiện <strong>${escapeHtml(data.eventName)}</strong>.</p>
+        <p>Vui lòng giữ mã QR dưới đây để check-in ngày vận hành:</p>
+        <p style="text-align:center;"><img src="cid:qr-code" alt="QR" width="220" height="220" style="border-radius:8px;" /></p>
+        <p>Hoặc truy cập trang trạng thái cá nhân: <a href="${data.magicLink}">${data.magicLink}</a></p>
+        <p style="color:#78716c; font-size:12px;">Nếu bạn không đăng ký, vui lòng bỏ qua email này.</p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB Team',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+          images: [
+            { type: 'image/png', name: 'qr-code', content: base64 },
+          ],
+        },
+      });
+      this.logger.log(`Team approved email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send team approved email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTeamWaitlisted(data: TeamWaitlistedData): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Team waitlisted: ${data.fullName} pos=${data.waitlistPosition}`,
+      );
+      return;
+    }
+    const subject = `Danh sách chờ — ${data.eventName}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #ea580c;">Chào ${escapeHtml(data.fullName)},</h2>
+        <p>Vị trí <strong>${escapeHtml(data.roleName)}</strong> trong sự kiện <strong>${escapeHtml(data.eventName)}</strong> đã đủ slot. Bạn đang ở danh sách chờ ở vị trí <strong>#${data.waitlistPosition}</strong>.</p>
+        <p>Chúng tôi sẽ tự động email cho bạn khi có slot mở ra.</p>
+        <p>Theo dõi trạng thái tại: <a href="${data.magicLink}">${data.magicLink}</a></p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB Team',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+        },
+      });
+      this.logger.log(`Team waitlisted email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send waitlisted email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
