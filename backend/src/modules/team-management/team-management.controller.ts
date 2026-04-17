@@ -43,6 +43,8 @@ import {
   ExportResponseDto,
 } from './dto/bulk-update.dto';
 import { RegistrationDetailDto } from './dto/registration-detail.dto';
+import { AdminManualRegisterDto } from './dto/manual-register.dto';
+import { RegisterResponseDto } from './dto/response.dto';
 import {
   DashboardQueryDto,
   DashboardResponseDto,
@@ -215,6 +217,20 @@ export class TeamManagementController {
     @Req() req: JwtRequest,
   ): Promise<RegistrationDetailDto> {
     return this.registrations.getDetail(id, identifyAdmin(req));
+  }
+
+  @Post('events/:id/registrations/manual')
+  @ApiOperation({
+    summary:
+      'Admin adds a registration directly (walk-in, phone referral). Bypasses public throttle + can auto-approve.',
+  })
+  @ApiResponse({ status: 201, type: RegisterResponseDto })
+  manualRegister(
+    @Param('id', ParseIntPipe) _eventId: number,
+    @Body() dto: AdminManualRegisterDto,
+    @Req() req: JwtRequest,
+  ): Promise<RegisterResponseDto> {
+    return this.registrations.adminManualRegister(dto, identifyAdmin(req));
   }
 
   @Post('registrations/bulk-update')

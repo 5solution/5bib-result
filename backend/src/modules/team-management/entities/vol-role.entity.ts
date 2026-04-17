@@ -57,6 +57,9 @@ export class VolRole {
   @Column({ type: 'boolean', default: true })
   waitlist_enabled!: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  auto_approve!: boolean;
+
   @Column({ type: 'decimal', precision: 12, scale: 0, default: 0 })
   daily_rate!: string;
 

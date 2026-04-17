@@ -43,6 +43,7 @@ import {
   BulkUpdateResponseDto,
 } from '../dto/bulk-update.dto';
 import { RegistrationDetailDto } from '../dto/registration-detail.dto';
+import { AdminManualRegisterDto } from '../dto/manual-register.dto';
 import { TeamCacheService } from './team-cache.service';
 import { TeamPhotoService } from './team-photo.service';
 
@@ -114,12 +115,23 @@ export class TeamRegistrationService {
       const avatarUrl = this.extractString(dto.form_data, 'avatar_photo');
       const cccdUrl = this.extractString(dto.form_data, 'cccd_photo');
 
+      // approval flow:
+      //   role.auto_approve = true (legacy) → approved if slot, else waitlisted
+      //   role.auto_approve = false (default) → pending (admin must review)
+      //   when waitlist is disabled and role is full, still reject 400.
       const hasSlot = role.filled_slots < role.max_slots;
-      const isApproved = hasSlot;
-      const isWaitlisted = !hasSlot && role.waitlist_enabled;
-      if (!isApproved && !isWaitlisted) {
-        throw new BadRequestException('Role is full and waitlist is disabled');
+      let assignedStatus: 'pending' | 'approved' | 'waitlisted';
+      if (role.auto_approve) {
+        if (hasSlot) assignedStatus = 'approved';
+        else if (role.waitlist_enabled) assignedStatus = 'waitlisted';
+        else throw new BadRequestException('Role is full and waitlist is disabled');
+      } else {
+        // Manual review: pending doesn't take a slot; filled_slots only
+        // increments when admin PATCHes to approved.
+        assignedStatus = 'pending';
       }
+      const isApproved = assignedStatus === 'approved';
+      const isWaitlisted = assignedStatus === 'waitlisted';
 
       let waitlistPosition: number | null = null;
       if (isWaitlisted) {
@@ -143,10 +155,12 @@ export class TeamRegistrationService {
         shirt_size: shirtSize,
         avatar_photo_url: avatarUrl,
         cccd_photo_url: cccdUrl,
-        status: isApproved ? 'approved' : 'waitlisted',
+        status: assignedStatus,
         waitlist_position: waitlistPosition,
         magic_token: magicToken,
         magic_token_expires: expiresAt,
+        // Only issue a QR code when the registration is already approved —
+        // pending registrations must be confirmed by admin first.
         qr_code: isApproved ? magicToken : null,
       });
 
@@ -170,7 +184,7 @@ export class TeamRegistrationService {
         regId: saved.id,
         eventId: role.event_id,
         outcome: {
-          status: saved.status as 'approved' | 'waitlisted',
+          status: saved.status as 'pending' | 'approved' | 'waitlisted',
           waitlist_position: saved.waitlist_position,
           magic_token: saved.magic_token,
           event_name: event.event_name,
@@ -181,10 +195,150 @@ export class TeamRegistrationService {
 
     await this.cache.invalidateEvent(eventId, [dto.role_id]);
 
-    // Fire-and-forget side effects: QR + email. Failures must not roll back the DB.
-    void this.sendPostRegisterEmail(regId, outcome).catch((err) =>
-      this.logger.warn(`Post-register email failed for reg ${regId}: ${err.message}`),
-    );
+    // Only email approved/waitlisted. Pending registrations get their email
+    // after admin flips status → approved (updateRegistration path sends it).
+    if (outcome.status !== 'pending') {
+      void this.sendPostRegisterEmail(regId, outcome).catch((err) =>
+        this.logger.warn(`Post-register email failed for reg ${regId}: ${err.message}`),
+      );
+    }
+
+    const message =
+      outcome.status === 'approved'
+        ? 'Đăng ký thành công! Kiểm tra email để nhận QR code.'
+        : outcome.status === 'waitlisted'
+          ? `Bạn đang ở danh sách chờ (vị trí ${outcome.waitlist_position}). Chúng tôi sẽ email khi có slot.`
+          : 'Đã nhận đăng ký. Ban tổ chức sẽ duyệt và thông báo qua email trong vòng 24h.';
+    return {
+      id: regId,
+      status: outcome.status,
+      waitlist_position: outcome.waitlist_position,
+      message,
+      magic_link: this.buildMagicLink(outcome.magic_token),
+    };
+  }
+
+  /**
+   * Admin-only manual-create. Walks through the same slot + transaction
+   * plumbing as the public register but takes `auto_approve` from the DTO
+   * (defaults to true) and skips the photo URL whitelist when the admin
+   * passes pre-uploaded keys.
+   */
+  async adminManualRegister(
+    dto: AdminManualRegisterDto,
+    adminIdentity: string,
+  ): Promise<RegisterResponseDto> {
+    const { regId, eventId, outcome } = await this.dataSource.transaction(async (m) => {
+      const role = await m
+        .getRepository(VolRole)
+        .createQueryBuilder('r')
+        .setLock('pessimistic_write')
+        .where('r.id = :id', { id: dto.role_id })
+        .getOne();
+      if (!role) throw new NotFoundException('Role not found');
+
+      const event = await m
+        .getRepository(VolEvent)
+        .createQueryBuilder('e')
+        .setLock('pessimistic_write')
+        .where('e.id = :id', { id: role.event_id })
+        .getOne();
+      if (!event) throw new NotFoundException('Event not found');
+
+      this.validateFormData(role.form_fields, dto.form_data);
+      this.validatePhotoUrls(dto.form_data);
+
+      const existing = await m.getRepository(VolRegistration).findOne({
+        where: { email: dto.email, role_id: dto.role_id },
+      });
+      if (existing) {
+        throw new ConflictException('This email is already registered for this role');
+      }
+
+      const hasSlot = role.filled_slots < role.max_slots;
+      const wantsApproved = dto.auto_approve !== false;
+      let assignedStatus: 'pending' | 'approved' | 'waitlisted';
+      if (wantsApproved) {
+        if (hasSlot) assignedStatus = 'approved';
+        else if (role.waitlist_enabled) assignedStatus = 'waitlisted';
+        else throw new BadRequestException('Role is full and waitlist is disabled');
+      } else {
+        assignedStatus = 'pending';
+      }
+      const isApproved = assignedStatus === 'approved';
+      const isWaitlisted = assignedStatus === 'waitlisted';
+
+      let waitlistPosition: number | null = null;
+      if (isWaitlisted) {
+        const maxPos = await m
+          .getRepository(VolRegistration)
+          .createQueryBuilder('r')
+          .select('COALESCE(MAX(r.waitlist_position), 0)', 'max')
+          .where('r.role_id = :id', { id: dto.role_id })
+          .andWhere('r.status = :s', { s: 'waitlisted' })
+          .getRawOne<{ max: string }>();
+        waitlistPosition = Number(maxPos?.max ?? 0) + 1;
+      }
+
+      const magicToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = this.expiry();
+      const shirtSize = this.extractShirtSize(dto.form_data);
+      const avatarUrl = this.extractString(dto.form_data, 'avatar_photo');
+      const cccdUrl = this.extractString(dto.form_data, 'cccd_photo');
+
+      const reg = m.getRepository(VolRegistration).create({
+        role_id: dto.role_id,
+        event_id: role.event_id,
+        full_name: dto.full_name,
+        email: dto.email,
+        phone: dto.phone,
+        form_data: dto.form_data,
+        shirt_size: shirtSize,
+        avatar_photo_url: avatarUrl,
+        cccd_photo_url: cccdUrl,
+        status: assignedStatus,
+        waitlist_position: waitlistPosition,
+        magic_token: magicToken,
+        magic_token_expires: expiresAt,
+        qr_code: isApproved ? magicToken : null,
+        notes: dto.notes ?? `Added manually by ${adminIdentity}`,
+      });
+
+      let saved: VolRegistration;
+      try {
+        saved = await m.getRepository(VolRegistration).save(reg);
+      } catch (err) {
+        if (this.isDupEntry(err)) {
+          throw new ConflictException('This email is already registered for this role');
+        }
+        throw err;
+      }
+
+      if (isApproved) {
+        await m.getRepository(VolRole).increment({ id: role.id }, 'filled_slots', 1);
+      }
+
+      return {
+        regId: saved.id,
+        eventId: role.event_id,
+        outcome: {
+          status: saved.status as 'pending' | 'approved' | 'waitlisted',
+          waitlist_position: saved.waitlist_position,
+          magic_token: saved.magic_token,
+          event_name: event.event_name,
+          role_name: role.role_name,
+        },
+      };
+    });
+
+    this.logger.log(`MANUAL_REGISTER admin=${adminIdentity} reg=${regId} status=${outcome.status}`);
+    await this.cache.invalidateEvent(eventId, [dto.role_id]);
+
+    if (outcome.status !== 'pending') {
+      void this.sendPostRegisterEmail(regId, outcome).catch((err) =>
+        this.logger.warn(`manual-register email failed reg=${regId}: ${err.message}`),
+      );
+    }
 
     return {
       id: regId,
@@ -192,8 +346,10 @@ export class TeamRegistrationService {
       waitlist_position: outcome.waitlist_position,
       message:
         outcome.status === 'approved'
-          ? 'Đăng ký thành công! Kiểm tra email để nhận QR code.'
-          : `Bạn đang ở danh sách chờ (vị trí ${outcome.waitlist_position}). Chúng tôi sẽ email khi có slot.`,
+          ? `Đã thêm ${dto.full_name} và gửi email QR.`
+          : outcome.status === 'waitlisted'
+            ? `Đã thêm ${dto.full_name} vào danh sách chờ (vị trí ${outcome.waitlist_position}).`
+            : `Đã thêm ${dto.full_name} với trạng thái pending — cần duyệt sau.`,
       magic_link: this.buildMagicLink(outcome.magic_token),
     };
   }
@@ -392,7 +548,7 @@ export class TeamRegistrationService {
     id: number,
     dto: UpdateRegistrationDto,
   ): Promise<VolRegistration> {
-    const { updated, waitlistTriggerRoleId } = await this.dataSource.transaction(
+    const { updated, waitlistTriggerRoleId, justApproved } = await this.dataSource.transaction(
       async (m) => {
         const reg = await m
           .getRepository(VolRegistration)
@@ -401,6 +557,7 @@ export class TeamRegistrationService {
 
         const previousStatus = reg.status;
         let triggerRoleId: number | null = null;
+        let flippedToApproved = false;
 
         if (dto.status && dto.status !== previousStatus) {
           if (dto.status === 'approved' && previousStatus !== 'approved') {
@@ -419,6 +576,7 @@ export class TeamRegistrationService {
             reg.magic_token_expires = this.expiry();
             reg.qr_code = reg.magic_token;
             reg.waitlist_position = null;
+            flippedToApproved = true;
           } else if (
             (dto.status === 'rejected' || dto.status === 'cancelled') &&
             previousStatus === 'approved'
@@ -463,7 +621,11 @@ export class TeamRegistrationService {
         }
 
         const saved = await m.getRepository(VolRegistration).save(reg);
-        return { updated: saved, waitlistTriggerRoleId: triggerRoleId };
+        return {
+          updated: saved,
+          waitlistTriggerRoleId: triggerRoleId,
+          justApproved: flippedToApproved,
+        };
       },
     );
 
@@ -473,6 +635,20 @@ export class TeamRegistrationService {
       // Do not block the HTTP response on the waitlist promotion.
       void this.autoFillWaitlist(waitlistTriggerRoleId).catch((err) =>
         this.logger.warn(`Waitlist auto-fill failed: ${err.message}`),
+      );
+    }
+
+    // Admin just flipped pending/waitlisted → approved. Fire the approved
+    // email with QR so the user gets it right after review.
+    if (justApproved) {
+      void this.sendPostRegisterEmail(updated.id, {
+        status: 'approved',
+        waitlist_position: null,
+        magic_token: updated.magic_token,
+        event_name: '',
+        role_name: '',
+      }).catch((err) =>
+        this.logger.warn(`post-approve email failed reg=${updated.id}: ${err.message}`),
       );
     }
 
@@ -626,7 +802,7 @@ export class TeamRegistrationService {
   private async sendPostRegisterEmail(
     regId: number,
     outcome: {
-      status: 'approved' | 'waitlisted';
+      status: 'pending' | 'approved' | 'waitlisted';
       waitlist_position: number | null;
       magic_token: string;
       event_name: string;
@@ -651,7 +827,7 @@ export class TeamRegistrationService {
         magicLink,
         qrDataUrl,
       });
-    } else {
+    } else if (outcome.status === 'waitlisted') {
       await this.mail.sendTeamWaitlisted({
         toEmail: reg.email,
         fullName: reg.full_name,
@@ -661,5 +837,6 @@ export class TeamRegistrationService {
         magicLink,
       });
     }
+    // pending → admin approval path sends approved email later
   }
 }

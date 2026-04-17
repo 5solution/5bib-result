@@ -29,8 +29,8 @@ export class PublicEventSummaryDto {
 
 export class RegisterResponseDto {
   @ApiProperty() id!: number;
-  @ApiProperty({ enum: ['approved', 'waitlisted'] })
-  status!: 'approved' | 'waitlisted';
+  @ApiProperty({ enum: ['pending', 'approved', 'waitlisted'] })
+  status!: 'pending' | 'approved' | 'waitlisted';
   @ApiProperty({ required: false, nullable: true })
   waitlist_position!: number | null;
   @ApiProperty() message!: string;

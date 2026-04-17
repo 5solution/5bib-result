@@ -206,6 +206,7 @@ function CreateRoleDialog({
     role_name: "",
     max_slots: 10,
     waitlist_enabled: true,
+    auto_approve: false,
     daily_rate: 0,
     working_days: 1,
     form_fields: DEFAULT_FORM_FIELDS,
@@ -314,6 +315,20 @@ function CreateRoleDialog({
             <Switch
               checked={form.waitlist_enabled}
               onCheckedChange={(v) => setForm({ ...form, waitlist_enabled: v })}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+            <div>
+              <Label>Tự duyệt khi đăng ký công khai</Label>
+              <p className="text-xs text-muted-foreground">
+                TẮT (khuyến nghị): người đăng ký vào trạng thái <b>pending</b>,
+                admin duyệt thủ công → mới gửi QR. BẬT: duyệt ngay + chiếm slot
+                + gửi QR tự động.
+              </p>
+            </div>
+            <Switch
+              checked={form.auto_approve === true}
+              onCheckedChange={(v) => setForm({ ...form, auto_approve: v })}
             />
           </div>
           <div>

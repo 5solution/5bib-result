@@ -9,6 +9,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+// keep imports sorted
 import { FormFieldConfigDto } from './form-field-config.dto';
 
 export class CreateRoleDto {
@@ -19,6 +20,15 @@ export class CreateRoleDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) max_slots!: number;
 
   @ApiProperty({ default: true }) @IsBoolean() waitlist_enabled: boolean = true;
+
+  @ApiProperty({
+    default: false,
+    description:
+      'FALSE (default): public register = status=pending, admin must approve. TRUE: status=approved immediately + claims slot + emails QR.',
+  })
+  @IsBoolean()
+  @IsOptional()
+  auto_approve?: boolean = false;
 
   @ApiProperty({ default: 0, description: 'VND per day' })
   @IsInt()

@@ -76,11 +76,39 @@ export interface CreateRoleInput {
   description?: string;
   max_slots: number;
   waitlist_enabled: boolean;
+  auto_approve?: boolean;
   daily_rate: number;
   working_days: number;
   form_fields: FormFieldConfig[];
   sort_order: number;
   contract_template_id?: number;
+}
+
+export interface ManualRegisterInput {
+  role_id: number;
+  full_name: string;
+  email: string;
+  phone: string;
+  form_data: Record<string, unknown>;
+  auto_approve?: boolean;
+  notes?: string;
+}
+
+export async function adminManualRegister(
+  token: string,
+  eventId: number,
+  input: ManualRegisterInput,
+): Promise<{ id: number; status: string; message: string; magic_link: string }> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/registrations/manual`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(input),
+    },
+  );
+  await assertOk(res);
+  return res.json();
 }
 
 function authedHeaders(token: string): HeadersInit {
@@ -532,18 +560,18 @@ export const DEFAULT_FORM_FIELDS: FormFieldConfig[] = [
     options: ["XS", "S", "M", "L", "XL", "XXL", "XXXL"],
   },
   {
-    key: "avatar_photo",
-    label: "Ảnh đại diện",
-    type: "photo",
-    required: true,
-    hint: "Ảnh chân dung rõ mặt",
-  },
-  {
     key: "cccd_photo",
     label: "Ảnh CCCD/CMND",
     type: "photo",
     required: true,
-    hint: "Chụp rõ mặt CCCD",
+    hint: "Chụp rõ mặt CCCD — bắt buộc để lập hợp đồng",
+  },
+  {
+    key: "avatar_photo",
+    label: "Ảnh chân dung (tùy chọn)",
+    type: "photo",
+    required: false,
+    hint: "Không bắt buộc. Nếu có sẽ dùng làm avatar.",
   },
   {
     key: "experience",
