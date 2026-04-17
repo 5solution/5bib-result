@@ -33,32 +33,25 @@ export class TeamShirtService {
     dto: UpsertShirtStockDto,
   ): Promise<{ updated: number }> {
     if (dto.sizes.length === 0) return { updated: 0 };
-    let updated = 0;
-    for (const row of dto.sizes) {
-      const existing = await this.stockRepo.findOne({
-        where: { event_id: eventId, size: row.size },
-      });
-      if (existing) {
-        existing.quantity_planned = row.quantity_planned;
-        existing.quantity_ordered = row.quantity_ordered;
-        existing.quantity_received = row.quantity_received;
-        existing.notes = row.notes ?? existing.notes;
-        await this.stockRepo.save(existing);
-      } else {
-        const entity = this.stockRepo.create({
-          event_id: eventId,
-          size: row.size,
-          quantity_planned: row.quantity_planned,
-          quantity_ordered: row.quantity_ordered,
-          quantity_received: row.quantity_received,
-          notes: row.notes ?? null,
-        });
-        await this.stockRepo.save(entity);
-      }
-      updated++;
-    }
+    // TypeORM `.upsert()` compiles to MySQL `INSERT ... ON DUPLICATE KEY
+    // UPDATE` so concurrent PUTs on the same (event_id, size) unique key
+    // no longer throw ER_DUP_ENTRY — last-write-wins on the 3 counters.
+    await this.stockRepo.upsert(
+      dto.sizes.map((row) => ({
+        event_id: eventId,
+        size: row.size,
+        quantity_planned: row.quantity_planned,
+        quantity_ordered: row.quantity_ordered,
+        quantity_received: row.quantity_received,
+        notes: row.notes ?? null,
+      })),
+      {
+        conflictPaths: ['event_id', 'size'],
+        skipUpdateIfNoValuesChanged: true,
+      },
+    );
     await this.cache.invalidateEvent(eventId);
-    return { updated };
+    return { updated: dto.sizes.length };
   }
 
   async aggregate(eventId: number): Promise<ShirtAggregateDto> {

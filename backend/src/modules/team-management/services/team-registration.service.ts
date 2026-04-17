@@ -251,11 +251,13 @@ export class TeamRegistrationService {
 
   /**
    * Full admin detail — CCCD number NOT masked; CCCD photo served via 1h
-   * presigned S3 URL. Admin username would normally be logged here for
-   * audit; wire that in once the auth module exposes the user payload in
-   * the service layer.
+   * presigned S3 URL. Every successful CCCD access is audit-logged with
+   * the admin identity per spec Danger Zone #5.
    */
-  async getDetail(id: number): Promise<RegistrationDetailDto> {
+  async getDetail(
+    id: number,
+    adminIdentity: string,
+  ): Promise<RegistrationDetailDto> {
     const reg = await this.regRepo.findOne({
       where: { id },
       relations: { role: true, event: true },
@@ -266,9 +268,13 @@ export class TeamRegistrationService {
     if (reg.cccd_photo_url) {
       try {
         cccdPhotoUrl = await this.photos.presignCccd(reg.cccd_photo_url, 3600);
+        // Audit log — never log the CCCD number itself, only the action.
+        this.logger.log(
+          `CCCD_ACCESS admin=${adminIdentity} reg=${id} event=${reg.event_id} role=${reg.role?.role_name ?? '?'}`,
+        );
       } catch (err) {
         this.logger.warn(
-          `Failed to presign CCCD reg=${id}: ${(err as Error).message}`,
+          `Failed to presign CCCD reg=${id} admin=${adminIdentity}: ${(err as Error).message}`,
         );
       }
     }

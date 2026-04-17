@@ -9,8 +9,10 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -56,6 +58,14 @@ import { TeamContractService } from './services/team-contract.service';
 import { TeamDashboardService } from './services/team-dashboard.service';
 import { TeamShirtService } from './services/team-shirt.service';
 import { TeamExportService } from './services/team-export.service';
+
+interface JwtRequest extends Request {
+  user?: { username?: string; email?: string; sub?: string };
+}
+
+function identifyAdmin(req: JwtRequest): string {
+  return req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
+}
 
 @ApiTags('Team Management (admin)')
 @ApiBearerAuth()
@@ -197,13 +207,14 @@ export class TeamManagementController {
   @Get('registrations/:id/detail')
   @ApiOperation({
     summary:
-      'Full personnel detail with presigned CCCD photo URL (1h). Unmasked form data.',
+      'Full personnel detail with presigned CCCD photo URL (1h). Unmasked form data. Access is audit-logged.',
   })
   @ApiResponse({ status: 200, type: RegistrationDetailDto })
   getDetail(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: JwtRequest,
   ): Promise<RegistrationDetailDto> {
-    return this.registrations.getDetail(id);
+    return this.registrations.getDetail(id, identifyAdmin(req));
   }
 
   @Post('registrations/bulk-update')
