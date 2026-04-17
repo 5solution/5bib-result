@@ -12,7 +12,9 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
-import sharp from 'sharp';
+// sharp is CJS with module.exports = fn. Without esModuleInterop our
+// default-import compiles to `sharp_1.default` → undefined at runtime.
+import sharp = require('sharp');
 import { env } from 'src/config';
 import type { PhotoType } from '../dto/upload-photo.dto';
 
