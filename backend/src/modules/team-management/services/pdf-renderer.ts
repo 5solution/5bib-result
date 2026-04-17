@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import puppeteer, { Browser } from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import sanitizeHtmlLib from 'sanitize-html';
 
 const logger = new Logger('PdfRenderer');
 
@@ -29,7 +30,24 @@ export async function htmlToPdfBuffer(html: string): Promise<Buffer> {
       headless: true,
     });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 30_000 });
+    // Block all subresource fetches to prevent SSRF via attacker template
+    // content (<img src="http://169.254.169.254/...">). Only the main
+    // document and embedded data: URLs are allowed through.
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const url = req.url();
+      const isMainFrameDoc =
+        req.resourceType() === 'document' && req.frame() === page.mainFrame();
+      const isDataUrl = url.startsWith('data:');
+      if (isMainFrameDoc || isDataUrl) {
+        void req.continue();
+      } else {
+        void req.abort();
+      }
+    });
+    // networkidle0 would wait for aborted requests — use 'load' since all
+    // subresources are blocked anyway.
+    await page.setContent(html, { waitUntil: 'load', timeout: 30_000 });
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -56,7 +74,14 @@ export async function docxToHtml(
   // Dynamic import because mammoth is CJS but we want lazy-load.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mammoth = require('mammoth') as typeof import('mammoth');
-  const result = await mammoth.convertToHtml({ buffer });
+  let result: Awaited<ReturnType<typeof mammoth.convertToHtml>>;
+  try {
+    result = await mammoth.convertToHtml({ buffer });
+  } catch (err) {
+    throw new Error(
+      `Invalid DOCX file: ${(err as Error).message || 'could not parse'}`,
+    );
+  }
   const sanitized = sanitizeHtml(result.value);
   return {
     html: sanitized,
@@ -81,15 +106,65 @@ export function renderTemplate(
 }
 
 /**
- * Strip `<script>` / `<style>` / inline event handlers from arbitrary HTML.
- * Contracts are user-uploaded so the admin can paste adversarial markup.
+ * Strip scripts, styles, on* handlers, and dangerous URL schemes from
+ * arbitrary HTML. Contracts come from admin input (paste or DOCX), which
+ * must be treated as semi-trusted — a compromised admin can otherwise
+ * plant XSS in the crew-facing contract preview.
+ *
+ * Allowlist approach via `sanitize-html`:
+ *   - tags: structural text + tables + imgs + basic formatting
+ *   - attributes: no `on*`, no `style` keyword URLs, no `srcset`
+ *   - URL schemes: http, https, mailto, tel, data: (images only)
  */
 export function sanitizeHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
-    .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '');
+  return sanitizeHtmlLib(html, {
+    allowedTags: [
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'p',
+      'span',
+      'div',
+      'br',
+      'hr',
+      'strong',
+      'em',
+      'b',
+      'i',
+      'u',
+      'a',
+      'ul',
+      'ol',
+      'li',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
+      'img',
+      'blockquote',
+      'pre',
+      'code',
+      'sub',
+      'sup',
+    ],
+    allowedAttributes: {
+      a: ['href', 'title', 'target'],
+      img: ['src', 'alt', 'width', 'height'],
+      '*': ['class'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto', 'tel'],
+    allowedSchemesByTag: {
+      img: ['http', 'https', 'data'],
+    },
+    allowProtocolRelative: false,
+    disallowedTagsMode: 'discard',
+    enforceHtmlBoundary: false,
+  });
 }
 
 function escapeHtml(s: string): string {
@@ -100,6 +175,8 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+export { escapeHtml };
 
 /**
  * Wrap rendered template HTML with the document shell (fonts, page margins,

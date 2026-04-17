@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -103,9 +104,19 @@ export class TeamContractTemplateController {
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ImportDocxResponseDto> {
     if (!file) {
-      throw new Error('file is required'); // caught by Nest → 400
+      throw new BadRequestException(
+        'file is required (multipart field name: "file")',
+      );
     }
-    const { content_html, warnings } = await this.contracts.importDocx(file.buffer);
-    return { content_html, warnings };
+    try {
+      const { content_html, warnings } = await this.contracts.importDocx(
+        file.buffer,
+      );
+      return { content_html, warnings };
+    } catch (err) {
+      throw new BadRequestException(
+        (err as Error).message || 'Could not parse DOCX',
+      );
+    }
   }
 }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -12,6 +13,8 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import { DataSource, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { env } from 'src/config';
@@ -54,7 +57,43 @@ export class TeamContractService {
     private readonly eventRepo: Repository<VolEvent>,
     private readonly s3: S3Client,
     private readonly mail: MailService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
+
+  private signLockKey(regId: number): string {
+    return `team:contract:signing:${regId}`;
+  }
+
+  /**
+   * Acquire a 60s Redis lock before doing expensive PDF work. If another
+   * request is already signing this registration we throw 409 — the single-
+   * use DB flag still protects against double-sign, but the lock stops N
+   * puppeteer instances from spinning up and blowing memory.
+   */
+  private async acquireSignLock(regId: number): Promise<string> {
+    const owner = crypto.randomBytes(16).toString('hex');
+    const ok = await this.redis.set(
+      this.signLockKey(regId),
+      owner,
+      'EX',
+      60,
+      'NX',
+    );
+    if (ok !== 'OK') {
+      throw new ConflictException('Another sign request is in progress. Try again shortly.');
+    }
+    return owner;
+  }
+
+  /** Release the lock only if we still own it (prevent stealing). */
+  private async releaseSignLock(regId: number, owner: string): Promise<void> {
+    const script = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
+    try {
+      await this.redis.eval(script, 1, this.signLockKey(regId), owner);
+    } catch (err) {
+      this.logger.warn(`Sign lock release failed reg=${regId}: ${(err as Error).message}`);
+    }
+  }
 
   // -------- Template CRUD (admin) --------
 
@@ -204,64 +243,73 @@ export class TeamContractService {
       throw new BadRequestException('confirmed_name does not match registration');
     }
 
-    const vars = this.buildPlaceholders(reg, role, event);
-    const body = renderTemplate(template.content_html, vars);
-    const pdfHtml = wrapContractDocument(body);
-    const pdfBuffer = await htmlToPdfBuffer(pdfHtml);
-    const hash = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
+    // Serialize concurrent sign requests so we don't launch N chromium
+    // instances for the same registration. The DB flag is still the
+    // canonical single-use gate below.
+    const lockOwner = await this.acquireSignLock(reg.id);
+    try {
+      const vars = this.buildPlaceholders(reg, role, event);
+      const body = renderTemplate(template.content_html, vars);
+      const pdfHtml = wrapContractDocument(body);
+      const pdfBuffer = await htmlToPdfBuffer(pdfHtml);
+      const hash = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
 
-    const key = `team-contracts/${event.id}/${reg.id}-${Date.now()}.pdf`;
-    await this.s3.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: pdfBuffer,
-        ContentType: 'application/pdf',
-      }),
-    );
-
-    const now = new Date();
-    // Atomic swap: only flip if not already used (single-use token).
-    const update = await this.dataSource.transaction(async (m) => {
-      return m
-        .getRepository(VolRegistration)
-        .createQueryBuilder()
-        .update()
-        .set({
-          contract_status: 'signed',
-          contract_signed_at: now,
-          contract_pdf_url: key,
-          contract_pdf_hash: hash,
-          contract_sign_token_used: true,
-        })
-        .where('id = :id', { id: reg.id })
-        .andWhere('contract_sign_token_used = :used', { used: false })
-        .execute();
-    });
-    if (update.affected === 0) {
-      throw new BadRequestException('Contract has already been signed');
-    }
-
-    this.logger.log(
-      `Contract signed reg=${reg.id} hash=${hash.slice(0, 12)}… ip=${clientIp ?? '?'}`,
-    );
-
-    const presignedPdf = await this.presignContract(key, 3600 * 24 * 7);
-    void this.mail
-      .sendTeamContractSigned({
-        toEmail: reg.email,
-        fullName: reg.full_name,
-        eventName: event.event_name,
-        roleName: role.role_name,
-        totalCompensation: formatVnd(Number(role.daily_rate) * role.working_days),
-        pdfBuffer,
-        pdfFilename: `contract-${event.event_name}-${reg.id}.pdf`,
-      })
-      .catch((err) =>
-        this.logger.warn(`sign email failed reg=${reg.id}: ${err.message}`),
+      const key = `team-contracts/${event.id}/${reg.id}-${Date.now()}.pdf`;
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: pdfBuffer,
+          ContentType: 'application/pdf',
+        }),
       );
 
-    return { success: true, pdf_url: presignedPdf, signed_at: now.toISOString() };
+      const now = new Date();
+      // Atomic swap: only flip if not already used (single-use token).
+      const update = await this.dataSource.transaction(async (m) => {
+        return m
+          .getRepository(VolRegistration)
+          .createQueryBuilder()
+          .update()
+          .set({
+            contract_status: 'signed',
+            contract_signed_at: now,
+            contract_pdf_url: key,
+            contract_pdf_hash: hash,
+            contract_sign_token_used: true,
+          })
+          .where('id = :id', { id: reg.id })
+          .andWhere('contract_sign_token_used = :used', { used: false })
+          .execute();
+      });
+      if (update.affected === 0) {
+        throw new BadRequestException('Contract has already been signed');
+      }
+
+      this.logger.log(
+        `Contract signed reg=${reg.id} hash=${hash.slice(0, 12)}… ip=${clientIp ?? '?'}`,
+      );
+
+      // 24h presigned URL — user can re-request from status page if expired.
+      const presignedPdf = await this.presignContract(key, 3600 * 24);
+      void this.mail
+        .sendTeamContractSigned({
+          toEmail: reg.email,
+          fullName: reg.full_name,
+          eventName: event.event_name,
+          roleName: role.role_name,
+          totalCompensation: formatVnd(Number(role.daily_rate) * role.working_days),
+          pdfBuffer,
+          pdfFilename: `contract-${event.event_name}-${reg.id}.pdf`,
+        })
+        .catch((err) =>
+          this.logger.warn(`sign email failed reg=${reg.id}: ${err.message}`),
+        );
+
+      return { success: true, pdf_url: presignedPdf, signed_at: now.toISOString() };
+    } finally {
+      await this.releaseSignLock(reg.id, lockOwner);
+    }
   }
 
   /**
@@ -309,30 +357,36 @@ export class TeamContractService {
       return { queued: 0, already_sent: alreadySent, skipped };
     }
 
-    const ids = notSent.map((r) => r.id);
-    await this.regRepo
-      .createQueryBuilder()
-      .update()
-      .set({ contract_status: 'sent' })
-      .whereInIds(ids)
-      .execute();
-
+    let queued = 0;
+    // Flip status PER registration only after the email resolves, so a
+    // crash mid-loop doesn't leave rows stuck at `sent` without the user
+    // ever receiving the email.
     for (const reg of notSent) {
       const magicLink = `${env.teamManagement.crewBaseUrl}/contract/${reg.magic_token}`;
-      void this.mail
-        .sendTeamContractSent({
+      try {
+        await this.mail.sendTeamContractSent({
           toEmail: reg.email,
           fullName: reg.full_name,
           eventName: event.event_name,
           roleName: role.role_name,
           magicLink,
-        })
-        .catch((err) =>
-          this.logger.warn(`send-contract email failed reg=${reg.id}: ${err.message}`),
+        });
+        await this.regRepo
+          .createQueryBuilder()
+          .update()
+          .set({ contract_status: 'sent' })
+          .where('id = :id', { id: reg.id })
+          .execute();
+        queued++;
+      } catch (err) {
+        this.logger.warn(
+          `send-contract email failed reg=${reg.id}: ${(err as Error).message}`,
         );
+        // leave contract_status as 'not_sent' so admin can retry
+      }
     }
 
-    return { queued: notSent.length, already_sent: alreadySent, skipped };
+    return { queued, already_sent: alreadySent, skipped };
   }
 }
 

@@ -66,10 +66,14 @@ export default async function ContractPage({
 function ContractPreview({ html }: { html: string }) {
   return (
     <section className="card overflow-x-auto">
+      {/* sandbox="" disables scripts, forms, popups, and same-origin access.
+          If any XSS payload slips past the backend sanitizer, it cannot
+          execute here or reach the crew.5bib.com origin. */}
       <iframe
         title="Xem hợp đồng"
         className="w-full"
         style={{ minHeight: "70vh", border: 0 }}
+        sandbox=""
         srcDoc={html}
       />
     </section>
