@@ -79,7 +79,7 @@ export interface CheckinResponse {
 
 // Server-side fetch — server components only.
 export async function listPublicEvents(): Promise<PublicEvent[]> {
-  const res = await fetch(`${BACKEND_URL}/public/team-events`, {
+  const res = await fetch(`${BACKEND_URL}/api/public/team-events`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Failed to load events: HTTP ${res.status}`);
@@ -87,7 +87,7 @@ export async function listPublicEvents(): Promise<PublicEvent[]> {
 }
 
 export async function getPublicEvent(id: number): Promise<PublicEvent> {
-  const res = await fetch(`${BACKEND_URL}/public/team-events/${id}`, {
+  const res = await fetch(`${BACKEND_URL}/api/public/team-events/${id}`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Failed to load event: HTTP ${res.status}`);
@@ -95,7 +95,7 @@ export async function getPublicEvent(id: number): Promise<PublicEvent> {
 }
 
 export async function getStatus(token: string): Promise<StatusResponse> {
-  const res = await fetch(`${BACKEND_URL}/public/team-status/${token}`, {
+  const res = await fetch(`${BACKEND_URL}/api/public/team-status/${token}`, {
     cache: "no-store",
   });
   if (!res.ok) {
@@ -106,7 +106,7 @@ export async function getStatus(token: string): Promise<StatusResponse> {
 }
 
 export async function getContract(token: string): Promise<ContractView> {
-  const res = await fetch(`${BACKEND_URL}/public/team-contract/${token}`, {
+  const res = await fetch(`${BACKEND_URL}/api/public/team-contract/${token}`, {
     cache: "no-store",
   });
   if (!res.ok) {
