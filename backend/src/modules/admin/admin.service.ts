@@ -29,7 +29,9 @@ export class AdminService {
    * Force-sync a specific course
    */
   async forceSync(raceId: string, courseId: string) {
-    const raceResult = await this.racesService.getRaceById(raceId);
+    // Admin caller: pass isPrivileged=true so courses[].apiUrl is NOT stripped
+    // (stripRacePrivateFields would remove apiUrl/apiFormat/importStatus for public consumers).
+    const raceResult = await this.racesService.getRaceById(raceId, true);
     if (!raceResult.data) {
       throw new NotFoundException('Race not found');
     }
@@ -114,7 +116,8 @@ export class AdminService {
     if (claim.email) {
       let eventTitle = '';
       try {
-        const race = await this.racesService.getRaceById(claim.raceId);
+        // Admin context — use privileged read to access draft/hidden races too
+        const race = await this.racesService.getRaceById(claim.raceId, true);
         eventTitle = race?.data?.title || '';
       } catch { /* ignore */ }
 
