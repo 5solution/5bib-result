@@ -35,9 +35,27 @@ import {
   SendContractsDto,
   SendContractsResponseDto,
 } from './dto/sign-contract.dto';
+import {
+  BulkUpdateRegistrationsDto,
+  BulkUpdateResponseDto,
+  ExportResponseDto,
+} from './dto/bulk-update.dto';
+import { RegistrationDetailDto } from './dto/registration-detail.dto';
+import {
+  DashboardQueryDto,
+  DashboardResponseDto,
+} from './dto/dashboard.dto';
+import {
+  ShirtAggregateDto,
+  UpsertShirtStockDto,
+} from './dto/shirt-stock.dto';
+import { VolShirtStock } from './entities/vol-shirt-stock.entity';
 import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamContractService } from './services/team-contract.service';
+import { TeamDashboardService } from './services/team-dashboard.service';
+import { TeamShirtService } from './services/team-shirt.service';
+import { TeamExportService } from './services/team-export.service';
 
 @ApiTags('Team Management (admin)')
 @ApiBearerAuth()
@@ -48,6 +66,9 @@ export class TeamManagementController {
     private readonly events: TeamEventService,
     private readonly registrations: TeamRegistrationService,
     private readonly contracts: TeamContractService,
+    private readonly dashboard: TeamDashboardService,
+    private readonly shirts: TeamShirtService,
+    private readonly exports: TeamExportService,
   ) {}
 
   // -------- Events --------
@@ -171,5 +192,84 @@ export class TeamManagementController {
     @Body() dto: UpdateRegistrationDto,
   ): Promise<VolRegistration> {
     return this.registrations.updateRegistration(id, dto);
+  }
+
+  @Get('registrations/:id/detail')
+  @ApiOperation({
+    summary:
+      'Full personnel detail with presigned CCCD photo URL (1h). Unmasked form data.',
+  })
+  @ApiResponse({ status: 200, type: RegistrationDetailDto })
+  getDetail(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<RegistrationDetailDto> {
+    return this.registrations.getDetail(id);
+  }
+
+  @Post('registrations/bulk-update')
+  @ApiOperation({ summary: 'Apply approve/reject/cancel to many registrations' })
+  @ApiResponse({ status: 201, type: BulkUpdateResponseDto })
+  bulkUpdate(
+    @Body() dto: BulkUpdateRegistrationsDto,
+  ): Promise<BulkUpdateResponseDto> {
+    return this.registrations.bulkUpdate(dto);
+  }
+
+  // -------- Dashboard --------
+
+  @Get('events/:id/dashboard')
+  @ApiOperation({
+    summary: '1-call dashboard aggregate (KPI + headcount + shirt + people)',
+  })
+  @ApiResponse({ status: 200, type: DashboardResponseDto })
+  getDashboard(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: DashboardQueryDto,
+  ): Promise<DashboardResponseDto> {
+    return this.dashboard.getDashboard(id, query);
+  }
+
+  // -------- Shirt stock --------
+
+  @Get('events/:id/shirt-stock')
+  @ApiOperation({ summary: 'List shirt stock rows for event' })
+  @ApiResponse({ status: 200, type: [VolShirtStock] })
+  listShirtStock(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<VolShirtStock[]> {
+    return this.shirts.listStock(id);
+  }
+
+  @Put('events/:id/shirt-stock')
+  @ApiOperation({ summary: 'Upsert shirt stock rows (by size)' })
+  upsertShirtStock(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpsertShirtStockDto,
+  ): Promise<{ updated: number }> {
+    return this.shirts.upsertStock(id, dto);
+  }
+
+  @Get('events/:id/shirt-aggregate')
+  @ApiOperation({
+    summary: 'Registered-vs-stock aggregate per shirt size',
+  })
+  @ApiResponse({ status: 200, type: ShirtAggregateDto })
+  shirtAggregate(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ShirtAggregateDto> {
+    return this.shirts.aggregate(id);
+  }
+
+  // -------- Export --------
+
+  @Get('events/:id/export')
+  @ApiOperation({
+    summary: 'Generate payment-report .xlsx and return 10-min presigned URL',
+  })
+  @ApiResponse({ status: 200, type: ExportResponseDto })
+  exportReport(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ExportResponseDto> {
+    return this.exports.exportPaymentReport(id);
   }
 }

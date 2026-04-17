@@ -357,32 +357,45 @@ export class TeamContractService {
       return { queued: 0, already_sent: alreadySent, skipped };
     }
 
-    let queued = 0;
+    // Bounded concurrency: process in chunks of 5 concurrent email sends.
+    // Avoids hammering Mailchimp + keeps the HTTP response under 30s even
+    // for 100-reg batches (each chunk ≈ 1-2s, 100/5 = 20 chunks ≈ ≤40s).
     // Flip status PER registration only after the email resolves, so a
     // crash mid-loop doesn't leave rows stuck at `sent` without the user
     // ever receiving the email.
-    for (const reg of notSent) {
-      const magicLink = `${env.teamManagement.crewBaseUrl}/contract/${reg.magic_token}`;
-      try {
-        await this.mail.sendTeamContractSent({
-          toEmail: reg.email,
-          fullName: reg.full_name,
-          eventName: event.event_name,
-          roleName: role.role_name,
-          magicLink,
-        });
-        await this.regRepo
-          .createQueryBuilder()
-          .update()
-          .set({ contract_status: 'sent' })
-          .where('id = :id', { id: reg.id })
-          .execute();
-        queued++;
-      } catch (err) {
-        this.logger.warn(
-          `send-contract email failed reg=${reg.id}: ${(err as Error).message}`,
-        );
-        // leave contract_status as 'not_sent' so admin can retry
+    const CONCURRENCY = 5;
+    let queued = 0;
+    for (let i = 0; i < notSent.length; i += CONCURRENCY) {
+      const chunk = notSent.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        chunk.map(async (reg) => {
+          const magicLink = `${env.teamManagement.crewBaseUrl}/contract/${reg.magic_token}`;
+          await this.mail.sendTeamContractSent({
+            toEmail: reg.email,
+            fullName: reg.full_name,
+            eventName: event.event_name,
+            roleName: role.role_name,
+            magicLink,
+          });
+          await this.regRepo
+            .createQueryBuilder()
+            .update()
+            .set({ contract_status: 'sent' })
+            .where('id = :id', { id: reg.id })
+            .execute();
+          return reg.id;
+        }),
+      );
+      for (let j = 0; j < results.length; j++) {
+        const r = results[j];
+        if (r.status === 'fulfilled') {
+          queued++;
+        } else {
+          this.logger.warn(
+            `send-contract email failed reg=${chunk[j].id}: ${(r.reason as Error).message}`,
+          );
+          // leave contract_status as 'not_sent' so admin can retry
+        }
       }
     }
 

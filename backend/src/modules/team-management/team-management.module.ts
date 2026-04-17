@@ -15,6 +15,9 @@ import { TeamCacheService } from './services/team-cache.service';
 import { TeamContractService } from './services/team-contract.service';
 import { TeamCheckinService } from './services/team-checkin.service';
 import { TeamReminderService } from './services/team-reminder.service';
+import { TeamShirtService } from './services/team-shirt.service';
+import { TeamDashboardService } from './services/team-dashboard.service';
+import { TeamExportService } from './services/team-export.service';
 import { TeamManagementController } from './team-management.controller';
 import { TeamRegistrationController } from './team-registration.controller';
 import { TeamContractTemplateController } from './team-contract-template.controller';
@@ -48,6 +51,9 @@ import { env } from 'src/config';
     TeamContractService,
     TeamCheckinService,
     TeamReminderService,
+    TeamShirtService,
+    TeamDashboardService,
+    TeamExportService,
     s3ClientProvider,
     // Make every route within this module subject to @Throttle decorators.
     // Without this provider the @Throttle calls on public endpoints are no-ops.

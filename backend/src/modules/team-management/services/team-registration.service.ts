@@ -38,7 +38,13 @@ import {
   RegistrationListRowDto,
 } from '../dto/registration-row.dto';
 import { UpdateRegistrationDto } from '../dto/update-registration.dto';
+import {
+  BulkUpdateRegistrationsDto,
+  BulkUpdateResponseDto,
+} from '../dto/bulk-update.dto';
+import { RegistrationDetailDto } from '../dto/registration-detail.dto';
 import { TeamCacheService } from './team-cache.service';
+import { TeamPhotoService } from './team-photo.service';
 
 const VALID_SHIRT_SIZES: ShirtSize[] = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
@@ -56,6 +62,7 @@ export class TeamRegistrationService {
     private readonly eventRepo: Repository<VolEvent>,
     private readonly cache: TeamCacheService,
     private readonly mail: MailService,
+    private readonly photos: TeamPhotoService,
   ) {}
 
   /**
@@ -240,6 +247,96 @@ export class TeamRegistrationService {
     }
     const [rows, total] = await qb.getManyAndCount();
     return { data: rows.map((r) => this.toListRow(r)), total };
+  }
+
+  /**
+   * Full admin detail — CCCD number NOT masked; CCCD photo served via 1h
+   * presigned S3 URL. Admin username would normally be logged here for
+   * audit; wire that in once the auth module exposes the user payload in
+   * the service layer.
+   */
+  async getDetail(id: number): Promise<RegistrationDetailDto> {
+    const reg = await this.regRepo.findOne({
+      where: { id },
+      relations: { role: true, event: true },
+    });
+    if (!reg) throw new NotFoundException('Registration not found');
+
+    let cccdPhotoUrl: string | null = null;
+    if (reg.cccd_photo_url) {
+      try {
+        cccdPhotoUrl = await this.photos.presignCccd(reg.cccd_photo_url, 3600);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to presign CCCD reg=${id}: ${(err as Error).message}`,
+        );
+      }
+    }
+    return {
+      id: reg.id,
+      role_id: reg.role_id,
+      role_name: reg.role?.role_name ?? '',
+      event_id: reg.event_id,
+      event_name: reg.event?.event_name ?? '',
+      full_name: reg.full_name,
+      email: reg.email,
+      phone: reg.phone,
+      shirt_size: reg.shirt_size,
+      avatar_photo_url: reg.avatar_photo_url,
+      cccd_photo_url: cccdPhotoUrl,
+      form_data: reg.form_data,
+      status: reg.status,
+      waitlist_position: reg.waitlist_position,
+      checked_in_at: reg.checked_in_at ? reg.checked_in_at.toISOString() : null,
+      checkin_method: reg.checkin_method,
+      contract_status: reg.contract_status,
+      contract_signed_at: reg.contract_signed_at
+        ? reg.contract_signed_at.toISOString()
+        : null,
+      contract_pdf_url: reg.contract_pdf_url,
+      actual_working_days: reg.actual_working_days,
+      actual_compensation: reg.actual_compensation,
+      payment_status: reg.payment_status,
+      notes: reg.notes,
+      created_at: reg.created_at.toISOString(),
+    };
+  }
+
+  /**
+   * Apply the same transition to a batch of registrations. Per-registration
+   * transaction so one failure doesn't poison the whole batch.
+   * Maximum 200 ids (enforced in DTO).
+   */
+  async bulkUpdate(
+    dto: BulkUpdateRegistrationsDto,
+  ): Promise<BulkUpdateResponseDto> {
+    let updated = 0;
+    let skipped = 0;
+    const failed: number[] = [];
+    for (const id of dto.ids) {
+      try {
+        const before = await this.regRepo.findOne({ where: { id } });
+        if (!before) {
+          failed.push(id);
+          continue;
+        }
+        if (before.status === dto.status) {
+          skipped++;
+          continue;
+        }
+        await this.updateRegistration(id, {
+          status: dto.status,
+          notes: dto.notes,
+        });
+        updated++;
+      } catch (err) {
+        this.logger.warn(
+          `Bulk update failed id=${id}: ${(err as Error).message}`,
+        );
+        failed.push(id);
+      }
+    }
+    return { updated, skipped, failed_ids: failed };
   }
 
   private toListRow(r: VolRegistration): RegistrationListRowDto {
