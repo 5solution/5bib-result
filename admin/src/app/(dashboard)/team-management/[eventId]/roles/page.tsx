@@ -9,9 +9,11 @@ import {
   createTeamRole,
   deleteTeamRole,
   sendContracts,
+  listContractTemplates,
   DEFAULT_FORM_FIELDS,
   type TeamRole,
   type CreateRoleInput,
+  type ContractTemplate,
 } from "@/lib/team-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,7 +211,18 @@ function CreateRoleDialog({
     form_fields: DEFAULT_FORM_FIELDS,
     sort_order: 0,
   });
+  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!token || !open) return;
+    listContractTemplates(token)
+      .then(setTemplates)
+      .catch((err) => {
+        // non-fatal — role can be created without template, contract flow just won't work
+        console.warn("Failed to load templates:", (err as Error).message);
+      });
+  }, [token, open]);
 
   async function handleSubmit(): Promise<void> {
     if (!token) return;
@@ -312,6 +325,33 @@ function CreateRoleDialog({
                 setForm({ ...form, sort_order: Number(e.target.value) || 0 })
               }
             />
+          </div>
+          <div>
+            <Label>Mẫu hợp đồng</Label>
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={form.contract_template_id ?? ""}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  contract_template_id: e.target.value
+                    ? Number(e.target.value)
+                    : undefined,
+                })
+              }
+            >
+              <option value="">— Không gán (sẽ không gửi HĐ được) —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.template_name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              {templates.length === 0
+                ? "Chưa có template nào. Tạo tại trang Mẫu hợp đồng."
+                : "Chọn template để dùng khi gửi HĐ hàng loạt cho role này."}
+            </p>
           </div>
           <p className="text-xs text-muted-foreground">
             Form đăng ký đang dùng {DEFAULT_FORM_FIELDS.length} field mặc định (CCCD, ngày sinh,

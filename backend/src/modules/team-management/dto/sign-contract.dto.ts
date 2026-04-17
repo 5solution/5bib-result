@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class SignContractDto {
   @ApiProperty({ description: 'Must match registration.full_name (case/space-insensitive)' })
@@ -34,6 +34,8 @@ export class SignContractResponseDto {
 
 export class SendContractsDto {
   @ApiProperty({ default: false, required: false })
+  @IsBoolean()
+  @IsOptional()
   dry_run?: boolean;
 }
 

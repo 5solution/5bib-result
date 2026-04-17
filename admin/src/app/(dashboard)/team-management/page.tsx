@@ -8,6 +8,7 @@ import {
   listTeamEvents,
   createTeamEvent,
   deleteTeamEvent,
+  updateTeamEvent,
   type TeamEvent,
   type CreateEventInput,
 } from "@/lib/team-api";
@@ -88,6 +89,27 @@ export default function TeamManagementPage(): React.ReactElement {
     }
   }
 
+  async function changeStatus(
+    id: number,
+    next: "draft" | "open" | "closed" | "completed",
+  ): Promise<void> {
+    if (!token) return;
+    const labels: Record<typeof next, string> = {
+      draft: "Nháp",
+      open: "Mở đăng ký",
+      closed: "Đóng đăng ký",
+      completed: "Hoàn tất",
+    };
+    if (!confirm(`Chuyển sang trạng thái "${labels[next]}"?`)) return;
+    try {
+      await updateTeamEvent(token, id, { status: next });
+      toast.success(`Đã chuyển sang ${labels[next]}`);
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
 
   return (
@@ -155,7 +177,40 @@ export default function TeamManagementPage(): React.ReactElement {
                   <TableCell className="text-sm text-muted-foreground">
                     {e.location ?? "—"}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right space-x-1">
+                    {e.status === "draft" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          void changeStatus(e.id, "open");
+                        }}
+                      >
+                        Mở ĐK
+                      </Button>
+                    ) : null}
+                    {e.status === "open" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          void changeStatus(e.id, "closed");
+                        }}
+                      >
+                        Đóng
+                      </Button>
+                    ) : null}
+                    {e.status === "closed" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          void changeStatus(e.id, "completed");
+                        }}
+                      >
+                        Hoàn tất
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
                       variant="ghost"

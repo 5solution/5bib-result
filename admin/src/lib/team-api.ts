@@ -80,6 +80,7 @@ export interface CreateRoleInput {
   working_days: number;
   form_fields: FormFieldConfig[];
   sort_order: number;
+  contract_template_id?: number;
 }
 
 function authedHeaders(token: string): HeadersInit {
@@ -137,6 +138,20 @@ export async function deleteTeamEvent(token: string, id: number): Promise<void> 
     headers: authedHeaders(token),
   });
   await assertOk(res);
+}
+
+export async function updateTeamEvent(
+  token: string,
+  id: number,
+  patch: Partial<CreateEventInput & { status: "draft" | "open" | "closed" | "completed" }>,
+): Promise<TeamEvent> {
+  const res = await fetch(`/api/team-management/events/${id}`, {
+    method: "PUT",
+    headers: authedHeaders(token),
+    body: JSON.stringify(patch),
+  });
+  await assertOk(res);
+  return res.json();
 }
 
 export async function listTeamRoles(

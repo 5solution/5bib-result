@@ -107,6 +107,11 @@ export class TeamExportService {
 
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
     const key = `team-exports/${eventId}-${Date.now()}.xlsx`;
+    // AWS SDK v3 header signing requires ASCII — Vietnamese chars in the
+    // filename break the signature. Use an ASCII-safe slug for the classic
+    // `filename=` and the RFC 5987 `filename*=` for the original UTF-8 name.
+    const asciiName = asciiSlug(event.event_name) || `event-${event.id}`;
+    const utf8Name = encodeURIComponent(`payment-report-${event.event_name}.xlsx`);
     await this.s3.send(
       new PutObjectCommand({
         Bucket: this.bucket,
@@ -114,7 +119,7 @@ export class TeamExportService {
         Body: buffer,
         ContentType:
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ContentDisposition: `attachment; filename="payment-report-${event.event_name}.xlsx"`,
+        ContentDisposition: `attachment; filename="payment-report-${asciiName}.xlsx"; filename*=UTF-8''${utf8Name}`,
       }),
     );
     const url = await getSignedUrl(
@@ -127,4 +132,20 @@ export class TeamExportService {
     );
     return { download_url: url, row_count: regs.length };
   }
+}
+
+/**
+ * Strip diacritics (Vietnamese → ASCII) and drop anything outside [a-z0-9-_]
+ * so the value is safe in an HTTP `filename=` token.
+ */
+function asciiSlug(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
 }

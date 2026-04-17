@@ -1,10 +1,17 @@
 import { Logger } from '@nestjs/common';
 import puppeteer, { Browser } from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
-// sanitize-html is CJS with `module.exports = fn`. Without esModuleInterop
-// in tsconfig, `import sanitizeHtml from 'sanitize-html'` compiles to
-// `.default` which is undefined → "not a function" at runtime. Use
-// `import =` (CJS-native) to get the callable directly.
+// CJS packages whose `module.exports` is the callable/class itself cannot
+// be default-imported in our tsconfig (no esModuleInterop). `import =
+// require` works for libs that also publish CJS-flavoured types, but
+// `@sparticuz/chromium` ships an ESM-only `.d.ts` that TypeScript resolves
+// to a namespace with `{ default: Chromium }`. At runtime `require(...)`
+// returns the class directly (no `.default`). We reach for the untyped
+// `require` and apply our own shape — matches the static methods we use.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const chromium: {
+  executablePath: (input?: string) => Promise<string>;
+  args: string[];
+} = require('@sparticuz/chromium');
 import sanitizeHtmlLib = require('sanitize-html');
 
 const logger = new Logger('PdfRenderer');
@@ -28,8 +35,15 @@ export async function htmlToPdfBuffer(html: string): Promise<Buffer> {
   const executablePath = await resolveExecutablePath();
   let browser: Browser | null = null;
   try {
+    // When CHROMIUM_PATH points to a system Chrome (macOS dev), the
+    // Lambda-tailored args from @sparticuz/chromium crash it with
+    // "Target closed". Use a minimal arg set in that case.
+    const usingSystemChrome = !!process.env.CHROMIUM_PATH;
+    const args = usingSystemChrome
+      ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      : chromium.args;
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args,
       executablePath,
       headless: true,
     });
