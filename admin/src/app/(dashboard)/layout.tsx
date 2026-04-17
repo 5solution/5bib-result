@@ -24,6 +24,7 @@ import {
   Store,
   ReceiptText,
   BarChart2,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
@@ -35,6 +36,7 @@ const navItems = [
   { href: "/reconciliations", label: "Đối soát", icon: ReceiptText },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/sponsors", label: "Nhà tài trợ", icon: Handshake },
+  { href: "/team-management", label: "Quản lý nhân sự", icon: Users },
   { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
   { href: "/claims", label: "Khiếu nại", icon: FileWarning },
 ];
