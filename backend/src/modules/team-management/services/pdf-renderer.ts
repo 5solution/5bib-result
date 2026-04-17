@@ -1,7 +1,11 @@
 import { Logger } from '@nestjs/common';
 import puppeteer, { Browser } from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import sanitizeHtmlLib from 'sanitize-html';
+// sanitize-html is CJS with `module.exports = fn`. Without esModuleInterop
+// in tsconfig, `import sanitizeHtml from 'sanitize-html'` compiles to
+// `.default` which is undefined → "not a function" at runtime. Use
+// `import =` (CJS-native) to get the callable directly.
+import sanitizeHtmlLib = require('sanitize-html');
 
 const logger = new Logger('PdfRenderer');
 

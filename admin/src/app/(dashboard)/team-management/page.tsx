@@ -203,14 +203,29 @@ function CreateEventDialog({
       toast.error("Vui lòng điền đủ thông tin bắt buộc");
       return;
     }
+    if (new Date(form.event_end_date) < new Date(form.event_start_date)) {
+      toast.error("Ngày kết thúc phải sau ngày bắt đầu");
+      return;
+    }
     setSaving(true);
     try {
+      // <input type="datetime-local"> yields "YYYY-MM-DDTHH:mm" (no seconds,
+      // no timezone). Backend uses @IsISO8601 strict → must normalize to
+      // a real ISO8601 string with seconds + timezone.
+      const toIso = (v: string): string => {
+        if (!v) return "";
+        const d = new Date(v);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toISOString();
+      };
+      const regOpen = toIso(form.registration_open) || new Date().toISOString();
+      const regClose =
+        toIso(form.registration_close) ||
+        new Date(`${form.event_start_date}T00:00:00`).toISOString();
       await createTeamEvent(token, {
         ...form,
-        registration_open: form.registration_open || new Date().toISOString(),
-        registration_close:
-          form.registration_close ||
-          new Date(form.event_start_date).toISOString(),
+        registration_open: regOpen,
+        registration_close: regClose,
       });
       toast.success("Đã tạo sự kiện");
       onCreated();
