@@ -62,6 +62,21 @@ export interface RegisterResponse {
   magic_link: string;
 }
 
+export interface ContractView {
+  html_content: string;
+  already_signed: boolean;
+  signed_at: string | null;
+  pdf_url: string | null;
+}
+
+export interface CheckinResponse {
+  success: true;
+  full_name: string;
+  role_name: string;
+  checked_in_at: string;
+  method: "qr_scan" | "gps_verify";
+}
+
 // Server-side fetch — server components only.
 export async function listPublicEvents(): Promise<PublicEvent[]> {
   const res = await fetch(`${BACKEND_URL}/public/team-events`, {
@@ -88,4 +103,15 @@ export async function getStatus(token: string): Promise<StatusResponse> {
     throw new Error(body?.message ?? `HTTP ${res.status}`);
   }
   return res.json() as Promise<StatusResponse>;
+}
+
+export async function getContract(token: string): Promise<ContractView> {
+  const res = await fetch(`${BACKEND_URL}/public/team-contract/${token}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<ContractView>;
 }

@@ -173,6 +173,103 @@ export async function deleteTeamRole(token: string, id: number): Promise<void> {
   await assertOk(res);
 }
 
+export interface ContractTemplate {
+  id: number;
+  template_name: string;
+  content_html: string;
+  variables: string[];
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listContractTemplates(token: string): Promise<ContractTemplate[]> {
+  const res = await fetch("/api/team-management/contract-templates", {
+    headers: authedHeaders(token),
+    cache: "no-store",
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function createContractTemplate(
+  token: string,
+  input: {
+    template_name: string;
+    content_html: string;
+    variables: string[];
+    is_active?: boolean;
+  },
+): Promise<ContractTemplate> {
+  const res = await fetch("/api/team-management/contract-templates", {
+    method: "POST",
+    headers: authedHeaders(token),
+    body: JSON.stringify(input),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateContractTemplate(
+  token: string,
+  id: number,
+  input: Partial<{
+    template_name: string;
+    content_html: string;
+    variables: string[];
+    is_active: boolean;
+  }>,
+): Promise<ContractTemplate> {
+  const res = await fetch(`/api/team-management/contract-templates/${id}`, {
+    method: "PUT",
+    headers: authedHeaders(token),
+    body: JSON.stringify(input),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function deleteContractTemplate(token: string, id: number): Promise<void> {
+  const res = await fetch(`/api/team-management/contract-templates/${id}`, {
+    method: "DELETE",
+    headers: authedHeaders(token),
+  });
+  await assertOk(res);
+}
+
+export async function importDocxToHtml(
+  token: string,
+  file: File,
+): Promise<{ content_html: string; warnings: string[] }> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch("/api/team-management/contract-templates/import-docx", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function sendContracts(
+  token: string,
+  roleId: number,
+  dryRun = false,
+): Promise<{ queued: number; already_sent: number; skipped: number }> {
+  const res = await fetch(
+    `/api/team-management/roles/${roleId}/send-contracts`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ dry_run: dryRun }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
 export const DEFAULT_FORM_FIELDS: FormFieldConfig[] = [
   { key: "cccd", label: "Số CCCD/CMND", type: "text", required: true },
   { key: "dob", label: "Ngày sinh", type: "date", required: true },

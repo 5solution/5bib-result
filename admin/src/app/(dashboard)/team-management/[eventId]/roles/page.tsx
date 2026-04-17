@@ -8,6 +8,7 @@ import {
   listTeamRoles,
   createTeamRole,
   deleteTeamRole,
+  sendContracts,
   DEFAULT_FORM_FIELDS,
   type TeamRole,
   type CreateRoleInput,
@@ -33,7 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Send } from "lucide-react";
 import { toast } from "sonner";
 
 export default function RolesPage(): React.ReactElement {
@@ -76,6 +77,21 @@ export default function RolesPage(): React.ReactElement {
     }
   }
 
+  async function handleSendContracts(roleId: number): Promise<void> {
+    if (!token) return;
+    try {
+      const preview = await sendContracts(token, roleId, true);
+      const ok = confirm(
+        `Sẽ gửi HĐ cho ${preview.queued} người (đã gửi: ${preview.already_sent}, skip: ${preview.skipped}). Xác nhận?`,
+      );
+      if (!ok) return;
+      const result = await sendContracts(token, roleId, false);
+      toast.success(`Đã gửi ${result.queued} hợp đồng`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
 
   return (
@@ -88,6 +104,11 @@ export default function RolesPage(): React.ReactElement {
         </Link>
         <h1 className="text-2xl font-bold tracking-tight">Vai trò — Sự kiện #{eventId}</h1>
         <div className="flex-1" />
+        <Link href="/team-management/contract-templates">
+          <Button variant="outline" size="sm">
+            Mẫu hợp đồng
+          </Button>
+        </Link>
         <CreateRoleDialog
           eventId={eventId}
           open={createOpen}
@@ -136,7 +157,17 @@ export default function RolesPage(): React.ReactElement {
                   </TableCell>
                   <TableCell>{r.waitlist_enabled ? "Có" : "—"}</TableCell>
                   <TableCell>{r.sort_order}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right space-x-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Gửi hợp đồng hàng loạt"
+                      onClick={() => {
+                        void handleSendContracts(r.id);
+                      }}
+                    >
+                      <Send className="size-4" />
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
