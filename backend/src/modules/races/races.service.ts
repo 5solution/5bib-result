@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, isValidObjectId } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
@@ -406,7 +406,12 @@ export class RacesService {
       return { data: payload, success: true };
     }
 
-    const race = await this.raceModel.findOne({ slug }).lean().exec();
+    // Primary: look up by slug. Fallback: look up by ObjectId so that URLs using
+    // the raw _id (e.g. from admin links on migrated races without a slug) still resolve.
+    let race = await this.raceModel.findOne({ slug }).lean().exec();
+    if (!race && isValidObjectId(slug)) {
+      race = await this.raceModel.findById(slug).lean().exec();
+    }
 
     if (!race || (!isPrivileged && race.status === 'draft')) {
       return { data: null, success: false, message: 'Race not found' };
