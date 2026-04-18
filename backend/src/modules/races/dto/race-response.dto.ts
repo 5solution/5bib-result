@@ -16,9 +16,9 @@ export class RaceCourseDto {
   @ApiPropertyOptional() apiFormat?: string;
   @ApiPropertyOptional() imageUrl?: string;
   @ApiPropertyOptional({ example: 500 }) elevationGain?: number;
-  @ApiPropertyOptional({ example: '05:00' }) startTime?: string;
+  @ApiPropertyOptional({ example: '2026-03-07T06:00' }) startTime?: string;
   @ApiPropertyOptional({ example: 'Quảng trường Lâm Viên' }) startLocation?: string;
-  @ApiPropertyOptional({ example: '12:00:00' }) cutOffTime?: string;
+  @ApiPropertyOptional({ example: '2026-03-07T13:00' }) cutOffTime?: string;
   @ApiPropertyOptional() mapUrl?: string;
   @ApiPropertyOptional() gpxUrl?: string;
   @ApiProperty({ type: [CourseCheckpointDto] }) checkpoints: CourseCheckpointDto[];

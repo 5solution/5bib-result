@@ -12,6 +12,13 @@ import { raceResultControllerGetRaceResults, raceResultControllerGetCourseStats 
 
 const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
 
+function formatCourseTime(value?: string): string {
+  if (!value) return '-';
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (m) return `${m[4]}:${m[5]} - ${m[3]}/${m[2]}/${m[1]}`;
+  return value;
+}
+
 interface Course {
   id: string;
   distance: string;
@@ -452,11 +459,11 @@ export default function RaceDetailPage() {
                       <div className="grid grid-cols-3 gap-4 mt-4">
                         <div>
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.startTime')}</p>
-                          <p className="text-lg font-bold text-slate-900">{course.startTime || '-'}</p>
+                          <p className="text-lg font-bold text-slate-900">{formatCourseTime(course.startTime)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">COT</p>
-                          <p className="text-lg font-bold text-slate-900">{course.cutOffTime || '-'}</p>
+                          <p className="text-lg font-bold text-slate-900">{formatCourseTime(course.cutOffTime)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-slate-400 uppercase tracking-wide">{t('race.elevation')}</p>
@@ -523,7 +530,7 @@ export default function RaceDetailPage() {
                             </div>
                             <div>
                               <p className="text-[10px] text-slate-400 uppercase">{t('race.startTime')}</p>
-                              <p className="text-sm font-bold text-slate-800">{course.startTime}</p>
+                              <p className="text-sm font-bold text-slate-800">{formatCourseTime(course.startTime)}</p>
                             </div>
                           </div>
                         )}
@@ -534,7 +541,7 @@ export default function RaceDetailPage() {
                             </div>
                             <div>
                               <p className="text-[10px] text-slate-400 uppercase">{t('race.cutOffTime')}</p>
-                              <p className="text-sm font-bold text-slate-800">{course.cutOffTime}</p>
+                              <p className="text-sm font-bold text-slate-800">{formatCourseTime(course.cutOffTime)}</p>
                             </div>
                           </div>
                         )}

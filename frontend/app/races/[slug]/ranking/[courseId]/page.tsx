@@ -13,6 +13,15 @@ import LiveTimer from '@/components/LiveTimer';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults, useCourseStats } from '@/lib/api-hooks';
 
+/* ─── Helpers ─── */
+
+function formatCourseTime(value?: string): string {
+  if (!value) return '-';
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (m) return `${m[4]}:${m[5]} - ${m[3]}/${m[2]}/${m[1]}`;
+  return value;
+}
+
 /* ─── Types ─── */
 
 interface Course {
@@ -329,9 +338,9 @@ export default function CourseRankingPage() {
 
   const infoItems = [
     { label: t('race.startLocation'), value: course.startLocation || race.location },
-    { label: t('race.startTime'), value: course.startTime || '05:00' },
+    { label: t('race.startTime'), value: formatCourseTime(course.startTime) },
     { label: t('race.distance'), value: `${course.distanceKm || '-'} KM` },
-    ...(course.cutOffTime ? [{ label: 'COT', value: course.cutOffTime }] : []),
+    ...(course.cutOffTime ? [{ label: 'COT', value: formatCourseTime(course.cutOffTime) }] : []),
     ...(course.elevation ? [{ label: t('race.totalElevation'), value: course.elevation }] : []),
   ];
 

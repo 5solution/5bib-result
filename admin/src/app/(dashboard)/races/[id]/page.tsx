@@ -1213,11 +1213,11 @@ export default function RaceDetailPage() {
                           />
                         </div>
                         <div className="flex flex-col gap-2">
-                          <Label className="flex items-center gap-1.5"><Clock className="size-3.5" /> Giờ xuất phát</Label>
+                          <Label className="flex items-center gap-1.5"><Clock className="size-3.5" /> Thời gian xuất phát</Label>
                           <Input
+                            type="datetime-local"
                             value={courseForm.startTime ?? ""}
                             onChange={(e) => setCourseForm((p: any) => ({ ...p, startTime: e.target.value }))}
-                            placeholder="05:00"
                           />
                         </div>
                       </div>
@@ -1233,9 +1233,9 @@ export default function RaceDetailPage() {
                         <div className="flex flex-col gap-2">
                           <Label className="flex items-center gap-1.5"><Clock className="size-3.5" /> Cut-off time (COT)</Label>
                           <Input
+                            type="datetime-local"
                             value={courseForm.cutOffTime ?? ""}
                             onChange={(e) => setCourseForm((p: any) => ({ ...p, cutOffTime: e.target.value }))}
-                            placeholder="12:00:00"
                           />
                         </div>
                       </div>
@@ -1421,7 +1421,7 @@ export default function RaceDetailPage() {
                           {course.distance || "-"}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-base text-muted-foreground py-4">
-                          {course.startTime || "-"}
+                          {course.startTime ? (() => { const m = course.startTime!.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); return m ? `${m[4]}:${m[5]} - ${m[3]}/${m[2]}` : course.startTime; })() : "-"}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[240px] truncate py-4">
                           {course.apiUrl || "-"}
