@@ -4,6 +4,8 @@ import {
   Entity,
   Index,
   JoinColumn,
+  JoinTable,
+  ManyToMany,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -96,15 +98,17 @@ export class VolRole {
   @Column({ type: 'boolean', default: false })
   is_leader_role!: boolean;
 
-  // v1.6 Option A: Leader role's "managed role" — trỏ tới role crew/TNV
-  // mà leader này quản lý. Supply plan + stations thuộc managed role,
-  // nhưng leader edit qua FK này. NULL cho non-leader roles.
-  @Column({ type: 'int', nullable: true })
-  manages_role_id!: number | null;
-
-  @ManyToOne(() => VolRole, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'manages_role_id' })
-  manages_role?: VolRole | null;
+  // v1.6 Option B2: Leader role → N managed roles via junction table.
+  // Supports nested hierarchy (Leader A manages Leader B which manages Crew).
+  // BFS resolver in TeamRoleHierarchyService traverses descendants at runtime.
+  // Empty array for non-leader roles (or leader not yet configured).
+  @ManyToMany(() => VolRole, { cascade: false })
+  @JoinTable({
+    name: 'vol_role_manages',
+    joinColumn: { name: 'leader_role_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'managed_role_id', referencedColumnName: 'id' },
+  })
+  managed_roles?: VolRole[];
 
   // v1.5: Per-role group chat link. Gated by registration.status
   // in the public endpoints — only shown once TNV has ký HĐ.

@@ -364,19 +364,26 @@ export class LeaderSupplyViewDto {
   @ApiProperty() event_id!: number;
   @ApiProperty({
     description:
-      'v1.6 Option A: id of the MANAGED role (not the leader role itself).',
+      'v1.6 Option B2: FIRST managed role id (for backward compat with clients that rendered a single-role header). Prefer `managed_role_ids` for multi.',
   })
   role_id!: number;
   @ApiProperty({
     description:
-      'Display name of the managed role. For backward compat mirrors managed_role_name.',
+      'Display name of the FIRST managed role. For backward compat mirrors first element of managed_role_names.',
   })
   role_name!: string;
   @ApiProperty({
+    type: [Number],
     description:
-      'v1.6 Option A: resolved name of the managed role (same as role_name; explicit alias for UI clarity).',
+      'v1.6 Option B2: ALL managed role ids (BFS result, nested descendants included).',
   })
-  managed_role_name!: string;
+  managed_role_ids!: number[];
+  @ApiProperty({
+    type: [String],
+    description:
+      'v1.6 Option B2: display names of ALL managed roles (same order as managed_role_ids). Crew UI renders as chips / joined header.',
+  })
+  managed_role_names!: string[];
   @ApiProperty({ type: [LeaderSupplyItemViewDto] })
   items!: LeaderSupplyItemViewDto[];
 }

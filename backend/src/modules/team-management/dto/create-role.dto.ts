@@ -81,27 +81,27 @@ export class CreateRoleDto {
   @MaxLength(500)
   chat_group_url?: string | null;
 
-  // v1.6: Leader role → managed role. FK self-reference on vol_role. Set
-  // this only when is_leader_role=true; service validates consistency.
-  // NULL cho non-leader role (or leader that has not been wired yet).
+  // v1.6 Option B2: nested N:M. Leader role quản lý nhiều role thông qua
+  // junction table vol_role_manages. BFS resolver trong TeamRoleHierarchyService
+  // tự động include descendants (tối đa 5 tầng). Empty/undefined cho non-leader.
   @ApiProperty({
     required: false,
-    nullable: true,
+    type: [Number],
     description:
-      'v1.6: leader role trỏ tới role được quản lý (crew/TNV). NULL cho non-leader.',
+      'v1.6 Option B2: nested. Leader role quản lý nhiều role (multi-select). BFS resolver tự động include descendants.',
   })
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  manages_role_id?: number | null;
+  @IsArray()
+  @IsInt({ each: true })
+  manages_role_ids?: number[];
 
   // v1.4/v1.6 companion — already on entity but was not DTO-exposed. Include
-  // so admin can toggle "is leader role" + optionally wire manages_role_id.
+  // so admin can toggle "is leader role" + optionally wire manages_role_ids.
   @ApiProperty({
     required: false,
     default: false,
     description:
-      'True = leader role (portal access + station gating). Companion field for manages_role_id.',
+      'True = leader role (portal access + station gating). Companion field for manages_role_ids.',
   })
   @IsOptional()
   @IsBoolean()

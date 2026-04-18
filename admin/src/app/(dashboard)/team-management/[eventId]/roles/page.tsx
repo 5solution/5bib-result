@@ -55,9 +55,11 @@ interface RoleEditFields {
   contract_template_id: number | null;
   chat_platform: ChatPlatform | null;
   chat_group_url: string | null;
-  // v1.4/v1.6 — leader role + managed role FK.
+  // v1.4/v1.6 Option B2 — leader role + multi-select managed roles.
+  // Field name aligns with the response shape (`managed_role_ids`); the
+  // DTO write path renames to `manages_role_ids` just before PATCH.
   is_leader_role: boolean;
-  manages_role_id: number | null;
+  managed_role_ids: number[];
 }
 
 export default function RolesPage(): React.ReactElement {
@@ -292,7 +294,7 @@ function EditRoleDialog({
       chat_platform?: ChatPlatform | null;
       chat_group_url?: string | null;
       is_leader_role?: boolean;
-      manages_role_id?: number | null;
+      managed_role_ids?: number[];
     };
     setForm({
       max_slots: role.max_slots,
@@ -305,7 +307,7 @@ function EditRoleDialog({
       chat_platform: r.chat_platform ?? null,
       chat_group_url: r.chat_group_url ?? null,
       is_leader_role: r.is_leader_role ?? false,
-      manages_role_id: r.manages_role_id ?? null,
+      managed_role_ids: r.managed_role_ids ?? [],
     });
   }, [role]);
 
@@ -318,14 +320,10 @@ function EditRoleDialog({
       });
   }, [token, role]);
 
-  // Candidate roles for the "Quản lý role" dropdown — exclude leader roles
-  // (leaders managing leaders is not supported) and exclude self to prevent
-  // circular FK.
-  const manageCandidates = allRoles.filter(
-    (r) =>
-      r.id !== role?.id &&
-      !((r as TeamRole & { is_leader_role?: boolean }).is_leader_role === true),
-  );
+  // v1.6 Option B2: candidates for multi-select. Leader→leader edges ARE
+  // now allowed (nested hierarchy). Self must still be excluded to prevent
+  // a 1-node cycle; backend also rejects this defensively.
+  const manageCandidates = allRoles.filter((r) => r.id !== role?.id);
 
   async function handleSubmit(): Promise<void> {
     if (!token || !role || !form) return;
@@ -341,11 +339,11 @@ function EditRoleDialog({
         contract_template_id: form.contract_template_id ?? undefined,
         chat_platform: form.chat_platform,
         chat_group_url: form.chat_group_url,
-        // v1.4/v1.6 — leader flag + managed role FK. manages_role_id is
-        // cleared when is_leader_role is false so non-leader rows never
-        // keep a stale FK.
+        // v1.4/v1.6 Option B2 — leader flag + multi-select managed roles.
+        // When is_leader_role=false we send an empty array so stale
+        // junction rows are cleared by the backend.
         is_leader_role: form.is_leader_role,
-        manages_role_id: form.is_leader_role ? form.manages_role_id : null,
+        manages_role_ids: form.is_leader_role ? form.managed_role_ids : [],
       });
       toast.success("Đã cập nhật vai trò");
       onSaved();
@@ -464,35 +462,56 @@ function EditRoleDialog({
                     setForm({
                       ...form,
                       is_leader_role: v,
-                      manages_role_id: v ? form.manages_role_id : null,
+                      managed_role_ids: v ? form.managed_role_ids : [],
                     })
                   }
                 />
               </div>
               {form.is_leader_role ? (
                 <div>
-                  <Label>Quản lý role</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={form.manages_role_id ?? ""}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        manages_role_id: e.target.value
-                          ? Number(e.target.value)
-                          : null,
-                      })
-                    }
-                  >
-                    <option value="">— (Không quản lý) —</option>
-                    {manageCandidates.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.role_name}
-                      </option>
-                    ))}
-                  </select>
+                  <Label>Quản lý các role (có thể chọn nhiều)</Label>
+                  <div className="space-y-1 max-h-48 overflow-y-auto rounded border p-2">
+                    {manageCandidates.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Chưa có role nào khác trong event.
+                      </p>
+                    ) : null}
+                    {manageCandidates.map((r) => {
+                      const checked = form.managed_role_ids.includes(r.id);
+                      const isLeader =
+                        (r as TeamRole & { is_leader_role?: boolean })
+                          .is_leader_role === true;
+                      return (
+                        <label
+                          key={r.id}
+                          className="flex items-center gap-2 text-sm cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const current = new Set(form.managed_role_ids);
+                              if (e.target.checked) current.add(r.id);
+                              else current.delete(r.id);
+                              setForm({
+                                ...form,
+                                managed_role_ids: Array.from(current),
+                              });
+                            }}
+                          />
+                          <span>{r.role_name}</span>
+                          {isLeader ? (
+                            <span className="text-[11px] text-gray-500">
+                              (Leader)
+                            </span>
+                          ) : null}
+                        </label>
+                      );
+                    })}
+                  </div>
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    Leader role trỏ tới role crew/TNV được quản lý. Dùng cho supply + station.
+                    Nếu chọn leader khác, hệ thống tự động include cả
+                    descendants (nested tối đa 5 tầng).
                   </p>
                 </div>
               ) : null}
@@ -606,7 +625,7 @@ function CreateRoleDialog({
       chat_platform: ChatPlatform | null;
       chat_group_url: string | null;
       is_leader_role: boolean;
-      manages_role_id: number | null;
+      managed_role_ids: number[];
     }
   >({
     role_name: "",
@@ -620,15 +639,11 @@ function CreateRoleDialog({
     chat_platform: null,
     chat_group_url: null,
     is_leader_role: false,
-    manages_role_id: null,
+    managed_role_ids: [],
   });
-  // Candidate roles for "Quản lý role" dropdown — exclude leader roles
-  // (leader-managing-leader unsupported). No self exclusion needed because
-  // the new role has no id yet.
-  const manageCandidates = allRoles.filter(
-    (r) =>
-      !((r as TeamRole & { is_leader_role?: boolean }).is_leader_role === true),
-  );
+  // v1.6 Option B2: nested hierarchy, so leader→leader edges are allowed.
+  // On create the new role has no id yet, so self-exclusion is a no-op.
+  const manageCandidates = allRoles;
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -651,8 +666,8 @@ function CreateRoleDialog({
     try {
       await createTeamRole(token, eventId, {
         ...form,
-        // v1.4/v1.6 — manages_role_id only meaningful when is_leader_role true.
-        manages_role_id: form.is_leader_role ? form.manages_role_id : null,
+        // v1.6 Option B2 — manages_role_ids only meaningful when is_leader_role true.
+        manages_role_ids: form.is_leader_role ? form.managed_role_ids : [],
       } satisfies CreateRoleInput);
       toast.success("Đã tạo vai trò");
       onCreated();
@@ -667,7 +682,7 @@ function CreateRoleDialog({
         chat_platform: null,
         chat_group_url: null,
         is_leader_role: false,
-        manages_role_id: null,
+        managed_role_ids: [],
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -792,35 +807,56 @@ function CreateRoleDialog({
                   setForm({
                     ...form,
                     is_leader_role: v,
-                    manages_role_id: v ? form.manages_role_id : null,
+                    managed_role_ids: v ? form.managed_role_ids : [],
                   })
                 }
               />
             </div>
             {form.is_leader_role ? (
               <div>
-                <Label>Quản lý role</Label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={form.manages_role_id ?? ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      manages_role_id: e.target.value
-                        ? Number(e.target.value)
-                        : null,
-                    })
-                  }
-                >
-                  <option value="">— (Không quản lý) —</option>
-                  {manageCandidates.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.role_name}
-                    </option>
-                  ))}
-                </select>
+                <Label>Quản lý các role (có thể chọn nhiều)</Label>
+                <div className="space-y-1 max-h-48 overflow-y-auto rounded border p-2">
+                  {manageCandidates.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      Chưa có role nào trong event. Tạo role crew/TNV trước.
+                    </p>
+                  ) : null}
+                  {manageCandidates.map((r) => {
+                    const checked = form.managed_role_ids.includes(r.id);
+                    const isLeader =
+                      (r as TeamRole & { is_leader_role?: boolean })
+                        .is_leader_role === true;
+                    return (
+                      <label
+                        key={r.id}
+                        className="flex items-center gap-2 text-sm cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const current = new Set(form.managed_role_ids);
+                            if (e.target.checked) current.add(r.id);
+                            else current.delete(r.id);
+                            setForm({
+                              ...form,
+                              managed_role_ids: Array.from(current),
+                            });
+                          }}
+                        />
+                        <span>{r.role_name}</span>
+                        {isLeader ? (
+                          <span className="text-[11px] text-gray-500">
+                            (Leader)
+                          </span>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+                </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Leader role trỏ tới role crew/TNV được quản lý. Dùng cho supply + station.
+                  Nếu chọn leader khác, hệ thống tự động include cả
+                  descendants (nested tối đa 5 tầng).
                 </p>
               </div>
             ) : null}

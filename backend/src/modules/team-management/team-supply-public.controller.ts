@@ -94,20 +94,27 @@ export class TeamSupplyPublicController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary:
-      'Leader upserts requested_qty + request_note for the managed role (v1.6 Option A).',
+      'Leader upserts requested_qty + request_note for a specific managed role (v1.6 Option B2 — nested).',
   })
   @ApiResponse({ status: 200, type: [SupplyPlanRowDto] })
   async upsertRequest(
     @Param('token') token: string,
-    @Body() dto: UpsertSupplyPlanRequestDto,
+    @Body() dto: UpsertSupplyPlanRequestDto & { target_role_id?: number },
   ): Promise<SupplyPlanRowDto[]> {
     const leader = await this.leaderSupply.validateLeaderToken(token);
-    // v1.6 Option A: leader's plan-writes target the MANAGED role. actor is
-    // still the leader's own role id so service can validate ownership.
-    const managedRoleId = this.leaderSupply.resolveManagedRoleId(leader);
+    // v1.6 Option B2: nested — leader may manage multiple roles. Client
+    // MUST specify which one this plan-write targets (`target_role_id`).
+    // Fallback: if caller omits it (legacy v1.6-Option-A client), pick the
+    // first role in the BFS set — keeps backward compat for single-managed
+    // leaders. Service re-validates membership before writing.
+    const managed = await this.leaderSupply.resolveManagedRoleIds(leader);
+    const targetRoleId =
+      dto.target_role_id && managed.has(dto.target_role_id)
+        ? dto.target_role_id
+        : Array.from(managed)[0];
     return this.plans.upsertRequest(
       leader.event_id,
-      managedRoleId,
+      targetRoleId,
       dto,
       leader.role_id,
     );
@@ -126,8 +133,8 @@ export class TeamSupplyPublicController {
     @Body() dto: UpsertAllocationDto,
   ): Promise<AllocationRowDto[]> {
     const leader = await this.leaderSupply.validateLeaderToken(token);
-    // Pass the leader's OWN role_id as actor; service compares against
-    // leader.role.manages_role_id (via repo lookup inside).
+    // Pass the leader's OWN role_id as actor; service BFS-resolves the
+    // managed hierarchy and checks station.role_id ∈ managed set.
     return this.allocations.upsertAllocationsForStation(
       stationId,
       dto,

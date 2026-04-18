@@ -91,11 +91,13 @@ export interface LeaderSupplyPlanRow {
 
 export interface LeaderSupplyView {
   event_id: number;
+  // v1.6 Option B2: first-managed (backward compat). Prefer managed_role_ids + managed_role_names.
   role_id: number;
   role_name: string;
-  // v1.6 Option A: resolved name of the managed crew/TNV role. UI uses
-  // this in the "Vật tư — {managed_role_name}" header.
-  managed_role_name: string;
+  // v1.6 Option B2: nested — leader may manage multiple roles (and
+  // descendants). UI renders joined header "Vật tư — A + B + …".
+  managed_role_ids: number[];
+  managed_role_names: string[];
   items: Array<{
     item_id: number;
     item_name: string;

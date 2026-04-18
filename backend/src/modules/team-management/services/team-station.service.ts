@@ -93,12 +93,33 @@ export class TeamStationService {
       where: { event_id: eventId, role_id: roleId },
       order: { sort_order: 'ASC', id: 'ASC' },
     });
+    return this.enrichStations(stations, cacheKey);
+  }
+
+  /**
+   * v1.6 — flat event-wide list for the new Trạm page (no role picker).
+   * Each station carries role_id + role_name so UI can group or filter.
+   */
+  async listAllStationsInEvent(
+    eventId: number,
+  ): Promise<StationWithAssignmentSummaryDto[]> {
+    const stations = await this.stationRepo.find({
+      where: { event_id: eventId },
+      relations: { role: true },
+      order: { role_id: 'ASC', sort_order: 'ASC', id: 'ASC' },
+    });
+    return this.enrichStations(stations);
+  }
+
+  private async enrichStations(
+    stations: VolStation[],
+    cacheKey?: string,
+  ): Promise<StationWithAssignmentSummaryDto[]> {
     if (stations.length === 0) {
       const empty: StationWithAssignmentSummaryDto[] = [];
-      await this.cache.setJson(cacheKey, empty, STATION_LIST_TTL_SECONDS);
+      if (cacheKey) await this.cache.setJson(cacheKey, empty, STATION_LIST_TTL_SECONDS);
       return empty;
     }
-
     const stationIds = stations.map((s) => s.id);
     const assignments = await this.assignmentRepo.find({
       where: { station_id: In(stationIds) },
@@ -114,7 +135,7 @@ export class TeamStationService {
     }
 
     const result = stations.map((s) => this.toStationSummary(s, byStation.get(s.id) ?? []));
-    await this.cache.setJson(cacheKey, result, STATION_LIST_TTL_SECONDS);
+    if (cacheKey) await this.cache.setJson(cacheKey, result, STATION_LIST_TTL_SECONDS);
     return result;
   }
 
@@ -493,6 +514,8 @@ export class TeamStationService {
       status: station.status,
       sort_order: station.sort_order,
       is_active: station.is_active,
+      role_id: station.role_id,
+      role_name: station.role?.role_name ?? null,
       crew,
       volunteers,
       crew_count: crew.length,

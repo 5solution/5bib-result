@@ -21,6 +21,7 @@ import {
   UpsertSupplyPlanRequestDto,
 } from '../dto/supply.dto';
 import { TeamCacheService, CACHE_TTL } from './team-cache.service';
+import { TeamRoleHierarchyService } from './team-role-hierarchy.service';
 
 /**
  * v1.6 Supply Plan service.
@@ -49,6 +50,7 @@ export class TeamSupplyPlanService {
     @InjectRepository(VolSupplyAllocation, 'volunteer')
     private readonly allocRepo: Repository<VolSupplyAllocation>,
     private readonly cache: TeamCacheService,
+    private readonly hierarchy: TeamRoleHierarchyService,
   ) {}
 
   /**
@@ -110,10 +112,9 @@ export class TeamSupplyPlanService {
     dto: UpsertSupplyPlanRequestDto,
     actorRoleId: number | null,
   ): Promise<SupplyPlanRowDto[]> {
-    // v1.6 Option A: when a leader is the actor, the target roleId must be
-    // the role that leader.role.manages_role_id points to. If actorRoleId
-    // already equals roleId it's a legacy same-role call — also allow it
-    // for backward compat. Otherwise actorRole.manages_role_id must match.
+    // v1.6 Option B2: when a leader is the actor, the target roleId must
+    // be in the BFS-resolved descendants set. Backward compat: same-role
+    // (actorRoleId === roleId) is still accepted for legacy callers.
     if (actorRoleId !== null && actorRoleId !== roleId) {
       const actorRole = await this.roleRepo.findOne({
         where: { id: actorRoleId },
@@ -124,14 +125,17 @@ export class TeamSupplyPlanService {
       if (!actorRole.is_leader_role) {
         throw new ForbiddenException('Actor is not a leader role');
       }
-      if (actorRole.manages_role_id == null) {
+      const managedSet = await this.hierarchy.resolveDescendantRoleIds(
+        actorRoleId,
+      );
+      if (managedSet.size === 0) {
         throw new BadRequestException(
           'Leader role chưa được cấu hình quản lý role nào. Liên hệ admin cấu hình "Quản lý role" trong Role.',
         );
       }
-      if (actorRole.manages_role_id !== roleId) {
+      if (!managedSet.has(roleId)) {
         throw new ForbiddenException(
-          'Leader may only edit plan for the role they manage',
+          'Leader may only edit plan for roles in their managed hierarchy',
         );
       }
     }

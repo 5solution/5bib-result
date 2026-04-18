@@ -36,6 +36,18 @@ import { TeamStationService } from './services/team-station.service';
 export class TeamStationController {
   constructor(private readonly stations: TeamStationService) {}
 
+  @Get('events/:eventId/stations')
+  @ApiOperation({
+    summary:
+      'v1.6: flat event-wide station list (no role picker). Each row carries role_id + role_name for client-side filtering/grouping.',
+  })
+  @ApiResponse({ status: 200, type: [StationWithAssignmentSummaryDto] })
+  listAllStationsInEvent(
+    @Param('eventId', ParseIntPipe) eventId: number,
+  ): Promise<StationWithAssignmentSummaryDto[]> {
+    return this.stations.listAllStationsInEvent(eventId);
+  }
+
   @Get('events/:eventId/roles/:roleId/stations')
   @ApiOperation({
     summary: 'List all stations under (event, role) with crew/volunteer summary',

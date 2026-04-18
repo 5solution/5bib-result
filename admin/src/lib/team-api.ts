@@ -41,10 +41,12 @@ export interface TeamRole {
   // v1.5: per-role group chat. Nullable — admin may not have configured.
   chat_platform?: ChatPlatform | null;
   chat_group_url?: string | null;
-  // v1.4/v1.6: leader-role flag + FK to the role this leader manages.
+  // v1.4/v1.6 Option B2 — leader-role flag + list of directly managed
+  // roles (N:M junction). Backend resolves nested descendants at runtime
+  // via BFS; this field only exposes direct edges for admin UI display.
   is_leader_role?: boolean;
-  manages_role_id?: number | null;
-  manages_role_name?: string | null;
+  managed_role_ids?: number[];
+  managed_roles?: Array<{ id: number; role_name: string }>;
 }
 
 export type ChatPlatform = "zalo" | "telegram" | "whatsapp" | "other";
@@ -115,9 +117,9 @@ export interface CreateRoleInput {
   // v1.5 group chat fields — optional. Null explicitly clears on update.
   chat_platform?: ChatPlatform | null;
   chat_group_url?: string | null;
-  // v1.4/v1.6 — leader role + managed role FK.
+  // v1.4/v1.6 Option B2 — leader role + multi-select managed roles.
   is_leader_role?: boolean;
-  manages_role_id?: number | null;
+  manages_role_ids?: number[];
 }
 
 export type UpdateRoleInput = Partial<CreateRoleInput>;
@@ -1384,11 +1386,29 @@ export interface Station {
   status: StationStatus;
   sort_order: number;
   is_active: boolean;
+  role_id: number;
+  role_name: string | null;
   crew: AssignmentMember[];
   volunteers: AssignmentMember[];
   crew_count: number;
   volunteer_count: number;
   has_crew: boolean;
+}
+
+/**
+ * v1.6 flat event-wide station list (no role picker) — each row carries
+ * role_id + role_name so UI can group/filter client-side.
+ */
+export async function listAllStationsInEvent(
+  token: string,
+  eventId: number,
+): Promise<Station[]> {
+  const res = await fetch(`/api/team-management/events/${eventId}/stations`, {
+    headers: authedHeaders(token),
+    cache: "no-store",
+  });
+  await assertOk(res);
+  return res.json();
 }
 
 export interface AssignableMember {

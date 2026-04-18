@@ -17,6 +17,7 @@ import { VolRegistration } from '../entities/vol-registration.entity';
 import { SupplementRowDto } from '../dto/supply.dto';
 import { TeamCacheService } from './team-cache.service';
 import { TeamSupplyAllocationService } from './team-supply-allocation.service';
+import { TeamRoleHierarchyService } from './team-role-hierarchy.service';
 
 /**
  * v1.6 Supplement service (OQ-D Option 2 — multi-round supplements).
@@ -51,24 +52,26 @@ export class TeamSupplySupplementService {
     private readonly roleRepo: Repository<VolRole>,
     private readonly cache: TeamCacheService,
     private readonly allocService: TeamSupplyAllocationService,
+    private readonly hierarchy: TeamRoleHierarchyService,
   ) {}
 
-  /** v1.6 Option A: same resolution pattern as allocation service. */
-  private async resolveActorScopedRoleId(
+  /** v1.6 Option B2: BFS-resolved set. Null for admin. */
+  private async resolveActorScopedRoleIds(
     actorRoleId: number | null,
-  ): Promise<number | null> {
+  ): Promise<Set<number> | null> {
     if (actorRoleId === null) return null;
     const role = await this.roleRepo.findOne({ where: { id: actorRoleId } });
     if (!role) throw new ForbiddenException('Actor role not found');
     if (!role.is_leader_role) {
       throw new ForbiddenException('Actor is not a leader role');
     }
-    if (role.manages_role_id == null) {
+    const managed = await this.hierarchy.resolveDescendantRoleIds(actorRoleId);
+    if (managed.size === 0) {
       throw new BadRequestException(
         'Leader role chưa được cấu hình quản lý role nào. Liên hệ admin cấu hình "Quản lý role" trong Role.',
       );
     }
-    return role.manages_role_id;
+    return managed;
   }
 
   async listSupplementsForAllocation(
@@ -110,12 +113,11 @@ export class TeamSupplySupplementService {
         'Cannot create supplement: round-1 allocation has not been confirmed yet',
       );
     }
-    // v1.6 Option A: leader gate compares leader.manages_role_id to
-    // allocation.station.role_id. Admin passes actorRoleId=null → bypass.
-    const scopedRoleId = await this.resolveActorScopedRoleId(actorRoleId);
-    if (scopedRoleId !== null && scopedRoleId !== alloc.station.role_id) {
+    // v1.6 Option B2: station.role_id must be in BFS managed set.
+    const scopedRoleIds = await this.resolveActorScopedRoleIds(actorRoleId);
+    if (scopedRoleIds !== null && !scopedRoleIds.has(alloc.station.role_id)) {
       throw new ForbiddenException(
-        'Leader may only supplement allocations for stations of the role they manage',
+        'Leader may only supplement allocations for stations within their managed hierarchy',
       );
     }
 

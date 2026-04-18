@@ -19,6 +19,7 @@ import {
   LeaderSupplyViewDto,
   SupplementRowDto,
 } from '../dto/supply.dto';
+import { TeamRoleHierarchyService } from './team-role-hierarchy.service';
 
 /**
  * v1.6 OQ-B Leader Supply View.
@@ -44,6 +45,7 @@ export class TeamSupplyLeaderService {
     private readonly allocRepo: Repository<VolSupplyAllocation>,
     @InjectRepository(VolSupplySupplement, 'volunteer')
     private readonly supRepo: Repository<VolSupplySupplement>,
+    private readonly hierarchy: TeamRoleHierarchyService,
   ) {}
 
   /**
@@ -66,19 +68,20 @@ export class TeamSupplyLeaderService {
   }
 
   /**
-   * v1.6 Option A: resolve the role this leader manages.
-   *  - Leader role must be is_leader_role=true (caller already verified via
-   *    validateLeaderToken, but re-assert for defensive depth).
-   *  - manages_role_id must be set; otherwise this leader has no managed
-   *    team and all downstream queries would be empty + confusing.
-   *  - Returns the managed role_id (not self). Non-leader callers throw 403.
+   * v1.6 Option B2: resolve every role this leader has authority over,
+   * including nested descendants via BFS.
+   *  - Leader role must be is_leader_role=true.
+   *  - Junction must have ≥1 row; otherwise 400 (leader not configured).
+   *  - Returns a Set of role IDs (does NOT include leader's own role).
    */
-  resolveManagedRoleId(leaderReg: VolRegistration): number {
+  async resolveManagedRoleIds(leaderReg: VolRegistration): Promise<Set<number>> {
     if (!leaderReg.role?.is_leader_role) {
       throw new ForbiddenException('Yêu cầu leader role');
     }
-    const managed = leaderReg.role.manages_role_id;
-    if (!managed) {
+    const managed = await this.hierarchy.resolveDescendantRoleIds(
+      leaderReg.role_id,
+    );
+    if (managed.size === 0) {
       throw new BadRequestException(
         'Leader role chưa được cấu hình quản lý role nào. Liên hệ admin cấu hình "Quản lý role" trong Role.',
       );
@@ -89,16 +92,24 @@ export class TeamSupplyLeaderService {
   async getLeaderSupplyView(token: string): Promise<LeaderSupplyViewDto> {
     const leader = await this.validateLeaderToken(token);
     const eventId = leader.event_id;
-    // v1.6 Option A: query supply/stations for the MANAGED role, not the
-    // leader's own role. 400 if manages_role_id is not configured.
-    const roleId = this.resolveManagedRoleId(leader);
-    const managedRole = await this.roleRepo.findOne({ where: { id: roleId } });
-    const managedRoleName = managedRole?.role_name ?? leader.role?.role_name ?? '';
+    // v1.6 Option B2: query supply/stations for ALL managed roles (nested).
+    const managedSet = await this.resolveManagedRoleIds(leader);
+    const managedIds = Array.from(managedSet);
+    const managedRoles = await this.roleRepo.find({
+      where: { id: In(managedIds) },
+      order: { sort_order: 'ASC', id: 'ASC' },
+    });
+    const managedRoleNames = managedRoles.map((r) => r.role_name);
+    // For backward compat: first-role id/name (stable ordering by sort_order).
+    const firstRoleId = managedRoles[0]?.id ?? managedIds[0] ?? 0;
+    const firstRoleName = managedRoles[0]?.role_name ?? '';
 
     const [plans, stations, items] = await Promise.all([
-      this.planRepo.find({ where: { event_id: eventId, role_id: roleId } }),
+      this.planRepo.find({
+        where: { event_id: eventId, role_id: In(managedIds) },
+      }),
       this.stationRepo.find({
-        where: { event_id: eventId, role_id: roleId },
+        where: { event_id: eventId, role_id: In(managedIds) },
         order: { sort_order: 'ASC', id: 'ASC' },
       }),
       this.itemRepo.find({
@@ -164,9 +175,10 @@ export class TeamSupplyLeaderService {
 
     return {
       event_id: eventId,
-      role_id: roleId,
-      role_name: managedRoleName,
-      managed_role_name: managedRoleName,
+      role_id: firstRoleId,
+      role_name: firstRoleName,
+      managed_role_ids: managedIds,
+      managed_role_names: managedRoleNames,
       items: itemViews,
     };
   }

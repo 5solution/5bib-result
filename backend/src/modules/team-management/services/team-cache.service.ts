@@ -191,6 +191,15 @@ export class TeamCacheService {
       if (stationAllocKeys.length > 0) {
         await this.redis.del(...stationAllocKeys);
       }
+      // v1.6 Option B2: role hierarchy memoization. Any role edit at the
+      // event-invalidation level might reshape ancestor resolution, so we
+      // wipe the whole pattern. Per-leader targeted invalidation happens
+      // in TeamRoleHierarchyService.invalidateHierarchy when the role
+      // service knows exactly which leader was touched.
+      const leaderDescKeys = await this.scanKeys(`team:leader:*:descendants`);
+      if (leaderDescKeys.length > 0) {
+        await this.redis.del(...leaderDescKeys);
+      }
     } catch (err) {
       this.logger.warn(`Cache invalidate failed for event ${eventId}: ${(err as Error).message}`);
     }
@@ -297,6 +306,30 @@ export class TeamCacheService {
       this.logger.warn(
         `Station-allocations cache invalidate failed for station ${stationId}: ${(err as Error).message}`,
       );
+    }
+  }
+
+  /**
+   * v1.6 Option B2 — generic helpers used by TeamRoleHierarchyService to
+   * manage the leader-descendants cache. Kept deliberately narrow (single
+   * key / pattern) to discourage ad-hoc wildcard flushes from other services.
+   */
+  async del(key: string): Promise<void> {
+    try {
+      await this.redis.del(key);
+    } catch (err) {
+      this.logger.warn(`del(${key}) failed: ${(err as Error).message}`);
+    }
+  }
+
+  async scanDel(pattern: string): Promise<void> {
+    try {
+      const keys = await this.scanKeys(pattern);
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } catch (err) {
+      this.logger.warn(`scanDel(${pattern}) failed: ${(err as Error).message}`);
     }
   }
 

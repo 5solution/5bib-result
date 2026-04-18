@@ -18,6 +18,7 @@ import {
   UpdateSupplyItemDto,
 } from '../dto/supply.dto';
 import { TeamCacheService, CACHE_TTL } from './team-cache.service';
+import { TeamRoleHierarchyService } from './team-role-hierarchy.service';
 
 /**
  * v1.6 Supply Items service.
@@ -44,27 +45,33 @@ export class TeamSupplyItemService {
     @InjectRepository(VolRole, 'volunteer')
     private readonly roleRepo: Repository<VolRole>,
     private readonly cache: TeamCacheService,
+    private readonly hierarchy: TeamRoleHierarchyService,
   ) {}
 
   /**
-   * v1.6 Option A: resolve leader actor → managed role id. Null for admin.
-   * Item ownership follows the MANAGED role (not the leader's own role).
+   * v1.6 Option B2: validate the actor is a leader + has ≥1 managed role.
+   * Unlike allocation/plan/supplement, the item service needs BOTH:
+   *   - the leader's own role_id (for `created_by_role_id` ownership), and
+   *   - the managed set (for edit gate — leader A can edit items created by
+   *     leader B if B is in A's descendants).
+   * Returns { ownerRoleId, managed } for leader, or null for admin.
    */
-  private async resolveActorScopedRoleId(
+  private async resolveActorContext(
     actorRoleId: number | null,
-  ): Promise<number | null> {
+  ): Promise<{ ownerRoleId: number; managed: Set<number> } | null> {
     if (actorRoleId === null) return null;
     const role = await this.roleRepo.findOne({ where: { id: actorRoleId } });
     if (!role) throw new ForbiddenException('Actor role not found');
     if (!role.is_leader_role) {
       throw new ForbiddenException('Actor is not a leader role');
     }
-    if (role.manages_role_id == null) {
+    const managed = await this.hierarchy.resolveDescendantRoleIds(actorRoleId);
+    if (managed.size === 0) {
       throw new BadRequestException(
         'Leader role chưa được cấu hình quản lý role nào. Liên hệ admin cấu hình "Quản lý role" trong Role.',
       );
     }
-    return role.manages_role_id;
+    return { ownerRoleId: actorRoleId, managed };
   }
 
   /** Admin + leader both see the same list. TTL 300s. */
@@ -106,15 +113,12 @@ export class TeamSupplyItemService {
       throw new ConflictException(`Item "${itemName}" already exists for this event`);
     }
 
-    // v1.6 Option A — leader path: pin created_by_role_id to leader's
-    // MANAGED role (so ownership follows the team the leader is running),
-    // not the leader role itself. Admin path: honor whatever the DTO
-    // provides (null or a role_id).
-    const scopedRoleId = await this.resolveActorScopedRoleId(actorRoleId);
+    // v1.6 Option B2 — leader path: ownership is the LEADER's own role_id
+    // (not a managed role, because multi-select means there's no single
+    // "managed" choice). Admin path: honor the DTO.
+    const ctx = await this.resolveActorContext(actorRoleId);
     const createdByRoleId =
-      scopedRoleId !== null
-        ? scopedRoleId
-        : dto.created_by_role_id ?? null;
+      ctx !== null ? ctx.ownerRoleId : dto.created_by_role_id ?? null;
 
     const row = this.itemRepo.create({
       event_id: eventId,
@@ -131,8 +135,9 @@ export class TeamSupplyItemService {
     return this.toDto(saved);
   }
 
-  /** Admin (actorRoleId === null) can edit any; leader only items owned
-   * by the role they manage (v1.6 Option A). */
+  /** Admin (actorRoleId === null) can edit any; leader may edit items
+   * created by themselves OR by any descendant leader in their managed
+   * hierarchy (v1.6 Option B2 — nested ownership). */
   async updateItem(
     id: number,
     dto: UpdateSupplyItemDto,
@@ -140,8 +145,8 @@ export class TeamSupplyItemService {
   ): Promise<SupplyItemDto> {
     const row = await this.itemRepo.findOne({ where: { id } });
     if (!row) throw new NotFoundException('Supply item not found');
-    const scopedRoleId = await this.resolveActorScopedRoleId(actorRoleId);
-    this.assertOwnership(row, scopedRoleId);
+    const ctx = await this.resolveActorContext(actorRoleId);
+    this.assertOwnership(row, ctx);
 
     if (dto.item_name !== undefined) {
       const next = dto.item_name.trim();
@@ -171,8 +176,8 @@ export class TeamSupplyItemService {
   async deleteItem(id: number, actorRoleId: number | null): Promise<void> {
     const row = await this.itemRepo.findOne({ where: { id } });
     if (!row) throw new NotFoundException('Supply item not found');
-    const scopedRoleId = await this.resolveActorScopedRoleId(actorRoleId);
-    this.assertOwnership(row, scopedRoleId);
+    const ctx = await this.resolveActorContext(actorRoleId);
+    this.assertOwnership(row, ctx);
 
     // Refuse delete if any plan/allocation references it — avoid cascade
     // orphans. Frontend should switch to soft-delete if needed.
@@ -194,22 +199,27 @@ export class TeamSupplyItemService {
   }
 
   /**
-   * Q7 gate: if the item has an owning role, only that role's leader (or
-   * any admin, actorRoleId === null) can edit. Admin-created items
-   * (created_by_role_id === null) are editable by any admin; leaders
-   * cannot edit admin-owned items.
+   * v1.6 Option B2 ownership gate:
+   *  - Admin (ctx === null): always allowed.
+   *  - Admin-owned item (created_by_role_id === null): leaders cannot edit.
+   *  - Leader-owned item: the actor's role_id OR any role in the actor's
+   *    BFS-managed set (so a top-level leader can edit items created by a
+   *    nested sub-leader they manage).
    */
   private assertOwnership(
     row: VolSupplyItem,
-    actorRoleId: number | null,
+    ctx: { ownerRoleId: number; managed: Set<number> } | null,
   ): void {
-    if (actorRoleId === null) return; // admin
+    if (ctx === null) return; // admin
     if (row.created_by_role_id === null) {
       throw new ForbiddenException('This item is admin-owned');
     }
-    if (row.created_by_role_id !== actorRoleId) {
+    const allowed =
+      row.created_by_role_id === ctx.ownerRoleId ||
+      ctx.managed.has(row.created_by_role_id);
+    if (!allowed) {
       throw new ForbiddenException(
-        'Leaders may only edit items they created',
+        'Leaders may only edit items they created or items owned by roles within their managed hierarchy',
       );
     }
   }

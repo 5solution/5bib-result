@@ -90,12 +90,23 @@ export function LeaderSupplyManager({
     );
   }
 
-  const managedRoleName = view.managed_role_name || view.role_name;
+  // v1.6 Option B2: multi-managed. Fall back to single role_name if the
+  // server is pre-B2 (still shipping `role_name` only).
+  const managedNames =
+    view.managed_role_names && view.managed_role_names.length > 0
+      ? view.managed_role_names
+      : view.role_name
+        ? [view.role_name]
+        : [];
+  const managedHeader =
+    managedNames.length === 0
+      ? "Chưa quản lý team nào"
+      : managedNames.join(" + ");
 
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-semibold text-gray-900">
-        Vật tư — {managedRoleName}
+        Vật tư — {managedHeader}
       </h3>
       {toast ? (
         <div

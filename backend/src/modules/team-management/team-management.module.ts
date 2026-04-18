@@ -38,6 +38,7 @@ import { TeamSupplyPlanService } from './services/team-supply-plan.service';
 import { TeamSupplyAllocationService } from './services/team-supply-allocation.service';
 import { TeamSupplySupplementService } from './services/team-supply-supplement.service';
 import { TeamSupplyLeaderService } from './services/team-supply-leader.service';
+import { TeamRoleHierarchyService } from './services/team-role-hierarchy.service';
 import { TeamManagementController } from './team-management.controller';
 import { TeamRegistrationController } from './team-registration.controller';
 import { TeamRegistrationImportController } from './team-registration-import.controller';
@@ -116,6 +117,7 @@ import { env } from 'src/config';
     TeamSupplyAllocationService,
     TeamSupplySupplementService,
     TeamSupplyLeaderService,
+    TeamRoleHierarchyService,
     s3ClientProvider,
     // Make every route within this module subject to @Throttle decorators.
     // Without this provider the @Throttle calls on public endpoints are no-ops.

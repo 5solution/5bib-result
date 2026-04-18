@@ -23,6 +23,7 @@ import {
   UnlockAllocationDto,
 } from '../dto/supply.dto';
 import { TeamCacheService, CACHE_TTL } from './team-cache.service';
+import { TeamRoleHierarchyService } from './team-role-hierarchy.service';
 
 /**
  * v1.6 Supply Allocation service.
@@ -54,31 +55,31 @@ export class TeamSupplyAllocationService {
     @InjectRepository(VolRole, 'volunteer')
     private readonly roleRepo: Repository<VolRole>,
     private readonly cache: TeamCacheService,
+    private readonly hierarchy: TeamRoleHierarchyService,
   ) {}
 
   /**
-   * v1.6 Option A: resolve which role a leader actor is authorized to act
-   * on. `actorRoleId` is the leader's own role. We look up the leader role,
-   * ensure it's flagged leader, and return its manages_role_id.
-   *
-   * Returns null for admin (actorRoleId === null). Throws for misconfigured
-   * leader (400) or non-leader actor (403).
+   * v1.6 Option B2: resolve the full Set of role_ids a leader actor is
+   * authorized to touch (nested descendants via BFS). Returns null for
+   * admin (actorRoleId === null). Throws 400 for misconfigured leader
+   * (empty managed set) or 403 for non-leader actor.
    */
-  private async resolveActorScopedRoleId(
+  private async resolveActorScopedRoleIds(
     actorRoleId: number | null,
-  ): Promise<number | null> {
+  ): Promise<Set<number> | null> {
     if (actorRoleId === null) return null;
     const role = await this.roleRepo.findOne({ where: { id: actorRoleId } });
     if (!role) throw new ForbiddenException('Actor role not found');
     if (!role.is_leader_role) {
       throw new ForbiddenException('Actor is not a leader role');
     }
-    if (role.manages_role_id == null) {
+    const managed = await this.hierarchy.resolveDescendantRoleIds(actorRoleId);
+    if (managed.size === 0) {
       throw new BadRequestException(
         'Leader role chưa được cấu hình quản lý role nào. Liên hệ admin cấu hình "Quản lý role" trong Role.',
       );
     }
-    return role.manages_role_id;
+    return managed;
   }
 
   /** List all allocations for a station + the underlying item names. TTL 30s. */
@@ -119,12 +120,12 @@ export class TeamSupplyAllocationService {
     const station = await this.stationRepo.findOne({ where: { id: stationId } });
     if (!station) throw new NotFoundException('Station not found');
 
-    // v1.6 Option A: leader gate compares leader.role.manages_role_id
-    // to station.role_id. resolveActorScopedRoleId returns null for admin.
-    const scopedRoleId = await this.resolveActorScopedRoleId(actorRoleId);
-    if (scopedRoleId !== null && scopedRoleId !== station.role_id) {
+    // v1.6 Option B2: leader gate — station.role_id must be in the
+    // BFS-resolved managed set. Admin (null) bypasses.
+    const scopedRoleIds = await this.resolveActorScopedRoleIds(actorRoleId);
+    if (scopedRoleIds !== null && !scopedRoleIds.has(station.role_id)) {
       throw new ForbiddenException(
-        'Leader may only edit allocations for stations of the role they manage',
+        'Leader may only edit allocations for stations within their managed hierarchy',
       );
     }
     // Duplicate-item-in-payload guard.

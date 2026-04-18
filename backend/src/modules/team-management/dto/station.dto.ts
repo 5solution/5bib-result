@@ -105,6 +105,8 @@ export class StationWithAssignmentSummaryDto {
   status!: StationStatus;
   @ApiProperty() sort_order!: number;
   @ApiProperty() is_active!: boolean;
+  @ApiProperty() role_id!: number;
+  @ApiProperty({ required: false, nullable: true }) role_name!: string | null;
   @ApiProperty({ type: [AssignmentMemberBriefDto] })
   crew!: AssignmentMemberBriefDto[];
   @ApiProperty({ type: [AssignmentMemberBriefDto] })
