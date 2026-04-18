@@ -80,4 +80,30 @@ export class CreateRoleDto {
   @IsString()
   @MaxLength(500)
   chat_group_url?: string | null;
+
+  // v1.6: Leader role → managed role. FK self-reference on vol_role. Set
+  // this only when is_leader_role=true; service validates consistency.
+  // NULL cho non-leader role (or leader that has not been wired yet).
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'v1.6: leader role trỏ tới role được quản lý (crew/TNV). NULL cho non-leader.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  manages_role_id?: number | null;
+
+  // v1.4/v1.6 companion — already on entity but was not DTO-exposed. Include
+  // so admin can toggle "is leader role" + optionally wire manages_role_id.
+  @ApiProperty({
+    required: false,
+    default: false,
+    description:
+      'True = leader role (portal access + station gating). Companion field for manages_role_id.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  is_leader_role?: boolean;
 }

@@ -55,6 +55,9 @@ interface RoleEditFields {
   contract_template_id: number | null;
   chat_platform: ChatPlatform | null;
   chat_group_url: string | null;
+  // v1.4/v1.6 — leader role + managed role FK.
+  is_leader_role: boolean;
+  manages_role_id: number | null;
 }
 
 export default function RolesPage(): React.ReactElement {
@@ -155,6 +158,7 @@ export default function RolesPage(): React.ReactElement {
         </Button>
         <CreateRoleDialog
           eventId={eventId}
+          allRoles={roles ?? []}
           open={createOpen}
           onOpenChange={setCreateOpen}
           onCreated={() => {
@@ -250,6 +254,7 @@ export default function RolesPage(): React.ReactElement {
 
       <EditRoleDialog
         role={editTarget}
+        allRoles={roles ?? []}
         onOpenChange={(open) => {
           if (!open) setEditTarget(null);
         }}
@@ -264,10 +269,12 @@ export default function RolesPage(): React.ReactElement {
 
 function EditRoleDialog({
   role,
+  allRoles,
   onOpenChange,
   onSaved,
 }: {
   role: TeamRole | null;
+  allRoles: TeamRole[];
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }): React.ReactElement {
@@ -284,6 +291,8 @@ function EditRoleDialog({
     const r = role as TeamRole & {
       chat_platform?: ChatPlatform | null;
       chat_group_url?: string | null;
+      is_leader_role?: boolean;
+      manages_role_id?: number | null;
     };
     setForm({
       max_slots: role.max_slots,
@@ -295,6 +304,8 @@ function EditRoleDialog({
       contract_template_id: role.contract_template_id,
       chat_platform: r.chat_platform ?? null,
       chat_group_url: r.chat_group_url ?? null,
+      is_leader_role: r.is_leader_role ?? false,
+      manages_role_id: r.manages_role_id ?? null,
     });
   }, [role]);
 
@@ -306,6 +317,15 @@ function EditRoleDialog({
         /* non-fatal */
       });
   }, [token, role]);
+
+  // Candidate roles for the "Quản lý role" dropdown — exclude leader roles
+  // (leaders managing leaders is not supported) and exclude self to prevent
+  // circular FK.
+  const manageCandidates = allRoles.filter(
+    (r) =>
+      r.id !== role?.id &&
+      !((r as TeamRole & { is_leader_role?: boolean }).is_leader_role === true),
+  );
 
   async function handleSubmit(): Promise<void> {
     if (!token || !role || !form) return;
@@ -319,12 +339,13 @@ function EditRoleDialog({
         auto_approve: form.auto_approve,
         sort_order: form.sort_order,
         contract_template_id: form.contract_template_id ?? undefined,
-        // v1.5: chat fields. Cast — SDK type may not yet include these
-        // until the backend agent lands them in team-api.ts.
-        ...({
-          chat_platform: form.chat_platform,
-          chat_group_url: form.chat_group_url,
-        } as Partial<CreateRoleInput>),
+        chat_platform: form.chat_platform,
+        chat_group_url: form.chat_group_url,
+        // v1.4/v1.6 — leader flag + managed role FK. manages_role_id is
+        // cleared when is_leader_role is false so non-leader rows never
+        // keep a stale FK.
+        is_leader_role: form.is_leader_role,
+        manages_role_id: form.is_leader_role ? form.manages_role_id : null,
       });
       toast.success("Đã cập nhật vai trò");
       onSaved();
@@ -430,6 +451,51 @@ function EditRoleDialog({
                   }
                 />
               </div>
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                <div>
+                  <Label>Là role leader</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Leader có magic link riêng, truy cập portal để quản lý supply + station.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.is_leader_role}
+                  onCheckedChange={(v) =>
+                    setForm({
+                      ...form,
+                      is_leader_role: v,
+                      manages_role_id: v ? form.manages_role_id : null,
+                    })
+                  }
+                />
+              </div>
+              {form.is_leader_role ? (
+                <div>
+                  <Label>Quản lý role</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={form.manages_role_id ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        manages_role_id: e.target.value
+                          ? Number(e.target.value)
+                          : null,
+                      })
+                    }
+                  >
+                    <option value="">— (Không quản lý) —</option>
+                    {manageCandidates.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.role_name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Leader role trỏ tới role crew/TNV được quản lý. Dùng cho supply + station.
+                  </p>
+                </div>
+              ) : null}
             </TabsContent>
 
             <TabsContent value="chat" className="space-y-3 pt-3">
@@ -523,11 +589,13 @@ function EditRoleDialog({
 
 function CreateRoleDialog({
   eventId,
+  allRoles,
   open,
   onOpenChange,
   onCreated,
 }: {
   eventId: number;
+  allRoles: TeamRole[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: () => void;
@@ -537,6 +605,8 @@ function CreateRoleDialog({
     CreateRoleInput & {
       chat_platform: ChatPlatform | null;
       chat_group_url: string | null;
+      is_leader_role: boolean;
+      manages_role_id: number | null;
     }
   >({
     role_name: "",
@@ -549,7 +619,16 @@ function CreateRoleDialog({
     sort_order: 0,
     chat_platform: null,
     chat_group_url: null,
+    is_leader_role: false,
+    manages_role_id: null,
   });
+  // Candidate roles for "Quản lý role" dropdown — exclude leader roles
+  // (leader-managing-leader unsupported). No self exclusion needed because
+  // the new role has no id yet.
+  const manageCandidates = allRoles.filter(
+    (r) =>
+      !((r as TeamRole & { is_leader_role?: boolean }).is_leader_role === true),
+  );
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -570,9 +649,11 @@ function CreateRoleDialog({
     }
     setSaving(true);
     try {
-      // Cast — SDK type doesn't yet include chat_* fields until backend
-      // agent lands them. Backend tolerates extra props.
-      await createTeamRole(token, eventId, form as CreateRoleInput);
+      await createTeamRole(token, eventId, {
+        ...form,
+        // v1.4/v1.6 — manages_role_id only meaningful when is_leader_role true.
+        manages_role_id: form.is_leader_role ? form.manages_role_id : null,
+      } satisfies CreateRoleInput);
       toast.success("Đã tạo vai trò");
       onCreated();
       setForm({
@@ -585,6 +666,8 @@ function CreateRoleDialog({
         sort_order: 0,
         chat_platform: null,
         chat_group_url: null,
+        is_leader_role: false,
+        manages_role_id: null,
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -696,6 +779,51 @@ function CreateRoleDialog({
                 }
               />
             </div>
+            <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+              <div>
+                <Label>Là role leader</Label>
+                <p className="text-xs text-muted-foreground">
+                  Leader có magic link riêng, truy cập portal để quản lý supply + station.
+                </p>
+              </div>
+              <Switch
+                checked={form.is_leader_role}
+                onCheckedChange={(v) =>
+                  setForm({
+                    ...form,
+                    is_leader_role: v,
+                    manages_role_id: v ? form.manages_role_id : null,
+                  })
+                }
+              />
+            </div>
+            {form.is_leader_role ? (
+              <div>
+                <Label>Quản lý role</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={form.manages_role_id ?? ""}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      manages_role_id: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    })
+                  }
+                >
+                  <option value="">— (Không quản lý) —</option>
+                  {manageCandidates.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.role_name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Leader role trỏ tới role crew/TNV được quản lý. Dùng cho supply + station.
+                </p>
+              </div>
+            ) : null}
           </TabsContent>
 
           <TabsContent value="form" className="space-y-3 pt-3">

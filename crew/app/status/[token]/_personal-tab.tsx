@@ -10,6 +10,9 @@ import type {
 import { updateProfile } from "@/lib/api";
 import { StatusBadge, deriveStatusKey } from "@/lib/status-style";
 import { namesMatch } from "@/lib/utils";
+import type { MyStationView } from "@/lib/station-api";
+import type { LeaderSupplyView } from "@/lib/supply-api";
+import { StationSection } from "./_station-section";
 
 /**
  * v1.4.1 — Personal profile tab with avatar + editable info + read-only
@@ -21,10 +24,14 @@ export function PersonalTab({
   token,
   status,
   signedPdfUrl,
+  myStation,
+  leaderSupply,
 }: {
   token: string;
   status: StatusResponse;
   signedPdfUrl: string | null;
+  myStation: MyStationView | null;
+  leaderSupply: LeaderSupplyView | null;
 }): React.ReactElement {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -214,6 +221,14 @@ export function PersonalTab({
           </div>
         ) : null}
       </section>
+
+      {/* ---------- v1.6: Vị trí & nhiệm vụ (station + supply for crew) ---------- */}
+      <StationSection
+        token={token}
+        myStation={myStation}
+        leaderSupply={leaderSupply}
+        roleName={status.role_name}
+      />
 
       {/* ---------- QR code (second, for quick scan) ---------- */}
       {showQr ? (

@@ -26,6 +26,12 @@ import { VolContractTemplate } from './team-management/entities/vol-contract-tem
 import { VolShirtStock } from './team-management/entities/vol-shirt-stock.entity';
 import { VolTeamScheduleEmail } from './team-management/entities/vol-team-schedule-email.entity';
 import { VolEventContact } from './team-management/entities/vol-event-contact.entity';
+import { VolStation } from './team-management/entities/vol-station.entity';
+import { VolStationAssignment } from './team-management/entities/vol-station-assignment.entity';
+import { VolSupplyItem } from './team-management/entities/vol-supply-item.entity';
+import { VolSupplyPlan } from './team-management/entities/vol-supply-plan.entity';
+import { VolSupplyAllocation } from './team-management/entities/vol-supply-allocation.entity';
+import { VolSupplySupplement } from './team-management/entities/vol-supply-supplement.entity';
 
 // Conditional: chỉ khởi tạo Platform DB nếu PLATFORM_DB_HOST được cung cấp
 const platformDbModules = env.platformDb.host
@@ -70,6 +76,12 @@ const volunteerDbModules = env.volunteerDb.host
           VolShirtStock,
           VolTeamScheduleEmail,
           VolEventContact,
+          VolStation,
+          VolStationAssignment,
+          VolSupplyItem,
+          VolSupplyPlan,
+          VolSupplyAllocation,
+          VolSupplySupplement,
         ],
         synchronize: false,
         logging: env.env === 'local' || env.env === 'development',

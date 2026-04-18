@@ -1,0 +1,126 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import {
+  AssignableMemberDto,
+  AssignmentMemberBriefDto,
+  CreateAssignmentDto,
+  CreateStationDto,
+  StationWithAssignmentSummaryDto,
+  UpdateStationDto,
+  UpdateStationStatusDto,
+} from './dto/station.dto';
+import { TeamStationService } from './services/team-station.service';
+
+// v1.6 THAY ĐỔI 1+2: admin-only station CRUD + assignment endpoints.
+@ApiTags('Team Management (stations)')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('team-management')
+export class TeamStationController {
+  constructor(private readonly stations: TeamStationService) {}
+
+  @Get('events/:eventId/roles/:roleId/stations')
+  @ApiOperation({
+    summary: 'List all stations under (event, role) with crew/volunteer summary',
+  })
+  @ApiResponse({ status: 200, type: [StationWithAssignmentSummaryDto] })
+  listStations(
+    @Param('eventId', ParseIntPipe) eventId: number,
+    @Param('roleId', ParseIntPipe) roleId: number,
+  ): Promise<StationWithAssignmentSummaryDto[]> {
+    return this.stations.listStationsWithSummary(eventId, roleId);
+  }
+
+  @Post('events/:eventId/roles/:roleId/stations')
+  @ApiOperation({ summary: 'Create a station under (event, role)' })
+  @ApiResponse({ status: 201, type: StationWithAssignmentSummaryDto })
+  createStation(
+    @Param('eventId', ParseIntPipe) eventId: number,
+    @Param('roleId', ParseIntPipe) roleId: number,
+    @Body() dto: CreateStationDto,
+  ): Promise<StationWithAssignmentSummaryDto> {
+    return this.stations.createStation(eventId, roleId, dto);
+  }
+
+  @Patch('stations/:id')
+  @ApiOperation({ summary: 'Partial update of a station' })
+  @ApiResponse({ status: 200, type: StationWithAssignmentSummaryDto })
+  updateStation(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateStationDto,
+  ): Promise<StationWithAssignmentSummaryDto> {
+    return this.stations.updateStation(id, dto);
+  }
+
+  @Patch('stations/:id/status')
+  @ApiOperation({
+    summary:
+      'Change station lifecycle status (setup/active/closed — any transition allowed)',
+  })
+  @ApiResponse({ status: 200, type: StationWithAssignmentSummaryDto })
+  updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateStationStatusDto,
+  ): Promise<StationWithAssignmentSummaryDto> {
+    return this.stations.updateStatus(id, dto.status);
+  }
+
+  @Delete('stations/:id')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Delete a station (409 if any assignments still attached)',
+  })
+  @ApiResponse({ status: 204 })
+  async deleteStation(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    await this.stations.deleteStation(id);
+  }
+
+  @Get('stations/:id/assignable-members')
+  @ApiOperation({
+    summary:
+      'List members eligible for assignment to this station (same role, approved+, not already assigned, non-leader)',
+  })
+  @ApiResponse({ status: 200, type: [AssignableMemberDto] })
+  listAssignableMembers(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<AssignableMemberDto[]> {
+    return this.stations.listAssignableMembers(id);
+  }
+
+  @Post('stations/:id/assignments')
+  @ApiOperation({ summary: 'Assign a member to a station (crew or volunteer)' })
+  @ApiResponse({ status: 201, type: AssignmentMemberBriefDto })
+  createAssignment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateAssignmentDto,
+  ): Promise<AssignmentMemberBriefDto> {
+    return this.stations.createAssignment(id, dto);
+  }
+
+  @Delete('station-assignments/:assignmentId')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Remove an assignment' })
+  @ApiResponse({ status: 204 })
+  async removeAssignment(
+    @Param('assignmentId', ParseIntPipe) assignmentId: number,
+  ): Promise<void> {
+    await this.stations.removeAssignment(assignmentId);
+  }
+}

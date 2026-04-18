@@ -6,7 +6,14 @@ const TTL = {
   roleSlots: 300,
   eventStats: 120,
   publicEvents: 120,
+  // v1.6 supply module
+  supplyItems: 300,
+  supplyOverview: 30,
+  supplyPlan: 60,
+  stationAllocations: 30,
 } as const;
+
+export const CACHE_TTL = TTL;
 
 /**
  * Redis cache keys for team-management. Keep all key names here so they can
@@ -48,6 +55,49 @@ export class TeamCacheService {
   }
 
   static readonly keyPublicEvents = 'team:public:events';
+
+  // v1.6 Stations — admin-side list per (event, role).
+  static keyStationsPrefix(eventId: number): string {
+    return `team:event:${eventId}:stations:`;
+  }
+
+  static keyStations(eventId: number, roleId: number): string {
+    return `${TeamCacheService.keyStationsPrefix(eventId)}${roleId}`;
+  }
+
+  // v1.6 Stations — public portal "my station" view per (station, registration).
+  static keyStationMyViewPrefix(stationId: number): string {
+    return `team:station:${stationId}:my-view:`;
+  }
+
+  static keyStationMyView(stationId: number, registrationId: number): string {
+    return `${TeamCacheService.keyStationMyViewPrefix(stationId)}${registrationId}`;
+  }
+
+  // v1.6 Supply — per-event item list (admin + leader)
+  static keySupplyItems(eventId: number): string {
+    return `team:event:${eventId}:supply-items`;
+  }
+
+  // v1.6 Supply — event-wide admin matrix overview
+  static keySupplyOverview(eventId: number): string {
+    return `team:event:${eventId}:supply-overview`;
+  }
+
+  // v1.6 Supply — per-role plan (admin + leader)
+  static keySupplyPlan(eventId: number, roleId: number): string {
+    return `team:event:${eventId}:supply-plan:${roleId}`;
+  }
+
+  // v1.6 Supply — per-station allocations list
+  static keyStationAllocations(stationId: number): string {
+    return `team:station:${stationId}:allocations`;
+  }
+
+  // Prefix used for bulk SCAN invalidation.
+  static keySupplyEventPrefix(eventId: number): string {
+    return `team:event:${eventId}:supply-`;
+  }
 
   async getJson<T>(key: string): Promise<T | null> {
     const raw = await this.redis.get(key);
@@ -107,6 +157,40 @@ export class TeamCacheService {
       if (directoryKeys.length > 0) {
         await this.redis.del(...directoryKeys);
       }
+      // v1.6: stations list keys live under `team:event:{id}:stations:*`
+      // and each station's "my view" caches live under
+      // `team:station:*:my-view:*`. Any station-level write on this event
+      // invalidates all of them; we broadly nuke my-view across stations
+      // because admins rarely care about per-station granularity at the
+      // event-invalidation level (Danny BR-STN: conservative invalidation).
+      const stationListKeys = await this.scanKeys(
+        `${TeamCacheService.keyStationsPrefix(eventId)}*`,
+      );
+      if (stationListKeys.length > 0) {
+        await this.redis.del(...stationListKeys);
+      }
+      const stationMyViewKeys = await this.scanKeys(
+        `team:station:*:my-view:*`,
+      );
+      if (stationMyViewKeys.length > 0) {
+        await this.redis.del(...stationMyViewKeys);
+      }
+      // v1.6 Supply — drop items/overview/plan for this event + all
+      // station-level allocation caches (we don't know which stations belong
+      // to this event without a DB hit, so we nuke the global allocation
+      // prefix — cheap and safe).
+      const supplyEventKeys = await this.scanKeys(
+        `${TeamCacheService.keySupplyEventPrefix(eventId)}*`,
+      );
+      if (supplyEventKeys.length > 0) {
+        await this.redis.del(...supplyEventKeys);
+      }
+      const stationAllocKeys = await this.scanKeys(
+        `team:station:*:allocations`,
+      );
+      if (stationAllocKeys.length > 0) {
+        await this.redis.del(...stationAllocKeys);
+      }
     } catch (err) {
       this.logger.warn(`Cache invalidate failed for event ${eventId}: ${(err as Error).message}`);
     }
@@ -123,6 +207,95 @@ export class TeamCacheService {
     } catch (err) {
       this.logger.warn(
         `Contacts cache invalidate failed for event ${eventId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * v1.6: Drop the admin "list stations" cache for one event. Optionally
+   * narrow to a single role; otherwise nukes every role under that event.
+   */
+  async invalidateStations(eventId: number, roleId?: number): Promise<void> {
+    try {
+      if (roleId !== undefined) {
+        await this.redis.del(TeamCacheService.keyStations(eventId, roleId));
+      } else {
+        const keys = await this.scanKeys(
+          `${TeamCacheService.keyStationsPrefix(eventId)}*`,
+        );
+        if (keys.length > 0) {
+          await this.redis.del(...keys);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Stations cache invalidate failed for event ${eventId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * v1.6: Drop every "my-station" portal view cached for a station. Called
+   * whenever a station field or any of its assignments changes.
+   */
+  async invalidateStation(stationId: number): Promise<void> {
+    try {
+      const keys = await this.scanKeys(
+        `${TeamCacheService.keyStationMyViewPrefix(stationId)}*`,
+      );
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Station cache invalidate failed for station ${stationId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * v1.6 Supply — targeted invalidators. Cheaper than `invalidateEvent`
+   * when only the supply slice changed.
+   */
+  async invalidateSupplyItems(eventId: number): Promise<void> {
+    try {
+      await this.redis.del(
+        TeamCacheService.keySupplyItems(eventId),
+        TeamCacheService.keySupplyOverview(eventId),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Supply-items cache invalidate failed for event ${eventId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  async invalidateSupplyPlan(eventId: number, roleId: number): Promise<void> {
+    try {
+      await this.redis.del(
+        TeamCacheService.keySupplyPlan(eventId, roleId),
+        TeamCacheService.keySupplyOverview(eventId),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Supply-plan cache invalidate failed (event=${eventId}, role=${roleId}): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  async invalidateStationAllocations(
+    stationId: number,
+    eventId?: number,
+  ): Promise<void> {
+    try {
+      const keys: string[] = [TeamCacheService.keyStationAllocations(stationId)];
+      if (eventId !== undefined) {
+        keys.push(TeamCacheService.keySupplyOverview(eventId));
+      }
+      await this.redis.del(...keys);
+    } catch (err) {
+      this.logger.warn(
+        `Station-allocations cache invalidate failed for station ${stationId}: ${(err as Error).message}`,
       );
     }
   }

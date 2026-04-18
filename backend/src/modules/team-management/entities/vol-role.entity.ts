@@ -96,6 +96,16 @@ export class VolRole {
   @Column({ type: 'boolean', default: false })
   is_leader_role!: boolean;
 
+  // v1.6 Option A: Leader role's "managed role" — trỏ tới role crew/TNV
+  // mà leader này quản lý. Supply plan + stations thuộc managed role,
+  // nhưng leader edit qua FK này. NULL cho non-leader roles.
+  @Column({ type: 'int', nullable: true })
+  manages_role_id!: number | null;
+
+  @ManyToOne(() => VolRole, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'manages_role_id' })
+  manages_role?: VolRole | null;
+
   // v1.5: Per-role group chat link. Gated by registration.status
   // in the public endpoints — only shown once TNV has ký HĐ.
   @Column({

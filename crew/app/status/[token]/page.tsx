@@ -7,6 +7,8 @@ import {
   type TeamDirectoryResponse,
   type PublicEventContactsResponse,
 } from "@/lib/directory-api";
+import { getMyStation, type MyStationView } from "@/lib/station-api";
+import { getLeaderSupplyView, type LeaderSupplyView } from "@/lib/supply-api";
 import { StatusTabs } from "./_status-tabs";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8081";
@@ -53,13 +55,33 @@ async function fetchSignedPdfUrl(token: string): Promise<string | null> {
 /**
  * Try to fetch leader portal data. A 403 simply means "not a leader" —
  * swallow into null so the status page can still render without the
- * team tab.
+ * management tab.
  */
 async function tryFetchLeaderPortal(
   token: string,
 ): Promise<LeaderPortalResponse | null> {
   try {
     return await getLeaderTeam(token);
+  } catch {
+    return null;
+  }
+}
+
+async function tryFetchLeaderSupply(
+  token: string,
+): Promise<LeaderSupplyView | null> {
+  try {
+    return await getLeaderSupplyView(token);
+  } catch {
+    return null;
+  }
+}
+
+async function tryFetchMyStation(
+  token: string,
+): Promise<MyStationView | null> {
+  try {
+    return await getMyStation(token);
   } catch {
     return null;
   }
@@ -90,14 +112,23 @@ export default async function StatusPage({
     );
   }
 
-  // Fetch signed PDF + leader probe + directory + contacts in parallel —
-  // all are best-effort. Token-expired/unauthorized on directory/contacts
-  // degrade to null so the Liên lạc tab just shows empty states.
-  const [signedPdfUrl, leaderPortal, directory, contacts]: [
+  // Fetch signed PDF + leader probe + directory + contacts + station +
+  // leader supply in parallel — all are best-effort. Unauthorized fetches
+  // degrade to null so the tabs render graceful empty states.
+  const [
+    signedPdfUrl,
+    leaderPortal,
+    directory,
+    contacts,
+    myStation,
+    leaderSupply,
+  ]: [
     string | null,
     LeaderPortalResponse | null,
     TeamDirectoryResponse | null,
     PublicEventContactsResponse | null,
+    MyStationView | null,
+    LeaderSupplyView | null,
   ] = await Promise.all([
     status.contract_status === "signed"
       ? fetchSignedPdfUrl(token)
@@ -105,6 +136,8 @@ export default async function StatusPage({
     tryFetchLeaderPortal(token),
     getDirectory(token).catch(() => null),
     getContacts(token).catch(() => null),
+    tryFetchMyStation(token),
+    tryFetchLeaderSupply(token),
   ]);
 
   return (
@@ -115,6 +148,8 @@ export default async function StatusPage({
       leaderPortal={leaderPortal}
       directory={directory}
       contacts={contacts}
+      myStation={myStation}
+      leaderSupply={leaderSupply}
     />
   );
 }

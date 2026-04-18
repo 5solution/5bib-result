@@ -41,6 +41,10 @@ export interface TeamRole {
   // v1.5: per-role group chat. Nullable — admin may not have configured.
   chat_platform?: ChatPlatform | null;
   chat_group_url?: string | null;
+  // v1.4/v1.6: leader-role flag + FK to the role this leader manages.
+  is_leader_role?: boolean;
+  manages_role_id?: number | null;
+  manages_role_name?: string | null;
 }
 
 export type ChatPlatform = "zalo" | "telegram" | "whatsapp" | "other";
@@ -111,6 +115,9 @@ export interface CreateRoleInput {
   // v1.5 group chat fields — optional. Null explicitly clears on update.
   chat_platform?: ChatPlatform | null;
   chat_group_url?: string | null;
+  // v1.4/v1.6 — leader role + managed role FK.
+  is_leader_role?: boolean;
+  manages_role_id?: number | null;
 }
 
 export type UpdateRoleInput = Partial<CreateRoleInput>;
@@ -1349,4 +1356,513 @@ export async function deleteEventContact(
     headers: authedHeaders(token),
   });
   await assertOk(res);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// v1.6 THAY ĐỔI 1+2 — Stations + assignments
+// ──────────────────────────────────────────────────────────────────────
+
+export type StationStatus = "setup" | "active" | "closed";
+export type AssignmentRole = "crew" | "volunteer";
+
+export interface AssignmentMember {
+  assignment_id: number;
+  registration_id: number;
+  full_name: string;
+  phone: string;
+  status: string;
+  assignment_role: AssignmentRole;
+  note: string | null;
+}
+
+export interface Station {
+  id: number;
+  station_name: string;
+  location_description: string | null;
+  gps_lat: string | null;
+  gps_lng: string | null;
+  status: StationStatus;
+  sort_order: number;
+  is_active: boolean;
+  crew: AssignmentMember[];
+  volunteers: AssignmentMember[];
+  crew_count: number;
+  volunteer_count: number;
+  has_crew: boolean;
+}
+
+export interface AssignableMember {
+  registration_id: number;
+  full_name: string;
+  phone: string;
+  email: string;
+  status: string;
+  avatar_url: string | null;
+}
+
+export interface CreateStationInput {
+  station_name: string;
+  location_description?: string | null;
+  gps_lat?: number | null;
+  gps_lng?: number | null;
+  sort_order?: number;
+}
+
+export type UpdateStationInput = Partial<CreateStationInput>;
+
+export interface CreateAssignmentInput {
+  registration_id: number;
+  assignment_role: AssignmentRole;
+  note?: string | null;
+}
+
+export async function listStations(
+  token: string,
+  eventId: number,
+  roleId: number,
+): Promise<Station[]> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/roles/${roleId}/stations`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function createStation(
+  token: string,
+  eventId: number,
+  roleId: number,
+  dto: CreateStationInput,
+): Promise<Station> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/roles/${roleId}/stations`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(dto),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateStation(
+  token: string,
+  id: number,
+  patch: UpdateStationInput,
+): Promise<Station> {
+  const res = await fetch(`/api/team-management/stations/${id}`, {
+    method: "PATCH",
+    headers: authedHeaders(token),
+    body: JSON.stringify(patch),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function deleteStation(token: string, id: number): Promise<void> {
+  const res = await fetch(`/api/team-management/stations/${id}`, {
+    method: "DELETE",
+    headers: authedHeaders(token),
+  });
+  await assertOk(res);
+}
+
+export async function updateStationStatus(
+  token: string,
+  id: number,
+  status: StationStatus,
+): Promise<Station> {
+  const res = await fetch(`/api/team-management/stations/${id}/status`, {
+    method: "PATCH",
+    headers: authedHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function listAssignableMembers(
+  token: string,
+  stationId: number,
+): Promise<AssignableMember[]> {
+  const res = await fetch(
+    `/api/team-management/stations/${stationId}/assignable-members`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function createAssignment(
+  token: string,
+  stationId: number,
+  dto: CreateAssignmentInput,
+): Promise<AssignmentMember> {
+  const res = await fetch(
+    `/api/team-management/stations/${stationId}/assignments`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(dto),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function removeAssignment(
+  token: string,
+  assignmentId: number,
+): Promise<void> {
+  const res = await fetch(
+    `/api/team-management/station-assignments/${assignmentId}`,
+    { method: "DELETE", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+}
+
+// =============================================================
+// v1.6 Supply module — types + admin SDK helpers
+// =============================================================
+
+export interface SupplyItem {
+  id: number;
+  event_id: number;
+  item_name: string;
+  unit: string;
+  created_by_role_id: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSupplyItemInput {
+  item_name: string;
+  unit: string;
+  sort_order?: number;
+  created_by_role_id?: number | null;
+}
+
+export type UpdateSupplyItemInput = Partial<CreateSupplyItemInput>;
+
+export interface SupplyPlanRow {
+  plan_id: number | null;
+  item_id: number;
+  item_name: string;
+  unit: string;
+  requested_qty: number;
+  request_note: string | null;
+  fulfilled_qty: number | null;
+  fulfill_note: string | null;
+  gap_qty: number | null;
+  updated_at: string | null;
+}
+
+export interface UpsertSupplyPlanRequestInput {
+  items: Array<{
+    item_id: number;
+    requested_qty: number;
+    request_note?: string | null;
+  }>;
+}
+
+export interface UpsertSupplyPlanFulfillInput {
+  items: Array<{
+    item_id: number;
+    fulfilled_qty: number;
+    fulfill_note?: string | null;
+  }>;
+}
+
+export interface SupplyOverviewCell {
+  role_id: number;
+  requested_qty: number;
+  fulfilled_qty: number | null;
+  gap_qty: number | null;
+  allocated_qty: number;
+  confirmed_qty: number;
+}
+
+export interface SupplyOverviewItemRow {
+  item_id: number;
+  item_name: string;
+  unit: string;
+  cells: SupplyOverviewCell[];
+}
+
+export interface EventSupplyOverview {
+  roles: Array<{ role_id: number; role_name: string }>;
+  items: SupplyOverviewItemRow[];
+}
+
+export interface AllocationRow {
+  id: number;
+  station_id: number;
+  item_id: number;
+  item_name: string;
+  unit: string;
+  allocated_qty: number;
+  confirmed_qty: number | null;
+  shortage_qty: number | null;
+  is_locked: boolean;
+  confirmed_at: string | null;
+  confirmation_note: string | null;
+  confirmed_by: { name: string | null; phone: string | null } | null;
+  updated_at: string;
+}
+
+export interface UpsertAllocationInput {
+  allocations: Array<{ item_id: number; allocated_qty: number }>;
+  optimistic_updated_at?: string;
+}
+
+export interface SupplementRow {
+  id: number;
+  allocation_id: number;
+  round_number: number;
+  qty: number;
+  note: string | null;
+  confirmed_qty: number | null;
+  shortage_qty: number | null;
+  confirmed_at: string | null;
+  confirmed_by_name: string | null;
+  confirmed_by_phone: string | null;
+  confirmation_note: string | null;
+  created_at: string;
+}
+
+export interface LeaderSupplyView {
+  event_id: number;
+  role_id: number;
+  role_name: string;
+  // v1.6 Option A: explicit alias so crew UI can show "Vật tư — {managed}".
+  managed_role_name: string;
+  items: Array<{
+    item_id: number;
+    item_name: string;
+    unit: string;
+    requested_qty: number;
+    fulfilled_qty: number | null;
+    gap_qty: number | null;
+    request_note: string | null;
+    fulfill_note: string | null;
+    stations: Array<{
+      allocation_id: number;
+      station_id: number;
+      station_name: string;
+      allocated_qty: number;
+      confirmed_qty: number | null;
+      shortage_qty: number | null;
+      is_locked: boolean;
+      confirmed_at: string | null;
+      confirmation_note: string | null;
+      confirmed_by: { name: string | null; phone: string | null } | null;
+      supplements: SupplementRow[];
+    }>;
+  }>;
+}
+
+// ---- items ----
+
+export async function listSupplyItems(
+  token: string,
+  eventId: number,
+): Promise<SupplyItem[]> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/supply-items`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function createSupplyItem(
+  token: string,
+  eventId: number,
+  input: CreateSupplyItemInput,
+): Promise<SupplyItem> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/supply-items`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(input),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateSupplyItem(
+  token: string,
+  id: number,
+  patch: UpdateSupplyItemInput,
+): Promise<SupplyItem> {
+  const res = await fetch(`/api/team-management/supply-items/${id}`, {
+    method: "PATCH",
+    headers: authedHeaders(token),
+    body: JSON.stringify(patch),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function deleteSupplyItem(
+  token: string,
+  id: number,
+): Promise<void> {
+  const res = await fetch(`/api/team-management/supply-items/${id}`, {
+    method: "DELETE",
+    headers: authedHeaders(token),
+  });
+  await assertOk(res);
+}
+
+// ---- plan ----
+
+export async function getSupplyPlan(
+  token: string,
+  eventId: number,
+  roleId: number,
+): Promise<SupplyPlanRow[]> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/roles/${roleId}/supply-plan`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function upsertSupplyPlanRequest(
+  token: string,
+  eventId: number,
+  roleId: number,
+  input: UpsertSupplyPlanRequestInput,
+): Promise<SupplyPlanRow[]> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/roles/${roleId}/supply-plan/request`,
+    {
+      method: "PUT",
+      headers: authedHeaders(token),
+      body: JSON.stringify(input),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function upsertSupplyPlanFulfill(
+  token: string,
+  eventId: number,
+  roleId: number,
+  input: UpsertSupplyPlanFulfillInput,
+): Promise<SupplyPlanRow[]> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/roles/${roleId}/supply-plan/fulfill`,
+    {
+      method: "PUT",
+      headers: authedHeaders(token),
+      body: JSON.stringify(input),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getSupplyOverview(
+  token: string,
+  eventId: number,
+): Promise<EventSupplyOverview> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/supply-overview`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+// ---- allocations ----
+
+export async function getStationAllocations(
+  token: string,
+  stationId: number,
+): Promise<AllocationRow[]> {
+  const res = await fetch(
+    `/api/team-management/stations/${stationId}/allocations`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function upsertStationAllocations(
+  token: string,
+  stationId: number,
+  input: UpsertAllocationInput,
+): Promise<AllocationRow[]> {
+  const res = await fetch(
+    `/api/team-management/stations/${stationId}/allocations`,
+    {
+      method: "PUT",
+      headers: authedHeaders(token),
+      body: JSON.stringify(input),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function unlockAllocation(
+  token: string,
+  allocationId: number,
+  adminNote: string,
+): Promise<AllocationRow> {
+  const res = await fetch(
+    `/api/team-management/supply-allocations/${allocationId}/unlock`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ admin_note: adminNote }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+// ---- supplements ----
+
+export async function listSupplements(
+  token: string,
+  allocationId: number,
+): Promise<SupplementRow[]> {
+  const res = await fetch(
+    `/api/team-management/supply-allocations/${allocationId}/supplements`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function createSupplement(
+  token: string,
+  allocationId: number,
+  qty: number,
+  note?: string | null,
+): Promise<SupplementRow> {
+  const res = await fetch(
+    `/api/team-management/supply-allocations/${allocationId}/supplements`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({
+        allocation_id: allocationId,
+        qty,
+        note: note ?? null,
+      }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
 }

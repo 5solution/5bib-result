@@ -101,4 +101,11 @@ export class ConfirmImportRegistrationsResponseDto {
 
   @ApiProperty({ type: [String], description: 'Per-row errors encountered during insert' })
   errors!: string[];
+
+  @ApiProperty({
+    example: 5,
+    description:
+      'v1.6: how many inserted registrations were also assigned to a station via the station_id column.',
+  })
+  assigned!: number;
 }
