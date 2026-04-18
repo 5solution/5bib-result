@@ -1042,7 +1042,7 @@ export default function RaceDetailPage() {
                       setEditForm((p: any) => ({
                         ...p,
                         startDate: e.target.value
-                          ? new Date(e.target.value + "T00:00:00").toISOString()
+                          ? e.target.value + "T00:00:00.000Z"
                           : undefined,
                       }))
                     }
@@ -1058,7 +1058,7 @@ export default function RaceDetailPage() {
                       setEditForm((p: any) => ({
                         ...p,
                         endDate: e.target.value
-                          ? new Date(e.target.value + "T00:00:00").toISOString()
+                          ? e.target.value + "T00:00:00.000Z"
                           : undefined,
                       }))
                     }
