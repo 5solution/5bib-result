@@ -242,7 +242,7 @@ export class RaceResultService {
 
   private normalizeRankValue(
     value: any,
-    timingPoint?: string,
+    timingPoint?: string | number,
   ): {
     original: string;
     numeric: number | null;
@@ -254,7 +254,7 @@ export class RaceResultService {
       // Status-based ranks (DNF, DNS, DSQ, OOC) → 900000 (after normal ranks)
       const statusValues = ['DNF', 'DNS', 'DSQ', 'OOC'];
       const upperStr = strValue.toUpperCase();
-      const upperTp = (timingPoint || '').toUpperCase();
+      const upperTp = String(timingPoint ?? '').toUpperCase();
       if (
         statusValues.includes(upperStr) ||
         statusValues.includes(upperTp)
@@ -483,10 +483,10 @@ export class RaceResultService {
     });
   }
 
-  private formatRankDisplay(rank: string, timingPoint?: string): string {
+  private formatRankDisplay(rank: string, timingPoint?: string | number): string {
     const statusValues = ['DNF', 'DNS', 'DSQ', 'OOC'];
     if (rank === '-1') {
-      const tp = (timingPoint || '').toUpperCase();
+      const tp = String(timingPoint ?? '').toUpperCase();
       if (statusValues.includes(tp)) return tp;
       return '';
     }
