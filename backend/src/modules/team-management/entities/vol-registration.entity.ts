@@ -13,15 +13,37 @@ import { VolEvent } from './vol-event.entity';
 import { VolRole } from './vol-role.entity';
 
 export type ShirtSize = 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL';
+// v1.4: 10-state machine. Terminal states: rejected, cancelled.
+// Flow: pending_approval → approved → contract_sent → contract_signed
+//     → qr_sent → checked_in → completed (+ waitlisted as parallel branch)
 export type RegistrationStatus =
-  | 'pending'
+  | 'pending_approval'
   | 'approved'
+  | 'contract_sent'
+  | 'contract_signed'
+  | 'qr_sent'
+  | 'checked_in'
+  | 'completed'
   | 'waitlisted'
   | 'rejected'
   | 'cancelled';
-export type CheckinMethod = 'qr_scan' | 'gps_verify';
+export type CheckinMethod = 'qr_scan' | 'gps_verify' | 'leader_checkin';
 export type ContractStatus = 'not_sent' | 'sent' | 'signed' | 'expired';
 export type PaymentStatus = 'pending' | 'paid';
+export type CompletionConfirmedBy = 'leader' | 'admin';
+
+export const REGISTRATION_STATUS_VALUES: RegistrationStatus[] = [
+  'pending_approval',
+  'approved',
+  'contract_sent',
+  'contract_signed',
+  'qr_sent',
+  'checked_in',
+  'completed',
+  'waitlisted',
+  'rejected',
+  'cancelled',
+];
 
 @Entity('vol_registration')
 @Index('idx_role_status', ['role_id', 'status'])
@@ -74,8 +96,8 @@ export class VolRegistration {
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'approved', 'waitlisted', 'rejected', 'cancelled'],
-    default: 'pending',
+    enum: REGISTRATION_STATUS_VALUES,
+    default: 'pending_approval',
   })
   status!: RegistrationStatus;
 
@@ -102,7 +124,7 @@ export class VolRegistration {
 
   @Column({
     type: 'enum',
-    enum: ['qr_scan', 'gps_verify'],
+    enum: ['qr_scan', 'gps_verify', 'leader_checkin'],
     nullable: true,
   })
   checkin_method!: CheckinMethod | null;
@@ -129,6 +151,9 @@ export class VolRegistration {
   @Column({ type: 'varchar', length: 64, nullable: true })
   contract_pdf_hash!: string | null;
 
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  contract_signature_url!: string | null;
+
   @Column({ type: 'int', nullable: true })
   actual_working_days!: number | null;
 
@@ -140,6 +165,46 @@ export class VolRegistration {
 
   @Column({ type: 'text', nullable: true })
   notes!: string | null;
+
+  // v1.4 — Reject / completion / anti-fraud fields
+  @Column({ type: 'text', nullable: true })
+  rejection_reason!: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  completion_confirmed_at!: Date | null;
+
+  @Column({ type: 'enum', enum: ['leader', 'admin'], nullable: true })
+  completion_confirmed_by!: CompletionConfirmedBy | null;
+
+  @Column({ type: 'int', nullable: true })
+  completion_confirmed_id!: number | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  checkout_at!: Date | null;
+
+  @Column({ type: 'boolean', default: false })
+  suspicious_checkin!: boolean;
+
+  // Snapshot compensation at completion — locks the pay amount against
+  // later edits to vol_role.daily_rate / working_days (Danny Q4 = Y).
+  @Column({ type: 'decimal', precision: 12, scale: 0, nullable: true })
+  snapshot_daily_rate!: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  snapshot_working_days!: number | null;
+
+  // v1.4.1 — TNV profile edit with admin re-approval.
+  // pending_changes is the JSON patch submitted by the TNV via the public
+  // /profile endpoint. has_pending_changes is a quick boolean flag that the
+  // admin list-view filters on. Both are cleared on approve/reject.
+  @Column({ type: 'json', nullable: true })
+  pending_changes!: Record<string, unknown> | null;
+
+  @Column({ type: 'boolean', default: false })
+  has_pending_changes!: boolean;
+
+  @Column({ type: 'datetime', nullable: true })
+  pending_changes_submitted_at!: Date | null;
 
   @CreateDateColumn({ type: 'datetime' })
   created_at!: Date;

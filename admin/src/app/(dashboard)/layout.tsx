@@ -124,8 +124,8 @@ export default function DashboardLayout({
 
   return (
     <div className="flex min-h-screen">
-      {/* Desktop Sidebar */}
-      <aside className="hidden w-60 shrink-0 border-r bg-card md:flex md:flex-col">
+      {/* Desktop Sidebar — collapsed under 1024px (lg) so tablets use the hamburger */}
+      <aside className="hidden w-60 shrink-0 border-r bg-card lg:flex lg:flex-col">
         <div className="flex h-14 items-center px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
             <Logo5bib className="h-7" />
@@ -155,7 +155,7 @@ export default function DashboardLayout({
         <header className="flex h-14 items-center gap-4 border-b bg-card px-4 md:px-6">
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger className="md:hidden inline-flex items-center justify-center rounded-md size-8 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+            <SheetTrigger className="lg:hidden inline-flex items-center justify-center rounded-md size-8 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
               <Menu className="size-5" />
             </SheetTrigger>
             <SheetContent side="left" className="w-60 p-0">
@@ -194,7 +194,7 @@ export default function DashboardLayout({
               variant="ghost"
               size="icon-sm"
               onClick={handleLogout}
-              className="hidden md:flex"
+              className="hidden lg:flex"
             >
               <LogOut className="size-4" />
             </Button>

@@ -46,7 +46,7 @@ export default function ExportPage(): React.ReactElement {
   return (
     <div className="space-y-5">
       <div className="rounded-lg border p-6">
-        <h2 className="text-lg font-bold">Xuất báo cáo thanh toán</h2>
+        <h2 className="font-display text-3xl font-bold tracking-tight text-gradient">Xuất báo cáo thanh toán</h2>
         <p className="text-sm text-muted-foreground mt-1">
           File .xlsx bao gồm tất cả người đã được duyệt (status=approved). Cột:
           Họ tên, CCCD, SĐT, Email, Vai trò, Size áo, Ngày công, Đơn giá,

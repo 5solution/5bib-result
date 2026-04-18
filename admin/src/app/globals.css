@@ -129,3 +129,182 @@
     font-size: 120%;
   }
 }
+
+/* ═══════════════════════════════════════════════════════
+   5BIB "DUONG MON" — Scoped Design System
+   Scoped to .duong-mon-scope to avoid clobbering other
+   admin modules (races, sponsors, merchants, etc).
+   ═══════════════════════════════════════════════════════ */
+.duong-mon-scope {
+  /* Brand surfaces — DesignCorrection v2: pure white base */
+  --5bib-bg: #ffffff;
+  --5bib-surface: #ffffff;
+  --5bib-surface-2: #f8fafc;
+  --5bib-accent: #2563eb;
+  --5bib-accent-dim: #1d4ed8;
+  --5bib-accent-warm: #b45309;
+  --5bib-accent-glow: rgba(37, 99, 235, 0.2);
+  --5bib-text: #111827;
+  --5bib-text-muted: #6b7280;
+  --5bib-border: #e5e7eb;
+  --5bib-success: #15803d;
+  --5bib-live: #dc2626;
+  --5bib-gold: #b45309;
+  --5bib-silver: #6b7280;
+  --5bib-bronze: #92400e;
+  --5bib-energy: #b45309;
+  --5bib-trail: #15803d;
+
+  /* shadcn semantic tokens — pure white */
+  --background: #ffffff;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f8fafc;
+  --secondary-foreground: #111827;
+  --muted: #f9fafb;
+  --muted-foreground: #6b7280;
+  --accent: #eff6ff;
+  --accent-foreground: #1d4ed8;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #2563eb;
+  --radius: 0.5rem;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-sm: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(28, 25, 23, 0.07), 0 2px 4px -2px rgba(28, 25, 23, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(28, 25, 23, 0.08), 0 4px 6px -4px rgba(28, 25, 23, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(28, 25, 23, 0.08), 0 8px 10px -6px rgba(28, 25, 23, 0.04);
+  --shadow-warm: 0 4px 24px rgba(37, 99, 235, 0.1);
+  --shadow-glow: 0 0 0 1px rgba(37, 99, 235, 0.08), 0 8px 32px rgba(37, 99, 235, 0.1);
+
+  /* Motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-athletic: cubic-bezier(0.22, 0.68, 0, 1.2);
+  --duration-fast: 150ms;
+  --duration-normal: 280ms;
+  --duration-slow: 500ms;
+
+  /* Font cascade */
+  font-family: "Plus Jakarta Sans", "Be Vietnam Pro", system-ui, sans-serif;
+  background-color: var(--5bib-bg);
+  color: var(--5bib-text);
+}
+
+.duong-mon-scope h1,
+.duong-mon-scope h2,
+.duong-mon-scope h3,
+.duong-mon-scope h4,
+.duong-mon-scope h5,
+.duong-mon-scope h6,
+.duong-mon-scope .font-display {
+  font-family: "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.duong-mon-scope code,
+.duong-mon-scope pre,
+.duong-mon-scope .font-mono,
+.duong-mon-scope [data-mono],
+.duong-mon-scope .tabular-nums {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer utilities {
+  .card-hover {
+    transition:
+      transform var(--duration-normal, 280ms) var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)),
+      box-shadow var(--duration-normal, 280ms) var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)),
+      border-color var(--duration-fast, 150ms) ease;
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.07));
+    border-color: #e5e7eb;
+  }
+
+  .result-row-hover {
+    transition: background-color var(--duration-fast, 150ms) ease;
+  }
+  .result-row-hover:hover {
+    background-color: #f0f4ff;
+  }
+
+  .glass-light {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+  }
+
+  .glass-dark {
+    background: rgba(28, 25, 23, 0.72);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .text-gradient {
+    color: #1d4ed8;
+  }
+  .text-gradient-warm {
+    color: #111827;
+  }
+
+  .slide-up {
+    animation: duong-mon-slide-up var(--duration-slow, 500ms) var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  }
+  @keyframes duong-mon-slide-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .stagger-in > * {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: duong-mon-stagger-up var(--duration-slow, 500ms) var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+  }
+  .stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-in > *:nth-child(2) { animation-delay: 70ms; }
+  .stagger-in > *:nth-child(3) { animation-delay: 140ms; }
+  .stagger-in > *:nth-child(4) { animation-delay: 210ms; }
+  .stagger-in > *:nth-child(5) { animation-delay: 280ms; }
+  .stagger-in > *:nth-child(6) { animation-delay: 350ms; }
+  @keyframes duong-mon-stagger-up {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .scale-in {
+    animation: duong-mon-scale-in var(--duration-normal, 280ms) var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+  }
+  @keyframes duong-mon-scale-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .pulse-live {
+    animation: duong-mon-pulse-heartbeat 1.8s ease-in-out infinite;
+  }
+  @keyframes duong-mon-pulse-heartbeat {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    15% { opacity: 0.6; transform: scale(0.96); }
+    30% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.94); }
+  }
+
+  .glow-accent { box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08), 0 8px 32px rgba(37, 99, 235, 0.1); }
+  .glow-warm { box-shadow: 0 4px 24px rgba(245, 158, 11, 0.12); }
+
+  .hero-pattern {
+    background-image: none;
+  }
+}

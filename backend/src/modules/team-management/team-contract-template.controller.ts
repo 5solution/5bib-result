@@ -29,6 +29,8 @@ import {
   CreateContractTemplateDto,
   ImportDocxResponseDto,
   UpdateContractTemplateDto,
+  ValidateTemplateDto,
+  ValidateTemplateResponseDto,
 } from './dto/contract-template.dto';
 import { TeamContractService } from './services/team-contract.service';
 
@@ -86,6 +88,27 @@ export class TeamContractTemplateController {
   ): Promise<{ success: true }> {
     await this.contracts.deleteTemplate(id);
     return { success: true };
+  }
+
+  @Post(':id/duplicate')
+  @ApiOperation({ summary: 'Duplicate a template — returns a new row with "(bản sao)" suffix' })
+  @ApiResponse({ status: 201, type: VolContractTemplate })
+  duplicate(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: JwtRequest,
+  ): Promise<VolContractTemplate> {
+    const createdBy =
+      req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
+    return this.contracts.duplicateTemplate(id, createdBy);
+  }
+
+  @Post('validate')
+  @ApiOperation({
+    summary: 'Validate template HTML — returns list of unknown {{variables}}',
+  })
+  @ApiResponse({ status: 201, type: ValidateTemplateResponseDto })
+  validate(@Body() dto: ValidateTemplateDto): ValidateTemplateResponseDto {
+    return this.contracts.validateTemplate(dto.content_html);
   }
 
   @Post('import-docx')

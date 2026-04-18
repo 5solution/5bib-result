@@ -363,6 +363,45 @@ export class MailService {
     }
   }
 
+  /**
+   * Send an arbitrary admin-authored HTML body. Used by v1.4 Team Schedule
+   * Email (one-off blasts per role) — caller is responsible for server-side
+   * sanitization before calling this. Returns true on successful queue;
+   * false when Mailchimp is not configured (dev) or the send errored (the
+   * error is logged but not thrown — bulk sends log per-failure and keep
+   * going).
+   */
+  async sendCustomHtml(
+    toEmail: string,
+    subject: string,
+    html: string,
+  ): Promise<boolean> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] sendCustomHtml to=${toEmail} subject="${subject}" (mailchimp not configured)`,
+      );
+      return false;
+    }
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB Team',
+          subject,
+          html,
+          to: [{ email: toEmail, type: 'to' }],
+        },
+      });
+      this.logger.log(`Custom HTML email sent to ${toEmail}`);
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `sendCustomHtml failed to=${toEmail}: ${(error as Error).message}`,
+      );
+      return false;
+    }
+  }
+
   async sendTeamWaitlisted(data: TeamWaitlistedData): Promise<void> {
     if (!this.client) {
       this.logger.warn(

@@ -36,4 +36,22 @@ export class CreateEventDto {
   @ApiProperty({ required: false }) @IsEmail() @IsOptional() contact_email?: string;
 
   @ApiProperty({ required: false }) @IsString() @IsOptional() contact_phone?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Public S3 URL of the benefits banner. Upload separately via /team-upload-photo, then pass the URL here.',
+  })
+  @IsString()
+  @IsOptional()
+  benefits_image_url?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Plain-text terms & conditions shown on the crew register page. TNV must agree before submitting.',
+  })
+  @IsString()
+  @IsOptional()
+  terms_conditions?: string;
 }

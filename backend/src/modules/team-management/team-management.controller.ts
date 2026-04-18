@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   ParseIntPipe,
   Patch,
@@ -10,11 +12,15 @@ import {
   Put,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -28,6 +34,11 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateRegistrationDto } from './dto/update-registration.dto';
+import { RejectRegistrationDto } from './dto/reject-registration.dto';
+import { RejectChangesDto } from './dto/reject-changes.dto';
+import { CancelRegistrationDto } from './dto/cancel-registration.dto';
+import { ConfirmCompletionDto } from './dto/confirm-completion.dto';
+import { ClearSuspiciousDto } from './dto/clear-suspicious.dto';
 import {
   ListRegistrationsQueryDto,
   PaginationQueryDto,
@@ -41,6 +52,7 @@ import {
   BulkUpdateRegistrationsDto,
   BulkUpdateResponseDto,
   ExportResponseDto,
+  PersonnelExportResponseDto,
 } from './dto/bulk-update.dto';
 import { RegistrationDetailDto } from './dto/registration-detail.dto';
 import { AdminManualRegisterDto } from './dto/manual-register.dto';
@@ -60,6 +72,12 @@ import { TeamContractService } from './services/team-contract.service';
 import { TeamDashboardService } from './services/team-dashboard.service';
 import { TeamShirtService } from './services/team-shirt.service';
 import { TeamExportService } from './services/team-export.service';
+import { TeamRoleImportService } from './services/team-role-import.service';
+import {
+  ConfirmRoleImportDto,
+  ConfirmRoleImportResponseDto,
+  PreviewRoleImportResponseDto,
+} from './dto/role-import.dto';
 
 interface JwtRequest extends Request {
   user?: { username?: string; email?: string; sub?: string };
@@ -81,6 +99,7 @@ export class TeamManagementController {
     private readonly dashboard: TeamDashboardService,
     private readonly shirts: TeamShirtService,
     private readonly exports: TeamExportService,
+    private readonly roleImport: TeamRoleImportService,
   ) {}
 
   // -------- Events --------
@@ -130,6 +149,70 @@ export class TeamManagementController {
   }
 
   // -------- Roles --------
+
+  @Get('roles/import-template')
+  @ApiOperation({
+    summary: 'Download a CSV template for bulk role import',
+  })
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header(
+    'Content-Disposition',
+    'attachment; filename="roles_template.csv"',
+  )
+  getImportTemplate(): string {
+    return this.roleImport.generateTemplateCsv();
+  }
+
+  @Post('events/:id/roles/import/preview')
+  @ApiOperation({
+    summary:
+      'Parse & validate a CSV/XLSX file of roles — returns preview, does not insert',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, type: PreviewRoleImportResponseDto })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 1 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const allowed = new Set([
+          'text/csv',
+          'application/csv',
+          'text/plain',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+        const name = (file.originalname ?? '').toLowerCase();
+        const extOk = name.endsWith('.csv') || name.endsWith('.xlsx');
+        if (!extOk || !allowed.has(file.mimetype ?? '')) {
+          return cb(
+            new BadRequestException('Chỉ hỗ trợ .csv và .xlsx'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  previewRoleImport(
+    @Param('id', ParseIntPipe) eventId: number,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<PreviewRoleImportResponseDto> {
+    return this.roleImport.preview(eventId, file);
+  }
+
+  @Post('events/:id/roles/import/confirm')
+  @ApiOperation({
+    summary:
+      'Commit parsed role rows (re-validates server-side, batch inserts, returns full roles list)',
+  })
+  @ApiResponse({ status: 201, type: ConfirmRoleImportResponseDto })
+  confirmRoleImport(
+    @Param('id', ParseIntPipe) eventId: number,
+    @Body() dto: ConfirmRoleImportDto,
+    @Req() req: JwtRequest,
+  ): Promise<ConfirmRoleImportResponseDto> {
+    return this.roleImport.confirm(eventId, dto.rows, identifyAdmin(req));
+  }
 
   @Post('events/:id/roles')
   @ApiOperation({ summary: 'Add role to event' })
@@ -197,13 +280,127 @@ export class TeamManagementController {
   }
 
   @Patch('registrations/:id')
-  @ApiOperation({ summary: 'Update registration (approve/reject/cancel/pay)' })
+  @ApiOperation({
+    summary:
+      'Update registration field-level edits (notes / payment / working_days). State transitions use dedicated endpoints.',
+  })
   @ApiResponse({ status: 200, type: VolRegistration })
   updateRegistration(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRegistrationDto,
   ): Promise<VolRegistration> {
     return this.registrations.updateRegistration(id, dto);
+  }
+
+  // ---- v1.4 state-machine endpoints ----
+
+  @Patch('registrations/:id/approve')
+  @ApiOperation({
+    summary:
+      'Approve a pending_approval registration. Transitions → approved then auto-sends the contract email (→ contract_sent).',
+  })
+  @ApiResponse({ status: 200, type: VolRegistration })
+  async approveRegistration(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<VolRegistration> {
+    const approved = await this.registrations.approveRegistration(id);
+    // Fire-and-forget contract email: failure leaves status at `approved`
+    // and the admin can retry from the role bulk-send or via re-approve.
+    void this.contracts
+      .sendContractForRegistrationId(id)
+      .catch((err) =>
+        // eslint-disable-next-line no-console
+        console.warn(`contract email after approve failed reg=${id}: ${(err as Error).message}`),
+      );
+    return approved;
+  }
+
+  @Patch('registrations/:id/reject')
+  @ApiOperation({
+    summary:
+      'Reject a pending_approval (or approved) registration with a required reason. Auto-promotes next waitlisted.',
+  })
+  @ApiResponse({ status: 200, type: VolRegistration })
+  rejectRegistration(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RejectRegistrationDto,
+  ): Promise<VolRegistration> {
+    return this.registrations.rejectRegistration(id, dto.rejection_reason);
+  }
+
+  @Patch('registrations/:id/cancel')
+  @ApiOperation({
+    summary:
+      'Cancel a registration (any non-terminal state). Auto-promotes next waitlisted if a slot opens.',
+  })
+  @ApiResponse({ status: 200, type: VolRegistration })
+  cancelRegistration(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelRegistrationDto,
+  ): Promise<VolRegistration> {
+    return this.registrations.cancelRegistration(id, dto.reason);
+  }
+
+  @Patch('registrations/:id/confirm-completion')
+  @ApiOperation({
+    summary:
+      'Admin-override completion (checked_in → completed). Snapshots daily_rate × working_days and clears the suspicious flag.',
+  })
+  @ApiResponse({ status: 200, type: VolRegistration })
+  confirmCompletion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ConfirmCompletionDto,
+  ): Promise<VolRegistration> {
+    return this.registrations.confirmCompletionByAdmin(id, dto.note);
+  }
+
+  @Patch('registrations/:id/clear-suspicious')
+  @ApiOperation({
+    summary:
+      'Clear the suspicious_checkin flag. Requires an admin note (audit trail).',
+  })
+  @ApiResponse({ status: 200, type: VolRegistration })
+  clearSuspicious(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ClearSuspiciousDto,
+    @Req() req: JwtRequest,
+  ): Promise<VolRegistration> {
+    return this.registrations.clearSuspicious(
+      id,
+      dto.admin_note,
+      identifyAdmin(req),
+    );
+  }
+
+  @Patch('registrations/:id/approve-changes')
+  @ApiOperation({
+    summary:
+      'v1.4.1 — Admin approves a queued profile edit. Applies pending_changes to the main row and clears the flag.',
+  })
+  @ApiResponse({ status: 200, type: VolRegistration })
+  approveProfileChanges(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: JwtRequest,
+  ): Promise<VolRegistration> {
+    return this.registrations.approveProfileChanges(id, identifyAdmin(req));
+  }
+
+  @Patch('registrations/:id/reject-changes')
+  @ApiOperation({
+    summary:
+      'v1.4.1 — Admin rejects a queued profile edit with a required reason. Emails the TNV.',
+  })
+  @ApiResponse({ status: 200, type: VolRegistration })
+  rejectProfileChanges(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RejectChangesDto,
+    @Req() req: JwtRequest,
+  ): Promise<VolRegistration> {
+    return this.registrations.rejectProfileChanges(
+      id,
+      dto.reason,
+      identifyAdmin(req),
+    );
   }
 
   @Get('registrations/:id/detail')
@@ -219,18 +416,79 @@ export class TeamManagementController {
     return this.registrations.getDetail(id, identifyAdmin(req));
   }
 
+  @Get('registrations/:id/signature-url')
+  @ApiOperation({
+    summary:
+      'Return a 10-min presigned URL for the handwritten signature PNG. Audit-logged.',
+  })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      type: 'object',
+      properties: { url: { type: 'string' }, expires_in: { type: 'number' } },
+    },
+  })
+  async getSignatureUrl(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: JwtRequest,
+  ): Promise<{ url: string; expires_in: number }> {
+    const url = await this.contracts.getSignatureUrlForRegistration(
+      id,
+      identifyAdmin(req),
+      600,
+    );
+    return { url, expires_in: 600 };
+  }
+
+  @Get('registrations/:id/contract-pdf-url')
+  @ApiOperation({
+    summary:
+      'Return a short-lived (10 min) presigned S3 URL for the signed contract PDF.',
+  })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      type: 'object',
+      properties: { url: { type: 'string' }, expires_in: { type: 'number' } },
+    },
+  })
+  async getContractPdfUrl(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<{ url: string; expires_in: number }> {
+    const url = await this.contracts.getSignedContractUrlForRegistration(id, 600);
+    return { url, expires_in: 600 };
+  }
+
   @Post('events/:id/registrations/manual')
   @ApiOperation({
     summary:
-      'Admin adds a registration directly (walk-in, phone referral). Bypasses public throttle + can auto-approve.',
+      'Admin adds a registration directly (walk-in, phone referral). Bypasses public throttle + can auto-approve. When auto_approve=true and slot is available, fires the contract-send chain automatically.',
   })
   @ApiResponse({ status: 201, type: RegisterResponseDto })
-  manualRegister(
+  async manualRegister(
     @Param('id', ParseIntPipe) _eventId: number,
     @Body() dto: AdminManualRegisterDto,
     @Req() req: JwtRequest,
   ): Promise<RegisterResponseDto> {
-    return this.registrations.adminManualRegister(dto, identifyAdmin(req));
+    const result = await this.registrations.adminManualRegister(
+      dto,
+      identifyAdmin(req),
+    );
+    // Per Danny Q3: with auto_approve=true we land in `approved`, then
+    // the admin expects the auto-chain approve → contract → sign → qr.
+    // Fire the contract email here (fire-and-forget; admin can retry if
+    // Mailchimp is down).
+    if (result.status === 'approved') {
+      void this.contracts
+        .sendContractForRegistrationId(result.id)
+        .catch((err) =>
+          // eslint-disable-next-line no-console
+          console.warn(
+            `contract email after manual-register failed reg=${result.id}: ${(err as Error).message}`,
+          ),
+        );
+    }
+    return result;
   }
 
   @Post('registrations/bulk-update')
@@ -298,5 +556,24 @@ export class TeamManagementController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ExportResponseDto> {
     return this.exports.exportPaymentReport(id);
+  }
+
+  @Get('events/:id/export-personnel')
+  @ApiOperation({
+    summary:
+      'Export full personnel list (admin) — all matching rows, unmasked CCCD, returns 10-min presigned .xlsx URL.',
+  })
+  @ApiResponse({ status: 200, type: PersonnelExportResponseDto })
+  exportPersonnel(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: ListRegistrationsQueryDto,
+    @Req() req: JwtRequest,
+  ): Promise<PersonnelExportResponseDto> {
+    return this.exports.exportPersonnelReport(id, {
+      status: query.status,
+      role_id: query.role_id,
+      search: query.search,
+      adminIdentity: identifyAdmin(req),
+    });
   }
 }

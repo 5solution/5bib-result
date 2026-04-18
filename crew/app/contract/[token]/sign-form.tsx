@@ -1,14 +1,85 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import SignaturePad from "signature_pad";
 
-export default function SignForm({ token }: { token: string }): React.ReactElement {
+export default function SignForm({
+  token,
+  expectedName,
+}: {
+  token: string;
+  expectedName?: string;
+}): React.ReactElement {
   const router = useRouter();
   const [confirmedName, setConfirmedName] = useState("");
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Re-render trigger when the pad fires begin/end. We don't need to
+  // mirror the image bytes into React state — just know if it's empty so
+  // the submit button disable logic picks it up.
+  const [sigEmpty, setSigEmpty] = useState(true);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const padRef = useRef<SignaturePad | null>(null);
+
+  // Initialize signature_pad on mount and wire HiDPI + resize.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // HiDPI support — signature_pad README recipe. Must preserve drawn
+    // strokes across resize via `toData()`/`fromData()`.
+    function resizeCanvas(): void {
+      if (!canvas || !padRef.current) return;
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const data = padRef.current.toData();
+      const cssWidth = canvas.clientWidth;
+      const cssHeight = canvas.clientHeight;
+      canvas.width = cssWidth * ratio;
+      canvas.height = cssHeight * ratio;
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.scale(ratio, ratio);
+      padRef.current.clear();
+      if (data.length > 0) padRef.current.fromData(data);
+      setSigEmpty(padRef.current.isEmpty());
+    }
+
+    const pad = new SignaturePad(canvas, {
+      backgroundColor: "rgba(255,255,255,1)",
+      penColor: "#0f172a",
+    });
+    padRef.current = pad;
+
+    // Track empty/dirty state via the events signature_pad v5 exposes.
+    pad.addEventListener("endStroke", () => {
+      setSigEmpty(pad.isEmpty());
+    });
+
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+    return () => {
+      window.removeEventListener("resize", resizeCanvas);
+      pad.off();
+      padRef.current = null;
+    };
+  }, []);
+
+  function handleClearSignature(): void {
+    padRef.current?.clear();
+    setSigEmpty(true);
+  }
+
+  const normalized = confirmedName.trim().toLowerCase();
+  const expected = (expectedName ?? "").trim().toLowerCase();
+  const showMismatch =
+    expected.length > 0 && normalized.length >= 2 && normalized !== expected;
+  const disabled =
+    submitting ||
+    !agree ||
+    confirmedName.trim().length < 2 ||
+    (expected.length > 0 && showMismatch) ||
+    sigEmpty;
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
@@ -16,15 +87,33 @@ export default function SignForm({ token }: { token: string }): React.ReactEleme
       setError("Vui lòng tick xác nhận đồng ý trước khi ký.");
       return;
     }
+    if (expected.length > 0 && normalized !== expected) {
+      setError("Họ tên chưa khớp với đăng ký.");
+      return;
+    }
+    if (!padRef.current || padRef.current.isEmpty()) {
+      setError("Vui lòng ký tên vào ô chữ ký.");
+      return;
+    }
+    // signature_pad v4+ `toDataURL('image/png')` returns a clean PNG data
+    // URL with a white background (per our init). We send the full data
+    // URL so the DTO regex matches on the server.
+    const signatureImage = padRef.current.toDataURL("image/png");
     setError(null);
     setSubmitting(true);
     try {
       const res = await fetch(`/api/public/team-contract/${token}/sign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmed_name: confirmedName }),
+        body: JSON.stringify({
+          confirmed_name: confirmedName,
+          signature_image: signatureImage,
+        }),
       });
-      const body = (await res.json()) as { message?: string; pdf_url?: string };
+      const body = (await res.json()) as {
+        message?: string;
+        pdf_url?: string;
+      };
       if (!res.ok) throw new Error(body.message ?? `HTTP ${res.status}`);
       router.refresh();
     } catch (err) {
@@ -44,11 +133,68 @@ export default function SignForm({ token }: { token: string }): React.ReactEleme
           className="input"
           value={confirmedName}
           onChange={(e) => setConfirmedName(e.target.value)}
-          placeholder="Nhập đúng họ tên trên đăng ký"
+          placeholder={
+            expectedName
+              ? "Nhập đúng họ tên trên đăng ký"
+              : "Nhập đúng họ tên trên đăng ký"
+          }
           autoComplete="off"
           required
         />
+        {showMismatch ? (
+          <p className="mt-1 text-xs text-red-600">
+            Họ tên chưa khớp với đăng ký.
+          </p>
+        ) : null}
       </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium">
+          Chữ ký của bạn <span className="text-red-500">*</span>
+        </label>
+        <div className="relative rounded border border-slate-300 bg-white">
+          <canvas
+            ref={canvasRef}
+            className="block w-full rounded"
+            style={{ height: "160px", touchAction: "none" }}
+            aria-label="Ô ký tên"
+          />
+          {sigEmpty ? (
+            <span className="pointer-events-none absolute left-3 top-2 select-none text-xs text-slate-400">
+              Chưa có chữ ký
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-1 flex items-center justify-between">
+          <p className="text-xs text-slate-500">
+            Dùng chuột hoặc ngón tay để ký vào ô trên.
+          </p>
+          <button
+            type="button"
+            onClick={handleClearSignature}
+            className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900"
+          >
+            {/* Inline Eraser icon to avoid dragging in a dep */}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+              <path d="M22 21H7" />
+              <path d="m5 11 9 9" />
+            </svg>
+            Xóa
+          </button>
+        </div>
+      </div>
+
       <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
@@ -57,8 +203,8 @@ export default function SignForm({ token }: { token: string }): React.ReactEleme
           className="mt-1"
         />
         <span>
-          Tôi đã đọc, hiểu và đồng ý với toàn bộ nội dung hợp đồng. Việc bấm "Ký
-          hợp đồng" có giá trị pháp lý như chữ ký tay.
+          Tôi đã đọc, hiểu và đồng ý với toàn bộ nội dung hợp đồng. Việc bấm
+          &quot;Ký hợp đồng&quot; có giá trị pháp lý như chữ ký tay.
         </span>
       </label>
       {error ? (
@@ -69,7 +215,7 @@ export default function SignForm({ token }: { token: string }): React.ReactEleme
       <button
         type="submit"
         className="btn-primary w-full"
-        disabled={submitting || !agree || confirmedName.trim().length < 2}
+        disabled={disabled}
       >
         {submitting ? "Đang ký..." : "Ký hợp đồng"}
       </button>

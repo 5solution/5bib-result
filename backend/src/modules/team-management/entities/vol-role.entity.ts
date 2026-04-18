@@ -91,6 +91,23 @@ export class VolRole {
   @Column({ type: 'int', default: 0 })
   sort_order!: number;
 
+  // v1.4: Leader roles can check-in and confirm completion for team
+  // members of the SAME event. Enforced in team-leader.service.
+  @Column({ type: 'boolean', default: false })
+  is_leader_role!: boolean;
+
+  // v1.5: Per-role group chat link. Gated by registration.status
+  // in the public endpoints — only shown once TNV has ký HĐ.
+  @Column({
+    type: 'enum',
+    enum: ['zalo', 'telegram', 'whatsapp', 'other'],
+    nullable: true,
+  })
+  chat_platform!: 'zalo' | 'telegram' | 'whatsapp' | 'other' | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  chat_group_url!: string | null;
+
   @CreateDateColumn({ type: 'datetime' })
   created_at!: Date;
 

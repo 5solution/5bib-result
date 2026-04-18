@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PublicEvent, FormFieldConfig } from "@/lib/api";
+import { namesMatch } from "@/lib/utils";
 
 interface RegisterFormProps {
   event: PublicEvent;
@@ -17,12 +18,43 @@ export default function RegisterForm({ event }: RegisterFormProps): React.ReactE
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  // Admin-configured terms gate: when `event.terms_conditions` is set the
+  // TNV must tick this checkbox before the submit button enables.
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const termsRequired = !!event.terms_conditions?.trim();
 
   const selectedRole = event.roles.find((r) => r.id === roleId) ?? null;
 
   function updateField(key: string, value: string) {
-    setFormData((prev) => ({ ...prev, [key]: value }));
+    // Strip non-digits from bank_account_number — backend regex is
+    // `^\d{6,20}$`, so silently dropping other chars here keeps the UX
+    // from showing a 400 later.
+    const cleaned =
+      key === "bank_account_number" ? value.replace(/[^\d]/g, "") : value;
+    setFormData((prev) => ({ ...prev, [key]: cleaned }));
   }
+
+  function handleFieldBlur(key: string): void {
+    // Uppercase holder name on blur — VN convention when referencing bank
+    // accounts. We don't remove diacritics client-side so the user can see
+    // their own name; the server does the diacritic-insensitive match.
+    if (key === "bank_holder_name") {
+      setFormData((prev) => {
+        const cur = prev[key] ?? "";
+        const up = cur.toUpperCase();
+        if (up === cur) return prev;
+        return { ...prev, [key]: up };
+      });
+    }
+  }
+
+  // Client-side early reject — bank_holder_name must match full_name
+  // (diacritic-insensitive, uppercase, trim). Matches the server rule.
+  const holderName = (formData["bank_holder_name"] ?? "").toString();
+  const holderMismatch =
+    holderName.trim().length > 0 &&
+    fullName.trim().length > 0 &&
+    !namesMatch(holderName, fullName);
 
   async function handlePhotoUpload(
     key: string,
@@ -44,6 +76,30 @@ export default function RegisterForm({ event }: RegisterFormProps): React.ReactE
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     if (!selectedRole) return;
+
+    // Block submit if holder name doesn't match. Backend rejects with 400,
+    // but showing the error up here is a lot nicer than waiting a round-trip.
+    if (holderMismatch) {
+      setMessage({
+        type: "error",
+        text: "Tên chủ tài khoản phải khớp với họ tên đăng ký (không phân biệt dấu / hoa thường).",
+      });
+      return;
+    }
+    // Client-side sanity check for account number — the field strips
+    // non-digits on change already, but catch the length rule here.
+    const acct = (formData["bank_account_number"] ?? "").toString();
+    const acctField = selectedRole.form_fields.find(
+      (f) => f.key === "bank_account_number",
+    );
+    if (acctField && acct.length > 0 && !/^\d{6,20}$/.test(acct)) {
+      setMessage({
+        type: "error",
+        text: "Số tài khoản phải có 6–20 chữ số.",
+      });
+      return;
+    }
+
     setSubmitting(true);
     setMessage(null);
     try {
@@ -123,35 +179,118 @@ export default function RegisterForm({ event }: RegisterFormProps): React.ReactE
         autoComplete="email"
       />
 
-      {selectedRole?.form_fields.map((field) => (
-        <DynamicField
-          key={field.key}
-          field={field}
-          value={formData[field.key] ?? ""}
-          onChange={(v) => updateField(field.key, v)}
-          onPhotoUpload={(file) =>
-            handlePhotoUpload(
-              field.key,
-              file,
-              field.key === "avatar_photo" ? "avatar" : "cccd",
-            )
-          }
-        />
-      ))}
+      {selectedRole?.form_fields.map((field) => {
+        // Surface client-side errors on the specific field they apply to.
+        const fieldError =
+          field.key === "bank_holder_name" && holderMismatch
+            ? "Tên chủ tài khoản phải khớp với họ tên đăng ký"
+            : null;
+        return (
+          <DynamicField
+            key={field.key}
+            field={field}
+            value={formData[field.key] ?? ""}
+            onChange={(v) => updateField(field.key, v)}
+            onBlur={() => handleFieldBlur(field.key)}
+            error={fieldError}
+            onPhotoUpload={(file) =>
+              handlePhotoUpload(
+                field.key,
+                file,
+                field.key === "avatar_photo" ? "avatar" : "cccd",
+              )
+            }
+          />
+        );
+      })}
 
       {message ? (
-        <div
-          className={`rounded-lg border p-3 text-sm ${
-            message.type === "success"
-              ? "border-green-300 bg-green-50 text-green-800"
-              : "border-red-300 bg-red-50 text-red-800"
-          }`}
-        >
-          {message.text}
-        </div>
+        message.type === "success" ? (
+          <div className="text-center py-6 slide-up scale-in">
+            <div
+              className="mx-auto mb-3 grid size-12 place-items-center rounded-full"
+              style={{ background: "#dcfce7" }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#15803d"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-6"
+              >
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <h2
+              className="font-display text-2xl font-bold mb-1"
+              style={{ color: "#111827" }}
+            >
+              Đăng ký thành công!
+            </h2>
+            <p className="text-sm" style={{ color: "#6b7280" }}>
+              {message.text}
+            </p>
+          </div>
+        ) : (
+          <div
+            className="rounded-lg border p-3 text-sm"
+            style={{
+              borderColor: "#fca5a5",
+              background: "#fee2e2",
+              color: "#b91c1c",
+            }}
+          >
+            {message.text}
+          </div>
+        )
       ) : null}
 
-      <button className="btn-primary w-full" type="submit" disabled={submitting || !selectedRole}>
+      {termsRequired ? (
+        <section
+          className="rounded-lg border p-4"
+          style={{ borderColor: "#e5e7eb", background: "#f9fafb" }}
+        >
+          <h3
+            className="font-semibold text-sm mb-2"
+            style={{ color: "#111827" }}
+          >
+            Điều khoản & điều kiện đăng ký
+          </h3>
+          <div
+            className="whitespace-pre-line text-sm leading-relaxed max-h-48 overflow-y-auto rounded border bg-white p-3"
+            style={{ color: "#374151", borderColor: "#e5e7eb" }}
+          >
+            {event.terms_conditions}
+          </div>
+          <label className="mt-3 flex items-start gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={termsAgreed}
+              onChange={(e) => setTermsAgreed(e.target.checked)}
+              className="mt-0.5 size-4"
+              aria-required="true"
+            />
+            <span className="text-sm">
+              Tôi đã đọc và đồng ý với điều khoản và điều kiện tham gia sự kiện
+              này.
+            </span>
+          </label>
+        </section>
+      ) : null}
+
+      <button
+        type="submit"
+        disabled={
+          submitting ||
+          !selectedRole ||
+          holderMismatch ||
+          (termsRequired && !termsAgreed)
+        }
+        className="w-full rounded-xl py-3.5 text-base font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm hover:shadow-md disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+      >
         {submitting ? "Đang gửi..." : "Gửi đăng ký"}
       </button>
       <p className="text-center text-xs text-[color:var(--color-muted)]">
@@ -201,11 +340,15 @@ function DynamicField({
   field,
   value,
   onChange,
+  onBlur,
+  error,
   onPhotoUpload,
 }: {
   field: FormFieldConfig;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
+  error?: string | null;
   onPhotoUpload: (file: File) => Promise<void>;
 }): React.ReactElement {
   if (field.type === "shirt_size") {
@@ -220,11 +363,23 @@ function DynamicField({
             <button
               type="button"
               key={size}
-              className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+              className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
                 value === size
-                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-white"
-                  : "bg-white hover:border-[color:var(--color-accent)]"
+                  ? "text-white"
+                  : "hover:border-[color:var(--5bib-accent)]"
               }`}
+              style={
+                value === size
+                  ? {
+                      borderColor: "var(--5bib-accent)",
+                      background: "var(--5bib-accent)",
+                      boxShadow: "var(--shadow-glow)",
+                    }
+                  : {
+                      background: "white",
+                      borderColor: "var(--5bib-border)",
+                    }
+              }
               onClick={() => onChange(size)}
             >
               {size}
@@ -292,6 +447,7 @@ function DynamicField({
     );
   }
 
+  const isAccountNumber = field.key === "bank_account_number";
   return (
     <div>
       <label className="mb-1 block text-sm font-medium">
@@ -303,11 +459,16 @@ function DynamicField({
         type={field.type === "tel" ? "tel" : field.type === "email" ? "email" : field.type === "date" ? "date" : "text"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         required={field.required}
+        inputMode={isAccountNumber ? "numeric" : undefined}
+        pattern={isAccountNumber ? "\\d{6,20}" : undefined}
+        autoCapitalize={field.key === "bank_holder_name" ? "characters" : undefined}
       />
       {field.hint ? (
         <p className="mt-1 text-xs text-[color:var(--color-muted)]">{field.hint}</p>
       ) : null}
+      {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
     </div>
   );
 }

@@ -1,11 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 
 export class SignContractDto {
   @ApiProperty({ description: 'Must match registration.full_name (case/space-insensitive)' })
   @IsString()
   @MinLength(2)
   confirmed_name!: string;
+
+  @ApiProperty({
+    description:
+      'Handwritten signature as PNG data URL (base64). Max 500KB decoded.',
+  })
+  @IsString()
+  @Matches(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, {
+    message: 'signature_image must be a base64 PNG data URL',
+  })
+  signature_image!: string;
 
   @ApiProperty({ required: false, description: 'Client IP, logged for audit' })
   @IsString()
@@ -24,6 +40,12 @@ export class ContractViewDto {
 
   @ApiProperty({ required: false, nullable: true })
   pdf_url!: string | null;
+
+  @ApiProperty({
+    description:
+      'Full name on the registration. Returned so the crew sign form can do a client-side match check before submit.',
+  })
+  full_name!: string;
 }
 
 export class SignContractResponseDto {

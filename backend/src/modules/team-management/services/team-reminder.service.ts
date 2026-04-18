@@ -29,11 +29,13 @@ export class TeamReminderService {
   // 08:00 Vietnam time every day (server is UTC → 01:00 UTC).
   @Cron('0 1 * * *', { name: 'team-reminder-t-minus-3' })
   async runDailyReminder(): Promise<void> {
+    // v1.4: target anyone fully cleared for the event (has QR, signed HĐ).
+    // Pre-contract rows get reminders via the admin workflow, not T-3.
     const rows = await this.regRepo
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.event', 'event')
       .leftJoinAndSelect('r.role', 'role')
-      .where("r.status = 'approved'")
+      .where("r.status IN ('qr_sent', 'checked_in')")
       .andWhere('event.event_start_date = DATE_ADD(CURDATE(), INTERVAL 3 DAY)')
       .getMany();
 

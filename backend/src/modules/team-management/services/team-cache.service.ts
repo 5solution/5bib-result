@@ -30,6 +30,23 @@ export class TeamCacheService {
     return `team:event:${eventId}:dashboard:`;
   }
 
+  // v1.5: emergency contacts per event, shared by every member viewing
+  // the portal. TTL 300s — ít thay đổi.
+  static keyEventContacts(eventId: number): string {
+    return `team:event:${eventId}:contacts`;
+  }
+
+  // v1.5: per-registration team directory. TTL 60s — race-day data changes
+  // constantly (check-ins). Stored per-registration because the response
+  // shape depends on leader vs member, so we can't share one snapshot.
+  static keyDirectoryPrefix(eventId: number): string {
+    return `team:event:${eventId}:directory:`;
+  }
+
+  static keyDirectory(eventId: number, registrationId: number): string {
+    return `${TeamCacheService.keyDirectoryPrefix(eventId)}${registrationId}`;
+  }
+
   static readonly keyPublicEvents = 'team:public:events';
 
   async getJson<T>(key: string): Promise<T | null> {
@@ -70,6 +87,9 @@ export class TeamCacheService {
     const fixedKeys = [
       TeamCacheService.keyEventStats(eventId),
       TeamCacheService.keyPublicEvents,
+      // v1.5: emergency-contact list is a single key per event, so we can
+      // include it in the fixed-delete pass.
+      TeamCacheService.keyEventContacts(eventId),
       ...affectedRoleIds.map((rid) => TeamCacheService.keyRoleSlots(rid)),
     ];
     try {
@@ -80,8 +100,30 @@ export class TeamCacheService {
       if (dashboardKeys.length > 0) {
         await this.redis.del(...dashboardKeys);
       }
+      // v1.5: directory is sharded per-registration — SCAN+DEL wildcard.
+      const directoryKeys = await this.scanKeys(
+        `${TeamCacheService.keyDirectoryPrefix(eventId)}*`,
+      );
+      if (directoryKeys.length > 0) {
+        await this.redis.del(...directoryKeys);
+      }
     } catch (err) {
       this.logger.warn(`Cache invalidate failed for event ${eventId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * v1.5: targeted invalidation after a CRUD on vol_event_contact.
+   * Only the single contacts key needs to be dropped — directory and dashboard
+   * are independent.
+   */
+  async invalidateEventContacts(eventId: number): Promise<void> {
+    try {
+      await this.redis.del(TeamCacheService.keyEventContacts(eventId));
+    } catch (err) {
+      this.logger.warn(
+        `Contacts cache invalidate failed for event ${eventId}: ${(err as Error).message}`,
+      );
     }
   }
 

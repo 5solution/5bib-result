@@ -9,7 +9,6 @@ import {
   adminControllerResolveClaim,
   adminControllerResolveClaimV2,
 } from "@/lib/api-generated";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,15 +53,51 @@ interface Claim {
 }
 
 function ClaimStatusBadge({ status }: { status: string }) {
-  const config: Record<string, { label: string; className: string }> = {
-    pending: { label: "Chờ xử lý", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
-    approved: { label: "Chấp nhận", className: "bg-green-500/20 text-green-400 border-green-500/30" },
+  const config: Record<
+    string,
+    { label: string; bg: string; text: string; border: string }
+  > = {
+    pending: {
+      label: "Chờ xử lý",
+      bg: "#fef3c7",
+      text: "#b45309",
+      border: "#fcd34d",
+    },
+    approved: {
+      label: "Chấp nhận",
+      bg: "#dcfce7",
+      text: "#15803d",
+      border: "#86efac",
+    },
     // legacy
-    resolved: { label: "Chấp nhận", className: "bg-green-500/20 text-green-400 border-green-500/30" },
-    rejected: { label: "Từ chối", className: "bg-red-500/20 text-red-400 border-red-500/30" },
+    resolved: {
+      label: "Chấp nhận",
+      bg: "#dcfce7",
+      text: "#15803d",
+      border: "#86efac",
+    },
+    rejected: {
+      label: "Từ chối",
+      bg: "#fee2e2",
+      text: "#b91c1c",
+      border: "#fca5a5",
+    },
   };
-  const c = config[status] || { label: status, className: "bg-zinc-500/20 text-zinc-400" };
-  return <Badge className={c.className}>{c.label}</Badge>;
+  const c =
+    config[status] ?? {
+      label: status,
+      bg: "#f3f4f6",
+      text: "#6b7280",
+      border: "#d1d5db",
+    };
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+      style={{ background: c.bg, color: c.text, borderColor: c.border }}
+    >
+      {c.label}
+    </span>
+  );
 }
 
 function formatDate(iso: string) {
@@ -183,22 +218,24 @@ export default function ClaimsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold">Khiếu nại</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">
+          Khiếu nại
+        </h1>
         <p className="text-sm text-muted-foreground">
           Quản lý yêu cầu chỉnh sửa kết quả thi đấu
         </p>
       </div>
 
       {/* Status filter tabs */}
-      <div className="flex gap-1 border border-zinc-700 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 border rounded-lg p-1 w-fit bg-white">
         {STATUS_FILTERS.map((f) => (
           <button
             key={f.value}
             onClick={() => setStatusFilter(f.value)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
               statusFilter === f.value
-                ? "bg-zinc-700 text-white"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+                ? "bg-gray-100 text-gray-900"
+                : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
             }`}
           >
             {f.label}
@@ -214,6 +251,7 @@ export default function ClaimsPage() {
         </div>
       ) : (
         <>
+          <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -237,8 +275,19 @@ export default function ClaimsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                claims.map((claim) => (
-                  <TableRow key={claim._id} className="cursor-pointer" onClick={() => openResolve(claim, claim.status === 'pending' ? 'approved' : claim.status as 'approved' | 'rejected')}>
+                claims.map((claim) => {
+                  const isPending = claim.status === "pending";
+                  return (
+                  <TableRow
+                    key={claim._id}
+                    className="cursor-pointer result-row-hover"
+                    style={
+                      isPending
+                        ? { borderLeft: "3px solid #fcd34d" }
+                        : undefined
+                    }
+                    onClick={() => openResolve(claim, isPending ? 'approved' : claim.status as 'approved' | 'rejected')}
+                  >
                     <TableCell className="text-xs">
                       {formatDate(claim.created_at || claim.createdAt || '')}
                     </TableCell>
@@ -274,7 +323,7 @@ export default function ClaimsPage() {
                             onClick={(e) => { e.stopPropagation(); openResolve(claim, "approved"); }}
                             title="Chấp nhận"
                           >
-                            <CheckCircle className="size-4 text-green-400" />
+                            <CheckCircle className="size-4" style={{ color: "#15803d" }} />
                           </Button>
                           <Button
                             variant="ghost"
@@ -282,7 +331,7 @@ export default function ClaimsPage() {
                             onClick={(e) => { e.stopPropagation(); openResolve(claim, "rejected"); }}
                             title="Từ chối"
                           >
-                            <XCircle className="size-4 text-red-400" />
+                            <XCircle className="size-4" style={{ color: "#b91c1c" }} />
                           </Button>
                         </div>
                       ) : (
@@ -292,10 +341,12 @@ export default function ClaimsPage() {
                       )}
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
+          </div>
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
@@ -357,12 +408,12 @@ export default function ClaimsPage() {
                       const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext);
                       const filename = url.split('/').pop() || `File ${i + 1}`;
                       return isImage ? (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border border-zinc-700 hover:border-blue-500 transition-colors">
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border hover:border-blue-500 transition-colors">
                           <img src={url} alt={filename} className="w-full h-32 object-cover" />
                           <p className="text-[10px] text-muted-foreground p-1 truncate">{filename}</p>
                         </a>
                       ) : (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border border-zinc-700 hover:border-blue-500 transition-colors">
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 rounded-lg border hover:border-blue-500 transition-colors">
                           <span className="text-lg">{['gpx', 'kml', 'kmz', 'fit', 'tcx'].includes(ext) ? '🗺️' : '📄'}</span>
                           <div className="min-w-0">
                             <p className="text-xs font-medium truncate">{filename}</p>
@@ -379,7 +430,7 @@ export default function ClaimsPage() {
           <div className="flex flex-col gap-4 py-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="resolution-note">
-                Ghi chú giải quyết <span className="text-red-400">*</span>
+                Ghi chú giải quyết <span style={{ color: "#b91c1c" }}>*</span>
                 <span className="text-xs text-muted-foreground ml-1">(tối thiểu 5 ký tự)</span>
               </Label>
               <textarea
@@ -388,14 +439,21 @@ export default function ClaimsPage() {
                 onChange={(e) => setResolutionNote(e.target.value)}
                 placeholder={resolveAction === "approved" ? "Đã kiểm tra tracklog, xác nhận đúng..." : "Không đủ bằng chứng để xác nhận..."}
                 rows={3}
-                className="w-full px-3 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full px-3 py-2 text-sm bg-white border border-input rounded-md text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
               {resolutionNote.length > 0 && resolutionNote.length < 5 && (
-                <p className="text-xs text-red-400">Cần thêm {5 - resolutionNote.length} ký tự nữa</p>
+                <p className="text-xs" style={{ color: "#b91c1c" }}>Cần thêm {5 - resolutionNote.length} ký tự nữa</p>
               )}
             </div>
             {resolveAction === "approved" && (
-              <p className="text-xs text-amber-400 bg-amber-400/10 px-3 py-2 rounded-md">
+              <p
+                className="text-xs px-3 py-2 rounded-md border"
+                style={{
+                  background: "#fef3c7",
+                  color: "#b45309",
+                  borderColor: "#fcd34d",
+                }}
+              >
                 ⚠️ Khi chấp nhận, hệ thống sẽ tự động ghi log chỉnh sửa vào kết quả của VĐV.
               </p>
             )}

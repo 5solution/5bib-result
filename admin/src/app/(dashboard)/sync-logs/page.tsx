@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/auth-context";
 import "@/lib/api"; // ensure client baseUrl is configured
 import { authHeaders } from "@/lib/api";
 import { adminControllerGetSyncLogs } from "@/lib/api-generated";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -32,20 +31,55 @@ interface SyncLog {
 }
 
 function SyncStatusBadge({ status }: { status: string }) {
-  const config: Record<string, { label: string; className: string }> = {
-    success: { label: "Thành công", className: "bg-green-500/20 text-green-400" },
-    failed: { label: "Thất bại", className: "bg-red-500/20 text-red-400" },
-    running: { label: "Đang chạy", className: "bg-yellow-500/20 text-yellow-400" },
-    pending: { label: "Chờ xử lý", className: "bg-yellow-500/20 text-yellow-400" },
+  const config: Record<
+    string,
+    { label: string; bg: string; text: string; border: string }
+  > = {
+    success: {
+      label: "Thành công",
+      bg: "#dcfce7",
+      text: "#15803d",
+      border: "#86efac",
+    },
+    failed: {
+      label: "Thất bại",
+      bg: "#fee2e2",
+      text: "#b91c1c",
+      border: "#fca5a5",
+    },
+    running: {
+      label: "Đang chạy",
+      bg: "#dbeafe",
+      text: "#1d4ed8",
+      border: "#93c5fd",
+    },
+    pending: {
+      label: "Chờ xử lý",
+      bg: "#fef3c7",
+      text: "#b45309",
+      border: "#fcd34d",
+    },
   };
-  const c = config[status] || { label: status, className: "bg-zinc-500/20 text-zinc-400" };
+  const c =
+    config[status] ?? {
+      label: status,
+      bg: "#f3f4f6",
+      text: "#6b7280",
+      border: "#d1d5db",
+    };
   return (
-    <Badge className={c.className}>
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+      style={{ background: c.bg, color: c.text, borderColor: c.border }}
+    >
       {status === "running" && (
-        <span className="mr-1 inline-block size-2 animate-pulse rounded-full bg-yellow-400" />
+        <span
+          className="mr-1 inline-block size-2 animate-pulse rounded-full"
+          style={{ background: "#1d4ed8" }}
+        />
       )}
       {c.label}
-    </Badge>
+    </span>
   );
 }
 
@@ -131,7 +165,9 @@ export default function SyncLogsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Nhật ký đồng bộ</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">
+            Nhật ký đồng bộ
+          </h1>
           <p className="text-sm text-muted-foreground">
             Lịch sử đồng bộ dữ liệu (tự động làm mới mỗi 30s)
           </p>
@@ -157,6 +193,7 @@ export default function SyncLogsPage() {
         </div>
       ) : (
         <>
+          <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -181,7 +218,7 @@ export default function SyncLogsPage() {
                 </TableRow>
               ) : (
                 logs.map((log) => (
-                  <TableRow key={log._id}>
+                  <TableRow key={log._id} className="result-row-hover">
                     <TableCell className="text-xs">
                       {formatDate(log.createdAt)}
                     </TableCell>
@@ -208,6 +245,7 @@ export default function SyncLogsPage() {
               )}
             </TableBody>
           </Table>
+          </div>
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between">

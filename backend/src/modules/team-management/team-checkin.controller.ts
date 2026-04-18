@@ -1,17 +1,40 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { Request } from 'express';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import {
+  CheckinLookupResponseDto,
   CheckinResponseDto,
   CheckinScanDto,
   CheckinStatsDto,
 } from './dto/checkin.dto';
 import { TeamCheckinService } from './services/team-checkin.service';
+
+interface JwtRequest extends Request {
+  user?: { username?: string; email?: string; sub?: string };
+}
+
+function identifyAdmin(req: JwtRequest): string {
+  return req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
+}
 
 @ApiTags('Team Management — Check-in (staff)')
 @ApiBearerAuth()
@@ -25,6 +48,27 @@ export class TeamCheckinController {
   @ApiResponse({ status: 201, type: CheckinResponseDto })
   scan(@Body() dto: CheckinScanDto): Promise<CheckinResponseDto> {
     return this.checkin.scanByQr(dto.qr_code, dto.event_id);
+  }
+
+  @Get('lookup')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Fallback lookup by name / phone / CCCD for race-day staff when QR scan fails',
+  })
+  @ApiQuery({ name: 'q', required: true, description: 'Min 2 chars' })
+  @ApiQuery({ name: 'event_id', required: true, type: Number })
+  @ApiResponse({ status: 200, type: CheckinLookupResponseDto })
+  lookup(
+    @Query('q') q: string,
+    @Query('event_id') eventIdRaw: string,
+    @Req() req: JwtRequest,
+  ): Promise<CheckinLookupResponseDto> {
+    const eventId = Number(eventIdRaw);
+    if (!Number.isFinite(eventId) || eventId <= 0) {
+      throw new BadRequestException('event_id is required');
+    }
+    return this.checkin.lookup(q ?? '', eventId, identifyAdmin(req));
   }
 
   @Get('stats/:eventId')

@@ -45,10 +45,39 @@ export class RegistrationListRowDto {
   @ApiProperty({ required: false, nullable: true })
   notes!: string | null;
   @ApiProperty() created_at!: string;
+
+  // v1.4.1 — admin list indicator for pending profile-edit requests.
+  @ApiProperty({ description: 'True when TNV has an unapproved profile edit.' })
+  has_pending_changes!: boolean;
 }
 
 export class ListRegistrationsResponseDto {
   @ApiProperty({ type: [RegistrationListRowDto] })
   data!: RegistrationListRowDto[];
   @ApiProperty() total!: number;
+
+  /**
+   * Count-per-status map for building filter tabs, e.g.
+   * `{ pending_approval: 12, approved: 3, contract_sent: 8, ... }`.
+   * Keys cover all 10 operational statuses — missing keys imply 0.
+   */
+  @ApiProperty({
+    description:
+      'Count per status across the full result set (ignores pagination). Used for filter tabs.',
+    type: 'object',
+    additionalProperties: { type: 'number' },
+    example: {
+      pending_approval: 12,
+      approved: 3,
+      contract_sent: 8,
+      contract_signed: 15,
+      qr_sent: 5,
+      checked_in: 2,
+      completed: 0,
+      waitlisted: 0,
+      rejected: 0,
+      cancelled: 0,
+    },
+  })
+  by_status!: Record<string, number>;
 }

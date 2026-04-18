@@ -3,14 +3,19 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
 // keep imports sorted
 import { FormFieldConfigDto } from './form-field-config.dto';
+
+export const CHAT_PLATFORMS = ['zalo', 'telegram', 'whatsapp', 'other'] as const;
+export type ChatPlatform = (typeof CHAT_PLATFORMS)[number];
 
 export class CreateRoleDto {
   @ApiProperty() @IsString() role_name!: string;
@@ -49,4 +54,30 @@ export class CreateRoleDto {
   contract_template_id?: number;
 
   @ApiProperty({ default: 0 }) @IsInt() sort_order: number = 0;
+
+  // v1.5: per-role group chat link. Gated on the public endpoint by
+  // registration.status ∈ (contract_signed, qr_sent, checked_in, completed).
+  @ApiProperty({
+    required: false,
+    enum: CHAT_PLATFORMS,
+    nullable: true,
+    description: 'Group chat platform (zalo/telegram/whatsapp/other).',
+  })
+  @IsOptional()
+  @IsEnum(CHAT_PLATFORMS)
+  chat_platform?: ChatPlatform | null;
+
+  // @IsString (not @IsUrl) — Zalo group links can be "zalo.me/g/xxx" without
+  // protocol. Service sanitizes: prepends "https://" when protocol is missing,
+  // and stores null for empty strings.
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    maxLength: 500,
+    description: 'Group chat URL (raw or protocol-less — service normalizes).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  chat_group_url?: string | null;
 }

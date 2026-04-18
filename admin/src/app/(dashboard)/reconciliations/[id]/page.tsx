@@ -182,12 +182,12 @@ function formatPeriod(start: string, end: string) {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  draft:     "bg-zinc-500/15 text-zinc-400 border-zinc-500/20",
-  flagged:   "bg-red-500/15 text-red-400 border-red-500/20",
-  ready:     "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  draft:     "bg-gray-100 text-gray-600 border-gray-300",
+  flagged:   "bg-red-100 text-red-700 border-red-300",
+  ready:     "bg-blue-100 text-blue-700 border-blue-300",
   approved:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  sent:      "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  reviewed:  "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  sent:      "bg-amber-100 text-amber-700 border-amber-300",
+  reviewed:  "bg-blue-100 text-blue-700 border-blue-300",
   signed:    "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
   completed: "bg-emerald-600/15 text-emerald-300 border-emerald-600/20",
 };
@@ -403,19 +403,19 @@ export default function ReconciliationDetailPage() {
         )}
 
         {isFlagged && (
-          <div className="border-t border-red-500/20 bg-red-500/5 px-6 py-4 flex flex-col gap-3">
+          <div className="border-t border-red-200 bg-red-50 px-6 py-4 flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="size-4 text-red-400 shrink-0" />
-              <span className="text-sm font-semibold text-red-400">Có vấn đề cần kiểm tra</span>
+              <AlertTriangle className="size-4 text-destructive shrink-0" />
+              <span className="text-sm font-semibold text-destructive">Có vấn đề cần kiểm tra</span>
             </div>
             <div className="flex flex-col gap-1.5">
               {data.flags?.map((flag, i) => (
                 <div key={i} className={`flex items-start gap-2 text-xs rounded px-3 py-2 border ${
                   flag.severity === "ERROR"
-                    ? "bg-red-500/10 text-red-300 border-red-500/20"
+                    ? "bg-red-50 text-red-700 border-red-300"
                     : flag.severity === "WARNING"
-                    ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                    : "bg-blue-500/10 text-blue-300 border-blue-500/20"
+                    ? "bg-amber-50 text-amber-700 border-amber-300"
+                    : "bg-blue-50 text-blue-700 border-blue-300"
                 }`}>
                   <span className="shrink-0 mt-px">
                     {flag.severity === "ERROR" ? "🔴" : flag.severity === "WARNING" ? "🟡" : "🔵"}
@@ -432,7 +432,7 @@ export default function ReconciliationDetailPage() {
         )}
 
         {isApproved && (
-          <div className="border-t border-blue-500/20 bg-blue-500/5 px-6 py-3 flex items-center gap-2.5">
+          <div className="border-t border-blue-200 bg-blue-50 px-6 py-3 flex items-center gap-2.5">
             <CheckCircle className="size-4 text-blue-400 shrink-0" />
             <span className="text-sm text-blue-400">
               Đã duyệt {formatDate(data.approved_at)} · Merchant nhận{" "}
@@ -467,12 +467,12 @@ export default function ReconciliationDetailPage() {
               <Separator />
 
               {/* Fees */}
-              <div className="flex items-center justify-between py-2 text-red-400/80">
+              <div className="flex items-center justify-between py-2 text-red-700">
                 <span className="text-muted-foreground pl-3">Phí dịch vụ {data.fee_rate_applied != null ? `(${data.fee_rate_applied}%)` : ""}</span>
                 <span className="tabular-nums">− {formatVnd(data.fee_amount)}</span>
               </div>
               {data.manual_fee_amount > 0 && (
-                <div className="flex items-center justify-between py-2 text-red-400/80">
+                <div className="flex items-center justify-between py-2 text-red-700">
                   <span className="text-muted-foreground pl-3">
                     Phí thủ công
                     {data.manual_ticket_count > 0 && (
@@ -485,13 +485,13 @@ export default function ReconciliationDetailPage() {
                 </div>
               )}
               {data.fee_vat_amount > 0 && (
-                <div className="flex items-center justify-between py-2 text-red-400/80">
+                <div className="flex items-center justify-between py-2 text-red-700">
                   <span className="text-muted-foreground pl-3">VAT trên phí ({data.fee_vat_rate}%)</span>
                   <span className="tabular-nums">− {formatVnd(data.fee_vat_amount)}</span>
                 </div>
               )}
               {data.manual_adjustment !== 0 && (
-                <div className={`flex items-center justify-between py-2 ${data.manual_adjustment > 0 ? "text-emerald-400/80" : "text-red-400/80"}`}>
+                <div className={`flex items-center justify-between py-2 ${data.manual_adjustment > 0 ? "text-emerald-700" : "text-red-700"}`}>
                   <span className="text-muted-foreground pl-3">Điều chỉnh thủ công</span>
                   <span className="tabular-nums">{data.manual_adjustment > 0 ? "+" : "−"} {formatVnd(Math.abs(data.manual_adjustment))}</span>
                 </div>
@@ -713,7 +713,7 @@ export default function ReconciliationDetailPage() {
 
           {data.status === "sent" && (
             <div className="flex flex-col gap-2">
-              <Label>Ngày ký <span className="text-red-400">*</span></Label>
+              <Label>Ngày ký <span className="text-destructive">*</span></Label>
               <Input type="date" value={signedAt} onChange={(e) => setSignedAt(e.target.value)} />
             </div>
           )}

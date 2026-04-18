@@ -1,22 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import {
   listRegistrations,
   listTeamRoles,
   bulkUpdateRegistrations,
   adminManualRegister,
+  exportPersonnel,
+  approveRegistration,
+  rejectRegistration,
+  cancelRegistration,
+  confirmCompletion,
+  sendContracts,
   type RegistrationListRow,
   type TeamRole,
   type ManualRegisterInput,
 } from "@/lib/team-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  StatusBadge,
+  deriveStatusKey,
+  STATUS_FUNNEL,
+  STATUS_STYLE,
+  type DisplayStatusKey,
+} from "@/lib/status-style";
 import {
   Table,
   TableBody,
@@ -32,27 +43,60 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, UserPlus } from "lucide-react";
+import {
+  Search,
+  UserPlus,
+  FileSpreadsheet,
+  FileUp,
+  Check,
+  X,
+  ExternalLink,
+  AlertTriangle,
+  Pencil,
+  Send,
+  CheckCircle2,
+  DollarSign,
+  FileText,
+  Clock,
+  Ban,
+  Undo2,
+} from "lucide-react";
 import { toast } from "sonner";
+import { namesMatch } from "@/lib/utils";
+import { RegistrationDetailView } from "./_registration-detail";
+import { RejectDialog } from "./_reject-dialog";
+import { RegistrationImportDialog } from "./_import-dialog";
 
-const STATUS_STYLES: Record<string, string> = {
-  approved: "bg-green-500/20 text-green-400",
-  waitlisted: "bg-orange-500/20 text-orange-400",
-  pending: "bg-yellow-500/20 text-yellow-400",
-  rejected: "bg-red-500/20 text-red-400",
-  cancelled: "bg-zinc-500/20 text-zinc-400",
-};
+// Status badges + row styles come from @/lib/status-style.
 
-const STATUS_LABELS: Record<string, string> = {
-  approved: "Đã duyệt",
-  waitlisted: "Chờ",
-  pending: "Mới",
-  rejected: "Từ chối",
-  cancelled: "Đã hủy",
-};
+type FilterKey = "all" | DisplayStatusKey;
+
+/**
+ * Map our 10 operational statuses to tab labels. "Tất cả" is an
+ * implicit 11th tab that sends no status filter to the backend.
+ */
+const FILTER_TABS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "Tất cả" },
+  { key: "pending_approval", label: "Chờ duyệt" },
+  { key: "approved", label: "Đã duyệt" },
+  { key: "contract_sent", label: "Chờ ký HĐ" },
+  { key: "contract_signed", label: "Đã ký" },
+  { key: "qr_sent", label: "Sẵn sàng" },
+  { key: "checked_in", label: "Checked-in" },
+  { key: "completed", label: "Hoàn thành" },
+  { key: "waitlisted", label: "Waitlist" },
+  { key: "rejected", label: "Từ chối" },
+  { key: "cancelled", label: "Huỷ" },
+];
 
 export default function RegistrationsListPage(): React.ReactElement {
   const router = useRouter();
@@ -63,13 +107,27 @@ export default function RegistrationsListPage(): React.ReactElement {
   const [roles, setRoles] = useState<TeamRole[]>([]);
   const [rows, setRows] = useState<RegistrationListRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [byStatus, setByStatus] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterTab, setFilterTab] = useState<FilterKey>("all");
   const [filterRoleId, setFilterRoleId] = useState<number | undefined>();
   const [page, setPage] = useState(1);
   const [selection, setSelection] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [rowBusy, setRowBusy] = useState<Set<number>>(new Set());
+
+  // Reject dialog — used both for single row and for bulk reject. The
+  // `mode` discriminates between "reject this one id" and "reject all
+  // currently-selected ids".
+  type RejectTarget =
+    | { kind: "single"; id: number; fullName: string }
+    | { kind: "bulk"; ids: number[] };
+  const [rejectTarget, setRejectTarget] = useState<RejectTarget | null>(null);
+  const [rejectBusy, setRejectBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -78,7 +136,7 @@ export default function RegistrationsListPage(): React.ReactElement {
       const [roleList, regs] = await Promise.all([
         listTeamRoles(token, eventId),
         listRegistrations(token, eventId, {
-          status: filterStatus || undefined,
+          status: filterTab === "all" ? undefined : filterTab,
           role_id: filterRoleId,
           search: search || undefined,
           page,
@@ -88,12 +146,13 @@ export default function RegistrationsListPage(): React.ReactElement {
       setRoles(roleList);
       setRows(regs.data);
       setTotal(regs.total);
+      setByStatus(regs.by_status ?? {});
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [token, eventId, filterStatus, filterRoleId, search, page]);
+  }, [token, eventId, filterTab, filterRoleId, search, page]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.replace("/login");
@@ -110,14 +169,120 @@ export default function RegistrationsListPage(): React.ReactElement {
     setSelection(next);
   }
 
-  async function handleBulk(status: "approved" | "rejected" | "cancelled"): Promise<void> {
+  function startRowBusy(id: number): () => void {
+    const next = new Set(rowBusy);
+    next.add(id);
+    setRowBusy(next);
+    return () => {
+      const done = new Set(next);
+      done.delete(id);
+      setRowBusy(done);
+    };
+  }
+
+  async function handleExport(): Promise<void> {
+    if (!token || exporting) return;
+    setExporting(true);
+    const toastId = toast.loading("Đang tạo file…");
+    try {
+      const result = await exportPersonnel(token, eventId, {
+        status: filterTab === "all" ? undefined : filterTab,
+        role_id: filterRoleId,
+        search: search || undefined,
+      });
+      toast.dismiss(toastId);
+      toast.success(`Đã xuất ${result.row_count} dòng`);
+      window.open(result.url, "_blank", "noopener");
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error((err as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function runAction(
+    id: number,
+    fn: () => Promise<unknown>,
+    successMsg: string,
+  ): Promise<void> {
+    if (!token || rowBusy.has(id)) return;
+    const done = startRowBusy(id);
+    try {
+      await fn();
+      toast.success(successMsg);
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      done();
+    }
+  }
+
+  function handleApprove(row: RegistrationListRow): void {
+    if (!token) return;
+    void runAction(
+      row.id,
+      () => approveRegistration(token, row.id),
+      "Đã duyệt",
+    );
+  }
+
+  function handleCancel(row: RegistrationListRow): void {
+    if (!token) return;
+    const reason = window.prompt(
+      `Lý do huỷ đăng ký của ${row.full_name}? (tuỳ chọn)`,
+    );
+    // `null` = user hit Cancel on the prompt → abort. Empty string = proceed without reason.
+    if (reason === null) return;
+    void runAction(
+      row.id,
+      () => cancelRegistration(token, row.id, reason || undefined),
+      "Đã huỷ",
+    );
+  }
+
+  function handleResendContract(row: RegistrationListRow): void {
+    if (!token) return;
+    // Role-level contract send — approve/unapprove isolated to this registration's role.
+    // Backend skips already-sent contracts unless they're expired.
+    void runAction(
+      row.id,
+      () => sendContracts(token, row.role_id, false),
+      "Đã gửi lại hợp đồng",
+    );
+  }
+
+  function handleConfirmCompletion(row: RegistrationListRow): void {
+    if (!token) return;
+    const note = window.prompt(
+      `Ghi chú xác nhận hoàn thành cho ${row.full_name}? (tuỳ chọn)`,
+    );
+    if (note === null) return;
+    void runAction(
+      row.id,
+      () => confirmCompletion(token, row.id, note || undefined),
+      "Đã xác nhận hoàn thành",
+    );
+  }
+
+  function handleReopenRejected(row: RegistrationListRow): void {
+    // Terminal states — spec says "open trở lại → approve". Backend won't
+    // let us transition rejected → approved directly, so we inform admin.
+    toast.info(
+      "Đăng ký đã từ chối là trạng thái cuối. Vui lòng tạo đăng ký mới (Thêm trực tiếp) cho người này.",
+    );
+  }
+
+  async function handleBulkApprove(): Promise<void> {
     if (!token || selection.size === 0) return;
     const ids = Array.from(selection);
-    const action =
-      status === "approved" ? "duyệt" : status === "rejected" ? "từ chối" : "hủy";
-    if (!confirm(`Xác nhận ${action} ${ids.length} người đã chọn?`)) return;
+    if (!confirm(`Duyệt ${ids.length} đăng ký đã chọn?`)) return;
     try {
-      const result = await bulkUpdateRegistrations(token, { ids, status });
+      const result = await bulkUpdateRegistrations(token, {
+        ids,
+        action: "approve",
+      });
       toast.success(
         `Cập nhật: ${result.updated} · bỏ qua: ${result.skipped} · lỗi: ${result.failed_ids.length}`,
       );
@@ -128,19 +293,159 @@ export default function RegistrationsListPage(): React.ReactElement {
     }
   }
 
+  async function handleRejectConfirm(reason: string): Promise<void> {
+    if (!token || !rejectTarget) return;
+    setRejectBusy(true);
+    try {
+      if (rejectTarget.kind === "single") {
+        await rejectRegistration(token, rejectTarget.id, reason);
+        toast.success("Đã từ chối");
+      } else {
+        const result = await bulkUpdateRegistrations(token, {
+          ids: rejectTarget.ids,
+          action: "reject",
+          reason,
+        });
+        toast.success(
+          `Cập nhật: ${result.updated} · bỏ qua: ${result.skipped} · lỗi: ${result.failed_ids.length}`,
+        );
+        setSelection(new Set());
+      }
+      setRejectTarget(null);
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setRejectBusy(false);
+    }
+  }
+
+  // For the bulk toolbar: compute whether selection is "all pending"
+  // (only then can we approve all), and whether all are rejectable
+  // (pending_approval OR approved — the state machine allows both).
+  const selectedRows = useMemo(
+    () => rows.filter((r) => selection.has(r.id)),
+    [rows, selection],
+  );
+  const allSelectedPending = useMemo(
+    () =>
+      selectedRows.length > 0 &&
+      selectedRows.every((r) => deriveStatusKey(r) === "pending_approval"),
+    [selectedRows],
+  );
+  const allSelectedRejectable = useMemo(
+    () =>
+      selectedRows.length > 0 &&
+      selectedRows.every((r) => {
+        const k = deriveStatusKey(r);
+        return k === "pending_approval" || k === "approved";
+      }),
+    [selectedRows],
+  );
+
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  const pendingCount = byStatus.pending_approval ?? 0;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Danh sách nhân sự</h2>
-        <Button
-          size="sm"
-          onClick={() => setManualOpen(true)}
-          disabled={roles.length === 0}
-        >
-          <UserPlus className="mr-2 size-4" /> Thêm trực tiếp
-        </Button>
+        <h2 className="font-display text-3xl font-bold tracking-tight text-gray-900">
+          Danh sách nhân sự
+        </h2>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void handleExport();
+            }}
+            disabled={exporting}
+          >
+            <FileSpreadsheet className="mr-2 size-4" />
+            {exporting ? "Đang xuất..." : "Xuất Excel"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            disabled={roles.length === 0}
+          >
+            <FileUp className="mr-2 size-4" /> Import Excel
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setManualOpen(true)}
+            disabled={roles.length === 0}
+          >
+            <UserPlus className="mr-2 size-4" /> Thêm trực tiếp
+          </Button>
+        </div>
+      </div>
+
+      {/* Filter tabs — one row, horizontally scrollable on mobile. */}
+      <div
+        className="flex flex-wrap items-center gap-1.5 border-b pb-2"
+        role="tablist"
+        aria-label="Lọc theo trạng thái"
+      >
+        {FILTER_TABS.map((tab) => {
+          const active = filterTab === tab.key;
+          const count =
+            tab.key === "all"
+              ? Object.values(byStatus).reduce((a, b) => a + b, 0)
+              : (byStatus[tab.key] ?? 0);
+          const highlight =
+            tab.key === "pending_approval" && count > 0;
+          const base = tab.key === "all"
+            ? undefined
+            : STATUS_STYLE[tab.key as DisplayStatusKey];
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => {
+                setPage(1);
+                setFilterTab(tab.key);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+              style={
+                active
+                  ? {
+                      background: base?.bg ?? "#1f2937",
+                      color: base?.text ?? "#ffffff",
+                      borderColor: base?.border ?? "#1f2937",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+                    }
+                  : {
+                      background: "#ffffff",
+                      color: "#374151",
+                      borderColor: "#e5e7eb",
+                    }
+              }
+            >
+              <span>{tab.label}</span>
+              <span
+                className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums"
+                style={{
+                  background: active ? "rgba(0,0,0,0.08)" : "#f3f4f6",
+                  color: "inherit",
+                }}
+              >
+                {count}
+              </span>
+              {highlight ? (
+                <span
+                  aria-hidden
+                  className="inline-block size-1.5 animate-pulse rounded-full"
+                  style={{ background: "#f59e0b" }}
+                />
+              ) : null}
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -158,25 +463,12 @@ export default function RegistrationsListPage(): React.ReactElement {
         </div>
         <select
           className="h-10 rounded-md border bg-background px-3 text-sm"
-          value={filterStatus}
-          onChange={(e) => {
-            setPage(1);
-            setFilterStatus(e.target.value);
-          }}
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="approved">Đã duyệt</option>
-          <option value="waitlisted">Chờ</option>
-          <option value="pending">Mới</option>
-          <option value="rejected">Từ chối</option>
-          <option value="cancelled">Đã hủy</option>
-        </select>
-        <select
-          className="h-10 rounded-md border bg-background px-3 text-sm"
           value={filterRoleId ?? ""}
           onChange={(e) => {
             setPage(1);
-            setFilterRoleId(e.target.value ? Number(e.target.value) : undefined);
+            setFilterRoleId(
+              e.target.value ? Number(e.target.value) : undefined,
+            );
           }}
         >
           <option value="">Tất cả vai trò</option>
@@ -189,21 +481,62 @@ export default function RegistrationsListPage(): React.ReactElement {
       </div>
 
       {selection.size > 0 ? (
-        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-2">
-          <span className="text-sm font-medium">{selection.size} đã chọn</span>
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/50 p-2">
+          <span className="text-sm font-medium">
+            {selection.size} đã chọn
+          </span>
           <div className="flex-1" />
-          <Button size="sm" variant="outline" onClick={() => handleBulk("approved")}>
-            Duyệt
+          <Button
+            size="sm"
+            disabled={!allSelectedPending}
+            title={
+              allSelectedPending
+                ? `Duyệt tất cả ${selection.size}`
+                : "Chỉ hoạt động khi tất cả đã chọn đều ở trạng thái Chờ duyệt"
+            }
+            onClick={() => void handleBulkApprove()}
+          >
+            <Check className="mr-1 size-4" />
+            Duyệt tất cả ({selection.size})
           </Button>
-          <Button size="sm" variant="outline" onClick={() => handleBulk("rejected")}>
-            Từ chối
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!allSelectedRejectable}
+            title={
+              allSelectedRejectable
+                ? "Từ chối tất cả — sẽ nhắc nhập lý do"
+                : "Chỉ từ chối được khi tất cả đã chọn đang ở Chờ duyệt / Đã duyệt"
+            }
+            onClick={() =>
+              setRejectTarget({ kind: "bulk", ids: Array.from(selection) })
+            }
+          >
+            <X className="mr-1 size-4" />
+            Từ chối tất cả
           </Button>
-          <Button size="sm" variant="outline" onClick={() => handleBulk("cancelled")}>
-            Hủy
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelection(new Set())}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelection(new Set())}
+          >
             Clear
           </Button>
+        </div>
+      ) : pendingCount > 0 ? (
+        <div
+          className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+          style={{
+            background: "#fffbeb",
+            borderColor: "#fde68a",
+            color: "#92400e",
+          }}
+        >
+          <span className="inline-block size-2 animate-pulse rounded-full bg-amber-500" />
+          <span>
+            <strong>{pendingCount}</strong> đăng ký đang chờ duyệt — bấm tab &quot;Chờ
+            duyệt&quot; để xem
+          </span>
         </div>
       ) : null}
 
@@ -226,91 +559,149 @@ export default function RegistrationsListPage(): React.ReactElement {
               <TableHead>Trạng thái</TableHead>
               <TableHead>Hợp đồng</TableHead>
               <TableHead>Check-in</TableHead>
+              <TableHead className="text-right">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <Skeleton className="h-8" />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="text-center text-muted-foreground py-8"
                 >
                   Không có dữ liệu
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selection.has(r.id)}
-                      onCheckedChange={(v) => toggleSelect(r.id, v === true)}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/team-management/${eventId}/registrations/${r.id}`}
-                      className="hover:underline"
-                    >
-                      {r.full_name}
-                    </Link>
-                    <div className="text-xs text-muted-foreground">{r.email}</div>
-                  </TableCell>
-                  <TableCell>{r.role_name ?? "—"}</TableCell>
-                  <TableCell>{r.shirt_size ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge className={STATUS_STYLES[r.status] ?? ""}>
-                      {STATUS_LABELS[r.status] ?? r.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {r.contract_status === "signed"
-                      ? "✅ Đã ký"
-                      : r.contract_status === "sent"
-                        ? "⏳ Chờ ký"
+              rows.map((r) => {
+                const statusKey = deriveStatusKey(r);
+                const isPending = statusKey === "pending_approval";
+                const isSuspicious = r.suspicious_checkin === true;
+                // suspicious takes precedence over pending for the row highlight.
+                const rowStyle: React.CSSProperties | undefined = isSuspicious
+                  ? { background: "#fee2e2", borderLeft: "3px solid #dc2626" }
+                  : isPending
+                    ? { background: "#fffbeb", borderLeft: "3px solid #f59e0b" }
+                    : undefined;
+                return (
+                  <TableRow
+                    key={r.id}
+                    className="result-row-hover"
+                    style={rowStyle}
+                    data-status={r.status}
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={selection.has(r.id)}
+                        onCheckedChange={(v) => toggleSelect(r.id, v === true)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-1.5">
+                        {isSuspicious ? (
+                          <AlertTriangle
+                            className="size-4 text-red-600"
+                            aria-label="Suspicious check-in"
+                          />
+                        ) : null}
+                        {r.has_pending_changes ? (
+                          <Pencil
+                            className="size-4 text-amber-600"
+                            aria-label="Có yêu cầu sửa thông tin chờ duyệt"
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setDetailId(r.id)}
+                          className="text-left hover:underline focus:underline focus:outline-none"
+                        >
+                          {r.full_name}
+                        </button>
+                      </div>
+                      <div className="text-xs text-gray-500">{r.email}</div>
+                    </TableCell>
+                    <TableCell>{r.role_name ?? "—"}</TableCell>
+                    <TableCell>{r.shirt_size ?? "—"}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={statusKey} />
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {r.contract_status === "signed"
+                        ? "✅ Đã ký"
+                        : r.contract_status === "sent"
+                          ? "⏳ Chờ ký"
+                          : "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {r.checked_in_at
+                        ? new Date(r.checked_in_at).toLocaleString("vi-VN")
                         : "—"}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {r.checked_in_at
-                      ? new Date(r.checked_in_at).toLocaleString("vi-VN")
-                      : "—"}
-                  </TableCell>
-                </TableRow>
-              ))
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <RowActions
+                          row={r}
+                          busy={rowBusy.has(r.id)}
+                          onApprove={() => handleApprove(r)}
+                          onReject={() =>
+                            setRejectTarget({
+                              kind: "single",
+                              id: r.id,
+                              fullName: r.full_name,
+                            })
+                          }
+                          onCancel={() => handleCancel(r)}
+                          onResendContract={() => handleResendContract(r)}
+                          onConfirmCompletion={() =>
+                            handleConfirmCompletion(r)
+                          }
+                          onReopen={() => handleReopenRejected(r)}
+                          onOpenDetail={() => setDetailId(r.id)}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
       </div>
 
-      <div className="flex items-center justify-between text-sm">
-        <div className="text-muted-foreground">
-          {rows.length} / {total}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-          >
-            Trang trước
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={rows.length < 50}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Trang sau
-          </Button>
-        </div>
-      </div>
+      {(() => {
+        const singlePage = total <= 50 && page === 1;
+        return (
+          <div className="flex items-center justify-between text-sm">
+            <div className="text-muted-foreground">
+              {rows.length} / {total}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={singlePage || page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Trang trước
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={singlePage || rows.length < 50}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Trang sau
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
 
       <ManualRegisterDialog
         eventId={eventId}
@@ -322,9 +713,308 @@ export default function RegistrationsListPage(): React.ReactElement {
           void load();
         }}
       />
+
+      <RegistrationImportDialog
+        eventId={eventId}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onDone={() => {
+          setImportOpen(false);
+          void load();
+        }}
+      />
+
+      <RejectDialog
+        open={rejectTarget != null}
+        onOpenChange={(v) => {
+          if (!v) setRejectTarget(null);
+        }}
+        target={
+          rejectTarget?.kind === "single"
+            ? { count: 1, label: rejectTarget.fullName }
+            : { count: rejectTarget?.ids.length ?? 0, label: "đăng ký đã chọn" }
+        }
+        busy={rejectBusy}
+        onConfirm={handleRejectConfirm}
+      />
+
+      <Sheet
+        open={detailId != null}
+        onOpenChange={(v) => {
+          if (!v) setDetailId(null);
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-2xl overflow-y-auto"
+        >
+          <SheetHeader>
+            <SheetTitle>Chi tiết đăng ký</SheetTitle>
+          </SheetHeader>
+          <div className="p-4 pt-0">
+            {detailId != null ? (
+              <RegistrationDetailView
+                regId={detailId}
+                onChange={() => {
+                  void load();
+                }}
+              />
+            ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
+
+/**
+ * Context-sensitive action buttons per status. Keeps the row action cell
+ * compact — icon-only buttons with aria-labels. Disabled "info chip"
+ * buttons surface downstream waiting states without looking clickable.
+ */
+function RowActions({
+  row,
+  busy,
+  onApprove,
+  onReject,
+  onCancel,
+  onResendContract,
+  onConfirmCompletion,
+  onReopen,
+  onOpenDetail,
+}: {
+  row: RegistrationListRow;
+  busy: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  onCancel: () => void;
+  onResendContract: () => void;
+  onConfirmCompletion: () => void;
+  onReopen: () => void;
+  onOpenDetail: () => void;
+}): React.ReactElement {
+  const status = deriveStatusKey(row);
+  const common = (
+    <Button
+      size="sm"
+      variant="ghost"
+      className="h-8 px-2"
+      onClick={onOpenDetail}
+      aria-label="Chi tiết"
+    >
+      <ExternalLink className="size-4" />
+    </Button>
+  );
+
+  function InfoChip({
+    icon,
+    label,
+  }: {
+    icon: React.ReactNode;
+    label: string;
+  }): React.ReactElement {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] text-muted-foreground"
+        style={{ background: "#f9fafb", borderColor: "#e5e7eb" }}
+      >
+        {icon}
+        {label}
+      </span>
+    );
+  }
+
+  switch (status) {
+    case "pending_approval":
+      return (
+        <>
+          <Button
+            size="sm"
+            className="h-8 px-2"
+            disabled={busy}
+            onClick={onApprove}
+            aria-label="Duyệt"
+          >
+            <Check className="size-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 px-2"
+            disabled={busy}
+            onClick={onReject}
+            aria-label="Từ chối"
+          >
+            <X className="size-4" />
+          </Button>
+          {common}
+        </>
+      );
+    case "approved":
+      return (
+        <>
+          <InfoChip
+            icon={<Clock className="size-3" />}
+            label="Chờ gửi HĐ"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 px-2"
+            disabled={busy}
+            onClick={onCancel}
+            aria-label="Huỷ"
+          >
+            <Ban className="size-4" />
+          </Button>
+          {common}
+        </>
+      );
+    case "contract_sent":
+      return (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 px-2"
+            disabled={busy}
+            onClick={onResendContract}
+            aria-label="Gửi lại hợp đồng"
+            title="Gửi lại hợp đồng"
+          >
+            <Send className="size-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 px-2"
+            disabled={busy}
+            onClick={onCancel}
+            aria-label="Huỷ"
+          >
+            <Ban className="size-4" />
+          </Button>
+          {common}
+        </>
+      );
+    case "contract_signed":
+      return (
+        <>
+          <InfoChip
+            icon={<Clock className="size-3" />}
+            label="Chờ gửi QR"
+          />
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2"
+            onClick={onOpenDetail}
+            aria-label="Xem hợp đồng"
+            title="Xem hợp đồng"
+          >
+            <FileText className="size-4" />
+          </Button>
+          {common}
+        </>
+      );
+    case "qr_sent":
+      return (
+        <>
+          <InfoChip
+            icon={<Send className="size-3" />}
+            label="Đã có QR"
+          />
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2"
+            onClick={onOpenDetail}
+            aria-label="Xem hợp đồng"
+            title="Xem hợp đồng"
+          >
+            <FileText className="size-4" />
+          </Button>
+          {common}
+        </>
+      );
+    case "checked_in":
+      return (
+        <>
+          <Button
+            size="sm"
+            className="h-8 px-2"
+            disabled={busy}
+            onClick={onConfirmCompletion}
+            aria-label="Xác nhận hoàn thành"
+            title="Xác nhận hoàn thành"
+          >
+            <CheckCircle2 className="size-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2"
+            onClick={onOpenDetail}
+            aria-label="Xem hợp đồng"
+            title="Xem hợp đồng"
+          >
+            <FileText className="size-4" />
+          </Button>
+          {common}
+        </>
+      );
+    case "completed":
+      return (
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2"
+            onClick={onOpenDetail}
+            aria-label="Đánh dấu đã trả"
+            title="Đánh dấu đã trả (mở chi tiết)"
+          >
+            <DollarSign className="size-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2"
+            onClick={onOpenDetail}
+            aria-label="Xem hợp đồng"
+            title="Xem hợp đồng"
+          >
+            <FileText className="size-4" />
+          </Button>
+          {common}
+        </>
+      );
+    case "rejected":
+      return (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 px-2"
+            onClick={onReopen}
+            aria-label="Mở lại"
+            title="Mở lại (tạo đăng ký mới)"
+          >
+            <Undo2 className="size-4" />
+          </Button>
+          {common}
+        </>
+      );
+    case "waitlisted":
+    case "cancelled":
+      return <>{common}</>;
+    default:
+      return <>{common}</>;
+  }
+}
+
+// Legacy filter funnel — kept exported for test/debugging parity.
+export { STATUS_FUNNEL };
 
 function ManualRegisterDialog({
   eventId,
@@ -361,6 +1051,18 @@ function ManualRegisterDialog({
     if (!token || !roleId) return;
     if (!form.full_name || !form.email || !form.phone) {
       toast.error("Họ tên / email / SĐT bắt buộc");
+      return;
+    }
+    const acct = (form.form_data?.bank_account_number ?? "") as string;
+    if (acct && !/^\d{6,20}$/.test(acct)) {
+      toast.error("Số tài khoản phải có 6–20 chữ số.");
+      return;
+    }
+    const holder = (form.form_data?.bank_holder_name ?? "") as string;
+    if (holder && !namesMatch(holder, form.full_name)) {
+      toast.error(
+        "Tên chủ tài khoản phải khớp với họ tên đăng ký (không phân biệt dấu / hoa thường).",
+      );
       return;
     }
     setSaving(true);
@@ -400,11 +1102,20 @@ function ManualRegisterDialog({
               value={roleId ?? ""}
               onChange={(e) => setRoleId(Number(e.target.value))}
             >
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.role_name} ({r.filled_slots}/{r.max_slots})
-                </option>
-              ))}
+              {roles.map((r) => {
+                const full = r.filled_slots >= r.max_slots;
+                const waitlistNote = full
+                  ? r.waitlist_enabled
+                    ? " (đầy — vào waitlist)"
+                    : " (đầy)"
+                  : "";
+                return (
+                  <option key={r.id} value={r.id}>
+                    {r.role_name} ({r.filled_slots}/{r.max_slots})
+                    {waitlistNote}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div>
@@ -435,6 +1146,7 @@ function ManualRegisterDialog({
             <DynamicFormFields
               fields={selectedRole.form_fields}
               values={form.form_data}
+              fullName={form.full_name}
               onChange={(values) => setForm({ ...form, form_data: values })}
             />
           ) : null}
@@ -481,15 +1193,26 @@ function ManualRegisterDialog({
 function DynamicFormFields({
   fields,
   values,
+  fullName,
   onChange,
 }: {
   fields: TeamRole["form_fields"];
   values: Record<string, unknown>;
+  fullName: string;
   onChange: (next: Record<string, unknown>) => void;
 }): React.ReactElement {
   function set(key: string, val: unknown) {
-    onChange({ ...values, [key]: val });
+    const cleaned =
+      key === "bank_account_number" && typeof val === "string"
+        ? val.replace(/[^\d]/g, "")
+        : val;
+    onChange({ ...values, [key]: cleaned });
   }
+  const holder = (values["bank_holder_name"] ?? "") as string;
+  const holderMismatch =
+    holder.trim().length > 0 &&
+    fullName.trim().length > 0 &&
+    !namesMatch(holder, fullName);
   return (
     <div className="space-y-2 rounded-lg border p-3">
       <p className="text-xs font-medium text-muted-foreground">
@@ -517,7 +1240,7 @@ function DynamicFormFields({
             </div>
           );
         }
-        if (f.type === "shirt_size") {
+        if (f.type === "shirt_size" || f.type === "select") {
           return (
             <div key={f.key}>
               <Label className="text-xs">
@@ -529,16 +1252,41 @@ function DynamicFormFields({
                 value={v}
                 onChange={(e) => set(f.key, e.target.value)}
               >
-                <option value="">—</option>
+                <option value="">
+                  {f.type === "select" ? "-- Chọn --" : "—"}
+                </option>
                 {(f.options ?? []).map((o) => (
                   <option key={o} value={o}>
                     {o}
                   </option>
                 ))}
               </select>
+              {f.hint ? (
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {f.hint}
+                </p>
+              ) : null}
             </div>
           );
         }
+        if (f.type === "textarea") {
+          return (
+            <div key={f.key}>
+              <Label className="text-xs">
+                {f.label}
+                {f.required ? " *" : ""}
+              </Label>
+              <textarea
+                className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                rows={3}
+                value={v}
+                onChange={(e) => set(f.key, e.target.value)}
+              />
+            </div>
+          );
+        }
+        const isAccountNumber = f.key === "bank_account_number";
+        const isHolderName = f.key === "bank_holder_name";
         return (
           <div key={f.key}>
             <Label className="text-xs">
@@ -557,7 +1305,27 @@ function DynamicFormFields({
               }
               value={v}
               onChange={(e) => set(f.key, e.target.value)}
+              onBlur={
+                isHolderName
+                  ? () => {
+                      if (v && v !== v.toUpperCase()) set(f.key, v.toUpperCase());
+                    }
+                  : undefined
+              }
+              inputMode={isAccountNumber ? "numeric" : undefined}
+              pattern={isAccountNumber ? "\\d{6,20}" : undefined}
+              autoCapitalize={isHolderName ? "characters" : undefined}
             />
+            {f.hint ? (
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {f.hint}
+              </p>
+            ) : null}
+            {isHolderName && holderMismatch ? (
+              <p className="text-[11px] text-red-600 mt-0.5">
+                Tên chủ tài khoản phải khớp với họ tên đăng ký
+              </p>
+            ) : null}
           </div>
         );
       })}

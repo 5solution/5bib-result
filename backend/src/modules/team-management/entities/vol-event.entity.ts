@@ -62,6 +62,24 @@ export class VolEvent {
   @Column({ type: 'varchar', length: 20, nullable: true })
   contact_phone!: string | null;
 
+  // Benefits banner shown on the crew register page ("Quyền lợi khi
+  // tham gia"). Admin uploads via the standard photo endpoint and stores
+  // the public S3 URL here. Null = no banner, the register page just
+  // hides the section.
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  benefits_image_url!: string | null;
+
+  // Terms & conditions TNV must agree to before submitting the register
+  // form. Plain text, preserves newlines. Null = no gate, register form
+  // submits immediately.
+  @Column({ type: 'text', nullable: true })
+  terms_conditions!: string | null;
+
+  // v1.4: Minimum hours between check-in and completion-confirm; under
+  // this threshold the completion is flagged `suspicious_checkin = TRUE`.
+  @Column({ type: 'decimal', precision: 4, scale: 1, default: 2.0 })
+  min_work_hours_for_completion!: string;
+
   @CreateDateColumn({ type: 'datetime' })
   created_at!: Date;
 

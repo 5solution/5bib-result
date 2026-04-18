@@ -1,22 +1,67 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════
+   5BIB "DUONG MON" — Crew Portal Design System
+   Sync với 5bib-result/frontend/app/globals.css
+   ═══════════════════════════════════════════════════════ */
+
 :root {
-  --color-bg: #fafaf9;
-  --color-fg: #1c1917;
-  --color-muted: #78716c;
-  --color-accent: #1d4ed8;
-  --color-energy: #ea580c;
-  --color-trail: #166534;
+  /* Brand surfaces — DesignCorrection v2: pure white base */
+  --5bib-bg: #ffffff;
+  --5bib-surface: #ffffff;
+  --5bib-surface-2: #f8fafc;
+  --5bib-accent: #2563eb;
+  --5bib-accent-dim: #1d4ed8;
+  --5bib-accent-warm: #b45309;
+  --5bib-accent-glow: rgba(37, 99, 235, 0.2);
+  --5bib-text: #111827;
+  --5bib-text-muted: #6b7280;
+  --5bib-border: #e5e7eb;
+  --5bib-success: #15803d;
+  --5bib-live: #dc2626;
+  --5bib-gold: #b45309;
+  --5bib-silver: #6b7280;
+  --5bib-bronze: #92400e;
+  --5bib-energy: #b45309;
+  --5bib-trail: #15803d;
+
+  /* Legacy token aliases (crew forms) */
+  --color-bg: #ffffff;
+  --color-fg: #111827;
+  --color-muted: #6b7280;
+  --color-accent: #2563eb;
+  --color-energy: #b45309;
+  --color-trail: #15803d;
   --color-card: #ffffff;
-  --color-border: #e7e5e4;
-  --font-sans: "Inter", "Be Vietnam Pro", system-ui, sans-serif;
-  --font-heading: "Be Vietnam Pro", "Inter", system-ui, sans-serif;
+  --color-border: #e5e7eb;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-sm: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(28, 25, 23, 0.07), 0 2px 4px -2px rgba(28, 25, 23, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(28, 25, 23, 0.08), 0 4px 6px -4px rgba(28, 25, 23, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(28, 25, 23, 0.08), 0 8px 10px -6px rgba(28, 25, 23, 0.04);
+  --shadow-warm: 0 4px 24px rgba(37, 99, 235, 0.1);
+  --shadow-glow: 0 0 0 1px rgba(37, 99, 235, 0.08), 0 8px 32px rgba(37, 99, 235, 0.1);
+
+  /* Motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-athletic: cubic-bezier(0.22, 0.68, 0, 1.2);
+  --duration-fast: 150ms;
+  --duration-normal: 280ms;
+  --duration-slow: 500ms;
+
+  /* Fonts */
+  --font-sans: "Plus Jakarta Sans", "Be Vietnam Pro", "Inter", system-ui, sans-serif;
+  --font-heading: "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 html,
 body {
-  background: var(--color-bg);
-  color: var(--color-fg);
+  background: var(--5bib-bg);
+  color: var(--5bib-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -24,21 +69,43 @@ body {
 
 h1,
 h2,
-h3 {
+h3,
+h4,
+h5,
+h6,
+.font-display {
   font-family: var(--font-heading);
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
+code,
+pre,
+.font-mono,
+[data-mono],
+.tabular-nums {
+  font-family: var(--font-mono);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Component primitives
+   ═══════════════════════════════════════════════════════ */
 .btn-primary {
-  background: var(--color-accent);
+  background: #2563eb;
   color: white;
-  padding: 0.75rem 1.25rem;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  transition: transform 0.15s ease, background 0.15s ease;
+  padding: 0.85rem 1.25rem;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  font-size: 1rem;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--duration-fast) var(--ease-out-expo),
+    box-shadow var(--duration-normal) var(--ease-out-expo),
+    background var(--duration-fast) ease;
 }
 .btn-primary:hover {
-  background: #1e40af;
+  background: #1d4ed8;
+  box-shadow: var(--shadow-md);
 }
 .btn-primary:active {
   transform: scale(0.98);
@@ -50,47 +117,147 @@ h3 {
 
 .card {
   background: var(--color-card);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--5bib-border);
   border-radius: 1rem;
   padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .input,
 .textarea,
 .select {
-  background: white;
-  border: 1px solid var(--color-border);
+  background: #f9fafb;
+  border: 1px solid var(--5bib-border);
   border-radius: 0.5rem;
   padding: 0.65rem 0.85rem;
   width: 100%;
   font-size: 0.95rem;
+  color: var(--5bib-text);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
 .input:focus,
 .textarea:focus,
 .select:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-  border-color: var(--color-accent);
+  outline: none;
+  border-color: var(--5bib-accent);
+  background: #ffffff;
+  box-shadow: 0 0 0 2px var(--5bib-accent-glow);
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.2rem 0.55rem;
+  padding: 0.25rem 0.65rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
 }
 .chip-approved {
   background: #dcfce7;
-  color: #166534;
+  color: #15803d;
+  border: 1px solid #86efac;
 }
 .chip-waitlist {
-  background: #ffedd5;
-  color: #9a3412;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
 }
 .chip-rejected {
   background: #fee2e2;
-  color: #991b1b;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Utility classes
+   ═══════════════════════════════════════════════════════ */
+@layer utilities {
+  .card-hover {
+    transition:
+      transform var(--duration-normal) var(--ease-out-expo),
+      box-shadow var(--duration-normal) var(--ease-out-expo),
+      border-color var(--duration-fast) ease;
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow-md);
+    border-color: #e5e7eb;
+  }
+
+  .result-row-hover {
+    transition: background-color var(--duration-fast) ease;
+  }
+  .result-row-hover:hover {
+    background-color: #f0f4ff;
+  }
+
+  .glass-light {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+  }
+
+  .glass-dark {
+    background: rgba(28, 25, 23, 0.72);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .text-gradient {
+    color: #1d4ed8;
+  }
+  .text-gradient-warm {
+    color: #111827;
+  }
+
+  .slide-up {
+    animation: duong-mon-slide-up var(--duration-slow) var(--ease-out-expo) both;
+  }
+  @keyframes duong-mon-slide-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .stagger-in > * {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: duong-mon-stagger-up var(--duration-slow) var(--ease-out-expo) forwards;
+  }
+  .stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-in > *:nth-child(2) { animation-delay: 70ms; }
+  .stagger-in > *:nth-child(3) { animation-delay: 140ms; }
+  .stagger-in > *:nth-child(4) { animation-delay: 210ms; }
+  .stagger-in > *:nth-child(5) { animation-delay: 280ms; }
+  .stagger-in > *:nth-child(6) { animation-delay: 350ms; }
+  @keyframes duong-mon-stagger-up {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .scale-in {
+    animation: duong-mon-scale-in var(--duration-normal) var(--ease-spring) both;
+  }
+  @keyframes duong-mon-scale-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .pulse-live {
+    animation: duong-mon-pulse-heartbeat 1.8s ease-in-out infinite;
+  }
+  @keyframes duong-mon-pulse-heartbeat {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    15% { opacity: 0.6; transform: scale(0.96); }
+    30% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.94); }
+  }
+
+  .glow-accent { box-shadow: var(--shadow-glow); }
+  .glow-warm { box-shadow: var(--shadow-warm); }
+
+  .hero-pattern {
+    background-image: none;
+  }
 }

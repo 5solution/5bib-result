@@ -63,12 +63,35 @@ export class DashboardResponseDto {
   @ApiProperty() last_updated!: string;
 
   @ApiProperty() total_roles!: number;
-  @ApiProperty() total_approved!: number;
+
+  /** Total registrations for this event (all statuses, for KPI header). */
+  @ApiProperty() total!: number;
+
+  // v1.4 state-machine KPI cards — one per operational status.
+  @ApiProperty() pending_approval!: number;
+  @ApiProperty() approved!: number;
+  @ApiProperty() contract_sent!: number;
+  @ApiProperty() contract_signed!: number;
+  @ApiProperty() qr_sent!: number;
+  @ApiProperty() checked_in!: number;
+  @ApiProperty() completed!: number;
+  @ApiProperty() waitlisted!: number;
+  @ApiProperty() rejected!: number;
+  @ApiProperty() cancelled!: number;
+
+  // Legacy aggregate KPIs — kept so existing admin dashboard UI doesn't
+  // break during rollout; these are derived from the status counts.
+  @ApiProperty({
+    description:
+      'Legacy: count of rows in any post-approval status (approved..completed). Retained for dashboard backward-compat.',
+  })
+  total_approved!: number;
   @ApiProperty() total_checked_in!: number;
   @ApiProperty() checkin_rate!: number;
   @ApiProperty() total_contract_signed!: number;
   @ApiProperty() total_contract_unsigned!: number;
   @ApiProperty() total_paid!: number;
+  @ApiProperty() total_suspicious!: number;
 
   @ApiProperty({ type: [DashboardRoleBreakdownDto] })
   by_role!: DashboardRoleBreakdownDto[];

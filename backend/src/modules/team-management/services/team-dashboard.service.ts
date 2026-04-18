@@ -2,7 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VolEvent } from '../entities/vol-event.entity';
-import { VolRegistration } from '../entities/vol-registration.entity';
+import {
+  REGISTRATION_STATUS_VALUES,
+  RegistrationStatus,
+  VolRegistration,
+} from '../entities/vol-registration.entity';
 import { VolRole } from '../entities/vol-role.entity';
 import { VolShirtStock } from '../entities/vol-shirt-stock.entity';
 import {
@@ -14,6 +18,19 @@ import {
 } from '../dto/dashboard.dto';
 import type { ShirtSizeEnum } from '../dto/shirt-stock.dto';
 import { TeamCacheService } from './team-cache.service';
+
+/**
+ * Statuses that represent "active personnel" — everything from approved
+ * onwards. Used for legacy total_approved / shirt / breakdown metrics.
+ */
+const POST_APPROVE: RegistrationStatus[] = [
+  'approved',
+  'contract_sent',
+  'contract_signed',
+  'qr_sent',
+  'checked_in',
+  'completed',
+];
 
 @Injectable()
 export class TeamDashboardService {
@@ -29,11 +46,6 @@ export class TeamDashboardService {
     private readonly cache: TeamCacheService,
   ) {}
 
-  /**
-   * Single-call dashboard aggregate. Caches JSON for 60s. People list
-   * paginated because a race could have 500+ approved personnel and
-   * the admin dashboard table shouldn't dump them all.
-   */
   async getDashboard(
     eventId: number,
     params: DashboardQueryDto,
@@ -47,15 +59,32 @@ export class TeamDashboardService {
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
 
-    const [kpi, byRole, shirtSizes, shirtStock, peopleTotal, people] =
-      await Promise.all([
-        this.kpi(eventId),
-        this.breakdownByRole(eventId),
-        this.shirtSizeCounts(eventId),
-        this.shirtStockRows(eventId),
-        this.peopleCount(eventId),
-        this.peoplePage(eventId, page, limit),
-      ]);
+    const [
+      statusCounts,
+      kpi,
+      byRole,
+      shirtSizes,
+      shirtStock,
+      peopleTotal,
+      people,
+    ] = await Promise.all([
+      this.countByStatus(eventId),
+      this.kpi(eventId),
+      this.breakdownByRole(eventId),
+      this.shirtSizeCounts(eventId),
+      this.shirtStockRows(eventId),
+      this.peopleCount(eventId),
+      this.peoplePage(eventId, page, limit),
+    ]);
+
+    const total = REGISTRATION_STATUS_VALUES.reduce(
+      (sum, s) => sum + (statusCounts[s] ?? 0),
+      0,
+    );
+    const totalApproved = POST_APPROVE.reduce(
+      (sum, s) => sum + (statusCounts[s] ?? 0),
+      0,
+    );
 
     const response: DashboardResponseDto = {
       event_id: event.id,
@@ -63,15 +92,29 @@ export class TeamDashboardService {
       last_updated: new Date().toISOString(),
 
       total_roles: byRole.filter((r) => r.headcount > 0).length,
-      total_approved: kpi.totalApproved,
+      total,
+
+      pending_approval: statusCounts.pending_approval ?? 0,
+      approved: statusCounts.approved ?? 0,
+      contract_sent: statusCounts.contract_sent ?? 0,
+      contract_signed: statusCounts.contract_signed ?? 0,
+      qr_sent: statusCounts.qr_sent ?? 0,
+      checked_in: statusCounts.checked_in ?? 0,
+      completed: statusCounts.completed ?? 0,
+      waitlisted: statusCounts.waitlisted ?? 0,
+      rejected: statusCounts.rejected ?? 0,
+      cancelled: statusCounts.cancelled ?? 0,
+
+      total_approved: totalApproved,
       total_checked_in: kpi.totalCheckedIn,
       checkin_rate:
-        kpi.totalApproved > 0
-          ? Math.round((kpi.totalCheckedIn / kpi.totalApproved) * 100)
+        totalApproved > 0
+          ? Math.round((kpi.totalCheckedIn / totalApproved) * 100)
           : 0,
       total_contract_signed: kpi.totalContractSigned,
-      total_contract_unsigned: kpi.totalApproved - kpi.totalContractSigned,
+      total_contract_unsigned: totalApproved - kpi.totalContractSigned,
       total_paid: kpi.totalPaid,
+      total_suspicious: kpi.totalSuspicious,
 
       by_role: byRole,
       shirt_sizes: shirtSizes,
@@ -84,20 +127,35 @@ export class TeamDashboardService {
       people_total: peopleTotal,
     };
 
-    // 60s cache. Invalidated by cache.invalidateEvent(eventId) on any mutation.
     await this.cache.setJson(cacheKey, response, 60);
     return response;
   }
 
+  /** GROUP BY status for the 9-card KPI map. */
+  private async countByStatus(
+    eventId: number,
+  ): Promise<Record<string, number>> {
+    const rows = await this.regRepo
+      .createQueryBuilder('r')
+      .select('r.status', 'status')
+      .addSelect('COUNT(r.id)', 'count')
+      .where('r.event_id = :eid', { eid: eventId })
+      .groupBy('r.status')
+      .getRawMany<{ status: string; count: string }>();
+    const out: Record<string, number> = {};
+    for (const s of REGISTRATION_STATUS_VALUES) out[s] = 0;
+    for (const row of rows) out[row.status] = Number(row.count);
+    return out;
+  }
+
   private async kpi(eventId: number): Promise<{
-    totalApproved: number;
     totalCheckedIn: number;
     totalContractSigned: number;
     totalPaid: number;
+    totalSuspicious: number;
   }> {
     const row = await this.regRepo
       .createQueryBuilder('r')
-      .select('COUNT(r.id)', 'total_approved')
       .addSelect(
         'SUM(CASE WHEN r.checked_in_at IS NOT NULL THEN 1 ELSE 0 END)',
         'total_checked_in',
@@ -110,19 +168,23 @@ export class TeamDashboardService {
         "SUM(CASE WHEN r.payment_status = 'paid' THEN 1 ELSE 0 END)",
         'total_paid',
       )
+      .addSelect(
+        'SUM(CASE WHEN r.suspicious_checkin = 1 THEN 1 ELSE 0 END)',
+        'total_suspicious',
+      )
       .where('r.event_id = :eid', { eid: eventId })
-      .andWhere("r.status = 'approved'")
+      .andWhere('r.status IN (:...statuses)', { statuses: POST_APPROVE })
       .getRawOne<{
-        total_approved: string;
         total_checked_in: string;
         total_contract_signed: string;
         total_paid: string;
+        total_suspicious: string;
       }>();
     return {
-      totalApproved: Number(row?.total_approved ?? 0),
       totalCheckedIn: Number(row?.total_checked_in ?? 0),
       totalContractSigned: Number(row?.total_contract_signed ?? 0),
       totalPaid: Number(row?.total_paid ?? 0),
+      totalSuspicious: Number(row?.total_suspicious ?? 0),
     };
   }
 
@@ -150,7 +212,7 @@ export class TeamDashboardService {
         'paid',
       )
       .where('r.event_id = :eid', { eid: eventId })
-      .andWhere("r.status = 'approved'")
+      .andWhere('r.status IN (:...statuses)', { statuses: POST_APPROVE })
       .groupBy('r.role_id')
       .getRawMany<{
         role_id: number;
@@ -182,7 +244,7 @@ export class TeamDashboardService {
       .select('r.shirt_size', 'size')
       .addSelect('COUNT(r.id)', 'count')
       .where('r.event_id = :eid', { eid: eventId })
-      .andWhere("r.status = 'approved'")
+      .andWhere('r.status IN (:...statuses)', { statuses: POST_APPROVE })
       .groupBy('r.shirt_size')
       .getRawMany<{ size: ShirtSizeEnum | null; count: string }>();
     return rows.map((row) => ({
@@ -203,7 +265,7 @@ export class TeamDashboardService {
       .select('r.shirt_size', 'size')
       .addSelect('COUNT(r.id)', 'count')
       .where('r.event_id = :eid', { eid: eventId })
-      .andWhere("r.status = 'approved'")
+      .andWhere('r.status IN (:...statuses)', { statuses: POST_APPROVE })
       .andWhere('r.shirt_size IS NOT NULL')
       .groupBy('r.shirt_size')
       .getRawMany<{ size: ShirtSizeEnum; count: string }>();
@@ -219,9 +281,11 @@ export class TeamDashboardService {
   }
 
   private async peopleCount(eventId: number): Promise<number> {
-    return this.regRepo.count({
-      where: { event_id: eventId, status: 'approved' },
-    });
+    return this.regRepo
+      .createQueryBuilder('r')
+      .where('r.event_id = :eid', { eid: eventId })
+      .andWhere('r.status IN (:...statuses)', { statuses: POST_APPROVE })
+      .getCount();
   }
 
   private async peoplePage(
@@ -233,7 +297,7 @@ export class TeamDashboardService {
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.role', 'role')
       .where('r.event_id = :eid', { eid: eventId })
-      .andWhere("r.status = 'approved'")
+      .andWhere('r.status IN (:...statuses)', { statuses: POST_APPROVE })
       .orderBy('role.sort_order', 'ASC')
       .addOrderBy('r.full_name', 'ASC')
       .skip((page - 1) * limit)

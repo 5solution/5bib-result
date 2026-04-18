@@ -5,6 +5,7 @@ import {
   Ip,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -38,6 +39,10 @@ import {
   CheckinResponseDto,
   SelfCheckinDto,
 } from './dto/checkin.dto';
+import {
+  UpdateProfileDto,
+  UpdateProfileResponseDto,
+} from './dto/update-profile.dto';
 import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamPhotoService } from './services/team-photo.service';
@@ -90,12 +95,46 @@ export class TeamRegistrationController {
     return this.registrations.getStatus(token);
   }
 
+  @Patch('team-registration/:token/profile')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'v1.4.1 — TNV submits profile edits via magic token. Pending_approval rows are applied directly; approved+ rows go into pending_changes awaiting admin re-approval.',
+  })
+  @ApiResponse({ status: 200, type: UpdateProfileResponseDto })
+  updateProfile(
+    @Param('token') token: string,
+    @Body() dto: UpdateProfileDto,
+  ): Promise<UpdateProfileResponseDto> {
+    return this.registrations.submitProfileEdit(token, dto);
+  }
+
   @Get('team-contract/:token')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'View contract HTML for signing (magic token)' })
   @ApiResponse({ status: 200, type: ContractViewDto })
   viewContract(@Param('token') token: string): Promise<ContractViewDto> {
     return this.contracts.viewContract(token);
+  }
+
+  @Get('team-contract-pdf/:token')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Return a 10-minute presigned URL for the signed contract PDF (magic token).',
+  })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      type: 'object',
+      properties: { url: { type: 'string' }, expires_in: { type: 'number' } },
+    },
+  })
+  async getSignedContractPdf(
+    @Param('token') token: string,
+  ): Promise<{ url: string; expires_in: number }> {
+    const url = await this.contracts.getSignedContractUrlForToken(token, 600);
+    return { url, expires_in: 600 };
   }
 
   @Post('team-contract/:token/sign')
@@ -107,7 +146,12 @@ export class TeamRegistrationController {
     @Body() dto: SignContractDto,
     @Ip() ip: string,
   ): Promise<SignContractResponseDto> {
-    return this.contracts.signContract(token, dto.confirmed_name, dto.ip ?? ip);
+    return this.contracts.signContract(
+      token,
+      dto.confirmed_name,
+      dto.signature_image,
+      dto.ip ?? ip,
+    );
   }
 
   @Post('team-checkin/:token')
@@ -132,7 +176,7 @@ export class TeamRegistrationController {
       required: ['file', 'photo_type'],
       properties: {
         file: { type: 'string', format: 'binary' },
-        photo_type: { type: 'string', enum: ['avatar', 'cccd'] },
+        photo_type: { type: 'string', enum: ['avatar', 'cccd', 'benefits'] },
       },
     },
   })
@@ -159,6 +203,8 @@ export class TeamRegistrationController {
       event_end_date: event.event_end_date,
       registration_open: event.registration_open.toISOString(),
       registration_close: event.registration_close.toISOString(),
+      benefits_image_url: event.benefits_image_url,
+      terms_conditions: event.terms_conditions,
       roles: roleList.map((r) => ({
         id: r.id,
         role_name: r.role_name,

@@ -2,6 +2,8 @@
 // TODO: once backend boots locally, run `pnpm run generate:api` and replace
 // these calls with generated SDK functions from @/lib/api-generated.
 
+import { VN_BANKS } from "./banks";
+
 export interface TeamEvent {
   id: number;
   race_id: string | null;
@@ -36,7 +38,12 @@ export interface TeamRole {
   form_fields: FormFieldConfig[];
   contract_template_id: number | null;
   sort_order: number;
+  // v1.5: per-role group chat. Nullable — admin may not have configured.
+  chat_platform?: ChatPlatform | null;
+  chat_group_url?: string | null;
 }
+
+export type ChatPlatform = "zalo" | "telegram" | "whatsapp" | "other";
 
 export interface FormFieldConfig {
   key: string;
@@ -69,6 +76,25 @@ export interface CreateEventInput {
   registration_close: string;
   contact_email?: string;
   contact_phone?: string;
+  benefits_image_url?: string;
+  terms_conditions?: string;
+}
+
+// Uploads a benefits/avatar/cccd image via the existing public endpoint
+// and returns the stored URL. Admins reuse this for event benefit banners.
+export async function uploadTeamPhoto(
+  file: File,
+  photoType: "avatar" | "cccd" | "benefits",
+): Promise<{ url: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("photo_type", photoType);
+  const res = await fetch("/api/public/team-upload-photo", {
+    method: "POST",
+    body: fd,
+  });
+  await assertOk(res);
+  return res.json();
 }
 
 export interface CreateRoleInput {
@@ -82,7 +108,12 @@ export interface CreateRoleInput {
   form_fields: FormFieldConfig[];
   sort_order: number;
   contract_template_id?: number;
+  // v1.5 group chat fields — optional. Null explicitly clears on update.
+  chat_platform?: ChatPlatform | null;
+  chat_group_url?: string | null;
 }
+
+export type UpdateRoleInput = Partial<CreateRoleInput>;
 
 export interface ManualRegisterInput {
   role_id: number;
@@ -281,6 +312,46 @@ export async function deleteContractTemplate(token: string, id: number): Promise
   await assertOk(res);
 }
 
+export async function duplicateContractTemplate(
+  token: string,
+  id: number,
+): Promise<ContractTemplate> {
+  const res = await fetch(
+    `/api/team-management/contract-templates/${id}/duplicate`,
+    { method: "POST", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function validateContractTemplate(
+  token: string,
+  contentHtml: string,
+): Promise<{ valid: boolean; unknownVars: string[] }> {
+  const res = await fetch(
+    "/api/team-management/contract-templates/validate",
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ content_html: contentHtml }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getContractTemplate(
+  token: string,
+  id: number,
+): Promise<ContractTemplate> {
+  const res = await fetch(`/api/team-management/contract-templates/${id}`, {
+    headers: authedHeaders(token),
+    cache: "no-store",
+  });
+  await assertOk(res);
+  return res.json();
+}
+
 export async function importDocxToHtml(
   token: string,
   file: File,
@@ -342,6 +413,20 @@ export interface DashboardResponse {
   event_name: string;
   last_updated: string;
   total_roles: number;
+  // v1.4 per-status counts (default 0 if missing from older responses)
+  total?: number;
+  pending_approval?: number;
+  approved?: number;
+  contract_sent?: number;
+  contract_signed?: number;
+  qr_sent?: number;
+  checked_in?: number;
+  completed?: number;
+  waitlisted?: number;
+  rejected?: number;
+  cancelled?: number;
+  total_suspicious?: number;
+  // Legacy aggregate KPIs (retained for transition)
   total_approved: number;
   total_checked_in: number;
   checkin_rate: number;
@@ -389,6 +474,14 @@ export interface RegistrationListRow {
   form_data: Record<string, unknown>;
   notes: string | null;
   created_at: string;
+  // v1.4 fields — optional so older responses still parse.
+  rejection_reason?: string | null;
+  suspicious_checkin?: boolean;
+  completion_confirmed_at?: string | null;
+  completion_confirmed_by?: "leader" | "admin" | null;
+  completion_confirmed_id?: number | null;
+  // v1.4.1 profile-edit indicator
+  has_pending_changes?: boolean;
 }
 
 export interface RegistrationDetail extends RegistrationListRow {
@@ -397,6 +490,80 @@ export interface RegistrationDetail extends RegistrationListRow {
   checkin_method: string | null;
   contract_signed_at: string | null;
   contract_pdf_url: string | null;
+  has_signature: boolean;
+  role_daily_rate?: string;
+  role_working_days?: number;
+  // v1.4.1
+  has_pending_changes: boolean;
+  pending_changes: Record<string, unknown> | null;
+  pending_changes_submitted_at: string | null;
+}
+
+export async function approveProfileChanges(
+  token: string,
+  id: number,
+): Promise<RegistrationListRow> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/approve-changes`,
+    { method: "PATCH", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function rejectProfileChanges(
+  token: string,
+  id: number,
+  reason: string,
+): Promise<RegistrationListRow> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/reject-changes`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ reason }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getSignatureUrl(
+  token: string,
+  registrationId: number,
+): Promise<{ url: string; expires_in: number }> {
+  const res = await fetch(
+    `/api/team-management/registrations/${registrationId}/signature-url`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getSignedContractUrl(
+  token: string,
+  registrationId: number,
+): Promise<{ url: string; expires_in: number }> {
+  const res = await fetch(
+    `/api/team-management/registrations/${registrationId}/contract-pdf-url`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateTeamRole(
+  token: string,
+  id: number,
+  patch: Partial<CreateRoleInput>,
+): Promise<TeamRole> {
+  const res = await fetch(`/api/team-management/roles/${id}`, {
+    method: "PUT",
+    headers: authedHeaders(token),
+    body: JSON.stringify(patch),
+  });
+  await assertOk(res);
+  return res.json();
 }
 
 export async function getDashboard(
@@ -458,7 +625,11 @@ export async function listRegistrations(
     page?: number;
     limit?: number;
   } = {},
-): Promise<{ data: RegistrationListRow[]; total: number }> {
+): Promise<{
+  data: RegistrationListRow[];
+  total: number;
+  by_status: Record<string, number>;
+}> {
   const qs = new URLSearchParams();
   if (params.status) qs.set("status", params.status);
   if (params.role_id) qs.set("role_id", String(params.role_id));
@@ -504,9 +675,11 @@ export async function patchRegistration(
   return res.json();
 }
 
+export type BulkAction = "approve" | "reject" | "cancel";
+
 export async function bulkUpdateRegistrations(
   token: string,
-  payload: { ids: number[]; status: string; notes?: string },
+  payload: { ids: number[]; action: BulkAction; reason?: string },
 ): Promise<{ updated: number; skipped: number; failed_ids: number[] }> {
   const res = await fetch(
     "/api/team-management/registrations/bulk-update",
@@ -514,6 +687,90 @@ export async function bulkUpdateRegistrations(
       method: "POST",
       headers: authedHeaders(token),
       body: JSON.stringify(payload),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v1.4 state-machine per-registration actions
+// ─────────────────────────────────────────────────────────────────────
+
+export async function approveRegistration(
+  token: string,
+  id: number,
+): Promise<RegistrationListRow> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/approve`,
+    { method: "PATCH", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function rejectRegistration(
+  token: string,
+  id: number,
+  rejection_reason: string,
+): Promise<RegistrationListRow> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/reject`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ rejection_reason }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function cancelRegistration(
+  token: string,
+  id: number,
+  reason?: string,
+): Promise<RegistrationListRow> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/cancel`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify(reason ? { reason } : {}),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function confirmCompletion(
+  token: string,
+  id: number,
+  note?: string,
+): Promise<RegistrationListRow> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/confirm-completion`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify(note ? { note } : {}),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function clearSuspicious(
+  token: string,
+  id: number,
+  admin_note: string,
+): Promise<RegistrationListRow> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/clear-suspicious`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ admin_note }),
     },
   );
   await assertOk(res);
@@ -532,6 +789,175 @@ export async function exportPaymentReport(
   return res.json();
 }
 
+export async function exportPersonnel(
+  token: string,
+  eventId: number,
+  params: { status?: string; role_id?: number; search?: string } = {},
+): Promise<{
+  url: string;
+  filename: string;
+  expires_in: number;
+  row_count: number;
+}> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.role_id) qs.set("role_id", String(params.role_id));
+  if (params.search) qs.set("search", params.search);
+  const query = qs.toString();
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/export-personnel${
+      query ? `?${query}` : ""
+    }`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export interface StaffCheckinScanResponse {
+  success: true;
+  full_name: string;
+  role_name: string;
+  checked_in_at: string;
+  method: "qr_scan" | "gps_verify";
+}
+
+export async function staffCheckinScan(
+  token: string,
+  scannedToken: string,
+  eventId?: number,
+): Promise<StaffCheckinScanResponse> {
+  const res = await fetch("/api/team-management/checkin/scan", {
+    method: "POST",
+    headers: authedHeaders(token),
+    body: JSON.stringify({
+      qr_code: scannedToken,
+      ...(eventId != null ? { event_id: eventId } : {}),
+    }),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export interface CheckinLookupResult {
+  id: number;
+  full_name: string;
+  role_name: string;
+  cccd_last4: string;
+  phone_masked: string;
+  avatar_photo_url: string | null;
+  status: string;
+  checked_in_at: string | null;
+  qr_code: string;
+}
+
+/**
+ * Fallback when a QR scan isn't possible — search approved regs by
+ * name / phone / CCCD. Min 2 chars, ≤ 8 rows, unchecked-in first.
+ */
+export async function lookupRegistrations(
+  token: string,
+  q: string,
+  eventId: number,
+): Promise<CheckinLookupResult[]> {
+  const trimmed = q.trim();
+  if (trimmed.length < 2) return [];
+  const qs = new URLSearchParams({ q: trimmed, event_id: String(eventId) });
+  const res = await fetch(
+    `/api/team-management/checkin/lookup?${qs.toString()}`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  const body = (await res.json()) as { data: CheckinLookupResult[] };
+  return body.data;
+}
+
+// -------- Role import (bulk CSV/XLSX) --------
+
+export interface ParsedRoleRow {
+  _row: number;
+  role_name: string;
+  description: string | null;
+  max_slots: number | null;
+  daily_rate: number;
+  working_days: number;
+  waitlist_enabled: boolean;
+  sort_order: number;
+}
+
+export interface ParsedRoleRowError {
+  _row: number;
+  role_name: string;
+  errors: string[];
+}
+
+export interface PreviewRoleImportResponse {
+  total_rows: number;
+  valid_rows: ParsedRoleRow[];
+  invalid_rows: ParsedRoleRowError[];
+}
+
+export interface ConfirmRoleImportResponse {
+  created: number;
+  skipped: number;
+  roles: TeamRole[];
+}
+
+export async function downloadRoleTemplate(token: string): Promise<void> {
+  // Endpoint is JWT-guarded, so we fetch with Bearer, then trigger a
+  // blob-based download. Filename comes from server's Content-Disposition
+  // header; fall back to "roles_template.csv".
+  const res = await fetch("/api/team-management/roles/import-template", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  await assertOk(res);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "roles_template.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function previewRoleImport(
+  token: string,
+  eventId: number,
+  file: File,
+): Promise<PreviewRoleImportResponse> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/roles/import/preview`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body,
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function confirmRoleImport(
+  token: string,
+  eventId: number,
+  rows: ParsedRoleRow[],
+): Promise<ConfirmRoleImportResponse> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/roles/import/confirm`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ rows }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
 export async function sendContracts(
   token: string,
   roleId: number,
@@ -544,6 +970,118 @@ export async function sendContracts(
       headers: authedHeaders(token),
       body: JSON.stringify({ dry_run: dryRun }),
     },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+// -------- v1.4 Schedule Email (per-role blast) --------
+
+export interface ScheduleEmailConfig {
+  id: number;
+  event_id: number;
+  role_id: number;
+  role_name: string;
+  member_count_eligible: number;
+  subject: string;
+  body_html: string;
+  reporting_time: string | null;
+  gathering_point: string | null;
+  team_contact_phone: string | null;
+  special_note: string | null;
+  last_sent_at: string | null;
+  last_sent_count: number;
+  total_sent_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleEmailRoleSummary {
+  role_id: number;
+  role_name: string;
+  member_count_eligible: number;
+  config: ScheduleEmailConfig | null;
+}
+
+export interface UpsertScheduleEmailInput {
+  subject: string;
+  body_html: string;
+  reporting_time?: string | null;
+  gathering_point?: string | null;
+  team_contact_phone?: string | null;
+  special_note?: string | null;
+}
+
+export async function listScheduleEmails(
+  token: string,
+  eventId: number,
+): Promise<ScheduleEmailRoleSummary[]> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/schedule-emails`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getScheduleEmail(
+  token: string,
+  eventId: number,
+  roleId: number,
+): Promise<ScheduleEmailConfig | null> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/schedule-emails/${roleId}`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  if (res.status === 404) return null;
+  await assertOk(res);
+  return res.json();
+}
+
+export async function upsertScheduleEmail(
+  token: string,
+  eventId: number,
+  roleId: number,
+  input: UpsertScheduleEmailInput,
+): Promise<ScheduleEmailConfig> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/schedule-emails/${roleId}`,
+    {
+      method: "PUT",
+      headers: authedHeaders(token),
+      body: JSON.stringify(input),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function sendTestScheduleEmail(
+  token: string,
+  eventId: number,
+  roleId: number,
+  testEmail?: string,
+): Promise<{ sent: boolean; delivered_to: string }> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/schedule-emails/${roleId}/send-test`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(testEmail ? { test_email: testEmail } : {}),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function sendBulkScheduleEmail(
+  token: string,
+  eventId: number,
+  roleId: number,
+): Promise<{ queued: number; skipped: number }> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/schedule-emails/${roleId}/send-bulk`,
+    { method: "POST", headers: authedHeaders(token) },
   );
   await assertOk(res);
   return res.json();
@@ -579,4 +1117,236 @@ export const DEFAULT_FORM_FIELDS: FormFieldConfig[] = [
     type: "textarea",
     required: false,
   },
+  // Bank / payout info — required so accountant can transfer payout.
+  // Rendered as a grouped "Thông tin thanh toán" section in the detail view.
+  {
+    key: "bank_account_number",
+    label: "Số tài khoản ngân hàng",
+    type: "text",
+    required: true,
+    hint: "Chỉ số, 6–20 chữ số",
+  },
+  {
+    key: "bank_holder_name",
+    label: "Tên chủ tài khoản",
+    type: "text",
+    required: true,
+    hint: "Phải khớp với họ tên ở trên (viết hoa không dấu)",
+  },
+  {
+    key: "bank_name",
+    label: "Ngân hàng",
+    type: "select",
+    required: true,
+    options: [...VN_BANKS],
+  },
+  {
+    key: "bank_branch",
+    label: "Chi nhánh",
+    type: "text",
+    required: false,
+  },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────
+// Registration bulk import (v1.4.2)
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface ImportRegistrationsPreviewRow {
+  row_num: number;
+  data: Record<string, unknown>;
+  errors: string[];
+  warnings: string[];
+  valid: boolean;
+  duplicate_kind: "none" | "in_file" | "in_db" | null;
+  resolved_role_id?: number | null;
+}
+
+export interface ImportRegistrationsPreviewResponse {
+  total_rows: number;
+  valid_count: number;
+  invalid_count: number;
+  duplicate_in_file: number;
+  duplicate_in_db: number;
+  rows: ImportRegistrationsPreviewRow[];
+  import_token: string;
+}
+
+export interface ConfirmImportRegistrationsResponse {
+  inserted: number;
+  skipped: number;
+  inserted_ids: number[];
+  errors: string[];
+}
+
+/** Trigger a browser download of the XLSX template for this event. */
+export async function downloadRegistrationTemplate(
+  token: string,
+  eventId: number,
+): Promise<void> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/registrations/import/template`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const b = (await res.json()) as { message?: string };
+      if (b.message) msg = b.message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `registration-import-template-event-${eventId}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function previewRegistrationImport(
+  token: string,
+  eventId: number,
+  file: File,
+): Promise<ImportRegistrationsPreviewResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/registrations/import/preview`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function confirmRegistrationImport(
+  token: string,
+  eventId: number,
+  importToken: string,
+  opts: { auto_approve?: boolean; skip_invalid?: boolean } = {},
+): Promise<ConfirmImportRegistrationsResponse> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/registrations/import/confirm`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({
+        import_token: importToken,
+        auto_approve: opts.auto_approve === true,
+        skip_invalid: opts.skip_invalid !== false,
+      }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+// ============================================================
+// v1.5 — Emergency contacts (per event)
+// ============================================================
+
+export type ContactType = "btc" | "medical" | "rescue" | "police" | "other";
+
+export interface EventContact {
+  id: number;
+  event_id: number;
+  contact_type: ContactType;
+  contact_name: string;
+  phone: string;
+  phone2: string | null;
+  note: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateEventContactInput {
+  contact_type: ContactType;
+  contact_name: string;
+  phone: string;
+  phone2?: string | null;
+  note?: string | null;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export type UpdateEventContactInput = Partial<CreateEventContactInput>;
+
+export async function listEventContacts(
+  token: string,
+  eventId: number,
+): Promise<EventContact[]> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/contacts`,
+    { headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function createEventContact(
+  token: string,
+  eventId: number,
+  input: CreateEventContactInput,
+): Promise<EventContact> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/contacts`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(input),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateEventContact(
+  token: string,
+  id: number,
+  patch: UpdateEventContactInput,
+): Promise<EventContact> {
+  const res = await fetch(`/api/team-management/contacts/${id}`, {
+    method: "PATCH",
+    headers: authedHeaders(token),
+    body: JSON.stringify(patch),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function toggleEventContactActive(
+  token: string,
+  id: number,
+): Promise<EventContact> {
+  const res = await fetch(
+    `/api/team-management/contacts/${id}/toggle-active`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function deleteEventContact(
+  token: string,
+  id: number,
+): Promise<void> {
+  const res = await fetch(`/api/team-management/contacts/${id}`, {
+    method: "DELETE",
+    headers: authedHeaders(token),
+  });
+  await assertOk(res);
+}

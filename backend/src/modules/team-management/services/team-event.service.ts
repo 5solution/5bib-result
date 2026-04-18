@@ -13,6 +13,22 @@ import { CreateRoleDto } from '../dto/create-role.dto';
 import { UpdateRoleDto } from '../dto/update-role.dto';
 import { TeamCacheService } from './team-cache.service';
 
+/**
+ * v1.5: Normalize a user-provided chat group URL.
+ * - undefined → undefined (caller treats as "no patch")
+ * - null or empty/whitespace-only string → null (stored as "no link")
+ * - Existing protocol (http/https/tel/mailto/zalo/etc) → returned as-is, trimmed
+ * - Bare "zalo.me/g/xxx" or "t.me/foo" → "https://" prepended
+ */
+function normalizeChatGroupUrl(input: string | null | undefined): string | null | undefined {
+  if (input === undefined) return undefined;
+  if (input === null) return null;
+  const trimmed = input.trim();
+  if (trimmed.length === 0) return null;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 @Injectable()
 export class TeamEventService {
   constructor(
@@ -100,11 +116,16 @@ export class TeamEventService {
   async createRole(eventId: number, dto: CreateRoleDto): Promise<VolRole> {
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
+    const normalizedChatUrl = normalizeChatGroupUrl(dto.chat_group_url);
     const role = this.roleRepo.create({
       ...dto,
       event_id: eventId,
       daily_rate: String(dto.daily_rate),
       filled_slots: 0,
+      chat_platform: dto.chat_platform ?? null,
+      // normalizedChatUrl can be undefined (user didn't pass) — coerce to null
+      // so the column is populated correctly on INSERT.
+      chat_group_url: normalizedChatUrl === undefined ? null : normalizedChatUrl,
     });
     const saved = await this.roleRepo.save(role);
     await this.cache.invalidateEvent(eventId, [saved.id]);
@@ -126,10 +147,26 @@ export class TeamEventService {
         `max_slots (${dto.max_slots}) cannot be smaller than filled_slots (${role.filled_slots})`,
       );
     }
+    // v1.5 chat fields: honor explicit null ("clear"), undefined means "leave
+    // unchanged", non-empty string gets normalized to https:// + kept.
+    // Strip chat fields from the spread first so undefined doesn't clobber
+    // the persisted value via Object.assign.
+    const {
+      chat_platform: chatPlatformIn,
+      chat_group_url: chatGroupUrlIn,
+      ...restDto
+    } = dto;
     Object.assign(role, {
-      ...dto,
+      ...restDto,
       daily_rate: dto.daily_rate != null ? String(dto.daily_rate) : role.daily_rate,
     });
+    if ('chat_platform' in dto) {
+      role.chat_platform = chatPlatformIn ?? null;
+    }
+    if ('chat_group_url' in dto) {
+      const normalized = normalizeChatGroupUrl(chatGroupUrlIn);
+      if (normalized !== undefined) role.chat_group_url = normalized;
+    }
     const saved = await this.roleRepo.save(role);
     await this.cache.invalidateEvent(role.event_id, [roleId]);
     return saved;

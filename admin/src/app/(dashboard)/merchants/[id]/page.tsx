@@ -292,7 +292,7 @@ export default function MerchantDetailPage() {
           <ArrowLeft className="size-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{merchant.name}</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">{merchant.name}</h1>
           <p className="text-sm text-muted-foreground">ID: #{merchant.id} · Tạo: {new Date(merchant.created_on).toLocaleDateString("vi-VN")}</p>
         </div>
         <div className="flex gap-2">
@@ -317,7 +317,7 @@ export default function MerchantDetailPage() {
           <TabsTrigger value="fee">
             Phí dịch vụ
             {merchant.service_fee_rate == null && (
-              <AlertTriangle className="ml-1 size-3 text-red-400" />
+              <AlertTriangle className="ml-1 size-3 text-destructive" />
             )}
           </TabsTrigger>
           <TabsTrigger value="races">Giải đấu ({races.length})</TabsTrigger>
@@ -533,7 +533,7 @@ export default function MerchantDetailPage() {
                     <Separator />
                     <div className="flex flex-col gap-2">
                       <Label>
-                        Lý do thay đổi <span className="text-red-400">*</span>
+                        Lý do thay đổi <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         value={feeForm.note}
@@ -556,7 +556,7 @@ export default function MerchantDetailPage() {
               <Card className="border-purple-500/20">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex size-8 items-center justify-center rounded-lg bg-purple-500/10">
+                    <div className="flex size-8 items-center justify-center rounded-lg bg-violet-100">
                       <Percent className="size-4 text-purple-400" />
                     </div>
                     <CardTitle className="text-sm">Phí dịch vụ</CardTitle>
@@ -567,7 +567,7 @@ export default function MerchantDetailPage() {
                   {merchant.service_fee_rate != null ? (
                     <p className="text-3xl font-bold text-purple-400">{merchant.service_fee_rate}%</p>
                   ) : (
-                    <div className="flex items-center gap-1 text-red-400">
+                    <div className="flex items-center gap-1 text-destructive">
                       <AlertTriangle className="size-4" />
                       <span className="font-semibold">Chưa thiết lập</span>
                     </div>
@@ -583,7 +583,7 @@ export default function MerchantDetailPage() {
               <Card className="border-blue-500/20">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex size-8 items-center justify-center rounded-lg bg-blue-500/10">
+                    <div className="flex size-8 items-center justify-center rounded-lg bg-blue-100">
                       <Ticket className="size-4 text-blue-400" />
                     </div>
                     <CardTitle className="text-sm">Phí thủ công</CardTitle>
@@ -601,15 +601,15 @@ export default function MerchantDetailPage() {
               <Card className="border-yellow-500/20">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex size-8 items-center justify-center rounded-lg bg-yellow-500/10">
-                      <Receipt className="size-4 text-yellow-400" />
+                    <div className="flex size-8 items-center justify-center rounded-lg bg-amber-100">
+                      <Receipt className="size-4 text-amber-600" />
                     </div>
                     <CardTitle className="text-sm">VAT trên phí</CardTitle>
                   </div>
                   <CardDescription className="text-xs">Tính trên tiền phí dịch vụ</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-yellow-400">{merchant.fee_vat_rate}%</p>
+                  <p className="text-3xl font-bold text-amber-600">{merchant.fee_vat_rate}%</p>
                   {merchant.fee_note && (
                     <p className="text-xs text-muted-foreground mt-1">{merchant.fee_note}</p>
                   )}
@@ -702,11 +702,19 @@ export default function MerchantDetailPage() {
               <CardContent className="flex flex-col gap-3">
                 <div className="flex items-center gap-3">
                   {merchant.is_approved ? (
-                    <Badge className="bg-green-500/20 text-green-400">
+                    <span
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                      style={{ background: "#dcfce7", color: "#15803d", borderColor: "#86efac" }}
+                    >
                       <CheckCircle className="mr-1 size-3" /> Đã duyệt
-                    </Badge>
+                    </span>
                   ) : (
-                    <Badge className="bg-zinc-500/20 text-zinc-400">Chờ duyệt</Badge>
+                    <span
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                      style={{ background: "#f3f4f6", color: "#6b7280", borderColor: "#d1d5db" }}
+                    >
+                      Chờ duyệt
+                    </span>
                   )}
                 </div>
                 {merchant.approved_at && (

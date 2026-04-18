@@ -116,7 +116,7 @@ export default function TeamManagementPage(): React.ReactElement {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Quản lý nhân sự</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-gray-900">Quản lý nhân sự</h1>
           <p className="text-sm text-muted-foreground">
             Tạo event, quản lý vai trò (Leader / Crew / TNV), xem danh sách đăng ký.
           </p>
@@ -157,7 +157,7 @@ export default function TeamManagementPage(): React.ReactElement {
             </TableHeader>
             <TableBody>
               {events.map((e) => (
-                <TableRow key={e.id}>
+                <TableRow key={e.id} className="result-row-hover">
                   <TableCell className="font-medium">
                     <Link
                       href={`/team-management/${e.id}/roles`}
@@ -249,8 +249,26 @@ function CreateEventDialog({
     event_end_date: "",
     registration_open: "",
     registration_close: "",
+    benefits_image_url: "",
+    terms_conditions: "",
   });
   const [saving, setSaving] = useState(false);
+  const [uploadingBenefits, setUploadingBenefits] = useState(false);
+
+  async function handleBenefitsFile(file: File): Promise<void> {
+    if (!file) return;
+    setUploadingBenefits(true);
+    try {
+      const { uploadTeamPhoto } = await import("@/lib/team-api");
+      const { url } = await uploadTeamPhoto(file, "benefits");
+      setForm((prev) => ({ ...prev, benefits_image_url: url }));
+      toast.success("Đã upload ảnh quyền lợi");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setUploadingBenefits(false);
+    }
+  }
 
   async function handleSubmit(): Promise<void> {
     if (!token) return;
@@ -292,6 +310,8 @@ function CreateEventDialog({
         event_end_date: "",
         registration_open: "",
         registration_close: "",
+        benefits_image_url: "",
+        terms_conditions: "",
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -384,6 +404,60 @@ function CreateEventDialog({
                 })
               }
             />
+          </div>
+          <div>
+            <Label>Ảnh quyền lợi khi tham gia</Label>
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              disabled={uploadingBenefits}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleBenefitsFile(f);
+              }}
+            />
+            <p className="text-[11px] text-gray-500 mt-1">
+              Tuỳ chọn · ảnh sẽ hiển thị trên trang đăng ký của TNV để mô tả
+              áo / ăn uống / thù lao / quà kỷ niệm. Dưới 5 MB, JPG/PNG/WebP.
+            </p>
+            {uploadingBenefits ? (
+              <p className="text-xs text-blue-600 mt-1">Đang upload...</p>
+            ) : null}
+            {form.benefits_image_url ? (
+              <div className="mt-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={form.benefits_image_url}
+                  alt="Preview ảnh quyền lợi"
+                  className="h-32 rounded border object-contain"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm({ ...form, benefits_image_url: "" })
+                  }
+                  className="text-xs text-red-600 mt-1 hover:underline"
+                >
+                  Xoá ảnh
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div>
+            <Label>Điều khoản & điều kiện đăng ký</Label>
+            <textarea
+              className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              rows={6}
+              value={form.terms_conditions ?? ""}
+              onChange={(e) =>
+                setForm({ ...form, terms_conditions: e.target.value })
+              }
+              placeholder={`VD:\n1. TNV cam kết tham gia đầy đủ ngày vận hành.\n2. Không chuyển nhượng vai trò cho người khác.\n3. Thực hiện đúng hướng dẫn của BTC.\n4. Bảo mật thông tin khai thác.`}
+            />
+            <p className="text-[11px] text-gray-500 mt-1">
+              Tuỳ chọn · nếu điền, TNV phải tick "Tôi đồng ý" trước khi submit
+              đăng ký. Xuống dòng được giữ nguyên.
+            </p>
           </div>
         </div>
         <DialogFooter>

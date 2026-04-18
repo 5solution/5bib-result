@@ -385,7 +385,7 @@ export default function NewReconciliationPage() {
     <div className="flex flex-col gap-6 max-w-4xl">
       {/* Stepper */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold">Tạo đối soát mới</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">Tạo đối soát mới</h1>
         <div className="flex items-center gap-2 mt-3">
           {STEPS.map((label, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -439,7 +439,7 @@ export default function NewReconciliationPage() {
                 </Select>
               )}
               {selectedMerchant && selectedMerchant.service_fee_rate == null && (
-                <div className="flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-600">
+                <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700">
                   <AlertTriangle className="size-4 shrink-0" />
                   Merchant chưa có tỉ lệ phí. Vui lòng cập nhật trước khi tạo đối soát.
                 </div>
@@ -589,10 +589,10 @@ export default function NewReconciliationPage() {
                           key={i}
                           className={`flex items-start gap-2 rounded px-2 py-1 ${
                             w.severity === "ERROR"
-                              ? "border border-red-500/30 bg-red-500/10 text-red-700"
+                              ? "border border-red-300 bg-red-50 text-red-700"
                               : w.severity === "WARNING"
-                              ? "border border-yellow-500/30 bg-yellow-500/10 text-yellow-700"
-                              : "border border-blue-500/30 bg-blue-500/10 text-blue-700"
+                              ? "border border-amber-300 bg-amber-50 text-amber-700"
+                              : "border border-blue-300 bg-blue-50 text-blue-700"
                           }`}
                         >
                           <span>
@@ -600,7 +600,7 @@ export default function NewReconciliationPage() {
                           </span>
                           <span className="flex-1">{w.message}</span>
                           <span className={`shrink-0 text-xs font-semibold ${
-                            w.severity === "ERROR" ? "text-red-600" : w.severity === "WARNING" ? "text-yellow-600" : "text-blue-600"
+                            w.severity === "ERROR" ? "text-red-600" : w.severity === "WARNING" ? "text-amber-700" : "text-blue-600"
                           }`}>
                             [{w.severity}]
                           </span>
@@ -619,12 +619,12 @@ export default function NewReconciliationPage() {
 
                   {/* Status message */}
                   {!preflight.can_create ? (
-                    <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-700">
+                    <div className="flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
                       Không có giao dịch trong kỳ
                     </div>
                   ) : hasErrors ? (
                     <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-700">
+                      <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700">
                         <AlertTriangle className="size-4 shrink-0" />
                         Dữ liệu có vấn đề — vẫn có thể tạo
                       </div>
@@ -639,7 +639,7 @@ export default function NewReconciliationPage() {
                       </label>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-700">
+                    <div className="flex items-center gap-2 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700">
                       <CheckCircle className="size-4 shrink-0" />
                       ✅ Dữ liệu sạch, sẵn sàng tạo đối soát
                     </div>
@@ -691,7 +691,7 @@ export default function NewReconciliationPage() {
         <div className="flex flex-col gap-5">
           {/* Warning */}
           {preview.missing_payment_ref_count > 0 && (
-            <div className="flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700">
+            <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-700">
               <AlertTriangle className="size-4 shrink-0" />
               Có {preview.missing_payment_ref_count} đơn không có mã thanh toán. Dữ liệu có thể chưa đầy đủ.
             </div>
@@ -869,7 +869,7 @@ export default function NewReconciliationPage() {
               </div>
               {parseFloat(manualAdjustment) !== 0 && (
                 <div className="flex flex-col gap-1.5">
-                  <Label>Ghi chú điều chỉnh <span className="text-red-400">*</span></Label>
+                  <Label>Ghi chú điều chỉnh <span className="text-destructive">*</span></Label>
                   <textarea
                     className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     placeholder="Lý do điều chỉnh..."
@@ -893,29 +893,29 @@ export default function NewReconciliationPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Phí dịch vụ</span>
-                <span className="font-medium text-red-400">− {formatVnd(computedFee())}</span>
+                <span className="font-medium text-destructive">− {formatVnd(computedFee())}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">VAT trên phí</span>
-                <span className="font-medium text-red-400">− {formatVnd(computedVat())}</span>
+                <span className="font-medium text-destructive">− {formatVnd(computedVat())}</span>
               </div>
               {preview.manual_ticket_count > 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Phí thủ công ({preview.manual_ticket_count} vé)</span>
-                  <span className="font-medium text-red-400">− {formatVnd(computedManualFee())}</span>
+                  <span className="font-medium text-destructive">− {formatVnd(computedManualFee())}</span>
                 </div>
               )}
               {parseFloat(manualAdjustment) !== 0 && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Điều chỉnh</span>
-                  <span className={`font-medium ${parseFloat(manualAdjustment) > 0 ? "text-green-400" : "text-red-400"}`}>
+                  <span className={`font-medium ${parseFloat(manualAdjustment) > 0 ? "text-emerald-700" : "text-destructive"}`}>
                     {parseFloat(manualAdjustment) > 0 ? "+" : ""}{formatVnd(parseFloat(manualAdjustment))}
                   </span>
                 </div>
               )}
               <div className="mt-2 flex justify-between border-t pt-2">
                 <span className="font-semibold">Số tiền thanh toán</span>
-                <span className="text-lg font-bold text-green-400">{formatVnd(computedPayout())}</span>
+                <span className="text-lg font-bold text-emerald-700">{formatVnd(computedPayout())}</span>
               </div>
             </CardContent>
           </Card>
@@ -955,14 +955,14 @@ export default function NewReconciliationPage() {
               </div>
               <div>
                 <p className="text-muted-foreground">Phí + VAT</p>
-                <p className="font-semibold text-red-400">
+                <p className="font-semibold text-destructive">
                   {formatVnd(computedFee() + computedVat())}
                 </p>
               </div>
               {computedManualFee() > 0 && (
                 <div>
                   <p className="text-muted-foreground">Phí thủ công ({preview.manual_ticket_count} vé)</p>
-                  <p className="font-semibold text-red-400">{formatVnd(computedManualFee())}</p>
+                  <p className="font-semibold text-destructive">{formatVnd(computedManualFee())}</p>
                 </div>
               )}
               <div>
@@ -975,7 +975,7 @@ export default function NewReconciliationPage() {
               </div>
               <div>
                 <p className="text-muted-foreground">Thanh toán</p>
-                <p className="text-lg font-bold text-green-400">{formatVnd(computedPayout())}</p>
+                <p className="text-lg font-bold text-emerald-700">{formatVnd(computedPayout())}</p>
               </div>
             </CardContent>
           </Card>
@@ -1032,7 +1032,7 @@ export default function NewReconciliationPage() {
 
       {/* Success */}
       {step === 2 && createResult && (
-        <Card className="border-green-500/30 bg-green-500/5">
+        <Card className="border-green-300 bg-green-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-green-500">
               <CheckCircle className="size-5" />

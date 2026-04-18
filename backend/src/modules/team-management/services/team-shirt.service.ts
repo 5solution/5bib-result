@@ -56,12 +56,15 @@ export class TeamShirtService {
 
   async aggregate(eventId: number): Promise<ShirtAggregateDto> {
     const stockRows = await this.listStock(eventId);
+    // v1.4: shirt counts cover any active-pipeline status (slot-holding).
     const registeredRows = await this.regRepo
       .createQueryBuilder('r')
       .select('r.shirt_size', 'size')
       .addSelect('COUNT(r.id)', 'count')
       .where('r.event_id = :eid', { eid: eventId })
-      .andWhere("r.status = 'approved'")
+      .andWhere(
+        "r.status IN ('approved','contract_sent','contract_signed','qr_sent','checked_in','completed')",
+      )
       .andWhere('r.shirt_size IS NOT NULL')
       .groupBy('r.shirt_size')
       .getRawMany<{ size: ShirtSizeEnum; count: string }>();

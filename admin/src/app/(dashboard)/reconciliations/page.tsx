@@ -103,11 +103,11 @@ interface BatchResult {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  draft: { label: "Nháp", className: "bg-zinc-500/20 text-zinc-400" },
-  reviewed: { label: "Đã xem xét", className: "bg-blue-500/20 text-blue-400" },
-  sent: { label: "Đã gửi", className: "bg-yellow-500/20 text-yellow-400" },
-  signed: { label: "Đã ký", className: "bg-green-500/20 text-green-400" },
-  completed: { label: "Hoàn tất", className: "bg-green-600/20 text-green-300" },
+  draft: { label: "Nháp", className: "bg-gray-100 text-gray-600" },
+  reviewed: { label: "Đã xem xét", className: "bg-blue-100 text-blue-700" },
+  sent: { label: "Đã gửi", className: "bg-amber-100 text-amber-700" },
+  signed: { label: "Đã ký", className: "bg-green-100 text-green-700" },
+  completed: { label: "Hoàn tất", className: "bg-emerald-100 text-emerald-700" },
 };
 
 const MONTH_NAMES = [
@@ -498,17 +498,17 @@ export default function ReconciliationsPage() {
     <div className="flex flex-col gap-6">
       {/* M5: Cron error banner */}
       {showCronBanner && (
-        <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-yellow-400" />
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-sm font-medium text-yellow-200">
+                <p className="text-sm font-medium text-amber-800">
                   {cronLog!.error_count} merchant chưa được tạo đối soát {cronPeriodFormatted} (cần xử lý thủ công)
                 </p>
                 <button
                   onClick={() => setCronBannerExpanded((v) => !v)}
-                  className="flex items-center gap-1 text-xs text-yellow-400 hover:text-yellow-300 transition-colors shrink-0"
+                  className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 transition-colors shrink-0"
                 >
                   Xem chi tiết
                   {cronBannerExpanded ? (
@@ -523,11 +523,11 @@ export default function ReconciliationsPage() {
                   {cronLog!.error_details.map((detail, i) => (
                     <div
                       key={i}
-                      className="rounded-md bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200"
+                      className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"
                     >
                       <span className="font-medium">{detail.merchant_name}</span>
                       {detail.race_title && (
-                        <span className="text-yellow-400"> · {detail.race_title}</span>
+                        <span className="text-amber-600"> · {detail.race_title}</span>
                       )}
                       <span className="text-yellow-500"> — {detail.reason}</span>
                     </div>
@@ -541,7 +541,7 @@ export default function ReconciliationsPage() {
 
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold">Đối soát doanh thu</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">Đối soát doanh thu</h1>
           <p className="text-sm text-muted-foreground">{total} bản ghi đối soát</p>
         </div>
         <div className="flex items-center gap-2">
@@ -677,7 +677,7 @@ export default function ReconciliationsPage() {
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => setDeleteTarget(item)}
-                        className="rounded p-1.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                        className="rounded p-1.5 text-muted-foreground hover:bg-red-50 hover:text-destructive transition-colors"
                         title="Xóa đối soát"
                       >
                         <Trash2 className="size-4" />
@@ -809,7 +809,7 @@ export default function ReconciliationsPage() {
           {/* Done state */}
           {exportStatus === "done" && (
             <div className="flex flex-col items-center gap-4 py-6">
-              <CheckCircle className="size-10 text-green-400" />
+              <CheckCircle className="size-10 text-emerald-600" />
               <div className="flex flex-col items-center gap-1 text-center">
                 <p className="font-medium">Xuất thành công!</p>
                 <p className="text-sm text-muted-foreground">File ZIP đã được tải xuống tự động.</p>
@@ -830,11 +830,11 @@ export default function ReconciliationsPage() {
           {/* Failed state */}
           {exportStatus === "failed" && (
             <div className="flex flex-col items-center gap-4 py-6">
-              <AlertTriangle className="size-10 text-red-400" />
+              <AlertTriangle className="size-10 text-destructive" />
               <div className="flex flex-col items-center gap-1 text-center">
                 <p className="font-medium">Xuất thất bại</p>
                 {exportError && (
-                  <p className="text-sm text-red-400">{exportError}</p>
+                  <p className="text-sm text-destructive">{exportError}</p>
                 )}
               </div>
               <DialogFooter>
@@ -858,7 +858,7 @@ export default function ReconciliationsPage() {
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-400">
+            <DialogTitle className="flex items-center gap-2 text-destructive">
               <Trash2 className="size-5" />
               Xóa bản ghi đối soát
             </DialogTitle>
@@ -1021,7 +1021,7 @@ export default function ReconciliationsPage() {
                                       {p.warnings
                                         .filter((w) => w.severity === "ERROR")
                                         .map((w, i) => (
-                                          <p key={i} className="text-xs text-red-400">
+                                          <p key={i} className="text-xs text-destructive">
                                             ⚠ {w.message}
                                           </p>
                                         ))}
@@ -1033,7 +1033,7 @@ export default function ReconciliationsPage() {
                                         {p.warnings
                                           .filter((w) => w.severity === "WARNING")
                                           .map((w, i) => (
-                                            <p key={i} className="text-xs text-yellow-400">
+                                            <p key={i} className="text-xs text-amber-600">
                                               ⚡ {w.message}
                                             </p>
                                           ))}
@@ -1119,21 +1119,21 @@ export default function ReconciliationsPage() {
                   {/* Result summary */}
                   <div className="flex gap-4 rounded-lg border bg-muted/30 px-4 py-4">
                     <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-2xl font-bold text-green-400">
+                      <span className="text-2xl font-bold text-emerald-600">
                         {batchResult.created}
                       </span>
                       <span className="text-xs text-muted-foreground">thành công</span>
                     </div>
                     <div className="w-px bg-border" />
                     <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-2xl font-bold text-yellow-400">
+                      <span className="text-2xl font-bold text-amber-600">
                         {batchResult.skipped}
                       </span>
                       <span className="text-xs text-muted-foreground">bỏ qua</span>
                     </div>
                     <div className="w-px bg-border" />
                     <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-2xl font-bold text-red-400">
+                      <span className="text-2xl font-bold text-destructive">
                         {batchResult.failed}
                       </span>
                       <span className="text-xs text-muted-foreground">thất bại</span>
@@ -1145,7 +1145,7 @@ export default function ReconciliationsPage() {
                     <div className="flex flex-col gap-2">
                       <button
                         onClick={() => setBatchErrorOpen((v) => !v)}
-                        className="flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300 transition-colors"
+                        className="flex items-center gap-1.5 text-sm text-destructive hover:text-red-700 transition-colors"
                       >
                         {batchErrorOpen ? (
                           <ChevronUp className="size-4" />
@@ -1162,13 +1162,13 @@ export default function ReconciliationsPage() {
                               .map((r, i) => (
                                 <div
                                   key={i}
-                                  className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs"
+                                  className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs"
                                 >
-                                  <span className="font-medium text-red-300">
+                                  <span className="font-medium text-red-700">
                                     {r.merchant_name}
                                   </span>
                                   {r.race_title && (
-                                    <span className="text-red-400/70"> · {r.race_title}</span>
+                                    <span className="text-destructive/70"> · {r.race_title}</span>
                                   )}
                                   {r.reason && (
                                     <span className="text-red-500"> — {r.reason}</span>

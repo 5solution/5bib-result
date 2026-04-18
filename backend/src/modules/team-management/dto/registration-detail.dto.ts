@@ -57,6 +57,14 @@ export class RegistrationDetailDto {
   @ApiProperty({ required: false, nullable: true })
   contract_pdf_url!: string | null;
 
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'True when a handwritten signature PNG is stored. Fetch the actual image via GET /registrations/:id/signature-url.',
+  })
+  has_signature!: boolean;
+
   @ApiProperty({ required: false, nullable: true })
   actual_working_days!: number | null;
   @ApiProperty({ required: false, nullable: true })
@@ -66,4 +74,32 @@ export class RegistrationDetailDto {
   @ApiProperty({ required: false, nullable: true })
   notes!: string | null;
   @ApiProperty() created_at!: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Role daily_rate (VND, stored as string). For admin payment tab default.',
+  })
+  role_daily_rate?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Role working_days. For admin payment tab default when actual_working_days is null.',
+  })
+  role_working_days?: number;
+
+  // v1.4.1 — profile-edit workflow
+  @ApiProperty({ description: 'True when TNV has submitted edits awaiting admin review.' })
+  has_pending_changes!: boolean;
+
+  @ApiProperty({ required: false, nullable: true })
+  pending_changes_submitted_at!: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    type: Object,
+    additionalProperties: true,
+    description: 'Raw patch submitted by TNV. Null when has_pending_changes=false.',
+  })
+  pending_changes!: Record<string, unknown> | null;
 }

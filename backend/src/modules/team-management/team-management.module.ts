@@ -8,6 +8,8 @@ import { VolRole } from './entities/vol-role.entity';
 import { VolRegistration } from './entities/vol-registration.entity';
 import { VolContractTemplate } from './entities/vol-contract-template.entity';
 import { VolShirtStock } from './entities/vol-shirt-stock.entity';
+import { VolTeamScheduleEmail } from './entities/vol-team-schedule-email.entity';
+import { VolEventContact } from './entities/vol-event-contact.entity';
 import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamPhotoService } from './services/team-photo.service';
@@ -18,16 +20,35 @@ import { TeamReminderService } from './services/team-reminder.service';
 import { TeamShirtService } from './services/team-shirt.service';
 import { TeamDashboardService } from './services/team-dashboard.service';
 import { TeamExportService } from './services/team-export.service';
+import { TeamRoleImportService } from './services/team-role-import.service';
+import { TeamRegistrationImportService } from './services/team-registration-import.service';
+import { TeamScheduleEmailService } from './services/team-schedule-email.service';
+import { TeamLeaderService } from './services/team-leader.service';
+import { TeamContactService } from './services/team-contact.service';
+import { TeamDirectoryService } from './services/team-directory.service';
 import { TeamManagementController } from './team-management.controller';
 import { TeamRegistrationController } from './team-registration.controller';
+import { TeamRegistrationImportController } from './team-registration-import.controller';
 import { TeamContractTemplateController } from './team-contract-template.controller';
 import { TeamCheckinController } from './team-checkin.controller';
+import { TeamScheduleEmailController } from './team-schedule-email.controller';
+import { TeamLeaderController } from './team-leader.controller';
+import { TeamContactController } from './team-contact.controller';
+import { TeamDirectoryController } from './team-directory.controller';
 import { env } from 'src/config';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature(
-      [VolEvent, VolRole, VolRegistration, VolContractTemplate, VolShirtStock],
+      [
+        VolEvent,
+        VolRole,
+        VolRegistration,
+        VolContractTemplate,
+        VolShirtStock,
+        VolTeamScheduleEmail,
+        VolEventContact,
+      ],
       'volunteer',
     ),
     ThrottlerModule.forRoot([
@@ -40,8 +61,13 @@ import { env } from 'src/config';
   controllers: [
     TeamManagementController,
     TeamRegistrationController,
+    TeamRegistrationImportController,
     TeamContractTemplateController,
     TeamCheckinController,
+    TeamScheduleEmailController,
+    TeamLeaderController,
+    TeamContactController,
+    TeamDirectoryController,
   ],
   providers: [
     TeamEventService,
@@ -54,6 +80,12 @@ import { env } from 'src/config';
     TeamShirtService,
     TeamDashboardService,
     TeamExportService,
+    TeamRoleImportService,
+    TeamRegistrationImportService,
+    TeamScheduleEmailService,
+    TeamLeaderService,
+    TeamContactService,
+    TeamDirectoryService,
     s3ClientProvider,
     // Make every route within this module subject to @Throttle decorators.
     // Without this provider the @Throttle calls on public endpoints are no-ops.

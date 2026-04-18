@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Trophy, Radio, Users, FileWarning, RefreshCw, Trash2 } from "lucide-react";
 
@@ -135,7 +134,9 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Tổng quan</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">
+            Tổng quan
+          </h1>
           <p className="text-sm text-muted-foreground">
             Tổng quan hệ thống 5BIB Result
           </p>
@@ -157,10 +158,20 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-2xl font-bold">{card.value}</span>
                   {card.highlight && card.value > 0 && (
-                    <Badge className="bg-green-500/20 text-green-400">
-                      <span className="mr-1 inline-block size-2 animate-pulse rounded-full bg-green-400" />
+                    <span
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                      style={{
+                        background: "#dcfce7",
+                        color: "#15803d",
+                        borderColor: "#86efac",
+                      }}
+                    >
+                      <span
+                        className="mr-1 inline-block size-2 animate-pulse rounded-full"
+                        style={{ background: "#15803d" }}
+                      />
                       Live
-                    </Badge>
+                    </span>
                   )}
                 </div>
               )}

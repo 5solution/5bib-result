@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -57,34 +56,51 @@ interface Race {
 }
 
 function StatusBadge({ status }: { status: RaceStatus }) {
-  const config: Record<RaceStatus, { label: string; className: string }> = {
+  const config: Record<
+    RaceStatus,
+    { label: string; bg: string; text: string; border: string }
+  > = {
     draft: {
       label: "Nháp",
-      className: "bg-yellow-500/20 text-yellow-400",
+      bg: "#f3f4f6",
+      text: "#6b7280",
+      border: "#d1d5db",
     },
     pre_race: {
       label: "Chuẩn bị",
-      className: "bg-blue-500/20 text-blue-400",
+      bg: "#fef3c7",
+      text: "#b45309",
+      border: "#fcd34d",
     },
     live: {
       label: "Đang diễn ra",
-      className: "bg-green-500/20 text-green-400",
+      bg: "#dcfce7",
+      text: "#15803d",
+      border: "#86efac",
     },
     ended: {
       label: "Đã kết thúc",
-      className: "bg-zinc-500/20 text-zinc-400",
+      bg: "#ede9fe",
+      text: "#5b21b6",
+      border: "#c4b5fd",
     },
   };
 
   const c = config[status] || config.ended;
 
   return (
-    <Badge className={`${c.className} text-xs px-2 py-0.5 whitespace-nowrap`}>
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap"
+      style={{ background: c.bg, color: c.text, borderColor: c.border }}
+    >
       {status === "live" && (
-        <span className="mr-1 inline-block size-2 animate-pulse rounded-full bg-green-400" />
+        <span
+          className="mr-1 inline-block size-2 animate-pulse rounded-full"
+          style={{ background: "#15803d" }}
+        />
       )}
       {c.label}
-    </Badge>
+    </span>
   );
 }
 
@@ -220,7 +236,9 @@ export default function RacesPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Giải đấu</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">
+            Giải đấu
+          </h1>
           <p className="text-sm text-muted-foreground">
             {totalItems} giải chạy trong hệ thống
           </p>
@@ -336,7 +354,7 @@ export default function RacesPage() {
         </div>
       ) : (
         <>
-          <div className="w-full overflow-hidden rounded-md border">
+          <div className="w-full overflow-hidden rounded-lg border">
           <Table className="table-fixed w-full">
             <TableHeader>
               <TableRow>
@@ -357,7 +375,7 @@ export default function RacesPage() {
                 </TableRow>
               ) : (
                 races.map((race) => (
-                  <TableRow key={race._id} className="text-sm">
+                  <TableRow key={race._id} className="text-sm result-row-hover">
                     <TableCell className="font-semibold py-3 min-w-0">
                       <button
                         className="text-left hover:underline text-sm truncate block w-full"

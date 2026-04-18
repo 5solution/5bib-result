@@ -82,6 +82,13 @@ export class TeamPhotoService {
         .resize(400, 400, { fit: 'cover' })
         .webp({ quality: 82 })
         .toBuffer();
+    } else if (photoType === 'benefits') {
+      // Benefits banner: wide, keep detail legible (poster with pricing
+      // lists, gift images, etc.). Cap longest side at 1600px.
+      processed = await pipeline
+        .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toBuffer();
     } else {
       // CCCD: keep legible quality, cap longest side at 1600px.
       processed = await pipeline
@@ -106,7 +113,7 @@ export class TeamPhotoService {
     );
 
     const url =
-      photoType === 'avatar'
+      photoType === 'avatar' || photoType === 'benefits'
         ? `https://${this.bucket}.s3.${this.region}.amazonaws.com/${key}`
         : key;
     this.logger.log(`Uploaded ${photoType} photo → ${key}`);

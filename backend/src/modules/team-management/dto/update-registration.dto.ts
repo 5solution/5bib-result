@@ -6,22 +6,20 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import type {
-  PaymentStatus,
-  RegistrationStatus,
-} from '../entities/vol-registration.entity';
+import type { PaymentStatus } from '../entities/vol-registration.entity';
 
-// Admins can only drive the three terminal transitions. To "revert" an
-// approval, cancel it first and let the user register again — otherwise
-// filled_slots drifts and the waitlist invariants break.
-const ADMIN_SETTABLE_STATUS = ['approved', 'rejected', 'cancelled'] as const;
-
+/**
+ * v1.4: Admin status transitions moved to dedicated endpoints
+ * (`/approve`, `/reject`, `/cancel`, `/confirm-completion`).
+ * This DTO now only covers field-level edits that don't change state:
+ *   - notes
+ *   - payment_status (pending → paid)
+ *   - actual_working_days (legacy manual override)
+ *
+ * The `status` field is intentionally omitted — trying to flip status
+ * through the generic PATCH route returns 400 "unknown property".
+ */
 export class UpdateRegistrationDto {
-  @ApiProperty({ enum: ADMIN_SETTABLE_STATUS, required: false })
-  @IsEnum(ADMIN_SETTABLE_STATUS)
-  @IsOptional()
-  status?: Extract<RegistrationStatus, (typeof ADMIN_SETTABLE_STATUS)[number]>;
-
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()

@@ -1,5 +1,31 @@
-import { getContract } from "@/lib/api";
+import type { Metadata } from "next";
+import { getContract, getStatus } from "@/lib/api";
 import SignForm from "./sign-form";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  const { token } = await params;
+  try {
+    const s = await getStatus(token);
+    const title = `Hợp đồng — ${s.full_name} · ${s.event_name}`;
+    const description = `Xem và ký hợp đồng cộng tác viên cho vai trò "${s.role_name}" — sự kiện ${s.event_name}.`;
+    return {
+      title,
+      description,
+      openGraph: { title, description },
+      twitter: { title, description },
+      robots: { index: false, follow: false },
+    };
+  } catch {
+    return {
+      title: "Hợp đồng không tìm thấy",
+      robots: { index: false, follow: false },
+    };
+  }
+}
 
 export default async function ContractPage({
   params,
@@ -49,16 +75,18 @@ export default async function ContractPage({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 slide-up">
       <section className="card">
-        <h1 className="text-xl font-bold">Hợp đồng cộng tác</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-gradient">
+          Hợp đồng cộng tác
+        </h1>
         <p className="text-sm text-[color:var(--color-muted)] mt-1">
           Đọc kỹ và nhập đầy đủ họ tên để xác nhận ký. Sau khi ký, bạn sẽ
           không thể ký lại bản này.
         </p>
       </section>
       <ContractPreview html={data.html_content} />
-      <SignForm token={token} />
+      <SignForm token={token} expectedName={data.full_name} />
     </div>
   );
 }

@@ -1,4 +1,69 @@
+import type { Metadata } from "next";
 import { getStatus } from "@/lib/api";
+import { getLeaderTeam, type LeaderPortalResponse } from "@/lib/leader-api";
+import {
+  getDirectory,
+  getContacts,
+  type TeamDirectoryResponse,
+  type PublicEventContactsResponse,
+} from "@/lib/directory-api";
+import { StatusTabs } from "./_status-tabs";
+
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8081";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  const { token } = await params;
+  try {
+    const s = await getStatus(token);
+    const title = `${s.full_name} — ${s.event_name}`;
+    const description = `Trạng thái đăng ký vai trò "${s.role_name}" cho sự kiện ${s.event_name}. Xem QR check-in và thông tin tham gia.`;
+    return {
+      title,
+      description,
+      openGraph: { title, description },
+      twitter: { title, description },
+      robots: { index: false, follow: false },
+    };
+  } catch {
+    return {
+      title: "Không tìm thấy thông tin",
+      robots: { index: false, follow: false },
+    };
+  }
+}
+
+async function fetchSignedPdfUrl(token: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/api/public/team-contract-pdf/${token}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as { url?: string };
+    return body.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Try to fetch leader portal data. A 403 simply means "not a leader" —
+ * swallow into null so the status page can still render without the
+ * team tab.
+ */
+async function tryFetchLeaderPortal(
+  token: string,
+): Promise<LeaderPortalResponse | null> {
+  try {
+    return await getLeaderTeam(token);
+  } catch {
+    return null;
+  }
+}
 
 export default async function StatusPage({
   params,
@@ -25,88 +90,31 @@ export default async function StatusPage({
     );
   }
 
-  const statusChip =
-    status.status === "approved"
-      ? "chip chip-approved"
-      : status.status === "waitlisted"
-        ? "chip chip-waitlist"
-        : "chip chip-rejected";
+  // Fetch signed PDF + leader probe + directory + contacts in parallel —
+  // all are best-effort. Token-expired/unauthorized on directory/contacts
+  // degrade to null so the Liên lạc tab just shows empty states.
+  const [signedPdfUrl, leaderPortal, directory, contacts]: [
+    string | null,
+    LeaderPortalResponse | null,
+    TeamDirectoryResponse | null,
+    PublicEventContactsResponse | null,
+  ] = await Promise.all([
+    status.contract_status === "signed"
+      ? fetchSignedPdfUrl(token)
+      : Promise.resolve(null),
+    tryFetchLeaderPortal(token),
+    getDirectory(token).catch(() => null),
+    getContacts(token).catch(() => null),
+  ]);
 
   return (
-    <div className="space-y-5">
-      <section className="card space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">{status.full_name}</h1>
-            <p className="text-sm text-[color:var(--color-muted)]">
-              {status.role_name} · {status.event_name}
-            </p>
-          </div>
-          <span className={statusChip}>
-            {labelForStatus(status.status)}
-            {status.status === "waitlisted" && status.waitlist_position
-              ? ` · #${status.waitlist_position}`
-              : ""}
-          </span>
-        </div>
-
-        {status.qr_code ? (
-          <div className="flex flex-col items-center gap-2 pt-3">
-            <img
-              src={status.qr_code}
-              alt="QR check-in"
-              width={220}
-              height={220}
-              className="rounded-lg border"
-            />
-            <p className="text-xs text-[color:var(--color-muted)]">
-              Đưa mã QR này để check-in vào ngày vận hành.
-            </p>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="card">
-        <h2 className="font-semibold mb-2">Tình trạng hợp đồng</h2>
-        <p className="text-sm">{labelForContract(status.contract_status)}</p>
-      </section>
-
-      {status.checked_in_at ? (
-        <section className="card border-green-300 bg-green-50">
-          <h2 className="font-semibold text-green-800">Đã check-in</h2>
-          <p className="text-sm text-green-700">{new Date(status.checked_in_at).toLocaleString("vi-VN")}</p>
-        </section>
-      ) : null}
-    </div>
+    <StatusTabs
+      token={token}
+      status={status}
+      signedPdfUrl={signedPdfUrl}
+      leaderPortal={leaderPortal}
+      directory={directory}
+      contacts={contacts}
+    />
   );
-}
-
-function labelForStatus(s: string): string {
-  switch (s) {
-    case "approved":
-      return "Đã duyệt";
-    case "waitlisted":
-      return "Danh sách chờ";
-    case "rejected":
-      return "Từ chối";
-    case "cancelled":
-      return "Đã hủy";
-    default:
-      return s;
-  }
-}
-
-function labelForContract(s: string): string {
-  switch (s) {
-    case "not_sent":
-      return "Chưa gửi hợp đồng";
-    case "sent":
-      return "Đã gửi hợp đồng — chờ bạn ký";
-    case "signed":
-      return "Đã ký hợp đồng";
-    case "expired":
-      return "Link hợp đồng đã hết hạn";
-    default:
-      return s;
-  }
 }

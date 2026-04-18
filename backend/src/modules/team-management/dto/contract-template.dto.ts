@@ -64,3 +64,20 @@ export class ImportDocxResponseDto {
   @ApiProperty({ type: [String], description: 'Warnings raised during conversion' })
   warnings!: string[];
 }
+
+export class ValidateTemplateDto {
+  @ApiProperty({ description: 'HTML body with {{placeholders}} to validate' })
+  @IsString()
+  content_html!: string;
+}
+
+export class ValidateTemplateResponseDto {
+  @ApiProperty({ description: 'True when all {{vars}} are in the canonical list' })
+  valid!: boolean;
+
+  @ApiProperty({
+    description: 'Variables found in the template that are not in VALID_VARIABLES',
+    type: [String],
+  })
+  unknownVars!: string[];
+}
