@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   getLeaderTeam,
   leaderCheckin,
@@ -577,10 +578,17 @@ function SuspiciousConfirmModal({
   onNoteChange: (s: string) => void;
   onCancel: () => void;
   onConfirm: () => void;
-}): React.ReactElement {
-  return (
+}): React.ReactElement | null {
+  // Portal to document.body so any `transform`/`filter` on ancestors
+  // (Tabs panel, etc.) can't hijack the `fixed` positioning — mobile
+  // users were seeing the dialog render at the top of the page because
+  // the containing block shifted when an ancestor had `transform`.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 overscroll-contain"
+      role="dialog"
+      aria-modal="true"
       onClick={onCancel}
     >
       <div
@@ -620,6 +628,7 @@ function SuspiciousConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
