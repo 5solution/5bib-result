@@ -89,9 +89,35 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  build-crew:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REPO }}/crew
+          tags: |
+            type=sha,prefix=
+            type=raw,value=production
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./crew
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   deploy:
-    needs: [build-backend, build-frontend, build-admin]
-    if: ${{ always() && !cancelled() && needs.build-backend.result == 'success' && needs.build-frontend.result == 'success' && needs.build-admin.result == 'success' }}
+    needs: [build-backend, build-frontend, build-admin, build-crew]
+    if: ${{ always() && !cancelled() && needs.build-backend.result == 'success' && needs.build-frontend.result == 'success' && needs.build-admin.result == 'success' && needs.build-crew.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to VPS (Production)
@@ -110,6 +136,8 @@ jobs:
             sed -i "s|ghcr.io/5solution/5bib-result/backend:.*|ghcr.io/5solution/5bib-result/backend:${TAG}|" docker-compose.yml
             sed -i "s|ghcr.io/5solution/5bib-result/frontend:.*|ghcr.io/5solution/5bib-result/frontend:${TAG}|" docker-compose.yml
             sed -i "s|ghcr.io/5solution/5bib-result/admin:.*|ghcr.io/5solution/5bib-result/admin:${TAG}|" docker-compose.yml
+            sed -i "s|ghcr.io/5solution/5bib-result/crew:.*|ghcr.io/5solution/5bib-result/crew:${TAG}|" docker-compose.yml
             docker compose pull
-            docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin
+            docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin 5bib-result-crew
+            docker image prune -f
             docker image prune -f
