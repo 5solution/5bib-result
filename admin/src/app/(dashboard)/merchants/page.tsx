@@ -51,29 +51,45 @@ interface Merchant {
   created_on: string;
 }
 
-const CONTRACT_LABELS: Record<string, { label: string; className: string }> = {
-  pending: { label: "Chờ xử lý", className: "bg-yellow-500/20 text-yellow-400" },
-  active: { label: "Đang hoạt động", className: "bg-green-500/20 text-green-400" },
-  suspended: { label: "Tạm dừng", className: "bg-orange-500/20 text-orange-400" },
-  terminated: { label: "Đã chấm dứt", className: "bg-red-500/20 text-red-400" },
+const CONTRACT_LABELS: Record<
+  string,
+  { label: string; bg: string; text: string; border: string }
+> = {
+  pending: { label: "Chờ xử lý", bg: "#fef3c7", text: "#b45309", border: "#fcd34d" },
+  active: { label: "Đang hoạt động", bg: "#dcfce7", text: "#15803d", border: "#86efac" },
+  suspended: { label: "Tạm dừng", bg: "#ffedd5", text: "#9a3412", border: "#fdba74" },
+  terminated: { label: "Đã chấm dứt", bg: "#fee2e2", text: "#b91c1c", border: "#fca5a5" },
 };
 
 function ContractBadge({ status }: { status: string }) {
   const c = CONTRACT_LABELS[status] ?? CONTRACT_LABELS.pending;
-  return <Badge className={c.className}>{c.label}</Badge>;
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+      style={{ background: c.bg, color: c.text, borderColor: c.border }}
+    >
+      {c.label}
+    </span>
+  );
 }
 
 function ApprovalBadge({ approved }: { approved: boolean }) {
   return approved ? (
-    <Badge className="bg-green-500/20 text-green-400">
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+      style={{ background: "#dcfce7", color: "#15803d", borderColor: "#86efac" }}
+    >
       <CheckCircle className="mr-1 size-3" />
       Đã duyệt
-    </Badge>
+    </span>
   ) : (
-    <Badge className="bg-zinc-500/20 text-zinc-400">
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+      style={{ background: "#f3f4f6", color: "#6b7280", borderColor: "#d1d5db" }}
+    >
       <Clock className="mr-1 size-3" />
       Chờ duyệt
-    </Badge>
+    </span>
   );
 }
 
@@ -151,7 +167,7 @@ export default function MerchantsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold">Quản lý Merchant</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">Quản lý Merchant</h1>
         <p className="text-sm text-muted-foreground">
           {total} merchant từ nền tảng 5BIB
         </p>
@@ -269,10 +285,13 @@ export default function MerchantsPage() {
                           </span>
                         </div>
                       ) : (
-                        <Badge className="bg-red-500/20 text-red-400">
+                        <span
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                          style={{ background: "#fee2e2", color: "#b91c1c", borderColor: "#fca5a5" }}
+                        >
                           <AlertTriangle className="mr-1 size-3" />
                           Chưa có phí
-                        </Badge>
+                        </span>
                       )}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">

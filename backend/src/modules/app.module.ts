@@ -18,6 +18,14 @@ import { MerchantModule } from './merchant/merchant.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { Tenant } from './merchant/entities/tenant.entity';
+import { TeamManagementModule } from './team-management/team-management.module';
+import { VolEvent } from './team-management/entities/vol-event.entity';
+import { VolRole } from './team-management/entities/vol-role.entity';
+import { VolRegistration } from './team-management/entities/vol-registration.entity';
+import { VolContractTemplate } from './team-management/entities/vol-contract-template.entity';
+import { VolShirtStock } from './team-management/entities/vol-shirt-stock.entity';
+import { VolTeamScheduleEmail } from './team-management/entities/vol-team-schedule-email.entity';
+import { VolEventContact } from './team-management/entities/vol-event-contact.entity';
 
 // Conditional: chỉ khởi tạo Platform DB nếu PLATFORM_DB_HOST được cung cấp
 const platformDbModules = env.platformDb.host
@@ -43,6 +51,36 @@ const platformDbModules = env.platformDb.host
     ]
   : [];
 
+// Conditional: chỉ khởi tạo Volunteer DB + Team Management module nếu VOLUNTEER_DB_HOST được cung cấp
+const volunteerDbModules = env.volunteerDb.host
+  ? [
+      TypeOrmModule.forRoot({
+        name: 'volunteer',
+        type: 'mysql',
+        host: env.volunteerDb.host,
+        port: env.volunteerDb.port,
+        username: env.volunteerDb.user,
+        password: env.volunteerDb.pass,
+        database: env.volunteerDb.name,
+        entities: [
+          VolEvent,
+          VolRole,
+          VolRegistration,
+          VolContractTemplate,
+          VolShirtStock,
+          VolTeamScheduleEmail,
+          VolEventContact,
+        ],
+        synchronize: false,
+        logging: env.env === 'local' || env.env === 'development',
+        extra: {
+          connectionLimit: 10,
+        },
+      }),
+      TeamManagementModule,
+    ]
+  : [];
+
 @Module({
   imports: [
     MongooseModule.forRoot(env.mongodb.url, { dbName: env.mongodb.dbName }),
@@ -54,6 +92,7 @@ const platformDbModules = env.platformDb.host
       options: {},
     }),
     ...platformDbModules,
+    ...volunteerDbModules,
     RacesModule,
     RaceResultModule,
     AdminModule,

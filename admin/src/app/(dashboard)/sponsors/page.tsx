@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -56,24 +55,40 @@ interface Sponsor {
 }
 
 function LevelBadge({ level }: { level: SponsorLevel }) {
-  const config: Record<SponsorLevel, { label: string; className: string }> = {
+  const config: Record<
+    SponsorLevel,
+    { label: string; bg: string; text: string; border: string }
+  > = {
     diamond: {
       label: "Diamond",
-      className: "bg-purple-500/20 text-purple-400",
+      bg: "#ede9fe",
+      text: "#5b21b6",
+      border: "#c4b5fd",
     },
     gold: {
       label: "Gold",
-      className: "bg-amber-500/20 text-amber-400",
+      bg: "#fef3c7",
+      text: "#b45309",
+      border: "#fcd34d",
     },
     silver: {
       label: "Silver",
-      className: "bg-zinc-500/20 text-zinc-400",
+      bg: "#f3f4f6",
+      text: "#6b7280",
+      border: "#d1d5db",
     },
   };
 
   const c = config[level] || config.silver;
 
-  return <Badge className={c.className}>{c.label}</Badge>;
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+      style={{ background: c.bg, color: c.text, borderColor: c.border }}
+    >
+      {c.label}
+    </span>
+  );
 }
 
 function LogoUploadButton({
@@ -292,7 +307,9 @@ export default function SponsorsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Nhà tài trợ</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">
+            Nhà tài trợ
+          </h1>
           <p className="text-sm text-muted-foreground">
             {sponsors.length} nhà tài trợ trong hệ thống
           </p>
@@ -398,6 +415,7 @@ export default function SponsorsPage() {
           ))}
         </div>
       ) : (
+        <div className="rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -424,7 +442,7 @@ export default function SponsorsPage() {
               </TableRow>
             ) : (
               sponsors.map((sponsor) => (
-                <TableRow key={sponsor._id}>
+                <TableRow key={sponsor._id} className="result-row-hover">
                   <TableCell>
                     {sponsor.logoUrl ? (
                       <img
@@ -460,15 +478,24 @@ export default function SponsorsPage() {
                     {sponsor.order}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <Badge
-                      className={
+                    <span
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                      style={
                         sponsor.isActive
-                          ? "bg-green-500/20 text-green-400"
-                          : "bg-zinc-500/20 text-zinc-400"
+                          ? {
+                              background: "#dcfce7",
+                              color: "#15803d",
+                              borderColor: "#86efac",
+                            }
+                          : {
+                              background: "#f3f4f6",
+                              color: "#9ca3af",
+                              borderColor: "#e5e7eb",
+                            }
                       }
                     >
                       {sponsor.isActive ? "Hoạt động" : "Ẩn"}
-                    </Badge>
+                    </span>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -524,6 +551,7 @@ export default function SponsorsPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       )}
 
       {/* Edit Dialog */}

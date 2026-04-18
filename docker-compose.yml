@@ -42,6 +42,19 @@ services:
       - backend
     restart: unless-stopped
 
+  crew:
+    build:
+      context: ./crew
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - BACKEND_URL=http://backend:8081
+      - NEXT_PUBLIC_CREW_ORIGIN=${NEXT_PUBLIC_CREW_ORIGIN:-https://crew-dev.5bib.com}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   mongo:
     image: mongo:7
     ports:

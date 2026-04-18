@@ -18,8 +18,15 @@
     {
       "name": "admin",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--dir", "admin", "dev"],
-      "port": 3000,
+      "runtimeArgs": ["--dir", "admin", "dev", "--port", "3010"],
+      "port": 3010,
+      "autoPort": false
+    },
+    {
+      "name": "crew",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "crew", "dev"],
+      "port": 3003,
       "autoPort": false
     }
   ]

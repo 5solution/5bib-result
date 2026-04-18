@@ -182,7 +182,7 @@ export default function EditResultPage() {
         </Link>
         <Separator orientation="vertical" className="h-4" />
         <div>
-          <h1 className="text-xl font-bold">Chỉnh sửa kết quả</h1>
+          <h1 className="font-display text-xl font-bold tracking-tight text-gray-900">Chỉnh sửa kết quả</h1>
           <p className="text-xs text-muted-foreground">Race ID: {raceId}</p>
         </div>
       </div>
@@ -234,25 +234,29 @@ export default function EditResultPage() {
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-bold">{result.Name}</h2>
                       {result.isManuallyEdited && (
-                        <Badge className="bg-amber-500/15 text-amber-500 border-amber-500/30 text-xs">
+                        <span
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                          style={{ background: "#fef3c7", color: "#b45309", borderColor: "#fcd34d" }}
+                        >
                           Đã chỉnh sửa thủ công
-                        </Badge>
+                        </span>
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">BIB #{result.Bib} · {result.distance || result.course_id}</p>
                   </div>
                 </div>
-                <Badge
-                  className={
+                <span
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                  style={
                     result.TimingPoint === "Finisher"
-                      ? "bg-green-500/15 text-green-500 border-green-500/30"
+                      ? { background: "#dcfce7", color: "#15803d", borderColor: "#86efac" }
                       : result.TimingPoint === "DNF"
-                      ? "bg-red-500/15 text-red-500 border-red-500/30"
-                      : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+                      ? { background: "#fee2e2", color: "#b91c1c", borderColor: "#fca5a5" }
+                      : { background: "#f3f4f6", color: "#6b7280", borderColor: "#d1d5db" }
                   }
                 >
                   {result.TimingPoint}
-                </Badge>
+                </span>
               </div>
 
               <Separator className="my-4" />
@@ -293,7 +297,7 @@ export default function EditResultPage() {
                     id="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className={name !== result.Name ? "border-amber-500/50 bg-amber-500/5" : ""}
+                    className={name !== result.Name ? "border-amber-400 bg-amber-50" : ""}
                   />
                 </div>
 
@@ -302,7 +306,7 @@ export default function EditResultPage() {
                     <Trophy className="size-3.5 text-muted-foreground" /> Trạng thái
                   </Label>
                   <Select value={status} onValueChange={(v) => setStatus(v ?? '')}>
-                    <SelectTrigger className={status !== result.TimingPoint ? "border-amber-500/50 bg-amber-500/5" : ""}>
+                    <SelectTrigger className={status !== result.TimingPoint ? "border-amber-400 bg-amber-50" : ""}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -324,7 +328,7 @@ export default function EditResultPage() {
                     value={chipTime}
                     onChange={(e) => setChipTime(e.target.value)}
                     placeholder="03:20:15"
-                    className={`font-mono ${chipTime !== result.ChipTime ? "border-amber-500/50 bg-amber-500/5" : ""}`}
+                    className={`font-mono ${chipTime !== result.ChipTime ? "border-amber-400 bg-amber-50" : ""}`}
                   />
                 </div>
 
@@ -339,7 +343,7 @@ export default function EditResultPage() {
                     value={gunTime}
                     onChange={(e) => setGunTime(e.target.value)}
                     placeholder="03:20:28"
-                    className={`font-mono ${gunTime !== result.GunTime ? "border-amber-500/50 bg-amber-500/5" : ""}`}
+                    className={`font-mono ${gunTime !== result.GunTime ? "border-amber-400 bg-amber-50" : ""}`}
                   />
                 </div>
 
@@ -357,7 +361,7 @@ export default function EditResultPage() {
                     value={overallRank}
                     onChange={(e) => setOverallRank(e.target.value)}
                     min={1}
-                    className={`font-mono max-w-[160px] ${overallRank !== result.OverallRank ? "border-amber-500/50 bg-amber-500/5" : ""}`}
+                    className={`font-mono max-w-[160px] ${overallRank !== result.OverallRank ? "border-amber-400 bg-amber-50" : ""}`}
                   />
                 </div>
               </div>
@@ -368,7 +372,7 @@ export default function EditResultPage() {
                 <Label htmlFor="reason" className="flex items-center gap-1.5">
                   <PenLine className="size-3.5 text-muted-foreground" />
                   Lý do chỉnh sửa
-                  <span className="text-red-400">*</span>
+                  <span className="text-destructive">*</span>
                   <span className="text-xs text-muted-foreground">(tối thiểu 10 ký tự · BR-03)</span>
                 </Label>
                 <Textarea
@@ -381,7 +385,7 @@ export default function EditResultPage() {
                 />
                 <div className="flex items-center justify-between">
                   {reason.length > 0 && reason.length < 10 ? (
-                    <p className="text-xs text-red-400 flex items-center gap-1">
+                    <p className="text-xs text-destructive flex items-center gap-1">
                       <AlertTriangle className="size-3" />
                       Cần thêm {10 - reason.length} ký tự nữa
                     </p>
@@ -397,7 +401,7 @@ export default function EditResultPage() {
               </div>
 
               {hasChanges && (
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-400 flex items-center gap-2">
+                <div className="rounded-lg border px-3 py-2 text-xs flex items-center gap-2" style={{ background: "#fef3c7", color: "#b45309", borderColor: "#fcd34d" }}>
                   <AlertTriangle className="size-3.5 flex-shrink-0" />
                   Có thay đổi chưa lưu — các trường được đánh dấu sẽ được ghi vào audit trail
                 </div>
@@ -437,7 +441,7 @@ export default function EditResultPage() {
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-amber-500">{entry.field}</span>
-                        <span className="line-through text-red-400">{String(entry.oldValue ?? "—")}</span>
+                        <span className="line-through text-destructive">{String(entry.oldValue ?? "—")}</span>
                         <span className="text-muted-foreground">→</span>
                         <span className="text-green-500">{String(entry.newValue ?? "—")}</span>
                       </div>

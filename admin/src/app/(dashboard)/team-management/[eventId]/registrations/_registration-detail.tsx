@@ -1,0 +1,1023 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import {
+  getRegistrationDetail,
+  getSignedContractUrl,
+  getSignatureUrl,
+  patchRegistration,
+  approveRegistration,
+  cancelRegistration,
+  confirmCompletion,
+  clearSuspicious,
+  approveProfileChanges,
+  rejectProfileChanges,
+  type RegistrationDetail,
+} from "@/lib/team-api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StatusBadge, deriveStatusKey } from "@/lib/status-style";
+import {
+  AlertTriangle,
+  Ban,
+  Check,
+  CheckCircle2,
+  ExternalLink,
+  Pencil,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import { RejectDialog } from "./_reject-dialog";
+
+const FIELD_LABELS: Record<string, string> = {
+  cccd: "Số CCCD",
+  dob: "Ngày sinh",
+  shirt_size: "Size áo",
+  experience: "Kinh nghiệm",
+  cccd_photo: "Ảnh CCCD",
+  avatar_photo: "Ảnh đại diện",
+  address: "Địa chỉ",
+  bank_account_number: "Số tài khoản",
+  bank_holder_name: "Chủ tài khoản",
+  bank_name: "Ngân hàng",
+  bank_branch: "Chi nhánh",
+};
+
+const BANK_KEYS = new Set<string>([
+  "bank_account_number",
+  "bank_holder_name",
+  "bank_name",
+  "bank_branch",
+]);
+
+// Non-terminal states — Cancel button is available for these.
+const NON_TERMINAL = new Set<string>([
+  "pending_approval",
+  "approved",
+  "contract_sent",
+  "contract_signed",
+  "qr_sent",
+  "checked_in",
+  "waitlisted",
+]);
+
+function labelFor(key: string): string {
+  return FIELD_LABELS[key] ?? key;
+}
+
+export function RegistrationDetailView({
+  regId,
+  onChange,
+}: {
+  regId: number;
+  onChange?: () => void;
+}): React.ReactElement {
+  const { token } = useAuth();
+
+  const [detail, setDetail] = useState<RegistrationDetail | null>(null);
+  const [editingNotes, setEditingNotes] = useState("");
+  const [editingDays, setEditingDays] = useState<number | "">("");
+  const [saving, setSaving] = useState(false);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectBusy, setRejectBusy] = useState(false);
+  const [clearSusOpen, setClearSusOpen] = useState(false);
+  const [clearSusNote, setClearSusNote] = useState("");
+  const [clearSusBusy, setClearSusBusy] = useState(false);
+  // v1.4.1 — pending profile-edit approval state
+  const [rejectChangesOpen, setRejectChangesOpen] = useState(false);
+  const [rejectChangesReason, setRejectChangesReason] = useState("");
+  const [changesBusy, setChangesBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!token) return;
+    try {
+      const d = await getRegistrationDetail(token, regId);
+      setDetail(d);
+      setEditingNotes(d.notes ?? "");
+      if (d.actual_working_days != null) setEditingDays(d.actual_working_days);
+      else if (d.role_working_days != null) setEditingDays(d.role_working_days);
+      else setEditingDays("");
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }, [token, regId]);
+
+  useEffect(() => {
+    if (token) void load();
+  }, [token, load]);
+
+  useEffect(() => {
+    if (!token || !detail) {
+      setSignatureUrl(null);
+      return;
+    }
+    if (detail.contract_status !== "signed" || !detail.has_signature) {
+      setSignatureUrl(null);
+      return;
+    }
+    let cancelled = false;
+    getSignatureUrl(token, detail.id)
+      .then((res) => {
+        if (!cancelled) setSignatureUrl(res.url);
+      })
+      .catch(() => {
+        if (!cancelled) setSignatureUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, detail]);
+
+  const statusKey = useMemo(
+    () => (detail ? deriveStatusKey(detail) : "pending_approval"),
+    [detail],
+  );
+  const isPending = statusKey === "pending_approval";
+  const isCheckedIn = statusKey === "checked_in";
+  const canCancel = detail ? NON_TERMINAL.has(detail.status) : false;
+  const suspicious = detail?.suspicious_checkin === true;
+
+  async function handleApprove(): Promise<void> {
+    if (!token || !detail) return;
+    if (!confirm(`Duyệt đăng ký của ${detail.full_name}?`)) return;
+    setSaving(true);
+    try {
+      await approveRegistration(token, regId);
+      toast.success("Đã duyệt");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleReject(reason: string): Promise<void> {
+    if (!token || !detail) return;
+    setRejectBusy(true);
+    try {
+      // Reject comes from the shared lib via the registrations index page —
+      // but this Sheet is self-contained, call it directly.
+      const { rejectRegistration } = await import("@/lib/team-api");
+      await rejectRegistration(token, regId, reason);
+      toast.success("Đã từ chối");
+      setRejectOpen(false);
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setRejectBusy(false);
+    }
+  }
+
+  async function handleCancel(): Promise<void> {
+    if (!token || !detail) return;
+    const reason = window.prompt(
+      `Lý do huỷ đăng ký của ${detail.full_name}? (tuỳ chọn)`,
+    );
+    if (reason === null) return;
+    setSaving(true);
+    try {
+      await cancelRegistration(token, regId, reason || undefined);
+      toast.success("Đã huỷ");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleConfirmCompletion(): Promise<void> {
+    if (!token || !detail) return;
+    const note = window.prompt(
+      `Ghi chú cho xác nhận hoàn thành của ${detail.full_name}? (tuỳ chọn)`,
+    );
+    if (note === null) return;
+    setSaving(true);
+    try {
+      await confirmCompletion(token, regId, note || undefined);
+      toast.success("Đã xác nhận hoàn thành");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleClearSuspicious(): Promise<void> {
+    if (!token || !detail) return;
+    const trimmed = clearSusNote.trim();
+    if (trimmed.length < 5) {
+      toast.error("Ghi chú phải ≥ 5 ký tự");
+      return;
+    }
+    setClearSusBusy(true);
+    try {
+      await clearSuspicious(token, regId, trimmed);
+      toast.success("Đã xác nhận OK");
+      setClearSusOpen(false);
+      setClearSusNote("");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setClearSusBusy(false);
+    }
+  }
+
+  async function handleApproveChanges(): Promise<void> {
+    if (!token || !detail) return;
+    if (!confirm(`Duyệt các thay đổi của ${detail.full_name}?`)) return;
+    setChangesBusy(true);
+    try {
+      await approveProfileChanges(token, regId);
+      toast.success("Đã duyệt thay đổi");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setChangesBusy(false);
+    }
+  }
+
+  async function handleRejectChanges(): Promise<void> {
+    if (!token || !detail) return;
+    const trimmed = rejectChangesReason.trim();
+    if (trimmed.length < 3) {
+      toast.error("Lý do phải ≥ 3 ký tự");
+      return;
+    }
+    setChangesBusy(true);
+    try {
+      await rejectProfileChanges(token, regId, trimmed);
+      toast.success("Đã từ chối thay đổi");
+      setRejectChangesOpen(false);
+      setRejectChangesReason("");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setChangesBusy(false);
+    }
+  }
+
+  async function saveNotes(): Promise<void> {
+    if (!token || !detail) return;
+    setSaving(true);
+    try {
+      await patchRegistration(token, regId, { notes: editingNotes });
+      toast.success("Đã lưu ghi chú");
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function savePayment(
+    payment_status: "pending" | "paid",
+  ): Promise<void> {
+    if (!token || !detail) return;
+    setSaving(true);
+    try {
+      await patchRegistration(token, regId, {
+        payment_status,
+        actual_working_days:
+          typeof editingDays === "number" ? editingDays : undefined,
+      });
+      toast.success("Đã cập nhật thanh toán");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function openSignedPdf(): Promise<void> {
+    if (!token || !detail) return;
+    setLoadingPdf(true);
+    try {
+      const { url } = await getSignedContractUrl(token, detail.id);
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLoadingPdf(false);
+    }
+  }
+
+  if (!detail) return <Skeleton className="h-96" />;
+
+  const dailyRate =
+    detail.role_daily_rate != null ? Number(detail.role_daily_rate) : null;
+  const workingDays =
+    typeof editingDays === "number" ? editingDays : null;
+  const computedPay =
+    dailyRate != null && workingDays != null ? dailyRate * workingDays : null;
+  const paid = detail.payment_status === "paid";
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col items-start gap-4 rounded-lg border p-4 sm:flex-row sm:items-center">
+        {detail.avatar_photo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={detail.avatar_photo_url}
+            alt=""
+            className="size-24 rounded-lg object-cover"
+          />
+        ) : (
+          <div className="size-24 rounded-lg bg-muted" />
+        )}
+        <div className="flex-1">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="font-display text-2xl font-bold tracking-tight text-gradient">
+                {detail.full_name}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {detail.role_name} · {detail.event_name}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={statusKey} />
+              {isPending ? (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={saving}
+                    onClick={() => {
+                      void handleApprove();
+                    }}
+                  >
+                    <Check className="mr-1 size-4" /> Duyệt
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={saving}
+                    onClick={() => setRejectOpen(true)}
+                  >
+                    <X className="mr-1 size-4" /> Từ chối
+                  </Button>
+                </>
+              ) : null}
+              {isCheckedIn ? (
+                <Button
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => {
+                    void handleConfirmCompletion();
+                  }}
+                >
+                  <CheckCircle2 className="mr-1 size-4" /> Xác nhận hoàn thành
+                </Button>
+              ) : null}
+              {canCancel ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => {
+                    void handleCancel();
+                  }}
+                >
+                  <Ban className="mr-1 size-4" /> Huỷ
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <p className="text-sm mt-1">
+            SĐT: {detail.phone} · Email: {detail.email}
+          </p>
+          <p className="text-sm">
+            Size áo: {detail.shirt_size ?? "—"} · Check-in:{" "}
+            {detail.checked_in_at
+              ? `✅ ${new Date(detail.checked_in_at).toLocaleString("vi-VN")}`
+              : "⏳ Chưa"}
+          </p>
+        </div>
+      </div>
+
+      {suspicious ? (
+        <div
+          className="rounded-lg border p-3"
+          style={{
+            background: "#fee2e2",
+            borderColor: "#fca5a5",
+            color: "#991b1b",
+          }}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="size-5 shrink-0 mt-0.5" />
+            <div className="flex-1 text-sm">
+              <p className="font-semibold">Check-in đáng ngờ</p>
+              <p className="mt-0.5">
+                Thời gian giữa check-in và xác nhận hoàn thành quá ngắn — cần
+                xem xét trước khi thanh toán.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setClearSusOpen(true)}
+            >
+              Xác nhận OK
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {detail.rejection_reason ? (
+        <div
+          className="rounded-lg border p-3 text-sm"
+          style={{
+            background: "#fef2f2",
+            borderColor: "#fecaca",
+            color: "#7f1d1d",
+          }}
+        >
+          <p className="font-semibold">Lý do từ chối</p>
+          <p className="mt-0.5 whitespace-pre-wrap">{detail.rejection_reason}</p>
+        </div>
+      ) : null}
+
+      {detail.has_pending_changes ? (
+        <div
+          className="rounded-lg border p-3"
+          style={{
+            background: "#fef3c7",
+            borderColor: "#fcd34d",
+            color: "#92400e",
+          }}
+          data-testid="pending-changes-admin-banner"
+        >
+          <div className="flex items-start gap-2">
+            <Pencil className="size-5 shrink-0 mt-0.5" />
+            <div className="flex-1 text-sm">
+              <p className="font-semibold">TNV đã gửi yêu cầu chỉnh sửa</p>
+              <p className="mt-0.5">
+                {detail.pending_changes_submitted_at
+                  ? `Gửi lúc ${new Date(detail.pending_changes_submitted_at).toLocaleString("vi-VN")}`
+                  : "Đang chờ duyệt"}
+                . Xem chi tiết ở tab &quot;Thông tin&quot; để so sánh.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              disabled={changesBusy}
+              onClick={() => {
+                void handleApproveChanges();
+              }}
+            >
+              <Check className="mr-1 size-4" /> Duyệt thay đổi
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={changesBusy}
+              onClick={() => setRejectChangesOpen(true)}
+            >
+              <X className="mr-1 size-4" /> Từ chối
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {detail.completion_confirmed_at ? (
+        <div
+          className="rounded-lg border p-3 text-sm"
+          style={{
+            background: "#ede9fe",
+            borderColor: "#c4b5fd",
+            color: "#4c1d95",
+          }}
+        >
+          <p className="font-semibold">Đã xác nhận hoàn thành</p>
+          <p className="mt-0.5">
+            {new Date(detail.completion_confirmed_at).toLocaleString("vi-VN")} ·
+            bởi{" "}
+            {detail.completion_confirmed_by === "leader"
+              ? "Leader"
+              : "Admin"}
+          </p>
+        </div>
+      ) : null}
+
+      <Tabs defaultValue="info">
+        <TabsList>
+          <TabsTrigger value="info">Thông tin</TabsTrigger>
+          <TabsTrigger value="contract">Hợp đồng</TabsTrigger>
+          <TabsTrigger value="payment">Thanh toán</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="info" className="space-y-3">
+          {detail.has_pending_changes && detail.pending_changes ? (
+            <div className="rounded-lg border p-4">
+              <h3 className="font-semibold mb-2 flex items-center gap-2">
+                <Pencil className="size-4" /> Đề xuất thay đổi — chờ duyệt
+              </h3>
+              <DiffTable
+                current={{
+                  full_name: detail.full_name,
+                  phone: detail.phone,
+                  form_data: detail.form_data,
+                }}
+                proposed={detail.pending_changes}
+              />
+            </div>
+          ) : null}
+
+          <div className="rounded-lg border p-4 space-y-3">
+            <div>
+              <h3 className="font-semibold mb-2">Dữ liệu form</h3>
+              {(() => {
+                const entries = Object.entries(detail.form_data);
+                const nonBank = entries.filter(([k]) => !BANK_KEYS.has(k));
+                const bank = entries.filter(([k]) => BANK_KEYS.has(k));
+                const renderEntry = ([key, value]: [string, unknown]) => {
+                  const isPhoto =
+                    key === "cccd_photo" || key === "avatar_photo";
+                  const photoUrl =
+                    key === "cccd_photo"
+                      ? detail.cccd_photo_url
+                      : key === "avatar_photo"
+                        ? detail.avatar_photo_url
+                        : null;
+                  return (
+                    <div key={key}>
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        {labelFor(key)}
+                      </dt>
+                      <dd className="break-all">
+                        {isPhoto ? (
+                          photoUrl ? (
+                            <a
+                              href={photoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={photoUrl}
+                                alt={labelFor(key)}
+                                className="mt-1 h-24 rounded border object-cover"
+                              />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              (chưa có ảnh)
+                            </span>
+                          )
+                        ) : typeof value === "string" ||
+                          typeof value === "number" ? (
+                          String(value)
+                        ) : (
+                          <code className="text-xs">
+                            {JSON.stringify(value)}
+                          </code>
+                        )}
+                      </dd>
+                    </div>
+                  );
+                };
+                return (
+                  <>
+                    <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+                      {nonBank.map(renderEntry)}
+                    </dl>
+                    {bank.length > 0 ? (
+                      <div className="mt-4 border-t pt-3">
+                        <h4 className="text-sm font-semibold mb-2">
+                          Thông tin thanh toán
+                        </h4>
+                        <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+                          {bank.map(renderEntry)}
+                        </dl>
+                      </div>
+                    ) : null}
+                  </>
+                );
+              })()}
+            </div>
+
+            {detail.cccd_photo_url ? (
+              <p className="text-xs text-muted-foreground">
+                Link ảnh CCCD hết hạn sau 1 giờ — refresh trang để lấy link mới.
+              </p>
+            ) : null}
+
+            <div>
+              <Label>Ghi chú admin</Label>
+              <Textarea
+                rows={3}
+                value={editingNotes}
+                onChange={(e) => setEditingNotes(e.target.value)}
+                placeholder="Ghi chú nội bộ..."
+              />
+              <Button
+                size="sm"
+                className="mt-2"
+                onClick={() => {
+                  void saveNotes();
+                }}
+                disabled={saving}
+              >
+                Lưu ghi chú
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="contract" className="space-y-3">
+          <div className="rounded-lg border p-4 space-y-3">
+            <div>
+              <strong>Trạng thái:</strong>{" "}
+              {detail.contract_status === "signed"
+                ? "✅ Đã ký"
+                : detail.contract_status === "sent"
+                  ? "⏳ Đã gửi, chờ ký"
+                  : "Chưa gửi"}
+            </div>
+            {detail.contract_signed_at ? (
+              <div className="text-sm">
+                Ký vào:{" "}
+                {new Date(detail.contract_signed_at).toLocaleString("vi-VN")}
+              </div>
+            ) : null}
+            {detail.contract_status === "signed" && detail.has_signature ? (
+              <div>
+                <Label className="text-xs">Chữ ký</Label>
+                {signatureUrl ? (
+                  <div className="mt-1 inline-block rounded border bg-white p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={signatureUrl}
+                      alt="Chữ ký của người ký"
+                      className="h-24 object-contain"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Đang tải link chữ ký...
+                  </p>
+                )}
+              </div>
+            ) : null}
+            {detail.contract_status === "signed" ? (
+              <div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={loadingPdf}
+                  onClick={() => {
+                    void openSignedPdf();
+                  }}
+                >
+                  <ExternalLink className="mr-2 size-4" />
+                  {loadingPdf ? "Đang tạo link..." : "Xem hợp đồng đã ký"}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Link presigned 10 phút — mở tab mới.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="payment" className="space-y-3">
+          <div className="rounded-lg border p-4 space-y-3">
+            <div>
+              <Label>Số ngày công thực tế</Label>
+              <Input
+                type="number"
+                min={0}
+                value={editingDays === "" ? "" : editingDays}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setEditingDays(v === "" ? "" : Number(v));
+                }}
+              />
+              {detail.actual_working_days == null &&
+              detail.role_working_days != null ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Mặc định theo vai trò: {detail.role_working_days} ngày. Điều
+                  chỉnh rồi bấm &quot;Đánh dấu đã thanh toán&quot;.
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <div>
+                <span className="text-xs text-muted-foreground">Hiện tại</span>
+                <div className="font-medium">
+                  {paid ? "✅ Đã thanh toán" : "⏳ Chờ"}
+                </div>
+              </div>
+              {dailyRate != null ? (
+                <div>
+                  <span className="text-xs text-muted-foreground">
+                    Đơn giá
+                  </span>
+                  <div className="font-medium">
+                    {dailyRate.toLocaleString("vi-VN")} ₫/ngày
+                  </div>
+                </div>
+              ) : null}
+              {computedPay != null ? (
+                <div>
+                  <span className="text-xs text-muted-foreground">
+                    Thành tiền (dự kiến)
+                  </span>
+                  <div className="font-medium">
+                    {computedPay.toLocaleString("vi-VN")} ₫
+                  </div>
+                </div>
+              ) : null}
+              {detail.actual_compensation ? (
+                <div>
+                  <span className="text-xs text-muted-foreground">Đã lưu</span>
+                  <div className="font-medium">
+                    {Number(detail.actual_compensation).toLocaleString(
+                      "vi-VN",
+                    )}{" "}
+                    ₫
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={paid ? "ghost" : "default"}
+                disabled={saving || paid || suspicious}
+                title={
+                  suspicious
+                    ? "Cần xem xét suspicious flag trước — bấm Xác nhận OK ở banner đỏ bên trên"
+                    : undefined
+                }
+                onClick={() => {
+                  void savePayment("paid");
+                }}
+              >
+                {paid ? "Đã thanh toán" : "Đánh dấu đã thanh toán"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void savePayment("pending");
+                }}
+                disabled={saving}
+              >
+                Đặt lại về chờ
+              </Button>
+            </div>
+            {suspicious ? (
+              <p className="text-xs text-red-600">
+                Không thể đánh dấu đã thanh toán khi đăng ký đang được flag là
+                đáng ngờ.
+              </p>
+            ) : null}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      <RejectDialog
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+        target={{ count: 1, label: detail.full_name }}
+        busy={rejectBusy}
+        onConfirm={handleReject}
+      />
+
+      <ClearSuspiciousDialog
+        open={clearSusOpen}
+        onOpenChange={(v) => {
+          if (!clearSusBusy) setClearSusOpen(v);
+        }}
+        note={clearSusNote}
+        onNoteChange={setClearSusNote}
+        busy={clearSusBusy}
+        onConfirm={handleClearSuspicious}
+      />
+
+      <RejectChangesDialog
+        open={rejectChangesOpen}
+        onOpenChange={(v) => {
+          if (!changesBusy) setRejectChangesOpen(v);
+        }}
+        reason={rejectChangesReason}
+        onReasonChange={setRejectChangesReason}
+        busy={changesBusy}
+        onConfirm={handleRejectChanges}
+      />
+    </div>
+  );
+}
+
+function DiffTable({
+  current,
+  proposed,
+}: {
+  current: { full_name: string; phone: string; form_data: Record<string, unknown> };
+  proposed: Record<string, unknown>;
+}): React.ReactElement {
+  const rows: Array<{ key: string; label: string; cur: unknown; next: unknown }> = [];
+  const labelFor = (k: string): string => FIELD_LABELS[k] ?? k;
+  const eq = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+  if (typeof proposed.full_name === "string" && !eq(proposed.full_name, current.full_name)) {
+    rows.push({ key: "full_name", label: "Họ tên", cur: current.full_name, next: proposed.full_name });
+  }
+  if (typeof proposed.phone === "string" && !eq(proposed.phone, current.phone)) {
+    rows.push({ key: "phone", label: "SĐT", cur: current.phone, next: proposed.phone });
+  }
+  if (proposed.form_data && typeof proposed.form_data === "object") {
+    const nextForm = proposed.form_data as Record<string, unknown>;
+    for (const [k, v] of Object.entries(nextForm)) {
+      const cur = current.form_data[k];
+      if (!eq(cur, v)) {
+        rows.push({ key: k, label: labelFor(k), cur, next: v });
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">(không có thay đổi)</p>;
+  }
+
+  const fmt = (v: unknown): string => {
+    if (v == null || v === "") return "—";
+    if (typeof v === "object") return JSON.stringify(v);
+    return String(v);
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm" data-testid="diff-table">
+        <thead>
+          <tr className="border-b bg-muted/50 text-xs uppercase tracking-wide">
+            <th className="px-2 py-1.5 text-left">Trường</th>
+            <th className="px-2 py-1.5 text-left">Hiện tại</th>
+            <th className="px-2 py-1.5 text-left">Đề xuất</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={r.key}
+              className="border-b last:border-b-0"
+              style={{ background: "#fffbeb" }}
+            >
+              <td className="px-2 py-1.5 font-medium">{r.label}</td>
+              <td className="px-2 py-1.5 text-muted-foreground break-all">{fmt(r.cur)}</td>
+              <td className="px-2 py-1.5 font-semibold break-all">{fmt(r.next)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RejectChangesDialog({
+  open,
+  onOpenChange,
+  reason,
+  onReasonChange,
+  busy,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  reason: string;
+  onReasonChange: (s: string) => void;
+  busy: boolean;
+  onConfirm: () => Promise<void>;
+}): React.ReactElement | null {
+  if (!open) return null;
+  const tooShort = reason.trim().length < 3;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={() => {
+        if (!busy) onOpenChange(false);
+      }}
+    >
+      <div
+        className="w-full max-w-md rounded-lg border bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-semibold text-lg mb-1">Từ chối thay đổi</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Lý do sẽ được gửi email tới TNV và lưu vào audit log.
+        </p>
+        <Textarea
+          rows={3}
+          value={reason}
+          onChange={(e) => onReasonChange(e.target.value)}
+          placeholder="VD: Ảnh CCCD mờ, vui lòng chụp lại..."
+          maxLength={1000}
+        />
+        <div className="flex justify-end gap-2 mt-3">
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+          >
+            Huỷ
+          </Button>
+          <Button
+            disabled={busy || tooShort}
+            onClick={() => {
+              void onConfirm();
+            }}
+          >
+            {busy ? "Đang xử lý..." : "Từ chối thay đổi"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ClearSuspiciousDialog({
+  open,
+  onOpenChange,
+  note,
+  onNoteChange,
+  busy,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  note: string;
+  onNoteChange: (s: string) => void;
+  busy: boolean;
+  onConfirm: () => Promise<void>;
+}): React.ReactElement | null {
+  if (!open) return null;
+  const tooShort = note.trim().length < 5;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={() => {
+        if (!busy) onOpenChange(false);
+      }}
+    >
+      <div
+        className="w-full max-w-md rounded-lg border bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-semibold text-lg mb-1">Xác nhận OK (clear flag)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Ghi chú sẽ được lưu vào audit log. Bắt buộc.
+        </p>
+        <Textarea
+          rows={3}
+          value={note}
+          onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="VD: Đã trao đổi với leader, check-in sớm vì..."
+          maxLength={500}
+        />
+        <div className="flex justify-end gap-2 mt-3">
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+          >
+            Huỷ
+          </Button>
+          <Button
+            disabled={busy || tooShort}
+            onClick={() => {
+              void onConfirm();
+            }}
+          >
+            {busy ? "Đang xử lý..." : "Xác nhận OK"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

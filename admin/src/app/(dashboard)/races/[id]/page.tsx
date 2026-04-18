@@ -155,20 +155,44 @@ interface Race {
 }
 
 function StatusBadge({ status }: { status: RaceStatus }) {
-  const config: Record<RaceStatus, { label: string; className: string }> = {
-    draft: { label: "Nháp", className: "bg-yellow-500/20 text-yellow-400" },
-    pre_race: { label: "Chuẩn bị", className: "bg-blue-500/20 text-blue-400" },
-    live: { label: "Đang diễn ra", className: "bg-green-500/20 text-green-400" },
-    ended: { label: "Đã kết thúc", className: "bg-zinc-500/20 text-zinc-400" },
+  const config: Record<
+    RaceStatus,
+    { label: string; bg: string; text: string; border: string }
+  > = {
+    draft: { label: "Nháp", bg: "#f3f4f6", text: "#6b7280", border: "#d1d5db" },
+    pre_race: {
+      label: "Chuẩn bị",
+      bg: "#fef3c7",
+      text: "#b45309",
+      border: "#fcd34d",
+    },
+    live: {
+      label: "Đang diễn ra",
+      bg: "#dcfce7",
+      text: "#15803d",
+      border: "#86efac",
+    },
+    ended: {
+      label: "Đã kết thúc",
+      bg: "#ede9fe",
+      text: "#5b21b6",
+      border: "#c4b5fd",
+    },
   };
   const c = config[status] || config.ended;
   return (
-    <Badge className={c.className}>
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+      style={{ background: c.bg, color: c.text, borderColor: c.border }}
+    >
       {status === "live" && (
-        <span className="mr-1 inline-block size-2 animate-pulse rounded-full bg-green-400" />
+        <span
+          className="mr-1 inline-block size-2 animate-pulse rounded-full"
+          style={{ background: "#15803d" }}
+        />
       )}
       {c.label}
-    </Badge>
+    </span>
   );
 }
 
@@ -657,7 +681,7 @@ export default function RaceDetailPage() {
           <ArrowLeft className="size-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{race.title}</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-gray-900">{race.title}</h1>
           <p className="text-sm text-muted-foreground">{race.slug}</p>
         </div>
         <StatusBadge status={race.status} />
@@ -1106,7 +1130,7 @@ export default function RaceDetailPage() {
                       <TabsTrigger value="checkpoints">
                         Checkpoints
                         {(courseForm.checkpoints as Checkpoint[])?.length > 0 && (
-                          <span className="ml-1.5 bg-blue-500/20 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#dbeafe", color: "#1d4ed8" }}>
                             {(courseForm.checkpoints as Checkpoint[]).length}
                           </span>
                         )}
@@ -1255,7 +1279,7 @@ export default function RaceDetailPage() {
                     <TabsContent value="checkpoints" className="mt-4">
                       <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-1">
                         {(courseForm.checkpoints as Checkpoint[] || []).map((cp: Checkpoint, idx: number) => (
-                          <div key={idx} className="border border-zinc-700 rounded-lg p-3 space-y-2">
+                          <div key={idx} className="border rounded-lg p-3 space-y-2">
                             <div className="flex items-start gap-2">
                               <div className="grid flex-1 grid-cols-3 gap-2">
                                 <Input
@@ -1319,8 +1343,8 @@ export default function RaceDetailPage() {
                                   }}
                                   className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors border ${
                                     cp.services?.[key as keyof CheckpointServices]
-                                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                                      : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-500'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-300'
+                                      : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400'
                                   }`}
                                 >
                                   {label}
@@ -1725,13 +1749,18 @@ export default function RaceDetailPage() {
                         </TableCell>
                         <TableCell className="font-medium">{s.name}</TableCell>
                         <TableCell>
-                          <Badge className={
-                            s.level === 'diamond' ? 'bg-purple-500/20 text-purple-400' :
-                            s.level === 'gold' ? 'bg-yellow-500/20 text-yellow-400' :
-                            'bg-zinc-500/20 text-zinc-400'
-                          }>
+                          <span
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                            style={
+                              s.level === 'diamond'
+                                ? { background: '#ede9fe', color: '#5b21b6', borderColor: '#c4b5fd' }
+                                : s.level === 'gold'
+                                ? { background: '#fef3c7', color: '#b45309', borderColor: '#fcd34d' }
+                                : { background: '#f3f4f6', color: '#6b7280', borderColor: '#d1d5db' }
+                            }
+                          >
                             {s.level === 'diamond' ? 'Kim cương' : s.level === 'gold' ? 'Vàng' : 'Bạc'}
-                          </Badge>
+                          </span>
                         </TableCell>
                         <TableCell>{s.order}</TableCell>
                         <TableCell className="text-right">
@@ -1740,7 +1769,7 @@ export default function RaceDetailPage() {
                               <Pencil className="size-4" />
                             </Button>
                             <Button variant="ghost" size="icon-sm" onClick={() => handleDeleteSponsor(s._id)} title="Xóa">
-                              <Trash2 className="size-4 text-red-400" />
+                              <Trash2 className="size-4 text-destructive" />
                             </Button>
                           </div>
                         </TableCell>
