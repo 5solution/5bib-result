@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       service:
-        description: "Service to build & deploy (all, backend, frontend, admin)"
+        description: "Service to build & deploy (all, backend, frontend, admin, crew)"
         required: false
         default: "all"
 
@@ -21,6 +21,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       admin: ${{ steps.filter.outputs.admin }}
+      crew: ${{ steps.filter.outputs.crew }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -33,6 +34,8 @@ jobs:
               - 'frontend/**'
             admin:
               - 'admin/**'
+            crew:
+              - 'crew/**'
 
   build-backend:
     needs: changes
@@ -118,9 +121,37 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  build-crew:
+    needs: changes
+    if: ${{ needs.changes.outputs.crew == 'true' || github.event.inputs.service == 'all' || github.event.inputs.service == 'crew' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REPO }}/crew
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./crew
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   deploy:
-    needs: [build-backend, build-frontend, build-admin]
-    if: ${{ always() && !cancelled() && (needs.build-backend.result == 'success' || needs.build-frontend.result == 'success' || needs.build-admin.result == 'success') }}
+    needs: [build-backend, build-frontend, build-admin, build-crew]
+    if: ${{ always() && !cancelled() && (needs.build-backend.result == 'success' || needs.build-frontend.result == 'success' || needs.build-admin.result == 'success' || needs.build-crew.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to VPS
@@ -139,6 +170,7 @@ jobs:
             sed -i "s|ghcr.io/5solution/5bib-result/backend:.*|ghcr.io/5solution/5bib-result/backend:${TAG}|" docker-compose.yml
             sed -i "s|ghcr.io/5solution/5bib-result/frontend:.*|ghcr.io/5solution/5bib-result/frontend:${TAG}|" docker-compose.yml
             sed -i "s|ghcr.io/5solution/5bib-result/admin:.*|ghcr.io/5solution/5bib-result/admin:${TAG}|" docker-compose.yml
+            sed -i "s|ghcr.io/5solution/5bib-result/crew:.*|ghcr.io/5solution/5bib-result/crew:${TAG}|" docker-compose.yml
             docker compose pull
-            docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin
+            docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin 5bib-result-crew
             docker image prune -f
