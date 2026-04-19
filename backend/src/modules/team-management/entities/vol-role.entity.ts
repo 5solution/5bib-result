@@ -4,12 +4,15 @@ import {
   Entity,
   Index,
   JoinColumn,
+  JoinTable,
+  ManyToMany,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { VolEvent } from './vol-event.entity';
 import { VolContractTemplate } from './vol-contract-template.entity';
+import { VolTeamCategory } from './vol-team-category.entity';
 
 export interface FormFieldConfig {
   key: string;
@@ -31,6 +34,7 @@ export interface FormFieldConfig {
 
 @Entity('vol_role')
 @Index('idx_event', ['event_id'])
+@Index('idx_role_category', ['category_id'])
 export class VolRole {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -41,6 +45,16 @@ export class VolRole {
   @ManyToOne(() => VolEvent, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'event_id' })
   event?: VolEvent;
+
+  // v1.8: Team mà role thuộc về. NULL = floater (role không thuộc team
+  // operational nào — VD "Cố vấn", "Khách mời"). Nếu có → role share
+  // stations + supply với các role khác trong cùng team.
+  @Column({ type: 'int', nullable: true })
+  category_id!: number | null;
+
+  @ManyToOne(() => VolTeamCategory, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'category_id' })
+  category?: VolTeamCategory | null;
 
   @Column({ type: 'varchar', length: 100 })
   role_name!: string;
@@ -95,6 +109,18 @@ export class VolRole {
   // members of the SAME event. Enforced in team-leader.service.
   @Column({ type: 'boolean', default: false })
   is_leader_role!: boolean;
+
+  // v1.6 Option B2: Leader role → N managed roles via junction table.
+  // Supports nested hierarchy (Leader A manages Leader B which manages Crew).
+  // BFS resolver in TeamRoleHierarchyService traverses descendants at runtime.
+  // Empty array for non-leader roles (or leader not yet configured).
+  @ManyToMany(() => VolRole, { cascade: false })
+  @JoinTable({
+    name: 'vol_role_manages',
+    joinColumn: { name: 'leader_role_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'managed_role_id', referencedColumnName: 'id' },
+  })
+  managed_roles?: VolRole[];
 
   // v1.5: Per-role group chat link. Gated by registration.status
   // in the public endpoints — only shown once TNV has ký HĐ.

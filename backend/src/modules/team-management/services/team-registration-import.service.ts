@@ -17,6 +17,7 @@ import Redis from 'ioredis';
 import { VolEvent } from '../entities/vol-event.entity';
 import { VolRole, FormFieldConfig } from '../entities/vol-role.entity';
 import { VolRegistration } from '../entities/vol-registration.entity';
+import { VolStation } from '../entities/vol-station.entity';
 import { VN_BANKS } from '../constants/banks';
 import {
   canonEmail,
@@ -41,6 +42,7 @@ import {
 import { TeamRegistrationService } from './team-registration.service';
 import { TeamContractService } from './team-contract.service';
 import { TeamCacheService } from './team-cache.service';
+import { TeamStationService } from './team-station.service';
 
 const MAX_ROWS = 500;
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -74,7 +76,18 @@ const KNOWN_HEADERS = [
   'notes',
   'avatar_photo',
   'cccd_photo',
+  // v1.6: optional station assignment columns.
+  'station_id',
+  'station_name',
+  'assignment_role',
 ];
+
+// v1.8: the entity enum has been dropped (derive from registration.role.is_leader_role).
+// The import template still surfaces this column for operator convenience, but
+// the value is NOT persisted on the assignment anymore — only used during
+// import validation to warn when it mismatches the row's role.
+type ImportAssignmentRole = 'crew' | 'volunteer';
+const ASSIGNMENT_ROLE_VALUES: ReadonlyArray<ImportAssignmentRole> = ['crew', 'volunteer'];
 
 type RawRow = Record<string, string>;
 
@@ -88,6 +101,11 @@ interface CachedRow {
   resolved_role_id: number | null;
   // Cached for confirm step — not returned to client.
   email_canon: string;
+  // v1.6 station assignment (optional). Only set when station_id column
+  // was provided and validation passed. Carried into confirm step so we
+  // can call TeamStationService.createAssignment after the reg lands.
+  resolved_station_id: number | null;
+  resolved_assignment_role: ImportAssignmentRole | null;
 }
 
 interface CachedImport {
@@ -107,10 +125,13 @@ export class TeamRegistrationImportService {
     private readonly roleRepo: Repository<VolRole>,
     @InjectRepository(VolRegistration, 'volunteer')
     private readonly regRepo: Repository<VolRegistration>,
+    @InjectRepository(VolStation, 'volunteer')
+    private readonly stationRepo: Repository<VolStation>,
     @InjectRedis() private readonly redis: Redis,
     private readonly registrationSvc: TeamRegistrationService,
     private readonly contractSvc: TeamContractService,
     private readonly cache: TeamCacheService,
+    private readonly stationSvc: TeamStationService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────
@@ -118,10 +139,12 @@ export class TeamRegistrationImportService {
   // ─────────────────────────────────────────────────────────────────────
 
   /**
-   * Build an XLSX template with 3 sheets:
+   * Build an XLSX template with 4 sheets:
    *   1) "Rows" — import columns + one example row + dropdown validations
    *   2) "Roles" — role reference (id, name, rate, slots) for this event
    *   3) "Banks" — allowed VN_BANKS values for the bank_name dropdown
+   *   4) "Stations" — v1.6 reference sheet: station_id + role info so admin
+   *      can match a TNV to a trạm directly at import time.
    */
   async generateTemplateXlsx(eventId: number): Promise<Buffer> {
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
@@ -131,6 +154,25 @@ export class TeamRegistrationImportService {
       where: { event_id: eventId },
       order: { sort_order: 'ASC', id: 'ASC' },
     });
+
+    // v1.8: stations belong to team categories (not roles). Display category name.
+    const rolesById = new Map<number, VolRole>();
+    for (const r of roles) rolesById.set(r.id, r);
+    const stationsRaw = await this.stationRepo.find({
+      where: { event_id: eventId },
+      relations: { category: true },
+      order: { category_id: 'ASC', sort_order: 'ASC', id: 'ASC' },
+    });
+    const stations = stationsRaw
+      .map((s) => ({
+        id: s.id,
+        station_name: s.station_name,
+        category_id: s.category_id,
+        category_name: s.category?.name ?? `(category ${s.category_id})`,
+        status: s.status,
+      }))
+      .sort((a, b) => a.category_name.localeCompare(b.category_name, 'vi'));
+    const assignableStations = stations.filter((s) => s.status !== 'closed');
 
     const wb = new ExcelJS.Workbook();
     wb.creator = '5BIB Team Management';
@@ -159,6 +201,10 @@ export class TeamRegistrationImportService {
       { header: 'bank_branch', key: 'bank_branch', width: 20, required: false },
       { header: 'experience', key: 'experience', width: 40, required: false },
       { header: 'notes', key: 'notes', width: 30, required: false },
+      // v1.6 station assignment columns — all optional.
+      { header: 'station_id', key: 'station_id', width: 12, required: false },
+      { header: 'station_name (tham khảo)', key: 'station_name', width: 28, required: false },
+      { header: 'assignment_role', key: 'assignment_role', width: 16, required: false },
     ];
     ws.columns = columns.map((c) => ({
       header: c.header,
@@ -188,7 +234,10 @@ export class TeamRegistrationImportService {
     });
 
     // One example data row (row 2) so admin sees the expected shape.
-    const exampleRole = roles[0];
+    const exampleRole = roles.find((r) => r.is_leader_role !== true) ?? roles[0];
+    const exampleStation = assignableStations.find(
+      (s) => s.category_id === exampleRole?.category_id,
+    );
     ws.addRow({
       full_name: 'Nguyễn Văn A',
       email: 'nguyenvana@example.com',
@@ -204,6 +253,9 @@ export class TeamRegistrationImportService {
       bank_branch: 'Hà Nội',
       experience: 'Đã tham gia 3 giải',
       notes: '',
+      station_id: exampleStation?.id ?? '',
+      station_name: exampleStation?.station_name ?? '',
+      assignment_role: exampleStation ? 'volunteer' : '',
     });
     // Italic grey to signal example
     ws.getRow(2).font = { italic: true, color: { argb: 'FF6B7280' } };
@@ -241,6 +293,29 @@ export class TeamRegistrationImportService {
     banksWs.getRow(1).font = { bold: true };
     for (const b of VN_BANKS) banksWs.addRow({ bank_name: b });
 
+    // --- Sheet 4: Stations (v1.6) ----------------------------------------
+    // Reference so admin can pick the correct station_id for a TNV. Leader
+    // roles are excluded (BR-STN-03 — leaders can't be assigned). Closed
+    // stations are excluded too (status='closed' rejects assignment).
+    const stationsWs = wb.addWorksheet('Stations');
+    stationsWs.columns = [
+      { header: 'id', key: 'id', width: 8 },
+      { header: 'station_name', key: 'station_name', width: 30 },
+      { header: 'category_id', key: 'category_id', width: 10 },
+      { header: 'category_name', key: 'category_name', width: 30 },
+      { header: 'status', key: 'status', width: 12 },
+    ];
+    stationsWs.getRow(1).font = { bold: true };
+    for (const s of assignableStations) {
+      stationsWs.addRow({
+        id: s.id,
+        station_name: s.station_name,
+        category_id: s.category_id,
+        category_name: s.category_name,
+        status: s.status,
+      });
+    }
+
     // --- Data validations on Rows sheet -----------------------------------
     // Dropdown: role_id (column D) → Roles!A2:A(N+1)
     const maxValidationRows = MAX_ROWS + 5; // a bit of headroom
@@ -257,9 +332,13 @@ export class TeamRegistrationImportService {
       }
     }
 
-    // Dropdown: shirt_size (column H) — inline list
+    // Dropdown: shirt_size (column I — after `address` column H)
+    // Header index: A full_name, B email, C phone, D role_id, E role_name,
+    // F cccd, G dob, H address, I shirt_size, J bank_account_number,
+    // K bank_holder_name, L bank_name, M bank_branch, N experience,
+    // O notes, P station_id, Q station_name, R assignment_role
     for (let r = 2; r <= maxValidationRows; r++) {
-      ws.getCell(`H${r}`).dataValidation = {
+      ws.getCell(`I${r}`).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: [`"${SHIRT_SIZE_OPTIONS.join(',')}"`],
@@ -269,15 +348,42 @@ export class TeamRegistrationImportService {
       };
     }
 
-    // Dropdown: bank_name (column K) → Banks!A2:A(42+1)
+    // Dropdown: bank_name (column L) → Banks!A2:A(VN_BANKS+1)
     for (let r = 2; r <= maxValidationRows; r++) {
-      ws.getCell(`K${r}`).dataValidation = {
+      ws.getCell(`L${r}`).dataValidation = {
         type: 'list',
         allowBlank: true,
         formulae: [`Banks!$A$2:$A$${VN_BANKS.length + 1}`],
         showErrorMessage: true,
         errorTitle: 'bank_name không hợp lệ',
         error: 'Chọn ngân hàng từ sheet Banks',
+      };
+    }
+
+    // v1.6 Dropdown: station_id (column P) → Stations!A2:A(N+1)
+    if (assignableStations.length > 0) {
+      for (let r = 2; r <= maxValidationRows; r++) {
+        ws.getCell(`P${r}`).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: [`Stations!$A$2:$A$${assignableStations.length + 1}`],
+          showErrorMessage: true,
+          errorTitle: 'station_id không hợp lệ',
+          error:
+            'Chọn một station_id từ sheet Stations (role_id phải khớp cột D)',
+        };
+      }
+    }
+
+    // v1.6 Dropdown: assignment_role (column R) — inline enum
+    for (let r = 2; r <= maxValidationRows; r++) {
+      ws.getCell(`R${r}`).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [`"${ASSIGNMENT_ROLE_VALUES.join(',')}"`],
+        showErrorMessage: true,
+        errorTitle: 'assignment_role không hợp lệ',
+        error: `Chọn: ${ASSIGNMENT_ROLE_VALUES.join(', ')}`,
       };
     }
 
@@ -306,6 +412,13 @@ export class TeamRegistrationImportService {
       rolesById.set(r.id, r);
       roleIdByNameLower.set(r.role_name.trim().toLowerCase(), r.id);
     }
+
+    // v1.6: load all stations for this event for station_id resolution.
+    const stations = await this.stationRepo.find({
+      where: { event_id: eventId },
+    });
+    const stationsById = new Map<number, VolStation>();
+    for (const s of stations) stationsById.set(s.id, s);
 
     // Load existing (email, role_id) pairs for DB duplicate detection.
     const existing = await this.regRepo
@@ -412,6 +525,66 @@ export class TeamRegistrationImportService {
         warnings.push('Thiếu ảnh CCCD — admin cần bổ sung sau import');
       }
 
+      // v1.6 — optional station assignment columns.
+      const stationIdRaw = String(raw.station_id ?? '').trim();
+      const assignmentRoleRaw = String(raw.assignment_role ?? '')
+        .trim()
+        .toLowerCase();
+      let resolved_station_id: number | null = null;
+      let resolved_assignment_role: ImportAssignmentRole | null = null;
+
+      if (stationIdRaw) {
+        const sid = Number.parseInt(stationIdRaw, 10);
+        if (!Number.isFinite(sid) || sid <= 0) {
+          errors.push(`station_id không hợp lệ: "${stationIdRaw}"`);
+        } else {
+          const station = stationsById.get(sid);
+          if (!station) {
+            // Spec: warning (not error) — user needs to create station first.
+            warnings.push(
+              `Trạm #${sid} chưa tồn tại — tạo trạm trước rồi import lại để gán`,
+            );
+          } else {
+            // v1.8: stations belong to team categories (not roles). The row's
+            // role must be in the same category as the station.
+            const rowRole =
+              resolved_role_id !== null
+                ? rolesById.get(resolved_role_id)
+                : null;
+            const rowCategoryId = rowRole?.category_id ?? null;
+            if (
+              rowCategoryId !== null &&
+              station.category_id !== rowCategoryId
+            ) {
+              errors.push(
+                `station_id=${sid} thuộc team ${station.category_id}, không khớp team của role_id=${resolved_role_id} (team=${rowCategoryId})`,
+              );
+            } else if (station.status === 'closed') {
+              errors.push(`Trạm #${sid} đã đóng — không thể gán thêm`);
+            } else {
+              resolved_station_id = station.id;
+            }
+          }
+        }
+      }
+
+      if (assignmentRoleRaw) {
+        if (assignmentRoleRaw !== 'crew' && assignmentRoleRaw !== 'volunteer') {
+          errors.push(
+            `assignment_role phải là "crew" hoặc "volunteer" (nhận: "${assignmentRoleRaw}")`,
+          );
+        } else if (!stationIdRaw) {
+          warnings.push(
+            'assignment_role được set nhưng không có station_id — sẽ bỏ qua',
+          );
+        } else {
+          resolved_assignment_role = assignmentRoleRaw as ImportAssignmentRole;
+        }
+      } else if (resolved_station_id !== null) {
+        // Default when station_id provided but assignment_role empty.
+        resolved_assignment_role = 'volunteer';
+      }
+
       // Duplicate detection — only meaningful if email + role are known.
       if (email && resolved_role_id) {
         const key = `${email}|${resolved_role_id}`;
@@ -451,6 +624,13 @@ export class TeamRegistrationImportService {
           bank_branch,
           experience,
           notes,
+          // v1.6 — echo the resolved station so the preview UI can show
+          // it in the diff table. Null when no station was provided.
+          station_id: resolved_station_id,
+          station_name: resolved_station_id
+            ? stationsById.get(resolved_station_id)?.station_name ?? ''
+            : '',
+          assignment_role: resolved_assignment_role,
         },
         errors,
         warnings,
@@ -458,6 +638,8 @@ export class TeamRegistrationImportService {
         duplicate_kind: duplicate_kind ?? 'none',
         resolved_role_id,
         email_canon: email,
+        resolved_station_id,
+        resolved_assignment_role,
       });
     });
 
@@ -548,9 +730,20 @@ export class TeamRegistrationImportService {
     const inserted_ids: number[] = [];
     const errors: string[] = [];
     let skipped = payload.rows.length - toProcess.length;
+    let assigned = 0;
+
+    // v1.6: only registrations past the approval gate may be station-assigned.
+    const POST_APPROVE_STATUSES = new Set([
+      'approved',
+      'contract_sent',
+      'contract_signed',
+      'qr_sent',
+      'checked_in',
+      'completed',
+    ]);
 
     for (const r of toProcess) {
-      const data = r.data as Record<string, string>;
+      const data = r.data as Record<string, unknown>;
       const roleId = r.resolved_role_id;
       if (!roleId) {
         skipped += 1;
@@ -572,19 +765,24 @@ export class TeamRegistrationImportService {
       ];
       for (const k of passthrough) {
         const v = data[k];
-        if (v != null && String(v).length > 0) form_data[k] = v;
+        if (v != null && String(v).length > 0) form_data[k] = String(v);
       }
+
+      const fullName = String(data.full_name ?? '');
+      const emailStr = String(data.email ?? '');
+      const phoneStr = String(data.phone ?? '');
+      const notesStr = String(data.notes ?? '');
 
       try {
         const result = await this.registrationSvc.adminManualRegister(
           {
             role_id: roleId,
-            full_name: data.full_name,
-            email: data.email,
-            phone: data.phone,
+            full_name: fullName,
+            email: emailStr,
+            phone: phoneStr,
             form_data,
             auto_approve: autoApprove,
-            notes: data.notes || `Imported by ${adminIdentity} (row ${r.row_num})`,
+            notes: notesStr || `Imported by ${adminIdentity} (row ${r.row_num})`,
           },
           adminIdentity,
           // Bulk import: TNV uploads photos later via self-service profile-edit
@@ -602,6 +800,35 @@ export class TeamRegistrationImportService {
               ),
             );
         }
+
+        // v1.6 — station assignment (best-effort, non-fatal).
+        if (r.resolved_station_id && r.resolved_assignment_role) {
+          if (!POST_APPROVE_STATUSES.has(result.status)) {
+            // auto_approve=false → registration lands in pending_approval →
+            // BR-STN-02 blocks assignment. Warn and skip.
+            errors.push(
+              `Dòng ${r.row_num}: registration #${result.id} chưa qua approval (status="${result.status}") — bỏ qua gán trạm. Bật auto_approve hoặc approve thủ công rồi gán sau.`,
+            );
+          } else {
+            try {
+              // v1.8: assignment_role no longer persisted on assignment —
+              // supervisor-vs-worker derives from registration.role.is_leader_role.
+              // The import column is kept for operator-side classification but
+              // not forwarded to createAssignment.
+              await this.stationSvc.createAssignment(r.resolved_station_id, {
+                registration_id: result.id,
+                note: null,
+              });
+              assigned += 1;
+            } catch (assignErr) {
+              const am =
+                (assignErr as Error).message || 'unknown assignment error';
+              errors.push(
+                `Dòng ${r.row_num}: reg #${result.id} tạo OK nhưng gán trạm thất bại — ${am}`,
+              );
+            }
+          }
+        }
       } catch (err) {
         const msg = (err as Error).message || 'unknown error';
         errors.push(`Dòng ${r.row_num}: ${msg}`);
@@ -618,7 +845,7 @@ export class TeamRegistrationImportService {
     }
 
     this.logger.log(
-      `REG_IMPORT admin=${adminIdentity} event=${eventId} inserted=${inserted_ids.length} skipped=${skipped} errors=${errors.length}`,
+      `REG_IMPORT admin=${adminIdentity} event=${eventId} inserted=${inserted_ids.length} assigned=${assigned} skipped=${skipped} errors=${errors.length}`,
     );
 
     return {
@@ -626,6 +853,7 @@ export class TeamRegistrationImportService {
       skipped,
       inserted_ids,
       errors,
+      assigned,
     };
   }
 

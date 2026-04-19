@@ -7,18 +7,22 @@ import type {
   TeamDirectoryResponse,
   PublicEventContactsResponse,
 } from "@/lib/directory-api";
-import { LeaderTeamTab } from "./_team-tab";
+import type { MyStationView } from "@/lib/station-api";
+import type { LeaderSupplyView } from "@/lib/supply-api";
 import { PersonalTab } from "./_personal-tab";
 import { ContactsTab } from "./_contacts-tab";
+import { LeaderManagementTab } from "./_leader-management-tab";
 
-type TabKey = "self" | "contacts" | "team";
+type TabKey = "self" | "contacts" | "management";
 
 /**
  * Status page shell.
- *  - "Thông tin cá nhân" — always shown (default).
- *  - "Liên lạc" — v1.5: always shown. Hub for chat group link, emergency
- *    contacts, my-team directory, cross-team leaders.
- *  - "Nhóm của tôi" — only for tokens the backend confirms as leader.
+ *  - "Thông tin cá nhân" — always shown (default); now includes v1.6 station
+ *    section + crew supply confirmation.
+ *  - "Liên lạc" — always shown. Hub for chat group, emergency contacts, my-team
+ *    directory, cross-team leaders.
+ *  - "Quản lý nhóm" — leaders only. Combines the old "Nhóm của tôi" roster
+ *    with v1.6 station + supply management.
  */
 export function StatusTabs({
   token,
@@ -27,6 +31,8 @@ export function StatusTabs({
   leaderPortal,
   directory,
   contacts,
+  myStation,
+  leaderSupply,
 }: {
   token: string;
   status: StatusResponse;
@@ -34,6 +40,8 @@ export function StatusTabs({
   leaderPortal: LeaderPortalResponse | null;
   directory: TeamDirectoryResponse | null;
   contacts: PublicEventContactsResponse | null;
+  myStation: MyStationView | null;
+  leaderSupply: LeaderSupplyView | null;
 }): React.ReactElement {
   const isLeader = leaderPortal != null;
   const [tab, setTab] = useState<TabKey>("self");
@@ -60,10 +68,10 @@ export function StatusTabs({
         />
         {isLeader ? (
           <TabButton
-            active={tab === "team"}
-            label={`Nhóm của tôi (${leaderPortal?.members.length ?? 0})`}
-            shortLabel={`Nhóm (${leaderPortal?.members.length ?? 0})`}
-            onClick={() => setTab("team")}
+            active={tab === "management"}
+            label={`Quản lý nhóm (${leaderPortal?.members.length ?? 0})`}
+            shortLabel={`Quản lý (${leaderPortal?.members.length ?? 0})`}
+            onClick={() => setTab("management")}
           />
         ) : null}
       </div>
@@ -73,6 +81,8 @@ export function StatusTabs({
           token={token}
           status={status}
           signedPdfUrl={signedPdfUrl}
+          myStation={myStation}
+          leaderSupply={leaderSupply}
         />
       ) : null}
 
@@ -84,11 +94,12 @@ export function StatusTabs({
         />
       ) : null}
 
-      {isLeader && tab === "team" ? (
-        <section className="card">
-          <h2 className="font-semibold mb-3">Nhóm của tôi</h2>
-          <LeaderTeamTab token={token} initial={leaderPortal} />
-        </section>
+      {isLeader && tab === "management" && leaderPortal ? (
+        <LeaderManagementTab
+          token={token}
+          leaderPortal={leaderPortal}
+          leaderSupply={leaderSupply}
+        />
       ) : null}
     </div>
   );

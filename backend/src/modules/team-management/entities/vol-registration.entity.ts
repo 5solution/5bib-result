@@ -12,6 +12,11 @@ import {
 import { VolEvent } from './vol-event.entity';
 import { VolRole } from './vol-role.entity';
 
+const decimalToNumber = {
+  from: (v: string | null): number | null => (v === null ? null : parseFloat(v)),
+  to: (v: number | null): number | null => v,
+};
+
 export type ShirtSize = 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL';
 // v1.4: 10-state machine. Terminal states: rejected, cancelled.
 // Flow: pending_approval → approved → contract_sent → contract_signed
@@ -129,11 +134,11 @@ export class VolRegistration {
   })
   checkin_method!: CheckinMethod | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
-  checkin_lat!: string | null;
+  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true, transformer: decimalToNumber })
+  checkin_lat!: number | null;
 
-  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true })
-  checkin_lng!: string | null;
+  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true, transformer: decimalToNumber })
+  checkin_lng!: number | null;
 
   @Column({
     type: 'enum',

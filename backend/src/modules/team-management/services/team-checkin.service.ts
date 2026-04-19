@@ -80,8 +80,8 @@ export class TeamCheckinService {
         `You are ${Math.round(distance)}m from the event (radius ${event.checkin_radius_m}m). Move closer and try again.`,
       );
     }
-    reg.checkin_lat = String(coords.lat);
-    reg.checkin_lng = String(coords.lng);
+    reg.checkin_lat = coords.lat;
+    reg.checkin_lng = coords.lng;
     return this.commitCheckin(reg, 'gps_verify');
   }
 

@@ -48,7 +48,7 @@ export class TeamRegistrationImportController {
   @Get('template')
   @ApiOperation({
     summary:
-      'Download XLSX template for bulk registration import. Includes Roles + Banks reference sheets and dropdown validations.',
+      'Download XLSX template for bulk registration import. Includes Roles + Banks + Stations (v1.6) reference sheets and dropdown validations. Station columns (station_id / station_name / assignment_role) are optional — if set, admin imports the TNV AND assigns them to the station in one step.',
   })
   @ApiResponse({
     status: 200,

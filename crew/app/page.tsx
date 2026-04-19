@@ -67,6 +67,14 @@ export default async function HomePage() {
           Đăng ký làm Leader / Crew / Tình nguyện viên cho các sự kiện chạy bộ.
           Sau khi đăng ký, bạn sẽ nhận email xác nhận kèm mã QR check-in.
         </p>
+        <p className="text-sm">
+          <Link
+            href="/recover"
+            className="text-blue-600 hover:underline inline-flex items-center gap-1"
+          >
+            Mất link truy cập? Khôi phục bằng email →
+          </Link>
+        </p>
       </section>
 
       {error ? (

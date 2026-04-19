@@ -27,7 +27,9 @@ import {
   Ban,
   Check,
   CheckCircle2,
+  Copy,
   ExternalLink,
+  KeyRound,
   Pencil,
   X,
 } from "lucide-react";
@@ -627,6 +629,11 @@ export function RegistrationDetailView({
               </p>
             ) : null}
 
+            <MagicLinkSection
+              magicLink={detail.magic_link}
+              expiresAt={detail.magic_token_expires}
+            />
+
             <div>
               <Label>Ghi chú admin</Label>
               <Textarea
@@ -955,6 +962,120 @@ function RejectChangesDialog({
           >
             {busy ? "Đang xử lý..." : "Từ chối thay đổi"}
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Displays the full crew-portal magic link so an admin can resend it to a
+ * TNV who lost their email / cleared their inbox. Copy-to-clipboard falls
+ * back to document.execCommand on non-HTTPS origins where navigator.clipboard
+ * is unavailable.
+ *
+ * Security note: this link grants full crew access (view contract, check-in,
+ * edit profile). Backend already audit-logs every detail view that emits
+ * this token — so sharing the token outside the approved recipient is
+ * traceable to the admin who pulled it.
+ */
+function MagicLinkSection({
+  magicLink,
+  expiresAt,
+}: {
+  magicLink: string;
+  expiresAt: string;
+}): React.ReactElement {
+  const [copied, setCopied] = useState(false);
+  const expiry = new Date(expiresAt);
+  const isExpired = expiry.getTime() < Date.now();
+  const msLeft = expiry.getTime() - Date.now();
+  const daysLeft = Math.floor(msLeft / (1000 * 60 * 60 * 24));
+
+  async function handleCopy(): Promise<void> {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(magicLink);
+      } else {
+        // HTTP fallback — dev env / pre-HTTPS local networks
+        const ta = document.createElement("textarea");
+        ta.value = magicLink;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      toast.success("Đã copy link vào clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Copy thất bại — chọn link và copy thủ công");
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+      <div className="flex items-start gap-2">
+        <KeyRound className="size-4 shrink-0 text-amber-700 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Label className="text-amber-900 font-semibold">
+              Link truy cập Portal (Magic link)
+            </Label>
+            <span
+              className={`text-xs font-medium ${
+                isExpired
+                  ? "text-red-700"
+                  : daysLeft < 1
+                    ? "text-amber-700"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {isExpired
+                ? "❌ Đã hết hạn"
+                : daysLeft < 1
+                  ? `⚠️ Hết hạn hôm nay (${expiry.toLocaleString("vi-VN")})`
+                  : `Hết hạn sau ${daysLeft} ngày (${expiry.toLocaleDateString(
+                      "vi-VN",
+                    )})`}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-stretch gap-2">
+            <Input
+              readOnly
+              value={magicLink}
+              className="font-mono text-xs bg-white"
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <Button
+              size="sm"
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void handleCopy();
+              }}
+              className="shrink-0"
+            >
+              <Copy className="mr-1 size-3.5" />
+              {copied ? "Đã copy" : "Copy"}
+            </Button>
+            <a
+              href={magicLink}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 inline-flex items-center justify-center rounded-md border bg-white px-3 text-xs font-medium hover:bg-gray-50 transition-colors"
+            >
+              <ExternalLink className="mr-1 size-3.5" />
+              Mở
+            </a>
+          </div>
+          <p className="text-[11px] text-amber-800/80 mt-1.5 leading-relaxed">
+            Gửi link này cho TNV khi họ mất email xác nhận. Link mở thẳng vào
+            portal tổng hợp (xem trạng thái · ký HĐ · check-in). Mọi lần xem
+            link đều được ghi audit log theo admin.
+          </p>
         </div>
       </div>
     </div>

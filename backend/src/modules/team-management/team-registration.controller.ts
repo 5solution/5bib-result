@@ -48,6 +48,8 @@ import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamPhotoService } from './services/team-photo.service';
 import { TeamContractService } from './services/team-contract.service';
 import { TeamCheckinService } from './services/team-checkin.service';
+import { TeamStationService } from './services/team-station.service';
+import { MyStationViewDto } from './dto/station.dto';
 import { VolRole } from './entities/vol-role.entity';
 
 @ApiTags('Team Management (public)')
@@ -59,6 +61,7 @@ export class TeamRegistrationController {
     private readonly photos: TeamPhotoService,
     private readonly contracts: TeamContractService,
     private readonly checkin: TeamCheckinService,
+    private readonly stations: TeamStationService,
   ) {}
 
   @Get('team-events')
@@ -163,6 +166,17 @@ export class TeamRegistrationController {
     @Body() dto: SelfCheckinDto,
   ): Promise<CheckinResponseDto> {
     return this.checkin.selfCheckin(token, dto);
+  }
+
+  @Get('team-registration/:token/station')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'v1.6 THAY ĐỔI 3 — TNV/Crew portal view: the caller\'s station + crew + teammates',
+  })
+  @ApiResponse({ status: 200, type: MyStationViewDto })
+  getMyStation(@Param('token') token: string): Promise<MyStationViewDto> {
+    return this.stations.getMyStationView(token);
   }
 
   @Post('team-upload-photo')

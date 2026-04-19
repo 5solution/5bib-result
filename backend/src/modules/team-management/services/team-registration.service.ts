@@ -559,6 +559,13 @@ export class TeamRegistrationService {
         );
       }
     }
+
+    // Audit every detail-view that exposes the magic token — lets us trace
+    // any "a TNV's account was used without their knowledge" incident back to
+    // which admin pulled the token and when.
+    this.logger.log(
+      `MAGIC_LINK_VIEW admin=${adminIdentity} reg=${id} event=${reg.event_id} expires=${reg.magic_token_expires.toISOString()}`,
+    );
     return {
       id: reg.id,
       role_id: reg.role_id,
@@ -597,6 +604,12 @@ export class TeamRegistrationService {
       pending_changes_submitted_at: reg.pending_changes_submitted_at
         ? reg.pending_changes_submitted_at.toISOString()
         : null,
+      // Magic-link recovery — expose to admin so they can resend manually.
+      // Audit-logged below. Token is already leaked through contract/status
+      // emails, so admin access here adds no net privilege escalation.
+      magic_link: this.buildMagicLink(reg.magic_token),
+      magic_token: reg.magic_token,
+      magic_token_expires: reg.magic_token_expires.toISOString(),
     };
   }
 

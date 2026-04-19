@@ -6,12 +6,25 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { listRegistrations } from "@/lib/team-api";
 
-const TABS = [
+// v1.7 UX update: Trạm is managed per-Role (Role drill-down), not event-wide.
+// Event-wide planner tools stay top-level: Kho vật tư (master stock) + Kế
+// hoạch vật tư (cross-team aggregate for planner review).
+
+type NavItem = {
+  slug: string;
+  label: string;
+};
+
+const ITEMS: NavItem[] = [
   { slug: "dashboard", label: "Tổng quan" },
+  // v1.8 — Team layer sits between event and roles
+  { slug: "teams", label: "Team" },
   { slug: "roles", label: "Vai trò" },
   { slug: "registrations", label: "Nhân sự" },
+  { slug: "supply-items", label: "Kho vật tư" },
+  { slug: "supply", label: "Kế hoạch vật tư" },
+  { slug: "contacts", label: "Liên lạc khẩn cấp" },
   { slug: "schedule-emails", label: "Email lịch trình" },
-  { slug: "contacts", label: "📞 Liên lạc khẩn cấp" },
   { slug: "scan", label: "Scan QR" },
   { slug: "export", label: "Xuất báo cáo" },
 ];
@@ -32,48 +45,49 @@ export default function EventLayout({
     if (!token || !Number.isFinite(eventId)) return;
     try {
       const res = await listRegistrations(token, eventId, {
-        status: "pending",
+        status: "pending_approval",
         page: 1,
         limit: 1,
       });
-      setPendingCount(res.total);
+      setPendingCount(res.total ?? 0);
     } catch {
-      // non-fatal — badge just stays at 0 if the probe fails
+      setPendingCount(0);
     }
   }, [token, eventId]);
 
   useEffect(() => {
     void fetchPending();
+    const t = window.setInterval(() => void fetchPending(), 30_000);
+    return () => window.clearInterval(t);
   }, [fetchPending]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <nav
-        className="flex flex-nowrap gap-1 overflow-x-auto whitespace-nowrap scrollbar-thin border-b"
-        style={{ borderColor: "#e5e7eb" }}
+        className="flex items-end gap-1 overflow-x-auto border-b scrollbar-hide"
+        aria-label="Team management navigation"
       >
-        {TABS.map((tab) => {
-          const href = `${base}/${tab.slug}`;
-          const active = pathname === href || pathname.startsWith(`${href}/`);
-          const showPendingBadge =
-            tab.slug === "registrations" && pendingCount > 0;
+        {ITEMS.map((item) => {
+          const href = `${base}/${item.slug}`;
+          // Match exact path OR nested (e.g. /registrations/:id still highlights "Nhân sự")
+          const active =
+            pathname === href || pathname.startsWith(`${href}/`);
+          const showBadge =
+            item.slug === "registrations" && pendingCount > 0;
           return (
             <Link
-              key={tab.slug}
+              key={item.slug}
               href={href}
-              className="flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-all duration-150 whitespace-nowrap"
-              style={{
-                borderBottomColor: active ? "#2563eb" : "transparent",
-                color: active ? "#1d4ed8" : "#6b7280",
-                background: "transparent",
-              }}
+              className={[
+                "whitespace-nowrap px-4 py-2.5 text-sm transition-colors border-b-2 -mb-px",
+                active
+                  ? "border-blue-600 text-blue-700 font-semibold"
+                  : "border-transparent text-gray-600 hover:text-gray-900",
+              ].join(" ")}
             >
-              {tab.label}
-              {showPendingBadge ? (
-                <span
-                  className="px-1.5 py-0.5 rounded-full text-xs font-bold animate-pulse"
-                  style={{ background: "#fef3c7", color: "#b45309" }}
-                >
+              {item.label}
+              {showBadge ? (
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-700">
                   {pendingCount}
                 </span>
               ) : null}
@@ -81,7 +95,8 @@ export default function EventLayout({
           );
         })}
       </nav>
-      {children}
+
+      <div>{children}</div>
     </div>
   );
 }

@@ -66,7 +66,10 @@ import {
   UpsertShirtStockDto,
 } from './dto/shirt-stock.dto';
 import { VolShirtStock } from './entities/vol-shirt-stock.entity';
-import { TeamEventService } from './services/team-event.service';
+import {
+  TeamEventService,
+  type VolRoleWithManaged,
+} from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamContractService } from './services/team-contract.service';
 import { TeamDashboardService } from './services/team-dashboard.service';
@@ -127,7 +130,7 @@ export class TeamManagementController {
   @ApiOperation({ summary: 'Get event detail with roles' })
   getEvent(
     @Param('id', ParseIntPipe) id: number,
-  ): Promise<VolEvent & { roles: VolRole[] }> {
+  ): Promise<VolEvent & { roles: VolRoleWithManaged[] }> {
     return this.events.getEvent(id);
   }
 
@@ -220,13 +223,15 @@ export class TeamManagementController {
   createRole(
     @Param('id', ParseIntPipe) eventId: number,
     @Body() dto: CreateRoleDto,
-  ): Promise<VolRole> {
+  ): Promise<VolRoleWithManaged> {
     return this.events.createRole(eventId, dto);
   }
 
   @Get('events/:id/roles')
   @ApiOperation({ summary: 'List roles for event' })
-  listRoles(@Param('id', ParseIntPipe) eventId: number): Promise<VolRole[]> {
+  listRoles(
+    @Param('id', ParseIntPipe) eventId: number,
+  ): Promise<VolRoleWithManaged[]> {
     return this.events.listRoles(eventId);
   }
 
@@ -236,7 +241,7 @@ export class TeamManagementController {
   updateRole(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRoleDto,
-  ): Promise<VolRole> {
+  ): Promise<VolRoleWithManaged> {
     return this.events.updateRole(id, dto);
   }
 

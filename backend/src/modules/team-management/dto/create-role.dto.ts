@@ -20,6 +20,18 @@ export type ChatPlatform = (typeof CHAT_PLATFORMS)[number];
 export class CreateRoleDto {
   @ApiProperty() @IsString() role_name!: string;
 
+  // v1.8: Team (category) mà role thuộc về. Optional — null = floater role
+  // (không thuộc team operational nào, VD "Cố vấn", "Khách mời").
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'v1.8 Team/Category ID. NULL = floater (không thuộc team nào). Để phân nhóm Leader/Crew/TNV thành 1 team shared stations + supply.',
+  })
+  @IsOptional()
+  @IsInt()
+  category_id?: number | null;
+
   @ApiProperty({ required: false }) @IsString() @IsOptional() description?: string;
 
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) max_slots!: number;
@@ -80,4 +92,30 @@ export class CreateRoleDto {
   @IsString()
   @MaxLength(500)
   chat_group_url?: string | null;
+
+  // v1.6 Option B2: nested N:M. Leader role quản lý nhiều role thông qua
+  // junction table vol_role_manages. BFS resolver trong TeamRoleHierarchyService
+  // tự động include descendants (tối đa 5 tầng). Empty/undefined cho non-leader.
+  @ApiProperty({
+    required: false,
+    type: [Number],
+    description:
+      'v1.6 Option B2: nested. Leader role quản lý nhiều role (multi-select). BFS resolver tự động include descendants.',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  manages_role_ids?: number[];
+
+  // v1.4/v1.6 companion — already on entity but was not DTO-exposed. Include
+  // so admin can toggle "is leader role" + optionally wire manages_role_ids.
+  @ApiProperty({
+    required: false,
+    default: false,
+    description:
+      'True = leader role (portal access + station gating). Companion field for manages_role_ids.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  is_leader_role?: boolean;
 }
