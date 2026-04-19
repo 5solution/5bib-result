@@ -753,6 +753,9 @@ export class RaceResultService {
           },
         },
       },
+      // Exclude finishers with zero/invalid chip time ("0:00:00", missing
+      // parts, ...). Otherwise $min returns 0 and avg is skewed downward.
+      { $match: { chipTimeSeconds: { $gt: 0 } } },
       {
         $group: {
           _id: null,
