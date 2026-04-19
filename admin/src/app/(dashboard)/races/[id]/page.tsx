@@ -32,6 +32,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import ImageUpload from "@/components/ImageUpload";
 import SponsorBanners from "@/components/SponsorBanners";
+import RaceCertificateConfigPanel from "@/components/certificates/RaceCertificateConfigPanel";
 import {
   Card,
   CardContent,
@@ -702,6 +703,7 @@ export default function RaceDetailPage() {
           <TabsTrigger value="branding">Hình ảnh & Thương hiệu</TabsTrigger>
           <TabsTrigger value="features">Tính năng</TabsTrigger>
           <TabsTrigger value="sponsors">Nhà tài trợ</TabsTrigger>
+          <TabsTrigger value="certificates">Certificates</TabsTrigger>
         </TabsList>
 
         {/* ════════════ Info Tab ════════════ */}
@@ -1830,6 +1832,29 @@ export default function RaceDetailPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* ════════════ Certificates Tab ════════════ */}
+        <TabsContent value="certificates">
+          <Card>
+            <CardHeader>
+              <CardTitle>Certificate Templates</CardTitle>
+              <CardDescription>
+                Cấu hình template chứng nhận và share card cho giải này (v1.1).
+                Chạy song song với hệ thống cũ — không ảnh hưởng tính năng hiện có.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RaceCertificateConfigPanel
+                raceId={raceId}
+                courses={(race.courses ?? []).map((c: Course) => ({
+                  courseId: c.courseId,
+                  name: c.name ?? c.distance,
+                  distance: c.distance,
+                }))}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
