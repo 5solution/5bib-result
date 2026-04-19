@@ -259,14 +259,59 @@ export class TeamEventService {
     if (event.status === 'completed') {
       throw new BadRequestException('Cannot edit event in completed status');
     }
+
+    // v1.8 QC fix: cross-field validation on the merged effective values so
+    // partial updates (e.g. only reg_close sent) are still checked against
+    // the stored counterpart. `undefined` = no change; `null` is rejected
+    // by the DTO above for required date fields, so only valid ISO / Date.
+    // VolEvent.event_start_date / event_end_date are string YYYY-MM-DD;
+    // new Date('YYYY-MM-DD') parses as UTC midnight, safe for same-tz compare.
+    const nextStart = new Date(
+      dto.event_start_date ?? event.event_start_date,
+    );
+    const nextEnd = new Date(dto.event_end_date ?? event.event_end_date);
+    if (nextEnd < nextStart) {
+      throw new BadRequestException(
+        'event_end_date must be on or after event_start_date',
+      );
+    }
+
+    const nextRegOpen =
+      dto.registration_open !== undefined
+        ? new Date(dto.registration_open)
+        : event.registration_open;
+    const nextRegClose =
+      dto.registration_close !== undefined
+        ? new Date(dto.registration_close)
+        : event.registration_close;
+    if (nextRegClose <= nextRegOpen) {
+      throw new BadRequestException(
+        'registration_close must be after registration_open',
+      );
+    }
+
+    // v1.8 QC fix: coord pairing — cannot have only one of lat/lng set.
+    // Compute next values honoring `null = clear`, `undefined = keep`.
+    const nextLat =
+      dto.location_lat === undefined ? event.location_lat : dto.location_lat;
+    const nextLng =
+      dto.location_lng === undefined ? event.location_lng : dto.location_lng;
+    if ((nextLat == null) !== (nextLng == null)) {
+      throw new BadRequestException(
+        'location_lat and location_lng must both be set or both null',
+      );
+    }
+
+    // v1.8 QC fix: explicit field-by-field assignment so that `null` values
+    // in the DTO actually wipe the stored value (Object.assign copies null
+    // which we want — but the previous lat/lng fallback silently ignored
+    // null-as-clear. Normalize here).
     Object.assign(event, {
       ...dto,
-      location_lat: dto.location_lat != null ? dto.location_lat : event.location_lat,
-      location_lng: dto.location_lng != null ? dto.location_lng : event.location_lng,
-      registration_open:
-        dto.registration_open != null ? new Date(dto.registration_open) : event.registration_open,
-      registration_close:
-        dto.registration_close != null ? new Date(dto.registration_close) : event.registration_close,
+      location_lat: nextLat,
+      location_lng: nextLng,
+      registration_open: nextRegOpen,
+      registration_close: nextRegClose,
     });
     const saved = await this.eventRepo.save(event);
     await this.cache.invalidateEvent(id);

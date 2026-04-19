@@ -326,10 +326,31 @@ export async function getTeamEvent(
   return res.json();
 }
 
+// v1.8 QC fix: update payload permits `null` on optional fields so the
+// settings page can explicitly wipe stored values (empty-string → null).
+// Backend DTO accepts null via ValidateIf; MySQL columns are nullable.
+export type UpdateTeamEventInput = Partial<{
+  event_name: string;
+  description: string | null;
+  location: string;
+  location_lat: number | null;
+  location_lng: number | null;
+  checkin_radius_m: number;
+  event_start_date: string;
+  event_end_date: string;
+  registration_open: string;
+  registration_close: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  benefits_image_url: string | null;
+  terms_conditions: string | null;
+  status: "draft" | "open" | "closed" | "completed";
+}>;
+
 export async function updateTeamEvent(
   token: string,
   id: number,
-  patch: Partial<CreateEventInput & { status: "draft" | "open" | "closed" | "completed" }>,
+  patch: UpdateTeamEventInput,
 ): Promise<TeamEvent> {
   const res = await fetch(`/api/team-management/events/${id}`, {
     method: "PUT",

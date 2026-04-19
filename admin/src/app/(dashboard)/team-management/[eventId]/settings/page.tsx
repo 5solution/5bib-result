@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings } from "lucide-react";
+import { Settings, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 // v1.8 — Full event edit page. Covers everything the create dialog exposes
@@ -48,7 +48,6 @@ interface FormState {
   contact_phone: string;
   benefits_image_url: string;
   terms_conditions: string;
-  min_work_hours: string; // numeric as string to allow empty/decimal typing
 }
 
 // Convert ISO8601 UTC → "YYYY-MM-DDTHH:mm" in local tz for <input datetime-local>.
@@ -85,10 +84,6 @@ function eventToForm(e: TeamEvent): FormState {
     contact_phone: e.contact_phone ?? "",
     benefits_image_url: e.benefits_image_url ?? "",
     terms_conditions: e.terms_conditions ?? "",
-    min_work_hours:
-      e.min_work_hours_for_completion == null
-        ? ""
-        : String(e.min_work_hours_for_completion),
   };
 }
 
@@ -177,25 +172,32 @@ export default function EventSettingsPage(): React.ReactElement {
 
     setSaving(true);
     try {
+      // v1.8 QC fix: send `null` (not undefined) for cleared optional
+      // strings so the backend actually wipes the stored value. Backend
+      // DTO accepts null via ValidateIf pattern; Object.assign copies null
+      // into the entity column (all these columns are nullable).
+      // `lat` / `lng` already use `undefined` when the admin didn't
+      // provide a value at all — but if the admin cleared a previously
+      // set coordinate, we want to persist that as null.
+      const clearedLatLng = !hasLat && !hasLng;
       await updateTeamEvent(token, event.id, {
         event_name: form.event_name.trim(),
-        description: form.description.trim() || undefined,
+        description: form.description.trim() === "" ? null : form.description.trim(),
         location: form.location.trim(),
-        location_lat: lat,
-        location_lng: lng,
+        location_lat: clearedLatLng ? null : lat,
+        location_lng: clearedLatLng ? null : lng,
         checkin_radius_m: form.checkin_radius_m,
         event_start_date: form.event_start_date,
         event_end_date: form.event_end_date,
-        // Backend DTO has registration_open/close as required strings, so
-        // we only send when present — if admin cleared them we'd let
-        // backend reject. Empty dates are product-wise nonsensical.
+        // registration_open/close are required on backend — only omit if
+        // admin somehow cleared them (blocked by validation above).
         ...(regOpen ? { registration_open: regOpen } : {}),
         ...(regClose ? { registration_close: regClose } : {}),
         status: form.status,
-        contact_email: form.contact_email.trim() || undefined,
-        contact_phone: form.contact_phone.trim() || undefined,
-        benefits_image_url: form.benefits_image_url.trim() || undefined,
-        terms_conditions: form.terms_conditions.trim() || undefined,
+        contact_email: form.contact_email.trim() === "" ? null : form.contact_email.trim(),
+        contact_phone: form.contact_phone.trim() === "" ? null : form.contact_phone.trim(),
+        benefits_image_url: form.benefits_image_url.trim() === "" ? null : form.benefits_image_url.trim(),
+        terms_conditions: form.terms_conditions.trim() === "" ? null : form.terms_conditions.trim(),
       });
       toast.success("Đã lưu cấu hình");
       await load();
@@ -205,6 +207,31 @@ export default function EventSettingsPage(): React.ReactElement {
       setSaving(false);
     }
   }
+
+  // v1.8 QC fix: surface the #1 operator foot-gun — setting
+  // status=open while the registration window doesn't include NOW.
+  // Public crew homepage filter (listPublicEvents) strictly requires
+  // status='open' AND registration_open <= NOW <= registration_close.
+  // Misconfiguring this silently hides the event from the public site.
+  const visibilityWarning = ((): string | null => {
+    if (!form) return null;
+    if (form.status !== "open") return null;
+    const now = Date.now();
+    const open = form.registration_open
+      ? new Date(form.registration_open).getTime()
+      : NaN;
+    const close = form.registration_close
+      ? new Date(form.registration_close).getTime()
+      : NaN;
+    if (Number.isNaN(open) || Number.isNaN(close)) return null;
+    if (now < open) {
+      return "Cấu hình hiện tại: status = Mở đăng ký NHƯNG thời điểm mở ĐK còn ở tương lai → event sẽ CHƯA hiện công khai cho đến khi tới giờ mở ĐK.";
+    }
+    if (now > close) {
+      return "Cấu hình hiện tại: status = Mở đăng ký NHƯNG đã QUÁ giờ đóng ĐK → event sẽ KHÔNG hiện công khai trên crew site.";
+    }
+    return null;
+  })();
 
   if (!form || !event) return <Skeleton className="h-96" />;
 
@@ -220,6 +247,13 @@ export default function EventSettingsPage(): React.ReactElement {
           thái, T&C. Xoá sự kiện thực hiện ở trang danh sách.
         </p>
       </div>
+
+      {visibilityWarning ? (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <AlertTriangle className="size-4 mt-0.5 flex-shrink-0" />
+          <span>{visibilityWarning}</span>
+        </div>
+      ) : null}
 
       {/* Group 1 — core metadata */}
       <section className="space-y-3">
