@@ -147,7 +147,15 @@ export class RaceCertificateConfigService {
 
   /**
    * Resolve which template to use for a render request.
-   * Priority: course-specific override > race default > null.
+   *
+   * Priority order:
+   *   1. RaceCertificateConfig course-specific override (if config exists + enabled)
+   *   2. RaceCertificateConfig race default (if config exists + enabled)
+   *   3. FALLBACK: most-recently-updated non-archived CertificateTemplate matching
+   *      (race_id + type + course_id), with course-specific match ranked above
+   *      null-course-id templates. Enables a simple "just-tag-the-template"
+   *      workflow where an admin can drop a template on a race without having
+   *      to explicitly upsert a RaceCertificateConfig document first.
    */
   async resolveTemplateId(
     raceId: string,
@@ -158,25 +166,56 @@ export class RaceCertificateConfigService {
       .findOne({ race_id: raceId, enabled: true })
       .lean()
       .exec();
-    if (!config) return null;
 
-    if (courseId) {
-      const override = config.course_overrides?.find(
-        (o) => o.course_id === courseId,
-      );
-      if (override) {
-        const id =
-          type === 'certificate'
-            ? override.template_certificate
-            : override.template_share_card;
-        if (id) return id;
+    if (config) {
+      if (courseId) {
+        const override = config.course_overrides?.find(
+          (o) => o.course_id === courseId,
+        );
+        if (override) {
+          const id =
+            type === 'certificate'
+              ? override.template_certificate
+              : override.template_share_card;
+          if (id) return id;
+        }
       }
+
+      const defaultId =
+        type === 'certificate'
+          ? config.default_template_certificate
+          : config.default_template_share_card;
+      if (defaultId) return defaultId;
     }
 
-    const defaultId =
-      type === 'certificate'
-        ? config.default_template_certificate
-        : config.default_template_share_card;
-    return defaultId ?? null;
+    // Fallback: match by CertificateTemplate.race_id directly.
+    // Prefer course-specific match, then course_id=null (applies to all courses).
+    if (courseId) {
+      const courseMatch = await this.templateModel
+        .findOne({
+          race_id: raceId,
+          type,
+          course_id: courseId,
+          is_archived: false,
+        })
+        .sort({ updated_at: -1 })
+        .select({ _id: 1 })
+        .lean()
+        .exec();
+      if (courseMatch) return courseMatch._id;
+    }
+
+    const anyMatch = await this.templateModel
+      .findOne({
+        race_id: raceId,
+        type,
+        $or: [{ course_id: null }, { course_id: { $exists: false } }],
+        is_archived: false,
+      })
+      .sort({ updated_at: -1 })
+      .select({ _id: 1 })
+      .lean()
+      .exec();
+    return anyMatch ? anyMatch._id : null;
   }
 }

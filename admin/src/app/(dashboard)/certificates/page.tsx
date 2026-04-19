@@ -45,6 +45,7 @@ import { Plus, Pencil, Trash2, Copy } from "lucide-react";
 interface RaceOption {
   id: string;
   title: string;
+  courses: { courseId: string; name: string }[];
 }
 
 const TYPE_BADGE: Record<
@@ -97,10 +98,21 @@ export default function CertificatesPage() {
       });
       const list = (res.data?.data?.list ?? []) as Array<Record<string, unknown>>;
       const mapped = list
-        .map((r) => ({
-          id: String(r.id ?? r._id ?? ""),
-          title: String(r.title ?? "Untitled"),
-        }))
+        .map((r) => {
+          const coursesRaw = (r.courses ?? []) as Array<
+            Record<string, unknown>
+          >;
+          return {
+            id: String(r.id ?? r._id ?? ""),
+            title: String(r.title ?? "Untitled"),
+            courses: coursesRaw
+              .map((c) => ({
+                courseId: String(c.courseId ?? c._id ?? ""),
+                name: String(c.name ?? c.distance ?? "Course"),
+              }))
+              .filter((c) => c.courseId),
+          };
+        })
         .filter((r) => r.id);
       setRaces(mapped);
     } catch (err) {
@@ -154,9 +166,16 @@ export default function CertificatesPage() {
     search ? t.name.toLowerCase().includes(search.toLowerCase()) : true,
   );
 
-  const raceMap = new Map(races.map((r) => [r.id, r.title]));
+  const raceMap = new Map(races.map((r) => [r.id, r]));
+  const courseNameFor = (raceId: string, courseId?: string | null): string => {
+    if (!courseId) return "";
+    const race = raceMap.get(raceId);
+    return (
+      race?.courses.find((c) => c.courseId === courseId)?.name ?? courseId
+    );
+  };
   const deleteTarget = deleteId
-    ? (templates ?? []).find((t) => t._id === deleteId) ?? null
+    ? (templates ?? []).find((t) => t.id === deleteId) ?? null
     : null;
 
   return (
@@ -192,8 +211,13 @@ export default function CertificatesPage() {
               setRaceFilter(!v || v === "__all__" ? "" : v)
             }
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Tất cả" />
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Tất cả">
+                {(val: string) => {
+                  if (!val || val === "__all__") return "Tất cả";
+                  return races.find((r) => r.id === val)?.title ?? "Tất cả";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Tất cả</SelectItem>
@@ -213,8 +237,15 @@ export default function CertificatesPage() {
               setTypeFilter(!v || v === "__all__" ? "" : (v as TemplateType))
             }
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Tất cả" />
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Tất cả">
+                {(val: string) => {
+                  if (!val || val === "__all__") return "Tất cả";
+                  if (val === "certificate") return "Certificate";
+                  if (val === "share_card") return "Share Card";
+                  return "Tất cả";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Tất cả</SelectItem>
@@ -267,10 +298,19 @@ export default function CertificatesPage() {
             )}
 
             {filtered.map((t) => (
-              <TableRow key={t._id}>
+              <TableRow key={t.id}>
                 <TableCell className="font-medium">{t.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {raceMap.get(t.race_id) ?? t.race_id}
+                <TableCell className="text-sm">
+                  <div className="flex flex-col">
+                    <span className="text-foreground truncate max-w-[280px]">
+                      {raceMap.get(t.race_id)?.title ?? t.race_id}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {t.course_id
+                        ? `Cự ly: ${courseNameFor(t.race_id, t.course_id)}`
+                        : "Tất cả cự ly"}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <TypeBadge type={t.type} />
@@ -284,7 +324,7 @@ export default function CertificatesPage() {
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
                     <Link
-                      href={`/certificates/${t._id}`}
+                      href={`/certificates/${t.id}`}
                       className={buttonVariants({
                         variant: "ghost",
                         size: "icon-sm",
@@ -297,7 +337,7 @@ export default function CertificatesPage() {
                       variant="ghost"
                       onClick={() =>
                         navigator.clipboard
-                          .writeText(t._id)
+                          .writeText(t.id)
                           .then(() => toast.success("Đã copy template ID"))
                       }
                       title="Copy ID"
@@ -307,7 +347,7 @@ export default function CertificatesPage() {
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      onClick={() => setDeleteId(t._id)}
+                      onClick={() => setDeleteId(t.id)}
                     >
                       <Trash2 className="size-3.5 text-destructive" />
                     </Button>

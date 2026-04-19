@@ -173,6 +173,11 @@
     "loadingCertificate": "Loading certificate...",
     "certificateSuccess": "Certificate downloaded!",
     "certificateNotReady": "Certificate not ready. Please try again later.",
+    "certificateV2": "Download Certificate",
+    "shareCardV2": "Download Share Card",
+    "downloadingV2": "Downloading...",
+    "downloadV2Success": "Downloaded successfully!",
+    "downloadV2Failed": "Download failed",
     "start": "Start",
     "finish": "Finish",
     "backToRanking": "Back to rankings"

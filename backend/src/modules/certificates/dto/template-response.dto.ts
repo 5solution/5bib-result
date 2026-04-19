@@ -35,6 +35,13 @@ export class TemplateResponseDto {
   @ApiPropertyOptional({ example: 'https://cdn.5bib.com/placeholder.png' })
   placeholder_photo_url?: string;
 
+  @ApiProperty({
+    example: false,
+    description:
+      'When true, photo_area and "photo" layers render BELOW canvas.backgroundImageUrl (for transparent PNG frames).',
+  })
+  photo_behind_background: boolean;
+
   @ApiProperty({ example: false })
   is_archived: boolean;
 

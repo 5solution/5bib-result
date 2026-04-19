@@ -66,6 +66,10 @@ export interface RenderData {
   distance?: string;
   event_name?: string;
   event_date?: string;
+  nation?: string;
+  gender_rank?: string | number;
+  ag_rank?: string | number;
+  overall_rank?: string | number;
   runner_photo_url?: string | null;
 }
 
@@ -78,31 +82,105 @@ export class CertificateRenderService {
     ensureFonts();
   }
 
-  async render(template: CertificateTemplate, data: RenderData): Promise<Buffer> {
-    const { canvas: canvasDef, layers, photo_area, placeholder_photo_url } =
-      template;
+  async render(
+    template: CertificateTemplate,
+    data: RenderData,
+    options: { includePhoto?: boolean } = {},
+  ): Promise<Buffer> {
+    const {
+      canvas: canvasDef,
+      layers,
+      photo_area,
+      placeholder_photo_url,
+      photo_behind_background,
+    } = template;
+
+    const includePhoto = options.includePhoto ?? true;
 
     const canvas = createCanvas(canvasDef.width, canvasDef.height);
     const ctx = canvas.getContext('2d');
 
-    // Background
-    await this.drawBackground(ctx, canvasDef, canvasDef.width, canvasDef.height);
+    const photoUrl = includePhoto
+      ? data.runner_photo_url || placeholder_photo_url || null
+      : null;
 
-    // Layers in z-order (array order)
-    for (const layer of layers) {
-      try {
-        await this.drawLayer(ctx, layer, data);
-      } catch (err) {
-        this.logger.warn(
-          `Layer render failed (type=${layer.type}): ${String(err)}`,
-        );
+    // Fill background color always
+    ctx.fillStyle = canvasDef.backgroundColor || '#ffffff';
+    ctx.fillRect(0, 0, canvasDef.width, canvasDef.height);
+
+    if (photo_behind_background) {
+      // ─── behind mode ───────────────────────────────────────────
+      // 1. photo_area + "photo" layers (beneath the frame)
+      if (includePhoto && photo_area && photoUrl) {
+        try {
+          await this.drawPhotoArea(ctx, photo_area, photoUrl);
+        } catch (err) {
+          this.logger.warn(`Photo area render failed: ${String(err)}`);
+        }
       }
-    }
+      if (includePhoto) {
+        for (const layer of layers) {
+          if (layer.type !== 'photo') continue;
+          try {
+            await this.drawLayer(ctx, layer, data);
+          } catch (err) {
+            this.logger.warn(`Photo layer render failed: ${String(err)}`);
+          }
+        }
+      }
 
-    // Photo area (certificate type only — share_card has no photo_area)
-    if (photo_area) {
-      const photoUrl = data.runner_photo_url || placeholder_photo_url || null;
-      if (photoUrl) {
+      // 2. background image (frame) on top of photo
+      if (canvasDef.backgroundImageUrl) {
+        try {
+          await this.drawBackgroundImage(
+            ctx,
+            canvasDef.backgroundImageUrl,
+            canvasDef.width,
+            canvasDef.height,
+          );
+        } catch (err) {
+          this.logger.warn(`Background image render failed: ${String(err)}`);
+        }
+      }
+
+      // 3. remaining non-photo layers (text, image, shape)
+      for (const layer of layers) {
+        if (layer.type === 'photo') continue;
+        try {
+          await this.drawLayer(ctx, layer, data);
+        } catch (err) {
+          this.logger.warn(
+            `Layer render failed (type=${layer.type}): ${String(err)}`,
+          );
+        }
+      }
+    } else {
+      // ─── default mode (bg image behind everything) ────────────
+      if (canvasDef.backgroundImageUrl) {
+        try {
+          await this.drawBackgroundImage(
+            ctx,
+            canvasDef.backgroundImageUrl,
+            canvasDef.width,
+            canvasDef.height,
+          );
+        } catch (err) {
+          this.logger.warn(`Background image render failed: ${String(err)}`);
+        }
+      }
+
+      for (const layer of layers) {
+        if (!includePhoto && layer.type === 'photo') continue;
+        try {
+          await this.drawLayer(ctx, layer, data);
+        } catch (err) {
+          this.logger.warn(
+            `Layer render failed (type=${layer.type}): ${String(err)}`,
+          );
+        }
+      }
+
+      if (includePhoto && photo_area && photoUrl) {
         try {
           await this.drawPhotoArea(ctx, photo_area, photoUrl);
         } catch (err) {
@@ -114,23 +192,19 @@ export class CertificateRenderService {
     return Buffer.from(canvas.toBuffer('image/png'));
   }
 
-  private async drawBackground(
+  private async drawBackgroundImage(
     ctx: SKRSContext2D,
-    canvasDef: CertificateTemplate['canvas'],
+    url: string,
     width: number,
     height: number,
   ): Promise<void> {
-    ctx.fillStyle = canvasDef.backgroundColor || '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-    if (canvasDef.backgroundImageUrl) {
-      const img = await this.loadImageCached(canvasDef.backgroundImageUrl);
-      const scale = Math.max(width / img.width, height / img.height);
-      const sw = width / scale;
-      const sh = height / scale;
-      const sx = (img.width - sw) / 2;
-      const sy = (img.height - sh) / 2;
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height);
-    }
+    const img = await this.loadImageCached(url);
+    const scale = Math.max(width / img.width, height / img.height);
+    const sw = width / scale;
+    const sh = height / scale;
+    const sx = (img.width - sw) / 2;
+    const sy = (img.height - sh) / 2;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height);
   }
 
   private async drawLayer(
@@ -175,7 +249,11 @@ export class CertificateRenderService {
       .replace(/\{pace\}/g, String(data.pace ?? ''))
       .replace(/\{distance\}/g, String(data.distance ?? ''))
       .replace(/\{event_name\}/g, String(data.event_name ?? ''))
-      .replace(/\{event_date\}/g, String(data.event_date ?? ''));
+      .replace(/\{event_date\}/g, String(data.event_date ?? ''))
+      .replace(/\{nation\}/g, String(data.nation ?? ''))
+      .replace(/\{gender_rank\}/g, String(data.gender_rank ?? ''))
+      .replace(/\{ag_rank\}/g, String(data.ag_rank ?? ''))
+      .replace(/\{overall_rank\}/g, String(data.overall_rank ?? ''));
   }
 
   private buildFontString(layer: TemplateLayer): string {

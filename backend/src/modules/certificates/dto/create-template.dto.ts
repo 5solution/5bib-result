@@ -66,6 +66,15 @@ export class CreateTemplateDto {
   @IsString()
   placeholder_photo_url?: string;
 
+  @ApiPropertyOptional({
+    example: false,
+    description:
+      'When true, photo_area and "photo" layers render BELOW canvas.backgroundImageUrl (for transparent PNG frames with a cut-out photo window, e.g. VMM finisher frame).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  photo_behind_background?: boolean;
+
   @ApiPropertyOptional({ example: false })
   @IsOptional()
   @IsBoolean()

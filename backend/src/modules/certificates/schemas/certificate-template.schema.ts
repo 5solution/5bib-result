@@ -98,6 +98,13 @@ export class CertificateTemplate {
 
   @Prop() placeholder_photo_url?: string;
 
+  /**
+   * When true, photo_area and "photo" layers are rendered BELOW
+   * canvas.backgroundImageUrl. Use when the bg image frame is a transparent
+   * PNG with a cut-out window for the athlete photo (e.g., VMM finisher frame).
+   */
+  @Prop({ default: false }) photo_behind_background: boolean;
+
   @Prop({ default: false }) is_archived: boolean;
 
   created_at: Date;

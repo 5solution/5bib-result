@@ -52,7 +52,7 @@ export interface PhotoArea {
 }
 
 export interface CertificateTemplate {
-  _id: string;
+  id: string;
   name: string;
   race_id: string;
   course_id?: string | null;
@@ -61,6 +61,12 @@ export interface CertificateTemplate {
   layers: TemplateLayer[];
   photo_area?: PhotoArea | null;
   placeholder_photo_url?: string | null;
+  /**
+   * When true, photo_area + "photo" layers render BELOW
+   * canvas.backgroundImageUrl. Use when the bg image is a transparent PNG
+   * frame with a cut-out window for the athlete photo.
+   */
+  photo_behind_background?: boolean;
   is_archived?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -82,6 +88,7 @@ export interface CreateTemplateInput {
   layers: TemplateLayer[];
   photo_area?: PhotoArea | null;
   placeholder_photo_url?: string | null;
+  photo_behind_background?: boolean;
 }
 
 export type UpdateTemplateInput = Partial<CreateTemplateInput> & {
@@ -104,7 +111,7 @@ export interface CourseTemplateOverride {
 }
 
 export interface RaceCertificateConfig {
-  _id?: string;
+  id?: string;
   race_id: string;
   default_template_certificate?: string | null;
   default_template_share_card?: string | null;
@@ -143,6 +150,112 @@ async function assertOk(res: Response): Promise<void> {
   throw new Error(message);
 }
 
+// ─── Admin ↔ Backend shape transformers ───────────────────────
+//
+// Admin editor keeps convenient field names (`font`, `size`, `fillColor`,
+// `strokeColor`, `variable`). Backend DTO whitelists different names
+// (`fontFamily`, `fontSize`, `fill`, `stroke`, `text` with `{variable}`
+// tokens). These helpers translate at the wire boundary so the editor
+// doesn't need to change everywhere.
+//
+// Rules:
+// - layer.font        ↔ layer.fontFamily
+// - layer.size        ↔ layer.fontSize
+// - layer.fillColor   ↔ layer.fill
+// - layer.strokeColor ↔ layer.stroke
+// - layer.variable    →  layer.text = "{variable}"
+//   layer.text = "{word}" ←  layer.variable = "word" (inverse on load)
+// - layer.zIndex      →  dropped (not in backend DTO)
+
+type AdminLayer = TemplateLayer;
+type BackendLayer = Record<string, unknown>;
+
+function layerToBackend(l: AdminLayer): BackendLayer {
+  const out: BackendLayer = {};
+  const copyKeys: Array<keyof AdminLayer> = [
+    "type",
+    "x",
+    "y",
+    "width",
+    "height",
+    "rotation",
+    "opacity",
+    "color",
+    "fontWeight",
+    "textAlign",
+    "lineHeight",
+    "letterSpacing",
+    "imageUrl",
+    "shape",
+    "strokeWidth",
+    "borderRadius",
+  ];
+  for (const k of copyKeys) {
+    const v = l[k];
+    if (v !== undefined) out[k] = v;
+  }
+  if (l.font !== undefined) out.fontFamily = l.font;
+  if (l.size !== undefined) out.fontSize = l.size;
+  if (l.fillColor !== undefined) out.fill = l.fillColor;
+  if (l.strokeColor !== undefined) out.stroke = l.strokeColor;
+  if (l.variable) {
+    out.text = `{${l.variable}}`;
+  } else if (l.text !== undefined) {
+    out.text = l.text;
+  }
+  return out;
+}
+
+function layerFromBackend(raw: BackendLayer): AdminLayer {
+  const r = raw as Record<string, unknown>;
+  const out: AdminLayer = {
+    type: r.type as LayerType,
+    x: Number(r.x) || 0,
+    y: Number(r.y) || 0,
+  };
+  if (r.width !== undefined) out.width = Number(r.width);
+  if (r.height !== undefined) out.height = Number(r.height);
+  if (r.rotation !== undefined) out.rotation = Number(r.rotation);
+  if (r.opacity !== undefined) out.opacity = Number(r.opacity);
+  if (typeof r.color === "string") out.color = r.color;
+  if (typeof r.fontWeight === "string") out.fontWeight = r.fontWeight;
+  if (typeof r.textAlign === "string")
+    out.textAlign = r.textAlign as TextAlign;
+  if (r.lineHeight !== undefined) out.lineHeight = Number(r.lineHeight);
+  if (r.letterSpacing !== undefined)
+    out.letterSpacing = Number(r.letterSpacing);
+  if (typeof r.imageUrl === "string") out.imageUrl = r.imageUrl;
+  if (typeof r.shape === "string") out.shape = r.shape as ShapeType;
+  if (r.strokeWidth !== undefined) out.strokeWidth = Number(r.strokeWidth);
+  if (r.borderRadius !== undefined) out.borderRadius = Number(r.borderRadius);
+  if (typeof r.fontFamily === "string") out.font = r.fontFamily;
+  if (r.fontSize !== undefined) out.size = Number(r.fontSize);
+  if (typeof r.fill === "string") out.fillColor = r.fill;
+  if (typeof r.stroke === "string") out.strokeColor = r.stroke;
+  if (typeof r.text === "string") {
+    const m = /^\{(\w+)\}$/.exec(r.text);
+    if (m) out.variable = m[1];
+    else out.text = r.text;
+  }
+  return out;
+}
+
+function templateToBackend(
+  t: Partial<CreateTemplateInput> & { layers?: AdminLayer[] },
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = { ...t };
+  if (t.layers) payload.layers = t.layers.map(layerToBackend);
+  return payload;
+}
+
+function templateFromBackend(raw: unknown): CertificateTemplate {
+  const r = raw as Record<string, unknown>;
+  const layers = Array.isArray(r.layers)
+    ? (r.layers as BackendLayer[]).map(layerFromBackend)
+    : [];
+  return { ...(r as object), layers } as CertificateTemplate;
+}
+
 // ─── Templates ────────────────────────────────────────────────
 
 export async function listCertificateTemplates(
@@ -162,7 +275,11 @@ export async function listCertificateTemplates(
     cache: "no-store",
   });
   await assertOk(res);
-  return res.json();
+  const body = (await res.json()) as TemplateListResponse;
+  return {
+    ...body,
+    data: (body.data ?? []).map(templateFromBackend),
+  };
 }
 
 export async function getCertificateTemplate(
@@ -174,7 +291,7 @@ export async function getCertificateTemplate(
     cache: "no-store",
   });
   await assertOk(res);
-  return res.json();
+  return templateFromBackend(await res.json());
 }
 
 export async function createCertificateTemplate(
@@ -184,10 +301,10 @@ export async function createCertificateTemplate(
   const res = await fetch("/api/certificate-templates", {
     method: "POST",
     headers: authed(token),
-    body: JSON.stringify(input),
+    body: JSON.stringify(templateToBackend(input)),
   });
   await assertOk(res);
-  return res.json();
+  return templateFromBackend(await res.json());
 }
 
 export async function updateCertificateTemplate(
@@ -198,10 +315,10 @@ export async function updateCertificateTemplate(
   const res = await fetch(`/api/certificate-templates/${id}`, {
     method: "PATCH",
     headers: authed(token),
-    body: JSON.stringify(input),
+    body: JSON.stringify(templateToBackend(input)),
   });
   await assertOk(res);
-  return res.json();
+  return templateFromBackend(await res.json());
 }
 
 export async function deleteCertificateTemplate(
@@ -244,6 +361,22 @@ export async function upsertRaceCertificateConfig(
   return res.json();
 }
 
+// ─── Upload (image → S3) ──────────────────────────────────────
+
+export async function uploadImage(token: string, file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/upload", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  await assertOk(res);
+  const body = (await res.json()) as { url: string };
+  if (!body?.url) throw new Error("Upload response missing url");
+  return body.url;
+}
+
 // ─── Render (public, no auth) ─────────────────────────────────
 
 export function certificateRenderUrl(
@@ -265,6 +398,10 @@ export const TEMPLATE_VARIABLES = [
   { key: "finish_time", label: "Thời gian" },
   { key: "pace", label: "Pace" },
   { key: "distance", label: "Cự ly" },
+  { key: "nation", label: "Quốc gia" },
+  { key: "gender_rank", label: "Hạng giới tính" },
+  { key: "ag_rank", label: "Hạng AG (theo độ tuổi)" },
+  { key: "overall_rank", label: "Hạng chung" },
   { key: "event_name", label: "Tên giải" },
   { key: "event_date", label: "Ngày giải" },
 ] as const;

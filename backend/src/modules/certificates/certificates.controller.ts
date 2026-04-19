@@ -203,10 +203,16 @@ export class CertificatesController {
       event_date: race?.startDate
         ? new Date(race.startDate).toISOString().slice(0, 10)
         : '',
+      nation: athlete.Nation ?? athlete.Nationality ?? '',
+      gender_rank: athlete.GenderRank ?? '',
+      ag_rank: athlete.CatRank ?? '',
+      overall_rank: athlete.OverallRank ?? '',
       runner_photo_url: athlete.avatarUrl ?? null,
     };
 
-    const png = await this.renderService.render(template, data);
+    const png = await this.renderService.render(template, data, {
+      includePhoto: query.includePhoto,
+    });
 
     res.set({
       'Content-Type': 'image/png',
@@ -215,6 +221,127 @@ export class CertificatesController {
       'Content-Disposition': `inline; filename="${query.type}-${bib}.png"`,
     });
     res.send(png);
+  }
+
+  @Get('certificates/render-meta/:raceId/:bib')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  @ApiOperation({
+    summary:
+      'Return canvas size + photo_area bounds for client-side photo compositing (public)',
+  })
+  @ApiParam({ name: 'raceId' })
+  @ApiParam({ name: 'bib' })
+  @ApiQuery({ name: 'type', enum: ['certificate', 'share_card'] })
+  @ApiQuery({ name: 'courseId', required: false })
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        canvas: {
+          type: 'object',
+          properties: {
+            width: { type: 'number' },
+            height: { type: 'number' },
+          },
+        },
+        photo_area: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            width: { type: 'number' },
+            height: { type: 'number' },
+            borderRadius: { type: 'number' },
+          },
+        },
+        photo_behind_background: { type: 'boolean' },
+        placeholder_photo_url: { type: 'string', nullable: true },
+        default_photo_url: { type: 'string', nullable: true },
+      },
+    },
+  })
+  async renderMeta(
+    @Param('raceId') raceId: string,
+    @Param('bib') bib: string,
+    @Query() query: RenderQueryDto,
+  ) {
+    if (!raceId || !bib) {
+      throw new BadRequestException('raceId and bib are required');
+    }
+
+    const athlete = await this.raceResultService.getAthleteDetail(raceId, bib);
+    if (!athlete) throw new NotFoundException('Athlete not found');
+
+    const courseId = query.courseId ?? athlete.course_id ?? undefined;
+    const templateId = await this.configService.resolveTemplateId(
+      raceId,
+      courseId,
+      query.type,
+    );
+    if (!templateId) {
+      throw new NotFoundException('No template configured');
+    }
+    const template = await this.templateService.findByIdRaw(
+      templateId.toString(),
+    );
+    if (!template || template.is_archived) {
+      throw new NotFoundException('Template missing or archived');
+    }
+
+    // Effective photo bounds: prefer top-level photo_area, fall back to the
+    // first "photo" layer's bounds. The admin editor currently creates photo
+    // layers (type=photo) rather than setting the top-level photo_area, so
+    // both paths need to work for the client compositor.
+    let effectivePhotoArea:
+      | {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          borderRadius: number;
+        }
+      | null = null;
+
+    if (template.photo_area) {
+      effectivePhotoArea = {
+        x: template.photo_area.x,
+        y: template.photo_area.y,
+        width: template.photo_area.width,
+        height: template.photo_area.height,
+        borderRadius: template.photo_area.borderRadius ?? 0,
+      };
+    } else if (Array.isArray(template.layers)) {
+      const photoLayer = template.layers.find(
+        (l) =>
+          l.type === 'photo' &&
+          typeof l.width === 'number' &&
+          typeof l.height === 'number' &&
+          l.width > 0 &&
+          l.height > 0,
+      );
+      if (photoLayer) {
+        effectivePhotoArea = {
+          x: photoLayer.x,
+          y: photoLayer.y,
+          width: photoLayer.width as number,
+          height: photoLayer.height as number,
+          borderRadius: photoLayer.photoBorderRadius ?? 0,
+        };
+      }
+    }
+
+    return {
+      canvas: {
+        width: template.canvas.width,
+        height: template.canvas.height,
+      },
+      photo_area: effectivePhotoArea,
+      photo_behind_background: template.photo_behind_background ?? false,
+      placeholder_photo_url: template.placeholder_photo_url ?? null,
+      default_photo_url: athlete.avatarUrl ?? null,
+    };
   }
 
   @Get('certificates/check/:raceId')
@@ -230,6 +357,7 @@ export class CertificatesController {
       properties: {
         hasCertificate: { type: 'boolean' },
         hasShareCard: { type: 'boolean' },
+        certificateHasPhotoArea: { type: 'boolean' },
       },
     },
   })
@@ -241,6 +369,26 @@ export class CertificatesController {
       this.configService.resolveTemplateId(raceId, courseId, 'certificate'),
       this.configService.resolveTemplateId(raceId, courseId, 'share_card'),
     ]);
-    return { hasCertificate: !!certId, hasShareCard: !!shareId };
+
+    let certificateHasPhotoArea = false;
+    if (certId) {
+      const certTpl = await this.templateService.findByIdRaw(certId.toString());
+      if (certTpl && !certTpl.is_archived) {
+        if (certTpl.photo_area) {
+          certificateHasPhotoArea = true;
+        } else if (
+          Array.isArray(certTpl.layers) &&
+          certTpl.layers.some((l) => l.type === 'photo')
+        ) {
+          certificateHasPhotoArea = true;
+        }
+      }
+    }
+
+    return {
+      hasCertificate: !!certId,
+      hasShareCard: !!shareId,
+      certificateHasPhotoArea,
+    };
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Stage, Layer, Rect, Text, Image as KonvaImage, Line, Circle, Group, Transformer } from "react-konva";
 import useImage from "use-image";
 import type Konva from "konva";
@@ -41,7 +42,10 @@ import {
   FONT_FAMILIES,
   certificateRenderUrl,
   updateCertificateTemplate,
+  uploadImage,
 } from "@/lib/certificate-api";
+import "@/lib/api";
+import { racesControllerSearchRaces } from "@/lib/api-generated";
 
 interface Props {
   template: CertificateTemplate;
@@ -54,12 +58,34 @@ const SAMPLE_DATA: Record<string, string> = {
   finish_time: "1:12:13",
   pace: "5:24",
   distance: "21K",
+  nation: "Vietnam",
+  gender_rank: "5",
+  ag_rank: "2",
+  overall_rank: "42",
   event_name: "VMM 2025",
   event_date: "2025-09-21",
 };
 
 function interpolate(text: string): string {
   return text.replace(/\{(\w+)\}/g, (_, k) => SAMPLE_DATA[k] ?? `{${k}}`);
+}
+
+function readImageDimensions(
+  file: File,
+): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      resolve(null);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
 }
 
 // ─── Layer renderers (preview on canvas) ──────────────────────
@@ -142,7 +168,7 @@ function ImageLayerNode({
   onSelect: () => void;
   onChange: (patch: Partial<TemplateLayer>) => void;
 }) {
-  const [img] = useImage(layer.imageUrl ?? "", "anonymous");
+  const [img] = useImage(layer.imageUrl ?? "");
   const ref = useRef<Konva.Image>(null);
   const trRef = useRef<Konva.Transformer>(null);
 
@@ -309,7 +335,7 @@ function PhotoAreaNode({
   onSelect: () => void;
   onChange: (patch: Partial<TemplateLayer>) => void;
 }) {
-  const [img] = useImage(placeholderUrl ?? "", "anonymous");
+  const [img] = useImage(placeholderUrl ?? "");
   const w = layer.width ?? 200;
   const h = layer.height ?? 200;
   const trRef = useRef<Konva.Transformer>(null);
@@ -386,12 +412,60 @@ function PhotoAreaNode({
 
 // ─── Main Editor ──────────────────────────────────────────────
 
+interface RaceOption {
+  id: string;
+  title: string;
+  courses: { courseId: string; name: string }[];
+}
+
 export default function TemplateEditor({ template, token }: Props) {
+  const router = useRouter();
   const [draft, setDraft] = useState<CertificateTemplate>(template);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [zoom, setZoom] = useState(0.5);
   const [saving, setSaving] = useState(false);
+  const [bgUploading, setBgUploading] = useState(false);
+  const [imgUploading, setImgUploading] = useState(false);
   const [previewBib, setPreviewBib] = useState("");
+  const [races, setRaces] = useState<RaceOption[]>([]);
+  const bgFileRef = useRef<HTMLInputElement>(null);
+  const imgFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    racesControllerSearchRaces({ query: { pageSize: 200 } })
+      .then((res) => {
+        if (cancelled) return;
+        const list = (res.data?.data?.list ?? []) as Array<
+          Record<string, unknown>
+        >;
+        const mapped: RaceOption[] = list
+          .map((r) => {
+            const id = String(r.id ?? r._id ?? "");
+            const coursesRaw = (r.courses ?? []) as Array<
+              Record<string, unknown>
+            >;
+            return {
+              id,
+              title: String(r.title ?? "Untitled"),
+              courses: coursesRaw
+                .map((c) => ({
+                  courseId: String(c.courseId ?? c._id ?? ""),
+                  name: String(c.name ?? c.distance ?? "Course"),
+                }))
+                .filter((c) => c.courseId),
+            };
+          })
+          .filter((r) => r.id);
+        setRaces(mapped);
+      })
+      .catch((err) => console.error("Failed to load races", err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedRace = races.find((r) => r.id === draft.race_id);
 
   const stageWidth = draft.canvas.width * zoom;
   const stageHeight = draft.canvas.height * zoom;
@@ -464,16 +538,71 @@ export default function TemplateEditor({ template, token }: Props) {
   }
 
   function addImage() {
-    const url = prompt("URL ảnh:");
-    if (!url) return;
-    addLayer({
-      type: "image",
-      imageUrl: url,
-      x: 50,
-      y: 50,
-      width: 200,
-      height: 200,
-    });
+    imgFileRef.current?.click();
+  }
+
+  async function handleBgFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("File phải là ảnh");
+      return;
+    }
+    setBgUploading(true);
+    try {
+      const url = await uploadImage(token, file);
+      // Read dimensions to optionally match canvas aspect ratio
+      const dims = await readImageDimensions(file);
+      setDraft((prev) => ({
+        ...prev,
+        canvas: {
+          ...prev.canvas,
+          backgroundImageUrl: url,
+          // If canvas is default portrait but uploaded bg is landscape, auto-resize
+          ...(dims && dims.width > dims.height && prev.canvas.width < prev.canvas.height
+            ? { width: 1600, height: Math.round((1600 * dims.height) / dims.width) }
+            : {}),
+        },
+      }));
+      toast.success("Đã upload ảnh nền");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload thất bại");
+    } finally {
+      setBgUploading(false);
+    }
+  }
+
+  async function handleImageLayerFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("File phải là ảnh");
+      return;
+    }
+    setImgUploading(true);
+    try {
+      const url = await uploadImage(token, file);
+      const dims = await readImageDimensions(file);
+      const maxDim = 300;
+      const ratio = dims ? dims.width / dims.height : 1;
+      const w = ratio >= 1 ? maxDim : Math.round(maxDim * ratio);
+      const h = ratio >= 1 ? Math.round(maxDim / ratio) : maxDim;
+      addLayer({
+        type: "image",
+        imageUrl: url,
+        x: 50,
+        y: 50,
+        width: w,
+        height: h,
+      });
+      toast.success("Đã thêm ảnh");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload thất bại");
+    } finally {
+      setImgUploading(false);
+    }
   }
 
   function addPhotoArea() {
@@ -494,18 +623,21 @@ export default function TemplateEditor({ template, token }: Props) {
   async function handleSave() {
     setSaving(true);
     try {
-      const updated = await updateCertificateTemplate(token, draft._id, {
+      await updateCertificateTemplate(token, draft.id, {
         name: draft.name,
+        race_id: draft.race_id,
+        course_id: draft.course_id ?? null,
         canvas: draft.canvas,
         layers: draft.layers,
         photo_area: draft.photo_area,
         placeholder_photo_url: draft.placeholder_photo_url,
+        photo_behind_background: draft.photo_behind_background ?? false,
       });
-      setDraft(updated);
       toast.success("Đã lưu template");
+      router.push("/certificates");
+      router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Lưu thất bại");
-    } finally {
       setSaving(false);
     }
   }
@@ -527,12 +659,71 @@ export default function TemplateEditor({ template, token }: Props) {
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)] overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b bg-card px-3 py-2">
+      <div className="flex items-center gap-2 border-b bg-card px-3 py-2 flex-wrap">
         <Input
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          className="max-w-sm"
+          className="max-w-xs"
+          placeholder="Tên template"
         />
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground">Giải:</span>
+          <Select
+            value={draft.race_id}
+            onValueChange={(v) =>
+              v && setDraft({ ...draft, race_id: v, course_id: null })
+            }
+          >
+            <SelectTrigger className="h-8 w-[260px] text-xs">
+              <SelectValue placeholder="Chọn giải">
+                {(val: string) =>
+                  races.find((r) => r.id === val)?.title ??
+                  (val ? "Đang tải..." : "Chọn giải")
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {races.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground">Cự ly:</span>
+          <Select
+            value={draft.course_id ?? "__all__"}
+            onValueChange={(v) =>
+              setDraft({
+                ...draft,
+                course_id: !v || v === "__all__" ? null : v,
+              })
+            }
+            disabled={!selectedRace || selectedRace.courses.length === 0}
+          >
+            <SelectTrigger className="h-8 w-[180px] text-xs">
+              <SelectValue placeholder="Tất cả cự ly">
+                {(val: string) => {
+                  if (!val || val === "__all__") return "Tất cả cự ly";
+                  return (
+                    selectedRace?.courses.find((c) => c.courseId === val)
+                      ?.name ?? val
+                  );
+                }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Tất cả cự ly</SelectItem>
+              {selectedRace?.courses.map((c) => (
+                <SelectItem key={c.courseId} value={c.courseId}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <span className="text-xs text-muted-foreground">
           {draft.canvas.width}×{draft.canvas.height} · {draft.layers.length}{" "}
           layers
@@ -637,7 +828,7 @@ export default function TemplateEditor({ template, token }: Props) {
 
           <Separator />
 
-          <div>
+          <div className="space-y-2">
             <Label className="text-xs font-medium">Background</Label>
             <Input
               type="color"
@@ -648,22 +839,101 @@ export default function TemplateEditor({ template, token }: Props) {
                   canvas: { ...draft.canvas, backgroundColor: e.target.value },
                 })
               }
-              className="h-8 mt-1"
+              className="h-8"
             />
-            <Input
-              placeholder="URL ảnh nền (optional)"
-              value={draft.canvas.backgroundImageUrl ?? ""}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  canvas: {
-                    ...draft.canvas,
-                    backgroundImageUrl: e.target.value || undefined,
-                  },
-                })
-              }
-              className="mt-2 text-xs"
+
+            <input
+              ref={bgFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleBgFile}
             />
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full text-xs"
+              disabled={bgUploading}
+              onClick={() => bgFileRef.current?.click()}
+            >
+              <ImagePlus className="size-3.5" />
+              {bgUploading
+                ? "Đang upload..."
+                : draft.canvas.backgroundImageUrl
+                  ? "Thay ảnh nền"
+                  : "Upload ảnh nền"}
+            </Button>
+
+            {draft.canvas.backgroundImageUrl && (
+              <div className="flex items-center gap-1">
+                <Input
+                  value={draft.canvas.backgroundImageUrl}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      canvas: {
+                        ...draft.canvas,
+                        backgroundImageUrl: e.target.value || undefined,
+                      },
+                    })
+                  }
+                  className="text-xs flex-1 min-w-0"
+                />
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      canvas: {
+                        ...draft.canvas,
+                        backgroundImageUrl: undefined,
+                      },
+                    })
+                  }
+                  title="Xóa ảnh nền"
+                >
+                  <Trash2 className="size-3.5 text-destructive" />
+                </Button>
+              </div>
+            )}
+
+            {/* Hidden input for image-layer upload — triggered from addImage() */}
+            <input
+              ref={imgFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageLayerFile}
+            />
+            {imgUploading && (
+              <p className="text-xs text-muted-foreground">
+                Đang upload ảnh layer...
+              </p>
+            )}
+
+            {draft.canvas.backgroundImageUrl && (
+              <label className="flex items-start gap-2 rounded border bg-muted/30 p-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={draft.photo_behind_background ?? false}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      photo_behind_background: e.target.checked,
+                    })
+                  }
+                />
+                <span className="leading-snug">
+                  <span className="font-medium">Ảnh VĐV xuống dưới khung</span>
+                  <span className="block text-muted-foreground">
+                    Dùng khi ảnh nền là PNG trong suốt có ô chừa sẵn cho ảnh
+                    runner (VD: khung VMM). Ảnh JPG sẽ không hiện.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
         </div>
 
@@ -683,55 +953,81 @@ export default function TemplateEditor({ template, token }: Props) {
               }}
             >
               <Layer>
-                <BackgroundNode canvas={draft.canvas} />
-                {draft.layers.map((layer, idx) => {
-                  const onSelect = () => setSelectedIdx(idx);
-                  const onChange = (patch: Partial<TemplateLayer>) =>
-                    updateLayer(idx, patch);
-                  const isSel = selectedIdx === idx;
-                  if (layer.type === "text")
+                <BackgroundColorNode canvas={draft.canvas} />
+                {(() => {
+                  const behind = draft.photo_behind_background === true;
+                  const nodes = draft.layers.map((layer, idx) => {
+                    const onSelect = () => setSelectedIdx(idx);
+                    const onChange = (patch: Partial<TemplateLayer>) =>
+                      updateLayer(idx, patch);
+                    const isSel = selectedIdx === idx;
+                    if (layer.type === "text")
+                      return (
+                        <TextLayerNode
+                          key={idx}
+                          layer={layer}
+                          isSelected={isSel}
+                          onSelect={onSelect}
+                          onChange={onChange}
+                        />
+                      );
+                    if (layer.type === "image")
+                      return (
+                        <ImageLayerNode
+                          key={idx}
+                          layer={layer}
+                          isSelected={isSel}
+                          onSelect={onSelect}
+                          onChange={onChange}
+                        />
+                      );
+                    if (layer.type === "shape")
+                      return (
+                        <ShapeLayerNode
+                          key={idx}
+                          layer={layer}
+                          isSelected={isSel}
+                          onSelect={onSelect}
+                          onChange={onChange}
+                        />
+                      );
+                    if (layer.type === "photo")
+                      return (
+                        <PhotoAreaNode
+                          key={idx}
+                          layer={layer}
+                          placeholderUrl={draft.placeholder_photo_url}
+                          isSelected={isSel}
+                          onSelect={onSelect}
+                          onChange={onChange}
+                        />
+                      );
+                    return null;
+                  });
+                  if (!behind) {
+                    // Default: bg image → all layers
                     return (
-                      <TextLayerNode
-                        key={idx}
-                        layer={layer}
-                        isSelected={isSel}
-                        onSelect={onSelect}
-                        onChange={onChange}
-                      />
+                      <>
+                        <BackgroundImageNode canvas={draft.canvas} />
+                        {nodes}
+                      </>
                     );
-                  if (layer.type === "image")
-                    return (
-                      <ImageLayerNode
-                        key={idx}
-                        layer={layer}
-                        isSelected={isSel}
-                        onSelect={onSelect}
-                        onChange={onChange}
-                      />
-                    );
-                  if (layer.type === "shape")
-                    return (
-                      <ShapeLayerNode
-                        key={idx}
-                        layer={layer}
-                        isSelected={isSel}
-                        onSelect={onSelect}
-                        onChange={onChange}
-                      />
-                    );
-                  if (layer.type === "photo")
-                    return (
-                      <PhotoAreaNode
-                        key={idx}
-                        layer={layer}
-                        placeholderUrl={draft.placeholder_photo_url}
-                        isSelected={isSel}
-                        onSelect={onSelect}
-                        onChange={onChange}
-                      />
-                    );
-                  return null;
-                })}
+                  }
+                  // Behind mode: photo-type layers → bg image → non-photo layers
+                  const photoNodes = draft.layers
+                    .map((l, i) => (l.type === "photo" ? nodes[i] : null))
+                    .filter(Boolean);
+                  const otherNodes = draft.layers
+                    .map((l, i) => (l.type === "photo" ? null : nodes[i]))
+                    .filter(Boolean);
+                  return (
+                    <>
+                      {photoNodes}
+                      <BackgroundImageNode canvas={draft.canvas} />
+                      {otherNodes}
+                    </>
+                  );
+                })()}
               </Layer>
             </Stage>
           </div>
@@ -826,31 +1122,49 @@ function layerLabel(l: TemplateLayer): string {
   return l.type;
 }
 
-// ─── Background Node ──────────────────────────────────────────
+// ─── Background Nodes ─────────────────────────────────────────
 
-function BackgroundNode({ canvas }: { canvas: CertificateTemplate["canvas"] }) {
-  const [bg] = useImage(canvas.backgroundImageUrl ?? "", "anonymous");
+function BackgroundColorNode({
+  canvas,
+}: {
+  canvas: CertificateTemplate["canvas"];
+}) {
   return (
-    <>
-      <Rect
-        x={0}
-        y={0}
-        width={canvas.width}
-        height={canvas.height}
-        fill={canvas.backgroundColor ?? "#ffffff"}
-        listening={false}
-      />
-      {bg && (
-        <KonvaImage
-          image={bg}
-          x={0}
-          y={0}
-          width={canvas.width}
-          height={canvas.height}
-          listening={false}
-        />
-      )}
-    </>
+    <Rect
+      x={0}
+      y={0}
+      width={canvas.width}
+      height={canvas.height}
+      fill={canvas.backgroundColor ?? "#ffffff"}
+      listening={false}
+    />
+  );
+}
+
+function BackgroundImageNode({
+  canvas,
+}: {
+  canvas: CertificateTemplate["canvas"];
+}) {
+  const [bg, bgStatus] = useImage(canvas.backgroundImageUrl ?? "");
+  useEffect(() => {
+    if (bgStatus === "failed" && canvas.backgroundImageUrl) {
+      console.error(
+        "[cert] background image failed to load:",
+        canvas.backgroundImageUrl,
+      );
+    }
+  }, [bgStatus, canvas.backgroundImageUrl]);
+  if (!bg) return null;
+  return (
+    <KonvaImage
+      image={bg}
+      x={0}
+      y={0}
+      width={canvas.width}
+      height={canvas.height}
+      listening={false}
+    />
   );
 }
 

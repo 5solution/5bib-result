@@ -103,7 +103,7 @@ export default function NewTemplatePage() {
       };
       const created = await createCertificateTemplate(token, input);
       toast.success("Đã tạo template");
-      router.push(`/certificates/${created._id}`);
+      router.push(`/certificates/${created.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Tạo template thất bại");
     } finally {
@@ -147,8 +147,13 @@ export default function NewTemplatePage() {
         <div className="space-y-2">
           <Label className="text-xs font-medium">Giải đấu *</Label>
           <Select value={raceId} onValueChange={(v) => setRaceId(v ?? "")}>
-            <SelectTrigger>
-              <SelectValue placeholder="Chọn giải" />
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Chọn giải">
+                {(val: string) =>
+                  races.find((r) => r.id === val)?.title ??
+                  (val ? "Đang tải..." : "Chọn giải")
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {races.map((r) => (
@@ -171,8 +176,16 @@ export default function NewTemplatePage() {
             }
             disabled={!selectedRace || selectedRace.courses.length === 0}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Tất cả cự ly" />
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Tất cả cự ly">
+                {(val: string) => {
+                  if (!val || val === "__all__") return "Tất cả cự ly";
+                  return (
+                    selectedRace?.courses.find((c) => c.courseId === val)
+                      ?.name ?? val
+                  );
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Tất cả cự ly</SelectItem>
@@ -191,8 +204,14 @@ export default function NewTemplatePage() {
             value={type}
             onValueChange={(v) => v && setType(v as TemplateType)}
           >
-            <SelectTrigger>
-              <SelectValue />
+            <SelectTrigger className="w-full">
+              <SelectValue>
+                {(val: string) =>
+                  val === "share_card"
+                    ? "Share Card (typography-only, không cần ảnh)"
+                    : "Certificate (giấy chứng nhận, có thể có ảnh VĐV)"
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="certificate">
@@ -211,8 +230,12 @@ export default function NewTemplatePage() {
             value={String(presetIdx)}
             onValueChange={(v) => v && setPresetIdx(Number(v))}
           >
-            <SelectTrigger>
-              <SelectValue />
+            <SelectTrigger className="w-full">
+              <SelectValue>
+                {(val: string) =>
+                  CANVAS_PRESETS[Number(val)]?.label ?? "Chọn kích thước"
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {CANVAS_PRESETS.map((p, i) => (

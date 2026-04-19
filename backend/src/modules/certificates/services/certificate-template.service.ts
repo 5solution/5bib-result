@@ -54,6 +54,7 @@ export class CertificateTemplateService {
       layers: plain.layers,
       photo_area: plain.photo_area ?? null,
       placeholder_photo_url: plain.placeholder_photo_url,
+      photo_behind_background: plain.photo_behind_background ?? false,
       is_archived: plain.is_archived,
       created_at: plain.created_at,
       updated_at: plain.updated_at,
@@ -121,10 +122,23 @@ export class CertificateTemplateService {
     if (!isValidObjectId(id)) {
       throw new BadRequestException('Invalid template id');
     }
-    if (dto.type === 'share_card' && dto.photo_area) {
-      throw new BadRequestException(
-        'share_card templates must not have photo_area',
-      );
+
+    // Guard: share_card must not have photo_area.
+    // When PATCH omits `type`, we must read the stored type to determine
+    // the effective type — otherwise a partial PATCH can silently add
+    // photo_area to an existing share_card template.
+    if (dto.photo_area !== undefined) {
+      const existing = await this.templateModel
+        .findById(id)
+        .select({ type: 1 })
+        .lean()
+        .exec();
+      const effectiveType = dto.type ?? existing?.type;
+      if (effectiveType === 'share_card') {
+        throw new BadRequestException(
+          'share_card templates must not have photo_area',
+        );
+      }
     }
     const updated = await this.templateModel
       .findByIdAndUpdate(id, { $set: dto }, { new: true })

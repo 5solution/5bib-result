@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachment } from '@/lib/api-hooks';
 import ResultImageEditor from '@/components/ResultImageEditor';
+import CertificateV2DownloadButtons from '@/components/CertificateV2DownloadButtons';
+import CertificateWithPhotoCta from '@/components/CertificateWithPhotoCta';
 
 interface AthleteResult {
   Bib: number;
@@ -568,7 +570,14 @@ export default function AthleteDetailPage() {
               <span>{t('athlete.resultDistance', { distance: athlete.distance })}</span>
             </Link>
             {/* Share buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <CertificateV2DownloadButtons
+                raceId={raceId}
+                bib={String(athlete.Bib)}
+                courseId={athlete.course_id}
+                runnerName={athlete.Name}
+                variant="glass"
+              />
               <button
                 onClick={() => setShowImageEditor(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
@@ -1018,7 +1027,7 @@ export default function AthleteDetailPage() {
               </div>
             </div>
 
-            <div className="text-center mt-6">
+            <div className="text-center mt-6 flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={downloadCertificateAsPng}
                 disabled={downloading}
@@ -1031,6 +1040,13 @@ export default function AthleteDetailPage() {
                 )}
                 {downloading ? t('common.processing') : t('athlete.downloadCertificate')}
               </button>
+              <CertificateWithPhotoCta
+                raceId={raceId}
+                bib={String(athlete.Bib)}
+                courseId={athlete.course_id}
+                runnerName={athlete.Name}
+                initialPhotoUrl={currentAvatarUrl || athlete.avatarUrl}
+              />
             </div>
           </div>
         </div>)}

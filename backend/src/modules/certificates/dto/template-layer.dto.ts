@@ -55,7 +55,7 @@ export class TemplateLayerDto {
   @ApiPropertyOptional({
     example: '{runner_name}',
     description:
-      'Text or template. Supported vars: {runner_name}, {bib}, {finish_time}, {pace}, {distance}, {event_name}, {event_date}',
+      'Text or template. Supported vars: {runner_name}, {bib}, {finish_time}, {pace}, {distance}, {event_name}, {event_date}, {nation}, {gender_rank}, {ag_rank}, {overall_rank}',
   })
   @IsOptional()
   @IsString()
