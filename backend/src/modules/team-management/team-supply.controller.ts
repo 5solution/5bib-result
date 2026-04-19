@@ -111,43 +111,45 @@ export class TeamSupplyController {
 
   // ---- plan ----
 
-  @Get('events/:eventId/roles/:roleId/supply-plan')
+  @Get('events/:eventId/team-categories/:categoryId/supply-plan')
   @ApiOperation({
-    summary: 'Get supply plan for a role — rows for every item in the event',
+    summary:
+      'v1.8 — Get supply plan for a Team (category). Rows cover every item in the event.',
   })
   @ApiResponse({ status: 200, type: [SupplyPlanRowDto] })
   getPlan(
     @Param('eventId', ParseIntPipe) eventId: number,
-    @Param('roleId', ParseIntPipe) roleId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
   ): Promise<SupplyPlanRowDto[]> {
-    return this.plans.getPlanForRole(eventId, roleId);
+    return this.plans.getPlanForRole(eventId, categoryId);
   }
 
-  @Put('events/:eventId/roles/:roleId/supply-plan/request')
+  @Put('events/:eventId/team-categories/:categoryId/supply-plan/request')
   @ApiOperation({
     summary:
-      'Admin-on-behalf-of-leader upsert of request_qty. Bulk upsert by item_id.',
+      'v1.8 — Admin-on-behalf-of-leader upsert of request_qty for a Team. Bulk atomic by item_id (INSERT … ON DUPLICATE KEY UPDATE).',
   })
   @ApiResponse({ status: 200, type: [SupplyPlanRowDto] })
   upsertRequest(
     @Param('eventId', ParseIntPipe) eventId: number,
-    @Param('roleId', ParseIntPipe) roleId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
     @Body() dto: UpsertSupplyPlanRequestDto,
   ): Promise<SupplyPlanRowDto[]> {
-    return this.plans.upsertRequest(eventId, roleId, dto, null);
+    return this.plans.upsertRequest(eventId, categoryId, dto, null);
   }
 
-  @Put('events/:eventId/roles/:roleId/supply-plan/fulfill')
+  @Put('events/:eventId/team-categories/:categoryId/supply-plan/fulfill')
   @ApiOperation({
-    summary: 'Admin upsert of fulfilled_qty. Bulk upsert by item_id.',
+    summary:
+      'v1.8 — Admin upsert of fulfilled_qty for a Team. Bulk atomic by item_id.',
   })
   @ApiResponse({ status: 200, type: [SupplyPlanRowDto] })
   upsertFulfill(
     @Param('eventId', ParseIntPipe) eventId: number,
-    @Param('roleId', ParseIntPipe) roleId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
     @Body() dto: UpsertSupplyPlanFulfillDto,
   ): Promise<SupplyPlanRowDto[]> {
-    return this.plans.upsertFulfill(eventId, roleId, dto);
+    return this.plans.upsertFulfill(eventId, categoryId, dto);
   }
 
   @Get('events/:eventId/supply-overview')
@@ -221,12 +223,6 @@ export class TeamSupplyController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateSupplementDto,
   ): Promise<SupplementRowDto> {
-    // Body carries its own allocation_id; ensure it matches the route id.
-    if (dto.allocation_id !== id) {
-      throw new BadRequestException(
-        'allocation_id in body must match URL parameter',
-      );
-    }
     return this.supplements.createSupplement(id, dto.qty, dto.note ?? null, null);
   }
 }

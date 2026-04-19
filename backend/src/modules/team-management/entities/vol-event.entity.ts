@@ -7,6 +7,13 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+// MariaDB DECIMAL columns come back as strings from the driver.
+// This transformer converts them to JS numbers transparently.
+const decimalToNumber = {
+  from: (v: string | null): number | null => (v === null ? null : parseFloat(v)),
+  to: (v: number | null): number | null => v,
+};
+
 export type VolEventStatus = 'draft' | 'open' | 'closed' | 'completed';
 
 @Entity('vol_event')
@@ -28,11 +35,11 @@ export class VolEvent {
   @Column({ type: 'varchar', length: 255, nullable: true })
   location!: string | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
-  location_lat!: string | null;
+  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true, transformer: decimalToNumber })
+  location_lat!: number | null;
 
-  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true })
-  location_lng!: string | null;
+  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true, transformer: decimalToNumber })
+  location_lng!: number | null;
 
   @Column({ type: 'int', default: 500 })
   checkin_radius_m!: number;

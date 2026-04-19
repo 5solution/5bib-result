@@ -20,6 +20,18 @@ export type ChatPlatform = (typeof CHAT_PLATFORMS)[number];
 export class CreateRoleDto {
   @ApiProperty() @IsString() role_name!: string;
 
+  // v1.8: Team (category) mà role thuộc về. Optional — null = floater role
+  // (không thuộc team operational nào, VD "Cố vấn", "Khách mời").
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'v1.8 Team/Category ID. NULL = floater (không thuộc team nào). Để phân nhóm Leader/Crew/TNV thành 1 team shared stations + supply.',
+  })
+  @IsOptional()
+  @IsInt()
+  category_id?: number | null;
+
   @ApiProperty({ required: false }) @IsString() @IsOptional() description?: string;
 
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) max_slots!: number;

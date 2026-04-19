@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 // Logger still used for cycle-detection warning.
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { VolRole } from '../entities/vol-role.entity';
 import { TeamCacheService } from './team-cache.service';
 
@@ -107,6 +107,30 @@ export class TeamRoleHierarchyService {
     } else {
       await this.cache.scanDel('team:leader:*:descendants');
     }
+  }
+
+  /**
+   * v1.8 — Resolve the set of Team (category) IDs a leader manages. Derived
+   * from: leader role + all descendant roles → distinct non-null category_id.
+   *
+   * Used by supply-leader + supply-allocation + leader portal gates so that
+   * every read/write boundary uses the SAME category set.
+   */
+  async resolveManagedCategoryIds(leaderRoleId: number): Promise<Set<number>> {
+    const managedRoleIds = await this.resolveDescendantRoleIds(leaderRoleId, {
+      includeSelf: true,
+    });
+    if (managedRoleIds.size === 0) return new Set();
+
+    const roles = await this.roleRepo.find({
+      where: { id: In(Array.from(managedRoleIds)) },
+      select: { id: true, category_id: true },
+    });
+    const categoryIds = new Set<number>();
+    for (const r of roles) {
+      if (r.category_id != null) categoryIds.add(r.category_id);
+    }
+    return categoryIds;
   }
 
   /**

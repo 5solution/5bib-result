@@ -102,4 +102,23 @@ export class RegistrationDetailDto {
     description: 'Raw patch submitted by TNV. Null when has_pending_changes=false.',
   })
   pending_changes!: Record<string, unknown> | null;
+
+  // Magic-link recovery — admin sees the full token so they can resend it to a
+  // TNV who lost their email. Exposing this adds no new privilege since admin
+  // can already approve/cancel/sign on behalf. Access is audit-logged
+  // (MAGIC_LINK_VIEW) per Danger Zone #5.
+  @ApiProperty({
+    description:
+      'Full crew-portal magic link (e.g. https://crew.5bib.com/status/<token>). Admin-only.',
+  })
+  magic_link!: string;
+
+  @ApiProperty({ description: 'Raw 64-char magic token (admin-only).' })
+  magic_token!: string;
+
+  @ApiProperty({
+    description:
+      'ISO timestamp when the magic token expires. After this, TNV must request a new link.',
+  })
+  magic_token_expires!: string;
 }

@@ -28,7 +28,8 @@ import {
 } from './dto/station.dto';
 import { TeamStationService } from './services/team-station.service';
 
-// v1.6 THAY ĐỔI 1+2: admin-only station CRUD + assignment endpoints.
+// v1.8: stations pivoted from role → category. Routes now group under
+// /team-categories/:categoryId/stations. Old role-scoped routes removed.
 @ApiTags('Team Management (stations)')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -39,7 +40,7 @@ export class TeamStationController {
   @Get('events/:eventId/stations')
   @ApiOperation({
     summary:
-      'v1.6: flat event-wide station list (no role picker). Each row carries role_id + role_name for client-side filtering/grouping.',
+      'v1.6: flat event-wide station list. Each row carries category_id + category_name + category_color for client-side filtering/grouping.',
   })
   @ApiResponse({ status: 200, type: [StationWithAssignmentSummaryDto] })
   listAllStationsInEvent(
@@ -48,27 +49,26 @@ export class TeamStationController {
     return this.stations.listAllStationsInEvent(eventId);
   }
 
-  @Get('events/:eventId/roles/:roleId/stations')
+  @Get('team-categories/:categoryId/stations')
   @ApiOperation({
-    summary: 'List all stations under (event, role) with crew/volunteer summary',
+    summary:
+      'List all stations under a Team (category) with member summary. v1.8 replacement for events/:eventId/roles/:roleId/stations.',
   })
   @ApiResponse({ status: 200, type: [StationWithAssignmentSummaryDto] })
   listStations(
-    @Param('eventId', ParseIntPipe) eventId: number,
-    @Param('roleId', ParseIntPipe) roleId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
   ): Promise<StationWithAssignmentSummaryDto[]> {
-    return this.stations.listStationsWithSummary(eventId, roleId);
+    return this.stations.listStationsWithSummary(categoryId);
   }
 
-  @Post('events/:eventId/roles/:roleId/stations')
-  @ApiOperation({ summary: 'Create a station under (event, role)' })
+  @Post('team-categories/:categoryId/stations')
+  @ApiOperation({ summary: 'Create a station under a Team (category)' })
   @ApiResponse({ status: 201, type: StationWithAssignmentSummaryDto })
   createStation(
-    @Param('eventId', ParseIntPipe) eventId: number,
-    @Param('roleId', ParseIntPipe) roleId: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
     @Body() dto: CreateStationDto,
   ): Promise<StationWithAssignmentSummaryDto> {
-    return this.stations.createStation(eventId, roleId, dto);
+    return this.stations.createStation(categoryId, dto);
   }
 
   @Patch('stations/:id')
@@ -107,7 +107,7 @@ export class TeamStationController {
   @Get('stations/:id/assignable-members')
   @ApiOperation({
     summary:
-      'List members eligible for assignment to this station (same role, approved+, not already assigned, non-leader)',
+      'List members eligible for assignment: same-team roles (any rank), approved+, not already assigned. v1.8: leaders allowed (BR-STN-03 relaxed to warning).',
   })
   @ApiResponse({ status: 200, type: [AssignableMemberDto] })
   listAssignableMembers(
@@ -117,7 +117,10 @@ export class TeamStationController {
   }
 
   @Post('stations/:id/assignments')
-  @ApiOperation({ summary: 'Assign a member to a station (crew or volunteer)' })
+  @ApiOperation({
+    summary:
+      'Assign a member to a station. Supervisor-vs-worker derived from role.is_leader_role.',
+  })
   @ApiResponse({ status: 201, type: AssignmentMemberBriefDto })
   createAssignment(
     @Param('id', ParseIntPipe) id: number,

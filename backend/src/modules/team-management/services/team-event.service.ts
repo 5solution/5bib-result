@@ -23,6 +23,9 @@ import { TeamRoleHierarchyService } from './team-role-hierarchy.service';
 export type VolRoleWithManaged = Omit<VolRole, 'managed_roles'> & {
   managed_role_ids: number[];
   managed_roles: Array<{ id: number; role_name: string }>;
+  // v1.8 — category display fields for admin UI team column
+  category_name: string | null;
+  category_color: string | null;
 };
 
 /**
@@ -194,6 +197,8 @@ export class TeamEventService {
       ...role,
       managed_roles: managed,
       managed_role_ids: managed.map((m) => m.id),
+      category_name: role.category?.name ?? null,
+      category_color: role.category?.color ?? null,
     };
   }
 
@@ -206,8 +211,8 @@ export class TeamEventService {
     }
     const entity = this.eventRepo.create({
       ...dto,
-      location_lat: dto.location_lat != null ? String(dto.location_lat) : null,
-      location_lng: dto.location_lng != null ? String(dto.location_lng) : null,
+      location_lat: dto.location_lat ?? null,
+      location_lng: dto.location_lng ?? null,
       registration_open: new Date(dto.registration_open),
       registration_close: new Date(dto.registration_close),
     });
@@ -238,6 +243,7 @@ export class TeamEventService {
     if (!event) throw new NotFoundException('Event not found');
     const roles = await this.roleRepo.find({
       where: { event_id: id },
+      relations: { category: true },
       order: { sort_order: 'ASC', id: 'ASC' },
     });
     const managedMap = await this.loadManagedForRoles(roles.map((r) => r.id));
@@ -255,8 +261,8 @@ export class TeamEventService {
     }
     Object.assign(event, {
       ...dto,
-      location_lat: dto.location_lat != null ? String(dto.location_lat) : event.location_lat,
-      location_lng: dto.location_lng != null ? String(dto.location_lng) : event.location_lng,
+      location_lat: dto.location_lat != null ? dto.location_lat : event.location_lat,
+      location_lng: dto.location_lng != null ? dto.location_lng : event.location_lng,
       registration_open:
         dto.registration_open != null ? new Date(dto.registration_open) : event.registration_open,
       registration_close:
@@ -314,6 +320,7 @@ export class TeamEventService {
   async listRoles(eventId: number): Promise<VolRoleWithManaged[]> {
     const roles = await this.roleRepo.find({
       where: { event_id: eventId },
+      relations: { category: true },
       order: { sort_order: 'ASC', id: 'ASC' },
     });
     const managedMap = await this.loadManagedForRoles(roles.map((r) => r.id));

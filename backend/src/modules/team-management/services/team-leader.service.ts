@@ -7,15 +7,17 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { VolEvent } from '../entities/vol-event.entity';
 import { VolRole } from '../entities/vol-role.entity';
 import {
   CheckinMethod,
   VolRegistration,
 } from '../entities/vol-registration.entity';
+import { VolTeamCategory } from '../entities/vol-team-category.entity';
 import { TeamCacheService } from './team-cache.service';
 import { TeamPhotoService } from './team-photo.service';
+import { TeamRoleHierarchyService } from './team-role-hierarchy.service';
 
 /**
  * Days of grace after the event ends for leaders to still confirm
@@ -50,6 +52,11 @@ export interface LeaderPortalResponse {
     // so they don't need a roundtrip through the TNV portal.
     chat_platform: 'zalo' | 'telegram' | 'whatsapp' | 'other' | null;
     chat_group_url: string | null;
+    // v1.8: Teams (categories) that this leader manages — derived from
+    // leader role + descendants → distinct non-null category_id. Used by
+    // crew UI to label the portal header with multi-team leader names.
+    managed_category_ids: number[];
+    managed_category_names: string[];
   };
   members: LeaderMemberView[];
 }
@@ -75,8 +82,11 @@ export class TeamLeaderService {
     private readonly roleRepo: Repository<VolRole>,
     @InjectRepository(VolEvent, 'volunteer')
     private readonly eventRepo: Repository<VolEvent>,
+    @InjectRepository(VolTeamCategory, 'volunteer')
+    private readonly categoryRepo: Repository<VolTeamCategory>,
     private readonly cache: TeamCacheService,
     private readonly photos: TeamPhotoService,
+    private readonly hierarchy: TeamRoleHierarchyService,
   ) {}
 
   /**
@@ -167,6 +177,26 @@ export class TeamLeaderService {
     expires.setDate(expires.getDate() + LEADER_PORTAL_GRACE_DAYS);
     expires.setHours(23, 59, 59, 999);
 
+    // v1.8 — resolve Teams (categories) this leader manages. Derived from
+    // leader role + descendants. Empty array for pre-v1.8 roles with null
+    // category_id. Names ordered parallel to IDs.
+    const managedCategoryIdSet = await this.hierarchy.resolveManagedCategoryIds(
+      leaderReg.role_id,
+    );
+    const managedCategoryIds = Array.from(managedCategoryIdSet).sort(
+      (a, b) => a - b,
+    );
+    const managedCategories =
+      managedCategoryIds.length === 0
+        ? []
+        : await this.categoryRepo.find({
+            where: { id: In(managedCategoryIds) },
+            order: { sort_order: 'ASC', id: 'ASC' },
+          });
+    // Re-sort IDs to match name order so the parallel arrays are coherent.
+    const orderedIds = managedCategories.map((c) => c.id);
+    const orderedNames = managedCategories.map((c) => c.name);
+
     // v1.5: leader role is past the contract-signed gate by definition
     // (leader portal already requires an active event). Expose the chat link
     // unconditionally so the leader sees the same join button members get.
@@ -181,6 +211,8 @@ export class TeamLeaderService {
         expires_at: expires.toISOString(),
         chat_platform: leaderReg.role.chat_platform ?? null,
         chat_group_url: leaderReg.role.chat_group_url ?? null,
+        managed_category_ids: orderedIds,
+        managed_category_names: orderedNames,
       },
       members: views,
     };

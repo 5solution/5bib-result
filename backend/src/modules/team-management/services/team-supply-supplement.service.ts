@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { VolRole } from '../entities/vol-role.entity';
 import { VolStation } from '../entities/vol-station.entity';
 import { VolStationAssignment } from '../entities/vol-station-assignment.entity';
@@ -55,8 +55,8 @@ export class TeamSupplySupplementService {
     private readonly hierarchy: TeamRoleHierarchyService,
   ) {}
 
-  /** v1.6 Option B2: BFS-resolved set. Null for admin. */
-  private async resolveActorScopedRoleIds(
+  /** v1.8: BFS-resolved role set → distinct non-null category set. Null for admin. */
+  private async resolveActorScopedCategoryIds(
     actorRoleId: number | null,
   ): Promise<Set<number> | null> {
     if (actorRoleId === null) return null;
@@ -65,13 +65,22 @@ export class TeamSupplySupplementService {
     if (!role.is_leader_role) {
       throw new ForbiddenException('Actor is not a leader role');
     }
-    const managed = await this.hierarchy.resolveDescendantRoleIds(actorRoleId);
-    if (managed.size === 0) {
+    const managedRoles = await this.hierarchy.resolveDescendantRoleIds(actorRoleId);
+    if (managedRoles.size === 0) {
       throw new BadRequestException(
         'Leader role chưa được cấu hình quản lý role nào. Liên hệ admin cấu hình "Quản lý role" trong Role.',
       );
     }
-    return managed;
+    const roles = await this.roleRepo.find({
+      where: { id: In(Array.from(managedRoles)) },
+    });
+    const categoryIds = new Set<number>();
+    for (const r of roles) {
+      if (r.category_id !== null && r.category_id !== undefined) {
+        categoryIds.add(r.category_id);
+      }
+    }
+    return categoryIds;
   }
 
   async listSupplementsForAllocation(
@@ -113,9 +122,9 @@ export class TeamSupplySupplementService {
         'Cannot create supplement: round-1 allocation has not been confirmed yet',
       );
     }
-    // v1.6 Option B2: station.role_id must be in BFS managed set.
-    const scopedRoleIds = await this.resolveActorScopedRoleIds(actorRoleId);
-    if (scopedRoleIds !== null && !scopedRoleIds.has(alloc.station.role_id)) {
+    // v1.8: station.category_id must be in BFS-derived managed category set.
+    const scopedCategoryIds = await this.resolveActorScopedCategoryIds(actorRoleId);
+    if (scopedCategoryIds !== null && !scopedCategoryIds.has(alloc.station.category_id)) {
       throw new ForbiddenException(
         'Leader may only supplement allocations for stations within their managed hierarchy',
       );
@@ -168,11 +177,14 @@ export class TeamSupplySupplementService {
     const reg = await this.allocService.validateCrewToken(token);
     const assignment = await this.assignRepo.findOne({
       where: { registration_id: reg.id },
+      relations: { registration: { role: true } },
     });
     if (!assignment) {
       throw new ForbiddenException('You are not assigned to a station');
     }
-    if (assignment.assignment_role !== 'crew') {
+    // v1.8: assignment_role field dropped. Supervisor-vs-worker derived
+    // from registration.role.is_leader_role — leaders cannot confirm supply.
+    if (assignment.registration?.role?.is_leader_role === true) {
       throw new ForbiddenException(
         'Only crew can confirm supply (BR-SUP-09)',
       );

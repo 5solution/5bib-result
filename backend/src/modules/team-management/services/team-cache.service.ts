@@ -56,13 +56,15 @@ export class TeamCacheService {
 
   static readonly keyPublicEvents = 'team:public:events';
 
-  // v1.6 Stations — admin-side list per (event, role).
+  // v1.8 Stations — admin-side list per (event, category).
+  // Prefix unchanged from v1.6 (`team:event:{id}:stations:*`) so existing
+  // SCAN-based event invalidation keeps working.
   static keyStationsPrefix(eventId: number): string {
     return `team:event:${eventId}:stations:`;
   }
 
-  static keyStations(eventId: number, roleId: number): string {
-    return `${TeamCacheService.keyStationsPrefix(eventId)}${roleId}`;
+  static keyStations(eventId: number, categoryId: number): string {
+    return `${TeamCacheService.keyStationsPrefix(eventId)}${categoryId}`;
   }
 
   // v1.6 Stations — public portal "my station" view per (station, registration).
@@ -84,9 +86,9 @@ export class TeamCacheService {
     return `team:event:${eventId}:supply-overview`;
   }
 
-  // v1.6 Supply — per-role plan (admin + leader)
-  static keySupplyPlan(eventId: number, roleId: number): string {
-    return `team:event:${eventId}:supply-plan:${roleId}`;
+  // v1.8 Supply — per-category plan (admin + leader)
+  static keySupplyPlan(eventId: number, categoryId: number): string {
+    return `team:event:${eventId}:supply-plan:${categoryId}`;
   }
 
   // v1.6 Supply — per-station allocations list
@@ -221,13 +223,19 @@ export class TeamCacheService {
   }
 
   /**
-   * v1.6: Drop the admin "list stations" cache for one event. Optionally
-   * narrow to a single role; otherwise nukes every role under that event.
+   * v1.8: Drop the admin "list stations" cache for one event. Optionally
+   * narrow to a single Team (category); otherwise nukes every category under
+   * that event. (v1.6 used roleId; renamed for semantic accuracy.)
    */
-  async invalidateStations(eventId: number, roleId?: number): Promise<void> {
+  async invalidateStations(
+    eventId: number,
+    categoryId?: number,
+  ): Promise<void> {
     try {
-      if (roleId !== undefined) {
-        await this.redis.del(TeamCacheService.keyStations(eventId, roleId));
+      if (categoryId !== undefined) {
+        await this.redis.del(
+          TeamCacheService.keyStations(eventId, categoryId),
+        );
       } else {
         const keys = await this.scanKeys(
           `${TeamCacheService.keyStationsPrefix(eventId)}*`,
@@ -279,15 +287,18 @@ export class TeamCacheService {
     }
   }
 
-  async invalidateSupplyPlan(eventId: number, roleId: number): Promise<void> {
+  async invalidateSupplyPlan(
+    eventId: number,
+    categoryId: number,
+  ): Promise<void> {
     try {
       await this.redis.del(
-        TeamCacheService.keySupplyPlan(eventId, roleId),
+        TeamCacheService.keySupplyPlan(eventId, categoryId),
         TeamCacheService.keySupplyOverview(eventId),
       );
     } catch (err) {
       this.logger.warn(
-        `Supply-plan cache invalidate failed (event=${eventId}, role=${roleId}): ${(err as Error).message}`,
+        `Supply-plan cache invalidate failed (event=${eventId}, category=${categoryId}): ${(err as Error).message}`,
       );
     }
   }

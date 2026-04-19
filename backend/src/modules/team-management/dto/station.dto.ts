@@ -11,13 +11,12 @@ import {
   Min,
 } from 'class-validator';
 
-// v1.6 THAY ĐỔI 1: Station/sub-team CRUD + assignment DTOs.
+// v1.8: Station/supply giờ thuộc Team (category), không thuộc role cụ thể.
+// `assignment_role` enum (crew/volunteer) đã BỎ — supervisor/worker distinction
+// derive tại read time từ registration.role.is_leader_role.
 
 export const STATION_STATUSES = ['setup', 'active', 'closed'] as const;
 export type StationStatus = (typeof STATION_STATUSES)[number];
-
-export const ASSIGNMENT_ROLES = ['crew', 'volunteer'] as const;
-export type AssignmentRole = (typeof ASSIGNMENT_ROLES)[number];
 
 export class CreateStationDto {
   @ApiProperty({ maxLength: 200 })
@@ -68,9 +67,18 @@ export class CreateAssignmentDto {
   @Min(1)
   registration_id!: number;
 
-  @ApiProperty({ enum: ASSIGNMENT_ROLES })
-  @IsEnum(ASSIGNMENT_ROLES)
-  assignment_role!: AssignmentRole;
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    maxLength: 100,
+    example: 'Phát nước',
+    description:
+      'Chuyên môn / nhiệm vụ cụ thể tại trạm (VD: phát nước, sơ cứu, timing)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  duty?: string | null;
 
   @ApiProperty({ required: false, nullable: true, maxLength: 500 })
   @IsOptional()
@@ -80,20 +88,31 @@ export class CreateAssignmentDto {
 }
 
 // Brief shape used in list/summary responses.
+// `is_supervisor` is DERIVED from registration.role.is_leader_role.
 export class AssignmentMemberBriefDto {
   @ApiProperty() assignment_id!: number;
   @ApiProperty() registration_id!: number;
   @ApiProperty() full_name!: string;
   @ApiProperty() phone!: string;
   @ApiProperty() status!: string;
-  @ApiProperty({ enum: ASSIGNMENT_ROLES })
-  assignment_role!: AssignmentRole;
+  @ApiProperty({
+    description:
+      'Derived: TRUE nếu registration thuộc role có is_leader_role=TRUE',
+  })
+  is_supervisor!: boolean;
+  @ApiProperty({ required: false, nullable: true })
+  role_id!: number | null;
+  @ApiProperty({ required: false, nullable: true })
+  role_name!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  duty!: string | null;
   @ApiProperty({ required: false, nullable: true })
   note!: string | null;
 }
 
 export class StationWithAssignmentSummaryDto {
   @ApiProperty() id!: number;
+  @ApiProperty() event_id!: number;
   @ApiProperty() station_name!: string;
   @ApiProperty({ required: false, nullable: true })
   location_description!: string | null;
@@ -105,15 +124,18 @@ export class StationWithAssignmentSummaryDto {
   status!: StationStatus;
   @ApiProperty() sort_order!: number;
   @ApiProperty() is_active!: boolean;
-  @ApiProperty() role_id!: number;
-  @ApiProperty({ required: false, nullable: true }) role_name!: string | null;
+  @ApiProperty() category_id!: number;
+  @ApiProperty({ required: false, nullable: true })
+  category_name!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  category_color!: string | null;
   @ApiProperty({ type: [AssignmentMemberBriefDto] })
-  crew!: AssignmentMemberBriefDto[];
+  supervisors!: AssignmentMemberBriefDto[];
   @ApiProperty({ type: [AssignmentMemberBriefDto] })
-  volunteers!: AssignmentMemberBriefDto[];
-  @ApiProperty() crew_count!: number;
-  @ApiProperty() volunteer_count!: number;
-  @ApiProperty() has_crew!: boolean;
+  workers!: AssignmentMemberBriefDto[];
+  @ApiProperty() supervisor_count!: number;
+  @ApiProperty() worker_count!: number;
+  @ApiProperty() has_supervisor!: boolean;
 }
 
 // Response for admin "assignable members" lookup — reuses brief shape minus
@@ -124,6 +146,9 @@ export class AssignableMemberDto {
   @ApiProperty() phone!: string;
   @ApiProperty() email!: string;
   @ApiProperty() status!: string;
+  @ApiProperty() role_id!: number;
+  @ApiProperty() role_name!: string;
+  @ApiProperty() is_leader_role!: boolean;
   @ApiProperty({ required: false, nullable: true })
   avatar_url!: string | null;
 }
@@ -132,6 +157,11 @@ export class AssignableMemberDto {
 export class MyStationDetailDto {
   @ApiProperty() id!: number;
   @ApiProperty() station_name!: string;
+  @ApiProperty() category_id!: number;
+  @ApiProperty({ required: false, nullable: true })
+  category_name!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  category_color!: string | null;
   @ApiProperty({ required: false, nullable: true })
   location_description!: string | null;
   @ApiProperty({ required: false, nullable: true })
@@ -147,10 +177,10 @@ export class MyStationDetailDto {
 export class MyStationViewDto {
   @ApiProperty({ type: MyStationDetailDto, required: false, nullable: true })
   station!: MyStationDetailDto | null;
-  @ApiProperty({ enum: ASSIGNMENT_ROLES, required: false, nullable: true })
-  my_assignment_role!: AssignmentRole | null;
+  @ApiProperty({ required: false, nullable: true })
+  my_is_supervisor!: boolean | null;
   @ApiProperty({ type: [AssignmentMemberBriefDto] })
-  crew_list!: AssignmentMemberBriefDto[];
+  supervisor_list!: AssignmentMemberBriefDto[];
   @ApiProperty({ type: [AssignmentMemberBriefDto] })
   teammate_list!: AssignmentMemberBriefDto[];
 }

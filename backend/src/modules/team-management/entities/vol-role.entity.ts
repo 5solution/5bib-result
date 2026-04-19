@@ -12,6 +12,7 @@ import {
 } from 'typeorm';
 import { VolEvent } from './vol-event.entity';
 import { VolContractTemplate } from './vol-contract-template.entity';
+import { VolTeamCategory } from './vol-team-category.entity';
 
 export interface FormFieldConfig {
   key: string;
@@ -33,6 +34,7 @@ export interface FormFieldConfig {
 
 @Entity('vol_role')
 @Index('idx_event', ['event_id'])
+@Index('idx_role_category', ['category_id'])
 export class VolRole {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -43,6 +45,16 @@ export class VolRole {
   @ManyToOne(() => VolEvent, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'event_id' })
   event?: VolEvent;
+
+  // v1.8: Team mà role thuộc về. NULL = floater (role không thuộc team
+  // operational nào — VD "Cố vấn", "Khách mời"). Nếu có → role share
+  // stations + supply với các role khác trong cùng team.
+  @Column({ type: 'int', nullable: true })
+  category_id!: number | null;
+
+  @ManyToOne(() => VolTeamCategory, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'category_id' })
+  category?: VolTeamCategory | null;
 
   @Column({ type: 'varchar', length: 100 })
   role_name!: string;

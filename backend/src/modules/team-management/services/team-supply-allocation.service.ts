@@ -59,12 +59,13 @@ export class TeamSupplyAllocationService {
   ) {}
 
   /**
-   * v1.6 Option B2: resolve the full Set of role_ids a leader actor is
-   * authorized to touch (nested descendants via BFS). Returns null for
-   * admin (actorRoleId === null). Throws 400 for misconfigured leader
-   * (empty managed set) or 403 for non-leader actor.
+   * v1.8: resolve the full Set of category_ids a leader actor is authorized
+   * to touch (derived from BFS-resolved descendant role ids → distinct
+   * non-null category_id). Returns null for admin (actorRoleId === null).
+   * Throws 400 for misconfigured leader (empty managed set) or 403 for
+   * non-leader actor.
    */
-  private async resolveActorScopedRoleIds(
+  private async resolveActorScopedCategoryIds(
     actorRoleId: number | null,
   ): Promise<Set<number> | null> {
     if (actorRoleId === null) return null;
@@ -73,13 +74,22 @@ export class TeamSupplyAllocationService {
     if (!role.is_leader_role) {
       throw new ForbiddenException('Actor is not a leader role');
     }
-    const managed = await this.hierarchy.resolveDescendantRoleIds(actorRoleId);
-    if (managed.size === 0) {
+    const managedRoles = await this.hierarchy.resolveDescendantRoleIds(actorRoleId);
+    if (managedRoles.size === 0) {
       throw new BadRequestException(
         'Leader role chưa được cấu hình quản lý role nào. Liên hệ admin cấu hình "Quản lý role" trong Role.',
       );
     }
-    return managed;
+    const roles = await this.roleRepo.find({
+      where: { id: In(Array.from(managedRoles)) },
+    });
+    const categoryIds = new Set<number>();
+    for (const r of roles) {
+      if (r.category_id !== null && r.category_id !== undefined) {
+        categoryIds.add(r.category_id);
+      }
+    }
+    return categoryIds;
   }
 
   /** List all allocations for a station + the underlying item names. TTL 30s. */
@@ -120,10 +130,10 @@ export class TeamSupplyAllocationService {
     const station = await this.stationRepo.findOne({ where: { id: stationId } });
     if (!station) throw new NotFoundException('Station not found');
 
-    // v1.6 Option B2: leader gate — station.role_id must be in the
-    // BFS-resolved managed set. Admin (null) bypasses.
-    const scopedRoleIds = await this.resolveActorScopedRoleIds(actorRoleId);
-    if (scopedRoleIds !== null && !scopedRoleIds.has(station.role_id)) {
+    // v1.8: leader gate — station.category_id must be in the BFS-resolved
+    // managed category set. Admin (null) bypasses.
+    const scopedCategoryIds = await this.resolveActorScopedCategoryIds(actorRoleId);
+    if (scopedCategoryIds !== null && !scopedCategoryIds.has(station.category_id)) {
       throw new ForbiddenException(
         'Leader may only edit allocations for stations within their managed hierarchy',
       );
@@ -156,14 +166,14 @@ export class TeamSupplyAllocationService {
       const planRepo = m.getRepository(VolSupplyPlan);
 
       for (const entry of dto.allocations) {
-        // Pessimistic lock on plan row for (role, item) — blocks concurrent
+        // Pessimistic lock on plan row for (category, item) — blocks concurrent
         // allocation writers against the same pool.
         const plan = await planRepo
           .createQueryBuilder('p')
           .setLock('pessimistic_write')
           .where(
-            'p.role_id = :roleId AND p.item_id = :itemId',
-            { roleId: station.role_id, itemId: entry.item_id },
+            'p.category_id = :categoryId AND p.item_id = :itemId',
+            { categoryId: station.category_id, itemId: entry.item_id },
           )
           .getOne();
 
@@ -198,13 +208,13 @@ export class TeamSupplyAllocationService {
           }
         }
 
-        // Compute SUM across OTHER stations in the same role + new value,
+        // Compute SUM across OTHER stations in the same category + new value,
         // then compare to fulfilled_qty.
         const otherTotalRaw = await allocRepo
           .createQueryBuilder('a')
           .innerJoin('vol_station', 's', 's.id = a.station_id')
           .select('COALESCE(SUM(a.allocated_qty), 0)', 'total')
-          .where('s.role_id = :roleId', { roleId: station.role_id })
+          .where('s.category_id = :categoryId', { categoryId: station.category_id })
           .andWhere('a.item_id = :iid', { iid: entry.item_id })
           .andWhere('a.station_id != :sid', { sid: stationId })
           .getRawOne<{ total: string }>();
@@ -221,7 +231,7 @@ export class TeamSupplyAllocationService {
         // reject >0 (nothing to allocate from).
         if ((!plan || fulfilled === 0) && entry.allocated_qty > 0) {
           throw new BadRequestException(
-            `Cannot allocate item ${entry.item_id}: admin has not fulfilled any quantity for role ${station.role_id}`,
+            `Cannot allocate item ${entry.item_id}: admin has not fulfilled any quantity for category ${station.category_id}`,
           );
         }
 
@@ -262,12 +272,14 @@ export class TeamSupplyAllocationService {
     const reg = await this.validateCrewToken(token);
     const assignment = await this.assignRepo.findOne({
       where: { registration_id: reg.id },
-      relations: { station: true },
+      relations: { station: true, registration: { role: true } },
     });
     if (!assignment || !assignment.station) {
       throw new ForbiddenException('You are not assigned to a station');
     }
-    if (assignment.assignment_role !== 'crew') {
+    // v1.8: assignment_role field dropped. Supervisor-vs-worker derived
+    // from registration.role.is_leader_role — leaders cannot confirm supply.
+    if (assignment.registration?.role?.is_leader_role === true) {
       throw new ForbiddenException(
         'Only crew can confirm supply (BR-SUP-09)',
       );

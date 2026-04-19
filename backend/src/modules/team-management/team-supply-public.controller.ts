@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Put } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+} from '@nestjs/common';
 import {
   ApiOperation,
   ApiResponse,
@@ -94,27 +103,46 @@ export class TeamSupplyPublicController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary:
-      'Leader upserts requested_qty + request_note for a specific managed role (v1.6 Option B2 — nested).',
+      'v1.8 — Leader upserts requested_qty + request_note for a specific managed TEAM (category). Client passes `target_category_id`; service validates it sits inside the leader\'s managed category set.',
   })
   @ApiResponse({ status: 200, type: [SupplyPlanRowDto] })
   async upsertRequest(
     @Param('token') token: string,
-    @Body() dto: UpsertSupplyPlanRequestDto & { target_role_id?: number },
+    @Body()
+    dto: UpsertSupplyPlanRequestDto & {
+      target_category_id?: number;
+      /** @deprecated v1.8 — kept for legacy clients; ignored if category provided. */
+      target_role_id?: number;
+    },
   ): Promise<SupplyPlanRowDto[]> {
     const leader = await this.leaderSupply.validateLeaderToken(token);
-    // v1.6 Option B2: nested — leader may manage multiple roles. Client
-    // MUST specify which one this plan-write targets (`target_role_id`).
-    // Fallback: if caller omits it (legacy v1.6-Option-A client), pick the
-    // first role in the BFS set — keeps backward compat for single-managed
-    // leaders. Service re-validates membership before writing.
-    const managed = await this.leaderSupply.resolveManagedRoleIds(leader);
-    const targetRoleId =
-      dto.target_role_id && managed.has(dto.target_role_id)
-        ? dto.target_role_id
-        : Array.from(managed)[0];
+    const managedCategorySet =
+      await this.leaderSupply.resolveManagedCategoryIds(leader);
+    if (managedCategorySet.size === 0) {
+      // Leader's managed roles are all floaters (no team) — can't write plans.
+      throw new BadRequestException(
+        'Leader quản lý roles chưa gán Team — không thể đặt supply plan.',
+      );
+    }
+    // Resolve target category.
+    // If client sends an explicit target_category_id, it MUST be in the leader's
+    // managed set — silently falling back would allow cross-team data pollution.
+    let targetCategoryId: number;
+    if (dto.target_category_id !== undefined && dto.target_category_id !== null) {
+      if (!managedCategorySet.has(dto.target_category_id)) {
+        throw new BadRequestException(
+          `target_category_id ${dto.target_category_id} không thuộc quyền quản lý của leader này.`,
+        );
+      }
+      targetCategoryId = dto.target_category_id;
+    } else {
+      // No category specified — fall back to first managed category.
+      // Legacy clients passing only target_role_id (deprecated) also land here.
+      targetCategoryId = Array.from(managedCategorySet)[0];
+    }
     return this.plans.upsertRequest(
       leader.event_id,
-      targetRoleId,
+      targetCategoryId,
       dto,
       leader.role_id,
     );

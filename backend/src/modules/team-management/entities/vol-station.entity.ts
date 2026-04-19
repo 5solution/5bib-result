@@ -9,14 +9,15 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { VolEvent } from './vol-event.entity';
-import { VolRole } from './vol-role.entity';
+import { VolTeamCategory } from './vol-team-category.entity';
 
 export type StationStatus = 'setup' | 'active' | 'closed';
 
-// v1.6: Trạm/sub-team trong mỗi role. Admin/Leader assign people
-// (crew + TNV) xuống trạm. Status lifecycle manual (Danny Q1).
+// v1.8: Trạm thuộc về Team (category), không thuộc role cụ thể.
+// Tất cả role trong cùng team (Leader/Crew/TNV) share quyền assign
+// vào station. Status lifecycle manual (Danny Q1 từ v1.6).
 @Entity('vol_station')
-@Index('idx_station_role', ['role_id', 'status', 'sort_order'])
+@Index('idx_station_category', ['category_id', 'status', 'sort_order'])
 @Index('idx_station_event', ['event_id'])
 export class VolStation {
   @PrimaryGeneratedColumn()
@@ -30,11 +31,11 @@ export class VolStation {
   event?: VolEvent;
 
   @Column({ type: 'int' })
-  role_id!: number;
+  category_id!: number;
 
-  @ManyToOne(() => VolRole, { onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'role_id' })
-  role?: VolRole;
+  @ManyToOne(() => VolTeamCategory, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'category_id' })
+  category?: VolTeamCategory;
 
   @Column({ type: 'varchar', length: 200 })
   station_name!: string;

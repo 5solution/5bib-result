@@ -10,6 +10,7 @@ import { VolContractTemplate } from './entities/vol-contract-template.entity';
 import { VolShirtStock } from './entities/vol-shirt-stock.entity';
 import { VolTeamScheduleEmail } from './entities/vol-team-schedule-email.entity';
 import { VolEventContact } from './entities/vol-event-contact.entity';
+import { VolTeamCategory } from './entities/vol-team-category.entity';
 import { VolStation } from './entities/vol-station.entity';
 import { VolStationAssignment } from './entities/vol-station-assignment.entity';
 import { VolSupplyItem } from './entities/vol-supply-item.entity';
@@ -39,8 +40,11 @@ import { TeamSupplyAllocationService } from './services/team-supply-allocation.s
 import { TeamSupplySupplementService } from './services/team-supply-supplement.service';
 import { TeamSupplyLeaderService } from './services/team-supply-leader.service';
 import { TeamRoleHierarchyService } from './services/team-role-hierarchy.service';
+import { TeamCategoryService } from './services/team-category.service';
+import { TeamRecoverService } from './services/team-recover.service';
 import { TeamManagementController } from './team-management.controller';
 import { TeamRegistrationController } from './team-registration.controller';
+import { TeamRecoverController } from './team-recover.controller';
 import { TeamRegistrationImportController } from './team-registration-import.controller';
 import { TeamContractTemplateController } from './team-contract-template.controller';
 import { TeamCheckinController } from './team-checkin.controller';
@@ -51,6 +55,7 @@ import { TeamDirectoryController } from './team-directory.controller';
 import { TeamStationController } from './team-station.controller';
 import { TeamSupplyController } from './team-supply.controller';
 import { TeamSupplyPublicController } from './team-supply-public.controller';
+import { TeamCategoryController } from './team-category.controller';
 import { env } from 'src/config';
 
 @Module({
@@ -64,6 +69,7 @@ import { env } from 'src/config';
         VolShirtStock,
         VolTeamScheduleEmail,
         VolEventContact,
+        VolTeamCategory,
         VolStation,
         VolStationAssignment,
         VolSupplyItem,
@@ -93,6 +99,8 @@ import { env } from 'src/config';
     TeamStationController,
     TeamSupplyController,
     TeamSupplyPublicController,
+    TeamCategoryController,
+    TeamRecoverController,
   ],
   providers: [
     TeamEventService,
@@ -118,6 +126,8 @@ import { env } from 'src/config';
     TeamSupplySupplementService,
     TeamSupplyLeaderService,
     TeamRoleHierarchyService,
+    TeamCategoryService,
+    TeamRecoverService,
     s3ClientProvider,
     // Make every route within this module subject to @Throttle decorators.
     // Without this provider the @Throttle calls on public endpoints are no-ops.

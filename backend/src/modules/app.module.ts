@@ -26,6 +26,7 @@ import { VolContractTemplate } from './team-management/entities/vol-contract-tem
 import { VolShirtStock } from './team-management/entities/vol-shirt-stock.entity';
 import { VolTeamScheduleEmail } from './team-management/entities/vol-team-schedule-email.entity';
 import { VolEventContact } from './team-management/entities/vol-event-contact.entity';
+import { VolTeamCategory } from './team-management/entities/vol-team-category.entity';
 import { VolStation } from './team-management/entities/vol-station.entity';
 import { VolStationAssignment } from './team-management/entities/vol-station-assignment.entity';
 import { VolSupplyItem } from './team-management/entities/vol-supply-item.entity';
@@ -76,6 +77,7 @@ const volunteerDbModules = env.volunteerDb.host
           VolShirtStock,
           VolTeamScheduleEmail,
           VolEventContact,
+          VolTeamCategory,
           VolStation,
           VolStationAssignment,
           VolSupplyItem,

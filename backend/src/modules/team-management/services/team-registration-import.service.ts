@@ -18,7 +18,6 @@ import { VolEvent } from '../entities/vol-event.entity';
 import { VolRole, FormFieldConfig } from '../entities/vol-role.entity';
 import { VolRegistration } from '../entities/vol-registration.entity';
 import { VolStation } from '../entities/vol-station.entity';
-import type { AssignmentRole } from '../entities/vol-station-assignment.entity';
 import { VN_BANKS } from '../constants/banks';
 import {
   canonEmail,
@@ -83,7 +82,12 @@ const KNOWN_HEADERS = [
   'assignment_role',
 ];
 
-const ASSIGNMENT_ROLE_VALUES: ReadonlyArray<AssignmentRole> = ['crew', 'volunteer'];
+// v1.8: the entity enum has been dropped (derive from registration.role.is_leader_role).
+// The import template still surfaces this column for operator convenience, but
+// the value is NOT persisted on the assignment anymore — only used during
+// import validation to warn when it mismatches the row's role.
+type ImportAssignmentRole = 'crew' | 'volunteer';
+const ASSIGNMENT_ROLE_VALUES: ReadonlyArray<ImportAssignmentRole> = ['crew', 'volunteer'];
 
 type RawRow = Record<string, string>;
 
@@ -101,7 +105,7 @@ interface CachedRow {
   // was provided and validation passed. Carried into confirm step so we
   // can call TeamStationService.createAssignment after the reg lands.
   resolved_station_id: number | null;
-  resolved_assignment_role: AssignmentRole | null;
+  resolved_assignment_role: ImportAssignmentRole | null;
 }
 
 interface CachedImport {
@@ -151,28 +155,24 @@ export class TeamRegistrationImportService {
       order: { sort_order: 'ASC', id: 'ASC' },
     });
 
-    // v1.6: stations for this event, joined with role name for display.
-    // Only include stations in non-leader roles (can't assign into leader role).
+    // v1.8: stations belong to team categories (not roles). Display category name.
     const rolesById = new Map<number, VolRole>();
     for (const r of roles) rolesById.set(r.id, r);
     const stationsRaw = await this.stationRepo.find({
       where: { event_id: eventId },
-      order: { role_id: 'ASC', sort_order: 'ASC', id: 'ASC' },
+      relations: { category: true },
+      order: { category_id: 'ASC', sort_order: 'ASC', id: 'ASC' },
     });
     const stations = stationsRaw
       .map((s) => ({
         id: s.id,
         station_name: s.station_name,
-        role_id: s.role_id,
-        role_name: rolesById.get(s.role_id)?.role_name ?? `(role ${s.role_id})`,
+        category_id: s.category_id,
+        category_name: s.category?.name ?? `(category ${s.category_id})`,
         status: s.status,
-        is_leader_role: rolesById.get(s.role_id)?.is_leader_role === true,
       }))
-      // Sort by role_name then the original sort_order (already applied by DB).
-      .sort((a, b) => a.role_name.localeCompare(b.role_name, 'vi'));
-    const assignableStations = stations.filter(
-      (s) => !s.is_leader_role && s.status !== 'closed',
-    );
+      .sort((a, b) => a.category_name.localeCompare(b.category_name, 'vi'));
+    const assignableStations = stations.filter((s) => s.status !== 'closed');
 
     const wb = new ExcelJS.Workbook();
     wb.creator = '5BIB Team Management';
@@ -236,7 +236,7 @@ export class TeamRegistrationImportService {
     // One example data row (row 2) so admin sees the expected shape.
     const exampleRole = roles.find((r) => r.is_leader_role !== true) ?? roles[0];
     const exampleStation = assignableStations.find(
-      (s) => s.role_id === exampleRole?.id,
+      (s) => s.category_id === exampleRole?.category_id,
     );
     ws.addRow({
       full_name: 'Nguyễn Văn A',
@@ -301,8 +301,8 @@ export class TeamRegistrationImportService {
     stationsWs.columns = [
       { header: 'id', key: 'id', width: 8 },
       { header: 'station_name', key: 'station_name', width: 30 },
-      { header: 'role_id', key: 'role_id', width: 10 },
-      { header: 'role_name', key: 'role_name', width: 30 },
+      { header: 'category_id', key: 'category_id', width: 10 },
+      { header: 'category_name', key: 'category_name', width: 30 },
       { header: 'status', key: 'status', width: 12 },
     ];
     stationsWs.getRow(1).font = { bold: true };
@@ -310,8 +310,8 @@ export class TeamRegistrationImportService {
       stationsWs.addRow({
         id: s.id,
         station_name: s.station_name,
-        role_id: s.role_id,
-        role_name: s.role_name,
+        category_id: s.category_id,
+        category_name: s.category_name,
         status: s.status,
       });
     }
@@ -531,7 +531,7 @@ export class TeamRegistrationImportService {
         .trim()
         .toLowerCase();
       let resolved_station_id: number | null = null;
-      let resolved_assignment_role: AssignmentRole | null = null;
+      let resolved_assignment_role: ImportAssignmentRole | null = null;
 
       if (stationIdRaw) {
         const sid = Number.parseInt(stationIdRaw, 10);
@@ -545,24 +545,24 @@ export class TeamRegistrationImportService {
               `Trạm #${sid} chưa tồn tại — tạo trạm trước rồi import lại để gán`,
             );
           } else {
-            // Station must belong to the same event (already filtered by load).
-            // Must match the row's role_id.
-            if (resolved_role_id !== null && station.role_id !== resolved_role_id) {
+            // v1.8: stations belong to team categories (not roles). The row's
+            // role must be in the same category as the station.
+            const rowRole =
+              resolved_role_id !== null
+                ? rolesById.get(resolved_role_id)
+                : null;
+            const rowCategoryId = rowRole?.category_id ?? null;
+            if (
+              rowCategoryId !== null &&
+              station.category_id !== rowCategoryId
+            ) {
               errors.push(
-                `station_id=${sid} thuộc role ${station.role_id}, không khớp role_id=${resolved_role_id}`,
+                `station_id=${sid} thuộc team ${station.category_id}, không khớp team của role_id=${resolved_role_id} (team=${rowCategoryId})`,
               );
             } else if (station.status === 'closed') {
               errors.push(`Trạm #${sid} đã đóng — không thể gán thêm`);
             } else {
-              const stationRole = rolesById.get(station.role_id);
-              if (stationRole?.is_leader_role === true) {
-                // BR-STN-03: leader roles can't host station assignments.
-                errors.push(
-                  `Trạm #${sid} thuộc role leader — không gán được (BR-STN-03)`,
-                );
-              } else {
-                resolved_station_id = station.id;
-              }
+              resolved_station_id = station.id;
             }
           }
         }
@@ -578,7 +578,7 @@ export class TeamRegistrationImportService {
             'assignment_role được set nhưng không có station_id — sẽ bỏ qua',
           );
         } else {
-          resolved_assignment_role = assignmentRoleRaw as AssignmentRole;
+          resolved_assignment_role = assignmentRoleRaw as ImportAssignmentRole;
         }
       } else if (resolved_station_id !== null) {
         // Default when station_id provided but assignment_role empty.
@@ -811,9 +811,12 @@ export class TeamRegistrationImportService {
             );
           } else {
             try {
+              // v1.8: assignment_role no longer persisted on assignment —
+              // supervisor-vs-worker derives from registration.role.is_leader_role.
+              // The import column is kept for operator-side classification but
+              // not forwarded to createAssignment.
               await this.stationSvc.createAssignment(r.resolved_station_id, {
                 registration_id: result.id,
-                assignment_role: r.resolved_assignment_role,
                 note: null,
               });
               assigned += 1;

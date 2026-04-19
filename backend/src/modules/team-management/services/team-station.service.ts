@@ -6,20 +6,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import {
-  DataSource,
-  In,
-  QueryFailedError,
-  Repository,
-} from 'typeorm';
+import { DataSource, In, QueryFailedError, Repository } from 'typeorm';
 import { VolStation } from '../entities/vol-station.entity';
 import type { StationStatus } from '../entities/vol-station.entity';
 import { VolStationAssignment } from '../entities/vol-station-assignment.entity';
-import type { AssignmentRole } from '../entities/vol-station-assignment.entity';
 import { VolRegistration } from '../entities/vol-registration.entity';
 import type { RegistrationStatus } from '../entities/vol-registration.entity';
 import { VolRole } from '../entities/vol-role.entity';
 import { VolEvent } from '../entities/vol-event.entity';
+import { VolTeamCategory } from '../entities/vol-team-category.entity';
 import {
   AssignableMemberDto,
   AssignmentMemberBriefDto,
@@ -66,6 +61,8 @@ export class TeamStationService {
     private readonly roleRepo: Repository<VolRole>,
     @InjectRepository(VolEvent, 'volunteer')
     private readonly eventRepo: Repository<VolEvent>,
+    @InjectRepository(VolTeamCategory, 'volunteer')
+    private readonly categoryRepo: Repository<VolTeamCategory>,
     private readonly cache: TeamCacheService,
     private readonly directory: TeamDirectoryService,
   ) {}
@@ -75,38 +72,38 @@ export class TeamStationService {
   // ──────────────────────────────────────────────────────────────────────
 
   /**
-   * List every station under (event, role), enriched with assignments split
-   * into crew vs volunteer. Redis-cached per-(event,role) for 60s.
+   * v1.8 — list every station under a Team (category), enriched with
+   * supervisor/worker split. Redis-cached per-category for 60s.
    */
   async listStationsWithSummary(
-    eventId: number,
-    roleId: number,
+    categoryId: number,
   ): Promise<StationWithAssignmentSummaryDto[]> {
-    await this.assertEventAndRole(eventId, roleId);
+    const category = await this.assertCategory(categoryId);
 
-    const cacheKey = TeamCacheService.keyStations(eventId, roleId);
+    const cacheKey = TeamCacheService.keyStations(category.event_id, categoryId);
     const cached =
       await this.cache.getJson<StationWithAssignmentSummaryDto[]>(cacheKey);
     if (cached) return cached;
 
     const stations = await this.stationRepo.find({
-      where: { event_id: eventId, role_id: roleId },
+      where: { category_id: categoryId },
+      relations: { category: true },
       order: { sort_order: 'ASC', id: 'ASC' },
     });
     return this.enrichStations(stations, cacheKey);
   }
 
   /**
-   * v1.6 — flat event-wide list for the new Trạm page (no role picker).
-   * Each station carries role_id + role_name so UI can group or filter.
+   * v1.8 — flat event-wide list (no picker). Each station carries
+   * category_id + category_name + category_color for client-side grouping.
    */
   async listAllStationsInEvent(
     eventId: number,
   ): Promise<StationWithAssignmentSummaryDto[]> {
     const stations = await this.stationRepo.find({
       where: { event_id: eventId },
-      relations: { role: true },
-      order: { role_id: 'ASC', sort_order: 'ASC', id: 'ASC' },
+      relations: { category: true },
+      order: { category_id: 'ASC', sort_order: 'ASC', id: 'ASC' },
     });
     return this.enrichStations(stations);
   }
@@ -121,10 +118,12 @@ export class TeamStationService {
       return empty;
     }
     const stationIds = stations.map((s) => s.id);
+    // Load assignments with their registration + the registration's role
+    // (we need role.is_leader_role to derive supervisor/worker).
     const assignments = await this.assignmentRepo.find({
       where: { station_id: In(stationIds) },
-      relations: { registration: true },
-      order: { assignment_role: 'ASC', sort_order: 'ASC', id: 'ASC' },
+      relations: { registration: { role: true } },
+      order: { sort_order: 'ASC', id: 'ASC' },
     });
 
     const byStation = new Map<number, VolStationAssignment[]>();
@@ -134,20 +133,21 @@ export class TeamStationService {
       byStation.set(a.station_id, bucket);
     }
 
-    const result = stations.map((s) => this.toStationSummary(s, byStation.get(s.id) ?? []));
+    const result = stations.map((s) =>
+      this.toStationSummary(s, byStation.get(s.id) ?? []),
+    );
     if (cacheKey) await this.cache.setJson(cacheKey, result, STATION_LIST_TTL_SECONDS);
     return result;
   }
 
   async createStation(
-    eventId: number,
-    roleId: number,
+    categoryId: number,
     dto: CreateStationDto,
   ): Promise<StationWithAssignmentSummaryDto> {
-    await this.assertEventAndRole(eventId, roleId);
+    const category = await this.assertCategory(categoryId);
     const row = this.stationRepo.create({
-      event_id: eventId,
-      role_id: roleId,
+      event_id: category.event_id,
+      category_id: categoryId,
       station_name: dto.station_name.trim(),
       location_description: dto.location_description?.trim() ?? null,
       gps_lat: this.numberToDecimalString(dto.gps_lat),
@@ -157,9 +157,10 @@ export class TeamStationService {
       is_active: true,
     });
     const saved = await this.stationRepo.save(row);
-    await this.cache.invalidateStations(eventId, roleId);
+    saved.category = category;
+    await this.cache.invalidateStations(category.event_id, categoryId);
     this.logger.log(
-      `STATION_CREATE event=${eventId} role=${roleId} id=${saved.id} name="${saved.station_name}"`,
+      `STATION_CREATE event=${category.event_id} category=${categoryId} id=${saved.id} name="${saved.station_name}"`,
     );
     return this.toStationSummary(saved, []);
   }
@@ -168,7 +169,10 @@ export class TeamStationService {
     id: number,
     dto: UpdateStationDto,
   ): Promise<StationWithAssignmentSummaryDto> {
-    const row = await this.stationRepo.findOne({ where: { id } });
+    const row = await this.stationRepo.findOne({
+      where: { id },
+      relations: { category: true },
+    });
     if (!row) throw new NotFoundException('Station not found');
 
     if (dto.station_name !== undefined) row.station_name = dto.station_name.trim();
@@ -186,13 +190,13 @@ export class TeamStationService {
     if (dto.sort_order !== undefined) row.sort_order = dto.sort_order;
 
     const saved = await this.stationRepo.save(row);
-    await this.cache.invalidateStations(saved.event_id, saved.role_id);
+    await this.cache.invalidateStations(saved.event_id, saved.category_id);
     await this.cache.invalidateStation(saved.id);
 
     const assignments = await this.assignmentRepo.find({
       where: { station_id: saved.id },
-      relations: { registration: true },
-      order: { assignment_role: 'ASC', sort_order: 'ASC', id: 'ASC' },
+      relations: { registration: { role: true } },
+      order: { sort_order: 'ASC', id: 'ASC' },
     });
     return this.toStationSummary(saved, assignments);
   }
@@ -207,17 +211,20 @@ export class TeamStationService {
     id: number,
     newStatus: StationStatus,
   ): Promise<StationWithAssignmentSummaryDto> {
-    const row = await this.stationRepo.findOne({ where: { id } });
+    const row = await this.stationRepo.findOne({
+      where: { id },
+      relations: { category: true },
+    });
     if (!row) throw new NotFoundException('Station not found');
     row.status = newStatus;
     const saved = await this.stationRepo.save(row);
-    await this.cache.invalidateStations(saved.event_id, saved.role_id);
+    await this.cache.invalidateStations(saved.event_id, saved.category_id);
     await this.cache.invalidateStation(saved.id);
 
     const assignments = await this.assignmentRepo.find({
       where: { station_id: saved.id },
-      relations: { registration: true },
-      order: { assignment_role: 'ASC', sort_order: 'ASC', id: 'ASC' },
+      relations: { registration: { role: true } },
+      order: { sort_order: 'ASC', id: 'ASC' },
     });
     return this.toStationSummary(saved, assignments);
   }
@@ -229,11 +236,11 @@ export class TeamStationService {
     if (count > 0) {
       throw new ConflictException(`Trạm có ${count} người đang được gán`);
     }
-    const { event_id: eventId, role_id: roleId } = row;
+    const { event_id: eventId, category_id: categoryId } = row;
     await this.stationRepo.remove(row);
-    await this.cache.invalidateStations(eventId, roleId);
+    await this.cache.invalidateStations(eventId, categoryId);
     await this.cache.invalidateStation(id);
-    this.logger.log(`STATION_DELETE event=${eventId} role=${roleId} id=${id}`);
+    this.logger.log(`STATION_DELETE event=${eventId} category=${categoryId} id=${id}`);
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -241,37 +248,34 @@ export class TeamStationService {
   // ──────────────────────────────────────────────────────────────────────
 
   /**
-   * List every member who COULD be assigned to this station:
-   *  - same event + same role as the station
+   * v1.8 — list every member who COULD be assigned to this station:
+   *  - same event + role.category_id === station.category_id (ANY rank)
    *  - registration.status ∈ POST_APPROVE_SET
    *  - NOT currently assigned to any station (UNIQUE registration_id)
-   *  - role.is_leader_role = FALSE (BR-STN-03 — leaders can't be assigned)
+   *
+   * BR-STN-03 v1.8 RELAXED: leaders are RETURNED in the list. The UI may
+   * surface a warning when assigning a leader, but the service no longer
+   * blocks. Rationale: operator may want a leader to "cầm trạm" in edge cases.
    */
   async listAssignableMembers(stationId: number): Promise<AssignableMemberDto[]> {
     const station = await this.stationRepo.findOne({
       where: { id: stationId },
-      relations: { role: true },
+      relations: { category: true },
     });
     if (!station) throw new NotFoundException('Station not found');
 
-    // Leaders are gated out at the role level — if the station's role itself
-    // is a leader role we return [] because there's no one valid to assign.
-    if (station.role?.is_leader_role === true) return [];
-
     const rows = await this.regRepo
       .createQueryBuilder('r')
-      .leftJoin(
-        VolStationAssignment,
-        'a',
-        'a.registration_id = r.id',
-      )
+      .leftJoin(VolStationAssignment, 'a', 'a.registration_id = r.id')
+      .leftJoinAndSelect('r.role', 'role')
       .where('r.event_id = :eid', { eid: station.event_id })
-      .andWhere('r.role_id = :rid', { rid: station.role_id })
+      .andWhere('role.category_id = :cid', { cid: station.category_id })
       .andWhere('r.status IN (:...statuses)', {
         statuses: Array.from(POST_APPROVE_SET),
       })
       .andWhere('a.id IS NULL')
-      .orderBy('r.full_name', 'ASC')
+      .orderBy('role.is_leader_role', 'DESC')
+      .addOrderBy('r.full_name', 'ASC')
       .getMany();
 
     return rows.map((r) => ({
@@ -280,6 +284,9 @@ export class TeamStationService {
       phone: r.phone,
       email: r.email,
       status: r.status,
+      role_id: r.role?.id ?? r.role_id,
+      role_name: r.role?.role_name ?? '',
+      is_leader_role: r.role?.is_leader_role === true,
       avatar_url: r.avatar_photo_url ?? null,
     }));
   }
@@ -289,16 +296,17 @@ export class TeamStationService {
    * with a pessimistic-write lock on the registration row. That plus the DB
    * UNIQUE constraint guarantees we never double-assign the same person if
    * two admins click "Assign" at the same moment.
+   *
+   * v1.8: supervisor/worker derived — not stored on the assignment.
    */
   async createAssignment(
     stationId: number,
     dto: CreateAssignmentDto,
   ): Promise<AssignmentMemberBriefDto> {
-    const { saved, eventId, roleId } = await this.dataSource.transaction(
+    const { saved, eventId, categoryId } = await this.dataSource.transaction(
       async (m) => {
         const station = await m.getRepository(VolStation).findOne({
           where: { id: stationId },
-          relations: { role: true },
         });
         if (!station) throw new NotFoundException('Station not found');
 
@@ -316,14 +324,10 @@ export class TeamStationService {
         if (reg.event_id !== station.event_id) {
           throw new BadRequestException('Registration belongs to a different event');
         }
-        if (reg.role_id !== station.role_id) {
+        if (!reg.role || reg.role.category_id !== station.category_id) {
           throw new BadRequestException(
-            'Registration role does not match station role',
+            'Registration role không thuộc team (category) của trạm',
           );
-        }
-        // BR-STN-03: leaders can't be assigned.
-        if (reg.role?.is_leader_role === true) {
-          throw new BadRequestException('Không thể gán leader vào trạm');
         }
         // BR-STN-02: must be past approval gate.
         if (!POST_APPROVE_SET.has(reg.status)) {
@@ -331,12 +335,18 @@ export class TeamStationService {
             `Registration status "${reg.status}" chưa đủ điều kiện gán trạm`,
           );
         }
+        // v1.8: Leader có thể assign — chỉ log warning.
+        if (reg.role.is_leader_role === true) {
+          this.logger.warn(
+            `LEADER_ASSIGNED station=${station.id} reg=${reg.id} role=${reg.role.id} — unusual pattern`,
+          );
+        }
 
         const row = m.getRepository(VolStationAssignment).create({
           station_id: station.id,
           registration_id: reg.id,
-          assignment_role: dto.assignment_role,
-          note: dto.note?.trim() ?? null,
+          duty: dto.duty?.trim() ? dto.duty.trim() : null,
+          note: dto.note?.trim() ? dto.note.trim() : null,
           sort_order: 0,
         });
 
@@ -359,22 +369,21 @@ export class TeamStationService {
         return {
           saved: persisted,
           eventId: station.event_id,
-          roleId: station.role_id,
-          reg,
+          categoryId: station.category_id,
         };
       },
     );
 
-    await this.cache.invalidateStations(eventId, roleId);
+    await this.cache.invalidateStations(eventId, categoryId);
     await this.cache.invalidateStation(stationId);
     this.logger.log(
-      `STATION_ASSIGN station=${stationId} reg=${dto.registration_id} role=${dto.assignment_role}`,
+      `STATION_ASSIGN station=${stationId} reg=${dto.registration_id}`,
     );
 
-    // Reload with registration relation so we can build the brief.
+    // Reload with registration + role so we can build the brief.
     const withReg = await this.assignmentRepo.findOne({
       where: { id: saved.id },
-      relations: { registration: true },
+      relations: { registration: { role: true } },
     });
     if (!withReg) {
       // Shouldn't happen — we just saved it.
@@ -391,10 +400,10 @@ export class TeamStationService {
     if (!row) throw new NotFoundException('Assignment not found');
     const stationId = row.station_id;
     const eventId = row.station?.event_id ?? null;
-    const roleId = row.station?.role_id ?? null;
+    const categoryId = row.station?.category_id ?? null;
     await this.assignmentRepo.remove(row);
-    if (eventId !== null && roleId !== null) {
-      await this.cache.invalidateStations(eventId, roleId);
+    if (eventId !== null && categoryId !== null) {
+      await this.cache.invalidateStations(eventId, categoryId);
     }
     await this.cache.invalidateStation(stationId);
     this.logger.log(`STATION_UNASSIGN station=${stationId} assignment=${assignmentId}`);
@@ -405,24 +414,24 @@ export class TeamStationService {
   // ──────────────────────────────────────────────────────────────────────
 
   /**
-   * Portal endpoint used by TNV/Crew. Validates the magic token, finds the
+   * Portal endpoint used by TNV/Crew/Leader. Validates magic token, finds
    * caller's assignment (if any), then loads sibling assignments on the same
-   * station and splits them into crew_list + teammate_list.
+   * station and splits them into supervisor_list + teammate_list.
    *
-   * If the caller has no assignment yet, returns an empty-station payload so
-   * the frontend can render a friendly "chưa được gán" state rather than 404.
+   * v1.8: supervisor/worker split derived from each sibling's role flag.
    */
   async getMyStationView(token: string): Promise<MyStationViewDto> {
     const reg = await this.directory.validateMemberToken(token);
 
     const assignment = await this.assignmentRepo.findOne({
       where: { registration_id: reg.id },
+      relations: { registration: { role: true } },
     });
     if (!assignment) {
       return {
         station: null,
-        my_assignment_role: null,
-        crew_list: [],
+        my_is_supervisor: null,
+        supervisor_list: [],
         teammate_list: [],
       };
     }
@@ -436,34 +445,38 @@ export class TeamStationService {
 
     const station = await this.stationRepo.findOne({
       where: { id: assignment.station_id },
+      relations: { category: true },
     });
     if (!station) {
       // Assignment exists but station was hard-deleted under it — defensive.
       return {
         station: null,
-        my_assignment_role: null,
-        crew_list: [],
+        my_is_supervisor: null,
+        supervisor_list: [],
         teammate_list: [],
       };
     }
 
     const siblings = await this.assignmentRepo.find({
       where: { station_id: station.id },
-      relations: { registration: true },
-      order: { assignment_role: 'ASC', sort_order: 'ASC', id: 'ASC' },
+      relations: { registration: { role: true } },
+      order: { sort_order: 'ASC', id: 'ASC' },
     });
 
-    const crew_list: AssignmentMemberBriefDto[] = [];
+    const supervisor_list: AssignmentMemberBriefDto[] = [];
     const teammate_list: AssignmentMemberBriefDto[] = [];
     for (const s of siblings) {
       const brief = this.toAssignmentBrief(s);
-      if (s.assignment_role === 'crew') {
-        crew_list.push(brief);
+      if (brief.is_supervisor) {
+        supervisor_list.push(brief);
       } else if (s.registration_id !== reg.id) {
-        // teammate_list excludes the caller themselves (spec: "exclude self").
+        // teammate_list excludes the caller themselves.
         teammate_list.push(brief);
       }
     }
+
+    const myIsSupervisor =
+      assignment.registration?.role?.is_leader_role === true;
 
     const gpsLat = station.gps_lat;
     const gpsLng = station.gps_lng;
@@ -476,14 +489,17 @@ export class TeamStationService {
       station: {
         id: station.id,
         station_name: station.station_name,
+        category_id: station.category_id,
+        category_name: station.category?.name ?? null,
+        category_color: station.category?.color ?? null,
         location_description: station.location_description,
         gps_lat: gpsLat,
         gps_lng: gpsLng,
         google_maps_url,
         status: station.status,
       },
-      my_assignment_role: assignment.assignment_role,
-      crew_list,
+      my_is_supervisor: myIsSupervisor,
+      supervisor_list,
       teammate_list,
     };
     await this.cache.setJson(cacheKey, response, MY_STATION_TTL_SECONDS);
@@ -498,15 +514,16 @@ export class TeamStationService {
     station: VolStation,
     assignments: VolStationAssignment[],
   ): StationWithAssignmentSummaryDto {
-    const crew: AssignmentMemberBriefDto[] = [];
-    const volunteers: AssignmentMemberBriefDto[] = [];
+    const supervisors: AssignmentMemberBriefDto[] = [];
+    const workers: AssignmentMemberBriefDto[] = [];
     for (const a of assignments) {
       const brief = this.toAssignmentBrief(a);
-      if (a.assignment_role === 'crew') crew.push(brief);
-      else volunteers.push(brief);
+      if (brief.is_supervisor) supervisors.push(brief);
+      else workers.push(brief);
     }
     return {
       id: station.id,
+      event_id: station.event_id,
       station_name: station.station_name,
       location_description: station.location_description,
       gps_lat: station.gps_lat,
@@ -514,36 +531,39 @@ export class TeamStationService {
       status: station.status,
       sort_order: station.sort_order,
       is_active: station.is_active,
-      role_id: station.role_id,
-      role_name: station.role?.role_name ?? null,
-      crew,
-      volunteers,
-      crew_count: crew.length,
-      volunteer_count: volunteers.length,
-      has_crew: crew.length > 0,
+      category_id: station.category_id,
+      category_name: station.category?.name ?? null,
+      category_color: station.category?.color ?? null,
+      supervisors,
+      workers,
+      supervisor_count: supervisors.length,
+      worker_count: workers.length,
+      has_supervisor: supervisors.length > 0,
     };
   }
 
   private toAssignmentBrief(a: VolStationAssignment): AssignmentMemberBriefDto {
+    const role = a.registration?.role;
     return {
       assignment_id: a.id,
       registration_id: a.registration_id,
       full_name: a.registration?.full_name ?? '',
       phone: a.registration?.phone ?? '',
       status: a.registration?.status ?? '',
-      assignment_role: a.assignment_role as AssignmentRole,
+      is_supervisor: role?.is_leader_role === true,
+      role_id: role?.id ?? null,
+      role_name: role?.role_name ?? null,
+      duty: a.duty,
       note: a.note,
     };
   }
 
-  private async assertEventAndRole(eventId: number, roleId: number): Promise<void> {
-    const event = await this.eventRepo.exist({ where: { id: eventId } });
-    if (!event) throw new NotFoundException('Event not found');
-    const role = await this.roleRepo.findOne({ where: { id: roleId } });
-    if (!role) throw new NotFoundException('Role not found');
-    if (role.event_id !== eventId) {
-      throw new BadRequestException('Role does not belong to this event');
-    }
+  private async assertCategory(categoryId: number): Promise<VolTeamCategory> {
+    const category = await this.categoryRepo.findOne({
+      where: { id: categoryId },
+    });
+    if (!category) throw new NotFoundException('Team (category) not found');
+    return category;
   }
 
   /** Mirror of the TypeORM decimal-string convention (entity stores as string). */

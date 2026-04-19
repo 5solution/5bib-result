@@ -10,13 +10,13 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { VolEvent } from './vol-event.entity';
-import { VolRole } from './vol-role.entity';
+import { VolTeamCategory } from './vol-team-category.entity';
 import { VolSupplyItem } from './vol-supply-item.entity';
 
-// v1.6: Leader order + Admin fulfill = 2 con số riêng.
-// gap_qty auto-compute by MariaDB STORED generated column.
+// v1.8: Supply-plan thuộc về Team (category), không thuộc role cụ thể.
+// Leader của team đại diện đặt hàng; admin fulfill. gap_qty tự tính.
 @Entity('vol_supply_plan')
-@Unique('uq_plan_role_item', ['role_id', 'item_id'])
+@Unique('uq_plan_category_item', ['event_id', 'category_id', 'item_id'])
 @Index('idx_plan_event', ['event_id'])
 export class VolSupplyPlan {
   @PrimaryGeneratedColumn()
@@ -30,11 +30,11 @@ export class VolSupplyPlan {
   event?: VolEvent;
 
   @Column({ type: 'int' })
-  role_id!: number;
+  category_id!: number;
 
-  @ManyToOne(() => VolRole, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'role_id' })
-  role?: VolRole;
+  @ManyToOne(() => VolTeamCategory, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'category_id' })
+  category?: VolTeamCategory;
 
   @Column({ type: 'int' })
   item_id!: number;
