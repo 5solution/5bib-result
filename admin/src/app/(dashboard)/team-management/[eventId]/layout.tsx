@@ -27,6 +27,9 @@ const ITEMS: NavItem[] = [
   { slug: "schedule-emails", label: "Email lịch trình" },
   { slug: "scan", label: "Scan QR" },
   { slug: "export", label: "Xuất báo cáo" },
+  // v1.8 — Edit event metadata (registration window, location, T&C, etc.)
+  // Placed last so the everyday workflow tabs stay on the left.
+  { slug: "settings", label: "Cấu hình" },
 ];
 
 export default function EventLayout({
