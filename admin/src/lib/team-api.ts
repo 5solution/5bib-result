@@ -24,9 +24,104 @@ export interface TeamEvent {
   updated_at: string;
 }
 
+// v1.8 — Team (category) layer. Roles belong to a Team; Team owns stations +
+// supply plan. See backend/src/modules/team-management/dto/team-category.dto.ts
+export interface TeamCategory {
+  id: number;
+  event_id: number;
+  name: string;
+  slug: string;
+  color: string;
+  sort_order: number;
+  description: string | null;
+  role_count: number;
+  station_count: number;
+  supply_plan_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateTeamCategoryInput {
+  name: string;
+  slug?: string;
+  color?: string;
+  sort_order?: number;
+  description?: string | null;
+}
+
+export type UpdateTeamCategoryInput = Partial<CreateTeamCategoryInput>;
+
+export async function listTeamCategories(
+  token: string,
+  eventId: number,
+): Promise<TeamCategory[]> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/team-categories`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function createTeamCategory(
+  token: string,
+  eventId: number,
+  dto: CreateTeamCategoryInput,
+): Promise<TeamCategory> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/team-categories`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(dto),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getTeamCategory(
+  token: string,
+  id: number,
+): Promise<TeamCategory> {
+  const res = await fetch(`/api/team-management/team-categories/${id}`, {
+    headers: authedHeaders(token),
+    cache: "no-store",
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateTeamCategory(
+  token: string,
+  id: number,
+  dto: UpdateTeamCategoryInput,
+): Promise<TeamCategory> {
+  const res = await fetch(`/api/team-management/team-categories/${id}`, {
+    method: "PATCH",
+    headers: authedHeaders(token),
+    body: JSON.stringify(dto),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function deleteTeamCategory(
+  token: string,
+  id: number,
+): Promise<void> {
+  const res = await fetch(`/api/team-management/team-categories/${id}`, {
+    method: "DELETE",
+    headers: authedHeaders(token),
+  });
+  await assertOk(res);
+}
+
 export interface TeamRole {
   id: number;
   event_id: number;
+  // v1.8 — optional Team (category) the role belongs to. null = unassigned.
+  category_id?: number | null;
   role_name: string;
   description: string | null;
   max_slots: number;
@@ -120,6 +215,8 @@ export interface CreateRoleInput {
   // v1.4/v1.6 Option B2 — leader role + multi-select managed roles.
   is_leader_role?: boolean;
   manages_role_ids?: number[];
+  // v1.8 — optional Team (category) assignment. null clears explicitly.
+  category_id?: number | null;
 }
 
 export type UpdateRoleInput = Partial<CreateRoleInput>;
@@ -506,6 +603,10 @@ export interface RegistrationDetail extends RegistrationListRow {
   has_pending_changes: boolean;
   pending_changes: Record<string, unknown> | null;
   pending_changes_submitted_at: string | null;
+  // Magic-link recovery (admin-only) — full crew-portal URL + raw token + expiry
+  magic_link: string;
+  magic_token: string;
+  magic_token_expires: string;
 }
 
 export async function approveProfileChanges(
@@ -1365,6 +1466,9 @@ export async function deleteEventContact(
 // ──────────────────────────────────────────────────────────────────────
 
 export type StationStatus = "setup" | "active" | "closed";
+// v1.8 — assignment_role enum DEPRECATED. supervisor/worker distinction is now
+// DERIVED from registration.role.is_leader_role at read-time. Kept only as a
+// typedef placeholder for old code paths; new code uses is_supervisor boolean.
 export type AssignmentRole = "crew" | "volunteer";
 
 export interface AssignmentMember {
@@ -1373,7 +1477,12 @@ export interface AssignmentMember {
   full_name: string;
   phone: string;
   status: string;
-  assignment_role: AssignmentRole;
+  // v1.8 — derived from role.is_leader_role
+  is_supervisor: boolean;
+  role_id: number | null;
+  role_name: string | null;
+  // v1.7 — chuyên môn cụ thể tại trạm
+  duty: string | null;
   note: string | null;
 }
 
@@ -1386,13 +1495,16 @@ export interface Station {
   status: StationStatus;
   sort_order: number;
   is_active: boolean;
-  role_id: number;
-  role_name: string | null;
-  crew: AssignmentMember[];
-  volunteers: AssignmentMember[];
-  crew_count: number;
-  volunteer_count: number;
-  has_crew: boolean;
+  event_id: number;
+  // v1.8 — station now belongs to Team (category), not role.
+  category_id: number;
+  category_name: string | null;
+  category_color: string | null;
+  supervisors: AssignmentMember[];
+  workers: AssignmentMember[];
+  supervisor_count: number;
+  worker_count: number;
+  has_supervisor: boolean;
 }
 
 /**
@@ -1418,6 +1530,11 @@ export interface AssignableMember {
   email: string;
   status: string;
   avatar_url: string | null;
+  // v1.8 — caller knows whether this member is from a leader-role (rendered
+  // as 👑 in the modal, assigned as supervisor automatically).
+  role_id: number;
+  role_name: string;
+  is_leader_role: boolean;
 }
 
 export interface CreateStationInput {
@@ -1432,17 +1549,17 @@ export type UpdateStationInput = Partial<CreateStationInput>;
 
 export interface CreateAssignmentInput {
   registration_id: number;
-  assignment_role: AssignmentRole;
+  // v1.8 — assignment_role REMOVED. supervisor/worker derives from role.is_leader_role
+  duty?: string | null;
   note?: string | null;
 }
 
-export async function listStations(
+export async function listStationsByCategory(
   token: string,
-  eventId: number,
-  roleId: number,
+  categoryId: number,
 ): Promise<Station[]> {
   const res = await fetch(
-    `/api/team-management/events/${eventId}/roles/${roleId}/stations`,
+    `/api/team-management/team-categories/${categoryId}/stations`,
     { headers: authedHeaders(token), cache: "no-store" },
   );
   await assertOk(res);
@@ -1451,12 +1568,11 @@ export async function listStations(
 
 export async function createStation(
   token: string,
-  eventId: number,
-  roleId: number,
+  categoryId: number,
   dto: CreateStationInput,
 ): Promise<Station> {
   const res = await fetch(
-    `/api/team-management/events/${eventId}/roles/${roleId}/stations`,
+    `/api/team-management/team-categories/${categoryId}/stations`,
     {
       method: "POST",
       headers: authedHeaders(token),
@@ -1745,24 +1861,75 @@ export async function deleteSupplyItem(
 export async function getSupplyPlan(
   token: string,
   eventId: number,
-  roleId: number,
+  categoryId: number,
 ): Promise<SupplyPlanRow[]> {
+  // v1.8: routes moved from role-scoped to team-category-scoped.
   const res = await fetch(
-    `/api/team-management/events/${eventId}/roles/${roleId}/supply-plan`,
+    `/api/team-management/events/${eventId}/team-categories/${categoryId}/supply-plan`,
     { headers: authedHeaders(token), cache: "no-store" },
   );
   await assertOk(res);
   return res.json();
 }
 
+// v1.8 — Team (category) level supply view. Backend supply-overview returns
+// cells keyed by "role_id" which semantically carries the category id in v1.8.
+// We filter down to this category's cells and flatten into SupplyPlanRow-ish
+// rows for the /teams/:teamId/supply tab.
+export async function getSupplyPlanByCategory(
+  token: string,
+  eventId: number,
+  categoryId: number,
+): Promise<
+  Array<{
+    item_id: number;
+    item_name: string;
+    unit: string;
+    requested_qty: number;
+    fulfilled_qty: number | null;
+    gap_qty: number | null;
+    allocated_qty: number;
+    confirmed_qty: number;
+  }>
+> {
+  const overview = await getSupplyOverview(token, eventId);
+  const out: Array<{
+    item_id: number;
+    item_name: string;
+    unit: string;
+    requested_qty: number;
+    fulfilled_qty: number | null;
+    gap_qty: number | null;
+    allocated_qty: number;
+    confirmed_qty: number;
+  }> = [];
+  for (const row of overview.items) {
+    const cell = row.cells.find((c) => c.role_id === categoryId);
+    if (!cell) continue;
+    if (cell.requested_qty === 0 && cell.fulfilled_qty == null) continue;
+    out.push({
+      item_id: row.item_id,
+      item_name: row.item_name,
+      unit: row.unit,
+      requested_qty: cell.requested_qty,
+      fulfilled_qty: cell.fulfilled_qty,
+      gap_qty: cell.gap_qty,
+      allocated_qty: cell.allocated_qty,
+      confirmed_qty: cell.confirmed_qty,
+    });
+  }
+  return out;
+}
+
 export async function upsertSupplyPlanRequest(
   token: string,
   eventId: number,
-  roleId: number,
+  categoryId: number,
   input: UpsertSupplyPlanRequestInput,
 ): Promise<SupplyPlanRow[]> {
+  // v1.8: team-category-scoped route.
   const res = await fetch(
-    `/api/team-management/events/${eventId}/roles/${roleId}/supply-plan/request`,
+    `/api/team-management/events/${eventId}/team-categories/${categoryId}/supply-plan/request`,
     {
       method: "PUT",
       headers: authedHeaders(token),
@@ -1776,11 +1943,12 @@ export async function upsertSupplyPlanRequest(
 export async function upsertSupplyPlanFulfill(
   token: string,
   eventId: number,
-  roleId: number,
+  categoryId: number,
   input: UpsertSupplyPlanFulfillInput,
 ): Promise<SupplyPlanRow[]> {
+  // v1.8: team-category-scoped route.
   const res = await fetch(
-    `/api/team-management/events/${eventId}/roles/${roleId}/supply-plan/fulfill`,
+    `/api/team-management/events/${eventId}/team-categories/${categoryId}/supply-plan/fulfill`,
     {
       method: "PUT",
       headers: authedHeaders(token),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -11,11 +11,13 @@ import {
   updateTeamRole,
   sendContracts,
   listContractTemplates,
+  listTeamCategories,
   downloadRoleTemplate,
   DEFAULT_FORM_FIELDS,
   type TeamRole,
   type CreateRoleInput,
   type ContractTemplate,
+  type TeamCategory,
 } from "@/lib/team-api";
 import { RoleImportDialog } from "./role-import-dialog";
 import { Button } from "@/components/ui/button";
@@ -60,6 +62,8 @@ interface RoleEditFields {
   // DTO write path renames to `manages_role_ids` just before PATCH.
   is_leader_role: boolean;
   managed_role_ids: number[];
+  // v1.8 — optional Team (category) assignment.
+  category_id: number | null;
 }
 
 export default function RolesPage(): React.ReactElement {
@@ -69,20 +73,37 @@ export default function RolesPage(): React.ReactElement {
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [roles, setRoles] = useState<TeamRole[] | null>(null);
+  const [teams, setTeams] = useState<TeamCategory[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<TeamRole | null>(null);
+  // v1.8 filter: "all" / "none" / team id (number as string)
+  const [teamFilter, setTeamFilter] = useState<string>("all");
 
   const load = useCallback(async () => {
     if (!token) return;
     try {
       setError(null);
-      setRoles(await listTeamRoles(token, eventId));
+      const [rs, ts] = await Promise.all([
+        listTeamRoles(token, eventId),
+        listTeamCategories(token, eventId).catch(() => [] as TeamCategory[]),
+      ]);
+      setRoles(rs);
+      setTeams(ts);
     } catch (err) {
       setError((err as Error).message);
     }
   }, [token, eventId]);
+
+  const filteredRoles = useMemo(() => {
+    if (!roles) return null;
+    if (teamFilter === "all") return roles;
+    if (teamFilter === "none")
+      return roles.filter((r) => r.category_id == null);
+    const tid = Number(teamFilter);
+    return roles.filter((r) => r.category_id === tid);
+  }, [roles, teamFilter]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.replace("/login");
@@ -161,6 +182,7 @@ export default function RolesPage(): React.ReactElement {
         <CreateRoleDialog
           eventId={eventId}
           allRoles={roles ?? []}
+          teams={teams}
           open={createOpen}
           onOpenChange={setCreateOpen}
           onCreated={() => {
@@ -185,11 +207,35 @@ export default function RolesPage(): React.ReactElement {
         </div>
       ) : null}
 
+      {/* v1.8 — filter by Team (category). */}
+      {teams.length > 0 ? (
+        <div className="flex items-center gap-2 text-sm">
+          <label className="text-gray-600">Lọc theo Team:</label>
+          <select
+            className="flex h-9 rounded-md border border-input bg-background px-2 text-sm"
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+          >
+            <option value="all">— Tất cả —</option>
+            <option value="none">— Không thuộc team —</option>
+            {teams.map((t) => (
+              <option key={t.id} value={String(t.id)}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
       {roles === null ? (
         <Skeleton className="h-64" />
       ) : roles.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
           Chưa có vai trò nào. Thêm Leader / Crew / TNV ở nút trên.
+        </div>
+      ) : filteredRoles && filteredRoles.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+          Không có vai trò nào khớp bộ lọc hiện tại.
         </div>
       ) : (
         <div className="rounded-lg border">
@@ -197,6 +243,7 @@ export default function RolesPage(): React.ReactElement {
             <TableHeader>
               <TableRow>
                 <TableHead>Tên vai trò</TableHead>
+                <TableHead>Team</TableHead>
                 <TableHead>Slots</TableHead>
                 <TableHead>Đơn giá</TableHead>
                 <TableHead>Waitlist</TableHead>
@@ -205,9 +252,45 @@ export default function RolesPage(): React.ReactElement {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {roles.map((r) => (
+              {(filteredRoles ?? []).map((r) => (
                 <TableRow key={r.id} className="result-row-hover">
-                  <TableCell className="font-medium">{r.role_name}</TableCell>
+                  <TableCell className="font-medium">
+                    {/* v1.7: click tên role để vào trang detail có sub-tabs
+                        (Nhân sự / Trạm / Vật tư / Cấu hình). */}
+                    <Link
+                      href={`/team-management/${eventId}/roles/${r.id}`}
+                      className="text-blue-700 hover:underline"
+                    >
+                      {r.role_name}
+                    </Link>
+                    {(r as TeamRole & { is_leader_role?: boolean })
+                      .is_leader_role ? (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800">
+                        👑 Leader
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const tm = teams.find((t) => t.id === r.category_id);
+                      if (!tm)
+                        return (
+                          <span className="text-xs text-gray-400 italic">
+                            — chưa gán —
+                          </span>
+                        );
+                      return (
+                        <span className="inline-flex items-center gap-1.5 text-sm">
+                          <span
+                            aria-hidden
+                            className="inline-block size-2.5 rounded-full"
+                            style={{ background: tm.color }}
+                          />
+                          {tm.name}
+                        </span>
+                      );
+                    })()}
+                  </TableCell>
                   <TableCell>
                     {r.filled_slots} / {r.max_slots}
                   </TableCell>
@@ -218,10 +301,18 @@ export default function RolesPage(): React.ReactElement {
                   <TableCell>{r.waitlist_enabled ? "Có" : "—"}</TableCell>
                   <TableCell>{r.sort_order}</TableCell>
                   <TableCell className="text-right space-x-1">
+                    <Link
+                      href={`/team-management/${eventId}/roles/${r.id}`}
+                      title="Mở chi tiết team"
+                    >
+                      <Button size="sm" variant="outline">
+                        Mở
+                      </Button>
+                    </Link>
                     <Button
                       size="sm"
                       variant="ghost"
-                      title="Sửa vai trò"
+                      title="Sửa nhanh (dialog)"
                       onClick={() => setEditTarget(r)}
                     >
                       <Pencil className="size-4" />
@@ -257,6 +348,7 @@ export default function RolesPage(): React.ReactElement {
       <EditRoleDialog
         role={editTarget}
         allRoles={roles ?? []}
+        teams={teams}
         onOpenChange={(open) => {
           if (!open) setEditTarget(null);
         }}
@@ -272,11 +364,13 @@ export default function RolesPage(): React.ReactElement {
 function EditRoleDialog({
   role,
   allRoles,
+  teams,
   onOpenChange,
   onSaved,
 }: {
   role: TeamRole | null;
   allRoles: TeamRole[];
+  teams: TeamCategory[];
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }): React.ReactElement {
@@ -308,6 +402,7 @@ function EditRoleDialog({
       chat_group_url: r.chat_group_url ?? null,
       is_leader_role: r.is_leader_role ?? false,
       managed_role_ids: r.managed_role_ids ?? [],
+      category_id: role.category_id ?? null,
     });
   }, [role]);
 
@@ -344,6 +439,8 @@ function EditRoleDialog({
         // junction rows are cleared by the backend.
         is_leader_role: form.is_leader_role,
         manages_role_ids: form.is_leader_role ? form.managed_role_ids : [],
+        // v1.8 — Team (category) assignment, null explicit clears.
+        category_id: form.category_id,
       });
       toast.success("Đã cập nhật vai trò");
       onSaved();
@@ -375,6 +472,30 @@ function EditRoleDialog({
                 Không được sửa <b>Tên vai trò</b> và <b>Cấu hình form</b> sau khi
                 đã có người đăng ký (tránh break dữ liệu cũ).
               </p>
+              <div>
+                <Label>Team</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={form.category_id == null ? "" : String(form.category_id)}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      category_id:
+                        e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
+                >
+                  <option value="">— Không thuộc team —</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Gán role vào một Team để nhóm trạm + vật tư cùng nhau.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Số slot tối đa</Label>
@@ -609,12 +730,14 @@ function EditRoleDialog({
 function CreateRoleDialog({
   eventId,
   allRoles,
+  teams,
   open,
   onOpenChange,
   onCreated,
 }: {
   eventId: number;
   allRoles: TeamRole[];
+  teams: TeamCategory[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: () => void;
@@ -626,6 +749,7 @@ function CreateRoleDialog({
       chat_group_url: string | null;
       is_leader_role: boolean;
       managed_role_ids: number[];
+      category_id: number | null;
     }
   >({
     role_name: "",
@@ -640,6 +764,7 @@ function CreateRoleDialog({
     chat_group_url: null,
     is_leader_role: false,
     managed_role_ids: [],
+    category_id: null,
   });
   // v1.6 Option B2: nested hierarchy, so leader→leader edges are allowed.
   // On create the new role has no id yet, so self-exclusion is a no-op.
@@ -668,6 +793,7 @@ function CreateRoleDialog({
         ...form,
         // v1.6 Option B2 — manages_role_ids only meaningful when is_leader_role true.
         manages_role_ids: form.is_leader_role ? form.managed_role_ids : [],
+        category_id: form.category_id,
       } satisfies CreateRoleInput);
       toast.success("Đã tạo vai trò");
       onCreated();
@@ -683,6 +809,7 @@ function CreateRoleDialog({
         chat_group_url: null,
         is_leader_role: false,
         managed_role_ids: [],
+        category_id: null,
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -716,6 +843,30 @@ function CreateRoleDialog({
                 value={form.role_name}
                 onChange={(e) => setForm({ ...form, role_name: e.target.value })}
               />
+            </div>
+            <div>
+              <Label>Team</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={form.category_id == null ? "" : String(form.category_id)}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    category_id:
+                      e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              >
+                <option value="">— Không thuộc team —</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Gán role vào một Team để nhóm trạm + vật tư cùng nhau.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

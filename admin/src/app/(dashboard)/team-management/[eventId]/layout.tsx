@@ -6,8 +6,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { listRegistrations } from "@/lib/team-api";
 
-// v1.6 UX update: flat nav per Danny feedback — mỗi entry là 1 tab
-// riêng, không gộp dropdown.
+// v1.7 UX update: Trạm is managed per-Role (Role drill-down), not event-wide.
+// Event-wide planner tools stay top-level: Kho vật tư (master stock) + Kế
+// hoạch vật tư (cross-team aggregate for planner review).
 
 type NavItem = {
   slug: string;
@@ -16,9 +17,10 @@ type NavItem = {
 
 const ITEMS: NavItem[] = [
   { slug: "dashboard", label: "Tổng quan" },
+  // v1.8 — Team layer sits between event and roles
+  { slug: "teams", label: "Team" },
   { slug: "roles", label: "Vai trò" },
   { slug: "registrations", label: "Nhân sự" },
-  { slug: "stations", label: "Trạm" },
   { slug: "supply-items", label: "Kho vật tư" },
   { slug: "supply", label: "Kế hoạch vật tư" },
   { slug: "contacts", label: "Liên lạc khẩn cấp" },

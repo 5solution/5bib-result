@@ -5,16 +5,16 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
-  listStations,
+  listStationsByCategory,
   createStation,
   updateStation,
   deleteStation,
   updateStationStatus,
-  listTeamRoles,
+  getTeamCategory,
   type CreateStationInput,
   type Station,
   type StationStatus,
-  type TeamRole,
+  type TeamCategory,
 } from "@/lib/team-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft,
   Plus,
   MapPin,
   Pencil,
@@ -43,21 +42,27 @@ import {
 import { toast } from "sonner";
 import { AssignPersonnelModal } from "./_assign-personnel-modal";
 
-const STATUS_LABELS: Record<StationStatus, { icon: string; text: string; bg: string; color: string }> = {
+// v1.8 — Stations now belong to Team (category), not role. assignment_role
+// (crew/volunteer) removed — supervisor/worker derives from role.is_leader_role.
+
+const STATUS_LABELS: Record<
+  StationStatus,
+  { icon: string; text: string; bg: string; color: string }
+> = {
   setup: { icon: "⚪", text: "Đang chuẩn bị", bg: "#f3f4f6", color: "#374151" },
   active: { icon: "🟢", text: "Đang hoạt động", bg: "#dcfce7", color: "#166534" },
   closed: { icon: "⚫", text: "Đã đóng", bg: "#e5e7eb", color: "#1f2937" },
 };
 
-export default function StationsPage(): React.ReactElement {
+export default function TeamStationsPage(): React.ReactElement {
   const router = useRouter();
-  const params = useParams<{ eventId: string; roleId: string }>();
+  const params = useParams<{ eventId: string; teamId: string }>();
   const eventId = Number(params.eventId);
-  const roleId = Number(params.roleId);
+  const teamId = Number(params.teamId);
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [stations, setStations] = useState<Station[] | null>(null);
-  const [role, setRole] = useState<TeamRole | null>(null);
+  const [team, setTeam] = useState<TeamCategory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Station | null>(null);
@@ -68,16 +73,16 @@ export default function StationsPage(): React.ReactElement {
     if (!token) return;
     try {
       setError(null);
-      const [list, roles] = await Promise.all([
-        listStations(token, eventId, roleId),
-        listTeamRoles(token, eventId),
+      const [list, t] = await Promise.all([
+        listStationsByCategory(token, teamId),
+        getTeamCategory(token, teamId).catch(() => null),
       ]);
       setStations(list);
-      setRole(roles.find((r) => r.id === roleId) ?? null);
+      setTeam(t);
     } catch (err) {
       setError((err as Error).message);
     }
-  }, [token, eventId, roleId]);
+  }, [token, teamId]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.replace("/login");
@@ -88,14 +93,14 @@ export default function StationsPage(): React.ReactElement {
   }, [token, load]);
 
   const totals = useMemo(() => {
-    if (!stations) return { total: 0, noCrew: 0, noVol: 0 };
-    let noCrew = 0;
-    let noVol = 0;
+    if (!stations) return { total: 0, noSup: 0, noWorker: 0 };
+    let noSup = 0;
+    let noWorker = 0;
     for (const s of stations) {
-      if (!s.has_crew) noCrew += 1;
-      if (s.volunteer_count === 0) noVol += 1;
+      if (!s.has_supervisor) noSup += 1;
+      if (s.worker_count === 0) noWorker += 1;
     }
-    return { total: stations.length, noCrew, noVol };
+    return { total: stations.length, noSup, noWorker };
   }, [stations]);
 
   async function handleDelete(id: number): Promise<void> {
@@ -110,7 +115,10 @@ export default function StationsPage(): React.ReactElement {
     }
   }
 
-  async function handleStatusChange(id: number, status: StationStatus): Promise<void> {
+  async function handleStatusChange(
+    id: number,
+    status: StationStatus,
+  ): Promise<void> {
     if (!token) return;
     try {
       await updateStationStatus(token, id, status);
@@ -125,21 +133,21 @@ export default function StationsPage(): React.ReactElement {
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
 
   return (
-    <div className="space-y-6">
-      {/* Breadcrumb + title */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Link href={`/team-management/${eventId}/roles`}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-2 size-4" /> Vai trò
-          </Button>
-        </Link>
-        <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-gradient flex items-center gap-2">
-          <MapPin className="size-6 sm:size-7 text-blue-600" />
-          Quản lý Trạm — {role?.role_name ?? `Role #${roleId}`}
-        </h1>
-        <div className="flex-1" />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <MapPin className="size-5 text-blue-600" />
+            Trạm của team
+          </h2>
+          <p className="text-xs text-gray-500">
+            Các trạm do team{" "}
+            <strong>{team?.name ?? `#${teamId}`}</strong> vận hành. Click "Gán
+            người" để assign Leader/Crew/TNV của team vào trạm.
+          </p>
+        </div>
         <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 size-4" /> Tạo Trạm Mới
+          <Plus className="mr-2 size-4" /> Tạo trạm mới
         </Button>
       </div>
 
@@ -158,7 +166,7 @@ export default function StationsPage(): React.ReactElement {
             Chưa có trạm. Tạo trạm đầu tiên.
           </p>
           <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 size-4" /> Tạo Trạm Mới
+            <Plus className="mr-2 size-4" /> Tạo trạm mới
           </Button>
         </div>
       ) : (
@@ -166,10 +174,10 @@ export default function StationsPage(): React.ReactElement {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {stations.map((s) => {
               const statusCfg = STATUS_LABELS[s.status];
-              const warning = !s.has_crew
-                ? { text: "⚠️ Chưa có Crew", color: "#dc2626" }
-                : s.volunteer_count === 0
-                ? { text: "🟡 Chưa đủ người", color: "#b45309" }
+              const warning = !s.has_supervisor
+                ? { text: "⚠️ Chưa có Supervisor", color: "#dc2626" }
+                : s.worker_count === 0
+                ? { text: "🟡 Chưa có Worker", color: "#b45309" }
                 : { text: "✅ Đủ nhân sự", color: "#166534" };
               return (
                 <div
@@ -199,9 +207,14 @@ export default function StationsPage(): React.ReactElement {
                         }
                         onBlur={(e) => {
                           const next = e.relatedTarget as Node | null;
-                          if (!e.currentTarget.parentElement?.contains(next)) {
+                          if (
+                            !e.currentTarget.parentElement?.contains(next)
+                          ) {
                             setTimeout(
-                              () => setOpenMenuId((cur) => (cur === s.id ? null : cur)),
+                              () =>
+                                setOpenMenuId((cur) =>
+                                  cur === s.id ? null : cur,
+                                ),
                               150,
                             );
                           }
@@ -223,7 +236,9 @@ export default function StationsPage(): React.ReactElement {
                                 key={st}
                                 type="button"
                                 disabled={st === s.status}
-                                onClick={() => void handleStatusChange(s.id, st)}
+                                onClick={() =>
+                                  void handleStatusChange(s.id, st)
+                                }
                                 className="w-full text-left px-3 py-2 text-sm hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
                               >
                                 {STATUS_LABELS[st].icon} Chuyển sang{" "}
@@ -244,7 +259,7 @@ export default function StationsPage(): React.ReactElement {
                             Sửa trạm
                           </button>
                           <Link
-                            href={`/team-management/${eventId}/roles/${roleId}/stations/${s.id}/allocations`}
+                            href={`/team-management/${eventId}/teams/${teamId}/stations/${s.id}/allocations`}
                             onClick={() => setOpenMenuId(null)}
                             className="block px-3 py-2 text-sm hover:bg-muted"
                           >
@@ -290,7 +305,8 @@ export default function StationsPage(): React.ReactElement {
                   </div>
 
                   <div className="text-xs text-muted-foreground">
-                    👑 Crew: {s.crew_count} · TNV: {s.volunteer_count} người
+                    👑 Supervisor: {s.supervisor_count} · 👤 Worker:{" "}
+                    {s.worker_count} người
                   </div>
                   <div
                     className="text-xs font-medium"
@@ -325,10 +341,10 @@ export default function StationsPage(): React.ReactElement {
               <b>Tổng:</b> {totals.total} trạm
             </span>
             <span>
-              <b>Chưa có Crew:</b> {totals.noCrew}
+              <b>Chưa có Supervisor:</b> {totals.noSup}
             </span>
             <span>
-              <b>Chưa có TNV:</b> {totals.noVol}
+              <b>Chưa có Worker:</b> {totals.noWorker}
             </span>
           </div>
         </>
@@ -348,8 +364,7 @@ export default function StationsPage(): React.ReactElement {
           setEditTarget(null);
           void load();
         }}
-        eventId={eventId}
-        roleId={roleId}
+        teamId={teamId}
       />
 
       <AssignPersonnelModal
@@ -370,15 +385,13 @@ function StationDialog({
   target,
   onOpenChange,
   onSaved,
-  eventId,
-  roleId,
+  teamId,
 }: {
   open: boolean;
   target: Station | null;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
-  eventId: number;
-  roleId: number;
+  teamId: number;
 }): React.ReactElement {
   const { token } = useAuth();
   const [form, setForm] = useState<CreateStationInput>({
@@ -423,7 +436,7 @@ function StationDialog({
         await updateStation(token, target.id, form);
         toast.success("Đã cập nhật trạm");
       } else {
-        await createStation(token, eventId, roleId, form);
+        await createStation(token, teamId, form);
         toast.success("Đã tạo trạm");
       }
       onSaved();
@@ -475,7 +488,8 @@ function StationDialog({
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    gps_lat: e.target.value === "" ? null : Number(e.target.value),
+                    gps_lat:
+                      e.target.value === "" ? null : Number(e.target.value),
                   })
                 }
               />
@@ -490,7 +504,8 @@ function StationDialog({
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    gps_lng: e.target.value === "" ? null : Number(e.target.value),
+                    gps_lng:
+                      e.target.value === "" ? null : Number(e.target.value),
                   })
                 }
               />
