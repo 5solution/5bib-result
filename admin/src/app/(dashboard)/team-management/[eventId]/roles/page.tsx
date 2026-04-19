@@ -789,10 +789,16 @@ function CreateRoleDialog({
     }
     setSaving(true);
     try {
+      // Destructure `managed_role_ids` OUT of the spread so the payload
+      // doesn't carry the read-shape key — backend DTO whitelist only
+      // accepts `manages_role_ids` (write-shape) and rejects the unknown
+      // field with 400. FE uses past-tense as state key to mirror the
+      // response model, but must rename at the send site.
+      const { managed_role_ids, ...rest } = form;
       await createTeamRole(token, eventId, {
-        ...form,
+        ...rest,
         // v1.6 Option B2 — manages_role_ids only meaningful when is_leader_role true.
-        manages_role_ids: form.is_leader_role ? form.managed_role_ids : [],
+        manages_role_ids: form.is_leader_role ? managed_role_ids : [],
         category_id: form.category_id,
       } satisfies CreateRoleInput);
       toast.success("Đã tạo vai trò");
