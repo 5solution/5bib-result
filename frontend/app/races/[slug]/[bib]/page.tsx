@@ -12,6 +12,11 @@ import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachme
 import ResultImageEditor from '@/components/ResultImageEditor';
 import CertificateV2DownloadButtons from '@/components/CertificateV2DownloadButtons';
 import CertificateWithPhotoCta from '@/components/CertificateWithPhotoCta';
+import RankProgressionChart from '@/components/RankProgressionChart';
+import PaceZoneChart from '@/components/PaceZoneChart';
+import CountryBadge from '@/components/CountryBadge';
+import PercentileBadge, { PercentileGauge } from '@/components/PercentileBadge';
+import RaceTheme from '@/components/RaceTheme';
 
 interface AthleteResult {
   Bib: number;
@@ -547,9 +552,17 @@ export default function AthleteDetailPage() {
   const genderColor = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'bg-blue-600' : 'bg-pink-500';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <RaceTheme brandColor={raceData?.brandColor} className="min-h-screen bg-gray-50">
       {/* ===== HERO SECTION ===== */}
-      <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 overflow-hidden">
+      <div
+        className="relative overflow-hidden"
+        style={{
+          background:
+            raceData?.brandColor && /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(raceData.brandColor)
+              ? `linear-gradient(135deg, var(--race-accent) 0%, var(--race-accent-dark) 100%)`
+              : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #3730a3 100%)',
+        }}
+      >
         {/* Background decorative elements */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-white rounded-full blur-3xl -translate-y-1/2" />
@@ -668,6 +681,14 @@ export default function AthleteDetailPage() {
             )}
           </div>
 
+          {/* Country rank + percentile badges (F-04 / F-06) */}
+          {raceId && athlete.Bib != null && !isUpcoming && (
+            <div className="flex justify-center flex-wrap gap-2 mt-2">
+              <CountryBadge raceId={raceId} bib={String(athlete.Bib)} />
+              <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} />
+            </div>
+          )}
+
           {/* Race name */}
           {athlete.race_name && (
             <p className="text-white/60 text-sm font-medium">{athlete.race_name}</p>
@@ -693,7 +714,13 @@ export default function AthleteDetailPage() {
               {/* Big time display */}
               <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
                 <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">{t('athlete.chipTime')}</div>
-                <div className="text-5xl md:text-7xl font-black text-blue-600 tracking-tight mb-3" style={{ fontFamily: 'var(--font-mono)' }}>
+                <div
+                  className="text-5xl md:text-7xl font-black tracking-tight mb-3"
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--race-accent, #2563eb)',
+                  }}
+                >
                   {athlete.ChipTime}
                 </div>
                 <div className="flex items-center justify-center gap-4 md:gap-8 text-sm text-gray-500">
@@ -738,6 +765,35 @@ export default function AthleteDetailPage() {
             </>
           )}
         </div>
+
+        {/* === RANK PROGRESSION + PACE ZONE (F-01 / F-02) === */}
+        {hasSplits && !isUpcoming && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <RankProgressionChart
+              splits={splits.map((s) => ({
+                name: s.name,
+                distance: s.distance,
+                overallRank: s.overallRank,
+                rankDelta: s.rankDelta,
+              }))}
+              finalRank={athlete.OverallRank}
+            />
+            <PaceZoneChart
+              splits={splits.map((s) => ({
+                name: s.name,
+                distance: s.distance,
+                pace: s.pace,
+                isPaceAlert: s.isPaceAlert,
+              }))}
+              avgPace={athlete.Pace}
+            />
+          </div>
+        )}
+
+        {/* === PERCENTILE GAUGE (F-06) === */}
+        {!isUpcoming && (
+          <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} />
+        )}
 
         {/* === SPLIT TIMES === */}
         {hasSplits && !isUpcoming && <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
@@ -1353,6 +1409,6 @@ export default function AthleteDetailPage() {
         </div>
       )}
 
-    </div>
+    </RaceTheme>
   );
 }

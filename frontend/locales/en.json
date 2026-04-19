@@ -133,7 +133,16 @@
     "firstPage": "First page",
     "prevPage": "Previous page",
     "nextPage": "Next page",
-    "lastPage": "Last page"
+    "lastPage": "Last page",
+    "countryRanking": {
+      "title": "Country rankings",
+      "country": "Country",
+      "finishers": "Finishers",
+      "bestTime": "Best time",
+      "empty": "No country data yet",
+      "showAll": "Show all ({{count}})",
+      "showLess": "Show less"
+    }
   },
   "athlete": {
     "notFound": "Athlete not found",
@@ -180,7 +189,52 @@
     "downloadV2Failed": "Download failed",
     "start": "Start",
     "finish": "Finish",
-    "backToRanking": "Back to rankings"
+    "backToRanking": "Back to rankings",
+    "rankProgression": {
+      "title": "Rank progression",
+      "rank": "Rank",
+      "trend": {
+        "up": "Climbed",
+        "down": "Dropped",
+        "flat": "Steady"
+      }
+    },
+    "paceZone": {
+      "title": "Pace zone analysis",
+      "avg": "Avg pace",
+      "zones": {
+        "fast": "Fast",
+        "steady": "Steady",
+        "slow": "Slow",
+        "alert": "Alert"
+      },
+      "strategy": {
+        "even": "Even Pacer",
+        "negative": "Negative Split",
+        "positive": "Positive Split"
+      }
+    },
+    "countryRank": {
+      "label": "Fellow countrymen"
+    },
+    "percentile": {
+      "label": "Top",
+      "tier": {
+        "top10": "Elite",
+        "top25": "Strong",
+        "top50": "Solid",
+        "midpack": "Midpack"
+      },
+      "panel": {
+        "title": "Performance percentile"
+      },
+      "summary": "You finished faster than {{count}} of {{total}} finishers — top {{pct}}%.",
+      "compare": {
+        "you": "You",
+        "avg": "Average",
+        "fastest": "Fastest"
+      }
+    }
   },
   "claim": {
     "title": "Appeal Result",
@@ -319,5 +373,28 @@
     "overallRank": "Overall Rank",
     "genderRank": "Gender Rank",
     "categoryRank": "Category Rank"
+  },
+  "stats": {
+    "cards": {
+      "started": "Started",
+      "finished": "Finished",
+      "dnf": "DNF",
+      "dns": "DNS",
+      "avgTime": "Avg time",
+      "bestTime": "Best time"
+    },
+    "finishRate": {
+      "title": "Completion breakdown",
+      "label": "Finish rate"
+    },
+    "timeDistribution": {
+      "title": "Finish time distribution",
+      "subtitle": "Based on {{total}} finishers",
+      "sampled": "Sampled",
+      "fastest": "Fastest",
+      "avg": "Average",
+      "athletes": "athletes",
+      "you": "You"
+    }
   }
 }

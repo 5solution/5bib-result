@@ -107,6 +107,10 @@ export class RaceResultService {
         `results:${courseId}:*`,
         `leaderboard:${courseId}`,
         `stats:${courseId}`,
+        `time-distribution:${courseId}`,
+        `country-stats:${courseId}`,
+        `country-rank:*:*`,
+        `percentile:*:*`,
       ];
       let deleted = 0;
       for (const pattern of patterns) {
@@ -852,6 +856,450 @@ export class RaceResultService {
 
     await this.setCache(cacheKey, stats, 60);
     return stats;
+  }
+
+  // ─── Stats Visualizations (F-03, F-04, F-06) ─────────────────
+
+  /**
+   * Parse "HH:MM:SS" or "MM:SS" chip time → seconds. Returns null for invalid.
+   */
+  private chipTimeToSeconds(chipTime: string | undefined | null): number | null {
+    if (!chipTime || typeof chipTime !== 'string') return null;
+    const parts = chipTime.split(':').map((p) => parseInt(p, 10));
+    if (parts.some((p) => isNaN(p))) return null;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return null;
+  }
+
+  private secondsToHms(s: number): string {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  }
+
+  // Cap for heavy aggregations. If a course has > this many finishers, we
+  // sample instead of scanning all docs (trade-off: ±1% accuracy for latency).
+  private static readonly AGG_SAMPLE_THRESHOLD = 10_000;
+
+  /**
+   * F-03 — Time distribution histogram for a course's finishers.
+   * Buckets auto-sized to 7–10 based on count. Cached 120s.
+   */
+  async getTimeDistribution(courseId: string) {
+    const cacheKey = `time-distribution:${courseId}`;
+    const cached = await this.getFromCache<any>(cacheKey);
+    if (cached) return cached;
+
+    // Pull chipTime strings for finishers, apply $limit if over threshold
+    // to keep aggregation bounded even on huge races.
+    const totalFinishersCheck = await this.resultModel.countDocuments({
+      courseId,
+      timingPoint: 'Finish',
+      chipTime: { $nin: ['', null] },
+    }).exec();
+
+    const sampled = totalFinishersCheck > RaceResultService.AGG_SAMPLE_THRESHOLD;
+
+    const docs = await this.resultModel
+      .aggregate([
+        {
+          $match: {
+            courseId,
+            timingPoint: 'Finish',
+            chipTime: { $nin: ['', null] },
+          },
+        },
+        ...(sampled
+          ? [{ $sample: { size: RaceResultService.AGG_SAMPLE_THRESHOLD } }]
+          : []),
+        { $project: { chipTime: 1 } },
+      ])
+      .exec();
+
+    const secondsArr: number[] = [];
+    for (const d of docs) {
+      const s = this.chipTimeToSeconds(d.chipTime);
+      if (s !== null && s > 0) secondsArr.push(s);
+    }
+
+    if (secondsArr.length === 0) {
+      const empty = {
+        buckets: [],
+        totalFinishers: 0,
+        minSeconds: 0,
+        maxSeconds: 0,
+        avgSeconds: 0,
+        sampled: false,
+      };
+      await this.setCache(cacheKey, empty, 120);
+      return empty;
+    }
+
+    secondsArr.sort((a, b) => a - b);
+    const minSeconds = secondsArr[0];
+    const maxSeconds = secondsArr[secondsArr.length - 1];
+    const avgSeconds = Math.round(
+      secondsArr.reduce((a, b) => a + b, 0) / secondsArr.length,
+    );
+
+    // Bucket count: min(10, ceil(sqrt(n))), at least 1.
+    const numBuckets =
+      minSeconds === maxSeconds
+        ? 1
+        : Math.max(1, Math.min(10, Math.ceil(Math.sqrt(secondsArr.length))));
+
+    const range = maxSeconds - minSeconds || 1;
+    const bucketWidth = range / numBuckets;
+
+    const buckets = Array.from({ length: numBuckets }, (_, i) => ({
+      minSeconds: Math.round(minSeconds + i * bucketWidth),
+      maxSeconds: Math.round(
+        i === numBuckets - 1 ? maxSeconds : minSeconds + (i + 1) * bucketWidth,
+      ),
+      count: 0,
+    }));
+
+    for (const s of secondsArr) {
+      let idx = Math.floor((s - minSeconds) / bucketWidth);
+      if (idx >= numBuckets) idx = numBuckets - 1;
+      if (idx < 0) idx = 0;
+      buckets[idx].count += 1;
+    }
+
+    const total = secondsArr.length;
+    const bucketsOut = buckets.map((b) => ({
+      range: `${this.secondsToHms(b.minSeconds)}–${this.secondsToHms(b.maxSeconds)}`,
+      minSeconds: b.minSeconds,
+      maxSeconds: b.maxSeconds,
+      count: b.count,
+      percentage: Math.round((b.count / total) * 1000) / 10, // 1 decimal
+    }));
+
+    const result = {
+      buckets: bucketsOut,
+      totalFinishers: sampled ? totalFinishersCheck : total,
+      minSeconds,
+      maxSeconds,
+      avgSeconds,
+      sampled,
+    };
+
+    await this.setCache(cacheKey, result, 120);
+    return result;
+  }
+
+  /**
+   * F-04 — Top countries aggregated for a course. Cached 120s.
+   */
+  async getCountryStats(courseId: string) {
+    const cacheKey = `country-stats:${courseId}`;
+    const cached = await this.getFromCache<any>(cacheKey);
+    if (cached) return cached;
+
+    const docs = await this.resultModel
+      .aggregate([
+        {
+          $match: {
+            courseId,
+            timingPoint: 'Finish',
+            nationality: { $nin: ['', null] },
+            chipTime: { $nin: ['', null] },
+          },
+        },
+        {
+          $group: {
+            _id: '$nationality',
+            count: { $sum: 1 },
+            bestChipTime: { $min: '$chipTime' },
+          },
+        },
+        { $sort: { count: -1 as const } },
+        { $limit: 50 },
+      ])
+      .exec();
+
+    const countries = docs.map((d) => {
+      const iso2 = this.nationalityToIso2(d._id as string);
+      const bestSeconds = this.chipTimeToSeconds(d.bestChipTime) ?? 0;
+      return {
+        nationality: d._id as string,
+        iso2,
+        count: d.count as number,
+        bestTime: d.bestChipTime as string,
+        bestSeconds,
+      };
+    });
+
+    const result = {
+      countries,
+      totalCountries: countries.length,
+    };
+
+    await this.setCache(cacheKey, result, 120);
+    return result;
+  }
+
+  /**
+   * F-04 — Country rank for one athlete on their course.
+   * Returns rank among same-nationality finishers (null if athlete not a finisher).
+   * Cached 300s per athlete.
+   */
+  async getCountryRank(raceId: string, bib: string) {
+    const cacheKey = `country-rank:${raceId}:${bib}`;
+    const cached = await this.getFromCache<any>(cacheKey);
+    if (cached) return cached;
+
+    const athlete = await this.resultModel
+      .findOne({ raceId, bib })
+      .select({
+        courseId: 1,
+        nationality: 1,
+        timingPoint: 1,
+        overallRankNumeric: 1,
+      })
+      .lean()
+      .exec();
+
+    if (!athlete || !athlete.nationality) {
+      return {
+        rank: null,
+        total: 0,
+        nationality: athlete?.nationality ?? '',
+        iso2: '',
+      };
+    }
+
+    // Per Option A: DNF athletes do not have a country rank (badge hidden).
+    if (athlete.timingPoint !== 'Finish') {
+      const total = await this.resultModel.countDocuments({
+        courseId: athlete.courseId,
+        nationality: athlete.nationality,
+        timingPoint: 'Finish',
+      }).exec();
+      const out = {
+        rank: null,
+        total,
+        nationality: athlete.nationality,
+        iso2: this.nationalityToIso2(athlete.nationality),
+      };
+      await this.setCache(cacheKey, out, 300);
+      return out;
+    }
+
+    const filter = {
+      courseId: athlete.courseId,
+      nationality: athlete.nationality,
+      timingPoint: 'Finish',
+    };
+
+    const [fasterCount, total] = await Promise.all([
+      this.resultModel
+        .countDocuments({
+          ...filter,
+          overallRankNumeric: { $lt: athlete.overallRankNumeric ?? 999999 },
+        })
+        .exec(),
+      this.resultModel.countDocuments(filter).exec(),
+    ]);
+
+    const out = {
+      rank: fasterCount + 1,
+      total,
+      nationality: athlete.nationality,
+      iso2: this.nationalityToIso2(athlete.nationality),
+    };
+
+    await this.setCache(cacheKey, out, 300);
+    return out;
+  }
+
+  /**
+   * F-06 — Performance percentile for one athlete. Cached 300s.
+   * Percentile = (slower count / total) * 100 — higher = better.
+   */
+  async getPercentile(raceId: string, bib: string) {
+    const cacheKey = `percentile:${raceId}:${bib}`;
+    const cached = await this.getFromCache<any>(cacheKey);
+    if (cached) return cached;
+
+    const athlete = await this.resultModel
+      .findOne({ raceId, bib })
+      .select({ courseId: 1, chipTime: 1, timingPoint: 1 })
+      .lean()
+      .exec();
+
+    if (!athlete || athlete.timingPoint !== 'Finish') {
+      return {
+        percentile: null,
+        slowerCount: 0,
+        totalFinishers: 0,
+        athleteSeconds: 0,
+        avgSeconds: 0,
+        minSeconds: 0,
+      };
+    }
+
+    const athleteSeconds = this.chipTimeToSeconds(athlete.chipTime);
+    if (athleteSeconds === null || athleteSeconds <= 0) {
+      return {
+        percentile: null,
+        slowerCount: 0,
+        totalFinishers: 0,
+        athleteSeconds: 0,
+        avgSeconds: 0,
+        minSeconds: 0,
+      };
+    }
+
+    // Leverage existing getCourseStats for avg/min (also cached)
+    const stats = await this.getCourseStats(athlete.courseId);
+    const totalFinishers = stats?.totalFinishers ?? 0;
+    const minSeconds = this.chipTimeToSeconds(stats?.minTime) ?? 0;
+    const avgSeconds = this.chipTimeToSeconds(stats?.avgTime) ?? 0;
+
+    // Count slower finishers via chipTime string comparison only works when
+    // all strings have identical widths. Since DB chipTime is "HH:MM:SS",
+    // alphabetical comparison IS chronological when H is 1 or 2 digits
+    // consistently — but to be safe we compare numeric via aggregation.
+    const result = await this.resultModel
+      .aggregate([
+        {
+          $match: {
+            courseId: athlete.courseId,
+            timingPoint: 'Finish',
+            chipTime: { $nin: ['', null] },
+          },
+        },
+        {
+          $addFields: {
+            chipTimeSecondsComputed: {
+              $let: {
+                vars: { p: { $split: ['$chipTime', ':'] } },
+                in: {
+                  $add: [
+                    {
+                      $multiply: [
+                        {
+                          $convert: {
+                            input: { $arrayElemAt: ['$$p', 0] },
+                            to: 'int',
+                            onError: 0,
+                            onNull: 0,
+                          },
+                        },
+                        3600,
+                      ],
+                    },
+                    {
+                      $multiply: [
+                        {
+                          $convert: {
+                            input: { $arrayElemAt: ['$$p', 1] },
+                            to: 'int',
+                            onError: 0,
+                            onNull: 0,
+                          },
+                        },
+                        60,
+                      ],
+                    },
+                    {
+                      $convert: {
+                        input: { $arrayElemAt: ['$$p', 2] },
+                        to: 'int',
+                        onError: 0,
+                        onNull: 0,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          $match: {
+            chipTimeSecondsComputed: { $gt: athleteSeconds },
+          },
+        },
+        { $count: 'slower' },
+      ])
+      .exec();
+
+    const slowerCount = result[0]?.slower ?? 0;
+    const percentile =
+      totalFinishers > 0
+        ? Math.round((slowerCount / totalFinishers) * 100)
+        : null;
+
+    const out = {
+      percentile,
+      slowerCount,
+      totalFinishers,
+      athleteSeconds,
+      avgSeconds,
+      minSeconds,
+    };
+    await this.setCache(cacheKey, out, 300);
+    return out;
+  }
+
+  /**
+   * Convert raw nationality string to ISO2 code (or empty if unresolvable).
+   * Mirrors the frontend country-flags util for consistent API output.
+   */
+  private nationalityToIso2(input: string | undefined | null): string {
+    if (!input) return '';
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+    // Already ISO2
+    if (trimmed.length === 2 && /^[A-Za-z]{2}$/.test(trimmed)) {
+      return trimmed.toUpperCase();
+    }
+    const lower = trimmed.toLowerCase();
+    const map: Record<string, string> = {
+      'vietnam': 'VN', 'viet nam': 'VN', 'vn': 'VN', 'vnm': 'VN', 'vie': 'VN',
+      'france': 'FR', 'fra': 'FR',
+      'japan': 'JP', 'jpn': 'JP',
+      'korea': 'KR', 'south korea': 'KR', 'kor': 'KR',
+      'china': 'CN', 'chn': 'CN',
+      'thailand': 'TH', 'tha': 'TH',
+      'singapore': 'SG', 'sgp': 'SG',
+      'malaysia': 'MY', 'mys': 'MY',
+      'indonesia': 'ID', 'idn': 'ID',
+      'philippines': 'PH', 'phl': 'PH',
+      'australia': 'AU', 'aus': 'AU',
+      'united states': 'US', 'usa': 'US',
+      'united kingdom': 'GB', 'uk': 'GB', 'gbr': 'GB',
+      'germany': 'DE', 'deu': 'DE',
+      'italy': 'IT', 'ita': 'IT',
+      'spain': 'ES', 'esp': 'ES',
+      'canada': 'CA', 'can': 'CA',
+      'brazil': 'BR', 'bra': 'BR',
+      'india': 'IN', 'ind': 'IN',
+      'netherlands': 'NL', 'nld': 'NL',
+      'belgium': 'BE', 'bel': 'BE',
+      'switzerland': 'CH', 'che': 'CH',
+      'sweden': 'SE', 'swe': 'SE',
+      'norway': 'NO', 'nor': 'NO',
+      'denmark': 'DK', 'dnk': 'DK',
+      'new zealand': 'NZ', 'nzl': 'NZ',
+      'taiwan': 'TW', 'twn': 'TW',
+      'hong kong': 'HK', 'hkg': 'HK',
+      'russia': 'RU', 'rus': 'RU',
+      'ukraine': 'UA', 'ukr': 'UA',
+      'poland': 'PL', 'pol': 'PL',
+      'portugal': 'PT', 'prt': 'PT',
+      'austria': 'AT', 'aut': 'AT',
+      'ireland': 'IE', 'irl': 'IE',
+      'south africa': 'ZA', 'zaf': 'ZA',
+      'cambodia': 'KH', 'khm': 'KH',
+      'laos': 'LA', 'lao': 'LA',
+    };
+    return map[lower] ?? '';
   }
 
   // ─── Claims ───────────────────────────────────────────────────

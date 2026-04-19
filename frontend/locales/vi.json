@@ -133,7 +133,16 @@
     "firstPage": "Trang đầu",
     "prevPage": "Trang trước",
     "nextPage": "Trang sau",
-    "lastPage": "Trang cuối"
+    "lastPage": "Trang cuối",
+    "countryRanking": {
+      "title": "Xếp hạng theo quốc gia",
+      "country": "Quốc gia",
+      "finishers": "Hoàn thành",
+      "bestTime": "Thời gian tốt nhất",
+      "empty": "Chưa có dữ liệu quốc gia",
+      "showAll": "Xem tất cả ({{count}})",
+      "showLess": "Thu gọn"
+    }
   },
   "athlete": {
     "notFound": "Không tìm thấy vận động viên",
@@ -180,7 +189,52 @@
     "downloadV2Failed": "Tải thất bại",
     "start": "Xuất phát",
     "finish": "Về đích",
-    "backToRanking": "Quay lại bảng xếp hạng"
+    "backToRanking": "Quay lại bảng xếp hạng",
+    "rankProgression": {
+      "title": "Diễn biến thứ hạng",
+      "rank": "Hạng",
+      "trend": {
+        "up": "Leo hạng",
+        "down": "Tụt hạng",
+        "flat": "Ổn định"
+      }
+    },
+    "paceZone": {
+      "title": "Phân tích Pace theo chặng",
+      "avg": "Pace TB",
+      "zones": {
+        "fast": "Nhanh",
+        "steady": "Ổn định",
+        "slow": "Chậm",
+        "alert": "Cảnh báo"
+      },
+      "strategy": {
+        "even": "Even Pacer",
+        "negative": "Negative Split",
+        "positive": "Positive Split"
+      }
+    },
+    "countryRank": {
+      "label": "Đồng hương"
+    },
+    "percentile": {
+      "label": "Top",
+      "tier": {
+        "top10": "Xuất sắc",
+        "top25": "Vượt trội",
+        "top50": "Tốt",
+        "midpack": "Trung bình"
+      },
+      "panel": {
+        "title": "Xếp hạng thành tích"
+      },
+      "summary": "Bạn về đích nhanh hơn {{count}}/{{total}} VĐV hoàn thành — top {{pct}}%.",
+      "compare": {
+        "you": "Bạn",
+        "avg": "Trung bình",
+        "fastest": "Nhanh nhất"
+      }
+    }
   },
   "claim": {
     "title": "Khiếu nại kết quả",
@@ -319,5 +373,28 @@
     "overallRank": "Hạng tổng",
     "genderRank": "Hạng giới tính",
     "categoryRank": "Hạng nhóm tuổi"
+  },
+  "stats": {
+    "cards": {
+      "started": "Xuất phát",
+      "finished": "Hoàn thành",
+      "dnf": "Bỏ cuộc",
+      "dns": "Không xuất phát",
+      "avgTime": "Thời gian TB",
+      "bestTime": "Thời gian tốt nhất"
+    },
+    "finishRate": {
+      "title": "Tỉ lệ hoàn thành",
+      "label": "Tỉ lệ về đích"
+    },
+    "timeDistribution": {
+      "title": "Phân bố thời gian về đích",
+      "subtitle": "Dựa trên {{total}} VĐV hoàn thành",
+      "sampled": "Mẫu ước tính",
+      "fastest": "Nhanh nhất",
+      "avg": "Trung bình",
+      "athletes": "VĐV",
+      "you": "Bạn"
+    }
   }
 }

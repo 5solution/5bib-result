@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import LiveTimer from '@/components/LiveTimer';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults, useCourseStats } from '@/lib/api-hooks';
+import CourseStatsViz from '@/components/CourseStatsViz';
+import CountryRankingTable from '@/components/CountryRankingTable';
 
 /* ─── Helpers ─── */
 
@@ -458,6 +460,21 @@ export default function CourseRankingPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+
+          {/* ── Course Stats Viz (F-03) ── */}
+          {courseId && (
+            <div className="mt-8 space-y-4">
+              <CourseStatsViz
+                courseId={courseId}
+                started={course?.starters}
+                finished={course?.finishers}
+                dnf={course?.dnf}
+                avgTime={courseStats?.avgTime}
+                minTime={courseStats?.minTime}
+              />
+              <CountryRankingTable courseId={courseId} />
+            </div>
+          )}
 
           {/* ── PHẦN 3: Bảng xếp hạng ── */}
           <div ref={rankingRef} className="mt-10 scroll-mt-32">
