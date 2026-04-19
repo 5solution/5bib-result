@@ -28,6 +28,7 @@ async function parseError(res: Response): Promise<string> {
 }
 
 export type StationStatus = "setup" | "active" | "closed";
+// v1.8 — assignment_role enum REMOVED. supervisor/worker derives from role.
 export type AssignmentRole = "crew" | "volunteer";
 
 export interface AssignmentMemberBrief {
@@ -36,13 +37,21 @@ export interface AssignmentMemberBrief {
   full_name: string;
   phone: string;
   status: string;
-  assignment_role: AssignmentRole;
+  // v1.8 — derived from role.is_leader_role
+  is_supervisor: boolean;
+  role_id: number | null;
+  role_name: string | null;
+  duty: string | null;
   note: string | null;
 }
 
 export interface MyStationDetail {
   id: number;
   station_name: string;
+  // v1.8 — Team (category) metadata surfaced to crew UI.
+  category_id: number;
+  category_name: string | null;
+  category_color: string | null;
   location_description: string | null;
   gps_lat: string | null;
   gps_lng: string | null;
@@ -52,8 +61,9 @@ export interface MyStationDetail {
 
 export interface MyStationView {
   station: MyStationDetail | null;
-  my_assignment_role: AssignmentRole | null;
-  crew_list: AssignmentMemberBrief[];
+  // v1.8 — replaces `my_assignment_role`. TRUE when my own role.is_leader_role.
+  my_is_supervisor: boolean | null;
+  supervisor_list: AssignmentMemberBrief[];
   teammate_list: AssignmentMemberBrief[];
 }
 

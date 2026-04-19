@@ -166,3 +166,57 @@ export async function getContract(token: string): Promise<ContractView> {
   }
   return res.json() as Promise<ContractView>;
 }
+
+// ---- Magic-link recovery (browser-only, hits /api proxy) ----
+
+export interface RecoveredRegistration {
+  event_id: number;
+  event_name: string;
+  role_name: string;
+  full_name: string;
+  status: string;
+  magic_link: string;
+}
+
+export interface RequestRecoverResponse {
+  ok: true;
+  sent_to: string;
+}
+
+export async function requestRecoverOtp(
+  email: string,
+  turnstileToken: string,
+): Promise<RequestRecoverResponse> {
+  const res = await fetch(`/api/public/recover/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, turnstile_token: turnstileToken }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as
+      | { message?: string | string[] }
+      | null;
+    const m = body?.message;
+    throw new Error(Array.isArray(m) ? m.join("; ") : (m ?? `HTTP ${res.status}`));
+  }
+  return res.json() as Promise<RequestRecoverResponse>;
+}
+
+export async function verifyRecoverOtp(
+  email: string,
+  otp: string,
+): Promise<{ registrations: RecoveredRegistration[] }> {
+  const res = await fetch(`/api/public/recover/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, otp }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as
+      | { message?: string | string[] }
+      | null;
+    const m = body?.message;
+    throw new Error(Array.isArray(m) ? m.join("; ") : (m ?? `HTTP ${res.status}`));
+  }
+  return res.json() as Promise<{ registrations: RecoveredRegistration[] }>;
+}

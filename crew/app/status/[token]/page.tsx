@@ -108,6 +108,12 @@ export default async function StatusPage({
         <p className="text-sm text-[color:var(--color-muted)] mt-2">
           {errorMessage ?? "Link không hợp lệ hoặc đã hết hạn."}
         </p>
+        <a
+          href="/recover"
+          className="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Khôi phục link bằng email →
+        </a>
       </div>
     );
   }

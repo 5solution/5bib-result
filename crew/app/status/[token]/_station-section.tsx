@@ -49,8 +49,9 @@ export function StationSection({
     );
   }
 
-  const { station, my_assignment_role, crew_list, teammate_list } = myStation;
-  const isCrew = my_assignment_role === "crew";
+  const { station, my_is_supervisor, supervisor_list, teammate_list } =
+    myStation;
+  const isSupervisor = my_is_supervisor === true;
 
   return (
     <section className="card space-y-4">
@@ -65,11 +66,11 @@ export function StationSection({
             style={{ color: "var(--5bib-text-muted)" }}
           >
             Role: <strong>{roleName}</strong>
-            {my_assignment_role ? (
+            {my_is_supervisor != null ? (
               <>
                 {" "}· Vai trò tại trạm:{" "}
                 <strong>
-                  {my_assignment_role === "crew" ? "Crew (phụ trách)" : "TNV"}
+                  {isSupervisor ? "Supervisor (👑)" : "Worker (👤)"}
                 </strong>
               </>
             ) : null}
@@ -89,12 +90,28 @@ export function StationSection({
         </div>
       ) : (
         <>
+          {/* v1.8 — Team badge on top of station card */}
+          {station.category_name ? (
+            <div className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                style={{
+                  background: station.category_color ?? "#e5e7eb",
+                  color: "#ffffff",
+                }}
+              >
+                <span aria-hidden>🏷️</span>
+                <span>Team {station.category_name}</span>
+              </span>
+            </div>
+          ) : null}
+
           <StationCard station={station} />
 
-          {crew_list.length > 0 ? (
+          {supervisor_list.length > 0 ? (
             <MemberList
-              title="👑 Crew phụ trách"
-              members={crew_list}
+              title="👑 Supervisor"
+              members={supervisor_list}
               emphasize
             />
           ) : null}
@@ -103,7 +120,7 @@ export function StationSection({
             <MemberList title="👥 Đồng đội" members={teammate_list} />
           ) : null}
 
-          {isCrew ? (
+          {isSupervisor ? (
             <CrewSupplyBlock
               token={token}
               stationId={station.id}
@@ -242,15 +259,27 @@ function MemberRow({
     >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-gray-900 truncate">
-          {emphasize ? (
-            <span className="text-amber-500 mr-1" aria-label="Crew">
+          {member.is_supervisor ? (
+            <span
+              className="text-amber-500 mr-1"
+              aria-label="Supervisor"
+              title="Supervisor (leader role)"
+            >
               👑
             </span>
           ) : null}
           {member.full_name}
         </p>
         <p className="text-xs text-gray-500">
-          {member.assignment_role === "crew" ? "Crew" : "TNV"}
+          {member.role_name ? (
+            <span className="italic">{member.role_name}</span>
+          ) : null}
+          {member.duty ? (
+            <>
+              {member.role_name ? " · " : ""}
+              <span className="italic">🎯 {member.duty}</span>
+            </>
+          ) : null}
           {member.note ? ` · ${member.note}` : ""}
         </p>
       </div>
