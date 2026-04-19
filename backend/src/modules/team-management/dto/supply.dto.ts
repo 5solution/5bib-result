@@ -268,10 +268,6 @@ export class ConfirmSupplyDto {
 // ---- SUPPLEMENT ----
 
 export class CreateSupplementDto {
-  @ApiProperty({ description: 'allocation cha — đã là is_locked=true' })
-  @IsInt()
-  allocation_id!: number;
-
   @ApiProperty({ description: 'Số lượng bổ sung (> 0)', minimum: 1 })
   @IsInt()
   @Min(1)
@@ -322,6 +318,32 @@ export class SupplementRowDto {
 }
 
 // ---- LEADER SUPPLY VIEW (OQ-B) ----
+
+export class LeaderStationBriefDto {
+  @ApiProperty() id!: number;
+  @ApiProperty() station_name!: string;
+  @ApiProperty() category_id!: number;
+  @ApiProperty({ required: false, nullable: true })
+  category_name!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  category_color!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  location_description!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  gps_lat!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  gps_lng!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  google_maps_url!: string | null;
+  @ApiProperty({ enum: ['setup', 'active', 'closed'] })
+  status!: 'setup' | 'active' | 'closed';
+  @ApiProperty() sort_order!: number;
+  @ApiProperty({
+    description:
+      'Số assignment hiện có tại station — để leader biết trạm đã có người chưa mà không cần gọi endpoint riêng.',
+  })
+  assignment_count!: number;
+}
 
 export class LeaderStationAllocationDto {
   @ApiProperty() allocation_id!: number;
@@ -384,6 +406,24 @@ export class LeaderSupplyViewDto {
       'v1.6 Option B2: display names of ALL managed roles (same order as managed_role_ids). Crew UI renders as chips / joined header.',
   })
   managed_role_names!: string[];
+  @ApiProperty({
+    type: [Number],
+    description:
+      'v1.8: ALL category (team) ids the leader manages (derived from managed roles → distinct non-null category_id).',
+  })
+  managed_category_ids!: number[];
+  @ApiProperty({
+    type: [String],
+    description:
+      'v1.8: display names of ALL managed categories (same order as managed_category_ids).',
+  })
+  managed_category_names!: string[];
   @ApiProperty({ type: [LeaderSupplyItemViewDto] })
   items!: LeaderSupplyItemViewDto[];
+  @ApiProperty({
+    type: [LeaderStationBriefDto],
+    description:
+      'v1.8+: tất cả trạm thuộc managed categories của leader. Độc lập với items[].stations[] — hiển thị dù chưa có allocation nào.',
+  })
+  stations!: LeaderStationBriefDto[];
 }

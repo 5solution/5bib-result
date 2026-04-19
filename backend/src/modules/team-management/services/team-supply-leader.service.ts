@@ -9,12 +9,15 @@ import { In, Repository } from 'typeorm';
 import { VolRegistration } from '../entities/vol-registration.entity';
 import { VolRole } from '../entities/vol-role.entity';
 import { VolStation } from '../entities/vol-station.entity';
+import { VolStationAssignment } from '../entities/vol-station-assignment.entity';
+import { VolTeamCategory } from '../entities/vol-team-category.entity';
 import { VolSupplyAllocation } from '../entities/vol-supply-allocation.entity';
 import { VolSupplyItem } from '../entities/vol-supply-item.entity';
 import { VolSupplyPlan } from '../entities/vol-supply-plan.entity';
 import { VolSupplySupplement } from '../entities/vol-supply-supplement.entity';
 import {
   LeaderStationAllocationDto,
+  LeaderStationBriefDto,
   LeaderSupplyItemViewDto,
   LeaderSupplyViewDto,
   SupplementRowDto,
@@ -35,8 +38,12 @@ export class TeamSupplyLeaderService {
     private readonly regRepo: Repository<VolRegistration>,
     @InjectRepository(VolRole, 'volunteer')
     private readonly roleRepo: Repository<VolRole>,
+    @InjectRepository(VolTeamCategory, 'volunteer')
+    private readonly categoryRepo: Repository<VolTeamCategory>,
     @InjectRepository(VolStation, 'volunteer')
     private readonly stationRepo: Repository<VolStation>,
+    @InjectRepository(VolStationAssignment, 'volunteer')
+    private readonly assignmentRepo: Repository<VolStationAssignment>,
     @InjectRepository(VolSupplyItem, 'volunteer')
     private readonly itemRepo: Repository<VolSupplyItem>,
     @InjectRepository(VolSupplyPlan, 'volunteer')
@@ -89,29 +96,76 @@ export class TeamSupplyLeaderService {
     return managed;
   }
 
+  /**
+   * v1.8 — derive managed category IDs from managed role set. Public
+   * controller uses this to validate `target_category_id`. Empty set means
+   * the leader's hierarchy doesn't span any team (all managed roles are
+   * floaters) — caller should 400 in that case.
+   */
+  async resolveManagedCategoryIds(
+    leaderReg: VolRegistration,
+  ): Promise<Set<number>> {
+    const roleIds = await this.resolveManagedRoleIds(leaderReg);
+    if (roleIds.size === 0) return new Set();
+    const roles = await this.roleRepo.find({
+      where: { id: In(Array.from(roleIds)) },
+    });
+    const categoryIds = new Set<number>();
+    for (const r of roles) {
+      if (r.category_id !== null && r.category_id !== undefined) {
+        categoryIds.add(r.category_id);
+      }
+    }
+    return categoryIds;
+  }
+
   async getLeaderSupplyView(token: string): Promise<LeaderSupplyViewDto> {
     const leader = await this.validateLeaderToken(token);
     const eventId = leader.event_id;
     // v1.6 Option B2: query supply/stations for ALL managed roles (nested).
-    const managedSet = await this.resolveManagedRoleIds(leader);
-    const managedIds = Array.from(managedSet);
+    const managedRoleSet = await this.resolveManagedRoleIds(leader);
+    const managedRoleIds = Array.from(managedRoleSet);
     const managedRoles = await this.roleRepo.find({
-      where: { id: In(managedIds) },
+      where: { id: In(managedRoleIds) },
       order: { sort_order: 'ASC', id: 'ASC' },
     });
     const managedRoleNames = managedRoles.map((r) => r.role_name);
-    // For backward compat: first-role id/name (stable ordering by sort_order).
-    const firstRoleId = managedRoles[0]?.id ?? managedIds[0] ?? 0;
-    const firstRoleName = managedRoles[0]?.role_name ?? '';
+
+    // v1.8: derive managed categories from the roles' category_id (distinct non-null).
+    const managedCategoryIdSet = new Set<number>();
+    for (const r of managedRoles) {
+      if (r.category_id !== null && r.category_id !== undefined) {
+        managedCategoryIdSet.add(r.category_id);
+      }
+    }
+    const managedCategoryIds = Array.from(managedCategoryIdSet);
+    const managedCategories =
+      managedCategoryIds.length === 0
+        ? []
+        : await this.categoryRepo.find({
+            where: { id: In(managedCategoryIds) },
+            order: { sort_order: 'ASC', id: 'ASC' },
+          });
+    const managedCategoryNames = managedCategories.map((c) => c.name);
+
+    // Deprecated role_id/role_name kept for backward compat.
+    // Must reflect the LEADER's own role, NOT a managed (subordinate) role.
+    const firstRoleId = leader.role_id;
+    const firstRoleName = leader.role?.role_name ?? '';
 
     const [plans, stations, items] = await Promise.all([
-      this.planRepo.find({
-        where: { event_id: eventId, role_id: In(managedIds) },
-      }),
-      this.stationRepo.find({
-        where: { event_id: eventId, role_id: In(managedIds) },
-        order: { sort_order: 'ASC', id: 'ASC' },
-      }),
+      managedCategoryIds.length === 0
+        ? Promise.resolve([])
+        : this.planRepo.find({
+            where: { event_id: eventId, category_id: In(managedCategoryIds) },
+          }),
+      managedCategoryIds.length === 0
+        ? Promise.resolve([])
+        : this.stationRepo.find({
+            where: { event_id: eventId, category_id: In(managedCategoryIds) },
+            relations: { category: true },
+            order: { sort_order: 'ASC', id: 'ASC' },
+          }),
       this.itemRepo.find({
         where: { event_id: eventId },
         order: { sort_order: 'ASC', id: 'ASC' },
@@ -119,21 +173,29 @@ export class TeamSupplyLeaderService {
     ]);
 
     const stationIds = stations.map((s) => s.id);
-    const allocations =
+    const [allocations, assignmentCounts] = await Promise.all([
       stationIds.length === 0
-        ? []
-        : await this.allocRepo.find({
+        ? Promise.resolve<VolSupplyAllocation[]>([])
+        : this.allocRepo.find({
             where: { station_id: In(stationIds) },
             relations: { confirmed_by_registration: true },
-          });
-
-    // Items to include: those with a plan in this role OR an allocation in
-    // any station of this role.
-    const relevantItemIds = new Set<number>([
-      ...plans.map((p) => p.item_id),
-      ...allocations.map((a) => a.item_id),
+          }),
+      stationIds.length === 0
+        ? Promise.resolve<Array<{ station_id: number; cnt: string }>>([])
+        : this.assignmentRepo
+            .createQueryBuilder('a')
+            .select('a.station_id', 'station_id')
+            .addSelect('COUNT(a.id)', 'cnt')
+            .where('a.station_id IN (:...ids)', { ids: stationIds })
+            .groupBy('a.station_id')
+            .getRawMany<{ station_id: number; cnt: string }>(),
     ]);
-    const itemsInView = items.filter((it) => relevantItemIds.has(it.id));
+
+    // v1.8.1 FIX — leader view phải thấy TOÀN BỘ supply items của event,
+    // kể cả item chưa có plan/allocation, để leader có thể initiate
+    // request. Trước đây filter by plans+allocations làm leader thấy
+    // items=[] khi admin chưa pre-create plan → không thể order.
+    const itemsInView = items;
 
     // Pre-load supplements for all allocation ids.
     const allocIds = allocations.map((a) => a.id);
@@ -173,13 +235,43 @@ export class TeamSupplyLeaderService {
       };
     });
 
+    const assignmentCountByStation = new Map<number, number>();
+    for (const row of assignmentCounts) {
+      assignmentCountByStation.set(Number(row.station_id), Number(row.cnt));
+    }
+
+    const stationBriefs: LeaderStationBriefDto[] = stations.map((st) => {
+      const gps_lat = st.gps_lat;
+      const gps_lng = st.gps_lng;
+      return {
+        id: st.id,
+        station_name: st.station_name,
+        category_id: st.category_id,
+        category_name: st.category?.name ?? null,
+        category_color: st.category?.color ?? null,
+        location_description: st.location_description,
+        gps_lat,
+        gps_lng,
+        google_maps_url:
+          gps_lat && gps_lng
+            ? `https://www.google.com/maps?q=${gps_lat},${gps_lng}`
+            : null,
+        status: st.status,
+        sort_order: st.sort_order,
+        assignment_count: assignmentCountByStation.get(st.id) ?? 0,
+      };
+    });
+
     return {
       event_id: eventId,
       role_id: firstRoleId,
       role_name: firstRoleName,
-      managed_role_ids: managedIds,
+      managed_role_ids: managedRoleIds,
       managed_role_names: managedRoleNames,
+      managed_category_ids: managedCategoryIds,
+      managed_category_names: managedCategoryNames,
       items: itemViews,
+      stations: stationBriefs,
     };
   }
 

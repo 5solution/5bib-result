@@ -89,6 +89,21 @@ export interface LeaderSupplyPlanRow {
   updated_at: string | null;
 }
 
+export interface LeaderStationBrief {
+  id: number;
+  station_name: string;
+  category_id: number;
+  category_name: string | null;
+  category_color: string | null;
+  location_description: string | null;
+  gps_lat: string | null;
+  gps_lng: string | null;
+  google_maps_url: string | null;
+  status: "setup" | "active" | "closed";
+  sort_order: number;
+  assignment_count: number;
+}
+
 export interface LeaderSupplyView {
   event_id: number;
   // v1.6 Option B2: first-managed (backward compat). Prefer managed_role_ids + managed_role_names.
@@ -98,6 +113,12 @@ export interface LeaderSupplyView {
   // descendants). UI renders joined header "Vật tư — A + B + …".
   managed_role_ids: number[];
   managed_role_names: string[];
+  // v1.8: team scope — all categories (teams) this leader controls.
+  managed_category_ids: number[];
+  managed_category_names: string[];
+  // v1.8.1: top-level station list — independent of supply allocations, so
+  // stations show even when no supply plan/allocation exists yet.
+  stations: LeaderStationBrief[];
   items: Array<{
     item_id: number;
     item_name: string;
