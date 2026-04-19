@@ -17,18 +17,24 @@ interface Props {
   courseId: string;
   initialOpen?: boolean;
   topN?: number;
+  /** Hide section entirely if total countries <= this value. Default 1 (only
+   *  useful when there are 2+ nationalities to compare). */
+  hideBelow?: number;
 }
 
 export function CountryRankingTable({
   courseId,
   initialOpen = false,
   topN = 10,
+  hideBelow = 1,
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(initialOpen);
   const [showAll, setShowAll] = useState(false);
+  // Prefetch always so we can decide whether to render the section at all.
+  // Data is tiny (top-N aggregate) and cached 120s server-side.
   const { data, isLoading, error } = useCountryStats(courseId, {
-    enabled: !!courseId && open,
+    enabled: !!courseId,
   });
 
   const countries = useMemo(() => {
@@ -37,6 +43,14 @@ export function CountryRankingTable({
   }, [data, showAll, topN]);
 
   const totalCountries = data?.totalCountries ?? 0;
+
+  // Hide the entire section when:
+  //  - still resolving first fetch (avoid empty flash)
+  //  - fetch errored (fail silently — supplementary section)
+  //  - not enough countries to rank against each other
+  if (isLoading && !data) return null;
+  if (error) return null;
+  if (totalCountries <= hideBelow) return null;
 
   return (
     <section className="rounded-2xl border border-stone-200 bg-white shadow-sm">
