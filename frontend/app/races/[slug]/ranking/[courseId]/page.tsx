@@ -461,8 +461,11 @@ export default function CourseRankingPage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
 
-          {/* ── Course Stats Viz (F-03) ── */}
-          {courseId && (
+          {/* ── Course Stats Viz (F-03) + Country Ranking (F-04) ──
+              Chỉ hiện khi race đã hoàn thành — số liệu giữa chừng dễ gây
+              hiểu lầm, và hero card "Xuất phát / Hoàn thành / DNF" chưa có
+              nghĩa khi race đang live / chưa diễn ra. */}
+          {courseId && race.status === 'completed' && (
             <div className="mt-8 space-y-4">
               <CourseStatsViz
                 courseId={courseId}
