@@ -773,34 +773,91 @@ export class RaceResultService {
       this.resultModel.distinct('nationality', { courseId, nationality: { $nin: ['', null] } }).exec(),
     ]);
 
-    // Count starters/dnf/dns/dsq from timingPoint field
-    const statusCounts = await this.resultModel.aggregate([
+    // Classify each doc into ONE mutually-exclusive bucket by inspecting
+    // timingPoint + overallRank. Vendor variations observed:
+    //   - timingPoint = "Finish"                      → finished
+    //   - timingPoint = "DNS" | overallRank = "DNS"   → dns
+    //   - timingPoint = "DSQ" | overallRank ∈ DSQ-*   → dsq
+    //   - timingPoint = checkpoint number with        → dnf
+    //     overallRank = "DNF"
+    //   - anything else non-Finish                    → dnf (conservative)
+    const bucketPipeline = [
       { $match: { courseId } },
       {
-        $group: {
-          _id: { $toUpper: '$timingPoint' },
-          count: { $sum: 1 },
-          // pick up course-level counters (stored on every doc from API)
-          started: { $max: '$started' },
-          finished: { $max: '$finished' },
-          dnf: { $max: '$dnf' },
+        $addFields: {
+          _bucket: {
+            $switch: {
+              branches: [
+                {
+                  case: { $eq: ['$timingPoint', 'Finish'] },
+                  then: 'finished',
+                },
+                {
+                  case: {
+                    $or: [
+                      {
+                        $eq: [
+                          { $toUpper: { $ifNull: ['$timingPoint', ''] } },
+                          'DNS',
+                        ],
+                      },
+                      {
+                        $eq: [
+                          { $toUpper: { $ifNull: ['$overallRank', ''] } },
+                          'DNS',
+                        ],
+                      },
+                    ],
+                  },
+                  then: 'dns',
+                },
+                {
+                  case: {
+                    $or: [
+                      {
+                        $eq: [
+                          { $toUpper: { $ifNull: ['$timingPoint', ''] } },
+                          'DSQ',
+                        ],
+                      },
+                      {
+                        $in: [
+                          { $toUpper: { $ifNull: ['$overallRank', ''] } },
+                          ['DSQ', 'DSQ-F'],
+                        ],
+                      },
+                    ],
+                  },
+                  then: 'dsq',
+                },
+              ],
+              default: 'dnf',
+            },
+          },
         },
       },
-    ]).exec();
-
-    // Aggregate started/finished/dnf from course-level counter fields (from API)
-    const firstDoc = await this.resultModel.findOne({ courseId }).lean().exec();
-    const apiStarted = firstDoc?.started ?? 0;
-    const apiFinished = firstDoc?.finished ?? 0;
-    const apiDnf = firstDoc?.dnf ?? 0;
-
-    let dnsCount = 0;
-    let dsqCount = 0;
-    for (const sc of statusCounts) {
-      const tp = sc._id as string;
-      if (tp === 'DNS') dnsCount = sc.count;
-      if (tp === 'DSQ') dsqCount = sc.count;
+      { $group: { _id: '$_bucket', count: { $sum: 1 } } },
+    ];
+    const bucketRows = await this.resultModel.aggregate(bucketPipeline).exec();
+    const buckets = { finished: 0, dns: 0, dsq: 0, dnf: 0 } as Record<
+      'finished' | 'dns' | 'dsq' | 'dnf',
+      number
+    >;
+    for (const r of bucketRows) {
+      const k = r._id as keyof typeof buckets;
+      if (k in buckets) buckets[k] = r.count;
     }
+
+    // Course-level counters stored on every doc from API (may be null if
+    // vendor didn't push them; in that case we use the derived buckets).
+    const firstDoc = await this.resultModel.findOne({ courseId }).lean().exec();
+    const apiFinished = firstDoc?.finished ?? buckets.finished;
+    const apiDnf = firstDoc?.dnf ?? buckets.dnf;
+    const dnsCount = buckets.dns;
+    const dsqCount = buckets.dsq;
+    // Started = everyone who showed up at the start line (excludes DNS).
+    const apiStarted =
+      firstDoc?.started ?? apiFinished + apiDnf + dsqCount;
 
     if (!agg) {
       const empty = {
