@@ -10,8 +10,8 @@ export interface TeamEvent {
   event_name: string;
   description: string | null;
   location: string | null;
-  location_lat: string | null;
-  location_lng: string | null;
+  location_lat: string | number | null;
+  location_lng: string | number | null;
   checkin_radius_m: number;
   event_start_date: string;
   event_end_date: string;
@@ -20,6 +20,12 @@ export interface TeamEvent {
   status: "draft" | "open" | "closed" | "completed";
   contact_email: string | null;
   contact_phone: string | null;
+  // Extra config fields — present on all event responses but not always
+  // required by list callers. Event settings page consumes the full shape.
+  benefits_image_url?: string | null;
+  terms_conditions?: string | null;
+  // TypeORM DECIMAL column returns as string from the driver.
+  min_work_hours_for_completion?: string | number | null;
   created_at: string;
   updated_at: string;
 }
@@ -305,10 +311,46 @@ export async function deleteTeamEvent(token: string, id: number): Promise<void> 
   await assertOk(res);
 }
 
+// Fetches a single event for the settings page. We intentionally don't hit
+// the public /team-events/:id endpoint because that one 404s when the
+// registration window is closed — admins need to edit exactly those cases.
+export async function getTeamEvent(
+  token: string,
+  id: number,
+): Promise<TeamEvent> {
+  const res = await fetch(`/api/team-management/events/${id}`, {
+    headers: authedHeaders(token),
+    cache: "no-store",
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+// v1.8 QC fix: update payload permits `null` on optional fields so the
+// settings page can explicitly wipe stored values (empty-string → null).
+// Backend DTO accepts null via ValidateIf; MySQL columns are nullable.
+export type UpdateTeamEventInput = Partial<{
+  event_name: string;
+  description: string | null;
+  location: string;
+  location_lat: number | null;
+  location_lng: number | null;
+  checkin_radius_m: number;
+  event_start_date: string;
+  event_end_date: string;
+  registration_open: string;
+  registration_close: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  benefits_image_url: string | null;
+  terms_conditions: string | null;
+  status: "draft" | "open" | "closed" | "completed";
+}>;
+
 export async function updateTeamEvent(
   token: string,
   id: number,
-  patch: Partial<CreateEventInput & { status: "draft" | "open" | "closed" | "completed" }>,
+  patch: UpdateTeamEventInput,
 ): Promise<TeamEvent> {
   const res = await fetch(`/api/team-management/events/${id}`, {
     method: "PUT",
