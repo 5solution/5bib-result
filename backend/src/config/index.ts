@@ -37,6 +37,10 @@ const envVarsSchema = Joi.object()
     TEAM_EMAIL_FROM: Joi.string().default('info@5bib.com'),
     RATE_LIMIT_TTL_MS: Joi.number().default(60_000),
     RATE_LIMIT_MAX: Joi.number().default(60),
+    // Cloudflare Turnstile — optional; if unset the backend skips verification
+    // (dev / self-hosted). In prod BOTH keys must be set.
+    CLOUDFLARE_TURNSTILE_SITE_KEY: Joi.string().optional().allow(''),
+    CLOUDFLARE_TURNSTILE_SECRET_KEY: Joi.string().optional().allow(''),
   })
   .unknown();
 
@@ -90,5 +94,9 @@ export const env = {
     emailFrom: envVars.TEAM_EMAIL_FROM as string,
     rateLimitTtlMs: envVars.RATE_LIMIT_TTL_MS as number,
     rateLimitMax: envVars.RATE_LIMIT_MAX as number,
+  },
+  turnstile: {
+    siteKey: (envVars.CLOUDFLARE_TURNSTILE_SITE_KEY as string) || '',
+    secretKey: (envVars.CLOUDFLARE_TURNSTILE_SECRET_KEY as string) || '',
   },
 };
