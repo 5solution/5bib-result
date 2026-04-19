@@ -574,16 +574,16 @@ export default function AthleteDetailPage() {
 
         {/* Navigation bar */}
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Link
               href={`/races/${slug}/ranking/${athlete.course_id}`}
-              className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors font-medium"
+              className="inline-flex items-center gap-1.5 text-sm text-white/80 hover:text-white transition-colors font-medium self-start"
             >
               <ChevronLeft className="w-4 h-4" />
               <span>{t('athlete.resultDistance', { distance: athlete.distance })}</span>
             </Link>
-            {/* Share buttons */}
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* Share buttons — flex-wrap cả mobile & desktop, cân đều ở mobile */}
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end [&>button]:flex-1 [&>button]:min-w-[104px] sm:[&>button]:flex-none sm:[&>button]:min-w-0">
               <CertificateV2DownloadButtons
                 raceId={raceId}
                 bib={String(athlete.Bib)}
@@ -593,24 +593,24 @@ export default function AthleteDetailPage() {
               />
               <button
                 onClick={() => setShowImageEditor(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
               >
-                <Download className="w-3.5 h-3.5" />
-                {t('athlete.resultImage')}
+                <Download className="w-4 h-4 shrink-0" />
+                <span className="whitespace-nowrap">{t('athlete.resultImage')}</span>
               </button>
               <button
                 onClick={handleShareFacebook}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
               >
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-                {t('common.share')}
+                <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+                <span className="whitespace-nowrap">{t('common.share')}</span>
               </button>
               <button
                 onClick={handleCopyLink}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
               >
-                {linkCopied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
-                {linkCopied ? t('athlete.copied') : t('athlete.copyLink')}
+                {linkCopied ? <Check className="w-4 h-4 shrink-0" /> : <Link2 className="w-4 h-4 shrink-0" />}
+                <span className="whitespace-nowrap">{linkCopied ? t('athlete.copied') : t('athlete.copyLink')}</span>
               </button>
             </div>
           </div>
