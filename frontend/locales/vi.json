@@ -173,6 +173,11 @@
     "loadingCertificate": "Đang tải chứng nhận...",
     "certificateSuccess": "Tải chứng nhận thành công!",
     "certificateNotReady": "Chứng nhận chưa sẵn sàng. Vui lòng thử lại sau.",
+    "certificateV2": "Tải Certificate",
+    "shareCardV2": "Tải Share Card",
+    "downloadingV2": "Đang tải...",
+    "downloadV2Success": "Tải thành công!",
+    "downloadV2Failed": "Tải thất bại",
     "start": "Xuất phát",
     "finish": "Về đích",
     "backToRanking": "Quay lại bảng xếp hạng"
