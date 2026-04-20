@@ -16,7 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from 'src/modules/clerk-auth';
 import { CreateEventContactDto } from './dto/create-event-contact.dto';
 import { UpdateEventContactDto } from './dto/update-event-contact.dto';
 import {
@@ -45,7 +45,7 @@ export class TeamContactController {
 
   @Get('team-management/events/:eventId/contacts')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({
     summary: 'List all emergency contacts for event (admin, includes inactive)',
   })
@@ -58,7 +58,7 @@ export class TeamContactController {
 
   @Post('team-management/events/:eventId/contacts')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({ summary: 'Create emergency contact for event' })
   @ApiResponse({ status: 201, type: EventContactDto })
   create(
@@ -70,7 +70,7 @@ export class TeamContactController {
 
   @Patch('team-management/contacts/:id')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({ summary: 'Update emergency contact' })
   @ApiResponse({ status: 200, type: EventContactDto })
   update(
@@ -82,7 +82,7 @@ export class TeamContactController {
 
   @Patch('team-management/contacts/:id/toggle-active')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({ summary: 'Flip is_active flag on a contact' })
   @ApiResponse({ status: 200, type: EventContactDto })
   toggleActive(@Param('id', ParseIntPipe) id: number): Promise<EventContactDto> {
@@ -91,7 +91,7 @@ export class TeamContactController {
 
   @Delete('team-management/contacts/:id')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({ summary: 'Delete emergency contact (hard-delete)' })
   @ApiResponse({ status: 200 })
   async remove(

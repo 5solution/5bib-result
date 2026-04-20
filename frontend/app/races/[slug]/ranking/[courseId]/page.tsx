@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import LiveTimer from '@/components/LiveTimer';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults, useCourseStats } from '@/lib/api-hooks';
+import { useStarredBibsByCourse } from '@/lib/hooks/use-athlete-stars';
+import StarAthleteButton from '@/components/StarAthleteButton';
 import CourseStatsViz from '@/components/CourseStatsViz';
 import CountryRankingTable from '@/components/CountryRankingTable';
 
@@ -229,6 +231,12 @@ export default function CourseRankingPage() {
   });
   const results: RaceResult[] = useMemo(() => (resultsRaw as any)?.data ?? [], [resultsRaw]);
   const totalItems = useMemo(() => (resultsRaw as any)?.pagination?.total ?? 0, [resultsRaw]);
+
+  // Starred bibs của user hiện tại trong course này
+  const { data: starredSet } = useStarredBibsByCourse(
+    race?.id !== undefined ? String(race.id) : undefined,
+    courseId,
+  );
 
   // Fetch course stats for finishers count
   const { data: courseStatsRaw } = useCourseStats(courseId, { enabled: !!courseId, refetchInterval: isLive ? 30_000 : false });
@@ -661,11 +669,24 @@ export default function CourseRankingPage() {
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-24">Pace</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Tốc độ</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">Cách 1st</th>
+                          <th className="px-2 py-3.5 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider w-14">⭐</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {paginatedResults.map((result) => (
-                          <RankingRow key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} genderFilter={genderFilter} categoryFilter={categoryFilter} raceStatus={race.status} />
+                          <RankingRow
+                            key={result.Bib}
+                            result={result}
+                            slug={slug}
+                            selected={selectedBibs.has(result.Bib)}
+                            onToggle={() => toggleBib(result.Bib)}
+                            genderFilter={genderFilter}
+                            categoryFilter={categoryFilter}
+                            raceStatus={race.status}
+                            raceId={String(race.id)}
+                            courseId={courseId}
+                            isStarred={starredSet?.has(String(result.Bib)) || false}
+                          />
                         ))}
                       </tbody>
                     </table>
@@ -674,7 +695,19 @@ export default function CourseRankingPage() {
                   {/* Mobile */}
                   <div className="md:hidden divide-y divide-slate-100">
                     {paginatedResults.map((result) => (
-                      <MobileRankingCard key={result.Bib} result={result} slug={slug} selected={selectedBibs.has(result.Bib)} onToggle={() => toggleBib(result.Bib)} genderFilter={genderFilter} categoryFilter={categoryFilter} raceStatus={race.status} />
+                      <MobileRankingCard
+                        key={result.Bib}
+                        result={result}
+                        slug={slug}
+                        selected={selectedBibs.has(result.Bib)}
+                        onToggle={() => toggleBib(result.Bib)}
+                        genderFilter={genderFilter}
+                        categoryFilter={categoryFilter}
+                        raceStatus={race.status}
+                        raceId={String(race.id)}
+                        courseId={courseId}
+                        isStarred={starredSet?.has(String(result.Bib)) || false}
+                      />
                     ))}
                   </div>
                 </>
@@ -827,7 +860,7 @@ function getInitials(name: string): string {
   return name.substring(0, 2).toUpperCase();
 }
 
-function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string }) {
+function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus, raceId, courseId, isStarred }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string; raceId: string; courseId: string; isStarred: boolean }) {
   const { t } = useTranslation();
   const isUpcoming = raceStatus === 'upcoming';
   const rankStr = (result.OverallRank || '').trim();
@@ -970,13 +1003,23 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
           </p>
         )}
       </td>
+
+      {/* Star athlete */}
+      <td className="px-2 py-3.5 text-center">
+        <StarAthleteButton
+          raceId={raceId}
+          courseId={courseId}
+          bib={String(result.Bib)}
+          isStarred={isStarred}
+        />
+      </td>
     </tr>
   );
 }
 
 /* ─── MobileRankingCard ─── */
 
-function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string }) {
+function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus, raceId, courseId, isStarred }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string; raceId: string; courseId: string; isStarred: boolean }) {
   const { t } = useTranslation();
   const isUpcoming = raceStatus === 'upcoming';
   const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
@@ -1054,6 +1097,15 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
           )}
         </div>
       </Link>
+      <div className="shrink-0">
+        <StarAthleteButton
+          raceId={raceId}
+          courseId={courseId}
+          bib={String(result.Bib)}
+          isStarred={isStarred}
+          size="sm"
+        />
+      </div>
     </div>
   );
 }

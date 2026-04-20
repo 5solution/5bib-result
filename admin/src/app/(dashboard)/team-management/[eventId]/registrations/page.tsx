@@ -155,7 +155,7 @@ export default function RegistrationsListPage(): React.ReactElement {
   }, [token, eventId, filterTab, filterRoleId, search, page]);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
+    if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {

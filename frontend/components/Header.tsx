@@ -38,9 +38,8 @@ export default function Header() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`relative flex items-center px-5 text-sm font-semibold transition-colors duration-200 group/nav ${
-                    isActive ? 'text-white' : 'text-blue-200 hover:text-white'
-                  }`}
+                  className={`relative flex items-center px-5 text-sm font-semibold transition-colors duration-200 group/nav ${isActive ? 'text-white' : 'text-blue-200 hover:text-white'
+                    }`}
                 >
                   {link.label}
                   <span className={`absolute bottom-0 left-0 h-[3px] bg-white transition-all duration-300 ${isActive ? 'w-full' : 'w-0 group-hover/nav:w-full'}`} />
@@ -100,7 +99,7 @@ export default function Header() {
                 href="/account"
                 className="flex-1 tracking-wide uppercase text-xs font-extrabold leading-tight hover:opacity-80"
               >
-                MY 5BIB
+                EMBRACING CHALLENGES
               </Link>
               <UserButton
                 appearance={{
@@ -126,9 +125,8 @@ export default function Header() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-semibold transition-all duration-200 ${
-                    isActive ? 'text-white border-l-2 border-white' : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
-                  }`}
+                  className={`block px-4 py-3 text-sm font-semibold transition-all duration-200 ${isActive ? 'text-white border-l-2 border-white' : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
+                    }`}
                 >
                   {link.label}
                 </Link>

@@ -22,7 +22,7 @@ export default function ExportPage(): React.ReactElement {
   } | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
+    if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   async function handleExport(): Promise<void> {

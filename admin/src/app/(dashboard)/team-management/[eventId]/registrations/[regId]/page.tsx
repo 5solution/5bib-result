@@ -16,7 +16,7 @@ export default function PersonnelDetailPage(): React.ReactElement {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
+    if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-96" />;

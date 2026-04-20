@@ -25,7 +25,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from '../clerk-auth';
 import { CertificateTemplateService } from './services/certificate-template.service';
 import { RaceCertificateConfigService } from './services/race-certificate-config.service';
 import {
@@ -59,7 +59,7 @@ export class CertificatesController {
   // ─── Admin: CertificateTemplate CRUD ──────────────────────────
 
   @Post('certificate-templates')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a certificate template (admin)' })
   @ApiResponse({ status: 201, type: TemplateResponseDto })
@@ -68,7 +68,7 @@ export class CertificatesController {
   }
 
   @Get('certificate-templates')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List certificate templates with filters (admin)' })
   @ApiResponse({ status: 200, type: TemplateListResponseDto })
@@ -77,7 +77,7 @@ export class CertificatesController {
   }
 
   @Get('certificate-templates/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get certificate template by id (admin)' })
   @ApiParam({ name: 'id' })
@@ -88,7 +88,7 @@ export class CertificatesController {
   }
 
   @Patch('certificate-templates/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update certificate template (admin)' })
   @ApiParam({ name: 'id' })
@@ -98,7 +98,7 @@ export class CertificatesController {
   }
 
   @Delete('certificate-templates/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete certificate template (admin)' })
   @ApiParam({ name: 'id' })
@@ -111,7 +111,7 @@ export class CertificatesController {
   // ─── Admin: RaceCertificateConfig ─────────────────────────────
 
   @Get('race-certificate-configs/:raceId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get race certificate config (admin)' })
   @ApiParam({ name: 'raceId' })
@@ -124,7 +124,7 @@ export class CertificatesController {
   }
 
   @Put('race-certificate-configs/:raceId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Upsert race certificate config (admin)' })
   @ApiParam({ name: 'raceId' })

@@ -25,7 +25,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from 'src/modules/clerk-auth';
 import { VolEvent } from './entities/vol-event.entity';
 import { VolRole } from './entities/vol-role.entity';
 import { VolRegistration } from './entities/vol-registration.entity';
@@ -57,14 +57,8 @@ import {
 import { RegistrationDetailDto } from './dto/registration-detail.dto';
 import { AdminManualRegisterDto } from './dto/manual-register.dto';
 import { RegisterResponseDto } from './dto/response.dto';
-import {
-  DashboardQueryDto,
-  DashboardResponseDto,
-} from './dto/dashboard.dto';
-import {
-  ShirtAggregateDto,
-  UpsertShirtStockDto,
-} from './dto/shirt-stock.dto';
+import { DashboardQueryDto, DashboardResponseDto } from './dto/dashboard.dto';
+import { ShirtAggregateDto, UpsertShirtStockDto } from './dto/shirt-stock.dto';
 import { VolShirtStock } from './entities/vol-shirt-stock.entity';
 import {
   TeamEventService,
@@ -92,7 +86,7 @@ function identifyAdmin(req: JwtRequest): string {
 
 @ApiTags('Team Management (admin)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(ClerkAdminGuard)
 @Controller('team-management')
 export class TeamManagementController {
   constructor(
@@ -146,7 +140,9 @@ export class TeamManagementController {
 
   @Delete('events/:id')
   @ApiOperation({ summary: 'Delete event (draft only)' })
-  async deleteEvent(@Param('id', ParseIntPipe) id: number): Promise<{ success: true }> {
+  async deleteEvent(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<{ success: true }> {
     await this.events.deleteEvent(id);
     return { success: true };
   }
@@ -158,10 +154,7 @@ export class TeamManagementController {
     summary: 'Download a CSV template for bulk role import',
   })
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header(
-    'Content-Disposition',
-    'attachment; filename="roles_template.csv"',
-  )
+  @Header('Content-Disposition', 'attachment; filename="roles_template.csv"')
   getImportTemplate(): string {
     return this.roleImport.generateTemplateCsv();
   }
@@ -187,10 +180,7 @@ export class TeamManagementController {
         const name = (file.originalname ?? '').toLowerCase();
         const extOk = name.endsWith('.csv') || name.endsWith('.xlsx');
         if (!extOk || !allowed.has(file.mimetype ?? '')) {
-          return cb(
-            new BadRequestException('Chỉ hỗ trợ .csv và .xlsx'),
-            false,
-          );
+          return cb(new BadRequestException('Chỉ hỗ trợ .csv và .xlsx'), false);
         }
         cb(null, true);
       },
@@ -247,7 +237,9 @@ export class TeamManagementController {
 
   @Delete('roles/:id')
   @ApiOperation({ summary: 'Delete role (must have 0 filled_slots)' })
-  async deleteRole(@Param('id', ParseIntPipe) id: number): Promise<{ success: true }> {
+  async deleteRole(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<{ success: true }> {
     await this.events.deleteRole(id);
     return { success: true };
   }
@@ -311,12 +303,12 @@ export class TeamManagementController {
     const approved = await this.registrations.approveRegistration(id);
     // Fire-and-forget contract email: failure leaves status at `approved`
     // and the admin can retry from the role bulk-send or via re-approve.
-    void this.contracts
-      .sendContractForRegistrationId(id)
-      .catch((err) =>
-        // eslint-disable-next-line no-console
-        console.warn(`contract email after approve failed reg=${id}: ${(err as Error).message}`),
-      );
+    void this.contracts.sendContractForRegistrationId(id).catch((err) =>
+      // eslint-disable-next-line no-console
+      console.warn(
+        `contract email after approve failed reg=${id}: ${(err as Error).message}`,
+      ),
+    );
     return approved;
   }
 
@@ -460,7 +452,10 @@ export class TeamManagementController {
   async getContractPdfUrl(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<{ url: string; expires_in: number }> {
-    const url = await this.contracts.getSignedContractUrlForRegistration(id, 600);
+    const url = await this.contracts.getSignedContractUrlForRegistration(
+      id,
+      600,
+    );
     return { url, expires_in: 600 };
   }
 
@@ -497,7 +492,9 @@ export class TeamManagementController {
   }
 
   @Post('registrations/bulk-update')
-  @ApiOperation({ summary: 'Apply approve/reject/cancel to many registrations' })
+  @ApiOperation({
+    summary: 'Apply approve/reject/cancel to many registrations',
+  })
   @ApiResponse({ status: 201, type: BulkUpdateResponseDto })
   bulkUpdate(
     @Body() dto: BulkUpdateRegistrationsDto,

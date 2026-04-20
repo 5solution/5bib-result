@@ -16,7 +16,7 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from '../clerk-auth';
 import { MerchantService } from './merchant.service';
 import { SearchMerchantsDto } from './dto/search-merchants.dto';
 import { UpdateMerchantFeeDto } from './dto/update-merchant-fee.dto';
@@ -25,7 +25,7 @@ import { ApproveMerchantDto } from './dto/approve-merchant.dto';
 
 @ApiTags('merchants')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(ClerkAdminGuard)
 @Controller('merchants')
 export class MerchantController {
   constructor(private readonly merchantService: MerchantService) {}

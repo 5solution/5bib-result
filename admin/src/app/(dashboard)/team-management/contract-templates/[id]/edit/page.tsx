@@ -53,7 +53,7 @@ export default function EditContractTemplatePage({
   const [unknownVars, setUnknownVars] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
+    if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {

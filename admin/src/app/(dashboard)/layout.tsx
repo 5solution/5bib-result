@@ -97,13 +97,13 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, logout } = useAuth();
+  const { isAuthenticated, isLoading, logout, userRole } = useAuth();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace("/login");
+      router.replace("/sign-in");
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -119,9 +119,30 @@ export default function DashboardLayout({
     return null;
   }
 
+  if (userRole !== "admin") {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="max-w-md text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto">
+            <LogOut className="size-7 text-red-600" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">
+            Không có quyền truy cập
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Tài khoản của bạn chưa được cấp role admin. Vui lòng liên hệ
+            superadmin để cấp quyền, hoặc đăng nhập tài khoản khác.
+          </p>
+          <Button variant="default" onClick={() => logout()}>
+            Đăng xuất
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   function handleLogout() {
     logout();
-    router.replace("/login");
   }
 
   return (

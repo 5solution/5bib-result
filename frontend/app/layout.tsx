@@ -64,6 +64,38 @@ export default function RootLayout({
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/account"
       signUpFallbackRedirectUrl="/account"
+      appearance={{
+        layout: {
+          logoImageUrl: '/logo.png',
+          logoLinkUrl: '/',
+          socialButtonsVariant: 'iconButton',
+        },
+        variables: {
+          colorPrimary: '#1d4ed8',
+          colorText: '#1c1917',
+          colorTextSecondary: '#64748b',
+          colorBackground: '#ffffff',
+          colorInputBackground: '#f8fafc',
+          colorInputText: '#0f172a',
+          borderRadius: '0.75rem',
+          fontFamily: 'var(--font-sans), system-ui, sans-serif',
+          fontFamilyButtons: 'var(--font-sans), system-ui, sans-serif',
+        },
+        elements: {
+          card: 'shadow-xl border border-slate-200',
+          headerTitle: 'text-xl font-extrabold tracking-tight',
+          formButtonPrimary:
+            'bg-blue-700 hover:bg-blue-800 text-white font-semibold normal-case text-sm tracking-normal',
+          socialButtonsBlockButton:
+            'border-slate-200 hover:bg-slate-50 text-slate-700',
+          footerActionLink: 'text-blue-700 hover:text-blue-800 font-semibold',
+          formFieldInput:
+            'border-slate-200 focus:border-blue-600 focus:ring-blue-600/20',
+          identityPreviewEditButton: 'text-blue-700 hover:text-blue-800',
+          logoBox: 'h-10',
+          logoImage: 'h-10 w-auto',
+        },
+      }}
     >
       <html lang="vi" className={`${plusJakarta.variable} ${beVietnamPro.variable}`}>
         <body className="font-sans antialiased bg-[var(--5bib-bg)] text-[var(--5bib-text)] min-h-screen flex flex-col">

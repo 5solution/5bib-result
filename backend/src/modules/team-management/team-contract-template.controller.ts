@@ -23,7 +23,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from 'src/modules/clerk-auth';
 import { VolContractTemplate } from './entities/vol-contract-template.entity';
 import {
   CreateContractTemplateDto,
@@ -40,7 +40,7 @@ interface JwtRequest extends Request {
 
 @ApiTags('Team Management — Contract Templates (admin)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(ClerkAdminGuard)
 @Controller('team-management/contract-templates')
 export class TeamContractTemplateController {
   constructor(private readonly contracts: TeamContractService) {}

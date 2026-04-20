@@ -19,7 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from 'src/modules/clerk-auth';
 import {
   CheckinLookupResponseDto,
   CheckinResponseDto,
@@ -38,7 +38,7 @@ function identifyAdmin(req: JwtRequest): string {
 
 @ApiTags('Team Management — Check-in (staff)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(ClerkAdminGuard)
 @Controller('team-management/checkin')
 export class TeamCheckinController {
   constructor(private readonly checkin: TeamCheckinService) {}

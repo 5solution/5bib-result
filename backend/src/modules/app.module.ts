@@ -16,6 +16,7 @@ import { HomepageModule } from './homepage/homepage.module';
 import { SearchModule } from './search/search.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { UsersModule } from './users/users.module';
+import { AthleteStarsModule } from './athlete-stars/athlete-stars.module';
 import { MerchantModule } from './merchant/merchant.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -120,6 +121,7 @@ const volunteerDbModules = env.volunteerDb.host
     SearchModule,
     CertificatesModule,
     UsersModule,
+    AthleteStarsModule,
   ],
 })
 export class AppModule {}

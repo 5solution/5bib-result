@@ -22,7 +22,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from 'src/modules/clerk-auth';
 import {
   ConfirmImportRegistrationsDto,
   ConfirmImportRegistrationsResponseDto,
@@ -40,7 +40,7 @@ function identifyAdmin(req: JwtRequest): string {
 
 @ApiTags('Team Registration Import (admin)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(ClerkAdminGuard)
 @Controller('team-management/events/:eventId/registrations/import')
 export class TeamRegistrationImportController {
   constructor(private readonly svc: TeamRegistrationImportService) {}

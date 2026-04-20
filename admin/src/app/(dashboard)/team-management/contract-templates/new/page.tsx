@@ -49,7 +49,7 @@ export default function NewContractTemplatePage(): React.ReactElement {
   const [unknownVars, setUnknownVars] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
+    if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   const runValidation = useCallback(

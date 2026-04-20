@@ -18,7 +18,7 @@ import {
 import { SponsorsService } from './sponsors.service';
 import { CreateSponsorDto } from './dto/create-sponsor.dto';
 import { UpdateSponsorDto } from './dto/update-sponsor.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from '../clerk-auth';
 
 @ApiTags('Sponsors')
 @Controller('sponsors')
@@ -52,7 +52,7 @@ export class SponsorsController {
 
   @Get('all')
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({ summary: 'List all sponsors including inactive (admin)' })
   @ApiResponse({ status: 200, description: 'Returns all sponsors' })
   async findAll() {
@@ -61,7 +61,7 @@ export class SponsorsController {
 
   @Post()
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({ summary: 'Create a new sponsor (admin)' })
   @ApiResponse({ status: 201, description: 'Sponsor created' })
   async create(@Body() dto: CreateSponsorDto) {
@@ -70,7 +70,7 @@ export class SponsorsController {
 
   @Patch(':id')
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({ summary: 'Update a sponsor (admin)' })
   @ApiParam({ name: 'id', type: 'string' })
   @ApiResponse({ status: 200, description: 'Sponsor updated' })
@@ -81,7 +81,7 @@ export class SponsorsController {
 
   @Delete(':id')
   @ApiBearerAuth('JWT-auth')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiOperation({ summary: 'Soft delete a sponsor (admin)' })
   @ApiParam({ name: 'id', type: 'string' })
   @ApiResponse({ status: 200, description: 'Sponsor deactivated' })

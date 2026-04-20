@@ -16,7 +16,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from 'src/modules/clerk-auth';
 import {
   CreateTeamCategoryDto,
   TeamCategoryDto,
@@ -28,7 +28,7 @@ import { TeamCategoryService } from './services/team-category.service';
 // a Team contains Leader/Crew/TNV roles + owns stations + supply plans.
 @ApiTags('Team Management (team categories)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(ClerkAdminGuard)
 @Controller('team-management')
 export class TeamCategoryController {
   constructor(private readonly categories: TeamCategoryService) {}

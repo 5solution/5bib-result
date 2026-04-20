@@ -3,103 +3,93 @@
 import {
   createContext,
   useContext,
-  useState,
   useEffect,
-  useCallback,
-  useRef,
+  useState,
   type ReactNode,
 } from "react";
+import {
+  useAuth as useClerkAuth,
+  useClerk,
+  useUser,
+} from "@clerk/nextjs";
 import "./api"; // ensure client baseUrl is configured
-import { authControllerLogin } from "./api-generated";
 
 interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** Legacy signature — no-op (login qua Clerk UI, không gọi function này) */
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  userRole: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const TOKEN_KEY = "5bib_admin_token";
-
+/**
+ * Admin auth context — wrapper quanh Clerk để giữ API `useAuth()` cũ.
+ * Các components sẽ tiếp tục dùng `const { token, isAuthenticated, logout }
+ * = useAuth()` mà không phải sửa code.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { isSignedIn, isLoaded, getToken } = useClerkAuth();
+  const { signOut } = useClerk();
+  const { user } = useUser();
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const logoutRef = useRef<() => void>(() => {});
+  const [tokenLoading, setTokenLoading] = useState(true);
 
+  // Cache token để components đọc sync. Refresh mỗi 50s.
   useEffect(() => {
-    const stored = localStorage.getItem(TOKEN_KEY);
-    if (stored) {
-      setToken(stored);
+    let cancelled = false;
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      setToken(null);
+      setTokenLoading(false);
+      return;
     }
-    setIsLoading(false);
-  }, []);
 
-  // Global fetch interceptor: auto-redirect to /login on 401
-  useEffect(() => {
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = async (...args: Parameters<typeof fetch>) => {
-      const res = await originalFetch(...args);
-      if (res.status === 401 && !window.location.pathname.startsWith("/login")) {
-        logoutRef.current();
-        window.location.href = "/login";
+    const fetchToken = async () => {
+      try {
+        const t = await getToken();
+        if (!cancelled) setToken(t);
+      } catch {
+        if (!cancelled) setToken(null);
+      } finally {
+        if (!cancelled) setTokenLoading(false);
       }
-      return res;
     };
+    fetchToken();
+    const id = setInterval(fetchToken, 50_000);
     return () => {
-      window.fetch = originalFetch;
+      cancelled = true;
+      clearInterval(id);
     };
-  }, []);
+  }, [isLoaded, isSignedIn, getToken]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { data, error } = await authControllerLogin({
-      body: { email, password },
-    });
+  const userRole =
+    (user?.publicMetadata as Record<string, unknown> | undefined)?.role as
+      | string
+      | null
+      | undefined ?? null;
 
-    if (error) {
-      throw new Error("Sai email hoac mat khau");
-    }
+  const value: AuthContextType = {
+    token,
+    isAuthenticated: !!isSignedIn && !!token,
+    isLoading: !isLoaded || tokenLoading,
+    login: async () => {
+      throw new Error(
+        "login() không còn dùng — admin auth qua Clerk. Redirect đến /sign-in",
+      );
+    },
+    logout: () => signOut({ redirectUrl: "/sign-in" }),
+    userRole,
+  };
 
-    const result = data as unknown as { access_token?: string; token?: string };
-    const accessToken = result?.access_token || result?.token;
-
-    if (!accessToken) {
-      throw new Error("Khong nhan duoc token");
-    }
-
-    localStorage.setItem(TOKEN_KEY, accessToken);
-    setToken(accessToken);
-  }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    setToken(null);
-  }, []);
-
-  // Keep ref in sync so the fetch interceptor always calls the latest logout
-  useEffect(() => {
-    logoutRef.current = logout;
-  }, [logout]);
-
-  return (
-    <AuthContext value={{
-      token,
-      isAuthenticated: !!token,
-      isLoading,
-      login,
-      logout,
-    }}>
-      {children}
-    </AuthContext>
-  );
+  return <AuthContext value={value}>{children}</AuthContext>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
 }

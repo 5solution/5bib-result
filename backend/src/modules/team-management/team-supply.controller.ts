@@ -19,7 +19,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from 'src/modules/clerk-auth';
 import {
   AllocationRowDto,
   CreateSupplementDto,
@@ -48,13 +48,13 @@ function identifyAdmin(req: JwtRequest): string {
 }
 
 /**
- * v1.6 Supply admin endpoints — all guarded by JwtAuthGuard.
+ * v1.6 Supply admin endpoints — all guarded by ClerkAdminGuard.
  * Admin calls pass `actorRoleId=null` into services so the leader-gate
  * checks are skipped.
  */
 @ApiTags('Team Management (supply)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(ClerkAdminGuard)
 @Controller('team-management')
 export class TeamSupplyController {
   constructor(

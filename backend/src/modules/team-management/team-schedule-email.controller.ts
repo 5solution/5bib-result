@@ -18,7 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from 'src/modules/clerk-auth';
 import {
   ScheduleEmailResponseDto,
   ScheduleEmailRoleSummaryDto,
@@ -35,7 +35,7 @@ interface JwtRequest extends Request {
 
 @ApiTags('Team Schedule Email')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(ClerkAdminGuard)
 @Controller('team-management/events/:eventId/schedule-emails')
 export class TeamScheduleEmailController {
   constructor(private readonly service: TeamScheduleEmailService) {}

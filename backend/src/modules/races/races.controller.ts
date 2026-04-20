@@ -25,7 +25,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from '../clerk-auth';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
 
@@ -106,7 +106,7 @@ export class RacesController {
 
   // ─── Admin CRUD ───────────────────────────────────────────────
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Post()
   @ApiOperation({ summary: 'Create a new race (admin)' })
@@ -115,7 +115,7 @@ export class RacesController {
     return this.racesService.createRace(dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id')
   @ApiOperation({ summary: 'Update a race (admin)' })
@@ -126,7 +126,7 @@ export class RacesController {
     return this.racesService.updateRace(id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a race (admin)' })
@@ -137,7 +137,7 @@ export class RacesController {
     return this.racesService.deleteRace(id);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update race lifecycle status (admin)' })
@@ -148,7 +148,7 @@ export class RacesController {
     return this.racesService.updateStatus(id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id/status/force')
   @ApiOperation({
@@ -170,7 +170,7 @@ export class RacesController {
 
   // ─── Course management ────────────────────────────────────────
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Post(':id/courses')
   @ApiOperation({ summary: 'Add a course to a race (admin)' })
@@ -181,7 +181,7 @@ export class RacesController {
     return this.racesService.addCourse(id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id/courses/:courseId')
   @ApiOperation({ summary: 'Update a course in a race (admin)' })
@@ -197,7 +197,7 @@ export class RacesController {
     return this.racesService.updateCourse(id, courseId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Delete(':id/courses/:courseId')
   @ApiOperation({ summary: 'Remove a course from a race (admin)' })
@@ -214,7 +214,7 @@ export class RacesController {
 
   // ─── Sync ─────────────────────────────────────────────────────
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Post('sync')
   @ApiOperation({ summary: 'Manually sync races from source API' })

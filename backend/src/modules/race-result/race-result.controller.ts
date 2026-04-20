@@ -37,7 +37,7 @@ import { RaceResultService } from './services/race-result.service';
 import { ResultImageService } from './services/result-image.service';
 import { RacesService } from '../races/races.service';
 import { UploadService } from '../upload/upload.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ClerkAdminGuard } from '../clerk-auth';
 
 @ApiTags('Race Results')
 @Controller('race-results')
@@ -489,7 +489,7 @@ export class RaceResultController {
     res.send(pngBuffer);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(ClerkAdminGuard)
   @Post('sync')
   @ApiOperation({ summary: 'Manually trigger race results sync' })
   @ApiResponse({
