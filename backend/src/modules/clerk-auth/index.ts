@@ -1,5 +1,6 @@
 export { ClerkAuthGuard } from './clerk-auth.guard';
 export { ClerkAdminGuard } from './clerk-admin.guard';
+export { OptionalClerkAuthGuard } from './optional-clerk-auth.guard';
 export { ClerkAuthModule } from './clerk-auth.module';
 export { ClerkService } from './clerk.service';
 export { CurrentUser } from './current-user.decorator';

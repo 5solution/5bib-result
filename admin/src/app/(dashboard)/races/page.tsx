@@ -44,7 +44,8 @@ import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight } from "lucide-
 type RaceStatus = "draft" | "pre_race" | "live" | "ended";
 
 interface Race {
-  _id: string;
+  _id?: string;  // present when backend returns privileged response
+  id?: string;   // public alias (always present as fallback)
   title: string;
   slug: string;
   status: RaceStatus;
@@ -374,13 +375,15 @@ export default function RacesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                races.map((race) => (
-                  <TableRow key={race._id} className="text-sm result-row-hover">
+                races.map((race) => {
+                  const raceId = race._id ?? race.id ?? '';
+                  return (
+                  <TableRow key={raceId} className="text-sm result-row-hover">
                     <TableCell className="font-semibold py-3 min-w-0">
                       <button
                         className="text-left hover:underline text-sm truncate block w-full"
                         title={race.title}
-                        onClick={() => router.push(`/races/${race._id}`)}
+                        onClick={() => router.push(`/races/${raceId}`)}
                       >
                         {race.title}
                       </button>
@@ -402,14 +405,14 @@ export default function RacesPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => router.push(`/races/${race._id}`)}
+                          onClick={() => router.push(`/races/${raceId}`)}
                         >
                           <Pencil className="size-4" />
                         </Button>
                         <Dialog
-                          open={deleteId === race._id}
+                          open={deleteId === raceId}
                           onOpenChange={(open) =>
-                            setDeleteId(open ? race._id : null)
+                            setDeleteId(open ? raceId : null)
                           }
                         >
                           <DialogTrigger render={<Button variant="ghost" size="icon-sm" />}>
@@ -442,7 +445,8 @@ export default function RacesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>

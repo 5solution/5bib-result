@@ -25,7 +25,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
-import { ClerkAdminGuard } from '../clerk-auth';
+import { ClerkAdminGuard, OptionalClerkAuthGuard } from '../clerk-auth';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
 
@@ -37,7 +37,7 @@ export class RacesController {
   // ─── Search / Read ────────────────────────────────────────────
 
   @Get()
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalClerkAuthGuard)
   @ApiOperation({
     summary: 'Search and list races with filters and pagination',
   })
@@ -66,7 +66,7 @@ export class RacesController {
   }
 
   @Get('slug/:slug')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalClerkAuthGuard)
   @ApiOperation({ summary: 'Get race by slug (SEO-friendly)' })
   @ApiParam({ name: 'slug', type: 'string', description: 'Race slug' })
   @ApiResponse({ status: 200, description: 'Returns race details' })
@@ -77,7 +77,7 @@ export class RacesController {
   }
 
   @Get(':id')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalClerkAuthGuard)
   @ApiOperation({ summary: 'Get race by ID' })
   @ApiParam({
     name: 'id',
