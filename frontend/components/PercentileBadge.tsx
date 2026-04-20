@@ -3,9 +3,15 @@
 /**
  * F-06 — Performance Percentile.
  *
- * PRD BR-01: percentile = (slower / totalFinishers) * 100
- * PRD BR-02: gauge bar green→blue gradient with marker at percentile position
- * PRD BR-03: comparison bars — You vs Average vs Fastest
+ * SEMANTIC (v2, 2026-04-20): `percentile` is now "Top X%" — LOWER = faster.
+ * The fastest runner on a course is at Top 1%, the slowest at Top 100%.
+ * This matches conventional running terminology and reverses the v1 meaning
+ * ("% of finishers I beat"). Backend returns the same field name but with
+ * inverted semantics; tier thresholds and gauge marker math are inverted
+ * accordingly.
+ *
+ * PRD BR-02: gauge bar green→blue gradient; marker LEFT = better (top 1%).
+ * PRD BR-03: comparison bars — You vs Average vs Fastest.
  * PRD BR-04: finishers only — hook returns null percentile for DNF; we hide.
  *
  * Exports:
@@ -22,27 +28,36 @@ interface Props {
   bib: string;
 }
 
+/**
+ * Tier thresholds use the "Top X%" semantic (lower = better).
+ *   p ≤ 10  → Elite   (Top 10%)
+ *   p ≤ 25  → Strong  (Top 25%)
+ *   p ≤ 50  → Solid   (Top 50%)
+ *   else    → Midpack (bottom half)
+ * i18n keys kept stable (top10/top25/top50/midpack) so translation files
+ * don't need a schema change.
+ */
 function tierOf(p: number): {
   label: string;
   bg: string;
   fg: string;
   Icon: typeof Award;
 } {
-  if (p >= 90)
+  if (p <= 10)
     return {
       label: 'top10',
       bg: 'bg-gradient-to-r from-amber-400 to-orange-500',
       fg: 'text-white',
       Icon: Flame,
     };
-  if (p >= 75)
+  if (p <= 25)
     return {
       label: 'top25',
       bg: 'bg-gradient-to-r from-blue-500 to-indigo-500',
       fg: 'text-white',
       Icon: Medal,
     };
-  if (p >= 50)
+  if (p <= 50)
     return {
       label: 'top50',
       bg: 'bg-gradient-to-r from-emerald-500 to-teal-500',
@@ -155,7 +170,10 @@ export function PercentileGauge({ raceId, bib }: Props) {
         </div>
       </div>
 
-      {/* Gauge bar — PRD BR-02 */}
+      {/* Gauge bar — PRD BR-02.
+          Semantics (v2): Top 1% = left (best, emerald) → Top 100% = right
+          (worst, indigo). Marker position uses `p` directly so smaller p
+          visually anchors toward the "better" side. */}
       <div className="mb-5">
         <div className="relative h-3 w-full overflow-hidden rounded-full bg-stone-100">
           <div
@@ -165,13 +183,13 @@ export function PercentileGauge({ raceId, bib }: Props) {
           <div
             className="absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-stone-900 shadow-md"
             style={{ left: `${Math.max(2, Math.min(98, p))}%` }}
-            aria-label={`Percentile ${p}`}
+            aria-label={`Top ${p}%`}
           />
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-stone-400">
-          <span>0</span>
-          <span>50</span>
-          <span>100</span>
+          <span>Top 1%</span>
+          <span>Top 50%</span>
+          <span>Top 100%</span>
         </div>
         <p className="mt-2 text-sm text-stone-600">
           {t('athlete.percentile.summary', {
