@@ -454,3 +454,149 @@
     letter-spacing: -0.02em;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   ATHLETE PROFILE v2 — visual polish layer
+   Spec: 5BIB_Spec_AthleteProfile_v2.md
+   Scoped with class/attribute selectors so they don't bleed to other
+   pages. All animations respect prefers-reduced-motion.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Scroll reveal ─────────────────────────────────────────────────── */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+[data-reveal][data-revealed='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Card rise (result card) ──────────────────────────────────────── */
+@keyframes ap-card-rise {
+  from { opacity: 0; transform: translateY(24px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ap-card-rise {
+  animation: ap-card-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Chip time shimmer ────────────────────────────────────────────── */
+@keyframes ap-shimmer {
+  0%   { background-position: -160% 50%; }
+  100% { background-position: 260% 50%; }
+}
+.ap-time-shimmer {
+  background-image: linear-gradient(
+    110deg,
+    currentColor 0%,
+    currentColor 35%,
+    rgba(255, 255, 255, 0.55) 50%,
+    currentColor 65%,
+    currentColor 100%
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* One-shot sweep on mount — stop at the final frame (solid brand color)
+     so the eye isn't pulled back to the time every 3.4s on a page that
+     already has parallax + charts fading in. */
+  animation: ap-shimmer 2.2s cubic-bezier(0.22, 1, 0.36, 1) 0.15s 1 both;
+}
+
+/* ── Avatar conic spinner ─────────────────────────────────────────── */
+@keyframes ap-ring-spin {
+  to { transform: rotate(360deg); }
+}
+.ap-avatar-ring {
+  position: relative;
+  isolation: isolate;
+}
+.ap-avatar-ring::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0.05)
+  );
+  /* Slow ambient rotation — 24s = barely perceptible, doesn't compete with
+     parallax, shimmer sweep, or scroll-reveal for the user's attention. */
+  animation: ap-ring-spin 24s linear infinite;
+  z-index: -1;
+  mask: radial-gradient(
+    circle,
+    transparent 58%,
+    #000 60%,
+    #000 100%
+  );
+  -webkit-mask: radial-gradient(
+    circle,
+    transparent 58%,
+    #000 60%,
+    #000 100%
+  );
+}
+
+/* ── Floating Action Bar ──────────────────────────────────────────── */
+.fab {
+  transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: opacity, transform;
+}
+/* Outer wrapper is `inset-x-0` (full-width) so translate only needs the Y
+   axis. The inner pill is centred via `mx-auto` + `w-fit`. `pointer-events`
+   is still toggled so the hidden gutters don't eat clicks behind them. */
+.fab-hidden {
+  opacity: 0;
+  transform: translateY(80px);
+}
+.fab-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Certificate gold-corner wrapper ──────────────────────────────── */
+.ap-cert-frame {
+  position: relative;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ap-cert-frame:hover {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow: 0 24px 60px -20px rgba(217, 119, 6, 0.35);
+}
+.ap-cert-frame::before,
+.ap-cert-frame::after,
+.ap-cert-frame > .ap-cert-corner-bl,
+.ap-cert-frame > .ap-cert-corner-br {
+  content: '';
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #d97706;
+  pointer-events: none;
+}
+.ap-cert-frame::before { top: 10px; left: 10px; border-right: 0; border-bottom: 0; border-top-left-radius: 8px; }
+.ap-cert-frame::after  { top: 10px; right: 10px; border-left: 0; border-bottom: 0; border-top-right-radius: 8px; }
+.ap-cert-frame > .ap-cert-corner-bl { bottom: 10px; left: 10px; border-right: 0; border-top: 0; border-bottom-left-radius: 8px; }
+.ap-cert-frame > .ap-cert-corner-br { bottom: 10px; right: 10px; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
+
+/* ── Reduced motion opt-out ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .ap-card-rise { animation: none; }
+  .ap-time-shimmer { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--race-brand-color, #1d4ed8); }
+  .ap-avatar-ring::before { animation: none; }
+  .fab { transition: none; }
+  .ap-cert-frame { transition: none; }
+  .ap-cert-frame:hover { transform: none; box-shadow: none; }
+  .hero-photo { transform: scale(1.06) !important; }
+}

@@ -6,6 +6,17 @@
  * Bar chart of per-segment pace, colour-coded into zones relative to the
  * athlete's average pace. Segments flagged as isPaceAlert (backend BR-02)
  * are highlighted red.
+ *
+ * v2 fixes (2026-04-20):
+ *  - Avg bias → use MEDIAN when provided avg is missing (robust to outliers)
+ *  - Negative split threshold symmetric (`lastAvg < firstAvg - 18`)
+ *  - New "erratic" strategy for high-variance runs with no clear trend
+ *  - Legend shows ALL 4 zones with count (incl. zeros)
+ *  - Adaptive thresholds scale with distance (5K stricter, ultra looser)
+ *  - "alert" zone renamed → "Sụt tốc" / "Fade" (clearer than "Cảnh báo")
+ *  - YAxis no longer `reversed`: taller bar = slower, with explicit caption
+ *  - Richer tooltip: distance + % vs avg
+ *  - ReferenceLine label anchored inside plot area (no overflow)
  */
 
 import { useMemo } from 'react';
@@ -31,14 +42,20 @@ export interface PaceZoneSplit {
 
 interface Props {
   splits: PaceZoneSplit[];
-  avgPace?: string; // e.g. "5:30/km" — optional, falls back to computed
+  avgPace?: string; // "5:30/km" — when provided overrides computed median
+  distanceKm?: number; // total race distance — enables adaptive thresholds
 }
+
+type Zone = 'fast' | 'steady' | 'slow' | 'alert';
+type Strategy = 'even' | 'negative' | 'positive' | 'erratic';
 
 interface DataPoint {
   checkpoint: string;
+  distance: string;
   paceSeconds: number;
   paceLabel: string;
-  zone: 'fast' | 'steady' | 'slow' | 'alert';
+  deltaPct: number; // signed % vs avg. negative = faster.
+  zone: Zone;
 }
 
 // "5:30/km" → 330, "1:02:30/km" → 3750. Returns null if unparsable.
@@ -58,23 +75,52 @@ function secondsToPace(s: number): string {
   return `${m}:${String(sec).padStart(2, '0')}/km`;
 }
 
-const ZONE_COLOR: Record<DataPoint['zone'], string> = {
-  fast: '#16a34a',    // green — faster than avg
-  steady: '#1d4ed8',  // blue — at avg
-  slow: '#f59e0b',    // amber — slower but not alert
-  alert: '#dc2626',   // red — backend flagged
+function median(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? Math.round((s[mid - 1] + s[mid]) / 2) : s[mid];
+}
+
+/**
+ * Adaptive thresholds. Short races are paced tighter; ultras swing more.
+ *  steady band: ±steadyPct   (default 5%)
+ *  slow  band: +steadyPct … +alertPct
+ *  alert     : > +alertPct OR backend-flagged
+ * Strategy thresholds scale too.
+ */
+function thresholdsFor(distanceKm: number | undefined): {
+  steadyPct: number;
+  alertPct: number;
+  evenRangeSec: number; // max-min below this → "even"
+  splitDeltaSec: number; // |lastAvg-firstAvg| above this = clear split
+} {
+  const km = distanceKm ?? 21;
+  if (km <= 10) return { steadyPct: 0.04, alertPct: 0.15, evenRangeSec: 20, splitDeltaSec: 12 };
+  if (km <= 25) return { steadyPct: 0.05, alertPct: 0.2, evenRangeSec: 30, splitDeltaSec: 18 };
+  if (km <= 50) return { steadyPct: 0.07, alertPct: 0.25, evenRangeSec: 45, splitDeltaSec: 25 };
+  return { steadyPct: 0.1, alertPct: 0.3, evenRangeSec: 75, splitDeltaSec: 40 };
+}
+
+const ZONE_COLOR: Record<Zone, string> = {
+  fast: '#16a34a', // green
+  steady: '#1d4ed8', // blue
+  slow: '#f59e0b', // amber
+  alert: '#dc2626', // red
 };
 
-export function PaceZoneChart({ splits, avgPace }: Props) {
+export function PaceZoneChart({ splits, avgPace, distanceKm }: Props) {
   const { t } = useTranslation();
 
-  const { data, avgSeconds, strategy } = useMemo((): {
+  const { data, avgSeconds, strategy, zoneCounts } = useMemo((): {
     data: DataPoint[];
     avgSeconds: number;
-    strategy: 'even' | 'negative' | 'positive' | null;
+    strategy: Strategy | null;
+    zoneCounts: Record<Zone, number>;
   } => {
     const pts: DataPoint[] = [];
     const paceSecs: number[] = [];
+    const th = thresholdsFor(distanceKm);
 
     for (const s of splits) {
       const secs = paceToSeconds(s.pace);
@@ -82,42 +128,48 @@ export function PaceZoneChart({ splits, avgPace }: Props) {
       paceSecs.push(secs);
     }
 
-    if (paceSecs.length === 0)
-      return { data: pts, avgSeconds: 0, strategy: null };
+    if (paceSecs.length === 0) {
+      return {
+        data: pts,
+        avgSeconds: 0,
+        strategy: null,
+        zoneCounts: { fast: 0, steady: 0, slow: 0, alert: 0 },
+      };
+    }
 
     const providedAvg = paceToSeconds(avgPace);
-    const avg =
-      providedAvg && providedAvg > 0
-        ? providedAvg
-        : Math.round(paceSecs.reduce((a, b) => a + b, 0) / paceSecs.length);
+    // Prefer caller-provided avg (usually the athlete's overall Pace field).
+    // Fall back to MEDIAN of segment paces — robust against one-off blow-ups
+    // that would otherwise drag a mean and mis-classify the rest.
+    const avg = providedAvg && providedAvg > 0 ? providedAvg : median(paceSecs);
 
     for (const s of splits) {
       const secs = paceToSeconds(s.pace);
       if (secs === null || secs <= 0) continue;
 
-      // PRD F-02 BR-01 zones: green (on pace ≤ avg×1.05), yellow (≤ avg×1.20),
-      // red (> avg×1.20 OR backend-flagged isPaceAlert). We extend with a
-      // "fast" (< avg×0.95) sub-category for richer UX — still a subset of
-      // the PRD green zone by strict definition.
-      let zone: DataPoint['zone'];
-      if (s.isPaceAlert || secs > avg * 1.2) zone = 'alert';
-      else if (secs > avg * 1.05) zone = 'slow';
-      else if (secs < avg * 0.95) zone = 'fast';
+      const deltaPct = (secs - avg) / avg;
+      let zone: Zone;
+      if (s.isPaceAlert || deltaPct > th.alertPct) zone = 'alert';
+      else if (deltaPct > th.steadyPct) zone = 'slow';
+      else if (deltaPct < -th.steadyPct) zone = 'fast';
       else zone = 'steady';
 
       pts.push({
         checkpoint: s.name,
+        distance: s.distance ?? '',
         paceSeconds: secs,
         paceLabel: secondsToPace(secs),
+        deltaPct: Math.round(deltaPct * 1000) / 10, // one decimal
         zone,
       });
     }
 
-    // PRD F-02 BR-02 — split strategy badge
-    // Even: max-min < 30s/km (0.5 min/km)
-    // Negative: last half avg faster than first half
-    // Positive: last half >= first half + 18s/km (0.3 min/km)
-    let strategy: 'even' | 'negative' | 'positive' | null = null;
+    // Split strategy
+    //   even:     max-min < evenRangeSec
+    //   negative: lastAvg < firstAvg - splitDeltaSec  (sped up)
+    //   positive: lastAvg > firstAvg + splitDeltaSec  (slowed down)
+    //   erratic:  high range but neither half dominates → bouncing
+    let strategyOut: Strategy | null = null;
     if (paceSecs.length >= 2) {
       const max = Math.max(...paceSecs);
       const min = Math.min(...paceSecs);
@@ -130,66 +182,78 @@ export function PaceZoneChart({ splits, avgPace }: Props) {
       const lastAvg = lastHalf.length
         ? lastHalf.reduce((a, b) => a + b, 0) / lastHalf.length
         : 0;
+      const diff = lastAvg - firstAvg;
 
-      if (max - min < 30) strategy = 'even';
-      else if (lastAvg > firstAvg + 18) strategy = 'positive';
-      else if (lastAvg < firstAvg) strategy = 'negative';
+      if (max - min < th.evenRangeSec) strategyOut = 'even';
+      else if (diff > th.splitDeltaSec) strategyOut = 'positive';
+      else if (diff < -th.splitDeltaSec) strategyOut = 'negative';
+      else strategyOut = 'erratic';
     }
 
-    return { data: pts, avgSeconds: avg, strategy };
-  }, [splits, avgPace]);
+    const counts = pts.reduce(
+      (acc, d) => ({ ...acc, [d.zone]: acc[d.zone] + 1 }),
+      { fast: 0, steady: 0, slow: 0, alert: 0 } as Record<Zone, number>,
+    );
+
+    return { data: pts, avgSeconds: avg, strategy: strategyOut, zoneCounts: counts };
+  }, [splits, avgPace, distanceKm]);
 
   if (data.length < 2) return null;
 
-  const zoneCounts = data.reduce(
-    (acc, d) => ({ ...acc, [d.zone]: acc[d.zone] + 1 }),
-    { fast: 0, steady: 0, slow: 0, alert: 0 },
-  );
+  const strategyBadgeClass: Record<Strategy, string> = {
+    even: 'bg-emerald-100 text-emerald-700',
+    negative: 'bg-blue-100 text-blue-700',
+    positive: 'bg-amber-100 text-amber-700',
+    erratic: 'bg-rose-100 text-rose-700',
+  };
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h3 className="font-heading text-lg font-semibold text-stone-900">
             {t('athlete.paceZone.title')}
           </h3>
           {strategy && (
             <span
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                strategy === 'even'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : strategy === 'negative'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-amber-100 text-amber-700'
-              }`}
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${strategyBadgeClass[strategy]}`}
             >
               {t(`athlete.paceZone.strategy.${strategy}`)}
             </span>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          {(['fast', 'steady', 'slow', 'alert'] as const).map((z) =>
-            zoneCounts[z] > 0 ? (
+          {(['fast', 'steady', 'slow', 'alert'] as const).map((z) => (
+            <span
+              key={z}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
+                zoneCounts[z] > 0
+                  ? 'bg-stone-100 text-stone-700'
+                  : 'bg-stone-50 text-stone-400'
+              }`}
+            >
               <span
-                key={z}
-                className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-stone-700"
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: ZONE_COLOR[z] }}
-                />
-                {t(`athlete.paceZone.zones.${z}`)}: {zoneCounts[z]}
-              </span>
-            ) : null,
-          )}
+                className="h-2 w-2 rounded-full"
+                style={{
+                  backgroundColor: ZONE_COLOR[z],
+                  opacity: zoneCounts[z] > 0 ? 1 : 0.4,
+                }}
+              />
+              {t(`athlete.paceZone.zones.${z}`)}: {zoneCounts[z]}
+            </span>
+          ))}
         </div>
       </div>
+
+      <p className="mb-2 text-[11px] text-stone-400">
+        {t('athlete.paceZone.axisHint')}
+      </p>
 
       <div className="h-60 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
-            margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
+            margin={{ top: 10, right: 12, left: 0, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
             <XAxis
@@ -203,8 +267,7 @@ export function PaceZoneChart({ splits, avgPace }: Props) {
               axisLine={{ stroke: '#d6d3d1' }}
               tickLine={false}
               tickFormatter={(v: number) => secondsToPace(v)}
-              width={60}
-              reversed
+              width={64}
             />
             <Tooltip
               contentStyle={{
@@ -216,7 +279,20 @@ export function PaceZoneChart({ splits, avgPace }: Props) {
               formatter={(_value, _name, entry) => {
                 const p = entry?.payload as DataPoint | undefined;
                 if (!p) return ['', ''];
-                return [p.paceLabel, t(`athlete.paceZone.zones.${p.zone}`)];
+                const deltaLabel =
+                  p.deltaPct > 0
+                    ? `+${p.deltaPct}% ${t('athlete.paceZone.vsAvgSlower')}`
+                    : p.deltaPct < 0
+                      ? `${p.deltaPct}% ${t('athlete.paceZone.vsAvgFaster')}`
+                      : t('athlete.paceZone.vsAvgEqual');
+                return [
+                  `${p.paceLabel} · ${deltaLabel}`,
+                  t(`athlete.paceZone.zones.${p.zone}`),
+                ];
+              }}
+              labelFormatter={(label, payload) => {
+                const p = payload?.[0]?.payload as DataPoint | undefined;
+                return p?.distance ? `${String(label)} · ${p.distance}` : String(label);
               }}
             />
             {avgSeconds > 0 && (
@@ -226,7 +302,7 @@ export function PaceZoneChart({ splits, avgPace }: Props) {
                 strokeDasharray="4 4"
                 label={{
                   value: `${t('athlete.paceZone.avg')} ${secondsToPace(avgSeconds)}`,
-                  position: 'right',
+                  position: 'insideTopRight',
                   fontSize: 10,
                   fill: '#1d4ed8',
                 }}

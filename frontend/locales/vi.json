@@ -152,6 +152,17 @@
     "resultImage": "Ảnh KQ",
     "copyLink": "Copy link",
     "copied": "Đã sao chép",
+    "fab": {
+      "ranking": "BXH",
+      "share": "Chia sẻ",
+      "certificate": "Chứng chỉ"
+    },
+    "paceStrip": {
+      "avgPace": "Pace TB",
+      "distance": "Cự ly",
+      "category": "Nhóm tuổi",
+      "raceDate": "Ngày đua"
+    },
     "upcomingTitle": "Giải chưa diễn ra",
     "upcomingSubtitle": "Kết quả sẽ được cập nhật khi giải bắt đầu",
     "chipTime": "Chip Time",
@@ -194,24 +205,29 @@
       "title": "Diễn biến thứ hạng",
       "rank": "Hạng",
       "trend": {
-        "up": "Leo hạng",
-        "down": "Tụt hạng",
-        "flat": "Ổn định"
+        "up": "↑ Leo hạng",
+        "down": "↓ Tụt hạng",
+        "flat": "— Giữ hạng"
       }
     },
     "paceZone": {
       "title": "Phân tích Pace theo chặng",
       "avg": "Pace TB",
+      "axisHint": "Cột càng cao = pace càng chậm. Đường đứt xanh = pace trung bình.",
+      "vsAvgFaster": "nhanh hơn TB",
+      "vsAvgSlower": "chậm hơn TB",
+      "vsAvgEqual": "ngang TB",
       "zones": {
         "fast": "Nhanh",
         "steady": "Ổn định",
         "slow": "Chậm",
-        "alert": "Cảnh báo"
+        "alert": "Sụt tốc"
       },
       "strategy": {
         "even": "Even Pacer",
         "negative": "Negative Split",
-        "positive": "Positive Split"
+        "positive": "Positive Split",
+        "erratic": "Dao động"
       }
     },
     "countryRank": {
