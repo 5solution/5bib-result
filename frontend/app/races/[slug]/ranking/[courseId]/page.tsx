@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import LiveTimer from '@/components/LiveTimer';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults, useCourseStats } from '@/lib/api-hooks';
+import CourseStatsViz from '@/components/CourseStatsViz';
+import CountryRankingTable from '@/components/CountryRankingTable';
 
 /* ─── Helpers ─── */
 
@@ -458,6 +460,29 @@ export default function CourseRankingPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+
+          {/* ── Course Stats Viz (F-03) + Country Ranking (F-04) ──
+              Chỉ hiện khi race đã hoàn thành — số liệu giữa chừng dễ gây
+              hiểu lầm, và hero card "Xuất phát / Hoàn thành / DNF" chưa có
+              nghĩa khi race đang live / chưa diễn ra. */}
+          {courseId && race.status === 'completed' && (
+            <div className="mt-8 space-y-4">
+              <CourseStatsViz
+                courseId={courseId}
+                /* Prefer the live-computed counters from the stats endpoint
+                 * (getCourseStats has a fallback that derives them from
+                 * timingPoint + overallRank when the API-reported counters
+                 * are null). Only fall back to the course-config values if
+                 * the stats endpoint is missing. */
+                started={courseStats?.started ?? course?.starters}
+                finished={courseStats?.finished ?? course?.finishers}
+                dnf={courseStats?.dnf ?? course?.dnf}
+                avgTime={courseStats?.avgTime}
+                minTime={courseStats?.minTime}
+              />
+              <CountryRankingTable courseId={courseId} />
+            </div>
+          )}
 
           {/* ── PHẦN 3: Bảng xếp hạng ── */}
           <div ref={rankingRef} className="mt-10 scroll-mt-32">

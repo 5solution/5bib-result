@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText } from 'lucide-react';
+import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,77 @@ import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachme
 import ResultImageEditor from '@/components/ResultImageEditor';
 import CertificateV2DownloadButtons from '@/components/CertificateV2DownloadButtons';
 import CertificateWithPhotoCta from '@/components/CertificateWithPhotoCta';
+import RankProgressionChart from '@/components/RankProgressionChart';
+import PaceZoneChart from '@/components/PaceZoneChart';
+import CountryBadge from '@/components/CountryBadge';
+import PercentileBadge, { PercentileGauge } from '@/components/PercentileBadge';
+import RaceTheme from '@/components/RaceTheme';
+
+// ── Nationality guard ────────────────────────────────────────────────────
+// Upstream RaceResult sometimes sends placeholder values like "0", "-1",
+// empty strings, or numeric IDs that never got mapped to a country name.
+// Rendering those literally produces a confusing "0" pill in the hero.
+// Accept only values that contain at least one alpha character and exclude
+// known garbage strings.
+function isValidNationality(n: unknown): n is string {
+  if (typeof n !== 'string') return false;
+  const trimmed = n.trim();
+  if (!trimmed) return false;
+  if (/^-?\d+$/.test(trimmed)) return false; // pure numeric (e.g. "0", "-1", "840")
+  if (['null', 'undefined', 'unknown', 'n/a', 'na', '-'].includes(trimmed.toLowerCase())) return false;
+  if (!/[a-zA-ZÀ-ỹ]/.test(trimmed)) return false; // needs at least one letter
+  return true;
+}
+
+// ── Final race status derived from overall rank + chip time ──────────────
+// Kept as module-level helpers so they're easy to move to a shared util
+// later if another surface needs the same classification.
+type FinalStatus = 'finisher' | 'dnf' | 'dsq' | 'dns';
+
+function deriveFinalStatus(overallRank: string, chipTime: string): FinalStatus {
+  const r = (overallRank || '').trim().toUpperCase();
+  if (r === 'DNS') return 'dns';
+  if (r.startsWith('DSQ')) return 'dsq';
+  if (r === 'DNF') return 'dnf';
+  const rankNum = parseInt(r, 10);
+  const hasTime = !!chipTime && chipTime !== '-' && chipTime !== '00:00:00';
+  if (Number.isFinite(rankNum) && rankNum > 0 && hasTime) return 'finisher';
+  return 'dnf';
+}
+
+const STATUS_CHIP: Record<
+  FinalStatus,
+  { bg: string; text: string; ring: string; Icon: typeof Flag; labelKey: string }
+> = {
+  finisher: {
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-700',
+    ring: 'ring-emerald-200',
+    Icon: Award,
+    labelKey: 'athlete.statusBadge.status.finisher',
+  },
+  dnf: {
+    bg: 'bg-rose-50',
+    text: 'text-rose-700',
+    ring: 'ring-rose-200',
+    Icon: XOctagon,
+    labelKey: 'athlete.statusBadge.status.dnf',
+  },
+  dsq: {
+    bg: 'bg-amber-50',
+    text: 'text-amber-800',
+    ring: 'ring-amber-200',
+    Icon: AlertTriangle,
+    labelKey: 'athlete.statusBadge.status.dsq',
+  },
+  dns: {
+    bg: 'bg-slate-100',
+    text: 'text-slate-700',
+    ring: 'ring-slate-200',
+    Icon: Flag,
+    labelKey: 'athlete.statusBadge.status.dns',
+  },
+};
 
 interface AthleteResult {
   Bib: number;
@@ -542,14 +613,29 @@ export default function AthleteDetailPage() {
   const maxPace = paces.length > 0 ? Math.max(...paces) : 0;
   const minPace = paces.length > 0 ? Math.min(...paces) : 0;
 
+  // Final status — drives the status chip + whether to show the cert CTA.
+  const finalStatus = deriveFinalStatus(athlete.OverallRank, athlete.ChipTime);
+  const statusChip = STATUS_CHIP[finalStatus];
+  const StatusIcon = statusChip.Icon;
+  const certCtaVisible =
+    finalStatus === 'finisher' && raceData?.enableEcert !== false;
+
   const genderLabel = athlete.Gender === 'Male' || athlete.Gender === 'M' ? t('common.male') : t('common.female');
   const genderIcon = athlete.Gender === 'Male' || athlete.Gender === 'M' ? '♂' : '♀';
   const genderColor = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'bg-blue-600' : 'bg-pink-500';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <RaceTheme brandColor={raceData?.brandColor} className="min-h-screen bg-gray-50">
       {/* ===== HERO SECTION ===== */}
-      <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 overflow-hidden">
+      <div
+        className="relative overflow-hidden"
+        style={{
+          background:
+            raceData?.brandColor && /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(raceData.brandColor)
+              ? `linear-gradient(135deg, var(--race-accent) 0%, var(--race-accent-dark) 100%)`
+              : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #3730a3 100%)',
+        }}
+      >
         {/* Background decorative elements */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-white rounded-full blur-3xl -translate-y-1/2" />
@@ -561,16 +647,16 @@ export default function AthleteDetailPage() {
 
         {/* Navigation bar */}
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Link
               href={`/races/${slug}/ranking/${athlete.course_id}`}
-              className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors font-medium"
+              className="inline-flex items-center gap-1.5 text-sm text-white/80 hover:text-white transition-colors font-medium self-start"
             >
               <ChevronLeft className="w-4 h-4" />
               <span>{t('athlete.resultDistance', { distance: athlete.distance })}</span>
             </Link>
-            {/* Share buttons */}
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* Share buttons — flex-wrap cả mobile & desktop, cân đều ở mobile */}
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end [&>button]:flex-1 [&>button]:min-w-[104px] sm:[&>button]:flex-none sm:[&>button]:min-w-0">
               <CertificateV2DownloadButtons
                 raceId={raceId}
                 bib={String(athlete.Bib)}
@@ -580,24 +666,24 @@ export default function AthleteDetailPage() {
               />
               <button
                 onClick={() => setShowImageEditor(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
               >
-                <Download className="w-3.5 h-3.5" />
-                {t('athlete.resultImage')}
+                <Download className="w-4 h-4 shrink-0" />
+                <span className="whitespace-nowrap">{t('athlete.resultImage')}</span>
               </button>
               <button
                 onClick={handleShareFacebook}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
               >
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-                {t('common.share')}
+                <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+                <span className="whitespace-nowrap">{t('common.share')}</span>
               </button>
               <button
                 onClick={handleCopyLink}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white rounded-full text-xs font-semibold transition-all border border-white/20"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
               >
-                {linkCopied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
-                {linkCopied ? t('athlete.copied') : t('athlete.copyLink')}
+                {linkCopied ? <Check className="w-4 h-4 shrink-0" /> : <Link2 className="w-4 h-4 shrink-0" />}
+                <span className="whitespace-nowrap">{linkCopied ? t('athlete.copied') : t('athlete.copyLink')}</span>
               </button>
             </div>
           </div>
@@ -661,12 +747,20 @@ export default function AthleteDetailPage() {
             <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
               {athlete.Category}
             </span>
-            {athlete.Nationality && (
+            {isValidNationality(athlete.Nationality) && (
               <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-sm font-semibold border border-white/30">
                 {countryToFlag(athlete.Nationality) || countryToFlag(athlete.Nation) || athlete.Nation} {athlete.Nationality}
               </span>
             )}
           </div>
+
+          {/* Country rank + percentile badges (F-04 / F-06) */}
+          {raceId && athlete.Bib != null && !isUpcoming && (
+            <div className="flex justify-center flex-wrap gap-2 mt-2">
+              <CountryBadge raceId={raceId} bib={String(athlete.Bib)} />
+              <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} />
+            </div>
+          )}
 
           {/* Race name */}
           {athlete.race_name && (
@@ -679,7 +773,17 @@ export default function AthleteDetailPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10 pb-12 space-y-6">
 
         {/* === TIME CARD (floating over hero) === */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="relative bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          {/* Status chip — top-right corner. Hidden for upcoming races. */}
+          {!isUpcoming && (
+            <div
+              className={`absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ${statusChip.bg} ${statusChip.text} ${statusChip.ring} md:right-5 md:top-5 md:text-xs`}
+            >
+              <StatusIcon className="h-3.5 w-3.5" />
+              {t(statusChip.labelKey)}
+            </div>
+          )}
+
           {isUpcoming ? (
             <div className="text-center py-10 md:py-14 px-6">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 mb-4">
@@ -693,7 +797,13 @@ export default function AthleteDetailPage() {
               {/* Big time display */}
               <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
                 <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">{t('athlete.chipTime')}</div>
-                <div className="text-5xl md:text-7xl font-black text-blue-600 tracking-tight mb-3" style={{ fontFamily: 'var(--font-mono)' }}>
+                <div
+                  className="text-5xl md:text-7xl font-black tracking-tight mb-3"
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--race-accent, #2563eb)',
+                  }}
+                >
                   {athlete.ChipTime}
                 </div>
                 <div className="flex items-center justify-center gap-4 md:gap-8 text-sm text-gray-500">
@@ -735,9 +845,77 @@ export default function AthleteDetailPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Certificate CTA — integrated footer of the TIME CARD.
+                  Shows only for finishers on races with cert feature on.
+                  Reuses `downloadCertificateAsPng` (same endpoint + confetti
+                  as the old cert section further down). */}
+              {certCtaVisible && (
+                <div className="border-t border-gray-100 bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/40 px-5 py-4 md:px-6 md:py-5">
+                  <div className="flex flex-col items-center justify-between gap-3 sm:flex-row sm:gap-4">
+                    <div className="flex items-center gap-2.5 text-left">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600/10 text-emerald-700 ring-1 ring-emerald-200">
+                        <Award className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700/80">
+                          {t('athlete.certificateSubtitle')}
+                        </div>
+                        <div className="text-sm font-semibold text-stone-700">
+                          {t('athlete.certificateTitle')}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={downloadCertificateAsPng}
+                      disabled={downloading}
+                      type="button"
+                      className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-700 px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-white shadow-md shadow-emerald-600/20 transition-all hover:shadow-lg hover:shadow-emerald-600/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+                    >
+                      {downloading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" />
+                      )}
+                      {downloading
+                        ? t('common.processing')
+                        : t('athlete.statusBadge.getCertificate')}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
+
+        {/* === RANK PROGRESSION + PACE ZONE (F-01 / F-02) === */}
+        {hasSplits && !isUpcoming && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <RankProgressionChart
+              splits={splits.map((s) => ({
+                name: s.name,
+                distance: s.distance,
+                overallRank: s.overallRank,
+                rankDelta: s.rankDelta,
+              }))}
+              finalRank={athlete.OverallRank}
+            />
+            <PaceZoneChart
+              splits={splits.map((s) => ({
+                name: s.name,
+                distance: s.distance,
+                pace: s.pace,
+                isPaceAlert: s.isPaceAlert,
+              }))}
+              avgPace={athlete.Pace}
+            />
+          </div>
+        )}
+
+        {/* === PERCENTILE GAUGE (F-06) === */}
+        {!isUpcoming && (
+          <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} />
+        )}
 
         {/* === SPLIT TIMES === */}
         {hasSplits && !isUpcoming && <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
@@ -1353,6 +1531,6 @@ export default function AthleteDetailPage() {
         </div>
       )}
 
-    </div>
+    </RaceTheme>
   );
 }

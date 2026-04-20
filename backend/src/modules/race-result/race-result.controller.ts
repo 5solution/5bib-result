@@ -27,6 +27,12 @@ import { memoryStorage } from 'multer';
 import { GetRaceResultsDto } from './dto/get-race-results.dto';
 import { RaceResultsPaginatedDto } from './dto/race-result-response.dto';
 import { SubmitClaimDto } from './dto/submit-claim.dto';
+import {
+  TimeDistributionResponseDto,
+  CountryStatsResponseDto,
+  CountryRankResponseDto,
+  PercentileResponseDto,
+} from './dto/stats-viz.dto';
 import { RaceResultService } from './services/race-result.service';
 import { ResultImageService } from './services/result-image.service';
 import { RacesService } from '../races/races.service';
@@ -208,6 +214,85 @@ export class RaceResultController {
   async getCourseStats(@Param('courseId') courseId: string) {
     const stats = await this.raceResultService.getCourseStats(courseId);
     return { data: stats, success: true };
+  }
+
+  // ─── F-03: Time Distribution ──────────────────────────────────
+
+  @Get('stats/:courseId/distribution')
+  @ApiOperation({
+    summary: 'Get finish time distribution histogram for a course (F-03)',
+  })
+  @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns histogram buckets + summary stats',
+    type: TimeDistributionResponseDto,
+  })
+  async getTimeDistribution(
+    @Param('courseId') courseId: string,
+  ): Promise<TimeDistributionResponseDto> {
+    const data = await this.raceResultService.getTimeDistribution(courseId);
+    return { data, success: true };
+  }
+
+  // ─── F-04: Country Stats ──────────────────────────────────────
+
+  @Get('stats/:courseId/countries')
+  @ApiOperation({
+    summary: 'Get per-country stats (count + best time) for a course (F-04)',
+  })
+  @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns top countries with finisher count + best chip time',
+    type: CountryStatsResponseDto,
+  })
+  async getCountryStats(
+    @Param('courseId') courseId: string,
+  ): Promise<CountryStatsResponseDto> {
+    const data = await this.raceResultService.getCountryStats(courseId);
+    return { data, success: true };
+  }
+
+  @Get('athlete/:raceId/:bib/country-rank')
+  @ApiOperation({
+    summary: 'Get athlete rank among same-nationality finishers (F-04)',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns rank (null if DNF) + total same-nationality finishers',
+    type: CountryRankResponseDto,
+  })
+  async getCountryRank(
+    @Param('raceId') raceId: string,
+    @Param('bib') bib: string,
+  ): Promise<CountryRankResponseDto> {
+    const data = await this.raceResultService.getCountryRank(raceId, bib);
+    return { data, success: true };
+  }
+
+  // ─── F-06: Performance Percentile ─────────────────────────────
+
+  @Get('athlete/:raceId/:bib/percentile')
+  @ApiOperation({
+    summary: "Get athlete's performance percentile on this course (F-06)",
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns percentile + comparison metrics',
+    type: PercentileResponseDto,
+  })
+  async getPercentile(
+    @Param('raceId') raceId: string,
+    @Param('bib') bib: string,
+  ): Promise<PercentileResponseDto> {
+    const data = await this.raceResultService.getPercentile(raceId, bib);
+    return { data, success: true };
   }
 
   @Post('avatar/request-otp')
