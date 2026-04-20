@@ -17,6 +17,9 @@ import PaceZoneChart from '@/components/PaceZoneChart';
 import CountryBadge from '@/components/CountryBadge';
 import PercentileBadge, { PercentileGauge } from '@/components/PercentileBadge';
 import RaceTheme from '@/components/RaceTheme';
+import RaceHeroHeader from '@/components/RaceHeroHeader';
+import FloatingActionBar from '@/components/FloatingActionBar';
+import { useScrollRevealObserver } from '@/lib/useScrollRevealObserver';
 
 // ── Nationality guard ────────────────────────────────────────────────────
 // Upstream RaceResult sometimes sends placeholder values like "0", "-1",
@@ -235,6 +238,9 @@ export default function AthleteDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
   const bib = params.bib as string;
+  // v2: wire scroll-reveal across all [data-reveal] sections on this page.
+  // Re-scans whenever slug/bib changes so SPA navigations still trigger it.
+  useScrollRevealObserver([slug, bib]);
 
   // Data fetching via react-query hooks
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
@@ -626,24 +632,11 @@ export default function AthleteDetailPage() {
 
   return (
     <RaceTheme brandColor={raceData?.brandColor} className="min-h-screen bg-gray-50">
-      {/* ===== HERO SECTION ===== */}
-      <div
-        className="relative overflow-hidden"
-        style={{
-          background:
-            raceData?.brandColor && /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(raceData.brandColor)
-              ? `linear-gradient(135deg, var(--race-accent) 0%, var(--race-accent-dark) 100%)`
-              : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #3730a3 100%)',
-        }}
+      {/* ===== HERO SECTION (v2 — blurred race banner, 3 layers) ===== */}
+      <RaceHeroHeader
+        bannerUrl={raceData?.bannerUrl}
+        brandColor={raceData?.brandColor}
       >
-        {/* Background decorative elements */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-white rounded-full blur-3xl -translate-y-1/2" />
-          <div className="absolute bottom-0 right-1/4 w-72 h-72 bg-blue-300 rounded-full blur-3xl translate-y-1/2" />
-        </div>
-        <div className="absolute inset-0" style={{
-          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 30px, rgba(255,255,255,0.03) 30px, rgba(255,255,255,0.03) 60px)',
-        }} />
 
         {/* Navigation bar */}
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-4">
@@ -691,8 +684,8 @@ export default function AthleteDetailPage() {
 
         {/* Avatar & athlete info */}
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-28 pt-6 text-center">
-          {/* Avatar */}
-          <div className="relative inline-block mb-5">
+          {/* Avatar — v2: conic-gradient spinner ring */}
+          <div className="ap-avatar-ring relative inline-block mb-5">
             {(currentAvatarUrl || athlete.avatarUrl) ? (
               <img
                 src={currentAvatarUrl || athlete.avatarUrl!}
@@ -767,13 +760,17 @@ export default function AthleteDetailPage() {
             <p className="text-white/60 text-sm font-medium">{athlete.race_name}</p>
           )}
         </div>
-      </div>
+      </RaceHeroHeader>
 
       {/* ===== MAIN CONTENT (overlapping hero) ===== */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10 pb-12 space-y-6">
 
         {/* === TIME CARD (floating over hero) === */}
-        <div className="relative bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div
+          data-reveal
+          className="ap-card-rise relative bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
+          style={{ boxShadow: '0 -4px 40px rgba(26,86,219,0.12), 0 20px 56px rgba(0,0,0,0.14)' }}
+        >
           {/* Status chip — top-right corner. Hidden for upcoming races. */}
           {!isUpcoming && (
             <div
@@ -798,10 +795,10 @@ export default function AthleteDetailPage() {
               <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
                 <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">{t('athlete.chipTime')}</div>
                 <div
-                  className="text-5xl md:text-7xl font-black tracking-tight mb-3"
+                  className="ap-time-shimmer text-5xl md:text-7xl font-black tracking-tight mb-3"
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    color: 'var(--race-accent, #2563eb)',
+                    color: 'var(--race-accent, #1d4ed8)',
                   }}
                 >
                   {athlete.ChipTime}
@@ -851,7 +848,9 @@ export default function AthleteDetailPage() {
                   Reuses `downloadCertificateAsPng` (same endpoint + confetti
                   as the old cert section further down). */}
               {certCtaVisible && (
-                <div className="border-t border-gray-100 bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/40 px-5 py-4 md:px-6 md:py-5">
+                <div className="ap-cert-frame border-t border-gray-100 bg-gradient-to-br from-amber-50/70 via-white to-emerald-50/40 px-5 py-4 md:px-6 md:py-5" id="athlete-certificate-cta">
+                  <span className="ap-cert-corner-bl" aria-hidden />
+                  <span className="ap-cert-corner-br" aria-hidden />
                   <div className="flex flex-col items-center justify-between gap-3 sm:flex-row sm:gap-4">
                     <div className="flex items-center gap-2.5 text-left">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600/10 text-emerald-700 ring-1 ring-emerald-200">
@@ -890,7 +889,7 @@ export default function AthleteDetailPage() {
 
         {/* === RANK PROGRESSION + PACE ZONE (F-01 / F-02) === */}
         {hasSplits && !isUpcoming && (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div data-reveal className="grid gap-4 md:grid-cols-2">
             <RankProgressionChart
               splits={splits.map((s) => ({
                 name: s.name,
@@ -918,11 +917,13 @@ export default function AthleteDetailPage() {
 
         {/* === PERCENTILE GAUGE (F-06) === */}
         {!isUpcoming && (
-          <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} />
+          <div data-reveal>
+            <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} />
+          </div>
         )}
 
         {/* === SPLIT TIMES === */}
-        {hasSplits && !isUpcoming && <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+        {hasSplits && !isUpcoming && <div data-reveal className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center">
               <Timer className="w-5 h-5 text-blue-600" />
@@ -1535,6 +1536,20 @@ export default function AthleteDetailPage() {
         </div>
       )}
 
+      {/* === FLOATING ACTION BAR (v2 — appears after scrollY ≥ 360px) === */}
+      {!isUpcoming && (
+        <FloatingActionBar
+          bib={athlete.Bib}
+          name={formatName(athlete.Name)}
+          rankingHref={`/races/${slug}/ranking/${athlete.course_id}`}
+          onShare={handleCopyLink}
+          hasCertificate={certCtaVisible}
+          onCertificate={() => {
+            const el = document.getElementById('athlete-certificate-cta');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
+        />
+      )}
     </RaceTheme>
   );
 }

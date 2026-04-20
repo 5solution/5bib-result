@@ -152,6 +152,11 @@
     "resultImage": "Image",
     "copyLink": "Copy link",
     "copied": "Copied",
+    "fab": {
+      "ranking": "Ranking",
+      "share": "Share",
+      "certificate": "Certificate"
+    },
     "upcomingTitle": "Race not started",
     "upcomingSubtitle": "Results will be updated when the race starts",
     "chipTime": "Chip Time",

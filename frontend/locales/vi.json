@@ -152,6 +152,11 @@
     "resultImage": "Ảnh KQ",
     "copyLink": "Copy link",
     "copied": "Đã sao chép",
+    "fab": {
+      "ranking": "BXH",
+      "share": "Chia sẻ",
+      "certificate": "Chứng chỉ"
+    },
     "upcomingTitle": "Giải chưa diễn ra",
     "upcomingSubtitle": "Kết quả sẽ được cập nhật khi giải bắt đầu",
     "chipTime": "Chip Time",
