@@ -202,16 +202,21 @@
     "paceZone": {
       "title": "Phân tích Pace theo chặng",
       "avg": "Pace TB",
+      "axisHint": "Cột càng cao = pace càng chậm. Đường đứt xanh = pace trung bình.",
+      "vsAvgFaster": "nhanh hơn TB",
+      "vsAvgSlower": "chậm hơn TB",
+      "vsAvgEqual": "ngang TB",
       "zones": {
         "fast": "Nhanh",
         "steady": "Ổn định",
         "slow": "Chậm",
-        "alert": "Cảnh báo"
+        "alert": "Sụt tốc"
       },
       "strategy": {
         "even": "Even Pacer",
         "negative": "Negative Split",
-        "positive": "Positive Split"
+        "positive": "Positive Split",
+        "erratic": "Dao động"
       }
     },
     "countryRank": {

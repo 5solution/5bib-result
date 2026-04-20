@@ -202,16 +202,21 @@
     "paceZone": {
       "title": "Pace zone analysis",
       "avg": "Avg pace",
+      "axisHint": "Taller bar = slower pace. Dashed blue line = average pace.",
+      "vsAvgFaster": "vs avg (faster)",
+      "vsAvgSlower": "vs avg (slower)",
+      "vsAvgEqual": "on avg",
       "zones": {
         "fast": "Fast",
         "steady": "Steady",
         "slow": "Slow",
-        "alert": "Alert"
+        "alert": "Fade"
       },
       "strategy": {
         "even": "Even Pacer",
         "negative": "Negative Split",
-        "positive": "Positive Split"
+        "positive": "Positive Split",
+        "erratic": "Erratic"
       }
     },
     "countryRank": {

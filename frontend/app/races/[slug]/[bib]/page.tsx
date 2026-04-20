@@ -908,6 +908,10 @@ export default function AthleteDetailPage() {
                 isPaceAlert: s.isPaceAlert,
               }))}
               avgPace={athlete.Pace}
+              distanceKm={(() => {
+                const m = String(athlete.distance ?? '').match(/(\d+(?:\.\d+)?)/);
+                return m ? parseFloat(m[1]) : undefined;
+              })()}
             />
           </div>
         )}
