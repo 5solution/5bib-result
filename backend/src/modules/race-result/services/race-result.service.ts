@@ -110,7 +110,8 @@ export class RaceResultService {
         `time-distribution:${courseId}`,
         `country-stats:${courseId}`,
         `country-rank:*:*`,
-        `percentile:*:*`,
+        `percentile:*:*`, // legacy v1 keys (still purged for old deploys)
+        `percentile:v2:*:*`,
       ];
       let deleted = 0;
       for (const pattern of patterns) {
@@ -1178,11 +1179,39 @@ export class RaceResultService {
 
   /**
    * F-06 — Performance percentile for one athlete. Cached 300s.
-   * Percentile = (slower count / total) * 100 — higher = better.
+   *
+   * SEMANTIC (v2, 2026-04-20): `percentile` is the athlete's **Top X%**
+   * position — LOWER is better. The fastest runner on a course lands at
+   * Top 1%, the slowest at Top 100%. This matches conventional running
+   * terminology ("I finished in the top 10%") and is the inverse of the
+   * v1 meaning ("% of finishers I beat").
+   *
+   * Formula:
+   *     rank        = 1 + count(docs with chipTimeSeconds < athleteSeconds)
+   *     percentile  = max(1, ceil(rank / totalFinishers * 100))
+   *
+   * Fix vs v1: v1 used two separate queries — `totalFinishers` from the
+   * vendor-pushed `course.finished` counter (often stale) vs `slowerCount`
+   * from a live Mongo aggregation. When the counter lagged behind the
+   * actual synced doc count, a rank-1 runner produced e.g. 174/170 = 103%
+   * ("Top 103%"), which is mathematically impossible. v2 computes BOTH
+   * numerator AND denominator inside a single `$facet` pipeline so they
+   * read from the same matched set in the same snapshot — guaranteed
+   * consistency.
+   *
+   * Cache key is versioned (`percentile:v2:`) so rolling deploys don't
+   * serve v1-cached numbers under v2 semantics.
    */
   async getPercentile(raceId: string, bib: string) {
-    const cacheKey = `percentile:${raceId}:${bib}`;
-    const cached = await this.getFromCache<any>(cacheKey);
+    const cacheKey = `percentile:v2:${raceId}:${bib}`;
+    const cached = await this.getFromCache<{
+      percentile: number | null;
+      slowerCount: number;
+      totalFinishers: number;
+      athleteSeconds: number;
+      avgSeconds: number;
+      minSeconds: number;
+    }>(cacheKey);
     if (cached) return cached;
 
     const athlete = await this.resultModel
@@ -1191,49 +1220,81 @@ export class RaceResultService {
       .lean()
       .exec();
 
-    if (!athlete || athlete.timingPoint !== 'Finish') {
-      return {
-        percentile: null,
-        slowerCount: 0,
-        totalFinishers: 0,
-        athleteSeconds: 0,
-        avgSeconds: 0,
-        minSeconds: 0,
-      };
-    }
+    const emptyResult = {
+      percentile: null as number | null,
+      slowerCount: 0,
+      totalFinishers: 0,
+      athleteSeconds: 0,
+      avgSeconds: 0,
+      minSeconds: 0,
+    };
+
+    if (!athlete || athlete.timingPoint !== 'Finish') return emptyResult;
 
     const athleteSeconds = this.chipTimeToSeconds(athlete.chipTime);
-    if (athleteSeconds === null || athleteSeconds <= 0) {
-      return {
-        percentile: null,
-        slowerCount: 0,
-        totalFinishers: 0,
-        athleteSeconds: 0,
-        avgSeconds: 0,
-        minSeconds: 0,
-      };
-    }
+    if (athleteSeconds === null || athleteSeconds <= 0) return emptyResult;
 
-    // Leverage existing getCourseStats for avg/min (also cached)
-    const stats = await this.getCourseStats(athlete.courseId);
-    // IMPORTANT: `stats.totalFinishers` is mis-named — it counts every doc
-    // with a valid chipTime on this course (includes DNFers who recorded
-    // partial times to the last checkpoint they reached). The actual count
-    // of athletes who crossed the finish line is `stats.finished` (derived
-    // from timingPoint === 'Finish' via the bucket aggregation). Using the
-    // wrong denominator here silently deflates every athlete's percentile
-    // — e.g. a rank-1 finisher on a 27-finisher course with 15 DNFers would
-    // show "Top 62%" instead of "Top 4%".
-    const totalFinishers = stats?.finished ?? 0;
-    const minSeconds = this.chipTimeToSeconds(stats?.minTime) ?? 0;
-    const avgSeconds = this.chipTimeToSeconds(stats?.avgTime) ?? 0;
+    // Single-pipeline facet — numerator, denominator, avg, min all share
+    // the same `$match` + `chipTimeSecondsComputed > 0` filter so they're
+    // atomically consistent.
+    const chipTimeSecondsStage = {
+      $addFields: {
+        chipTimeSecondsComputed: {
+          $let: {
+            vars: { p: { $split: ['$chipTime', ':'] } },
+            in: {
+              $add: [
+                {
+                  $multiply: [
+                    {
+                      $convert: {
+                        input: { $arrayElemAt: ['$$p', 0] },
+                        to: 'int',
+                        onError: 0,
+                        onNull: 0,
+                      },
+                    },
+                    3600,
+                  ],
+                },
+                {
+                  $multiply: [
+                    {
+                      $convert: {
+                        input: { $arrayElemAt: ['$$p', 1] },
+                        to: 'int',
+                        onError: 0,
+                        onNull: 0,
+                      },
+                    },
+                    60,
+                  ],
+                },
+                {
+                  $convert: {
+                    input: { $arrayElemAt: ['$$p', 2] },
+                    to: 'int',
+                    onError: 0,
+                    onNull: 0,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
 
-    // Count slower finishers via chipTime string comparison only works when
-    // all strings have identical widths. Since DB chipTime is "HH:MM:SS",
-    // alphabetical comparison IS chronological when H is 1 or 2 digits
-    // consistently — but to be safe we compare numeric via aggregation.
-    const result = await this.resultModel
-      .aggregate([
+    const [facet] = await this.resultModel
+      .aggregate<{
+        totals: Array<{
+          total: number;
+          avgSeconds: number | null;
+          minSeconds: number | null;
+        }>;
+        faster: Array<{ n: number }>;
+        slower: Array<{ n: number }>;
+      }>([
         {
           $match: {
             courseId: athlete.courseId,
@@ -1241,66 +1302,51 @@ export class RaceResultService {
             chipTime: { $nin: ['', null] },
           },
         },
+        chipTimeSecondsStage,
+        // Drop zero/invalid chip times so they don't inflate totals or
+        // skew min/avg (consistent with getCourseStats behaviour).
+        { $match: { chipTimeSecondsComputed: { $gt: 0 } } },
         {
-          $addFields: {
-            chipTimeSecondsComputed: {
-              $let: {
-                vars: { p: { $split: ['$chipTime', ':'] } },
-                in: {
-                  $add: [
-                    {
-                      $multiply: [
-                        {
-                          $convert: {
-                            input: { $arrayElemAt: ['$$p', 0] },
-                            to: 'int',
-                            onError: 0,
-                            onNull: 0,
-                          },
-                        },
-                        3600,
-                      ],
-                    },
-                    {
-                      $multiply: [
-                        {
-                          $convert: {
-                            input: { $arrayElemAt: ['$$p', 1] },
-                            to: 'int',
-                            onError: 0,
-                            onNull: 0,
-                          },
-                        },
-                        60,
-                      ],
-                    },
-                    {
-                      $convert: {
-                        input: { $arrayElemAt: ['$$p', 2] },
-                        to: 'int',
-                        onError: 0,
-                        onNull: 0,
-                      },
-                    },
-                  ],
+          $facet: {
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: 1 },
+                  avgSeconds: { $avg: '$chipTimeSecondsComputed' },
+                  minSeconds: { $min: '$chipTimeSecondsComputed' },
                 },
               },
-            },
+              { $project: { _id: 0, total: 1, avgSeconds: 1, minSeconds: 1 } },
+            ],
+            faster: [
+              { $match: { chipTimeSecondsComputed: { $lt: athleteSeconds } } },
+              { $count: 'n' },
+            ],
+            slower: [
+              { $match: { chipTimeSecondsComputed: { $gt: athleteSeconds } } },
+              { $count: 'n' },
+            ],
           },
         },
-        {
-          $match: {
-            chipTimeSecondsComputed: { $gt: athleteSeconds },
-          },
-        },
-        { $count: 'slower' },
       ])
       .exec();
 
-    const slowerCount = result[0]?.slower ?? 0;
+    const totalFinishers = facet?.totals[0]?.total ?? 0;
+    const avgSeconds = Math.round(facet?.totals[0]?.avgSeconds ?? 0);
+    const minSeconds = facet?.totals[0]?.minSeconds ?? 0;
+    const fasterCount = facet?.faster[0]?.n ?? 0;
+    const slowerCount = facet?.slower[0]?.n ?? 0;
+
+    // Competition ranking (1224): ties share rank = 1 + strictly-faster.
+    const rank = fasterCount + 1;
+
+    // Top X% — lower is better. `ceil` so rank-1 never rounds to 0%.
+    // `max(1, ...)` clamps the floor; `min(100, ...)` guards the ceiling
+    // even though the math can't exceed 100 with consistent tử/mẫu.
     const percentile =
       totalFinishers > 0
-        ? Math.round((slowerCount / totalFinishers) * 100)
+        ? Math.min(100, Math.max(1, Math.ceil((rank / totalFinishers) * 100)))
         : null;
 
     const out = {

@@ -139,13 +139,18 @@ export class CountryRankResponseDto {
 
 export class PercentileDataDto {
   @ApiProperty({
-    description: 'Percentile 0–100 (higher = faster). Null if athlete is DNF or chipTime invalid.',
-    example: 72,
+    description:
+      "Top X% position (1–100, LOWER = faster). The fastest finisher on a course lands at Top 1%, the slowest at Top 100%. Formula: max(1, ceil(rank / totalFinishers * 100)) where rank = 1 + count(strictly faster finishers). Null if athlete is DNF or chipTime invalid.",
+    example: 8,
     nullable: true,
   })
   percentile!: number | null;
 
-  @ApiProperty({ description: 'Count of finishers slower than athlete', example: 225 })
+  @ApiProperty({
+    description:
+      'Count of finishers slower than this athlete. Kept for the summary copy ("beat N of M finishers"); NOT used to derive percentile in v2.',
+    example: 225,
+  })
   slowerCount!: number;
 
   @ApiProperty({ description: 'Total finishers on this course', example: 312 })
