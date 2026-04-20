@@ -157,6 +157,12 @@
       "share": "Share",
       "certificate": "Certificate"
     },
+    "paceStrip": {
+      "avgPace": "Avg Pace",
+      "distance": "Distance",
+      "category": "Category",
+      "raceDate": "Race Date"
+    },
     "upcomingTitle": "Race not started",
     "upcomingSubtitle": "Results will be updated when the race starts",
     "chipTime": "Chip Time",
@@ -199,9 +205,9 @@
       "title": "Rank progression",
       "rank": "Rank",
       "trend": {
-        "up": "Climbed",
-        "down": "Dropped",
-        "flat": "Steady"
+        "up": "↑ Climbed",
+        "down": "↓ Dropped",
+        "flat": "— Held Rank"
       }
     },
     "paceZone": {

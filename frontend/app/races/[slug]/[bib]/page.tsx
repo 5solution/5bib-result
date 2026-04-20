@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Clock, Share2, Link2, Check, MapPin, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, ChevronRight, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
+import { ChevronLeft, Clock, Link2, Check, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,6 @@ import CertificateV2DownloadButtons from '@/components/CertificateV2DownloadButt
 import CertificateWithPhotoCta from '@/components/CertificateWithPhotoCta';
 import RankProgressionChart from '@/components/RankProgressionChart';
 import PaceZoneChart from '@/components/PaceZoneChart';
-import CountryBadge from '@/components/CountryBadge';
 import PercentileBadge, { PercentileGauge } from '@/components/PercentileBadge';
 import RaceTheme from '@/components/RaceTheme';
 import RaceHeroHeader from '@/components/RaceHeroHeader';
@@ -234,7 +233,7 @@ const DEMO_ATHLETE: AthleteResult = {
 };
 
 export default function AthleteDetailPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const params = useParams();
   const slug = params.slug as string;
   const bib = params.bib as string;
@@ -683,7 +682,7 @@ export default function AthleteDetailPage() {
         </div>
 
         {/* Avatar & athlete info */}
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-28 pt-6 text-center">
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-6 text-center">
           {/* Avatar — v2: conic-gradient spinner ring */}
           <div className="ap-avatar-ring relative inline-block mb-5">
             {(currentAvatarUrl || athlete.avatarUrl) ? (
@@ -747,23 +746,23 @@ export default function AthleteDetailPage() {
             )}
           </div>
 
-          {/* Country rank + percentile badges (F-04 / F-06) */}
+          {/* Percentile badge (F-06). CountryBadge ("Đồng hương") removed —
+              carried no signal for the athlete, just visual noise. Race name
+              <p> also dropped since the new race-header row inside the time
+              card shows the race title in full. */}
           {raceId && athlete.Bib != null && !isUpcoming && (
             <div className="flex justify-center flex-wrap gap-2 mt-2">
-              <CountryBadge raceId={raceId} bib={String(athlete.Bib)} />
               <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} />
             </div>
-          )}
-
-          {/* Race name */}
-          {athlete.race_name && (
-            <p className="text-white/60 text-sm font-medium">{athlete.race_name}</p>
           )}
         </div>
       </RaceHeroHeader>
 
-      {/* ===== MAIN CONTENT (overlapping hero) ===== */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10 pb-12 space-y-6">
+      {/* ===== MAIN CONTENT (overlapping hero) =====
+          pb-20 + -mt-20 (was pb-28 + -mt-16): tighter overlap so the time
+          card sits closer to the avatar now that the country / race-name
+          rows are gone. */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-20 relative z-10 pb-12 space-y-6">
 
         {/* === TIME CARD (floating over hero) === */}
         <div
@@ -771,15 +770,10 @@ export default function AthleteDetailPage() {
           className="ap-card-rise relative bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
           style={{ boxShadow: '0 -4px 40px rgba(26,86,219,0.12), 0 20px 56px rgba(0,0,0,0.14)' }}
         >
-          {/* Status chip — top-right corner. Hidden for upcoming races. */}
-          {!isUpcoming && (
-            <div
-              className={`absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ${statusChip.bg} ${statusChip.text} ${statusChip.ring} md:right-5 md:top-5 md:text-xs`}
-            >
-              <StatusIcon className="h-3.5 w-3.5" />
-              {t(statusChip.labelKey)}
-            </div>
-          )}
+          {/* Status chip moved INTO the race header row below (was absolute
+              top-right, now inline on the right of the dark header) — avoids
+              the badge overlapping the race title / sub-strip when the card
+              starts with the new header. */}
 
           {isUpcoming ? (
             <div className="text-center py-10 md:py-14 px-6">
@@ -791,6 +785,62 @@ export default function AthleteDetailPage() {
             </div>
           ) : (
             <>
+              {/* Race name header row — calmer dark gradient (no diagonal
+                  stripes, the hero already supplies that texture). Holds the
+                  race title + quick-glance strip AND the finisher status pill
+                  inline on the right, so there's no absolute badge overlap. */}
+              <div
+                className="relative px-5 py-4 md:px-6 md:py-5 text-white"
+                style={{
+                  /* --race-accent is injected by RaceTheme (outer wrapper),
+                     so it's in scope everywhere on the page — unlike
+                     --race-brand-color which lives only inside RaceHeroHeader. */
+                  background:
+                    'linear-gradient(135deg, #0b1640 0%, var(--race-accent, #1d4ed8) 60%, #1e293b 100%)',
+                }}
+              >
+                <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0 flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-lg ring-1 ring-white/20">
+                      🏁
+                    </span>
+                    <div className="min-w-0">
+                      <h2
+                        className="truncate text-[18px] md:text-[20px] font-black uppercase tracking-wide leading-tight"
+                        style={{ fontFamily: 'var(--font-heading, var(--font-sans))' }}
+                      >
+                        {raceData?.title || athlete.race_name || slug.replace(/-/g, ' ')}
+                      </h2>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/75">
+                        <span>{athlete.distance}</span>
+                        {athlete.Category && (
+                          <>
+                            <span className="text-white/30">·</span>
+                            <span>{athlete.Category}</span>
+                          </>
+                        )}
+                        {raceData?.location && (
+                          <>
+                            <span className="text-white/30">·</span>
+                            <span className="truncate max-w-[140px] md:max-w-[220px]">
+                              {raceData.location}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {!isUpcoming && (
+                    <span
+                      className={`inline-flex shrink-0 items-center gap-1.5 self-start rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ${statusChip.bg} ${statusChip.text} ${statusChip.ring} md:self-center md:text-xs`}
+                    >
+                      <StatusIcon className="h-3.5 w-3.5" />
+                      {t(statusChip.labelKey)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {/* Big time display */}
               <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
                 <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">{t('athlete.chipTime')}</div>
@@ -843,14 +893,73 @@ export default function AthleteDetailPage() {
                 ))}
               </div>
 
+              {/* Pace strip — 4 quick-glance metrics between rank badges and
+                  the cert CTA. Avg pace · distance · category · race date. */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-gray-100 border-t border-gray-100 bg-gray-50/60">
+                {[
+                  {
+                    label: t('athlete.paceStrip.avgPace'),
+                    value: athlete.Pace ? `${athlete.Pace}` : '—',
+                    suffix: athlete.Pace ? '/km' : '',
+                    mono: true,
+                  },
+                  {
+                    label: t('athlete.paceStrip.distance'),
+                    value: athlete.distance || '—',
+                    suffix: '',
+                    mono: false,
+                  },
+                  {
+                    label: t('athlete.paceStrip.category'),
+                    value: athlete.Category || '—',
+                    suffix: '',
+                    mono: false,
+                  },
+                  {
+                    label: t('athlete.paceStrip.raceDate'),
+                    value: raceData?.startDate
+                      ? new Date(raceData.startDate).toLocaleDateString(
+                          i18n.language?.startsWith('vi') ? 'vi-VN' : 'en-US',
+                          { day: '2-digit', month: '2-digit', year: 'numeric' },
+                        )
+                      : '—',
+                    suffix: '',
+                    mono: true,
+                  },
+                ].map((item, idx) => (
+                  <div
+                    key={`${item.label}-${idx}`}
+                    className="px-3 py-3 text-center"
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                      {item.label}
+                    </div>
+                    <div
+                      className="mt-1 text-sm font-black text-gray-900 tabular-nums"
+                      style={item.mono ? { fontFamily: 'var(--font-mono)' } : undefined}
+                    >
+                      {item.value}
+                      {item.suffix && (
+                        <span className="ml-1 text-[10px] font-semibold text-gray-400">
+                          {item.suffix}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {/* Certificate CTA — integrated footer of the TIME CARD.
                   Shows only for finishers on races with cert feature on.
                   Reuses `downloadCertificateAsPng` (same endpoint + confetti
                   as the old cert section further down). */}
               {certCtaVisible && (
-                <div className="ap-cert-frame border-t border-gray-100 bg-gradient-to-br from-amber-50/70 via-white to-emerald-50/40 px-5 py-4 md:px-6 md:py-5" id="athlete-certificate-cta">
-                  <span className="ap-cert-corner-bl" aria-hidden />
-                  <span className="ap-cert-corner-br" aria-hidden />
+                <div className="border-t border-gray-100 bg-gradient-to-br from-amber-50/70 via-white to-emerald-50/40 px-5 py-4 md:px-6 md:py-5">
+                  {/* Inline cert CTA intentionally NOT using ap-cert-frame:
+                      the time card has overflow-hidden (needed for rounded
+                      corners) which clips the frame's hover-lift transform.
+                      The full ap-cert-frame treatment lives on the standalone
+                      cert showcase section below (id="athlete-certificate-cta"). */}
                   <div className="flex flex-col items-center justify-between gap-3 sm:flex-row sm:gap-4">
                     <div className="flex items-center gap-2.5 text-left">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600/10 text-emerald-700 ring-1 ring-emerald-200">
@@ -887,18 +996,28 @@ export default function AthleteDetailPage() {
           )}
         </div>
 
-        {/* === RANK PROGRESSION + PACE ZONE (F-01 / F-02) === */}
+        {/* === RANK PROGRESSION + PACE ZONE (F-01 / F-02) ===
+            Grid rules:
+            · Finisher + splits → 2-col: RankProgression | PaceZone side-by-side
+            · DNF/DSQ/DNS + splits → 1-col: PaceZone only (rank chart is
+              meaningless for non-finishers — they never finished the course)
+            · No splits → neither chart renders */}
         {hasSplits && !isUpcoming && (
-          <div data-reveal className="grid gap-4 md:grid-cols-2">
-            <RankProgressionChart
-              splits={splits.map((s) => ({
-                name: s.name,
-                distance: s.distance,
-                overallRank: s.overallRank,
-                rankDelta: s.rankDelta,
-              }))}
-              finalRank={athlete.OverallRank}
-            />
+          <div
+            data-reveal
+            className={`grid gap-4 ${finalStatus === 'finisher' ? 'md:grid-cols-2' : ''}`}
+          >
+            {finalStatus === 'finisher' && (
+              <RankProgressionChart
+                splits={splits.map((s) => ({
+                  name: s.name,
+                  distance: s.distance,
+                  overallRank: s.overallRank,
+                  rankDelta: s.rankDelta,
+                }))}
+                finalRank={athlete.OverallRank}
+              />
+            )}
             <PaceZoneChart
               splits={splits.map((s) => ({
                 name: s.name,
@@ -1177,8 +1296,12 @@ export default function AthleteDetailPage() {
           </div>
         </div>}
 
-        {/* === CERTIFICATE === */}
-        {raceData?.enableEcert !== false && (<div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+        {/* === CERTIFICATE === (finishers only — DNF/DSQ/DNS see nothing) */}
+        {raceData?.enableEcert !== false && finalStatus === 'finisher' && (<div
+          data-reveal
+          id="athlete-certificate-cta"
+          className="ap-cert-frame bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden scroll-mt-24"
+        >
           <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
               <Award className="w-5 h-5 text-amber-600" />
@@ -1189,12 +1312,12 @@ export default function AthleteDetailPage() {
             </div>
           </div>
           <div className="p-6 md:p-8">
-            <div className="relative bg-gradient-to-br from-blue-50 via-white to-indigo-50 border-2 border-blue-100 rounded-2xl p-8 md:p-10 text-center overflow-hidden">
-              {/* Decorative corners */}
-              <div className="absolute top-3 left-3 w-8 h-8 border-t-2 border-l-2 border-blue-300 rounded-tl-lg" />
-              <div className="absolute top-3 right-3 w-8 h-8 border-t-2 border-r-2 border-blue-300 rounded-tr-lg" />
-              <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-blue-300 rounded-bl-lg" />
-              <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-blue-300 rounded-br-lg" />
+            <div className="relative bg-gradient-to-br from-amber-50 via-white to-emerald-50/60 border-2 border-amber-200/70 rounded-2xl p-8 md:p-10 text-center overflow-hidden">
+              {/* Decorative corners — gold accents per spec */}
+              <div className="absolute top-3 left-3 w-8 h-8 border-t-2 border-l-2 border-amber-400 rounded-tl-lg" />
+              <div className="absolute top-3 right-3 w-8 h-8 border-t-2 border-r-2 border-amber-400 rounded-tr-lg" />
+              <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-amber-400 rounded-bl-lg" />
+              <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-amber-400 rounded-br-lg" />
 
               <div className="relative">
                 <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-lg shadow-amber-200">

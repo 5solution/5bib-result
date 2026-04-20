@@ -89,7 +89,9 @@ export function RaceHeroHeader({ bannerUrl, brandColor, children, className }: P
         } as React.CSSProperties
       }
     >
-      {/* Layer 1 — blurred banner photo */}
+      {/* Layer 1 — race banner photo. Blur + brightness tuned so the banner
+          reads clearly as the race's visual identity (~40% visibility under
+          the gradient) while white text on top stays legible. */}
       {hasBanner && (
         <div
           ref={photoRef}
@@ -99,23 +101,25 @@ export function RaceHeroHeader({ bannerUrl, brandColor, children, className }: P
             backgroundImage: `url(${encodeURI(bannerUrl!)})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            filter: 'blur(14px) brightness(0.5) saturate(0.8)',
+            filter: 'blur(8px) brightness(0.9) saturate(1.05)',
             transform: 'scale(1.06)',
             willChange: 'transform',
           }}
         />
       )}
 
-      {/* Layer 2 — gradient overlay (always on, serves as fallback) */}
+      {/* Layer 2 — gradient overlay (always on, serves as fallback).
+          When a banner is present we drop overlay opacity so the photo reads
+          at ~40% through the tint; fallback (no banner) stays solid brand. */}
       <div
         aria-hidden
         className="absolute inset-0 z-[1]"
         style={{
           background: hasBanner
             ? `linear-gradient(160deg,
-                rgba(11,22,64,0.78) 0%,
-                rgba(${brandRgb},0.62) 45%,
-                rgba(15,23,65,0.90) 100%)`
+                rgba(11,22,64,0.48) 0%,
+                rgba(${brandRgb},0.32) 45%,
+                rgba(15,23,65,0.62) 100%)`
             : `linear-gradient(160deg,
                 #0b1640 0%,
                 rgba(${brandRgb},0.85) 50%,

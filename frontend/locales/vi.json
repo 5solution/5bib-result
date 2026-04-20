@@ -157,6 +157,12 @@
       "share": "Chia sẻ",
       "certificate": "Chứng chỉ"
     },
+    "paceStrip": {
+      "avgPace": "Pace TB",
+      "distance": "Cự ly",
+      "category": "Nhóm tuổi",
+      "raceDate": "Ngày đua"
+    },
     "upcomingTitle": "Giải chưa diễn ra",
     "upcomingSubtitle": "Kết quả sẽ được cập nhật khi giải bắt đầu",
     "chipTime": "Chip Time",
@@ -199,9 +205,9 @@
       "title": "Diễn biến thứ hạng",
       "rank": "Hạng",
       "trend": {
-        "up": "Leo hạng",
-        "down": "Tụt hạng",
-        "flat": "Ổn định"
+        "up": "↑ Leo hạng",
+        "down": "↓ Tụt hạng",
+        "flat": "— Giữ hạng"
       }
     },
     "paceZone": {
