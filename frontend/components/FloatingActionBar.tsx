@@ -14,13 +14,14 @@
  */
 
 import { useEffect, useState } from 'react';
-import { BarChart3, Share2, Award } from 'lucide-react';
+import { BarChart3, ImageDown, Award } from 'lucide-react';
 
 interface Props {
   bib: string | number;
   name: string;
   rankingHref: string;
   onShare: () => void;
+  onResultImage?: () => void;
   onCertificate?: () => void;
   hasCertificate?: boolean;
 }
@@ -32,6 +33,7 @@ export function FloatingActionBar({
   name,
   rankingHref,
   onShare,
+  onResultImage,
   onCertificate,
   hasCertificate,
 }: Props) {
@@ -105,13 +107,26 @@ export function FloatingActionBar({
           <BarChart3 className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">BXH</span>
         </a>
+        {onResultImage && (
+          <button
+            type="button"
+            onClick={onResultImage}
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold transition hover:bg-white/20"
+          >
+            <ImageDown className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Ảnh KQ</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={onShare}
           className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold transition hover:bg-white/20"
         >
-          <Share2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Share</span>
+          {/* Facebook icon */}
+          <svg className="h-3.5 w-3.5 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+          </svg>
+          <span className="hidden sm:inline">Chia sẻ</span>
         </button>
         {hasCertificate && onCertificate && (
           <button

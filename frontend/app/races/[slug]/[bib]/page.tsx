@@ -647,7 +647,8 @@ export default function AthleteDetailPage() {
               <ChevronLeft className="w-4 h-4" />
               <span>{t('athlete.resultDistance', { distance: athlete.distance })}</span>
             </Link>
-            {/* Share buttons — flex-wrap cả mobile & desktop, cân đều ở mobile */}
+            {/* Top nav actions: cert downloads + copy link only.
+                Ảnh KQ + Chia sẻ moved to FAB (persistent while scrolling). */}
             <div className="flex flex-wrap items-center gap-2 sm:justify-end [&>button]:flex-1 [&>button]:min-w-[104px] sm:[&>button]:flex-none sm:[&>button]:min-w-0">
               <CertificateV2DownloadButtons
                 raceId={raceId}
@@ -656,20 +657,6 @@ export default function AthleteDetailPage() {
                 runnerName={athlete.Name}
                 variant="glass"
               />
-              <button
-                onClick={() => setShowImageEditor(true)}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
-              >
-                <Download className="w-4 h-4 shrink-0" />
-                <span className="whitespace-nowrap">{t('athlete.resultImage')}</span>
-              </button>
-              <button
-                onClick={handleShareFacebook}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
-              >
-                <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
-                <span className="whitespace-nowrap">{t('common.share')}</span>
-              </button>
               <button
                 onClick={handleCopyLink}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
@@ -1665,7 +1652,8 @@ export default function AthleteDetailPage() {
           bib={athlete.Bib}
           name={formatName(athlete.Name)}
           rankingHref={`/races/${slug}/ranking/${athlete.course_id}`}
-          onShare={handleCopyLink}
+          onResultImage={() => setShowImageEditor(true)}
+          onShare={handleShareFacebook}
           hasCertificate={certCtaVisible}
           onCertificate={() => {
             const el = document.getElementById('athlete-certificate-cta');
