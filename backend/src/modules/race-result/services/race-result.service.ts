@@ -110,8 +110,9 @@ export class RaceResultService {
         `time-distribution:${courseId}`,
         `country-stats:${courseId}`,
         `country-rank:*:*`,
-        `percentile:*:*`, // legacy v1 keys (still purged for old deploys)
-        `percentile:v2:*:*`,
+        `percentile:*:*`, // legacy v1 keys
+        `percentile:v2:*:*`, // v2 (had MM:SS parser bug — orphan them)
+        `percentile:v3:*:*`,
       ];
       let deleted = 0;
       for (const pattern of patterns) {
@@ -707,51 +708,14 @@ export class RaceResultService {
           chipTime: { $nin: ['', null] },
         },
       },
+      // Shared parser — handles both "HH:MM:SS" and "MM:SS" upstream
+      // formats. Pre-fix, short races (5K as MM:SS) were parsed as HH:MM
+      // → avg/min/max inflated ~60× → time-distribution histograms and
+      // percentile both silently wrong.
+      RaceResultService.chipTimeSecondsStage,
       {
         $addFields: {
-          chipTimeParts: { $split: ['$chipTime', ':'] },
-        },
-      },
-      {
-        $addFields: {
-          chipTimeSeconds: {
-            $add: [
-              {
-                $multiply: [
-                  {
-                    $convert: {
-                      input: { $arrayElemAt: ['$chipTimeParts', 0] },
-                      to: 'int',
-                      onError: 0,
-                      onNull: 0,
-                    },
-                  },
-                  3600,
-                ],
-              },
-              {
-                $multiply: [
-                  {
-                    $convert: {
-                      input: { $arrayElemAt: ['$chipTimeParts', 1] },
-                      to: 'int',
-                      onError: 0,
-                      onNull: 0,
-                    },
-                  },
-                  60,
-                ],
-              },
-              {
-                $convert: {
-                  input: { $arrayElemAt: ['$chipTimeParts', 2] },
-                  to: 'int',
-                  onError: 0,
-                  onNull: 0,
-                },
-              },
-            ],
-          },
+          chipTimeSeconds: '$chipTimeSecondsComputed',
         },
       },
       // Exclude finishers with zero/invalid chip time ("0:00:00", missing
@@ -940,6 +904,108 @@ export class RaceResultService {
     if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     return `${m}:${String(sec).padStart(2, '0')}`;
   }
+
+  /**
+   * Mongo aggregation stage: adds `chipTimeSecondsComputed` (int seconds)
+   * from the `chipTime` string. Handles BOTH upstream RaceResult formats:
+   *   - "HH:MM:SS" (long races / trail)
+   *   - "MM:SS"    (short races like 5K — confirmed on bac-son 725)
+   *
+   * IMPORTANT: the TypeScript helper `chipTimeToSeconds` handles both, but
+   * the old inline Mongo parser assumed 3 parts always. For MM:SS docs it
+   * read `parts[0]` as hours → inflated 25-minute times into 25-hour times
+   * → percentile/stats/time-distribution all silently wrong on 5K races.
+   * See git blame for the "Top 100% / Top 103%" incident.
+   *
+   * Uses `$cond` on `$size` of the split array to dispatch. Invalid
+   * (single-part or >3 parts) → 0 so the downstream `$match > 0` filter
+   * drops them.
+   */
+  private static readonly chipTimeSecondsStage = {
+    $addFields: {
+      chipTimeSecondsComputed: {
+        $let: {
+          vars: { parts: { $split: ['$chipTime', ':'] } },
+          in: {
+            $switch: {
+              branches: [
+                {
+                  case: { $eq: [{ $size: '$$parts' }, 3] },
+                  then: {
+                    $add: [
+                      {
+                        $multiply: [
+                          {
+                            $convert: {
+                              input: { $arrayElemAt: ['$$parts', 0] },
+                              to: 'int',
+                              onError: 0,
+                              onNull: 0,
+                            },
+                          },
+                          3600,
+                        ],
+                      },
+                      {
+                        $multiply: [
+                          {
+                            $convert: {
+                              input: { $arrayElemAt: ['$$parts', 1] },
+                              to: 'int',
+                              onError: 0,
+                              onNull: 0,
+                            },
+                          },
+                          60,
+                        ],
+                      },
+                      {
+                        $convert: {
+                          input: { $arrayElemAt: ['$$parts', 2] },
+                          to: 'int',
+                          onError: 0,
+                          onNull: 0,
+                        },
+                      },
+                    ],
+                  },
+                },
+                {
+                  case: { $eq: [{ $size: '$$parts' }, 2] },
+                  then: {
+                    $add: [
+                      {
+                        $multiply: [
+                          {
+                            $convert: {
+                              input: { $arrayElemAt: ['$$parts', 0] },
+                              to: 'int',
+                              onError: 0,
+                              onNull: 0,
+                            },
+                          },
+                          60,
+                        ],
+                      },
+                      {
+                        $convert: {
+                          input: { $arrayElemAt: ['$$parts', 1] },
+                          to: 'int',
+                          onError: 0,
+                          onNull: 0,
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+              default: 0,
+            },
+          },
+        },
+      },
+    },
+  } as const;
 
   // Cap for heavy aggregations. If a course has > this many finishers, we
   // sample instead of scanning all docs (trade-off: ±1% accuracy for latency).
@@ -1203,7 +1269,10 @@ export class RaceResultService {
    * serve v1-cached numbers under v2 semantics.
    */
   async getPercentile(raceId: string, bib: string) {
-    const cacheKey = `percentile:v2:${raceId}:${bib}`;
+    // v3 — v2 still had a Mongo inline parser that couldn't handle
+    // "MM:SS" (short races), so avg/min/slower counts were wildly off.
+    // Bumping the key prefix orphans any bad-cached v2 entries.
+    const cacheKey = `percentile:v3:${raceId}:${bib}`;
     const cached = await this.getFromCache<{
       percentile: number | null;
       slowerCount: number;
@@ -1236,55 +1305,8 @@ export class RaceResultService {
 
     // Single-pipeline facet — numerator, denominator, avg, min all share
     // the same `$match` + `chipTimeSecondsComputed > 0` filter so they're
-    // atomically consistent.
-    const chipTimeSecondsStage = {
-      $addFields: {
-        chipTimeSecondsComputed: {
-          $let: {
-            vars: { p: { $split: ['$chipTime', ':'] } },
-            in: {
-              $add: [
-                {
-                  $multiply: [
-                    {
-                      $convert: {
-                        input: { $arrayElemAt: ['$$p', 0] },
-                        to: 'int',
-                        onError: 0,
-                        onNull: 0,
-                      },
-                    },
-                    3600,
-                  ],
-                },
-                {
-                  $multiply: [
-                    {
-                      $convert: {
-                        input: { $arrayElemAt: ['$$p', 1] },
-                        to: 'int',
-                        onError: 0,
-                        onNull: 0,
-                      },
-                    },
-                    60,
-                  ],
-                },
-                {
-                  $convert: {
-                    input: { $arrayElemAt: ['$$p', 2] },
-                    to: 'int',
-                    onError: 0,
-                    onNull: 0,
-                  },
-                },
-              ],
-            },
-          },
-        },
-      },
-    };
-
+    // atomically consistent. Uses the shared chipTimeSecondsStage helper
+    // which correctly parses BOTH "HH:MM:SS" and "MM:SS" upstream formats.
     const [facet] = await this.resultModel
       .aggregate<{
         totals: Array<{
@@ -1302,7 +1324,7 @@ export class RaceResultService {
             chipTime: { $nin: ['', null] },
           },
         },
-        chipTimeSecondsStage,
+        RaceResultService.chipTimeSecondsStage,
         // Drop zero/invalid chip times so they don't inflate totals or
         // skew min/avg (consistent with getCourseStats behaviour).
         { $match: { chipTimeSecondsComputed: { $gt: 0 } } },
