@@ -234,6 +234,18 @@
         "avg": "Trung bình",
         "fastest": "Nhanh nhất"
       }
+    },
+    "statusBadge": {
+      "lastCheckpoint": "Điểm cuối đã qua",
+      "noCheckpoint": "Chưa có dữ liệu checkpoint",
+      "status": {
+        "label": "Trạng thái",
+        "finisher": "HOÀN THÀNH",
+        "dnf": "DNF",
+        "dsq": "BỊ LOẠI",
+        "dns": "KHÔNG XUẤT PHÁT"
+      },
+      "getCertificate": "TẢI CHỨNG NHẬN"
     }
   },
   "claim": {

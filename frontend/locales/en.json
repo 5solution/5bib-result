@@ -234,6 +234,18 @@
         "avg": "Average",
         "fastest": "Fastest"
       }
+    },
+    "statusBadge": {
+      "lastCheckpoint": "Last Checkpoint",
+      "noCheckpoint": "No checkpoint recorded",
+      "status": {
+        "label": "Status",
+        "finisher": "FINISHER",
+        "dnf": "DNF",
+        "dsq": "DISQUALIFIED",
+        "dns": "DID NOT START"
+      },
+      "getCertificate": "GET MY CERTIFICATE"
     }
   },
   "claim": {

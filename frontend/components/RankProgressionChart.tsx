@@ -64,8 +64,28 @@ export function RankProgressionChart({ splits, finalRank }: Props) {
       });
     }
 
-    // If the final row has a rank and isn't already included (e.g. last split),
-    // rely on the splits array already containing the Finish row.
+    // IMPORTANT: upstream data quirk — OverallRanks["Finish"] is the snapshot
+    // taken at the instant the athlete crossed the finish line (useful for
+    // live tracking), while OverallRank (finalRank) is the AUTHORITATIVE final
+    // rank sorted by chip time. When races use wave starts, the two diverge:
+    // a runner may cross the line 3rd-overall but have the fastest chip time
+    // (rank 1). The big hero card shows `OverallRank`, so the chart MUST agree
+    // — otherwise the finish dot silently contradicts the card and creates a
+    // "kiện cáo" scenario. Override the last point with `finalRank` whenever
+    // it's a valid numeric rank.
+    const finalNumeric = toNumeric(finalRank ?? undefined);
+    if (finalNumeric !== null && pts.length > 0) {
+      const last = pts[pts.length - 1];
+      if (last.rank !== finalNumeric) {
+        const prev = pts.length >= 2 ? pts[pts.length - 2].rank : last.rank;
+        pts[pts.length - 1] = {
+          ...last,
+          rank: finalNumeric,
+          delta: prev - finalNumeric, // positive = climbed
+        };
+      }
+    }
+
     const last = pts[pts.length - 1];
     const first = pts[0];
     let trend: 'up' | 'down' | 'flat' = 'flat';
@@ -73,7 +93,6 @@ export function RankProgressionChart({ splits, finalRank }: Props) {
       if (last.rank < first.rank) trend = 'up'; // lower number = better
       else if (last.rank > first.rank) trend = 'down';
     }
-    void finalRank;
 
     const max = pts.reduce((m, p) => Math.max(m, p.rank), 0);
     return { data: pts, maxRank: max, trend };

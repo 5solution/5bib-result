@@ -469,9 +469,14 @@ export default function CourseRankingPage() {
             <div className="mt-8 space-y-4">
               <CourseStatsViz
                 courseId={courseId}
-                started={course?.starters}
-                finished={course?.finishers}
-                dnf={course?.dnf}
+                /* Prefer the live-computed counters from the stats endpoint
+                 * (getCourseStats has a fallback that derives them from
+                 * timingPoint + overallRank when the API-reported counters
+                 * are null). Only fall back to the course-config values if
+                 * the stats endpoint is missing. */
+                started={courseStats?.started ?? course?.starters}
+                finished={courseStats?.finished ?? course?.finishers}
+                dnf={courseStats?.dnf ?? course?.dnf}
                 avgTime={courseStats?.avgTime}
                 minTime={courseStats?.minTime}
               />

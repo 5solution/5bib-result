@@ -1216,7 +1216,15 @@ export class RaceResultService {
 
     // Leverage existing getCourseStats for avg/min (also cached)
     const stats = await this.getCourseStats(athlete.courseId);
-    const totalFinishers = stats?.totalFinishers ?? 0;
+    // IMPORTANT: `stats.totalFinishers` is mis-named — it counts every doc
+    // with a valid chipTime on this course (includes DNFers who recorded
+    // partial times to the last checkpoint they reached). The actual count
+    // of athletes who crossed the finish line is `stats.finished` (derived
+    // from timingPoint === 'Finish' via the bucket aggregation). Using the
+    // wrong denominator here silently deflates every athlete's percentile
+    // — e.g. a rank-1 finisher on a 27-finisher course with 15 DNFers would
+    // show "Top 62%" instead of "Top 4%".
+    const totalFinishers = stats?.finished ?? 0;
     const minSeconds = this.chipTimeToSeconds(stats?.minTime) ?? 0;
     const avgSeconds = this.chipTimeToSeconds(stats?.avgTime) ?? 0;
 
