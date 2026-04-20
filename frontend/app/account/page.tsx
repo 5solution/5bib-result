@@ -66,10 +66,10 @@ export default function AccountPage() {
   const phone = user.primaryPhoneNumber?.phoneNumber;
   const joinDate = user.createdAt
     ? new Date(user.createdAt).toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      })
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    })
     : null;
 
   return (
@@ -189,20 +189,18 @@ function StatCard({
 }) {
   return (
     <div
-      className={`rounded-xl p-4 border ${
-        subtle
+      className={`rounded-xl p-4 border ${subtle
           ? 'bg-slate-50 border-slate-200'
           : 'bg-white border-slate-200 shadow-sm'
-      }`}
+        }`}
     >
       <div className="flex items-center gap-2 text-slate-500 text-[11px] font-semibold uppercase tracking-wider">
         <Icon className="w-3.5 h-3.5" />
         {label}
       </div>
       <div
-        className={`text-2xl font-black mt-1.5 ${
-          subtle ? 'text-slate-400' : 'text-slate-900'
-        }`}
+        className={`text-2xl font-black mt-1.5 ${subtle ? 'text-slate-400' : 'text-slate-900'
+          }`}
       >
         {value}
       </div>

@@ -72,8 +72,8 @@ function CalendarContent() {
   // Map UI status filter → API status value
   const apiStatus = statusFilter === 'all' ? undefined
     : statusFilter === 'upcoming' ? 'pre_race'
-    : statusFilter === 'completed' ? 'ended'
-    : 'live';
+      : statusFilter === 'completed' ? 'ended'
+        : 'live';
 
   // Reset page on status change
   const prevStatus = useRef(statusFilter);
@@ -196,11 +196,10 @@ function CalendarContent() {
                 <button
                   key={tab.key}
                   onClick={() => setStatusFilter(tab.key)}
-                  className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-all ${
-                    statusFilter === tab.key
-                      ? 'bg-white text-blue-700 shadow-lg'
-                      : 'bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm'
-                  }`}
+                  className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-all ${statusFilter === tab.key
+                    ? 'bg-white text-blue-700 shadow-lg'
+                    : 'bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm'
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -229,7 +228,7 @@ function CalendarContent() {
                   <div className="h-3 w-1/2 bg-slate-200 rounded" />
                   <div className="h-3 w-2/3 bg-slate-200 rounded" />
                   <div className="flex gap-1.5 mt-2">
-                    {[1,2,3].map(j => <div key={j} className="h-5 w-12 bg-slate-200 rounded" />)}
+                    {[1, 2, 3].map(j => <div key={j} className="h-5 w-12 bg-slate-200 rounded" />)}
                   </div>
                 </div>
               </div>
@@ -355,11 +354,10 @@ function CalendarContent() {
                 <button
                   key={p}
                   onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className={`w-9 h-9 rounded-full text-sm font-semibold transition-colors ${
-                    p === page
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
+                  className={`w-9 h-9 rounded-full text-sm font-semibold transition-colors ${p === page
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
                 >
                   {p}
                 </button>

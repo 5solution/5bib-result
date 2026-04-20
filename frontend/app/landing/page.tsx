@@ -14,31 +14,28 @@ export default function LandingPage() {
   const isSportMode = mode === 'sport';
 
   return (
-    <div className={`min-h-screen transition-all duration-500 ${
-      isSportMode
-        ? 'bg-gradient-to-br from-[#FF0E65] via-[#2563EB] to-[#1E293B]'
-        : 'bg-gradient-to-br from-[#F8FAFC] via-[#FFFFFF] to-[#2563EB]/10'
-    }`}>
+    <div className={`min-h-screen transition-all duration-500 ${isSportMode
+      ? 'bg-gradient-to-br from-[#FF0E65] via-[#2563EB] to-[#1E293B]'
+      : 'bg-gradient-to-br from-[#F8FAFC] via-[#FFFFFF] to-[#2563EB]/10'
+      }`}>
       {/* Mode Switcher & Language */}
       <div className="fixed top-6 right-6 z-50 flex gap-4">
         <div className="flex gap-2 bg-white/10 backdrop-blur-sm rounded-lg p-1 border border-white/20">
           <button
             onClick={() => setMode('sport')}
-            className={`px-4 py-2 rounded-md text-sm font-black uppercase tracking-wider transition-all duration-300 ${
-              isSportMode
-                ? 'bg-[#FF0E65] text-white shadow-lg'
-                : 'text-white/70 hover:text-white'
-            }`}
+            className={`px-4 py-2 rounded-md text-sm font-black uppercase tracking-wider transition-all duration-300 ${isSportMode
+              ? 'bg-[#FF0E65] text-white shadow-lg'
+              : 'text-white/70 hover:text-white'
+              }`}
           >
             Sport
           </button>
           <button
             onClick={() => setMode('model')}
-            className={`px-4 py-2 rounded-md text-sm font-black uppercase tracking-wider transition-all duration-300 ${
-              !isSportMode
-                ? 'bg-[#2563EB] text-white shadow-lg'
-                : 'text-white/70 hover:text-white'
-            }`}
+            className={`px-4 py-2 rounded-md text-sm font-black uppercase tracking-wider transition-all duration-300 ${!isSportMode
+              ? 'bg-[#2563EB] text-white shadow-lg'
+              : 'text-white/70 hover:text-white'
+              }`}
           >
             Model
           </button>
@@ -50,21 +47,18 @@ export default function LandingPage() {
       <section className="relative min-h-screen flex items-center justify-center px-4 md:px-6 overflow-hidden">
         {/* Animated Background Elements */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className={`absolute w-96 h-96 rounded-full blur-3xl opacity-20 animate-pulse ${
-            isSportMode ? 'bg-[#FF0E65] top-20 left-20' : 'bg-[#2563EB] top-40 right-20'
-          }`} />
-          <div className={`absolute w-96 h-96 rounded-full blur-3xl opacity-20 animate-pulse delay-1000 ${
-            isSportMode ? 'bg-[#2563EB] bottom-20 right-20' : 'bg-[#FF0E65] bottom-40 left-20'
-          }`} />
+          <div className={`absolute w-96 h-96 rounded-full blur-3xl opacity-20 animate-pulse ${isSportMode ? 'bg-[#FF0E65] top-20 left-20' : 'bg-[#2563EB] top-40 right-20'
+            }`} />
+          <div className={`absolute w-96 h-96 rounded-full blur-3xl opacity-20 animate-pulse delay-1000 ${isSportMode ? 'bg-[#2563EB] bottom-20 right-20' : 'bg-[#FF0E65] bottom-40 left-20'
+            }`} />
         </div>
 
         <div className="relative z-10 max-w-7xl mx-auto text-center">
           {/* Main Heading */}
-          <h1 className={`text-5xl md:text-7xl lg:text-8xl font-black uppercase tracking-tighter mb-6 transition-all duration-500 ${
-            isSportMode
-              ? 'text-white drop-shadow-2xl'
-              : 'text-[#1E293B]'
-          }`}>
+          <h1 className={`text-5xl md:text-7xl lg:text-8xl font-black uppercase tracking-tighter mb-6 transition-all duration-500 ${isSportMode
+            ? 'text-white drop-shadow-2xl'
+            : 'text-[#1E293B]'
+            }`}>
             <span className={`inline-block ${isSportMode ? 'animate-bounce' : ''}`}>5BIB</span>
             <br />
             <span className={`${isSportMode ? 'text-[#FF0E65]' : 'text-[#2563EB]'}`}>
@@ -73,22 +67,20 @@ export default function LandingPage() {
           </h1>
 
           {/* Subtitle */}
-          <p className={`text-xl md:text-2xl lg:text-3xl font-semibold mb-12 max-w-3xl mx-auto transition-all duration-500 ${
-            isSportMode
-              ? 'text-white/90'
-              : 'text-[#1E293B]/70'
-          }`}>
+          <p className={`text-xl md:text-2xl lg:text-3xl font-semibold mb-12 max-w-3xl mx-auto transition-all duration-500 ${isSportMode
+            ? 'text-white/90'
+            : 'text-[#1E293B]/70'
+            }`}>
             {t('header.subtitle')}
           </p>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 md:gap-6 justify-center items-center">
             <Link href="/">
-              <button className={`group relative px-8 md:px-12 py-4 md:py-6 text-lg md:text-xl font-black uppercase tracking-wider rounded-lg transition-all duration-300 overflow-hidden ${
-                isSportMode
-                  ? 'bg-[#FF0E65] text-white hover:bg-[#FF0E65]/90 shadow-2xl hover:shadow-[#FF0E65]/50'
-                  : 'bg-[#2563EB] text-white hover:bg-[#2563EB]/90 shadow-2xl hover:shadow-[#2563EB]/50'
-              }`}>
+              <button className={`group relative px-8 md:px-12 py-4 md:py-6 text-lg md:text-xl font-black uppercase tracking-wider rounded-lg transition-all duration-300 overflow-hidden ${isSportMode
+                ? 'bg-[#FF0E65] text-white hover:bg-[#FF0E65]/90 shadow-2xl hover:shadow-[#FF0E65]/50'
+                : 'bg-[#2563EB] text-white hover:bg-[#2563EB]/90 shadow-2xl hover:shadow-[#2563EB]/50'
+                }`}>
                 <span className="relative z-10 flex items-center gap-2">
                   {t('common.search')} Results
                   <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,11 +90,10 @@ export default function LandingPage() {
               </button>
             </Link>
 
-            <button className={`px-8 md:px-12 py-4 md:py-6 text-lg md:text-xl font-black uppercase tracking-wider rounded-lg border-4 transition-all duration-300 hover:scale-105 ${
-              isSportMode
-                ? 'border-white text-white hover:bg-white hover:text-[#FF0E65]'
-                : 'border-[#2563EB] text-[#2563EB] hover:bg-[#2563EB] hover:text-white'
-            }`}>
+            <button className={`px-8 md:px-12 py-4 md:py-6 text-lg md:text-xl font-black uppercase tracking-wider rounded-lg border-4 transition-all duration-300 hover:scale-105 ${isSportMode
+              ? 'border-white text-white hover:bg-white hover:text-[#FF0E65]'
+              : 'border-[#2563EB] text-[#2563EB] hover:bg-[#2563EB] hover:text-white'
+              }`}>
               Live Leaderboard
             </button>
           </div>
@@ -116,20 +107,17 @@ export default function LandingPage() {
             ].map((stat, index) => (
               <div
                 key={index}
-                className={`group p-6 md:p-8 rounded-xl transition-all duration-300 hover:scale-105 cursor-pointer ${
-                  isSportMode
-                    ? 'bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20'
-                    : 'bg-white backdrop-blur-md border-2 border-gray-200 hover:border-[#2563EB] shadow-lg hover:shadow-2xl'
-                }`}
+                className={`group p-6 md:p-8 rounded-xl transition-all duration-300 hover:scale-105 cursor-pointer ${isSportMode
+                  ? 'bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20'
+                  : 'bg-white backdrop-blur-md border-2 border-gray-200 hover:border-[#2563EB] shadow-lg hover:shadow-2xl'
+                  }`}
               >
-                <div className={`text-3xl md:text-5xl font-black mb-2 ${
-                  isSportMode ? 'text-white' : 'text-[#2563EB]'
-                }`}>
+                <div className={`text-3xl md:text-5xl font-black mb-2 ${isSportMode ? 'text-white' : 'text-[#2563EB]'
+                  }`}>
                   {stat.value}
                 </div>
-                <div className={`text-sm md:text-base font-semibold uppercase tracking-widest ${
-                  isSportMode ? 'text-white/80' : 'text-[#1E293B]/60'
-                }`}>
+                <div className={`text-sm md:text-base font-semibold uppercase tracking-widest ${isSportMode ? 'text-white/80' : 'text-[#1E293B]/60'
+                  }`}>
                   {stat.label}
                 </div>
               </div>
@@ -139,13 +127,11 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section className={`py-20 md:py-32 px-4 md:px-6 ${
-        isSportMode ? 'bg-[#1E293B]/30 backdrop-blur-sm' : 'bg-white/50 backdrop-blur-sm'
-      }`}>
+      <section className={`py-20 md:py-32 px-4 md:px-6 ${isSportMode ? 'bg-[#1E293B]/30 backdrop-blur-sm' : 'bg-white/50 backdrop-blur-sm'
+        }`}>
         <div className="max-w-7xl mx-auto">
-          <h2 className={`text-4xl md:text-6xl font-black uppercase text-center mb-16 md:mb-24 ${
-            isSportMode ? 'text-white' : 'text-[#1E293B]'
-          }`}>
+          <h2 className={`text-4xl md:text-6xl font-black uppercase text-center mb-16 md:mb-24 ${isSportMode ? 'text-white' : 'text-[#1E293B]'
+            }`}>
             Why Choose 5BIB
           </h2>
 
@@ -184,21 +170,18 @@ export default function LandingPage() {
             ].map((feature, index) => (
               <div
                 key={index}
-                className={`group p-6 md:p-8 rounded-xl transition-all duration-300 hover:scale-105 cursor-pointer ${
-                  isSportMode
-                    ? 'bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 hover:border-[#FF0E65]'
-                    : 'bg-white backdrop-blur-md border-2 border-gray-200 hover:border-[#2563EB] shadow-lg hover:shadow-2xl'
-                }`}
+                className={`group p-6 md:p-8 rounded-xl transition-all duration-300 hover:scale-105 cursor-pointer ${isSportMode
+                  ? 'bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 hover:border-[#FF0E65]'
+                  : 'bg-white backdrop-blur-md border-2 border-gray-200 hover:border-[#2563EB] shadow-lg hover:shadow-2xl'
+                  }`}
               >
                 <div className="text-5xl md:text-6xl mb-4">{feature.icon}</div>
-                <h3 className={`text-xl md:text-2xl font-black uppercase mb-3 ${
-                  isSportMode ? 'text-white' : 'text-[#1E293B]'
-                }`}>
+                <h3 className={`text-xl md:text-2xl font-black uppercase mb-3 ${isSportMode ? 'text-white' : 'text-[#1E293B]'
+                  }`}>
                   {feature.title}
                 </h3>
-                <p className={`text-sm md:text-base leading-relaxed ${
-                  isSportMode ? 'text-white/80' : 'text-[#1E293B]/70'
-                }`}>
+                <p className={`text-sm md:text-base leading-relaxed ${isSportMode ? 'text-white/80' : 'text-[#1E293B]/70'
+                  }`}>
                   {feature.description}
                 </p>
               </div>
@@ -208,11 +191,10 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className={`py-20 md:py-32 px-4 md:px-6 ${
-        isSportMode
-          ? 'bg-gradient-to-r from-[#FF0E65] to-[#2563EB]'
-          : 'bg-gradient-to-r from-[#2563EB] to-[#1E293B]'
-      }`}>
+      <section className={`py-20 md:py-32 px-4 md:px-6 ${isSportMode
+        ? 'bg-gradient-to-r from-[#FF0E65] to-[#2563EB]'
+        : 'bg-gradient-to-r from-[#2563EB] to-[#1E293B]'
+        }`}>
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl md:text-6xl font-black uppercase text-white mb-6">
             Ready to Check Your Results?

@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081';
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8081";
 
 async function proxyRequest(req: NextRequest) {
   const url = new URL(req.url);
@@ -8,15 +8,15 @@ async function proxyRequest(req: NextRequest) {
   const targetUrl = `${BACKEND_URL}${targetPath}${url.search}`;
 
   const headers = new Headers();
-  const auth = req.headers.get('authorization');
-  if (auth) headers.set('Authorization', auth);
+  const auth = req.headers.get("authorization");
+  if (auth) headers.set("Authorization", auth);
 
-  const contentType = req.headers.get('content-type');
-  if (contentType) headers.set('Content-Type', contentType);
+  const contentType = req.headers.get("content-type");
+  if (contentType) headers.set("Content-Type", contentType);
 
   const init: RequestInit = { method: req.method, headers };
 
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  if (req.method !== "GET" && req.method !== "HEAD") {
     try {
       init.body = Buffer.from(await req.arrayBuffer());
     } catch {}
@@ -27,7 +27,9 @@ async function proxyRequest(req: NextRequest) {
 
   return new NextResponse(data, {
     status: res.status,
-    headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+    headers: {
+      "Content-Type": res.headers.get("Content-Type") || "application/json",
+    },
   });
 }
 
