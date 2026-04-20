@@ -41,6 +41,11 @@ const envVarsSchema = Joi.object()
     // (dev / self-hosted). In prod BOTH keys must be set.
     CLOUDFLARE_TURNSTILE_SITE_KEY: Joi.string().optional().allow(''),
     CLOUDFLARE_TURNSTILE_SECRET_KEY: Joi.string().optional().allow(''),
+    // Clerk auth — optional in dev, required in prod
+    CLERK_SECRET_KEY: Joi.string().optional().allow(''),
+    CLERK_PUBLISHABLE_KEY: Joi.string().optional().allow(''),
+    CLERK_JWT_KEY: Joi.string().optional().allow(''),
+    CLERK_AUTHORIZED_PARTIES: Joi.string().optional().allow(''),
   })
   .unknown();
 
@@ -98,5 +103,14 @@ export const env = {
   turnstile: {
     siteKey: (envVars.CLOUDFLARE_TURNSTILE_SITE_KEY as string) || '',
     secretKey: (envVars.CLOUDFLARE_TURNSTILE_SECRET_KEY as string) || '',
+  },
+  clerk: {
+    secretKey: (envVars.CLERK_SECRET_KEY as string) || '',
+    publishableKey: (envVars.CLERK_PUBLISHABLE_KEY as string) || '',
+    jwtKey: (envVars.CLERK_JWT_KEY as string) || '',
+    authorizedParties: ((envVars.CLERK_AUTHORIZED_PARTIES as string) || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 };

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Plus_Jakarta_Sans, Be_Vietnam_Pro } from 'next/font/google'
 import { Toaster } from 'sonner'
+import { ClerkProvider } from '@clerk/nextjs'
+import { viVN } from '@clerk/localizations'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
@@ -56,26 +58,34 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="vi" className={`${plusJakarta.variable} ${beVietnamPro.variable}`}>
-      <body className="font-sans antialiased bg-[var(--5bib-bg)] text-[var(--5bib-text)] min-h-screen flex flex-col">
-        <I18nProvider>
-        <QueryProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </QueryProvider>
-        </I18nProvider>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            style: {
-              background: 'var(--5bib-surface)',
-              color: 'var(--5bib-text)',
-              border: '1px solid var(--5bib-border)',
-            },
-          }}
-        />
-      </body>
-    </html>
+    <ClerkProvider
+      localization={viVN}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      signInFallbackRedirectUrl="/account"
+      signUpFallbackRedirectUrl="/account"
+    >
+      <html lang="vi" className={`${plusJakarta.variable} ${beVietnamPro.variable}`}>
+        <body className="font-sans antialiased bg-[var(--5bib-bg)] text-[var(--5bib-text)] min-h-screen flex flex-col">
+          <I18nProvider>
+          <QueryProvider>
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </QueryProvider>
+          </I18nProvider>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: 'var(--5bib-surface)',
+                color: 'var(--5bib-text)',
+                border: '1px solid var(--5bib-border)',
+              },
+            }}
+          />
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { Menu, X, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 export default function Header() {
@@ -62,15 +63,54 @@ export default function Header() {
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
 
-          {/* MY 5BIB — cyan accent tile, far right, angled left edge (like UTMB "MY UTMB") */}
-          <Link
-            href="/account"
-            className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
-            style={{ width: 200, clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)', paddingLeft: 36, paddingRight: 16 }}
-          >
-              <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">Embracing Challenges</span>
-            <ChevronRight className="w-4 h-4 ml-auto shrink-0" strokeWidth={2.5} />
-          </Link>
+          {/* 5BIB Account tile — cyan accent, angled left edge (like UTMB "MY UTMB") */}
+          {/* Signed out: "Đăng nhập" + trigger SignInButton */}
+          <Show when="signed-out">
+            <SignInButton mode="redirect">
+              <button
+                type="button"
+                className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
+                style={{
+                  width: 200,
+                  clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
+                  paddingLeft: 36,
+                  paddingRight: 16,
+                }}
+              >
+                <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">
+                  Đăng nhập / Sign in
+                </span>
+                <ChevronRight className="w-4 h-4 ml-auto shrink-0" strokeWidth={2.5} />
+              </button>
+            </SignInButton>
+          </Show>
+
+          {/* Signed in: Avatar + "MY 5BIB" link to /account */}
+          <Show when="signed-in">
+            <div
+              className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
+              style={{
+                width: 200,
+                clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
+                paddingLeft: 32,
+                paddingRight: 10,
+              }}
+            >
+              <Link
+                href="/account"
+                className="flex-1 tracking-wide uppercase text-xs font-extrabold leading-tight hover:opacity-80"
+              >
+                MY 5BIB
+              </Link>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: 'w-8 h-8 ring-2 ring-slate-900/20 shrink-0',
+                  },
+                }}
+              />
+            </div>
+          </Show>
 
         </div>
       </div>
