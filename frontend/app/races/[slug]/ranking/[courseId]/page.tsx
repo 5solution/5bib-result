@@ -422,28 +422,43 @@ export default function CourseRankingPage() {
                   <span className="text-blue-200 italic">{t('status.upcoming')}</span>
                 ) : (
                   <>
-                    <span className="text-blue-100">
-                      {t('ranking.starters')}{' '}
-                      <strong className="text-white font-black text-lg md:text-xl ml-1.5">
-                        {(course.starters ?? 0).toLocaleString('vi-VN')}
-                      </strong>
-                    </span>
-                    {(course.finishers ?? 0) > 0 && (
-                      <span className="text-blue-100">
-                        {t('ranking.finishers')}{' '}
-                        <strong className="text-emerald-300 font-black text-lg md:text-xl ml-1.5">
-                          {course.finishers!.toLocaleString('vi-VN')}
-                        </strong>
-                      </span>
-                    )}
-                    {(course.dnf ?? 0) > 0 && (
-                      <span className="text-blue-100">
-                        DNF{' '}
-                        <strong className="text-yellow-300 font-black text-lg md:text-xl ml-1.5">
-                          {course.dnf!.toLocaleString('vi-VN')}
-                        </strong>
-                      </span>
-                    )}
+                    {/* IMPORTANT: keep this header in sync with the stats card
+                        below (CourseStatsViz). Both must read the same source
+                        of truth — `courseStats` (live-derived) first, fall back
+                        to `course.*` (legacy race config) only if stats not
+                        available. Otherwise header shows "0" while stats card
+                        shows the real number → confused runners. */}
+                    {(() => {
+                      const starters = courseStats?.started ?? course.starters ?? 0;
+                      const finishers = courseStats?.finished ?? course.finishers ?? 0;
+                      const dnf = courseStats?.dnf ?? course.dnf ?? 0;
+                      return (
+                        <>
+                          <span className="text-blue-100">
+                            {t('ranking.starters')}{' '}
+                            <strong className="text-white font-black text-lg md:text-xl ml-1.5">
+                              {starters.toLocaleString('vi-VN')}
+                            </strong>
+                          </span>
+                          {finishers > 0 && (
+                            <span className="text-blue-100">
+                              {t('ranking.finishers')}{' '}
+                              <strong className="text-emerald-300 font-black text-lg md:text-xl ml-1.5">
+                                {finishers.toLocaleString('vi-VN')}
+                              </strong>
+                            </span>
+                          )}
+                          {dnf > 0 && (
+                            <span className="text-blue-100">
+                              DNF{' '}
+                              <strong className="text-yellow-300 font-black text-lg md:text-xl ml-1.5">
+                                {dnf.toLocaleString('vi-VN')}
+                              </strong>
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </>
                 )}
               </div>
