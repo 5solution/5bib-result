@@ -27,7 +27,7 @@ export default function SolutionPage() {
 
   const [lang, setLang] = React.useState<Lang>(initialLang);
   const [showModal, setShowModal] = React.useState(false);
-  const accent = '#FF0E65';
+  const accent = '#D4145A';
 
   const onCTA = React.useCallback(() => {
     if (typeof window !== 'undefined' && typeof (window as unknown as { gtag?: Function }).gtag === 'function') {

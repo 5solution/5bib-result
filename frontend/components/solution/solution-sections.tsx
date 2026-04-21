@@ -120,7 +120,7 @@ export function SolutionComparison({ lang, accent = '#FF0E65' }: Ctx) {
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr repeat(4, 1fr)', borderBottom: i < rows.length - 1 ? '1px solid var(--5s-border)' : 'none', background: i % 2 ? 'var(--5s-slate-50)' : '#fff' }}>
             <div style={{ padding: '16px 24px', fontFamily: 'var(--font-body)', fontSize: 13.5, fontWeight: 600, color: 'var(--5s-text)' }}>{r.f}</div>
             {r.v.map((v, j) => (
-              <div key={j} style={{ padding: '16px 18px', textAlign: 'center', background: j === 0 ? 'rgba(0,38,179,0.04)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{renderCell(v)}</div>
+              <div key={j} style={{ padding: '16px 18px', textAlign: 'center', background: j === 0 ? 'rgba(21,46,150,0.04)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{renderCell(v)}</div>
             ))}
           </div>
         ))}
@@ -137,7 +137,7 @@ export function SolutionCaseStudy({ lang, accent = '#FF0E65' }: Ctx) {
   return (
     <section style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 32px' }}>
       <div style={{ background: 'var(--5s-blue-700)', color: '#fff', borderRadius: 24, overflow: 'hidden', position: 'relative' }}>
-        <div aria-hidden style={{ position: 'absolute', top: -80, right: -40, width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,14,101,0.25),transparent 65%)' }} />
+        <div aria-hidden style={{ position: 'absolute', top: -80, right: -40, width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,20,90,0.25),transparent 65%)' }} />
         <div className="solution-case-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 0 }}>
           <div style={{ padding: 'clamp(36px,5vw,64px)' }}>
             <Pill bg="rgba(255,255,255,0.18)" color="#fff">{t('Case study', 'Case study')}</Pill>
@@ -200,7 +200,7 @@ export function SolutionTestimonials({ lang, accent = '#FF0E65' }: Ctx) {
   ];
   return (
     <section id="customers" style={{ background: 'var(--5s-blue-700)', color: '#fff', padding: '96px 0', position: 'relative', overflow: 'hidden' }}>
-      <div aria-hidden style={{ position: 'absolute', inset: 0, opacity: 0.08, background: 'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4),transparent 55%), radial-gradient(circle at 85% 80%, rgba(255,14,101,0.5),transparent 55%)' }} />
+      <div aria-hidden style={{ position: 'absolute', inset: 0, opacity: 0.08, background: 'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4),transparent 55%), radial-gradient(circle at 85% 80%, rgba(212,20,90,0.5),transparent 55%)' }} />
       <div style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '0 32px' }}>
         <div style={{ marginBottom: 44, maxWidth: 700 }}>
           <div className="type-eyebrow" style={{ color: '#FFD6E3' }}>{t('Khách hàng nói gì', 'What organizers say')}</div>
@@ -256,7 +256,7 @@ export function SolutionPricing({ lang, accent = '#FF0E65', onCTA }: Ctx & { onC
           </div>
         </div>
         <div style={{ background: 'var(--5s-blue-700)', color: '#fff', borderRadius: 22, padding: 36, position: 'relative', overflow: 'hidden' }}>
-          <div aria-hidden style={{ position: 'absolute', top: -60, right: -40, width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,14,101,0.3),transparent 65%)' }} />
+          <div aria-hidden style={{ position: 'absolute', top: -60, right: -40, width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,20,90,0.3),transparent 65%)' }} />
           <div style={{ position: 'relative' }}>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 900, letterSpacing: '.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)' }}>{t('Gói bao gồm', 'Included in every plan')}</div>
             <ul style={{ listStyle: 'none', padding: 0, margin: '20px 0 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -327,7 +327,7 @@ export function SolutionFinalCTA({ lang, onCTA, accent = '#FF0E65' }: Ctx & { on
     <section style={{ padding: '80px 32px', position: 'relative' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto', background: 'var(--5s-blue)', color: '#fff', borderRadius: 28, padding: 'clamp(40px,6vw,80px) clamp(32px,6vw,72px)', position: 'relative', overflow: 'hidden' }}>
         <div aria-hidden style={{ position: 'absolute', top: -120, right: -60, width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.18),transparent 65%)' }} />
-        <div aria-hidden style={{ position: 'absolute', bottom: -160, left: -80, width: 480, height: 480, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,14,101,0.25),transparent 65%)' }} />
+        <div aria-hidden style={{ position: 'absolute', bottom: -160, left: -80, width: 480, height: 480, borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,20,90,0.25),transparent 65%)' }} />
         <div className="solution-cta-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 40, alignItems: 'center' }}>
           <div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 9999, marginBottom: 20 }}>
