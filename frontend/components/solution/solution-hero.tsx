@@ -227,6 +227,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
               {stats.map((s, i) => (
                 <div
                   key={i}
+                  className={i === 0 ? 'solution-stat-card solution-stat-card--accent' : 'solution-stat-card'}
                   style={{
                     background: i === 0 ? accent : 'rgba(255,255,255,0.07)',
                     border: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.18)',
@@ -293,6 +294,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
             </div>
             {/* Registration form chip */}
             <div
+              className="solution-live-card"
               style={{
                 marginTop: 16,
                 background: '#fff',
