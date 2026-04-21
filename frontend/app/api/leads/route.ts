@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     '';
 
   try {
-    const res = await fetch(`${backendUrl}/solution/leads`, {
+    const res = await fetch(`${backendUrl}/api/solution/leads`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
