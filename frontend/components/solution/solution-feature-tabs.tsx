@@ -35,9 +35,9 @@ function TabShell({
 }) {
   return (
     <div className="solution-tab-grid" style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', minHeight: 540 }}>
-      <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <h3 className="type-campaign" style={{ fontSize: 42, color: 'var(--5s-text)', margin: 0 }}>{title}</h3>
-        <p className="type-lead" style={{ margin: '16px 0 24px', fontSize: 17 }}>{sub}</p>
+      <div className="solution-tab-left" style={{ padding: '40px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <h3 className="type-campaign solution-tab-title" style={{ fontSize: 42, color: 'var(--5s-text)', margin: 0 }}>{title}</h3>
+        <p className="type-lead solution-tab-sub" style={{ margin: '16px 0 24px', fontSize: 17 }}>{sub}</p>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {bullets.map((b, i) => (
             <li key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -47,7 +47,7 @@ function TabShell({
           ))}
         </ul>
       </div>
-      <div style={{ background: 'var(--5s-surface)', borderLeft: '1px solid var(--5s-border)', padding: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+      <div className="solution-tab-right" style={{ background: 'var(--5s-surface)', borderLeft: '1px solid var(--5s-border)', padding: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
         {right}
       </div>
     </div>
@@ -400,9 +400,9 @@ export default function SolutionFeatureTabs({ lang, accent = '#FF0E65' }: { lang
           </p>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28, padding: 6, background: '#fff', borderRadius: 14, border: '1px solid var(--5s-border)', boxShadow: 'var(--shadow-xs)' }}>
+        <div className="solution-tab-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28, padding: 6, background: '#fff', borderRadius: 14, border: '1px solid var(--5s-border)', boxShadow: 'var(--shadow-xs)' }}>
           {tabs.map((tb, i) => (
-            <button key={tb.id} onClick={() => setTab(i)} style={{ flex: '1 1 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', background: tab === i ? 'var(--5s-blue)' : 'transparent', color: tab === i ? '#fff' : 'var(--5s-text-muted)', border: 'none', borderRadius: 10, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12.5, letterSpacing: '-0.01em', cursor: 'pointer', transition: 'all 200ms', textTransform: 'uppercase' }}>
+            <button key={tb.id} onClick={() => setTab(i)} className="solution-tab-btn" style={{ flex: '1 1 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', background: tab === i ? 'var(--5s-blue)' : 'transparent', color: tab === i ? '#fff' : 'var(--5s-text-muted)', border: 'none', borderRadius: 10, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12.5, letterSpacing: '-0.01em', cursor: 'pointer', transition: 'all 200ms', textTransform: 'uppercase' }}>
               {tb.icon} {tb.label}
             </button>
           ))}

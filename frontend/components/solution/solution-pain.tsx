@@ -23,7 +23,7 @@ export function SolutionSocialProof({ lang }: { lang: Lang }) {
           {t("BTC hàng đầu Việt Nam mở bán vé trên 5BIB", "Vietnam's leading organizers sell tickets on 5BIB")}
         </h3>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 0, borderTop: '1px solid var(--5s-border)', borderBottom: '1px solid var(--5s-border)' }}>
+      <div className="solution-clients-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 0, borderTop: '1px solid var(--5s-border)', borderBottom: '1px solid var(--5s-border)' }}>
         {clients.map((c, i) => (
           <div key={i} style={{ padding: '22px 18px', borderRight: i < clients.length - 1 ? '1px solid var(--5s-border)' : 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 22, letterSpacing: '-0.02em', color: 'var(--5s-blue)' }}>{c.n}</div>
@@ -69,7 +69,7 @@ export function SolutionPainSolution({ lang, accent = '#FF0E65' }: { lang: Lang;
           {t('BTC Việt Nam đang mất 2 tuần đối soát, 150 triệu build tool, hoặc chịu phí cao từ platform đóng. 5BIB làm cả ba việc đó trong một hệ thống — và rẻ hơn.', 'Vietnamese organizers lose two weeks on reconciliation, 150M₫ on in-house tools, or pay steep fees to closed platforms. 5BIB does all three in one system — for less.')}
         </p>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
+      <div className="solution-pain-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
         {rows.map((r, i) => (
           <div key={i} style={{ background: '#fff', border: '1px solid var(--5s-border)', borderRadius: 16, padding: 28, position: 'relative', overflow: 'hidden', transition: 'all 280ms' }}
             onMouseEnter={(e) => { const el = e.currentTarget as HTMLDivElement; el.style.transform = 'translateY(-3px)'; el.style.boxShadow = 'var(--shadow-lg)'; }}

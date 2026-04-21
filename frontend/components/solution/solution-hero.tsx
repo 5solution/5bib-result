@@ -81,8 +81,8 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
         className="solution-hero-grid"
         style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '56px 32px 0' }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 56, alignItems: 'center' }}>
-          <div>
+        <div className="solution-hero-inner-grid" style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 56, alignItems: 'center' }}>
+          <div className="solution-hero-left">
             <div
               style={{
                 display: 'inline-flex',
@@ -121,7 +121,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
               </span>
             </div>
             <h1
-              className="type-campaign"
+              className="type-campaign solution-hero-h1"
               style={{
                 fontSize: 'clamp(52px, 7.2vw, 100px)',
                 color: '#fff',
@@ -135,6 +135,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
               <span style={{ color: accent }}>{t('#1 Việt Nam.', 'platform #1 in Vietnam.')}</span>
             </h1>
             <p
+              className="solution-hero-desc"
               style={{
                 fontFamily: 'var(--font-body)',
                 fontWeight: 500,
@@ -150,7 +151,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
                 'Registration form · payments · BIB & wave management · check-in · email blast · dashboard — all in one platform. Replaces Google Form, closed registration platforms, and 6 months of in-house dev.',
               )}
             </p>
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <div className="solution-hero-cta-row" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <button
                 onClick={onCTA}
                 style={{
@@ -221,8 +222,8 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
           </div>
 
           {/* Right: stats board */}
-          <div style={{ position: 'relative' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="solution-hero-right" style={{ position: 'relative' }}>
+            <div className="solution-hero-stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               {stats.map((s, i) => (
                 <div
                   key={i}
@@ -355,7 +356,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
       </div>
 
       {/* scrolling marquee */}
-      <div style={{ position: 'relative', marginTop: 80 }}>
+      <div className="solution-hero-marquee-wrap" style={{ position: 'relative', marginTop: 80 }}>
         <div
           style={{
             padding: '14px 0',

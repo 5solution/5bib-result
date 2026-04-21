@@ -21,9 +21,9 @@ export function SolutionHowItWorks({ lang, accent = '#FF0E65' }: Ctx) {
           <span style={{ color: 'var(--5s-blue)' }}>{t('đến tiếp cận 120k user của 5BIB.', 'to reaching 120k 5BIB users.')}</span>
         </h2>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 18 }}>
+      <div className="solution-steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 18 }}>
         {steps.map((s, i) => (
-          <div key={i} style={{ background: '#fff', border: '1px solid var(--5s-border)', borderRadius: 16, padding: 28, position: 'relative' }}>
+          <div key={i} className="solution-step-card" style={{ background: '#fff', border: '1px solid var(--5s-border)', borderRadius: 16, padding: 28, position: 'relative' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 56, letterSpacing: '-0.04em', color: accent, lineHeight: 1 }}>{s.n}</div>
             <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 22, margin: '14px 0 8px', letterSpacing: '-0.02em', color: 'var(--5s-text)' }}>{s.t}</h3>
             <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.55, color: 'var(--5s-text-muted)', margin: 0 }}>{s.d}</p>
@@ -55,7 +55,7 @@ export function SolutionTimeline({ lang, accent = '#FF0E65' }: Ctx) {
         </div>
         <div style={{ position: 'relative' }} className="solution-timeline">
           <div style={{ position: 'absolute', top: 42, left: 28, right: 28, height: 2, background: 'var(--5s-border)', zIndex: 0 }} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, position: 'relative', zIndex: 1 }}>
+          <div className="solution-timeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, position: 'relative', zIndex: 1 }}>
             {phases.map((p, i) => (
               <div key={i} style={{ textAlign: 'center' }}>
                 <div style={{ width: 86, height: 86, borderRadius: 22, margin: '0 auto', background: '#fff', border: `2px solid ${p.col}`, color: p.col, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)' }}>
@@ -208,7 +208,7 @@ export function SolutionTestimonials({ lang, accent = '#FF0E65' }: Ctx) {
             {t('BTC Việt Nam chọn 5BIB.', 'VN organizers choose 5BIB.')}
           </h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 18 }}>
+        <div className="solution-testimonials-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 18 }}>
           {quotes.map((qq, i) => (
             <div key={i} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: 28, backdropFilter: 'blur(8px)', display: 'flex', flexDirection: 'column' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 56, lineHeight: 0.8, color: accent, height: 26, marginBottom: 12 }}>&ldquo;</div>
@@ -305,7 +305,7 @@ export function SolutionFAQ({ lang, accent = '#FF0E65' }: Ctx) {
           const isOpen = open === i;
           return (
             <div key={i} style={{ borderBottom: i < items.length - 1 ? '1px solid var(--5s-border)' : 'none' }}>
-              <button onClick={() => setOpen(isOpen ? -1 : i)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: '22px 24px', background: isOpen ? 'var(--5s-blue-50)' : '#fff', border: 'none', textAlign: 'left', cursor: 'pointer', transition: 'all 150ms' }}>
+              <button onClick={() => setOpen(isOpen ? -1 : i)} className="solution-faq-btn" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: '22px 24px', background: isOpen ? 'var(--5s-blue-50)' : '#fff', border: 'none', textAlign: 'left', cursor: 'pointer', transition: 'all 150ms' }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--5s-blue)', width: 32, flexShrink: 0 }}>0{i + 1}</span>
                 <span style={{ flex: 1, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16.5, letterSpacing: '-0.01em', color: 'var(--5s-text)' }}>{it.q}</span>
                 <span style={{ transition: 'transform 280ms', transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)', color: 'var(--5s-blue)' }}><IPlus s={18} /></span>
@@ -341,7 +341,7 @@ export function SolutionFinalCTA({ lang, onCTA, accent = '#FF0E65' }: Ctx & { on
             <p style={{ fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: 17, lineHeight: 1.55, color: 'rgba(255,255,255,0.85)', maxWidth: 560, margin: '20px 0 32px' }}>
               {t('Đặt lịch demo 15 phút với team 5BIB. Xem form builder, dashboard, flow thanh toán — và nhận báo giá theo đúng mùa giải của bạn trước khi rời buổi họp.', 'Book a 15-minute demo with the 5BIB team. See the form builder, dashboards, and payment flow — and leave with a quote matched to your season.')}
             </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <div className="solution-cta-btns" style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               <button onClick={onCTA} style={{ background: '#fff', color: 'var(--5s-blue-700)', border: 'none', padding: '16px 28px', borderRadius: 12, fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 14, textTransform: 'uppercase', letterSpacing: '.06em', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 10, boxShadow: '0 14px 40px rgba(0,0,0,0.25)' }}>
                 {t('Đặt lịch demo 15 phút', 'Book a 15-min demo')} <IArr s={16} />
               </button>
@@ -405,7 +405,7 @@ export function SolutionFooter({ lang }: { lang: Lang }) {
           </div>
         ))}
       </div>
-      <div style={{ maxWidth: 1280, margin: '40px auto 0', paddingTop: 22, borderTop: '1px solid rgba(255,255,255,0.12)', display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.5)' }}>
+      <div className="solution-footer-bottom" style={{ maxWidth: 1280, margin: '40px auto 0', paddingTop: 22, borderTop: '1px solid rgba(255,255,255,0.12)', display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.5)' }}>
         <span>© 2026 5Solution JSC · {t('Hà Nội, Việt Nam', 'Hanoi, Vietnam')} · MST 0108xxxxxx</span>
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.01em', color: 'rgba(255,255,255,0.7)' }}>Embracing Challenges</span>
       </div>
