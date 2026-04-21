@@ -106,7 +106,7 @@ export default function TimingLandingPage() {
                     100+
                   </span>
                 </div>
-                <div className="tl-hero-stat-label">Giải đã bấm giờ</div>
+                <div className="tl-hero-stat-label">Giải đã vận hành</div>
               </div>
               <div>
                 <div className="tl-hero-stat-num">
@@ -528,7 +528,7 @@ export default function TimingLandingPage() {
           <div className="tl-stats-grid">
             <div className="tl-stat-box">
               <div className="tl-stat-num">100+</div>
-              <div className="tl-stat-label">Giải chạy đã bấm giờ</div>
+              <div className="tl-stat-label">Giải đã vận hành</div>
             </div>
             <div className="tl-stat-box">
               <div className="tl-stat-num">94K+</div>
@@ -617,7 +617,7 @@ export default function TimingLandingPage() {
                 </div>
                 <div className="tl-rw-footer">
                   <span className="tl-rw-footer-url">result.5bib.com/races/giai-marathon-quoc-te-vtv-lpbank-2025.../90932</span>
-                  <a href="https://result.5bib.com" target="_blank" rel="noopener" className="tl-rw-footer-link">Xem đầy đủ →</a>
+                  <a href="https://result.5bib.com/races/giai-marathon-quoc-te-vtv-lpbank-2025-nhip-dieu-xuyen-thoi-gian/90932" target="_blank" rel="noopener" className="tl-rw-footer-link">Xem đầy đủ →</a>
                 </div>
               </div>
             </div>
