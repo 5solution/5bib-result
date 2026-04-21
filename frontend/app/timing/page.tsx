@@ -30,7 +30,6 @@ export default function TimingLandingPage() {
         <div className="tl-nav-inner">
           <div className="tl-nav-logo">
             <Logo />
-            5BIB Timing
           </div>
           <ul className="tl-nav-links">
             <li>
@@ -776,7 +775,6 @@ export default function TimingLandingPage() {
             <div className="tl-footer-brand">
               <div className="tl-footer-logo">
                 <Logo />
-                5BIB Timing
               </div>
               <p className="tl-footer-desc">
                 Dịch vụ bấm giờ chip chuyên nghiệp cho giải chạy tại Việt Nam. Công nghệ
