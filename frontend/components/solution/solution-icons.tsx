@@ -230,6 +230,36 @@ export function Pill({
   );
 }
 
+/** Count-up number that animates when scrolled into view. Parses "120K+", "48M+", "72h", "195+". */
+export function CountUpStat({ value, duration = 1300 }: { value: string; duration?: number }) {
+  const { num, suffix } = React.useMemo(() => {
+    const m = value.match(/^(\d+)(.*)/);
+    return m ? { num: parseInt(m[1], 10), suffix: m[2] } : { num: 0, suffix: value };
+  }, [value]);
+  const [count, setCount] = React.useState(0);
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const started = React.useRef(false);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting || started.current) return;
+      started.current = true;
+      io.disconnect();
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const p = Math.min((now - t0) / duration, 1);
+        setCount(Math.round((1 - Math.pow(1 - p, 3)) * num));
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }, { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [num, duration]);
+  return <span ref={ref}>{count}{suffix}</span>;
+}
+
 /** Pulsing live-status dot. */
 export function LiveDot({ color = '#fef08a' }: { color?: string }) {
   return (

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { IArr, ICheck, LiveDot, useT, type Lang } from './solution-icons';
+import { IArr, ICheck, CountUpStat, LiveDot, useT, type Lang } from './solution-icons';
 
 type Props = {
   lang: Lang;
@@ -264,7 +264,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
                       color: '#fff',
                     }}
                   >
-                    {s.n}
+                    <CountUpStat value={s.n} />
                   </div>
                   <div
                     style={{

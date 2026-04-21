@@ -263,10 +263,32 @@ function AthleteDashMock({ lang, accent }: Ctx) {
   );
 }
 
+function useMountCountUp(target: number, duration: number, decimals = 0) {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const p = Math.min((now - t0) / duration, 1);
+      setV(parseFloat(((1 - Math.pow(1 - p, 3)) * target).toFixed(decimals)));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return v;
+}
+
 function BtcDashMock({ lang, accent }: Ctx) {
   const t = useT(lang);
   const days = [22, 38, 45, 52, 68, 75, 88, 72, 94];
   const max = Math.max(...days);
+  const revenue = useMountCountUp(2.94, 1400, 2);
+  const orders = useMountCountUp(4812, 1400, 0);
+  const conv = useMountCountUp(18.2, 1400, 1);
+  const stats = [
+    { l: t('Doanh thu', 'Revenue'), v: `${revenue.toFixed(2)}B`, c: 'var(--5s-blue)' },
+    { l: t('Số đơn', 'Orders'), v: orders >= 1000 ? `${Math.floor(orders / 1000)},${(orders % 1000).toString().padStart(3, '0')}` : orders.toString(), c: 'var(--5s-text)' },
+    { l: 'Conv rate', v: `${conv.toFixed(1)}%`, c: accent },
+  ];
   return (
     <div style={{ width: '100%', maxWidth: 500, background: '#fff', borderRadius: 14, border: '1px solid var(--5s-border)', boxShadow: 'var(--shadow-lg)', padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -274,11 +296,7 @@ function BtcDashMock({ lang, accent }: Ctx) {
         <Pill bg="var(--5s-blue-50)" color="var(--5s-blue)">{t('9 ngày đầu', 'first 9 days')}</Pill>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-        {[
-          { l: t('Doanh thu', 'Revenue'), v: '2.94B', c: 'var(--5s-blue)' },
-          { l: t('Số đơn', 'Orders'), v: '4,812', c: 'var(--5s-text)' },
-          { l: 'Conv rate', v: '18.2%', c: accent },
-        ].map((s, i) => (
+        {stats.map((s, i) => (
           <div key={i}>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: 9.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--5s-text-subtle)', fontWeight: 800 }}>{s.l}</div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 22, color: s.c, letterSpacing: '-0.02em' }}>{s.v}</div>
@@ -289,7 +307,17 @@ function BtcDashMock({ lang, accent }: Ctx) {
         {days.map((d, i) => (
           <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'var(--5s-text-subtle)' }}>{d}0M</div>
-            <div style={{ width: '100%', height: `${(d / max) * 100}%`, background: i === days.length - 1 ? accent : 'var(--5s-blue)', borderRadius: '6px 6px 0 0', opacity: i === days.length - 1 ? 1 : 0.85 }} />
+            <div
+              className="solution-bar-grow"
+              style={{
+                width: '100%',
+                height: `${(d / max) * 100}%`,
+                background: i === days.length - 1 ? accent : 'var(--5s-blue)',
+                borderRadius: '6px 6px 0 0',
+                opacity: i === days.length - 1 ? 1 : 0.85,
+                animationDelay: `${i * 70}ms`,
+              }}
+            />
           </div>
         ))}
       </div>

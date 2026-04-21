@@ -596,6 +596,16 @@
   }
 }
 
+/* ── Bar chart grow animation (BTC dashboard) ── */
+@keyframes solution-bar-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+.solution-bar-grow {
+  transform-origin: bottom;
+  animation: solution-bar-grow 0.55s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
 /* ── 480px: Small phone ── */
 @media (max-width: 480px) {
   .solution-root .type-campaign {
