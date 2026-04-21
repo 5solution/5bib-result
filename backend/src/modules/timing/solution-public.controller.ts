@@ -1,3 +1,4 @@
+// POST /solution/leads — lead capture for solution.5bib.com landing page
 import {
   Body,
   Controller,
