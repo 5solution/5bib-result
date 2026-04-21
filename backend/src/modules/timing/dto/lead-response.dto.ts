@@ -10,6 +10,8 @@ export class TimingLeadResponseDto {
   @ApiProperty({ enum: ['basic', 'advanced', 'professional', 'unspecified'] })
   package_interest: string;
   @ApiProperty() notes: string;
+  @ApiProperty({ enum: ['timing', 'solution'], default: 'timing' })
+  source: string;
   @ApiProperty({
     enum: ['new', 'contacted', 'quoted', 'closed_won', 'closed_lost'],
   })

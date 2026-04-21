@@ -12,6 +12,9 @@ import {
 const STATUSES = ['new', 'contacted', 'quoted', 'closed_won', 'closed_lost'] as const;
 type LeadStatus = (typeof STATUSES)[number];
 
+const SOURCES = ['timing', 'solution'] as const;
+type LeadSource = (typeof SOURCES)[number];
+
 export class ListLeadsQueryDto {
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()
@@ -42,4 +45,9 @@ export class ListLeadsQueryDto {
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   include_archived?: boolean = false;
+
+  @ApiProperty({ required: false, enum: SOURCES })
+  @IsOptional()
+  @IsEnum(SOURCES)
+  source?: LeadSource;
 }

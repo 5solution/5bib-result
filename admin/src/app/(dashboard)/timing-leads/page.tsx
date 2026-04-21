@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, Eye } from "lucide-react";
 
 type LeadStatus = "new" | "contacted" | "quoted" | "closed_won" | "closed_lost";
+type LeadSource = "timing" | "solution";
 
 interface TimingLead {
   _id: string;
@@ -37,6 +38,7 @@ interface TimingLead {
   athlete_count_range: string;
   package_interest: "basic" | "advanced" | "professional" | "unspecified";
   notes: string;
+  source: LeadSource;
   status: LeadStatus;
   is_archived: boolean;
   staff_notes: string;
@@ -66,6 +68,11 @@ const PACKAGE_LABEL: Record<TimingLead["package_interest"], string> = {
   unspecified: "Chưa xác định",
 };
 
+const SOURCE_BADGE: Record<LeadSource, { label: string; className: string }> = {
+  timing: { label: "Timing", className: "bg-sky-100 text-sky-700 border-sky-200" },
+  solution: { label: "Solution", className: "bg-pink-100 text-pink-700 border-pink-200" },
+};
+
 export default function TimingLeadsPage() {
   const { token } = useAuth();
   const [items, setItems] = useState<TimingLead[]>([]);
@@ -75,6 +82,7 @@ export default function TimingLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
+  const [sourceFilter, setSourceFilter] = useState<LeadSource | "all">("all");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -88,6 +96,7 @@ export default function TimingLeadsPage() {
       });
       if (q.trim()) params.set("q", q.trim());
       if (statusFilter !== "all") params.set("status", statusFilter);
+      if (sourceFilter !== "all") params.set("source", sourceFilter);
       if (includeArchived) params.set("include_archived", "true");
       const res = await fetch(`/api/admin/timing/leads?${params.toString()}`, {
         ...authHeaders(token),
@@ -101,7 +110,7 @@ export default function TimingLeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, page, limit, q, statusFilter, includeArchived]);
+  }, [token, page, limit, q, statusFilter, sourceFilter, includeArchived]);
 
   useEffect(() => {
     fetchLeads();
@@ -116,6 +125,7 @@ export default function TimingLeadsPage() {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
       if (statusFilter !== "all") params.set("status", statusFilter);
+      if (sourceFilter !== "all") params.set("source", sourceFilter);
       if (includeArchived) params.set("include_archived", "true");
       const res = await fetch(
         `/api/admin/timing/leads/export?${params.toString()}`,
@@ -190,6 +200,25 @@ export default function TimingLeadsPage() {
             </SelectContent>
           </Select>
         </div>
+        <div>
+          <Label>Nguồn</Label>
+          <Select
+            value={sourceFilter}
+            onValueChange={(v) => {
+              setSourceFilter(v as LeadSource | "all");
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="min-w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả nguồn</SelectItem>
+              <SelectItem value="timing">Timing</SelectItem>
+              <SelectItem value="solution">Solution</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
@@ -213,6 +242,7 @@ export default function TimingLeadsPage() {
               <TableHead>Tổ chức</TableHead>
               <TableHead>Quy mô</TableHead>
               <TableHead>Gói</TableHead>
+              <TableHead>Nguồn</TableHead>
               <TableHead>Trạng thái</TableHead>
               <TableHead>Ngày gửi</TableHead>
               <TableHead className="w-16" />
@@ -222,14 +252,14 @@ export default function TimingLeadsPage() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={9}>
+                  <TableCell colSpan={10}>
                     <Skeleton className="h-6 w-full" />
                   </TableCell>
                 </TableRow>
               ))
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={10} className="text-center text-muted-foreground py-10">
                   Chưa có lead nào
                 </TableCell>
               </TableRow>
@@ -244,6 +274,16 @@ export default function TimingLeadsPage() {
                     <TableCell>{it.organization}</TableCell>
                     <TableCell className="text-xs">{it.athlete_count_range || "-"}</TableCell>
                     <TableCell className="text-xs">{PACKAGE_LABEL[it.package_interest]}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const src = SOURCE_BADGE[it.source ?? "timing"];
+                        return (
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${src.className}`}>
+                            {src.label}
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell>
                       <span
                         className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${s.className}`}

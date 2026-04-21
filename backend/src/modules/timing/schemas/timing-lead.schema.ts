@@ -16,6 +16,8 @@ export type TimingPackageInterest =
   | 'professional'
   | 'unspecified';
 
+export type TimingLeadSource = 'timing' | 'solution';
+
 @Schema({
   collection: 'timing_leads',
   timestamps: true,
@@ -56,6 +58,14 @@ export class TimingLead {
   })
   status: TimingLeadStatus;
 
+  @Prop({
+    type: String,
+    enum: ['timing', 'solution'],
+    default: 'timing',
+    index: true,
+  })
+  source: TimingLeadSource;
+
   @Prop({ default: false, index: true })
   is_archived: boolean;
 
@@ -76,3 +86,4 @@ export const TimingLeadSchema = SchemaFactory.createForClass(TimingLead);
 
 TimingLeadSchema.index({ createdAt: -1 });
 TimingLeadSchema.index({ is_archived: 1, status: 1, createdAt: -1 });
+TimingLeadSchema.index({ source: 1, createdAt: -1 });

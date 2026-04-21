@@ -12,6 +12,7 @@ import {
 } from './schemas/timing-counter.schema';
 import { TimingService } from './timing.service';
 import { TimingPublicController } from './timing-public.controller';
+import { SolutionPublicController } from './solution-public.controller';
 import { TimingAdminController } from './timing-admin.controller';
 
 @Module({
@@ -30,7 +31,7 @@ import { TimingAdminController } from './timing-admin.controller';
     ]),
     ClerkAuthModule,
   ],
-  controllers: [TimingPublicController, TimingAdminController],
+  controllers: [TimingPublicController, SolutionPublicController, TimingAdminController],
   providers: [TimingService],
   exports: [TimingService],
 })

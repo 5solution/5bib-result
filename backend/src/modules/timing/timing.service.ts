@@ -11,6 +11,7 @@ import { env } from 'src/config';
 import {
   TimingLead,
   TimingLeadDocument,
+  TimingLeadSource,
 } from './schemas/timing-lead.schema';
 import {
   TimingCounter,
@@ -73,6 +74,7 @@ export class TimingService {
   async createLead(
     dto: CreateLeadDto,
     meta: { ip: string; userAgent: string },
+    source: TimingLeadSource = 'timing',
   ): Promise<{ success: boolean; lead_number: number }> {
     // Honeypot — silently accept but log + do not persist real lead
     if (dto.website && dto.website.trim().length > 0) {
@@ -109,6 +111,7 @@ export class TimingService {
       athlete_count_range: dto.athlete_count_range || '',
       package_interest: dto.package_interest || 'unspecified',
       notes: dto.notes?.trim() || '',
+      source,
       status: 'new',
       is_archived: false,
       staff_notes: '',
@@ -149,6 +152,9 @@ export class TimingService {
     }
     if (query.status) {
       filter.status = query.status;
+    }
+    if (query.source) {
+      filter.source = query.source;
     }
     if (query.q && query.q.trim()) {
       const needle = query.q.trim();
@@ -206,6 +212,7 @@ export class TimingService {
     const filter: Record<string, unknown> = {};
     if (!query.include_archived) filter.is_archived = { $ne: true };
     if (query.status) filter.status = query.status;
+    if (query.source) filter.source = query.source;
     if (query.q && query.q.trim()) {
       const needle = query.q.trim();
       const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -226,6 +233,7 @@ export class TimingService {
 
     const header = [
       'lead_number',
+      'source',
       'created_at',
       'full_name',
       'phone',
@@ -247,6 +255,7 @@ export class TimingService {
       lines.push(
         [
           r.lead_number,
+          r.source ?? 'timing',
           r.createdAt?.toISOString() ?? '',
           r.full_name,
           r.phone,

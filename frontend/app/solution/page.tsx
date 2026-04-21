@@ -16,6 +16,7 @@ import {
   SolutionFinalCTA,
   SolutionFooter,
 } from '@/components/solution/solution-sections';
+import SolutionContactModal from '@/components/solution/SolutionContactModal';
 import type { Lang } from '@/components/solution/solution-icons';
 
 export default function SolutionPage() {
@@ -25,20 +26,17 @@ export default function SolutionPage() {
   const initialLang: Lang = (searchParams?.get('lang') === 'en' ? 'en' : 'vi') as Lang;
 
   const [lang, setLang] = React.useState<Lang>(initialLang);
+  const [showModal, setShowModal] = React.useState(false);
   const accent = '#FF0E65';
 
   const onCTA = React.useCallback(() => {
-    // GA4 event — only fires if window.gtag is available (set by GoogleAnalytics in layout)
-    if (typeof window !== 'undefined' && typeof (window as any).gtag === 'function') {
-      (window as any).gtag('event', 'solution_cta_click', {
+    if (typeof window !== 'undefined' && typeof (window as unknown as { gtag?: Function }).gtag === 'function') {
+      (window as unknown as { gtag: Function }).gtag('event', 'solution_cta_click', {
         event_category: 'engagement',
         event_label: 'solution_landing',
       });
     }
-    // Route to partner lead-capture — swap to internal /contact once the form ships.
-    if (typeof window !== 'undefined') {
-      window.open('https://5bib.com/partner-register', '_blank', 'noopener,noreferrer');
-    }
+    setShowModal(true);
   }, []);
 
   return (
@@ -57,6 +55,12 @@ export default function SolutionPage() {
       <SolutionFAQ lang={lang} accent={accent} />
       <SolutionFinalCTA lang={lang} onCTA={onCTA} accent={accent} />
       <SolutionFooter lang={lang} />
+      <SolutionContactModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        lang={lang}
+        accent={accent}
+      />
     </>
   );
 }
