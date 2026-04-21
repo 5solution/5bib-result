@@ -84,19 +84,40 @@ export class TimingService {
       return { success: true, lead_number: 0 };
     }
 
-    const phoneNorm = this.normalizePhone(dto.phone);
+    // Backward-compat: legacy tracks require phone + organization; 5sport-athlete may use email-only.
+    if (source !== '5sport-athlete') {
+      if (!dto.phone) {
+        throw new BadRequestException('Vui lòng nhập số điện thoại');
+      }
+      if (!dto.organization) {
+        throw new BadRequestException('Vui lòng nhập tên tổ chức');
+      }
+    } else {
+      if (!dto.email && !dto.phone) {
+        throw new BadRequestException('Vui lòng nhập email hoặc số điện thoại');
+      }
+    }
 
-    // Dedup — same phone within last 30 minutes = silently succeed (idempotent)
-    const recent = await this.leadModel
-      .findOne({
-        phone: phoneNorm,
-        createdAt: { $gte: new Date(Date.now() - 30 * 60_000) },
-      })
-      .lean()
-      .exec();
+    const phoneNorm = dto.phone ? this.normalizePhone(dto.phone) : '';
+    const emailNorm = (dto.email || '').trim().toLowerCase();
+
+    // Dedup — same phone OR email within last 30 minutes = silently succeed (idempotent)
+    const dedupFilter: Record<string, unknown>[] = [];
+    if (phoneNorm) dedupFilter.push({ phone: phoneNorm });
+    if (emailNorm) dedupFilter.push({ email: emailNorm });
+    const recent =
+      dedupFilter.length > 0
+        ? await this.leadModel
+            .findOne({
+              $or: dedupFilter,
+              createdAt: { $gte: new Date(Date.now() - 30 * 60_000) },
+            })
+            .lean()
+            .exec()
+        : null;
     if (recent) {
       this.logger.log(
-        `[dedup] Duplicate lead from phone=${phoneNorm} within 30m — returning existing #${recent.lead_number}`,
+        `[dedup] Duplicate lead phone=${phoneNorm} email=${emailNorm} within 30m — returning existing #${recent.lead_number}`,
       );
       return { success: true, lead_number: recent.lead_number };
     }
@@ -107,10 +128,15 @@ export class TimingService {
       lead_number,
       full_name: dto.full_name.trim(),
       phone: phoneNorm,
-      organization: dto.organization.trim(),
+      email: emailNorm,
+      organization: (dto.organization || '').trim(),
       athlete_count_range: dto.athlete_count_range || '',
       package_interest: dto.package_interest || 'unspecified',
       notes: dto.notes?.trim() || '',
+      sport_type: dto.sport_type || '',
+      tournament_scale: dto.tournament_scale || '',
+      tournament_timing: dto.tournament_timing || '',
+      city: (dto.city || '').trim(),
       source,
       status: 'new',
       is_archived: false,

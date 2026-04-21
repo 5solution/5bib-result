@@ -13,6 +13,7 @@ import {
 import { TimingService } from './timing.service';
 import { TimingPublicController } from './timing-public.controller';
 import { SolutionPublicController } from './solution-public.controller';
+import { Sport5PublicController } from './sport5-public.controller';
 import { TimingAdminController } from './timing-admin.controller';
 
 @Module({
@@ -31,7 +32,12 @@ import { TimingAdminController } from './timing-admin.controller';
     ]),
     ClerkAuthModule,
   ],
-  controllers: [TimingPublicController, SolutionPublicController, TimingAdminController],
+  controllers: [
+    TimingPublicController,
+    SolutionPublicController,
+    Sport5PublicController,
+    TimingAdminController,
+  ],
   providers: [TimingService],
   exports: [TimingService],
 })

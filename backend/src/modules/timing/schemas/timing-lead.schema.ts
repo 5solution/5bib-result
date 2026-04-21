@@ -16,7 +16,15 @@ export type TimingPackageInterest =
   | 'professional'
   | 'unspecified';
 
-export type TimingLeadSource = 'timing' | 'solution';
+export type TimingLeadSource =
+  | 'timing'
+  | 'solution'
+  | '5sport-btc'
+  | '5sport-athlete';
+
+export type SportType = 'pickleball' | 'badminton' | 'both';
+export type TournamentScale = 'lt50' | '50-200' | 'gt200';
+export type TournamentTiming = '1-3m' | '3-6m' | 'tbd';
 
 @Schema({
   collection: 'timing_leads',
@@ -60,11 +68,38 @@ export class TimingLead {
 
   @Prop({
     type: String,
-    enum: ['timing', 'solution'],
+    enum: ['timing', 'solution', '5sport-btc', '5sport-athlete'],
     default: 'timing',
     index: true,
   })
   source: TimingLeadSource;
+
+  @Prop({ default: '', maxlength: 100 })
+  email: string;
+
+  @Prop({
+    type: String,
+    enum: ['pickleball', 'badminton', 'both', ''],
+    default: '',
+  })
+  sport_type: SportType | '';
+
+  @Prop({
+    type: String,
+    enum: ['lt50', '50-200', 'gt200', ''],
+    default: '',
+  })
+  tournament_scale: TournamentScale | '';
+
+  @Prop({
+    type: String,
+    enum: ['1-3m', '3-6m', 'tbd', ''],
+    default: '',
+  })
+  tournament_timing: TournamentTiming | '';
+
+  @Prop({ default: '', maxlength: 100 })
+  city: string;
 
   @Prop({ default: false, index: true })
   is_archived: boolean;
