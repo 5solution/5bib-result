@@ -43,7 +43,7 @@ export default function SolutionHeader({ lang, setLang, onCTA, accent = '#FF0E65
       <div
         style={{
           height: 56,
-          background: scrolled ? 'rgba(21,46,150,0.92)' : 'var(--5s-blue-700)',
+          background: scrolled ? 'rgba(38,64,184,0.92)' : 'var(--5s-blue-700)',
           backdropFilter: scrolled ? 'blur(18px) saturate(1.4)' : 'none',
           display: 'flex',
           alignItems: 'stretch',

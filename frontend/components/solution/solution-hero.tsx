@@ -64,7 +64,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
             width: 600,
             height: 600,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(136,162,255,0.18) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(141,163,248,0.18) 0%, transparent 70%)',
           }}
         />
         <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.08 }}>

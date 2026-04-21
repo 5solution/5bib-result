@@ -76,7 +76,7 @@ export function SolutionPainSolution({ lang, accent = '#FF0E65' }: { lang: Lang;
             onMouseLeave={(e) => { const el = e.currentTarget as HTMLDivElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = 'none'; }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
               <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--5s-blue-50)', color: 'var(--5s-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{r.icon}</div>
-              <span style={{ fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: accent, background: 'rgba(212,20,90,0.08)', padding: '4px 10px', borderRadius: 9999 }}>{r.k}</span>
+              <span style={{ fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: accent, background: 'rgba(240,53,110,0.08)', padding: '4px 10px', borderRadius: 9999 }}>{r.k}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 10, background: '#FEF2F2', marginBottom: 10 }}>
               <span style={{ marginTop: 2, color: '#DC2626', flexShrink: 0 }}><IX s={14} /></span>

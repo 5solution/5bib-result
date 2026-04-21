@@ -27,7 +27,7 @@ export default function SolutionPage() {
 
   const [lang, setLang] = React.useState<Lang>(initialLang);
   const [showModal, setShowModal] = React.useState(false);
-  const accent = '#D4145A';
+  const accent = '#F0356E';
 
   React.useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;

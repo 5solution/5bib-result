@@ -91,7 +91,7 @@ function FormMock({ lang, accent }: Ctx) {
           <Input label={t('Họ và tên', 'Full name')} value="Nguyễn Văn Phúc" />
           <Input label="BIB size" value="M · Unisex" />
         </div>
-        <div style={{ padding: '10px 12px', border: `1.5px dashed ${accent}`, borderRadius: 10, background: 'rgba(212,20,90,0.04)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: '10px 12px', border: `1.5px dashed ${accent}`, borderRadius: 10, background: 'rgba(240,53,110,0.04)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ background: accent, color: '#fff', padding: '4px 10px', borderRadius: 9999, fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 10, letterSpacing: '.14em' }}>EARLYBIRD</div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--5s-text)', fontWeight: 600 }}>{t('Giảm 80k — còn 8 ngày', 'Save 80k — 8 days left')}</div>
         </div>
