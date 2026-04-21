@@ -137,7 +137,7 @@ export function SolutionCaseStudy({ lang, accent = '#FF0E65' }: Ctx) {
   return (
     <section style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 32px' }}>
       <div style={{ background: 'var(--5s-blue-700)', color: '#fff', borderRadius: 24, overflow: 'hidden', position: 'relative' }}>
-        <div aria-hidden style={{ position: 'absolute', top: -80, right: -40, width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,20,90,0.25),transparent 65%)' }} />
+        <div aria-hidden style={{ position: 'absolute', top: -80, right: -40, width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(190,225,74,0.18),transparent 65%)' }} />
         <div className="solution-case-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 0 }}>
           <div style={{ padding: 'clamp(36px,5vw,64px)' }}>
             <Pill bg="rgba(255,255,255,0.18)" color="#fff">{t('Case study', 'Case study')}</Pill>
