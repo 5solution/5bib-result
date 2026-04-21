@@ -429,6 +429,7 @@ export class RaceResultController {
       type: 'object',
       properties: {
         bg: { type: 'string', enum: ['blue', 'dark', 'sunset', 'forest', 'purple'], default: 'blue' },
+        ratio: { type: 'string', enum: ['4:5', '1:1', '9:16'], default: '4:5', description: 'F-07 ratio — 4:5 Instagram Portrait, 1:1 Square, 9:16 Story' },
         customBg: { type: 'string', format: 'binary', description: 'Custom background image' },
       },
     },
@@ -445,6 +446,7 @@ export class RaceResultController {
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
     @Body('bg') bg: string,
+    @Body('ratio') ratio: string | undefined,
     @UploadedFile() customBg: Express.Multer.File | undefined,
     @Res() res: Response,
   ) {
@@ -459,6 +461,12 @@ export class RaceResultController {
       const race = await this.racesService.getRaceById(raceId);
       raceName = race?.data?.title || '';
     } catch { /* ignore */ }
+
+    const validRatios = ['4:5', '1:1', '9:16'] as const;
+    type ValidRatio = (typeof validRatios)[number];
+    const chosenRatio: ValidRatio = validRatios.includes(ratio as ValidRatio)
+      ? (ratio as ValidRatio)
+      : '4:5';
 
     const pngBuffer = await this.resultImageService.generateImage(
       {
@@ -478,6 +486,7 @@ export class RaceResultController {
       },
       bg || 'blue',
       customBg?.buffer,
+      chosenRatio,
     );
 
     res.set({

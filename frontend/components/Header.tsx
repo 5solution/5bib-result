@@ -8,6 +8,7 @@ import { Menu, X, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import WatchlistButton from '@/components/WatchlistButton';
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -50,8 +51,9 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Language switcher — right side, before account tile */}
-          <div className="hidden md:flex items-center ml-auto pr-1">
+          {/* Watchlist + Language — right side, before account tile */}
+          <div className="hidden md:flex items-center gap-1 ml-auto pr-2">
+            <WatchlistButton variant="light" />
             <LanguageSwitcher />
           </div>
 

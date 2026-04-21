@@ -36,8 +36,15 @@ const GRADIENTS: Record<string, { stops: [number, string][] }> = {
   purple: { stops: [[0, '#7c3aed'], [0.5, '#6d28d9'], [1, '#4c1d95']] },
 };
 
-const WIDTH = 1080;
-const HEIGHT = 1350;
+/** F-07 Share Card ratios — Instagram Portrait (4:5), Facebook Square (1:1), Story (9:16). */
+export type ImageRatio = '4:5' | '1:1' | '9:16';
+
+const RATIO_DIMENSIONS: Record<ImageRatio, { width: number; height: number }> = {
+  '4:5': { width: 1080, height: 1350 },
+  '1:1': { width: 1080, height: 1080 },
+  '9:16': { width: 1080, height: 1920 },
+};
+
 const PADDING_X = 72;
 const PADDING_TOP = 96;
 const PADDING_BOTTOM = 84;
@@ -107,7 +114,13 @@ export class ResultImageService {
     athlete: AthleteImageData,
     bgKey: string,
     customBgBuffer?: Buffer,
+    ratio: ImageRatio = '4:5',
   ): Promise<Buffer> {
+    const { width: WIDTH, height: HEIGHT } =
+      RATIO_DIMENSIONS[ratio] ?? RATIO_DIMENSIONS['4:5'];
+    const isSquare = ratio === '1:1';
+    const isStory = ratio === '9:16';
+
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext('2d');
 

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { fetchRaceBySlug, getRaceImage } from '@/lib/metadata';
+import { brandStyle } from '@/lib/brand-color';
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -16,7 +17,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const raceName = race.title || race.name || slug;
   const title = `5BIB - ${raceName}`;
-  const description = race.description || `Kết quả và xếp hạng giải ${raceName} trên nền tảng 5BIB`;
+  const description =
+    race.description || `Kết quả và xếp hạng giải ${raceName} trên nền tảng 5BIB`;
   const image = getRaceImage(race);
 
   return {
@@ -33,6 +35,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default function RaceLayout({ children }: Props) {
-  return children;
+export default async function RaceLayout({ params, children }: Props) {
+  const { slug } = await params;
+  const race = await fetchRaceBySlug(slug);
+  const brandColor = (race as { brandColor?: string } | null)?.brandColor;
+
+  // F-05 — inject race brandColor as CSS variables scoped to this subtree.
+  // Components inside can use `var(--race-brand)` etc.
+  return (
+    <div style={brandStyle(brandColor)} className="race-scope">
+      {children}
+    </div>
+  );
 }

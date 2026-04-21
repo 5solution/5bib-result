@@ -365,7 +365,13 @@ export default function CourseRankingPage() {
             className="absolute inset-0 bg-cover bg-center"
             style={{ backgroundImage: `url(${race.imageUrl || 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=1920&q=80'})` }}
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-blue-700/90 via-blue-600/70 to-blue-800/90" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(to bottom, color-mix(in srgb, var(--race-brand) 90%, black) 0%, color-mix(in srgb, var(--race-brand) 70%, transparent) 50%, color-mix(in srgb, var(--race-brand) 90%, black) 100%)',
+            }}
+          />
 
           <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
 
@@ -686,6 +692,8 @@ export default function CourseRankingPage() {
                             raceId={String(race.id)}
                             courseId={courseId}
                             isStarred={starredSet?.has(String(result.Bib)) || false}
+                            raceName={race.name}
+                            courseName={course?.name || course?.distance || ''}
                           />
                         ))}
                       </tbody>
@@ -707,6 +715,8 @@ export default function CourseRankingPage() {
                         raceId={String(race.id)}
                         courseId={courseId}
                         isStarred={starredSet?.has(String(result.Bib)) || false}
+                        raceName={race.name}
+                        courseName={course?.name || course?.distance || ''}
                       />
                     ))}
                   </div>
@@ -860,7 +870,7 @@ function getInitials(name: string): string {
   return name.substring(0, 2).toUpperCase();
 }
 
-function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus, raceId, courseId, isStarred }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string; raceId: string; courseId: string; isStarred: boolean }) {
+function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus, raceId, courseId, isStarred, raceName, courseName }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string; raceId: string; courseId: string; isStarred: boolean; raceName?: string; courseName?: string }) {
   const { t } = useTranslation();
   const isUpcoming = raceStatus === 'upcoming';
   const rankStr = (result.OverallRank || '').trim();
@@ -1011,6 +1021,14 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
           courseId={courseId}
           bib={String(result.Bib)}
           isStarred={isStarred}
+          athlete={{
+            name: result.Name,
+            raceName,
+            raceSlug: slug,
+            courseName,
+            gender: result.Gender,
+            category: result.Category,
+          }}
         />
       </td>
     </tr>
@@ -1019,7 +1037,7 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
 
 /* ─── MobileRankingCard ─── */
 
-function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus, raceId, courseId, isStarred }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string; raceId: string; courseId: string; isStarred: boolean }) {
+function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus, raceId, courseId, isStarred, raceName, courseName }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string; raceId: string; courseId: string; isStarred: boolean; raceName?: string; courseName?: string }) {
   const { t } = useTranslation();
   const isUpcoming = raceStatus === 'upcoming';
   const rawRank = categoryFilter ? result.CatRank : genderFilter ? result.GenderRank : result.OverallRank;
@@ -1104,6 +1122,14 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
           bib={String(result.Bib)}
           isStarred={isStarred}
           size="sm"
+          athlete={{
+            name: result.Name,
+            raceName,
+            raceSlug: slug,
+            courseName,
+            gender: result.Gender,
+            category: result.Category,
+          }}
         />
       </div>
     </div>

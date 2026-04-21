@@ -31,6 +31,14 @@ const BACKGROUNDS = [
   { id: 'purple', label: 'Tím', gradient: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #4c1d95 100%)' },
 ];
 
+/** F-07 ratios — Instagram Portrait, Facebook Square, Instagram Story */
+const RATIOS = [
+  { id: '4:5', label: 'Portrait', ar: '4 / 5', hint: 'Instagram feed' },
+  { id: '1:1', label: 'Square', ar: '1 / 1', hint: 'Facebook · Zalo' },
+  { id: '9:16', label: 'Story', ar: '9 / 16', hint: 'IG/FB Stories' },
+] as const;
+type RatioId = (typeof RATIOS)[number]['id'];
+
 export default function ResultImageEditor({
   athlete,
   raceId,
@@ -43,6 +51,7 @@ export default function ResultImageEditor({
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
   const [selectedBg, setSelectedBg] = useState(BACKGROUNDS[0].id);
+  const [selectedRatio, setSelectedRatio] = useState<RatioId>('4:5');
   const [customBg, setCustomBg] = useState<string | null>(null);
   const [customBgFile, setCustomBgFile] = useState<File | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -78,6 +87,7 @@ export default function ResultImageEditor({
   const fetchImage = useCallback(async (): Promise<Blob | null> => {
     const formData = new FormData();
     formData.append('bg', customBgFile ? 'blue' : selectedBg);
+    formData.append('ratio', selectedRatio);
     if (customBgFile) {
       formData.append('customBg', customBgFile);
     }
@@ -91,7 +101,7 @@ export default function ResultImageEditor({
       return null;
     }
     return res.blob();
-  }, [raceId, athlete.Bib, selectedBg, customBgFile]);
+  }, [raceId, athlete.Bib, selectedBg, customBgFile, selectedRatio]);
 
   const getFileName = useCallback(() => {
     return `result-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
@@ -162,6 +172,39 @@ export default function ResultImageEditor({
           </button>
         </div>
 
+        {/* Ratio picker */}
+        <div className="px-5 py-3 border-b">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Kích thước</p>
+          <div className="grid grid-cols-3 gap-2">
+            {RATIOS.map((r) => {
+              const isActive = selectedRatio === r.id;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setSelectedRatio(r.id)}
+                  className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 py-2 transition-all ${
+                    isActive
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                  title={r.hint}
+                >
+                  <div
+                    className={`rounded ${isActive ? 'bg-blue-600' : 'bg-slate-300'}`}
+                    style={{
+                      aspectRatio: r.ar,
+                      height: 28,
+                    }}
+                  />
+                  <div className="text-[11px] font-bold text-slate-700">{r.id}</div>
+                  <div className="text-[9px] text-slate-500 leading-none">{r.label}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Background picker */}
         <div className="px-5 py-3 border-b bg-slate-50">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t('resultImage.chooseBg')}</p>
@@ -194,10 +237,10 @@ export default function ResultImageEditor({
         {/* Preview card (DOM-based for fast interactive preview) */}
         <div className="p-5">
           <div
-            className="rounded-xl overflow-hidden"
+            className="rounded-xl overflow-hidden mx-auto"
             style={{
-              width: '100%',
-              aspectRatio: '4/5',
+              width: selectedRatio === '9:16' ? '60%' : '100%',
+              aspectRatio: RATIOS.find((r) => r.id === selectedRatio)?.ar || '4/5',
               position: 'relative',
               ...backgroundCss,
               fontFamily: 'system-ui, -apple-system, sans-serif',

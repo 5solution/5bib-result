@@ -61,6 +61,11 @@
   --5bib-bronze: #78350f;
   --5bib-energy: #c2410c;
   --5bib-trail: #166534;
+  /* F-05 Race-themed fallback — per-race layout overrides these via brandStyle() */
+  --race-brand: #1d4ed8;
+  --race-brand-light: #1d4ed81a;
+  --race-brand-dim: #173fad;
+  --race-brand-text: #1d4ed8;
 
   /* ── shadcn semantic tokens ── */
   --background: #faf8f5;
