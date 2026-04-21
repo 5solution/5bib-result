@@ -1,0 +1,280 @@
+/* ═══════════════════════════════════════════════════════════════════
+   5Solution Design System — Solution Landing (scoped tokens)
+   Loaded via <link rel="stylesheet" href="/solution/solution.css" />
+   from the Solution page only — does NOT touch the app's global CSS.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* NOTE on fonts:
+   The host app already loads "Be Vietnam Pro", "Plus Jakarta Sans",
+   "JetBrains Mono" via next/font in frontend/app/layout.tsx. This file
+   therefore does NOT redeclare @font-face rules — instead it references
+   the CSS variables the host exposes (--font-be-vietnam-pro, etc.)
+   If those are not available, we fall back to system equivalents. */
+
+:root {
+  /* ───── Brand primaries ───── */
+  --5s-blue:            #1D49FF;
+  --5s-blue-600:        #0B36E6;
+  --5s-blue-700:        #0026B3;
+  --5s-blue-400:        #4A6EFF;
+  --5s-blue-300:        #88A2FF;
+  --5s-blue-100:        #DCE3FF;
+  --5s-blue-50:         #F0F3FF;
+
+  --5s-magenta:         #FF0E65;
+  --5s-magenta-600:     #E60057;
+  --5s-magenta-400:     #FF4D89;
+  --5s-magenta-100:     #FFD6E3;
+
+  --5s-lime:            #BEE14A;
+
+  /* ───── Neutrals ───── */
+  --5s-bg:              #FAF8F5;
+  --5s-surface:         #F3F0EB;
+  --5s-surface-2:       #E8E4DD;
+  --5s-border:          #D6D3D1;
+  --5s-border-strong:   #A8A29E;
+  --5s-text:            #1C1917;
+  --5s-text-muted:      #57534E;
+  --5s-text-subtle:     #78716C;
+  --5s-white:           #FFFFFF;
+  --5s-black:           #0A0A0A;
+
+  --5s-slate:           #1E293B;
+  --5s-slate-500:       #64748B;
+  --5s-slate-200:       #E2E8F0;
+  --5s-slate-100:       #F1F5F9;
+  --5s-slate-50:        #F8FAFC;
+
+  /* ───── Semantic ───── */
+  --5s-success:         #166534;
+  --5s-success-bg:      #DCFCE7;
+  --5s-warning:         #D97706;
+  --5s-warning-bg:      #FEF3C7;
+  --5s-danger:          #DC2626;
+  --5s-live:            #DC2626;
+  --5s-info:            var(--5s-blue);
+
+  --5s-gold:            #D97706;
+  --5s-silver:          #78716C;
+  --5s-bronze:          #92400E;
+  --5s-energy:          #EA580C;
+  --5s-trail:           #166534;
+
+  /* ───── Font var aliases (host exposes --font-heading / --font-sans / --font-jetbrains-mono) ───── */
+  --font-be-vietnam-pro:    var(--font-heading);
+  --font-plus-jakarta-sans: var(--font-sans);
+
+  /* ───── Typography (bridge to host next/font vars) ───── */
+  --font-display: var(--font-be-vietnam-pro), "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    var(--font-plus-jakarta-sans), "Plus Jakarta Sans", "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-mono:    var(--font-jetbrains-mono), "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+
+  --text-xs:   12px;
+  --text-sm:   14px;
+  --text-base: 16px;
+  --text-lg:   18px;
+  --text-xl:   20px;
+  --text-2xl:  24px;
+  --text-3xl:  30px;
+  --text-4xl:  36px;
+  --text-5xl:  48px;
+  --text-6xl:  64px;
+  --text-7xl:  80px;
+  --text-hero: 96px;
+
+  --leading-tight:   1.1;
+  --leading-snug:    1.25;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.65;
+
+  --tracking-tighter: -0.03em;
+  --tracking-tight:   -0.02em;
+  --tracking-normal:   0em;
+  --tracking-wide:     0.02em;
+  --tracking-wider:    0.08em;
+  --tracking-widest:   0.18em;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-pill: 9999px;
+
+  --shadow-xs:  0 1px 2px rgba(28,25,23,0.04);
+  --shadow-sm:  0 1px 3px rgba(28,25,23,0.06), 0 1px 2px rgba(28,25,23,0.04);
+  --shadow-md:  0 4px 6px -1px rgba(28,25,23,0.07), 0 2px 4px -2px rgba(28,25,23,0.05);
+  --shadow-lg:  0 10px 15px -3px rgba(28,25,23,0.08), 0 4px 6px -4px rgba(28,25,23,0.04);
+  --shadow-xl:  0 20px 25px -5px rgba(28,25,23,0.08), 0 8px 10px -6px rgba(28,25,23,0.04);
+  --shadow-2xl: 0 25px 50px -12px rgba(28,25,23,0.18);
+  --shadow-glow-blue:    0 0 0 1px rgba(29,73,255,0.08), 0 8px 32px rgba(29,73,255,0.22);
+  --shadow-glow-magenta: 0 0 0 1px rgba(255,14,101,0.12), 0 10px 30px rgba(255,14,101,0.25);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SEMANTIC TYPE CLASSES (scoped under .solution-root so they don't
+   leak into the rest of the app's pages).
+   ═══════════════════════════════════════════════════════════════════ */
+
+.solution-root {
+  background: var(--5s-bg);
+  color: var(--5s-text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.solution-root * { box-sizing: border-box; }
+.solution-root img { max-width: 100%; display: block; }
+.solution-root button { font: inherit; }
+.solution-root a { color: inherit; }
+
+.solution-root .type-hero {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(var(--text-5xl), 7vw, var(--text-hero));
+  line-height: 1.02;
+  letter-spacing: var(--tracking-tighter);
+  text-transform: uppercase;
+}
+
+.solution-root .type-h1 {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(var(--text-4xl), 5vw, var(--text-6xl));
+  line-height: 1.08;
+  letter-spacing: var(--tracking-tighter);
+  text-transform: uppercase;
+}
+
+.solution-root .type-h2 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--text-4xl);
+  line-height: 1.12;
+  letter-spacing: var(--tracking-tight);
+}
+
+.solution-root .type-h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-2xl);
+  line-height: 1.2;
+  letter-spacing: var(--tracking-tight);
+}
+
+.solution-root .type-h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-xl);
+  line-height: 1.25;
+  letter-spacing: var(--tracking-tight);
+}
+
+.solution-root .type-eyebrow {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--5s-text-muted);
+}
+
+.solution-root .type-lead {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--text-xl);
+  line-height: var(--leading-relaxed);
+  color: var(--5s-text-muted);
+}
+
+.solution-root .type-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--5s-text);
+}
+
+.solution-root .type-small {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--5s-text-muted);
+}
+
+.solution-root .type-label {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+
+.solution-root .type-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-tight);
+  font-weight: 600;
+}
+
+.solution-root .type-campaign {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+  text-transform: lowercase;
+}
+
+.solution-root h1,
+.solution-root h2,
+.solution-root h3,
+.solution-root h4,
+.solution-root h5,
+.solution-root h6 {
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
+  margin: 0;
+}
+
+.solution-root ::selection {
+  background: rgba(29,73,255,0.15);
+  color: var(--5s-text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Responsive breakdowns — collapse inline grid layouts on small screens
+   (inline styles can't do media queries, so we drop helper classes on
+   the relevant grids inside each component.)
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  .solution-root .solution-comparison-wrap {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .solution-root .solution-hero-grid,
+  .solution-root .solution-tab-grid,
+  .solution-root .solution-cta-grid,
+  .solution-root .solution-case-grid,
+  .solution-root .solution-footer-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .solution-root .solution-timeline > div:first-child {
+    display: none !important; /* hide the connecting line when wrapping */
+  }
+  .solution-root .solution-timeline > div:last-child {
+    grid-template-columns: 1fr 1fr !important;
+    row-gap: 28px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .solution-root .solution-header-nav { display: none !important; }
+}
