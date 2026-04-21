@@ -453,8 +453,9 @@
 
 /* ── 640px: Phone landscape / small phone ── */
 @media (max-width: 640px) {
-  /* Header nav hidden */
+  /* Header nav + CTA hidden on mobile — logo stays visible */
   .solution-root .solution-header-nav { display: none !important; }
+  .solution-root .solution-header-cta { display: none !important; }
 
   /* Hero: single-column, compact */
   .solution-root .solution-hero-grid {

@@ -54,13 +54,13 @@ export default function SolutionHeader({ lang, setLang, onCTA, accent = '#FF0E65
           <Image
             src="/solution/logos/5bib-logo-white.png"
             alt="5BIB"
-            width={108}
-            height={30}
-            style={{ height: 30, width: 'auto' }}
+            width={151}
+            height={42}
+            style={{ height: 42, width: 'auto' }}
             priority
           />
         </a>
-        <nav style={{ display: 'flex', flex: 1, justifyContent: 'center' }} className="solution-nav">
+        <nav style={{ display: 'flex', flex: 1, justifyContent: 'center' }} className="solution-header-nav">
           {links.map((l) => (
             <a
               key={l.id}
