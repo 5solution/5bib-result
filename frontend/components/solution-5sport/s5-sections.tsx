@@ -19,6 +19,8 @@ import {
   IMoney,
   IChart,
   CountUpStat,
+  Reveal,
+  TiltCard,
 } from './s5-shared';
 
 const sectionEyebrowStyle: React.CSSProperties = {
@@ -143,14 +145,16 @@ export function S5Pain({ lang }: { lang: Lang }) {
       </div>
 
       <div className="s5-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
-        {cards.map((c) => (
-          <div key={c.vi} className="s5-card">
-            <div style={{ fontSize: 40, lineHeight: 1, marginBottom: 14 }}>{c.e}</div>
-            <h3 className="type-h3" style={{ marginBottom: 10 }}>{t(c.vi, c.en)}</h3>
-            <p className="type-body" style={{ color: 'var(--s5-text-muted)' }}>
-              {t(c.dvi, c.den)}
-            </p>
-          </div>
+        {cards.map((c, i) => (
+          <Reveal key={c.vi} delay={i * 120}>
+            <TiltCard className="s5-card" strength={6} style={{ height: '100%' }}>
+              <div style={{ fontSize: 40, lineHeight: 1, marginBottom: 14 }}>{c.e}</div>
+              <h3 className="type-h3" style={{ marginBottom: 10 }}>{t(c.vi, c.en)}</h3>
+              <p className="type-body" style={{ color: 'var(--s5-text-muted)' }}>
+                {t(c.dvi, c.den)}
+              </p>
+            </TiltCard>
+          </Reveal>
         ))}
       </div>
 
@@ -217,9 +221,10 @@ export function S5Pillars({ lang }: { lang: Lang }) {
       </div>
 
       <div className="s5-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
-        {pillars.map((p) => (
+        {pillars.map((p, i) => (
+          <Reveal key={p.vi} delay={i * 120}>
+          <TiltCard strength={8} glare>
           <a
-            key={p.vi}
             href={p.link}
             className="s5-card"
             style={{
@@ -228,6 +233,7 @@ export function S5Pillars({ lang }: { lang: Lang }) {
               gap: 14,
               textDecoration: 'none',
               color: 'inherit',
+              height: '100%',
             }}
           >
             <div
@@ -263,6 +269,8 @@ export function S5Pillars({ lang }: { lang: Lang }) {
               {t('Xem thêm', 'Learn more')} <IArr s={14} />
             </span>
           </a>
+          </TiltCard>
+          </Reveal>
         ))}
       </div>
     </Section>
@@ -380,8 +388,9 @@ export function S5Community({ lang }: { lang: Lang }) {
       </div>
 
       <div className="s5-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
-        {features.map((f) => (
-          <div key={f.vi} className="s5-card">
+        {features.map((f, i) => (
+          <Reveal key={f.vi} delay={i * 120}>
+          <TiltCard className="s5-card" strength={6} style={{ height: '100%' }}>
             <div
               style={{
                 width: 48,
@@ -419,7 +428,8 @@ export function S5Community({ lang }: { lang: Lang }) {
             <p className="type-body" style={{ color: 'var(--s5-text-muted)' }}>
               {t(f.dvi, f.den)}
             </p>
-          </div>
+          </TiltCard>
+          </Reveal>
         ))}
       </div>
     </Section>
@@ -492,8 +502,9 @@ export function S5Tournament({ lang }: { lang: Lang }) {
       </div>
 
       <div className="s5-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
-        {blocks.map((b) => (
-          <div key={b.vi} className="s5-card" id={b.vi === 'Phần mềm Quản lý Giải' ? 'btc' : undefined}>
+        {blocks.map((b, i) => (
+          <Reveal key={b.vi} delay={i * 120}>
+          <TiltCard className="s5-card" strength={8} style={{ height: '100%' }} id={b.vi === 'Phần mềm Quản lý Giải' ? 'btc' : undefined}>
             <div
               style={{
                 width: 44,
@@ -511,7 +522,8 @@ export function S5Tournament({ lang }: { lang: Lang }) {
             </div>
             <h3 className="type-h3" style={{ marginBottom: 10 }}>{t(b.vi, b.en)}</h3>
             <p className="type-body" style={{ color: 'var(--s5-text-muted)' }}>{t(b.dvi, b.den)}</p>
-          </div>
+          </TiltCard>
+          </Reveal>
         ))}
       </div>
     </Section>
@@ -719,12 +731,14 @@ export function S5Ecosystem({ lang }: { lang: Lang }) {
       </div>
 
       <div className="s5-4col" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
-        {cards.map((c) => (
-          <div
-            key={c.n}
+        {cards.map((c, i) => (
+          <Reveal key={c.n} delay={i * 80}>
+          <TiltCard
             className="s5-card"
+            strength={10}
             style={{
               padding: 20,
+              height: '100%',
               ...(c.here
                 ? {
                     background: 'var(--s5-navy)',
@@ -763,7 +777,8 @@ export function S5Ecosystem({ lang }: { lang: Lang }) {
                 {t('Bạn đang ở đây', 'You are here')}
               </span>
             )}
-          </div>
+          </TiltCard>
+          </Reveal>
         ))}
       </div>
 
@@ -835,7 +850,8 @@ export function S5Testimonials({ lang }: { lang: Lang }) {
       </div>
       <div className="s5-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
         {items.map((it, i) => (
-          <div key={i} className="s5-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Reveal key={i} delay={i * 120}>
+          <TiltCard className="s5-card" strength={5} style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
             <span
               style={{
                 alignSelf: 'flex-start',
@@ -866,7 +882,8 @@ export function S5Testimonials({ lang }: { lang: Lang }) {
             >
               — {it.a}
             </div>
-          </div>
+          </TiltCard>
+          </Reveal>
         ))}
       </div>
       <p
@@ -954,13 +971,15 @@ export function S5Pricing({ lang }: { lang: Lang }) {
       </div>
 
       <div className="s5-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 18 }}>
-        {tiers.map((tier) => (
-          <div
-            key={tier.name}
+        {tiers.map((tier, i) => (
+          <Reveal key={tier.name} delay={i * 120}>
+          <TiltCard
             className="s5-card"
+            strength={tier.featured ? 10 : 6}
             style={{
               border: `2px solid ${tier.featured ? tier.accent : 'var(--s5-border)'}`,
               position: 'relative',
+              height: '100%',
               ...(tier.featured ? { boxShadow: 'var(--s5-glow-blue)' } : null),
             }}
           >
@@ -1017,7 +1036,8 @@ export function S5Pricing({ lang }: { lang: Lang }) {
                   ? t('Bắt đầu dùng Pro', 'Start with Pro')
                   : t('Đăng ký miễn phí', 'Sign up free')}
             </a>
-          </div>
+          </TiltCard>
+          </Reveal>
         ))}
       </div>
 

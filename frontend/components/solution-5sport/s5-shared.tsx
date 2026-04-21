@@ -37,41 +37,153 @@ export const ICamera = (p: IconProps) => <Ic {...p} s={p.s ?? 18} d={<><path d="
 export const IShare = (p: IconProps) => <Ic {...p} s={p.s ?? 18} d={<><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.59 13.51 6.83 3.98M15.41 6.51 8.59 10.49" /></>} />;
 export const IMoney = (p: IconProps) => <Ic {...p} s={p.s ?? 18} d={<><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="3" /><path d="M6 12h.01M18 12h.01" /></>} />;
 
-export function S5Logo({ size = 32, invert = false }: { size?: number; invert?: boolean }) {
-  const blue = invert ? '#C8FF00' : '#1400FF';
-  const dark = invert ? '#ffffff' : '#0A0D2E';
+export function S5Logo({ size = 36, invert = false }: { size?: number; invert?: boolean }) {
+  const defaultSrc = invert
+    ? '/solution-5sport/logo-5sport-white.png'
+    : '/solution-5sport/logo-5sport.png';
+  const [src, setSrc] = React.useState(defaultSrc);
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, lineHeight: 1 }}>
-      <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
-        <rect x="2" y="2" width="44" height="44" rx="10" fill={blue} />
-        <path d="M17 14h15M17 14v8h10a5 5 0 0 1 0 10H17" stroke="#C8FF00" strokeWidth="3.5"
-              strokeLinecap="round" strokeLinejoin="round" fill="none"
-              style={invert ? { stroke: '#1400FF' } : undefined} />
-        <circle cx="35.5" cy="33.5" r="3.5" fill="#C8FF00" style={invert ? { fill: '#1400FF' } : undefined} />
-      </svg>
-      <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
-        <strong style={{
-          fontFamily: 'var(--font-display-5s)',
-          fontWeight: 900,
-          fontSize: size * 0.55,
-          letterSpacing: '-0.02em',
-          color: dark,
-          textTransform: 'uppercase',
-        }}>
-          5<span style={{ color: blue }}>SPORT</span>
-        </strong>
-        <span style={{
-          fontFamily: 'var(--font-body-5s)',
-          fontWeight: 700,
-          fontSize: size * 0.26,
-          letterSpacing: '.12em',
-          color: invert ? 'rgba(255,255,255,0.6)' : 'var(--s5-text-muted)',
-          textTransform: 'uppercase',
-        }}>
-          Level Up Your Game
-        </span>
-      </span>
+    <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt="5Sport — Level Up Your Game"
+        onError={() => {
+          if (!src.endsWith('.svg')) setSrc('/solution-5sport/logo-5sport.svg');
+        }}
+        style={{ height: size, width: 'auto', display: 'block' }}
+      />
     </span>
+  );
+}
+
+/** IntersectionObserver-based reveal — fade-up + slight scale once visible. */
+export function Reveal({
+  children,
+  delay = 0,
+  y = 28,
+  as: Tag = 'div',
+  style,
+  className,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  y?: number;
+  as?: 'div' | 'section' | 'article' | 'span';
+  style?: React.CSSProperties;
+  className?: string;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [shown, setShown] = React.useState(false);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        setShown(true);
+        io.disconnect();
+      }
+    }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const Component = Tag as React.ElementType;
+  return (
+    <Component
+      ref={ref}
+      className={className}
+      style={{
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'translateY(0) scale(1)' : `translateY(${y}px) scale(0.985)`,
+        transition: `opacity 720ms var(--ease-out-expo) ${delay}ms, transform 720ms var(--ease-out-expo) ${delay}ms`,
+        willChange: 'opacity, transform',
+        ...style,
+      }}
+    >
+      {children}
+    </Component>
+  );
+}
+
+/** 3D tilt card — tracks pointer and tilts on hover. Respects reduced motion. */
+export function TiltCard({
+  children,
+  className,
+  style,
+  id,
+  strength = 10,
+  glare = true,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+  id?: string;
+  strength?: number;
+  glare?: boolean;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const rafId = React.useRef<number | null>(null);
+  const [glarePos, setGlarePos] = React.useState<{ x: number; y: number; active: boolean }>({
+    x: 50,
+    y: 50,
+    active: false,
+  });
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    const rx = (0.5 - py) * strength;
+    const ry = (px - 0.5) * strength;
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      el.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-4px)`;
+      if (glare) setGlarePos({ x: px * 100, y: py * 100, active: true });
+    });
+  };
+
+  const onLeave = () => {
+    const el = ref.current;
+    if (!el) return;
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    el.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg) translateY(0)';
+    setGlarePos((g) => ({ ...g, active: false }));
+  };
+
+  return (
+    <div
+      ref={ref}
+      id={id}
+      className={className}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      style={{
+        position: 'relative',
+        transformStyle: 'preserve-3d',
+        transition: 'transform 260ms var(--ease-out-expo), box-shadow 260ms',
+        ...style,
+      }}
+    >
+      {children}
+      {glare && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: 'inherit',
+            pointerEvents: 'none',
+            background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(255,255,255,0.35), transparent 42%)`,
+            opacity: glarePos.active ? 1 : 0,
+            transition: 'opacity 220ms var(--ease-out-expo)',
+            mixBlendMode: 'overlay',
+          }}
+        />
+      )}
+    </div>
   );
 }
 

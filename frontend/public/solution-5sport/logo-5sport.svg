@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" fill="none">
+  <!-- Placeholder SVG — replace by dropping logo-5sport.png at this path -->
+  <!-- Flowing "5S" in blue -->
+  <g fill="#1400FF" stroke="#1400FF" strokeLinejoin="round" strokeLinecap="round">
+    <!-- "5" stylized as flowing curve -->
+    <path d="M50 30 Q95 20 110 30 L108 42 Q78 38 62 44 L58 80 Q80 72 100 82 Q126 96 124 128 Q120 162 80 170 Q46 172 30 158 L40 146 Q58 156 78 152 Q102 146 104 124 Q104 104 84 96 Q62 90 48 98 L44 92 Z" strokeWidth="2"/>
+    <!-- "S" stylized curve -->
+    <path d="M160 34 Q138 30 126 42 Q114 58 128 72 Q148 82 158 96 Q168 118 150 134 Q128 148 108 140 Q94 132 92 118 L104 116 Q106 128 122 130 Q142 132 148 118 Q152 104 136 96 Q118 88 108 74 Q98 54 116 36 Q138 22 166 30 Z" strokeWidth="2"/>
+  </g>
+  <!-- Lime ball top right -->
+  <ellipse cx="172" cy="46" rx="11" ry="12" fill="#B8D950" transform="rotate(-12 172 46)"/>
+  <ellipse cx="170" cy="44" rx="3" ry="4" fill="#D4E87A" opacity="0.6" transform="rotate(-12 170 44)"/>
+
+  <!-- "SPORT" -->
+  <text x="100" y="196" textAnchor="middle" fontFamily="'Be Vietnam Pro', 'Plus Jakarta Sans', system-ui, sans-serif"
+        fontWeight="900" fontSize="32" fill="#1D49FF" fontStyle="italic" letterSpacing="2">SPORT</text>
+
+  <!-- tagline -->
+  <text x="100" y="215" textAnchor="middle" fontFamily="'Be Vietnam Pro', system-ui, sans-serif"
+        fontWeight="400" fontSize="10" fill="#0A0D2E" letterSpacing="0.6">level up your game</text>
+</svg>
