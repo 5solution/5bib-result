@@ -299,6 +299,34 @@
   box-shadow: var(--shadow-lg);
 }
 
+/* ── Feature tab auto-play progress bar ── */
+@keyframes tab-progress {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
+.solution-root .solution-tab-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.55);
+  animation: tab-progress 4800ms linear forwards;
+}
+
+/* Inactive tab hover effect */
+.solution-root .solution-tab-btn:not([data-active="true"]):hover {
+  background: var(--5s-blue-50) !important;
+  color: var(--5s-blue) !important;
+  transform: translateY(-1px);
+}
+
+/* Active tab — subtle inner glow */
+.solution-root .solution-tab-btn[data-active="true"] {
+  box-shadow: 0 4px 14px rgba(32,64,200,0.35);
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    Responsive breakdowns — collapse inline grid layouts on small screens
    (inline styles can't do media queries, so we drop helper classes on

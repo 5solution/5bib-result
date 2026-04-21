@@ -304,9 +304,26 @@ function BtcDashMock({ lang, accent }: Ctx) {
   );
 }
 
+const TAB_INTERVAL = 4800;
+
 export default function SolutionFeatureTabs({ lang, accent = '#FF0E65' }: { lang: Lang; accent?: string }) {
   const t = useT(lang);
   const [tab, setTab] = React.useState(0);
+  const [paused, setPaused] = React.useState(false);
+  const resumeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    if (paused) return;
+    const iv = setInterval(() => setTab(i => (i + 1) % 6), TAB_INTERVAL);
+    return () => clearInterval(iv);
+  }, [paused]);
+
+  const handleTabClick = (i: number) => {
+    setTab(i);
+    setPaused(true);
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    resumeTimer.current = setTimeout(() => setPaused(false), 14000);
+  };
 
   const tabs = [
     { id: 'form', icon: <IPalette s={14} />, label: t('Form đăng ký', 'Registration form') },
@@ -402,8 +419,13 @@ export default function SolutionFeatureTabs({ lang, accent = '#FF0E65' }: { lang
 
         <div className="solution-tab-bar" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28, padding: 6, background: '#fff', borderRadius: 14, border: '1px solid var(--5s-border)', boxShadow: 'var(--shadow-xs)' }}>
           {tabs.map((tb, i) => (
-            <button key={tb.id} onClick={() => setTab(i)} className="solution-tab-btn" style={{ flex: '1 1 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', background: tab === i ? 'var(--5s-blue)' : 'transparent', color: tab === i ? '#fff' : 'var(--5s-text-muted)', border: 'none', borderRadius: 10, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12.5, letterSpacing: '-0.01em', cursor: 'pointer', transition: 'all 200ms', textTransform: 'uppercase' }}>
+            <button key={tb.id} onClick={() => handleTabClick(i)} data-active={tab === i}
+              className="solution-tab-btn"
+              style={{ flex: '1 1 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', background: tab === i ? 'var(--5s-blue)' : 'transparent', color: tab === i ? '#fff' : 'var(--5s-text-muted)', border: 'none', borderRadius: 10, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12.5, letterSpacing: '-0.01em', cursor: 'pointer', transition: 'all 200ms', textTransform: 'uppercase', position: 'relative', overflow: 'hidden' }}>
               {tb.icon} {tb.label}
+              {tab === i && !paused && (
+                <span key={`${i}-${paused}`} className="solution-tab-progress" />
+              )}
             </button>
           ))}
         </div>
