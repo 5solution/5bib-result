@@ -381,33 +381,98 @@ export function SolutionFinalCTA({ lang, onCTA, accent = '#FF0E65' }: Ctx & { on
 
 export function SolutionFooter({ lang }: { lang: Lang }) {
   const t = useT(lang);
-  const cols = [
-    { h: t('Sản phẩm', 'Product'), l: ['5BIB · Registration', '5Ticket · Tickets', '5BIB Results', '5Pix · Photos', '5Tech · Timing'] },
-    { h: t('Công ty', 'Company'), l: [t('Về chúng tôi', 'About'), t('Khách hàng', 'Customers'), 'Blog', t('Tuyển dụng', 'Careers'), t('Liên hệ', 'Contact')] },
-    { h: t('Tài nguyên', 'Resources'), l: ['API Docs', t('Hướng dẫn BTC', 'Organizer Guide'), t('Tích hợp thanh toán', 'Payment Integrations'), 'Status', 'Changelog'] },
-    { h: t('Pháp lý', 'Legal'), l: [t('Điều khoản', 'Terms'), t('Bảo mật', 'Privacy'), 'Cookies', t('Bộ Công Thương', 'MOIT notice')] },
+
+  const legalLinks = [
+    'Quy chế 5bib.com',
+    'Chính sách bảo mật thông tin',
+    'Chính sách bảo mật thông tin thanh toán',
+    'Chính sách thanh toán',
+    'Thông tin về chủ sở hữu',
+    'Quy trình giải quyết tranh chấp, khiếu nại',
   ];
+
+  const socials = [
+    { label: 'Facebook', href: 'https://www.facebook.com/5bibapp', bg: '#1877F2',
+      svg: <svg viewBox="0 0 24 24" fill="currentColor" width={18} height={18}><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg> },
+    { label: 'Instagram', href: 'https://www.instagram.com/5bib_findyournewexperience', bg: 'linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)',
+      svg: <svg viewBox="0 0 24 24" fill="currentColor" width={18} height={18}><path d="M12 0C8.74 0 8.333.015 7.053.072 5.775.132 4.905.333 4.14.63c-.789.306-1.459.717-2.126 1.384S.935 3.35.63 4.14C.333 4.905.131 5.775.072 7.053.012 8.333 0 8.74 0 12s.015 3.667.072 4.947c.06 1.277.261 2.148.558 2.913.306.788.717 1.459 1.384 2.126.667.666 1.336 1.079 2.126 1.384.766.296 1.636.499 2.913.558C8.333 23.988 8.74 24 12 24s3.667-.015 4.947-.072c1.277-.06 2.148-.262 2.913-.558.788-.306 1.459-.718 2.126-1.384.666-.667 1.079-1.335 1.384-2.126.296-.765.499-1.636.558-2.913.06-1.28.072-1.687.072-4.947s-.015-3.667-.072-4.947c-.06-1.277-.262-2.149-.558-2.913-.306-.789-.718-1.459-1.384-2.126C21.319 1.347 20.651.935 19.86.63c-.765-.297-1.636-.499-2.913-.558C15.667.012 15.26 0 12 0zm0 2.16c3.203 0 3.585.016 4.85.071 1.17.055 1.805.249 2.227.415.562.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.227.057 1.266.07 1.646.07 4.85s-.015 3.585-.074 4.85c-.061 1.17-.256 1.805-.421 2.227-.224.562-.479.96-.899 1.382-.419.419-.824.679-1.38.896-.42.164-1.065.36-2.235.413-1.274.057-1.649.07-4.859.07-3.211 0-3.586-.015-4.859-.074-1.171-.061-1.816-.256-2.236-.421-.569-.224-.96-.479-1.379-.899-.421-.419-.69-.824-.9-1.38-.165-.42-.359-1.065-.42-2.235-.045-1.26-.061-1.649-.061-4.844 0-3.196.016-3.586.061-4.861.061-1.17.255-1.814.42-2.234.21-.57.479-.96.9-1.381.419-.419.81-.689 1.379-.898.42-.166 1.051-.361 2.221-.421 1.275-.045 1.65-.06 4.859-.06l.045.03zm0 3.678c-3.405 0-6.162 2.76-6.162 6.162 0 3.405 2.76 6.162 6.162 6.162 3.405 0 6.162-2.76 6.162-6.162 0-3.405-2.76-6.162-6.162-6.162zM12 16c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm7.846-10.405c0 .795-.646 1.44-1.44 1.44-.795 0-1.44-.646-1.44-1.44 0-.794.646-1.439 1.44-1.439.793-.001 1.44.645 1.44 1.439z" /></svg> },
+    { label: 'TikTok', href: 'https://www.tiktok.com/@5bib.com', bg: '#010101',
+      svg: <svg viewBox="0 0 24 24" fill="currentColor" width={18} height={18}><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.73a4.85 4.85 0 01-1.01-.04z" /></svg> },
+    { label: 'YouTube', href: 'https://www.youtube.com/@5BIBCustomerSupport', bg: '#FF0000',
+      svg: <svg viewBox="0 0 24 24" fill="currentColor" width={18} height={18}><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg> },
+    { label: 'Strava', href: 'https://www.strava.com/clubs/1282714', bg: '#FC4C02',
+      svg: <svg viewBox="0 0 24 24" fill="currentColor" width={18} height={18}><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" /></svg> },
+  ];
+
+  const colLabel = (s: string) => (
+    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 11, letterSpacing: '.2em', textTransform: 'uppercase', marginBottom: 16, color: '#fff' }}>{s}</div>
+  );
+  const info = (label: string, value: string) => (
+    <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-body)', fontSize: 12.5, color: 'rgba(255,255,255,0.58)', lineHeight: 1.55 }}>
+      <span style={{ fontWeight: 700, color: 'rgba(255,255,255,0.78)' }}>{label}</span> {value}
+    </p>
+  );
+
   return (
-    <footer style={{ background: '#0A1A4D', color: 'rgba(255,255,255,0.8)', padding: '56px 32px 28px' }}>
-      <div className="solution-footer-grid" style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: '1.4fr repeat(4,1fr)', gap: 32 }}>
-        <div>
-          {/* Use regular <img> — footer logo is below fold; avoids layout-shift vs next/image with unknown height */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/solution/logos/5bib-logo-white.png" alt="5BIB" style={{ height: 34, marginBottom: 16 }} />
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.62)', margin: 0, maxWidth: 280 }}>
-            {t('Cổng đăng ký & quản lý VĐV #1 VIỆT NAM. Một phần của hệ sinh thái 5Solution.', "Vietnam's #1 registration & athlete-management platform. Part of the 5Solution ecosystem.")}
-          </p>
-        </div>
-        {cols.map((col, i) => (
-          <div key={i}>
-            <div style={{ fontFamily: 'var(--font-body)', fontWeight: 900, fontSize: 11, letterSpacing: '.2em', textTransform: 'uppercase', marginBottom: 14, color: '#fff' }}>{col.h}</div>
-            {col.l.map((x) => <a key={x} href="#" style={{ display: 'block', color: 'rgba(255,255,255,0.62)', textDecoration: 'none', fontFamily: 'var(--font-body)', fontSize: 13, padding: '4px 0' }}>{x}</a>)}
+    <footer style={{ background: '#08133A', color: 'rgba(255,255,255,0.8)' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '56px 32px 0' }}>
+        <div className="solution-footer-grid" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr', gap: 48 }}>
+
+          {/* Col 1 — Brand + Company Info */}
+          <div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/solution/logos/5bib-logo-white.png" alt="5BIB" style={{ height: 34, marginBottom: 18 }} />
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.55)', margin: '0 0 20px', maxWidth: 340 }}>
+              {t('Cổng đăng ký & quản lý VĐV #1 VIỆT NAM. Một phần của hệ sinh thái 5Solution.', "Vietnam's #1 registration & athlete-management platform. Part of the 5Solution ecosystem.")}
+            </p>
+            {info(t('Địa chỉ:', 'Address:'), 'Tầng 9, Hồ Gươm Plaza, Số 102 Trần Phú, Quận Hà Đông, Hà Nội, Việt Nam')}
+            {info('MST:', '0110398986')}
+            {info(t('Ngày cấp:', 'Issued:'), '26/06/2023')}
+            {info(t('Nơi cấp:', 'By:'), 'Sở Kế hoạch và Đầu tư TP Hà Nội')}
+            {info('Email:', 'info@5bib.com')}
+            {info(t('Hotline:', 'Hotline:'), '0373 398 986')}
+            <a href="http://online.gov.vn/Website/chi-tiet-111732" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 16 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="http://online.gov.vn/Content/EndUser/LogoCCDVSaleNoti/logoCCDV.png" alt="Đã Đăng Ký Bộ Công Thương" style={{ height: 52, width: 'auto' }} />
+            </a>
           </div>
-        ))}
+
+          {/* Col 2 — Legal */}
+          <div>
+            {colLabel(t('Pháp lý', 'Legal'))}
+            {legalLinks.map((l) => (
+              <a key={l} href="#" style={{ display: 'block', color: 'rgba(255,255,255,0.55)', textDecoration: 'none', fontFamily: 'var(--font-body)', fontSize: 13, padding: '5px 0', lineHeight: 1.45, transition: 'color 150ms' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.55)')}
+              >{l}</a>
+            ))}
+          </div>
+
+          {/* Col 3 — Social */}
+          <div>
+            {colLabel(t('Liên hệ', 'Connect'))}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+              {socials.map((s) => (
+                <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label}
+                  style={{ width: 40, height: 40, borderRadius: 9999, background: s.bg, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity 150ms', textDecoration: 'none' }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+                >
+                  {s.svg}
+                </a>
+              ))}
+            </div>
+            {colLabel(t('Hệ sinh thái', 'Ecosystem'))}
+            {['5BIB · Đăng ký & Kết quả', '5Ticket · Vé sự kiện', '5Pix · Ảnh giải chạy', '5Tech · Chip timing'].map((item) => (
+              <div key={item} style={{ fontFamily: 'var(--font-body)', fontSize: 12.5, color: 'rgba(255,255,255,0.5)', padding: '4px 0' }}>{item}</div>
+            ))}
+          </div>
+        </div>
       </div>
-      <div className="solution-footer-bottom" style={{ maxWidth: 1280, margin: '40px auto 0', paddingTop: 22, borderTop: '1px solid rgba(255,255,255,0.12)', display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.5)' }}>
-        <span>© 2026 5Solution JSC · {t('Hà Nội, VIỆT NAM', 'Hanoi, Vietnam')} · MST 0108xxxxxx</span>
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.01em', color: 'rgba(255,255,255,0.7)' }}>Embracing Challenges</span>
+
+      <div className="solution-footer-bottom" style={{ maxWidth: 1280, margin: '40px auto 0', padding: '20px 32px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 20, flexWrap: 'wrap', fontSize: 11.5, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.4)' }}>
+        <span>© 2026 5Solution JSC · Hà Nội, VIỆT NAM · MST 0110398986</span>
+        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.01em', color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>Embracing Challenges</span>
       </div>
     </footer>
   );
