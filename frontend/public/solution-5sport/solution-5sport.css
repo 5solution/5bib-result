@@ -1,0 +1,204 @@
+/* ═══════════════════════════════════════════════════════════════════
+   5Sport Landing — scoped tokens under .s5-root
+   Loaded from frontend/app/solution-5sport/layout.tsx only.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  --s5-blue:       #1400FF;
+  --s5-blue-600:   #0A00D6;
+  --s5-blue-700:   #0700A8;
+  --s5-blue-400:   #3D2FFF;
+  --s5-blue-300:   #7164FF;
+  --s5-blue-100:   #D6D1FF;
+  --s5-blue-50:    #EDEAFF;
+
+  --s5-lime:       #C8FF00;
+  --s5-lime-600:   #B0E600;
+  --s5-lime-200:   #E3FF66;
+  --s5-lime-50:    #F6FFD4;
+
+  --s5-navy:       #0A0D2E;
+  --s5-navy-2:     #141842;
+
+  --s5-magenta:    #FF0E65;
+
+  --s5-bg:         #FAFAF7;
+  --s5-surface:    #F2F1ED;
+  --s5-surface-2: #E6E4DE;
+  --s5-border:     #D6D3D1;
+  --s5-border-strong: #A8A29E;
+  --s5-text:       #111112;
+  --s5-text-muted: #4E4E52;
+  --s5-text-subtle:#7A7A7E;
+  --s5-white:      #FFFFFF;
+
+  --s5-slate:      #1E293B;
+  --s5-slate-50:   #F8FAFC;
+  --s5-slate-100:  #F1F5F9;
+  --s5-slate-200:  #E2E8F0;
+
+  --s5-success:    #166534;
+  --s5-warning:    #D97706;
+  --s5-danger:     #DC2626;
+
+  --font-display-5s: var(--font-heading), "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-body-5s:    var(--font-sans), "Plus Jakarta Sans", "Be Vietnam Pro", system-ui, sans-serif;
+  --font-mono-5s:    var(--font-jetbrains-mono), "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+
+  --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --s5-shadow-sm: 0 1px 3px rgba(10,13,46,0.06), 0 1px 2px rgba(10,13,46,0.04);
+  --s5-shadow-md: 0 4px 6px -1px rgba(10,13,46,0.07), 0 2px 4px -2px rgba(10,13,46,0.05);
+  --s5-shadow-lg: 0 10px 15px -3px rgba(10,13,46,0.08), 0 4px 6px -4px rgba(10,13,46,0.04);
+  --s5-shadow-xl: 0 20px 25px -5px rgba(10,13,46,0.10), 0 8px 10px -6px rgba(10,13,46,0.05);
+  --s5-glow-lime: 0 0 0 1px rgba(200,255,0,0.25), 0 10px 32px rgba(200,255,0,0.35);
+  --s5-glow-blue: 0 0 0 1px rgba(20,0,255,0.14), 0 10px 32px rgba(20,0,255,0.28);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GLOBAL (scoped)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.s5-root { font-family: var(--font-body-5s); background: var(--s5-bg); color: var(--s5-text); min-height: 100vh; line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.s5-root * { box-sizing: border-box; }
+.s5-root h1, .s5-root h2, .s5-root h3, .s5-root h4 { font-family: var(--font-display-5s); letter-spacing: -0.02em; margin: 0; }
+.s5-root a { color: inherit; text-decoration: none; }
+.s5-root ::selection { background: rgba(20,0,255,0.18); color: var(--s5-text); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TYPE CLASSES
+   ═══════════════════════════════════════════════════════════════════ */
+
+.s5-root .type-hero       { font-family: var(--font-display-5s); font-weight: 900; font-size: clamp(44px, 7vw, 96px); line-height: 1.02; letter-spacing: -0.035em; text-transform: uppercase; }
+.s5-root .type-h1         { font-family: var(--font-display-5s); font-weight: 900; font-size: clamp(36px, 5vw, 64px); line-height: 1.05; letter-spacing: -0.03em; text-transform: uppercase; }
+.s5-root .type-h2         { font-family: var(--font-display-5s); font-weight: 900; font-size: clamp(28px, 3.6vw, 44px); line-height: 1.08; letter-spacing: -0.028em; text-transform: uppercase; }
+.s5-root .type-h3         { font-family: var(--font-display-5s); font-weight: 800; font-size: 22px; letter-spacing: -0.02em; }
+.s5-root .type-eyebrow    { font-family: var(--font-body-5s); font-weight: 800; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; }
+.s5-root .type-lead       { font-family: var(--font-body-5s); font-weight: 500; font-size: clamp(16px, 1.5vw, 19px); line-height: 1.62; color: var(--s5-text-muted); }
+.s5-root .type-body       { font-family: var(--font-body-5s); font-weight: 400; font-size: 15px; line-height: 1.6; color: var(--s5-text); }
+.s5-root .type-small      { font-family: var(--font-body-5s); font-weight: 500; font-size: 13px; color: var(--s5-text-muted); }
+.s5-root .type-data       { font-family: var(--font-mono-5s); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: -0.01em; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   BUTTONS & PILLS
+   ═══════════════════════════════════════════════════════════════════ */
+
+.s5-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 24px;
+  font-family: var(--font-display-5s);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 200ms var(--ease-out-expo), box-shadow 200ms, background 200ms, color 200ms, border-color 200ms;
+  white-space: nowrap;
+}
+.s5-btn:hover { transform: translateY(-2px); }
+.s5-btn-primary   { background: var(--s5-blue); color: #fff; box-shadow: var(--s5-glow-blue); }
+.s5-btn-primary:hover { background: var(--s5-blue-600); }
+.s5-btn-lime      { background: var(--s5-lime); color: var(--s5-navy); box-shadow: var(--s5-glow-lime); }
+.s5-btn-lime:hover{ background: var(--s5-lime-600); }
+.s5-btn-outline   { background: transparent; color: var(--s5-text); border-color: var(--s5-border-strong); }
+.s5-btn-outline:hover { border-color: var(--s5-blue); color: var(--s5-blue); }
+.s5-btn-ghost-white { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.28); backdrop-filter: blur(6px); }
+.s5-btn-ghost-white:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.5); }
+
+.s5-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 9999px;
+  font-family: var(--font-body-5s); font-weight: 700; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HERO VIDEO / GRADIENT BG
+   ═══════════════════════════════════════════════════════════════════ */
+
+.s5-hero-bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse at top right, rgba(200,255,0,0.18), transparent 55%),
+    radial-gradient(ellipse at bottom left, rgba(20,0,255,0.4), transparent 60%),
+    linear-gradient(180deg, var(--s5-navy) 0%, #080726 55%, #040320 100%);
+}
+.s5-hero-bg::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(-45deg, rgba(200,255,0,0.035) 0 1px, transparent 1px 60px);
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CARDS & SURFACES
+   ═══════════════════════════════════════════════════════════════════ */
+
+.s5-card {
+  background: #fff;
+  border: 1px solid var(--s5-border);
+  border-radius: 18px;
+  padding: 28px;
+  transition: transform 240ms var(--ease-out-expo), box-shadow 240ms, border-color 240ms;
+}
+.s5-card:hover { transform: translateY(-4px); box-shadow: var(--s5-shadow-lg); border-color: var(--s5-blue-300); }
+
+.s5-dark {
+  background: linear-gradient(140deg, var(--s5-navy) 0%, #0F1337 50%, #06082A 100%);
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════ */
+
+@keyframes s5-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.s5-fade-up { animation: s5-fade-up 700ms var(--ease-out-expo) both; }
+
+@keyframes s5-pulse-lime {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200,255,0,0.55); }
+  50%      { box-shadow: 0 0 0 10px rgba(200,255,0,0); }
+}
+.s5-pulse-lime { animation: s5-pulse-lime 2.2s ease-in-out infinite; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  .s5-root .s5-hide-md { display: none !important; }
+}
+
+@media (max-width: 900px) {
+  .s5-root .s5-hero-grid { grid-template-columns: 1fr !important; }
+  .s5-root .s5-2col { grid-template-columns: 1fr !important; }
+  .s5-root .s5-3col { grid-template-columns: 1fr !important; }
+  .s5-root .s5-4col { grid-template-columns: 1fr 1fr !important; }
+  .s5-root .s5-section { padding-top: 72px !important; padding-bottom: 56px !important; }
+}
+
+@media (max-width: 640px) {
+  .s5-root .s5-header-nav { display: none !important; }
+  .s5-root .s5-header-cta { display: none !important; }
+  .s5-root .s5-4col { grid-template-columns: 1fr !important; }
+  .s5-root .s5-hide-sm { display: none !important; }
+  .s5-root .s5-hero-badges { flex-direction: column !important; align-items: flex-start !important; }
+  .s5-root .type-hero { font-size: clamp(36px, 10vw, 52px) !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SCROLLBAR HIDE
+   ═══════════════════════════════════════════════════════════════════ */
+
+.s5-root .s5-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
+.s5-root .s5-scroll-hide::-webkit-scrollbar { display: none; }

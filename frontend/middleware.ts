@@ -5,10 +5,22 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 const isProtected = createRouteMatcher(['/account(.*)']);
 
 export default clerkMiddleware(async (auth, req) => {
-  // Subdomain routing: timing.5bib.com → /timing/*, solution.5bib.com → /solution/*
-  const host = req.headers.get('host') || '';
-  const isTimingHost = host.startsWith('timing.') || host.startsWith('timing-');
-  const isSolutionHost = host.startsWith('solution.') || host.startsWith('solution-');
+  // Subdomain routing:
+  //   timing.5bib.com → /timing/*
+  //   solution.5bib.com → /solution/*
+  //   solution.5sport.vn → /solution-5sport/*
+  const host = (req.headers.get('host') || '').toLowerCase();
+  const isSport5Host = host.includes('5sport.');
+  const isTimingHost = !isSport5Host && (host.startsWith('timing.') || host.startsWith('timing-'));
+  const isSolutionHost = !isSport5Host && (host.startsWith('solution.') || host.startsWith('solution-'));
+
+  if (isSport5Host) {
+    const url = req.nextUrl.clone();
+    if (!url.pathname.startsWith('/api') && !url.pathname.startsWith('/solution-5sport')) {
+      url.pathname = `/solution-5sport${url.pathname === '/' ? '' : url.pathname}`;
+      return NextResponse.rewrite(url);
+    }
+  }
 
   if (isTimingHost) {
     const url = req.nextUrl.clone();
