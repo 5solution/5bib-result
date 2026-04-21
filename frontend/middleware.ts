@@ -5,14 +5,23 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 const isProtected = createRouteMatcher(['/account(.*)']);
 
 export default clerkMiddleware(async (auth, req) => {
-  // Subdomain routing: timing.5bib.com → /timing/*
+  // Subdomain routing: timing.5bib.com → /timing/*, solution.5bib.com → /solution/*
   const host = req.headers.get('host') || '';
   const isTimingHost = host.startsWith('timing.') || host.startsWith('timing-');
+  const isSolutionHost = host.startsWith('solution.') || host.startsWith('solution-');
+
   if (isTimingHost) {
     const url = req.nextUrl.clone();
-    // Cho phép API proxy pass-through (/api/*)
     if (!url.pathname.startsWith('/api') && !url.pathname.startsWith('/timing')) {
       url.pathname = `/timing${url.pathname === '/' ? '' : url.pathname}`;
+      return NextResponse.rewrite(url);
+    }
+  }
+
+  if (isSolutionHost) {
+    const url = req.nextUrl.clone();
+    if (!url.pathname.startsWith('/api') && !url.pathname.startsWith('/solution')) {
+      url.pathname = `/solution${url.pathname === '/' ? '' : url.pathname}`;
       return NextResponse.rewrite(url);
     }
   }
