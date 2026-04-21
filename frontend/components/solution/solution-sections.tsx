@@ -196,7 +196,7 @@ export function SolutionTestimonials({ lang, accent = '#FF0E65' }: Ctx) {
   const quotes = [
     { q: t('"Trang đăng ký đẹp đến mức VĐV chủ động share lên Facebook. Lượng traffic về giải tăng 3 lần so với năm ngoái."', '"Our registration page is polished enough that runners share it unprompted. Traffic to the race tripled versus last year."'), n: 'Đặng Quang Đức', r: t('Giám đốc · Racejungle', 'Director · Racejungle'), s: '+312%', sl: t('lượt share', 'shares') },
     { q: t('"Tôi từng rất đau đầu về việc bán vé và quản lý bản vé. Giờ chạy 1 luồng, tiết kiệm nhiều ngày làm việc."', '"Ticketing and bib management used to be a massive headache. Now it all runs as one flow — saving us days of work every race."'), n: 'Tạ Quang Quỳnh', r: t('Trưởng nhóm · VTV–LPBank Marathon', 'Team Lead · VTV–LPBank Marathon'), s: '2 ngày', sl: t('tiết kiệm / giải', 'saved / race') },
-    { q: t('"Lần đầu BTC Việt Nam có athlete dashboard + BTC dashboard đầy đủ. VĐV tự xử đổi cự ly, đội support giảm 80% ticket."', '"First time a Vietnamese organizer has a proper athlete + organizer dashboard. Runners self-serve distance swaps, and support tickets dropped 80%."'), n: 'Nguyễn Văn Du', r: t('Director · 5Sport', 'Director · 5Sport'), s: '94%', sl: t('VĐV hài lòng', 'runner satisfaction') },
+    { q: t('"Lần đầu BTC VIỆT NAM có athlete dashboard + BTC dashboard đầy đủ. VĐV tự xử đổi cự ly, đội support giảm 80% ticket."', '"First time a Vietnamese organizer has a proper athlete + organizer dashboard. Runners self-serve distance swaps, and support tickets dropped 80%."'), n: 'Nguyễn Văn Du', r: t('Director · 5Sport', 'Director · 5Sport'), s: '94%', sl: t('VĐV hài lòng', 'runner satisfaction') },
   ];
   return (
     <section id="customers" style={{ background: 'var(--5s-blue-700)', color: '#fff', padding: '96px 0', position: 'relative', overflow: 'hidden' }}>
@@ -205,7 +205,7 @@ export function SolutionTestimonials({ lang, accent = '#FF0E65' }: Ctx) {
         <div style={{ marginBottom: 44, maxWidth: 700 }}>
           <div className="type-eyebrow" style={{ color: '#FFD6E3' }}>{t('Khách hàng nói gì', 'What organizers say')}</div>
           <h2 className="type-campaign" style={{ fontSize: 'clamp(40px,5vw,72px)', color: '#fff', margin: '10px 0 0' }}>
-            {t('BTC Việt Nam chọn 5BIB.', 'VN organizers choose 5BIB.')}
+            {lang === 'vi' ? <>BTC <span style={{ textTransform: 'uppercase' }}>Việt Nam</span> chọn 5BIB.</> : 'VN organizers choose 5BIB.'}
           </h2>
         </div>
         <div className="solution-testimonials-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 18 }}>
@@ -289,7 +289,7 @@ export function SolutionFAQ({ lang, accent = '#FF0E65' }: Ctx) {
     { q: t('Bao lâu thì mở bán được?', 'How fast can we go live?'), a: t('72 giờ kể từ khi BTC gửi thông tin giải. Team 5BIB onboard 1-1, setup form, domain, brand, thanh toán. Bạn chỉ cần review và bấm "mở bán".', '72 hours from your kickoff. The 5BIB team onboards 1-on-1, sets up the form, domain, brand, and payments. You just review and hit "go live."') },
     { q: t('Check-in hoạt động thế nào khi mất mạng?', 'How does check-in work when the network drops?'), a: t('App offline-first: volunteer scan QR, dữ liệu lưu local, auto sync khi có mạng. Đã test với 5,000 VĐV/giờ không bị delay.', 'Offline-first app: volunteers scan QR, data is stored locally, auto-syncs when the network returns. Tested at 5,000 runners/hour with no delay.') },
     { q: t('VĐV có thể đổi cự ly sau khi đăng ký không?', 'Can athletes change distance after registering?'), a: t('Có. Athlete Dashboard cho phép VĐV đổi cự ly, đổi size áo, cập nhật thông tin khẩn cấp. BTC bật/tắt quyền đổi theo policy giải.', 'Yes. The athlete dashboard lets runners change distance, swap shirt size, and update emergency info. Organizers can enable/disable changes per race policy.') },
-    { q: t('Dữ liệu có thuộc về BTC không?', 'Does the organizer own the data?'), a: t('100%. BTC export CSV, API đầy đủ. 5BIB không bán data cho bên thứ 3. Tuân thủ Luật An ninh mạng Việt Nam và nguyên tắc GDPR.', '100%. Organizers export CSV and have full API access. 5BIB never sells data to third parties. Compliant with Vietnamese Cybersecurity Law and GDPR principles.') },
+    { q: t('Dữ liệu có thuộc về BTC không?', 'Does the organizer own the data?'), a: t('100%. BTC export CSV, API đầy đủ. 5BIB không bán data cho bên thứ 3. Tuân thủ Luật An ninh mạng VIỆT NAM và nguyên tắc GDPR.', '100%. Organizers export CSV and have full API access. 5BIB never sells data to third parties. Compliant with Vietnamese Cybersecurity Law and GDPR principles.') },
     { q: t('Phí thế nào?', 'What are the fees?'), a: t('Mỗi giải là một câu chuyện khác — quy mô, cự ly, upsell, kênh bán đều ảnh hưởng giá. Gọi chúng tôi 15 phút, có con số rõ ràng và không có phí ẩn.', 'Every race is different — scale, distances, upsells, channels all factor in. Book a 15-minute call for a clear number with no hidden fees.') },
   ];
   return (
@@ -395,7 +395,7 @@ export function SolutionFooter({ lang }: { lang: Lang }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/solution/logos/5bib-logo-white.png" alt="5BIB" style={{ height: 34, marginBottom: 16 }} />
           <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.62)', margin: 0, maxWidth: 280 }}>
-            {t('Cổng đăng ký & quản lý VĐV #1 Việt Nam. Một phần của hệ sinh thái 5Solution.', "Vietnam's #1 registration & athlete-management platform. Part of the 5Solution ecosystem.")}
+            {t('Cổng đăng ký & quản lý VĐV #1 VIỆT NAM. Một phần của hệ sinh thái 5Solution.', "Vietnam's #1 registration & athlete-management platform. Part of the 5Solution ecosystem.")}
           </p>
         </div>
         {cols.map((col, i) => (
@@ -406,7 +406,7 @@ export function SolutionFooter({ lang }: { lang: Lang }) {
         ))}
       </div>
       <div className="solution-footer-bottom" style={{ maxWidth: 1280, margin: '40px auto 0', paddingTop: 22, borderTop: '1px solid rgba(255,255,255,0.12)', display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.5)' }}>
-        <span>© 2026 5Solution JSC · {t('Hà Nội, Việt Nam', 'Hanoi, Vietnam')} · MST 0108xxxxxx</span>
+        <span>© 2026 5Solution JSC · {t('Hà Nội, VIỆT NAM', 'Hanoi, Vietnam')} · MST 0108xxxxxx</span>
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '-0.01em', color: 'rgba(255,255,255,0.7)' }}>Embracing Challenges</span>
       </div>
     </footer>

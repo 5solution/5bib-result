@@ -20,7 +20,7 @@ export function SolutionSocialProof({ lang }: { lang: Lang }) {
           {t('Được tin dùng bởi', 'Trusted by')}
         </div>
         <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-0.01em', margin: '8px 0 0', color: 'var(--5s-text)' }}>
-          {t("BTC hàng đầu Việt Nam mở bán vé trên 5BIB", "Vietnam's leading organizers sell tickets on 5BIB")}
+          {t("BTC hàng đầu VIỆT NAM mở bán vé trên 5BIB", "Vietnam's leading organizers sell tickets on 5BIB")}
         </h3>
       </div>
       <div className="solution-clients-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 0, borderTop: '1px solid var(--5s-border)', borderBottom: '1px solid var(--5s-border)' }}>
@@ -66,7 +66,7 @@ export function SolutionPainSolution({ lang, accent = '#FF0E65' }: { lang: Lang;
           <span style={{ color: 'var(--5s-blue)' }}>{t('cả 3 đều đau.', 'all three hurt.')}</span>
         </h2>
         <p className="type-lead" style={{ marginTop: 18 }}>
-          {t('BTC Việt Nam đang mất 2 tuần đối soát, 150 triệu build tool, hoặc chịu phí cao từ platform đóng. 5BIB làm cả ba việc đó trong một hệ thống — và rẻ hơn.', 'Vietnamese organizers lose two weeks on reconciliation, 150M₫ on in-house tools, or pay steep fees to closed platforms. 5BIB does all three in one system — for less.')}
+          {t('BTC VIỆT NAM đang mất 2 tuần đối soát, 150 triệu build tool, hoặc chịu phí cao từ platform đóng. 5BIB làm cả ba việc đó trong một hệ thống — và rẻ hơn.', 'Vietnamese organizers lose two weeks on reconciliation, 150M₫ on in-house tools, or pay steep fees to closed platforms. 5BIB does all three in one system — for less.')}
         </p>
       </div>
       <div className="solution-pain-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
