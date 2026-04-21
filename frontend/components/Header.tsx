@@ -19,8 +19,10 @@ export default function Header() {
     { href: '/calendar', label: t('nav.calendar') },
   ];
 
+  if (pathname?.startsWith('/timing')) return null;
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50">
+    <header data-site-header className="fixed top-0 left-0 right-0 z-50">
       <div className="bg-blue-700">
         <div className="flex items-stretch h-14">
 

@@ -46,6 +46,15 @@ const envVarsSchema = Joi.object()
     CLERK_PUBLISHABLE_KEY: Joi.string().optional().allow(''),
     CLERK_JWT_KEY: Joi.string().optional().allow(''),
     CLERK_AUTHORIZED_PARTIES: Joi.string().optional().allow(''),
+    // Timing landing (timing.5bib.com) — lead notification emails + admin link
+    TIMING_NOTIFY_EMAILS: Joi.string()
+      .optional()
+      .allow('')
+      .default('danny@5bib.com,khanhnguyen@5bib.com'),
+    TIMING_ADMIN_BASE_URL: Joi.string()
+      .optional()
+      .allow('')
+      .default('https://result-admin.5bib.com'),
   })
   .unknown();
 
@@ -112,5 +121,12 @@ export const env = {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
+  },
+  timing: {
+    notifyEmails: ((envVars.TIMING_NOTIFY_EMAILS as string) || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    adminBaseUrl: (envVars.TIMING_ADMIN_BASE_URL as string) || '',
   },
 };

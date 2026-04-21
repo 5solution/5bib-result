@@ -26,6 +26,7 @@ import {
   BarChart2,
   Users,
   Award,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
@@ -41,6 +42,7 @@ const navItems = [
   { href: "/team-management", label: "Quản lý nhân sự", icon: Users },
   { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
   { href: "/claims", label: "Khiếu nại", icon: FileWarning },
+  { href: "/timing-leads", label: "Timing Leads", icon: Timer },
 ];
 
 function NavLink({

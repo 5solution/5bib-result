@@ -1,0 +1,37 @@
+import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AuthModule } from '../auth/auth.module';
+import {
+  TimingLead,
+  TimingLeadSchema,
+} from './schemas/timing-lead.schema';
+import {
+  TimingCounter,
+  TimingCounterSchema,
+} from './schemas/timing-counter.schema';
+import { TimingService } from './timing.service';
+import { TimingPublicController } from './timing-public.controller';
+import { TimingAdminController } from './timing-admin.controller';
+
+@Module({
+  imports: [
+    MongooseModule.forFeature([
+      { name: TimingLead.name, schema: TimingLeadSchema },
+      { name: TimingCounter.name, schema: TimingCounterSchema },
+    ]),
+    // Module-scoped throttler — mirrors certificates pattern so @Throttle works
+    // without interfering with app-wide config.
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 100,
+      },
+    ]),
+    AuthModule,
+  ],
+  controllers: [TimingPublicController, TimingAdminController],
+  providers: [TimingService],
+  exports: [TimingService],
+})
+export class TimingModule {}
