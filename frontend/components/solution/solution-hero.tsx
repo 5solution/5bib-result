@@ -132,7 +132,7 @@ export default function SolutionHero({ lang, style, onCTA, accent = '#FF0E65' }:
             >
               {t('cổng đăng ký & quản lý VĐV', 'the registration & athlete-management')}
               <br />
-              <span style={{ color: accent }}>{t('#1 Việt Nam.', 'platform #1 in Vietnam.')}</span>
+              <span style={{ color: accent, textTransform: 'uppercase' }}>{t('#1 Việt Nam.', 'platform #1 in Vietnam.')}</span>
             </h1>
             <p
               className="solution-hero-desc"
