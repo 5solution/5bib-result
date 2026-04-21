@@ -3,24 +3,23 @@
 /**
  * F-06 — Performance Percentile.
  *
- * SEMANTIC (v2, 2026-04-20): `percentile` is now "Top X%" — LOWER = faster.
+ * SEMANTIC (v2, 2026-04-20): `percentile` is "Top X%" — LOWER = faster.
  * The fastest runner on a course is at Top 1%, the slowest at Top 100%.
- * This matches conventional running terminology and reverses the v1 meaning
- * ("% of finishers I beat"). Backend returns the same field name but with
- * inverted semantics; tier thresholds and gauge marker math are inverted
- * accordingly.
  *
- * PRD BR-02: gauge bar green→blue gradient; marker LEFT = better (top 1%).
- * PRD BR-03: comparison bars — You vs Average vs Fastest.
- * PRD BR-04: finishers only — hook returns null percentile for DNF; we hide.
+ * Special cases:
+ * - Athlete IS the fastest (athleteSeconds === minSeconds):
+ *     → badge shows "🏆 #1", summary says "Về đích đầu tiên...", hide redundant
+ *       "Nhanh nhất" row (it would be identical to "Bạn").
+ *     → display percentile capped at 1 (never show "Top 2%" for rank-1).
+ * - Always show gap-to-average commentary as a second insight line.
  *
  * Exports:
  *  - <PercentileBadge/>  — compact pill badge (hero area)
- *  - <PercentileGauge/>  — full panel: badge + gauge + comparison bars
+ *  - <PercentileGauge/>  — full panel: badge + gauge + comparison bars + insights
  */
 
 import { useTranslation } from 'react-i18next';
-import { Award, Flame, Medal, Sparkles } from 'lucide-react';
+import { Award, Flame, Medal, Sparkles, Trophy } from 'lucide-react';
 import { usePercentile } from '@/lib/api-hooks';
 
 interface Props {
@@ -28,15 +27,6 @@ interface Props {
   bib: string;
 }
 
-/**
- * Tier thresholds use the "Top X%" semantic (lower = better).
- *   p ≤ 10  → Elite   (Top 10%)
- *   p ≤ 25  → Strong  (Top 25%)
- *   p ≤ 50  → Solid   (Top 50%)
- *   else    → Midpack (bottom half)
- * i18n keys kept stable (top10/top25/top50/midpack) so translation files
- * don't need a schema change.
- */
 function tierOf(p: number): {
   label: string;
   bg: string;
@@ -81,6 +71,95 @@ function secondsToHms(s: number): string {
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
+/** Format a seconds difference as "Xh Ym" or "Ym" — always positive. */
+function formatGap(diffSec: number): string {
+  const abs = Math.abs(Math.round(diffSec));
+  const h = Math.floor(abs / 3600);
+  const m = Math.floor((abs % 3600) / 60);
+  if (h > 0 && m > 0) return `${h}g ${m}p`;
+  if (h > 0) return `${h} giờ`;
+  return `${m} phút`;
+}
+
+/** Build insight lines based on performance relative to field. */
+function buildInsights(
+  isRankOne: boolean,
+  athleteSeconds: number,
+  avgSeconds: number,
+  minSeconds: number,
+  totalFinishers: number,
+  lang: string,
+  p: number,
+): string[] {
+  const vi = lang.startsWith('vi');
+  const insights: string[] = [];
+
+  // 1. Rank-1 / fastest highlight
+  if (isRankOne) {
+    insights.push(
+      vi
+        ? `🏆 Bạn là VĐV về đích đầu tiên trong số ${totalFinishers} người hoàn thành cự ly này.`
+        : `🏆 You crossed the finish line first among all ${totalFinishers} finishers.`,
+    );
+  }
+
+  // 2. Gap to average
+  if (avgSeconds > 0 && athleteSeconds > 0) {
+    const diff = avgSeconds - athleteSeconds;
+    if (diff > 60) {
+      // athlete is faster than average
+      insights.push(
+        vi
+          ? `⚡ Nhanh hơn trung bình ${formatGap(diff)} (trung bình: ${secondsToHms(avgSeconds)}).`
+          : `⚡ ${formatGap(diff)} faster than the field average (avg: ${secondsToHms(avgSeconds)}).`,
+      );
+    } else if (diff < -60) {
+      // athlete is slower than average
+      const gap = formatGap(-diff);
+      insights.push(
+        vi
+          ? `Chậm hơn trung bình ${gap} — vẫn còn tiềm năng cải thiện thành tích.`
+          : `${gap} behind the field average — great target to beat next time.`,
+      );
+    } else {
+      insights.push(
+        vi
+          ? `Thành tích của bạn sát với mức trung bình của cự ly.`
+          : `Your finish time is right on par with the field average.`,
+      );
+    }
+  }
+
+  // 3. Gap to fastest (only if athlete is NOT rank-1)
+  if (!isRankOne && minSeconds > 0 && athleteSeconds > 0) {
+    const behindLeader = athleteSeconds - minSeconds;
+    if (behindLeader > 0) {
+      insights.push(
+        vi
+          ? `📍 Cách VĐV nhanh nhất ${formatGap(behindLeader)} (${secondsToHms(minSeconds)}).`
+          : `📍 ${formatGap(behindLeader)} behind the fastest finisher (${secondsToHms(minSeconds)}).`,
+      );
+    }
+  }
+
+  // 4. Top-tier congratulation (only for non rank-1, who already got #1 message)
+  if (!isRankOne && p <= 5) {
+    insights.push(
+      vi
+        ? `🔥 Top 5% — đẳng cấp Elite hiếm có.`
+        : `🔥 Top 5% — truly elite performance.`,
+    );
+  } else if (!isRankOne && p <= 10) {
+    insights.push(
+      vi
+        ? `Thành tích top 10% là mức mà phần lớn VĐV mơ ước.`
+        : `A top-10% finish is a benchmark most runners aspire to.`,
+    );
+  }
+
+  return insights;
+}
+
 export function PercentileBadge({ raceId, bib }: Props) {
   const { t } = useTranslation();
   const { data, isLoading } = usePercentile(raceId, bib);
@@ -89,44 +168,57 @@ export function PercentileBadge({ raceId, bib }: Props) {
   if (data.percentile === null) return null;
   if (data.totalFinishers < 5) return null;
 
-  const tier = tierOf(data.percentile);
-  const Icon = tier.Icon;
+  const isRankOne = data.athleteSeconds > 0 && data.athleteSeconds === data.minSeconds;
+  // Cap display percentile at 1 when athlete IS the fastest (avoid "Top 2%" for rank-1)
+  const displayPct = isRankOne ? 1 : data.percentile;
+  const tier = tierOf(displayPct);
+  const Icon = isRankOne ? Trophy : tier.Icon;
 
   return (
     <div
-      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm ${tier.bg} ${tier.fg}`}
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm ${
+        isRankOne
+          ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white'
+          : `${tier.bg} ${tier.fg}`
+      }`}
     >
       <Icon className="h-4 w-4" />
-      <span>
-        {t('athlete.percentile.label')}{' '}
-        <strong className="font-mono">{data.percentile}%</strong>
-      </span>
-      <span className="text-xs opacity-80">
-        · {t(`athlete.percentile.tier.${tier.label}`)}
-      </span>
+      {isRankOne ? (
+        <span>🏆 #1 Nhanh nhất</span>
+      ) : (
+        <>
+          <span>
+            {t('athlete.percentile.label')}{' '}
+            <strong className="font-mono">{displayPct}%</strong>
+          </span>
+          <span className="text-xs opacity-80">
+            · {t(`athlete.percentile.tier.${tier.label}`)}
+          </span>
+        </>
+      )}
     </div>
   );
 }
 
 export function PercentileGauge({ raceId, bib }: Props) {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const { data, isLoading } = usePercentile(raceId, bib);
 
   if (isLoading || !data) return null;
   if (data.percentile === null) return null;
   if (data.totalFinishers < 5) return null;
 
-  const p = data.percentile;
-  const tier = tierOf(p);
-  const Icon = tier.Icon;
+  const isRankOne = data.athleteSeconds > 0 && data.athleteSeconds === data.minSeconds;
+  const displayPct = isRankOne ? 1 : data.percentile;
+  const tier = tierOf(displayPct);
+  const Icon = isRankOne ? Trophy : tier.Icon;
+  const lang = i18n.language ?? 'vi';
 
-  // Comparison bar widths: longer bar = slower time.
-  const maxSec = Math.max(
-    data.athleteSeconds,
-    data.avgSeconds,
-    data.minSeconds,
-    1,
-  );
+  // Gauge marker — cap at 2px from left so rank-1 is visually at left edge
+  const markerLeft = isRankOne ? 2 : Math.max(2, Math.min(98, displayPct));
+
+  // Comparison bars — longer bar = slower. Exclude "fastest" row if athlete IS fastest.
+  const maxSec = Math.max(data.athleteSeconds, data.avgSeconds, data.minSeconds, 1);
   const pct = (s: number) => (s > 0 ? Math.max(5, (s / maxSec) * 100) : 0);
 
   const comparison = [
@@ -144,17 +236,44 @@ export function PercentileGauge({ raceId, bib }: Props) {
       color: 'bg-stone-400',
       emphasis: false,
     },
-    {
-      key: 'fastest',
-      label: t('athlete.percentile.compare.fastest'),
-      seconds: data.minSeconds,
-      color: 'bg-gradient-to-r from-emerald-400 to-emerald-600',
-      emphasis: false,
-    },
+    // Only show "fastest" row when athlete is NOT rank-1 (otherwise it's identical to "you")
+    ...(!isRankOne
+      ? [
+          {
+            key: 'fastest',
+            label: t('athlete.percentile.compare.fastest'),
+            seconds: data.minSeconds,
+            color: 'bg-gradient-to-r from-emerald-400 to-emerald-600',
+            emphasis: false,
+          },
+        ]
+      : []),
   ];
+
+  const insights = buildInsights(
+    isRankOne,
+    data.athleteSeconds,
+    data.avgSeconds,
+    data.minSeconds,
+    data.totalFinishers,
+    lang,
+    displayPct,
+  );
+
+  // Summary line: different wording for rank-1 vs others
+  const summaryLine = isRankOne
+    ? (lang.startsWith('vi')
+        ? `Về đích đầu tiên trong số ${data.totalFinishers} VĐV hoàn thành.`
+        : `First across the finish line among ${data.totalFinishers} finishers.`)
+    : t('athlete.percentile.summary', {
+        pct: displayPct,
+        count: data.slowerCount,
+        total: data.totalFinishers,
+      });
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+      {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5 text-stone-600" />
@@ -163,17 +282,24 @@ export function PercentileGauge({ raceId, bib }: Props) {
           </h3>
         </div>
         <div
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ${tier.bg} ${tier.fg}`}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ${
+            isRankOne
+              ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white'
+              : `${tier.bg} ${tier.fg}`
+          }`}
         >
-          {t('athlete.percentile.label')}{' '}
-          <span className="font-mono">{p}%</span>
+          {isRankOne ? (
+            <span>🏆 #1</span>
+          ) : (
+            <>
+              {t('athlete.percentile.label')}{' '}
+              <span className="font-mono">{displayPct}%</span>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Gauge bar — PRD BR-02.
-          Semantics (v2): Top 1% = left (best, emerald) → Top 100% = right
-          (worst, indigo). Marker position uses `p` directly so smaller p
-          visually anchors toward the "better" side. */}
+      {/* Gauge bar */}
       <div className="mb-5">
         <div className="relative h-3 w-full overflow-hidden rounded-full bg-stone-100">
           <div
@@ -182,8 +308,8 @@ export function PercentileGauge({ raceId, bib }: Props) {
           />
           <div
             className="absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-stone-900 shadow-md"
-            style={{ left: `${Math.max(2, Math.min(98, p))}%` }}
-            aria-label={`Top ${p}%`}
+            style={{ left: `${markerLeft}%` }}
+            aria-label={isRankOne ? '#1' : `Top ${displayPct}%`}
           />
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-stone-400">
@@ -191,16 +317,23 @@ export function PercentileGauge({ raceId, bib }: Props) {
           <span>Top 50%</span>
           <span>Top 100%</span>
         </div>
-        <p className="mt-2 text-sm text-stone-600">
-          {t('athlete.percentile.summary', {
-            pct: p,
-            count: data.slowerCount,
-            total: data.totalFinishers,
-          })}
-        </p>
+
+        {/* Summary line */}
+        <p className="mt-2 text-sm text-stone-600">{summaryLine}</p>
+
+        {/* Insight lines */}
+        {insights.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {insights.map((line, i) => (
+              <li key={i} className="text-sm text-stone-500">
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* Comparison bars — PRD BR-03 */}
+      {/* Comparison bars */}
       <div className="space-y-3">
         {comparison.map((row) => (
           <div key={row.key}>
