@@ -106,24 +106,28 @@ export function SolutionComparison({ lang, accent = '#FF0E65' }: Ctx) {
           <span style={{ color: 'var(--5s-blue)' }}>{t('không cần chọn lại.', 'never look back.')}</span>
         </h2>
       </div>
-      <div className="solution-comparison-wrap" style={{ background: '#fff', border: '1px solid var(--5s-border)', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr repeat(4, 1fr)', borderBottom: '1px solid var(--5s-border)', background: 'var(--5s-slate-50)' }}>
-          <div style={{ padding: '22px 24px', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--5s-text-subtle)' }}>{t('Tính năng', 'Feature')}</div>
-          {cols.map((c, i) => (
-            <div key={i} style={{ padding: '22px 18px', textAlign: 'center', background: c.h ? 'var(--5s-blue)' : 'transparent', color: c.h ? '#fff' : 'var(--5s-text)' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 18, letterSpacing: '-0.02em' }}>{c.n}</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, color: c.h ? 'rgba(255,255,255,0.8)' : 'var(--5s-text-subtle)', marginTop: 2 }}>{c.sub}</div>
+      <div className="solution-comparison-wrap" style={{ borderRadius: 18, boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ background: '#fff', border: '1px solid var(--5s-border)', borderRadius: 18, overflow: 'hidden', minWidth: 660 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr repeat(4, 1fr)', borderBottom: '1px solid var(--5s-border)', background: 'var(--5s-slate-50)' }}>
+              <div style={{ padding: '22px 24px', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--5s-text-subtle)' }}>{t('Tính năng', 'Feature')}</div>
+              {cols.map((c, i) => (
+                <div key={i} style={{ padding: '22px 18px', textAlign: 'center', background: c.h ? 'var(--5s-blue)' : 'transparent', color: c.h ? '#fff' : 'var(--5s-text)' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 18, letterSpacing: '-0.02em' }}>{c.n}</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, color: c.h ? 'rgba(255,255,255,0.8)' : 'var(--5s-text-subtle)', marginTop: 2 }}>{c.sub}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        {rows.map((r, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr repeat(4, 1fr)', borderBottom: i < rows.length - 1 ? '1px solid var(--5s-border)' : 'none', background: i % 2 ? 'var(--5s-slate-50)' : '#fff' }}>
-            <div style={{ padding: '16px 24px', fontFamily: 'var(--font-body)', fontSize: 13.5, fontWeight: 600, color: 'var(--5s-text)' }}>{r.f}</div>
-            {r.v.map((v, j) => (
-              <div key={j} style={{ padding: '16px 18px', textAlign: 'center', background: j === 0 ? 'rgba(61,90,241,0.04)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{renderCell(v)}</div>
+            {rows.map((r, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.6fr repeat(4, 1fr)', borderBottom: i < rows.length - 1 ? '1px solid var(--5s-border)' : 'none', background: i % 2 ? 'var(--5s-slate-50)' : '#fff' }}>
+                <div style={{ padding: '16px 24px', fontFamily: 'var(--font-body)', fontSize: 13.5, fontWeight: 600, color: 'var(--5s-text)' }}>{r.f}</div>
+                {r.v.map((v, j) => (
+                  <div key={j} style={{ padding: '16px 18px', textAlign: 'center', background: j === 0 ? 'rgba(61,90,241,0.04)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{renderCell(v)}</div>
+                ))}
+              </div>
             ))}
           </div>
-        ))}
+        </div>
       </div>
       <div style={{ marginTop: 14, fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--5s-text-subtle)', fontWeight: 500 }}>
         {t('* Google Form miễn phí nhưng chi phí ẩn: 2 tuần đối soát + không có dashboard, check-in, communication.', '* Google Form is free but hides costs: 2 weeks of reconciliation + no dashboard, check-in, or communications.')}
