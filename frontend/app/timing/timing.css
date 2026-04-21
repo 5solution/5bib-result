@@ -121,6 +121,8 @@ body.timing-landing-active [data-site-footer] {
   font-weight: 800; font-size: 18px; color: var(--tl-blue);
 }
 .tl-nav-logo svg { width: 34px; height: 34px; }
+.tl-logo-img { width: 34px; height: 34px; object-fit: contain; }
+.tl-footer-logo .tl-logo-img { width: 36px; height: 36px; }
 .tl-nav-links {
   display: flex; align-items: center; gap: 28px;
   font-size: 14px; font-weight: 600; color: var(--tl-text2);

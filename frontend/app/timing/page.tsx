@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import ContactForm from './ContactForm';
 import TimingEffects from './TimingEffects';
 
@@ -9,20 +10,14 @@ export const metadata: Metadata = {
 };
 
 const Logo = () => (
-  <svg viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="34" height="34" rx="9" fill="#2B5EE8" />
-    <text
-      x="17"
-      y="23"
-      textAnchor="middle"
-      fontFamily="Be Vietnam Pro,sans-serif"
-      fontWeight={900}
-      fontSize={13}
-      fill="white"
-    >
-      5BIB
-    </text>
-  </svg>
+  <Image
+    src="/logo.png"
+    alt="5BIB"
+    width={34}
+    height={34}
+    priority
+    className="tl-logo-img"
+  />
 );
 
 export default function TimingLandingPage() {
