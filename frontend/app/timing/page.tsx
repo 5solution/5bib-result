@@ -544,6 +544,85 @@ export default function TimingLandingPage() {
               <div className="tl-stat-label">Sự cố mất dữ liệu</div>
             </div>
           </div>
+
+          {/* CASE STUDY */}
+          <div className="tl-case-study">
+            <div className="tl-cs-header">
+              <div className="tl-cs-header-left">
+                <div className="tl-cs-label">CASE STUDY</div>
+                <div className="tl-cs-race-title">VTV LPBank International Marathon 2025</div>
+                <div className="tl-cs-race-sub">Nhịp điệu xuyên thời gian · Flamingo Đại Lải Resort, Phúc Yên · 15–16/08/2025</div>
+                <div className="tl-cs-url-badge">result.5bib.com</div>
+              </div>
+              <div className="tl-cs-header-right">
+                <div className="tl-cs-total">
+                  <div className="tl-cs-total-num">7,196</div>
+                  <div className="tl-cs-total-label">Tổng VĐV hoàn thành</div>
+                </div>
+                <div className="tl-cs-courses">
+                  <div className="tl-cs-course"><span>21KM</span><strong>2,949</strong></div>
+                  <div className="tl-cs-course"><span>10KM</span><strong>1,736</strong></div>
+                  <div className="tl-cs-course"><span>6.8KM</span><strong>2,511</strong></div>
+                </div>
+                <div className="tl-cs-best">
+                  <span className="tl-cs-flag">🇰🇪</span>
+                  <span>Best: Glady Kiptoo 1:14:56</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Athlete result widget */}
+            <div className="tl-result-widget">
+              <div className="tl-rw-left">
+                <div className="tl-rw-bib-label">BIB NUMBER</div>
+                <div className="tl-rw-bib">#90932</div>
+                <div className="tl-rw-name">PHẠM THỊ<br />HỒNG LỆ</div>
+                <div className="tl-rw-meta">🇻🇳 Việt Nam · Female Under 30</div>
+                <div className="tl-rw-ranks">
+                  <div className="tl-rw-rank-row">
+                    <span className="tl-rw-rank-label">Overall</span>
+                    <span className="tl-rw-rank-val">#7/2,949</span>
+                  </div>
+                  <div className="tl-rw-badge">🏅 Nữ xuất sắc nhất &nbsp; #1 ♀</div>
+                  <div className="tl-rw-rank-row">
+                    <span className="tl-rw-rank-label">F Under 30</span>
+                    <span className="tl-rw-rank-val">#1</span>
+                  </div>
+                </div>
+              </div>
+              <div className="tl-rw-right">
+                <div className="tl-rw-time-label">CHIP TIME</div>
+                <div className="tl-rw-time">1:21:21</div>
+                <div className="tl-rw-pace-row">
+                  <span>⚡ Pace: 3:51/km</span>
+                  <span>🏅 21KM</span>
+                </div>
+                <div className="tl-rw-splits-label">⏱ SPLIT TIMES</div>
+                <div className="tl-rw-splits">
+                  {[
+                    { cp: 'CP 1', time: '19:08', pace: '3:49/km', pct: 22 },
+                    { cp: 'CP 2', time: '30:14', pace: '3:46/km', pct: 35 },
+                    { cp: 'CP 3', time: '32:56', pace: '3:52/km', pct: 38 },
+                    { cp: 'CP 4', time: '1:09:22', pace: '3:51/km', pct: 80 },
+                    { cp: '🏁 FINISH', time: '1:21:21', pace: '3:52/km', pct: 100, finish: true },
+                  ].map((s) => (
+                    <div key={s.cp} className={`tl-rw-split-row${s.finish ? ' tl-rw-split-finish' : ''}`}>
+                      <div className="tl-rw-split-cp">{s.cp}</div>
+                      <div className="tl-rw-split-bar-wrap">
+                        <div className="tl-rw-split-bar" style={{ width: `${s.pct}%` }} />
+                      </div>
+                      <div className="tl-rw-split-time">{s.time}</div>
+                      <div className="tl-rw-split-pace">{s.pace}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="tl-rw-footer">
+                  <span className="tl-rw-footer-url">result.5bib.com/races/giai-marathon-quoc-te-vtv-lpbank-2025.../90932</span>
+                  <a href="https://result.5bib.com" target="_blank" rel="noopener" className="tl-rw-footer-link">Xem đầy đủ →</a>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
