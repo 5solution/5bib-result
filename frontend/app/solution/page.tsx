@@ -17,6 +17,7 @@ import {
   SolutionFooter,
 } from '@/components/solution/solution-sections';
 import SolutionContactModal from '@/components/solution/SolutionContactModal';
+import SolutionAnalytics from '@/components/solution/SolutionAnalytics';
 import type { Lang } from '@/components/solution/solution-icons';
 
 export default function SolutionPage() {
@@ -73,6 +74,8 @@ export default function SolutionPage() {
         lang={lang}
         accent={accent}
       />
+      {/* GTM event listeners — mounts once, renders null */}
+      <SolutionAnalytics />
     </>
   );
 }

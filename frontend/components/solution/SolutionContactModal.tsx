@@ -3,6 +3,7 @@
 import * as React from 'react';
 import type { Lang } from './solution-icons';
 import { useT } from './solution-icons';
+import { dl } from '@/lib/gtm';
 
 type Props = {
   open: boolean;
@@ -40,6 +41,30 @@ export default function SolutionContactModal({ open, onClose, lang, accent = '#F
   const [submitting, setSubmitting] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
+
+  // ── Analytics helpers ────────────────────────────────────────────────────
+  const formStarted = React.useRef(false);
+
+  const onFieldFocus = React.useCallback(() => {
+    if (formStarted.current) return;
+    formStarted.current = true;
+    dl({ event: 'form_start', form_name: 'contact_lead', form_location: 'contact_section' });
+  }, []);
+
+  const onFieldBlur = React.useCallback(
+    (fieldName: string) =>
+      (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        if (!e.target.value.trim()) return;
+        dl({
+          event: 'form_field_complete',
+          field_name: fieldName,
+          field_type: (e.target as HTMLInputElement).type ?? e.target.tagName.toLowerCase(),
+          form_name: 'contact_lead',
+        });
+      },
+    [],
+  );
+  // ────────────────────────────────────────────────────────────────────────
 
   React.useEffect(() => {
     if (open) {
@@ -81,6 +106,25 @@ export default function SolutionContactModal({ open, onClose, lang, accent = '#F
     e.preventDefault();
     setGeneralError(null);
     if (!validate()) return;
+
+    // ── 4.8 form_submit (secondary conversion) ──────────────────────────────
+    dl({
+      event: 'form_submit',
+      form_name: 'contact_lead',
+      form_location: 'contact_section',
+      org_size: form.athlete_count_range,
+      package_interest: form.package_interest,
+      fields_filled: {
+        name: Boolean(form.full_name.trim()),
+        email: false, // form has no email field
+        phone: Boolean(form.phone.trim()),
+        organization: Boolean(form.organization.trim()),
+      },
+      currency: 'VND',
+      value: 0,
+    });
+    // ────────────────────────────────────────────────────────────────────────
+
     setSubmitting(true);
     try {
       const phone = form.phone.trim().replace(/\s+/g, '');
@@ -107,8 +151,12 @@ export default function SolutionContactModal({ open, onClose, lang, accent = '#F
         setGeneralError(Array.isArray(msg) ? msg.join(', ') : String(msg));
         return;
       }
+      // ── 4.8 form_submit_success (PRIMARY conversion) ──────────────────────
+      dl({ event: 'form_submit_success', form_name: 'contact_lead', conversion_type: 'lead_generated' });
+      // ──────────────────────────────────────────────────────────────────────
       setDone(true);
       setForm(initial);
+      formStarted.current = false;
     } catch {
       setGeneralError(t('Không kết nối được máy chủ. Vui lòng thử lại.', 'Connection failed. Please try again.'));
     } finally {
@@ -286,26 +334,35 @@ export default function SolutionContactModal({ open, onClose, lang, accent = '#F
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
               <div>
                 <label style={label} htmlFor="sl-name">{t('Họ và tên', 'Full name')} *</label>
-                <input id="sl-name" type="text" placeholder="Nguyễn Văn A" value={form.full_name} onChange={update('full_name')} maxLength={100} autoComplete="name" style={errors.full_name ? inpErr : inp} />
+                <input id="sl-name" type="text" placeholder="Nguyễn Văn A" value={form.full_name} onChange={update('full_name')} onFocus={onFieldFocus} onBlur={onFieldBlur('full_name')} maxLength={100} autoComplete="name" style={errors.full_name ? inpErr : inp} />
                 {errors.full_name && <div style={errMsg}>{errors.full_name}</div>}
               </div>
               <div>
                 <label style={label} htmlFor="sl-phone">{t('Số điện thoại', 'Phone number')} *</label>
-                <input id="sl-phone" type="tel" placeholder="0909 000 000" value={form.phone} onChange={update('phone')} maxLength={20} autoComplete="tel" style={errors.phone ? inpErr : inp} />
+                <input id="sl-phone" type="tel" placeholder="0909 000 000" value={form.phone} onChange={update('phone')} onFocus={onFieldFocus} onBlur={onFieldBlur('phone')} maxLength={20} autoComplete="tel" style={errors.phone ? inpErr : inp} />
                 {errors.phone && <div style={errMsg}>{errors.phone}</div>}
               </div>
             </div>
 
             <div style={{ marginBottom: 14 }}>
               <label style={label} htmlFor="sl-org">{t('Tên tổ chức / BTC', 'Organization / Race org')} *</label>
-              <input id="sl-org" type="text" placeholder={t('VD: CLB Chạy Bộ Hà Nội', 'e.g. Hanoi Running Club')} value={form.organization} onChange={update('organization')} maxLength={200} autoComplete="organization" style={errors.organization ? inpErr : inp} />
+              <input id="sl-org" type="text" placeholder={t('VD: CLB Chạy Bộ Hà Nội', 'e.g. Hanoi Running Club')} value={form.organization} onChange={update('organization')} onFocus={onFieldFocus} onBlur={onFieldBlur('organization')} maxLength={200} autoComplete="organization" style={errors.organization ? inpErr : inp} />
               {errors.organization && <div style={errMsg}>{errors.organization}</div>}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
               <div>
                 <label style={label} htmlFor="sl-size">{t('Quy mô VĐV', 'Athlete count')}</label>
-                <select id="sl-size" value={form.athlete_count_range} onChange={update('athlete_count_range')} style={{ ...inp, cursor: 'pointer' }}>
+                <select id="sl-size" value={form.athlete_count_range}
+                  onChange={e => {
+                    update('athlete_count_range')(e);
+                    // ── 4.8 org_size_selected ───────────────────────────────
+                    if (e.target.value) {
+                      dl({ event: 'org_size_selected', org_size: e.target.value, org_size_text: e.target.options[e.target.selectedIndex]?.text ?? '', form_name: 'contact_lead' });
+                    }
+                  }}
+                  onFocus={onFieldFocus}
+                  style={{ ...inp, cursor: 'pointer' }}>
                   <option value="">— {t('Chọn', 'Select')} —</option>
                   <option>{t('Dưới 500 VĐV', 'Under 500')}</option>
                   <option>{t('500 – 1,000 VĐV', '500 – 1,000')}</option>
@@ -316,7 +373,7 @@ export default function SolutionContactModal({ open, onClose, lang, accent = '#F
               </div>
               <div>
                 <label style={label} htmlFor="sl-pkg">{t('Gói quan tâm', 'Package interest')}</label>
-                <select id="sl-pkg" value={form.package_interest} onChange={update('package_interest')} style={{ ...inp, cursor: 'pointer' }}>
+                <select id="sl-pkg" value={form.package_interest} onChange={update('package_interest')} onFocus={onFieldFocus} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="unspecified">{t('Chưa xác định', 'Not sure yet')}</option>
                   <option value="basic">Basic</option>
                   <option value="advanced">Advanced</option>
@@ -332,6 +389,8 @@ export default function SolutionContactModal({ open, onClose, lang, accent = '#F
                 placeholder={t('Ngày giải, địa điểm, số cự ly, yêu cầu đặc biệt...', 'Race date, venue, distances, special requirements...')}
                 value={form.notes}
                 onChange={update('notes')}
+                onFocus={onFieldFocus}
+                onBlur={onFieldBlur('notes')}
                 maxLength={2000}
                 rows={3}
                 style={{ ...inp, resize: 'vertical', minHeight: 80 }}

@@ -17,6 +17,7 @@ import {
   useT,
   type Lang,
 } from './solution-icons';
+import { dl } from '@/lib/gtm';
 
 type Ctx = { lang: Lang; accent: string };
 
@@ -334,6 +335,9 @@ function BtcDashMock({ lang, accent }: Ctx) {
 
 const TAB_INTERVAL = 4800;
 
+/** Stable tab IDs in declaration order — used for GTM tracking. */
+const TAB_IDS = ['form', 'bib', 'checkin', 'comms', 'athlete', 'btc'] as const;
+
 export default function SolutionFeatureTabs({ lang, accent = '#FF0E65' }: { lang: Lang; accent?: string }) {
   const t = useT(lang);
   const [tab, setTab] = React.useState(0);
@@ -351,6 +355,11 @@ export default function SolutionFeatureTabs({ lang, accent = '#FF0E65' }: { lang
     setPaused(true);
     if (resumeTimer.current) clearTimeout(resumeTimer.current);
     resumeTimer.current = setTimeout(() => setPaused(false), 14000);
+
+    // ── 4.3 Feature tab tracking ───────────────────────────────────────────
+    const tabId = TAB_IDS[i] ?? `tab_${i}`;
+    dl({ event: 'feature_tab_click', tab_id: tabId, tab_index: i, section: 'features' });
+    dl({ event: 'feature_tab_view',  tab_id: tabId, section: 'features' });
   };
 
   const tabs = [

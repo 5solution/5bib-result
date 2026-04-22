@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { IArr, ICheck, IPlus, IX, LiveDot, Pill, useT, type Lang } from './solution-icons';
+import { dl } from '@/lib/gtm';
 
 type Ctx = { lang: Lang; accent?: string };
 
@@ -309,7 +310,14 @@ export function SolutionFAQ({ lang, accent = '#FF0E65' }: Ctx) {
           const isOpen = open === i;
           return (
             <div key={i} style={{ borderBottom: i < items.length - 1 ? '1px solid var(--5s-border)' : 'none' }}>
-              <button onClick={() => setOpen(isOpen ? -1 : i)} className="solution-faq-btn" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: '22px 24px', background: isOpen ? 'var(--5s-blue-50)' : '#fff', border: 'none', textAlign: 'left', cursor: 'pointer', transition: 'all 150ms' }}>
+              <button onClick={() => {
+                const next = isOpen ? -1 : i;
+                setOpen(next);
+                // ── 4.5 faq_open ─────────────────────────────────────────────
+                if (next === i) {
+                  dl({ event: 'faq_open', faq_question: it.q.substring(0, 80), faq_index: i });
+                }
+              }} className="solution-faq-btn" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 16, padding: '22px 24px', background: isOpen ? 'var(--5s-blue-50)' : '#fff', border: 'none', textAlign: 'left', cursor: 'pointer', transition: 'all 150ms' }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--5s-blue)', width: 32, flexShrink: 0 }}>0{i + 1}</span>
                 <span style={{ flex: 1, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16.5, letterSpacing: '-0.01em', color: 'var(--5s-text)' }}>{it.q}</span>
                 <span style={{ transition: 'transform 280ms', transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)', color: 'var(--5s-blue)' }}><IPlus s={18} /></span>
@@ -328,7 +336,7 @@ export function SolutionFAQ({ lang, accent = '#FF0E65' }: Ctx) {
 export function SolutionFinalCTA({ lang, onCTA, accent = '#FF0E65' }: Ctx & { onCTA: () => void }) {
   const t = useT(lang);
   return (
-    <section style={{ padding: '80px 32px', position: 'relative' }}>
+    <section id="contact" style={{ padding: '80px 32px', position: 'relative' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto', background: 'var(--5s-blue)', color: '#fff', borderRadius: 28, padding: 'clamp(40px,6vw,80px) clamp(32px,6vw,72px)', position: 'relative', overflow: 'hidden' }}>
         <div aria-hidden style={{ position: 'absolute', top: -120, right: -60, width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.18),transparent 65%)' }} />
         <div aria-hidden style={{ position: 'absolute', bottom: -160, left: -80, width: 480, height: 480, borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,53,110,0.25),transparent 65%)' }} />
