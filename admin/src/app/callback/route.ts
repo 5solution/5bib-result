@@ -4,14 +4,14 @@ import { logtoConfig } from "@/lib/logto";
 
 /**
  * OIDC callback endpoint — path matches Logto Next SDK default (`/callback`).
- * Redirect URIs in Logto Dashboard should point here: `${baseUrl}/callback`.
  *
- * After exchanging the authorization code for tokens, we send the user to
- * /dashboard. If the user was already signed in on a different app (SSO
- * via same Logto instance), the exchange is near-instant.
+ * Post-auth redirect uses `logtoConfig.baseUrl` (set via LOGTO_BASE_URL)
+ * rather than `request.url`, because when Next.js runs behind nginx without
+ * trusted proxy headers, `request.url` resolves to the internal container
+ * address (e.g. http://0.0.0.0:3000) instead of the public domain.
  */
 export async function GET(request: NextRequest) {
   const searchParams = new URL(request.url).searchParams;
   await handleSignIn(logtoConfig, searchParams);
-  return NextResponse.redirect(new URL("/dashboard", request.url));
+  return NextResponse.redirect(new URL("/dashboard", logtoConfig.baseUrl));
 }
