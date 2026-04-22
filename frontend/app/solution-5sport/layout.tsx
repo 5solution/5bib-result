@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://solution.5sport.vn'),
@@ -96,7 +97,30 @@ export default function Sport5Layout({ children }: { children: React.ReactNode }
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="s5-root">{children}</div>
+
+      {/* ── Google Tag Manager — GTM-PLR9LHLZ ───────────────────────────────── */}
+      <Script id="s5-gtm-datalayer-init" strategy="afterInteractive">{`
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          'page_type': 'landing_page',
+          'product': '5sport_platform',
+          'environment': 'production'
+        });
+      `}</Script>
+      <Script id="s5-gtm-loader" strategy="afterInteractive">{`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PLR9LHLZ');`}</Script>
+      {/* ────────────────────────────────────────────────────────────────────── */}
+
+      <div className="s5-root">
+        <noscript>
+          <iframe
+            src="https://www.googletagmanager.com/ns.html?id=GTM-PLR9LHLZ"
+            height="0"
+            width="0"
+            style={{ display: 'none', visibility: 'hidden' }}
+          />
+        </noscript>
+        {children}
+      </div>
     </>
   );
 }

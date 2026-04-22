@@ -22,6 +22,7 @@ import {
   Reveal,
   TiltCard,
 } from './s5-shared';
+import { dl } from '@/lib/gtm';
 
 const sectionEyebrowStyle: React.CSSProperties = {
   color: 'var(--s5-blue)',
@@ -1121,7 +1122,13 @@ export function S5FAQ({ lang }: { lang: Lang }) {
               }}
             >
               <button
-                onClick={() => setOpen(isOpen ? null : i)}
+                onClick={() => {
+                  const next = isOpen ? null : i;
+                  setOpen(next);
+                  if (next === i) {
+                    dl({ event: 'faq_open', faq_question: items[i]?.[0]?.substring(0, 80) ?? '', faq_index: i });
+                  }
+                }}
                 style={{
                   width: '100%',
                   textAlign: 'left',

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Lang, useT, ICheck, IArr, IMail, IPhone, IPin } from './s5-shared';
+import { dl } from '@/lib/gtm';
 
 type Track = '5sport-btc' | '5sport-athlete';
 type Status = 'idle' | 'submitting' | 'success' | 'error';
@@ -275,13 +276,44 @@ function BtcForm({ lang }: { lang: Lang }) {
   const [form, set, reset] = useForm();
   const [status, setStatus] = React.useState<Status>('idle');
   const [err, setErr] = React.useState<string | null>(null);
+  const formStarted = React.useRef(false);
+
+  const onFieldFocus = React.useCallback(() => {
+    if (formStarted.current) return;
+    formStarted.current = true;
+    dl({ event: 'form_start', form_name: 'btc_lead', form_location: 'lead_form_section' });
+  }, []);
+
+  const onFieldBlur = React.useCallback(
+    (fieldName: string) =>
+      (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+        if (!e.target.value.trim()) return;
+        dl({ event: 'form_field_complete', field_name: fieldName, form_name: 'btc_lead' });
+      },
+    [],
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('submitting');
     setErr(null);
+    // ── form_submit ───────────────────────────────────────────────────────
+    dl({
+      event: 'form_submit',
+      form_name: 'btc_lead',
+      form_track: '5sport-btc',
+      form_location: 'lead_form_section',
+      sport_type: form.sport_type,
+      tournament_scale: form.tournament_scale,
+      currency: 'VND',
+      value: 0,
+    });
+    // ─────────────────────────────────────────────────────────────────────
     try {
       await submit('5sport-btc', form);
+      // ── form_submit_success (PRIMARY conversion) ───────────────────────
+      dl({ event: 'form_submit_success', form_name: 'btc_lead', form_track: '5sport-btc', conversion_type: 'btc_lead_generated' });
+      formStarted.current = false;
       setStatus('success');
     } catch (e) {
       setStatus('error');
@@ -324,6 +356,8 @@ function BtcForm({ lang }: { lang: Lang }) {
             style={inputStyle}
             value={form.full_name}
             onChange={(e) => set('full_name', e.target.value)}
+            onFocus={onFieldFocus}
+            onBlur={onFieldBlur('full_name')}
             placeholder="Nguyễn Văn A"
           />
         </Field>
@@ -333,6 +367,8 @@ function BtcForm({ lang }: { lang: Lang }) {
             style={inputStyle}
             value={form.organization}
             onChange={(e) => set('organization', e.target.value)}
+            onFocus={onFieldFocus}
+            onBlur={onFieldBlur('organization')}
             placeholder={t('VD: CLB Pickleball Q7', 'e.g. Pickleball Club Q7')}
           />
         </Field>
@@ -343,6 +379,8 @@ function BtcForm({ lang }: { lang: Lang }) {
             type="tel"
             value={form.phone}
             onChange={(e) => set('phone', e.target.value)}
+            onFocus={onFieldFocus}
+            onBlur={onFieldBlur('phone')}
             placeholder="09xx xxx xxx"
           />
         </Field>
@@ -352,7 +390,11 @@ function BtcForm({ lang }: { lang: Lang }) {
             <select
               style={inputStyle}
               value={form.sport_type}
-              onChange={(e) => set('sport_type', e.target.value as FormState['sport_type'])}
+              onChange={(e) => {
+                set('sport_type', e.target.value as FormState['sport_type']);
+                if (e.target.value) dl({ event: 'sport_type_selected', sport_type: e.target.value, form_name: 'btc_lead' });
+              }}
+              onFocus={onFieldFocus}
             >
               <option value="">—</option>
               <option value="pickleball">Pickleball</option>
@@ -414,13 +456,43 @@ function AthleteForm({ lang }: { lang: Lang }) {
   const [form, set, reset] = useForm();
   const [status, setStatus] = React.useState<Status>('idle');
   const [err, setErr] = React.useState<string | null>(null);
+  const formStarted = React.useRef(false);
+
+  const onFieldFocus = React.useCallback(() => {
+    if (formStarted.current) return;
+    formStarted.current = true;
+    dl({ event: 'form_start', form_name: 'athlete_lead', form_location: 'lead_form_section' });
+  }, []);
+
+  const onFieldBlur = React.useCallback(
+    (fieldName: string) =>
+      (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+        if (!e.target.value.trim()) return;
+        dl({ event: 'form_field_complete', field_name: fieldName, form_name: 'athlete_lead' });
+      },
+    [],
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('submitting');
     setErr(null);
+    // ── form_submit ───────────────────────────────────────────────────────
+    dl({
+      event: 'form_submit',
+      form_name: 'athlete_lead',
+      form_track: '5sport-athlete',
+      form_location: 'lead_form_section',
+      sport_type: form.sport_type,
+      currency: 'VND',
+      value: 0,
+    });
+    // ─────────────────────────────────────────────────────────────────────
     try {
       await submit('5sport-athlete', form);
+      // ── form_submit_success (PRIMARY conversion) ───────────────────────
+      dl({ event: 'form_submit_success', form_name: 'athlete_lead', form_track: '5sport-athlete', conversion_type: 'athlete_lead_generated' });
+      formStarted.current = false;
       setStatus('success');
     } catch (e) {
       setStatus('error');
@@ -462,6 +534,8 @@ function AthleteForm({ lang }: { lang: Lang }) {
             style={inputStyle}
             value={form.full_name}
             onChange={(e) => set('full_name', e.target.value)}
+            onFocus={onFieldFocus}
+            onBlur={onFieldBlur('full_name')}
             placeholder={t('Tên của bạn', 'Your name')}
           />
         </Field>
@@ -472,6 +546,8 @@ function AthleteForm({ lang }: { lang: Lang }) {
             style={inputStyle}
             value={form.email}
             onChange={(e) => set('email', e.target.value)}
+            onFocus={onFieldFocus}
+            onBlur={onFieldBlur('email')}
             placeholder="you@example.com"
           />
         </Field>
@@ -481,7 +557,11 @@ function AthleteForm({ lang }: { lang: Lang }) {
             <select
               style={inputStyle}
               value={form.sport_type}
-              onChange={(e) => set('sport_type', e.target.value as FormState['sport_type'])}
+              onChange={(e) => {
+                set('sport_type', e.target.value as FormState['sport_type']);
+                if (e.target.value) dl({ event: 'sport_type_selected', sport_type: e.target.value, form_name: 'athlete_lead' });
+              }}
+              onFocus={onFieldFocus}
             >
               <option value="">—</option>
               <option value="pickleball">Pickleball</option>

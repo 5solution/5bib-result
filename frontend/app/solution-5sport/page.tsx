@@ -19,6 +19,7 @@ import {
 } from '@/components/solution-5sport/s5-sections';
 import { S5LeadForm } from '@/components/solution-5sport/s5-lead-form';
 import { S5Footer } from '@/components/solution-5sport/s5-footer';
+import S5Analytics from '@/components/solution-5sport/S5Analytics';
 import type { Lang } from '@/components/solution-5sport/s5-shared';
 
 export default function Sport5LandingPage() {
@@ -49,6 +50,8 @@ export default function Sport5LandingPage() {
         <S5LeadForm lang={lang} />
       </main>
       <S5Footer lang={lang} />
+      {/* GTM event listeners — mounts once, renders null */}
+      <S5Analytics />
     </>
   );
 }
