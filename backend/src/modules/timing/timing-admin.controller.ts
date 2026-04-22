@@ -15,7 +15,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { ClerkAdminGuard } from '../clerk-auth';
+import { LogtoAdminGuard } from '../logto-auth';
 import { TimingService } from './timing.service';
 import { ListLeadsQueryDto } from './dto/list-leads-query.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
@@ -26,7 +26,7 @@ import {
 
 @ApiTags('Timing (admin)')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(ClerkAdminGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('admin/timing/leads')
 export class TimingAdminController {
   constructor(private readonly service: TimingService) {}

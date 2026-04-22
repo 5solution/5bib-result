@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { ClerkAuthModule } from '../clerk-auth';
+import { LogtoAuthModule } from '../logto-auth';
 import {
   TimingLead,
   TimingLeadSchema,
@@ -30,7 +30,7 @@ import { TimingAdminController } from './timing-admin.controller';
         limit: 100,
       },
     ]),
-    ClerkAuthModule,
+    LogtoAuthModule,
   ],
   controllers: [
     TimingPublicController,

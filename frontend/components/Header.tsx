@@ -4,11 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { Menu, X, ChevronRight } from 'lucide-react';
+import { Menu, X, ChevronRight, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import WatchlistButton from '@/components/WatchlistButton';
+import { useUser } from '@/lib/hooks/use-user';
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -66,54 +66,8 @@ export default function Header() {
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
 
-          {/* 5BIB Account tile — cyan accent, angled left edge (like UTMB "MY UTMB") */}
-          {/* Signed out: "Đăng nhập" + trigger SignInButton */}
-          <Show when="signed-out">
-            <SignInButton mode="redirect">
-              <button
-                type="button"
-                className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
-                style={{
-                  width: 200,
-                  clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
-                  paddingLeft: 36,
-                  paddingRight: 16,
-                }}
-              >
-                <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">
-                  Đăng nhập / Sign in
-                </span>
-                <ChevronRight className="w-4 h-4 ml-auto shrink-0" strokeWidth={2.5} />
-              </button>
-            </SignInButton>
-          </Show>
-
-          {/* Signed in: Avatar + "MY 5BIB" link to /account */}
-          <Show when="signed-in">
-            <div
-              className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
-              style={{
-                width: 200,
-                clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
-                paddingLeft: 32,
-                paddingRight: 10,
-              }}
-            >
-              <Link
-                href="/account"
-                className="flex-1 tracking-wide uppercase text-xs font-extrabold leading-tight hover:opacity-80"
-              >
-                EMBRACING CHALLENGES
-              </Link>
-              <UserButton
-                appearance={{
-                  elements: {
-                    avatarBox: 'w-8 h-8 ring-2 ring-slate-900/20 shrink-0',
-                  },
-                }}
-              />
-            </div>
-          </Show>
+          {/* 5BIB Account tile — cyan accent, angled left edge */}
+          <AccountTile />
 
         </div>
       </div>
@@ -143,5 +97,83 @@ export default function Header() {
         </div>
       )}
     </header>
+  );
+}
+
+/* ─── Account tile — custom UserButton replacement ─── */
+
+function AccountTile() {
+  const { isAuthenticated, isLoading, displayName, imageUrl } = useUser();
+
+  // Common cyan tile style
+  const tileStyle = {
+    width: 200,
+    clipPath: 'polygon(14% 0%, 100% 0%, 100% 100%, 0% 100%)',
+  } as React.CSSProperties;
+
+  if (isLoading) {
+    // Placeholder tile during session check
+    return (
+      <div
+        className="hidden md:flex items-center shrink-0 bg-cyan-400/40 animate-pulse"
+        style={tileStyle}
+      />
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <a
+        href="/api/logto/sign-in"
+        className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
+        style={{ ...tileStyle, paddingLeft: 36, paddingRight: 16 }}
+      >
+        <span className="tracking-wide uppercase text-xs font-extrabold leading-tight">
+          Đăng nhập / Sign in
+        </span>
+        <ChevronRight className="w-4 h-4 ml-auto shrink-0" strokeWidth={2.5} />
+      </a>
+    );
+  }
+
+  // Signed in — link to /account + compact avatar with sign-out affordance
+  return (
+    <div
+      className="hidden md:flex items-center gap-2.5 shrink-0 bg-cyan-400 hover:bg-cyan-300 transition-colors duration-200 text-slate-900 font-bold text-sm select-none"
+      style={{ ...tileStyle, paddingLeft: 32, paddingRight: 10 }}
+    >
+      <Link
+        href="/account"
+        className="flex-1 tracking-wide uppercase text-xs font-extrabold leading-tight hover:opacity-80 truncate"
+        title={displayName ?? undefined}
+      >
+        {displayName ? displayName.split(' ')[0] : 'TÀI KHOẢN'}
+      </Link>
+      {imageUrl ? (
+        <Link href="/account" className="shrink-0" aria-label="Tài khoản">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageUrl}
+            alt={displayName ?? 'avatar'}
+            className="w-8 h-8 rounded-full object-cover ring-2 ring-slate-900/20"
+          />
+        </Link>
+      ) : (
+        <Link
+          href="/account"
+          className="w-8 h-8 shrink-0 rounded-full bg-slate-900/15 flex items-center justify-center text-slate-900 text-xs font-black"
+        >
+          {displayName?.[0]?.toUpperCase() ?? '?'}
+        </Link>
+      )}
+      <a
+        href="/api/logto/sign-out"
+        className="shrink-0 p-1 rounded text-slate-900/70 hover:text-slate-900"
+        title="Đăng xuất"
+        aria-label="Đăng xuất"
+      >
+        <LogOut className="w-4 h-4" />
+      </a>
+    </div>
   );
 }

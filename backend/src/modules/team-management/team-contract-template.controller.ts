@@ -23,7 +23,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { ClerkAdminGuard } from 'src/modules/clerk-auth';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import { VolContractTemplate } from './entities/vol-contract-template.entity';
 import {
   CreateContractTemplateDto,
@@ -34,13 +34,10 @@ import {
 } from './dto/contract-template.dto';
 import { TeamContractService } from './services/team-contract.service';
 
-interface JwtRequest extends Request {
-  user?: { username?: string; email?: string; sub?: string };
-}
 
 @ApiTags('Team Management — Contract Templates (admin)')
 @ApiBearerAuth()
-@UseGuards(ClerkAdminGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management/contract-templates')
 export class TeamContractTemplateController {
   constructor(private readonly contracts: TeamContractService) {}
@@ -64,7 +61,7 @@ export class TeamContractTemplateController {
   @ApiResponse({ status: 201, type: VolContractTemplate })
   create(
     @Body() dto: CreateContractTemplateDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<VolContractTemplate> {
     const createdBy =
       req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
@@ -95,7 +92,7 @@ export class TeamContractTemplateController {
   @ApiResponse({ status: 201, type: VolContractTemplate })
   duplicate(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<VolContractTemplate> {
     const createdBy =
       req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';

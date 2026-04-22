@@ -25,7 +25,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { ClerkAdminGuard } from 'src/modules/clerk-auth';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import { VolEvent } from './entities/vol-event.entity';
 import { VolRole } from './entities/vol-role.entity';
 import { VolRegistration } from './entities/vol-registration.entity';
@@ -76,17 +76,14 @@ import {
   PreviewRoleImportResponseDto,
 } from './dto/role-import.dto';
 
-interface JwtRequest extends Request {
-  user?: { username?: string; email?: string; sub?: string };
-}
 
-function identifyAdmin(req: JwtRequest): string {
+function identifyAdmin(req: AuthenticatedRequest): string {
   return req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
 }
 
 @ApiTags('Team Management (admin)')
 @ApiBearerAuth()
-@UseGuards(ClerkAdminGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management')
 export class TeamManagementController {
   constructor(
@@ -202,7 +199,7 @@ export class TeamManagementController {
   confirmRoleImport(
     @Param('id', ParseIntPipe) eventId: number,
     @Body() dto: ConfirmRoleImportDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<ConfirmRoleImportResponseDto> {
     return this.roleImport.confirm(eventId, dto.rows, identifyAdmin(req));
   }
@@ -360,7 +357,7 @@ export class TeamManagementController {
   clearSuspicious(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ClearSuspiciousDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<VolRegistration> {
     return this.registrations.clearSuspicious(
       id,
@@ -377,7 +374,7 @@ export class TeamManagementController {
   @ApiResponse({ status: 200, type: VolRegistration })
   approveProfileChanges(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<VolRegistration> {
     return this.registrations.approveProfileChanges(id, identifyAdmin(req));
   }
@@ -391,7 +388,7 @@ export class TeamManagementController {
   rejectProfileChanges(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RejectChangesDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<VolRegistration> {
     return this.registrations.rejectProfileChanges(
       id,
@@ -408,7 +405,7 @@ export class TeamManagementController {
   @ApiResponse({ status: 200, type: RegistrationDetailDto })
   getDetail(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<RegistrationDetailDto> {
     return this.registrations.getDetail(id, identifyAdmin(req));
   }
@@ -427,7 +424,7 @@ export class TeamManagementController {
   })
   async getSignatureUrl(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<{ url: string; expires_in: number }> {
     const url = await this.contracts.getSignatureUrlForRegistration(
       id,
@@ -468,7 +465,7 @@ export class TeamManagementController {
   async manualRegister(
     @Param('id', ParseIntPipe) _eventId: number,
     @Body() dto: AdminManualRegisterDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<RegisterResponseDto> {
     const result = await this.registrations.adminManualRegister(
       dto,
@@ -569,7 +566,7 @@ export class TeamManagementController {
   exportPersonnel(
     @Param('id', ParseIntPipe) id: number,
     @Query() query: ListRegistrationsQueryDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<PersonnelExportResponseDto> {
     return this.exports.exportPersonnelReport(id, {
       status: query.status,

@@ -18,7 +18,7 @@ import { CertificatesController } from './certificates.controller';
 
 import { RaceResultModule } from '../race-result/race-result.module';
 import { RacesModule } from '../races/races.module';
-import { AuthModule } from '../auth/auth.module';
+import { LogtoAuthModule } from '../logto-auth';
 
 @Module({
   imports: [
@@ -39,7 +39,7 @@ import { AuthModule } from '../auth/auth.module';
     ]),
     RaceResultModule,
     RacesModule,
-    AuthModule,
+    LogtoAuthModule,
   ],
   controllers: [CertificatesController],
   providers: [

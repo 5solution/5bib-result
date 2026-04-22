@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
-import { ClerkAdminGuard } from '../clerk-auth';
+import { LogtoAdminGuard } from '../logto-auth';
 import { ReconciliationService } from './reconciliation.service';
 import { ReconciliationQueryService } from './services/reconciliation-query.service';
 import { ReconciliationPreflightService } from './services/reconciliation-preflight.service';
@@ -45,7 +45,7 @@ function buildRecFilename(doc: any, ext: string): string {
 
 @ApiTags('reconciliations')
 @Controller('reconciliations')
-@UseGuards(ClerkAdminGuard)
+@UseGuards(LogtoAdminGuard)
 export class ReconciliationController {
   constructor(
     private readonly reconciliationService: ReconciliationService,

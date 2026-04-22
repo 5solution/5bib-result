@@ -18,7 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
-import { ClerkAdminGuard } from 'src/modules/clerk-auth';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import {
   ScheduleEmailResponseDto,
   ScheduleEmailRoleSummaryDto,
@@ -29,13 +29,10 @@ import {
 } from './dto/schedule-email.dto';
 import { TeamScheduleEmailService } from './services/team-schedule-email.service';
 
-interface JwtRequest extends Request {
-  user?: { username?: string; email?: string; sub?: string };
-}
 
 @ApiTags('Team Schedule Email')
 @ApiBearerAuth()
-@UseGuards(ClerkAdminGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management/events/:eventId/schedule-emails')
 export class TeamScheduleEmailController {
   constructor(private readonly service: TeamScheduleEmailService) {}
@@ -93,7 +90,7 @@ export class TeamScheduleEmailController {
     @Param('eventId', ParseIntPipe) eventId: number,
     @Param('roleId', ParseIntPipe) roleId: number,
     @Body() dto: SendTestScheduleEmailDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<SendTestResponseDto> {
     const adminEmail = req.user?.email ?? '';
     return this.service

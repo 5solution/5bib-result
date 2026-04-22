@@ -13,7 +13,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { ClerkAuthGuard, CurrentUser, type ClerkUser } from '../clerk-auth';
+import { LogtoAuthGuard, CurrentUser, type LogtoUser } from '../logto-auth';
 import { AthleteStarsService } from './athlete-stars.service';
 import { StarAthleteDto } from './dto/star-athlete.dto';
 import {
@@ -24,7 +24,7 @@ import {
 
 @ApiTags('athlete-stars')
 @Controller('athlete-stars')
-@UseGuards(ClerkAuthGuard)
+@UseGuards(LogtoAuthGuard)
 @ApiBearerAuth('Clerk')
 export class AthleteStarsController {
   constructor(private readonly service: AthleteStarsService) {}
@@ -32,9 +32,9 @@ export class AthleteStarsController {
   @Post()
   @ApiOperation({ summary: 'Star an athlete (idempotent upsert)' })
   @ApiResponse({ status: 201, type: AthleteStarResponseDto })
-  async star(@CurrentUser() user: ClerkUser, @Body() dto: StarAthleteDto) {
+  async star(@CurrentUser() user: LogtoUser, @Body() dto: StarAthleteDto) {
     const data = await this.service.star(
-      user.clerkId,
+      user.userId,
       dto.raceId,
       dto.courseId,
       dto.bib,
@@ -45,9 +45,9 @@ export class AthleteStarsController {
   @Delete()
   @ApiOperation({ summary: 'Unstar an athlete' })
   @ApiResponse({ status: 200, description: '{ deleted: boolean }' })
-  async unstar(@CurrentUser() user: ClerkUser, @Body() dto: StarAthleteDto) {
+  async unstar(@CurrentUser() user: LogtoUser, @Body() dto: StarAthleteDto) {
     return this.service.unstar(
-      user.clerkId,
+      user.userId,
       dto.raceId,
       dto.courseId,
       dto.bib,
@@ -58,11 +58,11 @@ export class AthleteStarsController {
   @ApiOperation({ summary: 'List all starred athletes of current user' })
   @ApiResponse({ status: 200, type: AthleteStarListResponseDto })
   async list(
-    @CurrentUser() user: ClerkUser,
+    @CurrentUser() user: LogtoUser,
     @Query() query: ListStarsQueryDto,
   ) {
     return this.service.list(
-      user.clerkId,
+      user.userId,
       query.pageNo || 1,
       query.pageSize || 20,
     );
@@ -77,12 +77,12 @@ export class AthleteStarsController {
     description: '{ data: string[] }',
   })
   async byCourse(
-    @CurrentUser() user: ClerkUser,
+    @CurrentUser() user: LogtoUser,
     @Query('raceId') raceId: string,
     @Query('courseId') courseId: string,
   ) {
     const data = await this.service.listByCourse(
-      user.clerkId,
+      user.userId,
       raceId,
       courseId,
     );

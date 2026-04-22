@@ -37,7 +37,7 @@ import { RaceResultService } from './services/race-result.service';
 import { ResultImageService } from './services/result-image.service';
 import { RacesService } from '../races/races.service';
 import { UploadService } from '../upload/upload.service';
-import { ClerkAdminGuard } from '../clerk-auth';
+import { LogtoAdminGuard } from '../logto-auth';
 
 @ApiTags('Race Results')
 @Controller('race-results')
@@ -498,7 +498,7 @@ export class RaceResultController {
     res.send(pngBuffer);
   }
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @Post('sync')
   @ApiOperation({ summary: 'Manually trigger race results sync' })
   @ApiResponse({

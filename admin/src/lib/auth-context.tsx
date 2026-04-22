@@ -7,82 +7,96 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  useAuth as useClerkAuth,
-  useClerk,
-  useUser,
-} from "@clerk/nextjs";
+import { useQuery } from "@tanstack/react-query";
 import "./api"; // ensure client baseUrl is configured
 
+interface LogtoUserInfo {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+  username?: string;
+  roles?: string[];
+  custom_data?: Record<string, unknown>;
+}
+
 interface AuthContextType {
+  /** Kept for API compat — always null now (access token is injected server-side by the proxy). */
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  /** Legacy signature — no-op (login qua Clerk UI, không gọi function này) */
+  /** No-op. Legacy bcrypt login removed. Use /api/logto/sign-in instead. */
   login: (email: string, password: string) => Promise<void>;
+  /** Redirects to Logto end-session endpoint. */
   logout: () => void;
   userRole: string | null;
+  /** Logto userInfo response (claims + custom_data). */
+  userInfo: LogtoUserInfo | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 /**
- * Admin auth context — wrapper quanh Clerk để giữ API `useAuth()` cũ.
- * Các components sẽ tiếp tục dùng `const { token, isAuthenticated, logout }
- * = useAuth()` mà không phải sửa code.
+ * Admin auth context — wraps the Logto `/api/logto/user` response so downstream
+ * components keep consuming `useAuth()` with the same shape as the Clerk era.
+ *
+ * Token plumbing is now invisible to clients: the `/api/[...proxy]` route
+ * pulls a Logto access token server-side and forwards it as `Authorization`
+ * before proxying to backend. Components just `fetch('/api/...')`.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { isSignedIn, isLoaded, getToken } = useClerkAuth();
-  const { signOut } = useClerk();
-  const { user } = useUser();
-  const [token, setToken] = useState<string | null>(null);
-  const [tokenLoading, setTokenLoading] = useState(true);
+  const { data, isLoading } = useQuery({
+    queryKey: ["logto-user"],
+    queryFn: async () => {
+      const res = await fetch("/api/logto/user", {
+        credentials: "same-origin",
+      });
+      if (!res.ok) throw new Error("Failed to load Logto context");
+      return res.json() as Promise<{
+        isAuthenticated: boolean;
+        userInfo: LogtoUserInfo | null;
+        claims: LogtoUserInfo | null;
+      }>;
+    },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
 
-  // Cache token để components đọc sync. Refresh mỗi 50s.
+  const [redirecting, setRedirecting] = useState(false);
+
+  const isAuthenticated = !!data?.isAuthenticated;
+  const userInfo = data?.userInfo ?? data?.claims ?? null;
+  const roles = (userInfo?.roles as string[] | undefined) ?? [];
+  const userRole = roles.includes("admin") ? "admin" : roles[0] ?? null;
+
   useEffect(() => {
-    let cancelled = false;
-    if (!isLoaded) return;
-    if (!isSignedIn) {
-      setToken(null);
-      setTokenLoading(false);
-      return;
+    // Legacy LOCAL_STORAGE token cleanup — remove on first mount
+    try {
+      localStorage.removeItem("5bib_admin_token");
+    } catch {
+      /* ignore */
     }
-
-    const fetchToken = async () => {
-      try {
-        const t = await getToken();
-        if (!cancelled) setToken(t);
-      } catch {
-        if (!cancelled) setToken(null);
-      } finally {
-        if (!cancelled) setTokenLoading(false);
-      }
-    };
-    fetchToken();
-    const id = setInterval(fetchToken, 50_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const userRole =
-    (user?.publicMetadata as Record<string, unknown> | undefined)?.role as
-      | string
-      | null
-      | undefined ?? null;
+  }, []);
 
   const value: AuthContextType = {
-    token,
-    isAuthenticated: !!isSignedIn && !!token,
-    isLoading: !isLoaded || tokenLoading,
+    // Sentinel string — legacy pages gate on `if (!token) return`.
+    // Actual auth token is injected by the server-side proxy route.
+    token: isAuthenticated ? "logto-session" : null,
+    isAuthenticated,
+    isLoading: isLoading || redirecting,
     login: async () => {
-      throw new Error(
-        "login() không còn dùng — admin auth qua Clerk. Redirect đến /sign-in",
-      );
+      setRedirecting(true);
+      window.location.href = "/api/logto/sign-in";
+      // Wait forever — redirect takes over
+      await new Promise(() => {});
     },
-    logout: () => signOut({ redirectUrl: "/sign-in" }),
+    logout: () => {
+      setRedirecting(true);
+      window.location.href = "/api/logto/sign-out";
+    },
     userRole,
+    userInfo,
   };
 
   return <AuthContext value={value}>{children}</AuthContext>;

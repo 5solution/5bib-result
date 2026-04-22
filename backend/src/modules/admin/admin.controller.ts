@@ -21,12 +21,12 @@ import {
 import { AdminService } from './admin.service';
 import { ResolveClaimDto } from './dto/resolve-claim.dto';
 import { EditResultDto, ResolveClaimV2Dto } from './dto/edit-result.dto';
-import { ClerkAdminGuard } from '../clerk-auth';
+import { LogtoAdminGuard } from '../logto-auth';
 import { RaceResultService } from '../race-result/services/race-result.service';
 
 @ApiTags('Admin')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(ClerkAdminGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('admin')
 export class AdminController {
   constructor(
