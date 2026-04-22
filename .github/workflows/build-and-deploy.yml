@@ -156,21 +156,51 @@ jobs:
     steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1
+        env:
+          TAG_SHA: ${{ github.sha }}
+          BUILT_BACKEND: ${{ needs.build-backend.result }}
+          BUILT_FRONTEND: ${{ needs.build-frontend.result }}
+          BUILT_ADMIN: ${{ needs.build-admin.result }}
+          BUILT_CREW: ${{ needs.build-crew.result }}
         with:
           host: ${{ secrets.VPS_HOST }}
           port: ${{ secrets.VPS_PORT || 22 }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: TAG_SHA,BUILT_BACKEND,BUILT_FRONTEND,BUILT_ADMIN,BUILT_CREW
           script: |
-            TAG=${{ github.sha }}
-            TAG=${TAG:0:7}
+            set -e
+            TAG=${TAG_SHA:0:7}
             TOKEN=$(grep -oP 'ghp_[A-Za-z0-9]+' /opt/.github_token)
             echo "$TOKEN" | docker login ghcr.io -u 0xaldric --password-stdin
             cd /opt/5bib-result
-            sed -i "s|ghcr.io/5solution/5bib-result/backend:.*|ghcr.io/5solution/5bib-result/backend:${TAG}|" docker-compose.yml
-            sed -i "s|ghcr.io/5solution/5bib-result/frontend:.*|ghcr.io/5solution/5bib-result/frontend:${TAG}|" docker-compose.yml
-            sed -i "s|ghcr.io/5solution/5bib-result/admin:.*|ghcr.io/5solution/5bib-result/admin:${TAG}|" docker-compose.yml
-            sed -i "s|ghcr.io/5solution/5bib-result/crew:.*|ghcr.io/5solution/5bib-result/crew:${TAG}|" docker-compose.yml
-            docker compose pull
-            docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin 5bib-result-crew
+
+            # Only bump image tag for services that were actually built.
+            # Services skipped by paths-filter keep their previous SHA so
+            # `docker compose pull` doesn't hit a non-existent tag.
+            RESTART_SVCS=""
+            if [ "$BUILT_BACKEND" = "success" ]; then
+              sed -i "s|ghcr.io/5solution/5bib-result/backend:.*|ghcr.io/5solution/5bib-result/backend:${TAG}|" docker-compose.yml
+              RESTART_SVCS="$RESTART_SVCS 5bib-result-backend"
+            fi
+            if [ "$BUILT_FRONTEND" = "success" ]; then
+              sed -i "s|ghcr.io/5solution/5bib-result/frontend:.*|ghcr.io/5solution/5bib-result/frontend:${TAG}|" docker-compose.yml
+              RESTART_SVCS="$RESTART_SVCS 5bib-result-frontend"
+            fi
+            if [ "$BUILT_ADMIN" = "success" ]; then
+              sed -i "s|ghcr.io/5solution/5bib-result/admin:.*|ghcr.io/5solution/5bib-result/admin:${TAG}|" docker-compose.yml
+              RESTART_SVCS="$RESTART_SVCS 5bib-result-admin"
+            fi
+            if [ "$BUILT_CREW" = "success" ]; then
+              sed -i "s|ghcr.io/5solution/5bib-result/crew:.*|ghcr.io/5solution/5bib-result/crew:${TAG}|" docker-compose.yml
+              RESTART_SVCS="$RESTART_SVCS 5bib-result-crew"
+            fi
+
+            if [ -z "$RESTART_SVCS" ]; then
+              echo "No services built — nothing to deploy"
+              exit 0
+            fi
+
+            docker compose pull $RESTART_SVCS
+            docker compose up -d --force-recreate $RESTART_SVCS
             docker image prune -f
