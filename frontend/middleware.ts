@@ -9,10 +9,12 @@ export default clerkMiddleware(async (auth, req) => {
   //   timing.5bib.com → /timing/*
   //   solution.5bib.com → /solution/*
   //   solution.5sport.vn → /solution-5sport/*
-  const host = (req.headers.get('host') || '').toLowerCase();
-  const isSport5Host = host.includes('5sport.');
-  const isTimingHost = !isSport5Host && (host.startsWith('timing.') || host.startsWith('timing-'));
-  const isSolutionHost = !isSport5Host && (host.startsWith('solution.') || host.startsWith('solution-'));
+  // Use nextUrl.hostname (canonical public hostname resolved by Next.js from Host / x-forwarded-host)
+  // Fallback to raw Host header — covers all proxy configurations
+  const hostname = (req.nextUrl.hostname || req.headers.get('host') || '').toLowerCase().split(':')[0];
+  const isSport5Host = hostname.includes('5sport');
+  const isTimingHost = !isSport5Host && (hostname.startsWith('timing') && hostname.includes('5bib'));
+  const isSolutionHost = !isSport5Host && hostname.startsWith('solution') && hostname.includes('5bib');
 
   if (isSport5Host) {
     const url = req.nextUrl.clone();
