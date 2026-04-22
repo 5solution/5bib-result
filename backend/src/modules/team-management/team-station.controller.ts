@@ -16,7 +16,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { ClerkAdminGuard } from 'src/modules/clerk-auth';
+import { LogtoAdminGuard } from 'src/modules/logto-auth';
 import {
   AssignableMemberDto,
   AssignmentMemberBriefDto,
@@ -32,7 +32,7 @@ import { TeamStationService } from './services/team-station.service';
 // /team-categories/:categoryId/stations. Old role-scoped routes removed.
 @ApiTags('Team Management (stations)')
 @ApiBearerAuth()
-@UseGuards(ClerkAdminGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management')
 export class TeamStationController {
   constructor(private readonly stations: TeamStationService) {}

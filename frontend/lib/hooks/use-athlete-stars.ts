@@ -4,22 +4,18 @@
  * F-11 Watchlist / Athlete Stars — hybrid localStorage + backend sync.
  *
  * Signed-OUT:
- *   - Read/write localStorage only (no Clerk token, no API calls).
- *   - Limits enforced: 20 per race, 100 total.
+ *   Read/write localStorage only (no access token needed).
+ *   Limits enforced: 20 per race, 100 total.
  *
- * Signed-IN:
- *   - Backend MongoDB is source of truth (Clerk-gated).
- *   - On sign-in transition, localStorage entries are pushed up via
- *     POST /api/athlete-stars (idempotent). See `useWatchlistSync`.
- *   - React Query invalidation keeps "by-course" + "list" views fresh.
+ * Signed-IN (Logto session present):
+ *   Backend MongoDB is source of truth. API calls go through `/api/...`
+ *   proxy which injects the Logto access token server-side — clients
+ *   don't touch tokens directly.
+ *   On sign-in transition, localStorage entries are pushed up via
+ *   useWatchlistSync() (idempotent POST).
  *
  * Auto-refresh:
- *   - useWatchlistStatus refetches every 30s when race.status === 'live'.
- *
- * Keys:
- *   ['athlete-stars', 'by-course', raceId, courseId] → Set<string> of bibs
- *   ['athlete-stars', 'list']                        → full list (Account page)
- *   ['athlete-stars', 'status', raceId, bibs[]]      → compare-endpoint snapshot
+ *   useWatchlistStatus refetches every 30s when race.status === 'live'.
  */
 
 import { useEffect, useRef } from 'react';
@@ -28,22 +24,20 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useAuth } from '@clerk/nextjs';
 import {
   addToWatchlist,
   clearWatchlist,
   filterByCourse,
   readWatchlist,
   removeFromWatchlist,
-  writeWatchlist,
   type WatchlistItem,
 } from '@/lib/watchlist-storage';
+import { useUser } from './use-user';
 
 interface StarAthleteInput {
   raceId: string;
   courseId: string;
   bib: string;
-  /** Snapshot fields used when falling back to localStorage. */
   name?: string;
   raceName?: string;
   raceSlug?: string;
@@ -51,10 +45,6 @@ interface StarAthleteInput {
   athleteGender?: string;
   athleteCategory?: string;
 }
-
-// ────────────────────────────────────────────────────────────────────────
-// Backend-list shape (GET /api/athlete-stars)
-// ────────────────────────────────────────────────────────────────────────
 
 export interface AthleteStarRecord {
   _id: string;
@@ -74,31 +64,24 @@ export interface AthleteStarRecord {
 // Queries
 // ────────────────────────────────────────────────────────────────────────
 
-/**
- * Starred bibs for the current user inside a single course.
- * - Signed-in: calls /by-course (fast payload — just bib[]).
- * - Signed-out: reads localStorage.
- */
 export function useStarredBibsByCourse(
   raceId: string | undefined,
   courseId: string | undefined,
 ) {
-  const { isSignedIn, isLoaded, getToken } = useAuth();
+  const { isAuthenticated, isLoading } = useUser();
   return useQuery({
-    queryKey: ['athlete-stars', 'by-course', raceId, courseId, !!isSignedIn],
-    enabled: isLoaded && !!raceId && !!courseId,
+    queryKey: ['athlete-stars', 'by-course', raceId, courseId, isAuthenticated],
+    enabled: !isLoading && !!raceId && !!courseId,
     queryFn: async () => {
-      if (!isSignedIn) {
+      if (!isAuthenticated) {
         return new Set<string>(
           filterByCourse(raceId!, courseId!).map((i) => i.bib),
         );
       }
-      const token = await getToken();
       const res = await fetch(
         `/api/athlete-stars/by-course?raceId=${encodeURIComponent(
           raceId!,
         )}&courseId=${encodeURIComponent(courseId!)}`,
-        { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) throw new Error('Fetch starred bibs failed');
       const json = await res.json();
@@ -108,18 +91,13 @@ export function useStarredBibsByCourse(
   });
 }
 
-/**
- * Full starred list — used by WatchlistPanel + Account page.
- * - Signed-in: server-side paginated list.
- * - Signed-out: whole localStorage, mapped into the same record shape.
- */
 export function useStarredList(pageNo = 1, pageSize = 50) {
-  const { isSignedIn, isLoaded, getToken } = useAuth();
+  const { isAuthenticated, isLoading } = useUser();
   return useQuery({
-    queryKey: ['athlete-stars', 'list', pageNo, pageSize, !!isSignedIn],
-    enabled: isLoaded,
+    queryKey: ['athlete-stars', 'list', pageNo, pageSize, isAuthenticated],
+    enabled: !isLoading,
     queryFn: async () => {
-      if (!isSignedIn) {
+      if (!isAuthenticated) {
         const items = readWatchlist();
         const start = (pageNo - 1) * pageSize;
         const page = items.slice(start, start + pageSize);
@@ -130,10 +108,8 @@ export function useStarredList(pageNo = 1, pageSize = 50) {
           pageSize,
         };
       }
-      const token = await getToken();
       const res = await fetch(
         `/api/athlete-stars?pageNo=${pageNo}&pageSize=${pageSize}`,
-        { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) throw new Error('Fetch starred list failed');
       return res.json() as Promise<{
@@ -146,14 +122,6 @@ export function useStarredList(pageNo = 1, pageSize = 50) {
   });
 }
 
-/**
- * "Status ticker" — look up current chipTime/rank/status for a set of starred
- * runners in a race. Refetches every 30s when race is live.
- *
- * Uses the existing compare endpoint: GET /api/race-results/compare/:raceId?bibs=
- *
- * @param raceStatus — 'live' | 'upcoming' | 'completed' | 'pre_race' | 'ended' | undefined
- */
 export function useWatchlistStatus(
   raceId: string | undefined,
   bibs: string[],
@@ -181,20 +149,10 @@ export function useWatchlistStatus(
 // Mutations
 // ────────────────────────────────────────────────────────────────────────
 
-export type ToggleStarError =
-  | 'race-limit'
-  | 'total-limit'
-  | 'network';
+export type ToggleStarError = 'race-limit' | 'total-limit' | 'network';
 
-/**
- * Toggle a star — optimistic update on the "by-course" Set cache.
- * Routes to localStorage or backend depending on sign-in state.
- *
- * Returns an error marker ('race-limit' | 'total-limit') when localStorage
- * limits are reached — UI surfaces that via toast.
- */
 export function useToggleStar(raceId: string, courseId: string) {
-  const { isSignedIn, getToken } = useAuth();
+  const { isAuthenticated } = useUser();
   const qc = useQueryClient();
 
   return useMutation({
@@ -205,8 +163,7 @@ export function useToggleStar(raceId: string, courseId: string) {
     }) => {
       const { bib, isStarred, athlete } = input;
 
-      if (!isSignedIn) {
-        // localStorage path
+      if (!isAuthenticated) {
         if (isStarred) {
           removeFromWatchlist(raceId, bib);
           return { source: 'local' as const };
@@ -233,15 +190,10 @@ export function useToggleStar(raceId: string, courseId: string) {
         return { source: 'local' as const };
       }
 
-      // Backend path
-      const token = await getToken();
       const method = isStarred ? 'DELETE' : 'POST';
       const res = await fetch('/api/athlete-stars', {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ raceId, courseId, bib }),
       });
       if (!res.ok) {
@@ -252,13 +204,12 @@ export function useToggleStar(raceId: string, courseId: string) {
       return res.json();
     },
     onMutate: async ({ bib, isStarred }) => {
-      // Optimistic update on the by-course Set
       const key = [
         'athlete-stars',
         'by-course',
         raceId,
         courseId,
-        !!isSignedIn,
+        isAuthenticated,
       ];
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<Set<string>>(key);
@@ -280,23 +231,16 @@ export function useToggleStar(raceId: string, courseId: string) {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Sync: push localStorage entries to backend after user signs in
+// Sync localStorage → backend after sign-in
 // ────────────────────────────────────────────────────────────────────────
 
-/**
- * On every sign-in transition, push localStorage watchlist entries up to the
- * backend (idempotent POST). Runs once per session — tracked in localStorage
- * `5bib-watchlist-synced` flag.
- *
- * Call once at app root (e.g. inside AuthProvider-equivalent or layout).
- */
 export function useWatchlistSync() {
-  const { isSignedIn, isLoaded, getToken } = useAuth();
+  const { isAuthenticated, isLoading } = useUser();
   const qc = useQueryClient();
   const didSync = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || didSync.current) return;
+    if (isLoading || !isAuthenticated || didSync.current) return;
     didSync.current = true;
 
     const items = readWatchlist();
@@ -305,17 +249,11 @@ export function useWatchlistSync() {
     let cancelled = false;
     (async () => {
       try {
-        const token = await getToken();
-        // Fire sequential; backend upserts are idempotent (unique compound
-        // index on userId+raceId+courseId+bib).
         for (const it of items) {
           if (cancelled) break;
           await fetch('/api/athlete-stars', {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               raceId: it.raceId,
               courseId: it.courseId,
@@ -325,11 +263,9 @@ export function useWatchlistSync() {
             /* ignore per-item failure */
           });
         }
-        // Clear local mirror — backend is now source of truth
         clearWatchlist();
         qc.invalidateQueries({ queryKey: ['athlete-stars'] });
       } catch {
-        /* ignore — keep localStorage as-is, try again next session */
         didSync.current = false;
       }
     })();
@@ -337,7 +273,27 @@ export function useWatchlistSync() {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, getToken, qc]);
+  }, [isLoading, isAuthenticated, qc]);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Count
+// ────────────────────────────────────────────────────────────────────────
+
+export function useWatchlistCount() {
+  const { isAuthenticated, isLoading } = useUser();
+  return useQuery({
+    queryKey: ['athlete-stars', 'count', isAuthenticated],
+    enabled: !isLoading,
+    queryFn: async () => {
+      if (!isAuthenticated) return readWatchlist().length;
+      const res = await fetch('/api/athlete-stars?pageNo=1&pageSize=1');
+      if (!res.ok) return 0;
+      const json = await res.json();
+      return (json.total as number) ?? 0;
+    },
+    staleTime: 15_000,
+  });
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -358,33 +314,6 @@ function localToRecord(item: WatchlistItem): AthleteStarRecord {
     courseName: item.courseName || '',
     starred_at: new Date(item.addedAt).toISOString(),
   };
-}
-
-/**
- * Return the total watchlist count (sum across all races).
- * Signed-in: read from React Query cache if available, else trigger useStarredList.
- * Signed-out: read localStorage synchronously.
- *
- * Simpler API: use the hook `useWatchlistCount`.
- */
-export function useWatchlistCount() {
-  const { isSignedIn, isLoaded, getToken } = useAuth();
-
-  return useQuery({
-    queryKey: ['athlete-stars', 'count', !!isSignedIn],
-    enabled: isLoaded,
-    queryFn: async () => {
-      if (!isSignedIn) return readWatchlist().length;
-      const token = await getToken();
-      const res = await fetch('/api/athlete-stars?pageNo=1&pageSize=1', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return 0;
-      const json = await res.json();
-      return (json.total as number) ?? 0;
-    },
-    staleTime: 15_000,
-  });
 }
 
 export type { StarAthleteInput };

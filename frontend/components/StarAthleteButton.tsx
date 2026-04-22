@@ -10,7 +10,6 @@ interface Props {
   bib: string;
   isStarred: boolean;
   size?: 'sm' | 'md';
-  /** Metadata stored when signed-out (localStorage snapshot) */
   athlete?: {
     name?: string;
     raceName?: string;
@@ -22,10 +21,8 @@ interface Props {
 }
 
 /**
- * Star toggle button — signed-out writes to localStorage, signed-in writes
- * to backend. Both paths flow through the same useToggleStar hook.
- *
- * BR-06: toggle feedback via toast (2s). Scale animation on click.
+ * Star toggle — localStorage when signed-out, backend when signed-in.
+ * Works the same either way; the hook routes storage automatically.
  */
 export default function StarAthleteButton({
   raceId,

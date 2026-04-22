@@ -25,9 +25,11 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
-import { ClerkAdminGuard, OptionalClerkAuthGuard } from '../clerk-auth';
-import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
-import { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
+import {
+  LogtoAdminGuard,
+  OptionalLogtoAuthGuard,
+  type AuthenticatedRequest,
+} from '../logto-auth';
 
 @ApiTags('Races')
 @Controller('races')
@@ -37,7 +39,7 @@ export class RacesController {
   // ─── Search / Read ────────────────────────────────────────────
 
   @Get()
-  @UseGuards(OptionalClerkAuthGuard)
+  @UseGuards(OptionalLogtoAuthGuard)
   @ApiOperation({
     summary: 'Search and list races with filters and pagination',
   })
@@ -66,7 +68,7 @@ export class RacesController {
   }
 
   @Get('slug/:slug')
-  @UseGuards(OptionalClerkAuthGuard)
+  @UseGuards(OptionalLogtoAuthGuard)
   @ApiOperation({ summary: 'Get race by slug (SEO-friendly)' })
   @ApiParam({ name: 'slug', type: 'string', description: 'Race slug' })
   @ApiResponse({ status: 200, description: 'Returns race details' })
@@ -77,7 +79,7 @@ export class RacesController {
   }
 
   @Get(':id')
-  @UseGuards(OptionalClerkAuthGuard)
+  @UseGuards(OptionalLogtoAuthGuard)
   @ApiOperation({ summary: 'Get race by ID' })
   @ApiParam({
     name: 'id',
@@ -106,7 +108,7 @@ export class RacesController {
 
   // ─── Admin CRUD ───────────────────────────────────────────────
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Post()
   @ApiOperation({ summary: 'Create a new race (admin)' })
@@ -115,7 +117,7 @@ export class RacesController {
     return this.racesService.createRace(dto);
   }
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id')
   @ApiOperation({ summary: 'Update a race (admin)' })
@@ -126,7 +128,7 @@ export class RacesController {
     return this.racesService.updateRace(id, dto);
   }
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a race (admin)' })
@@ -137,7 +139,7 @@ export class RacesController {
     return this.racesService.deleteRace(id);
   }
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update race lifecycle status (admin)' })
@@ -148,7 +150,7 @@ export class RacesController {
     return this.racesService.updateStatus(id, dto);
   }
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id/status/force')
   @ApiOperation({
@@ -170,7 +172,7 @@ export class RacesController {
 
   // ─── Course management ────────────────────────────────────────
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Post(':id/courses')
   @ApiOperation({ summary: 'Add a course to a race (admin)' })
@@ -181,7 +183,7 @@ export class RacesController {
     return this.racesService.addCourse(id, dto);
   }
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id/courses/:courseId')
   @ApiOperation({ summary: 'Update a course in a race (admin)' })
@@ -197,7 +199,7 @@ export class RacesController {
     return this.racesService.updateCourse(id, courseId, dto);
   }
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Delete(':id/courses/:courseId')
   @ApiOperation({ summary: 'Remove a course from a race (admin)' })
@@ -214,7 +216,7 @@ export class RacesController {
 
   // ─── Sync ─────────────────────────────────────────────────────
 
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @Post('sync')
   @ApiOperation({ summary: 'Manually sync races from source API' })

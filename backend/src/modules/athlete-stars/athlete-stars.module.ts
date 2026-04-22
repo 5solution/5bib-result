@@ -11,11 +11,11 @@ import {
   RaceResultSchema,
 } from '../race-result/schemas/race-result.schema';
 import { Race, RaceSchema } from '../races/schemas/race.schema';
-import { ClerkAuthModule } from '../clerk-auth';
+import { LogtoAuthModule } from '../logto-auth';
 
 @Module({
   imports: [
-    ClerkAuthModule,
+    LogtoAuthModule,
     MongooseModule.forFeature([
       { name: AthleteStar.name, schema: AthleteStarSchema },
       { name: RaceResult.name, schema: RaceResultSchema },

@@ -2,7 +2,6 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { useUser, useAuth, UserButton } from '@clerk/nextjs';
 import { toast } from 'sonner';
 import {
   Camera,
@@ -10,41 +9,44 @@ import {
   Star,
   ChevronRight,
   Mail,
-  Phone,
   Calendar,
   Shield,
-  ExternalLink,
+  LogOut,
   Award,
-  Heart,
+  ExternalLink,
 } from 'lucide-react';
 import { useStarredList, useToggleStar } from '@/lib/hooks/use-athlete-stars';
+import { useUser } from '@/lib/hooks/use-user';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function AccountPage() {
-  const { user, isLoaded } = useUser();
-  const { getToken } = useAuth();
+  const {
+    isAuthenticated,
+    isLoading,
+    userInfo,
+    displayName: rawDisplayName,
+    email,
+    imageUrl,
+    customAvatarUrl,
+  } = useUser();
+  const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const customAvatar = (user?.publicMetadata as any)?.customAvatarUrl as
-    | string
-    | undefined;
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      const token = await getToken();
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch('/api/users/me/avatar', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: fd,
       });
       if (!res.ok) throw new Error('Upload failed');
       toast.success('Avatar đã được cập nhật');
-      await user?.reload();
+      await qc.invalidateQueries({ queryKey: ['logto-user'] });
     } catch {
       toast.error('Upload thất bại');
     } finally {
@@ -53,7 +55,7 @@ export default function AccountPage() {
     }
   };
 
-  if (!isLoaded || !user) {
+  if (isLoading || !isAuthenticated) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -61,16 +63,8 @@ export default function AccountPage() {
     );
   }
 
-  const displayName = user.fullName || user.username || user.firstName || 'Bạn';
-  const email = user.primaryEmailAddress?.emailAddress;
-  const phone = user.primaryPhoneNumber?.phoneNumber;
-  const joinDate = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-    })
-    : null;
+  const displayName = rawDisplayName || 'Bạn';
+  const emailVerified = (userInfo as any)?.email_verified === true;
 
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-10 space-y-6">
@@ -86,11 +80,18 @@ export default function AccountPage() {
         <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center gap-5 md:gap-7">
           {/* Avatar with upload */}
           <div className="relative group shrink-0">
-            <img
-              src={customAvatar || user.imageUrl}
-              alt={displayName}
-              className="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover ring-4 ring-white/20 shadow-lg"
-            />
+            {imageUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={imageUrl}
+                alt={displayName}
+                className="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover ring-4 ring-white/20 shadow-lg"
+              />
+            ) : (
+              <div className="w-24 h-24 md:w-28 md:h-28 rounded-full bg-white/20 ring-4 ring-white/20 flex items-center justify-center text-4xl font-black">
+                {displayName[0]?.toUpperCase() ?? '?'}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -111,7 +112,7 @@ export default function AccountPage() {
               hidden
               onChange={handleUpload}
             />
-            {customAvatar && (
+            {customAvatarUrl && (
               <span className="absolute -bottom-1 -right-1 bg-cyan-400 text-slate-900 text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow">
                 S3
               </span>
@@ -128,34 +129,25 @@ export default function AccountPage() {
                   <Mail className="w-3.5 h-3.5" /> {email}
                 </span>
               )}
-              {phone && (
-                <span className="flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5" /> {phone}
-                </span>
-              )}
             </div>
             <div className="flex flex-wrap gap-2 mt-3">
-              {user.primaryEmailAddress?.verification?.status === 'verified' && (
+              {emailVerified && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-[11px] font-semibold">
                   <Shield className="w-3 h-3" /> Email xác thực
-                </span>
-              )}
-              {joinDate && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 text-blue-100 border border-white/20 text-[11px] font-semibold">
-                  <Calendar className="w-3 h-3" /> Tham gia {joinDate}
                 </span>
               )}
             </div>
           </div>
 
           <div className="shrink-0 self-start">
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: 'w-9 h-9 ring-2 ring-white/30',
-                },
-              }}
-            />
+            <a
+              href="/api/logto/sign-out"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 rounded-full border border-white/20 transition-colors"
+              title="Đăng xuất"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Đăng xuất
+            </a>
           </div>
         </div>
       </section>

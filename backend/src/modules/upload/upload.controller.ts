@@ -6,7 +6,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ClerkAdminGuard } from '../clerk-auth';
+import { LogtoAdminGuard } from '../logto-auth';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { UploadService } from './upload.service';
@@ -17,7 +17,7 @@ export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post('')
-  @UseGuards(ClerkAdminGuard)
+  @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
