@@ -9,12 +9,12 @@ export default clerkMiddleware(async (auth, req) => {
   //   timing.5bib.com → /timing/*
   //   solution.5bib.com → /solution/*
   //   solution.5sport.vn → /solution-5sport/*
-  // Use nextUrl.hostname (canonical public hostname resolved by Next.js from Host / x-forwarded-host)
-  // Fallback to raw Host header — covers all proxy configurations
-  const hostname = (req.nextUrl.hostname || req.headers.get('host') || '').toLowerCase().split(':')[0];
-  const isSport5Host = hostname.includes('5sport');
-  const isTimingHost = !isSport5Host && (hostname.startsWith('timing') && hostname.includes('5bib'));
-  const isSolutionHost = !isSport5Host && hostname.startsWith('solution') && hostname.includes('5bib');
+  // nginx rewrites solution.5sport.vn → /solution-5sport directly (no middleware detection needed for 5sport)
+  // For solution.5bib.com and timing.5bib.com, rely on Host header set by nginx proxy_set_header Host $host
+  const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').toLowerCase();
+  const isSport5Host = host.includes('5sport');
+  const isTimingHost = !isSport5Host && (host.startsWith('timing.') || host.startsWith('timing-'));
+  const isSolutionHost = !isSport5Host && (host.startsWith('solution.') || host.startsWith('solution-'));
 
   if (isSport5Host) {
     const url = req.nextUrl.clone();
