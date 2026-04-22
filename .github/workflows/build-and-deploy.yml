@@ -196,11 +196,20 @@ jobs:
               RESTART_SVCS="$RESTART_SVCS 5bib-result-crew"
             fi
 
+            # Trim + collapse whitespace. appleboy/ssh-action runs the
+            # script via `sh -c "..."` — unquoted $RESTART_SVCS does NOT
+            # word-split the way plain bash does, so pass services one by
+            # one through a loop.
+            RESTART_SVCS=$(echo "$RESTART_SVCS" | xargs)
+
             if [ -z "$RESTART_SVCS" ]; then
               echo "No services built — nothing to deploy"
               exit 0
             fi
 
-            docker compose pull $RESTART_SVCS
-            docker compose up -d --force-recreate $RESTART_SVCS
+            echo "Deploying services: $RESTART_SVCS"
+            for svc in $RESTART_SVCS; do
+              docker compose pull "$svc"
+              docker compose up -d --force-recreate "$svc"
+            done
             docker image prune -f
