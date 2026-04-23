@@ -292,10 +292,9 @@ export class CertificatesController {
       throw new NotFoundException('Template missing or archived');
     }
 
-    // Effective photo bounds: prefer top-level photo_area, fall back to the
-    // first "photo" layer's bounds. The admin editor currently creates photo
-    // layers (type=photo) rather than setting the top-level photo_area, so
-    // both paths need to work for the client compositor.
+    // Effective photo bounds: prefer type=photo layer (admin drag-drop editor
+    // always writes here) over the top-level photo_area field (legacy / stale).
+    // This ensures the modal dashed outline matches the actual rendered position.
     let effectivePhotoArea:
       | {
           x: number;
@@ -306,15 +305,8 @@ export class CertificatesController {
         }
       | null = null;
 
-    if (template.photo_area) {
-      effectivePhotoArea = {
-        x: template.photo_area.x,
-        y: template.photo_area.y,
-        width: template.photo_area.width,
-        height: template.photo_area.height,
-        borderRadius: template.photo_area.borderRadius ?? 0,
-      };
-    } else if (Array.isArray(template.layers)) {
+    // 1. Prefer type=photo layer — this is what the admin editor controls
+    if (Array.isArray(template.layers)) {
       const photoLayer = template.layers.find(
         (l) =>
           l.type === 'photo' &&
@@ -332,6 +324,17 @@ export class CertificatesController {
           borderRadius: photoLayer.borderRadius ?? 0,
         };
       }
+    }
+
+    // 2. Fall back to top-level photo_area only when no photo layer found
+    if (!effectivePhotoArea && template.photo_area) {
+      effectivePhotoArea = {
+        x: template.photo_area.x,
+        y: template.photo_area.y,
+        width: template.photo_area.width,
+        height: template.photo_area.height,
+        borderRadius: template.photo_area.borderRadius ?? 0,
+      };
     }
 
     return {
