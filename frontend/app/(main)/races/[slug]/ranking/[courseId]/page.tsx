@@ -53,6 +53,9 @@ interface RaceInfo {
   courses: Course[];
   logoUrl?: string;
   imageUrl?: string;
+  enableHideStats?: boolean;
+  enablePrivateList?: boolean;
+  privateListLimit?: number;
 }
 
 interface RaceResult {
@@ -198,6 +201,9 @@ export default function CourseRankingPage() {
       })),
       logoUrl: r.logoUrl,
       imageUrl: r.imageUrl,
+      enableHideStats: r.enableHideStats ?? false,
+      enablePrivateList: r.enablePrivateList ?? false,
+      privateListLimit: r.privateListLimit ?? 20,
     };
   }, [raceRaw]);
 
@@ -213,6 +219,11 @@ export default function CourseRankingPage() {
 
   const isLive = race?.status === 'live';
 
+  // When private list mode is on and no search is active, cap the page size
+  // to privateListLimit so pagination is effectively hidden (only first N show).
+  const isPrivateNoSearch = (race?.enablePrivateList ?? false) && !searchQuery.trim();
+  const effectivePageSize = isPrivateNoSearch ? (race?.privateListLimit ?? 20) : pageSize;
+
   const { data: resultsRaw, isLoading: loadingResults } = useRaceResults({
     raceId: race?.id !== undefined ? String(race.id) : undefined,
     course_id: courseId,
@@ -222,7 +233,7 @@ export default function CourseRankingPage() {
     type: (typeFilter as any) || undefined,
     nationality: nationalityFilter || undefined,
     pageNo: currentPage,
-    pageSize,
+    pageSize: effectivePageSize,
     sortField: 'OverallRank',
     sortDirection: 'ASC',
   }, {
@@ -273,7 +284,7 @@ export default function CourseRankingPage() {
     router.push(`/races/${slug}/compare/${courseId}?bibs=${bibs}`);
   };
 
-  const totalPages = Math.ceil(totalItems / pageSize);
+  const totalPages = Math.ceil(totalItems / effectivePageSize);
   const paginatedResults = results;
 
   useEffect(() => {
@@ -434,7 +445,7 @@ export default function CourseRankingPage() {
               <div className="flex items-center gap-6 sm:gap-8 text-sm md:text-base">
                 {race.status === 'upcoming' ? (
                   <span className="text-blue-200 italic">{t('status.upcoming')}</span>
-                ) : (
+                ) : (race.enableHideStats || race.enablePrivateList) ? null : (
                   <>
                     {/* IMPORTANT: keep this header in sync with the stats card
                         below (CourseStatsViz). Both must read the same source
@@ -494,7 +505,7 @@ export default function CourseRankingPage() {
               Chỉ hiện khi race đã hoàn thành — số liệu giữa chừng dễ gây
               hiểu lầm, và hero card "Xuất phát / Hoàn thành / DNF" chưa có
               nghĩa khi race đang live / chưa diễn ra. */}
-          {courseId && race.status === 'completed' && (
+          {courseId && race.status === 'completed' && !race.enableHideStats && !race.enablePrivateList && (
             <div className="mt-8 space-y-4">
               <CourseStatsViz
                 courseId={courseId}
@@ -733,8 +744,8 @@ export default function CourseRankingPage() {
               )}
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
+            {/* Pagination — hidden when private list mode is on and no search */}
+            {totalPages > 1 && !isPrivateNoSearch && (
               <div className="mt-6">
                 <RankingPagination
                   currentPage={currentPage}

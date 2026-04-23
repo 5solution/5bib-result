@@ -49,6 +49,9 @@ interface RaceInfo {
   imageUrl?: string;
   description?: string;
   organizer?: string;
+  enableHideStats?: boolean;
+  enablePrivateList?: boolean;
+  privateListLimit?: number;
 }
 
 interface RaceResult {
@@ -162,6 +165,9 @@ export default function RaceDetailPage() {
       imageUrl: r.imageUrl,
       description: r.description,
       organizer: r.organizer,
+      enableHideStats: r.enableHideStats ?? false,
+      enablePrivateList: r.enablePrivateList ?? false,
+      privateListLimit: r.privateListLimit ?? 20,
     };
   }, [raceRaw, loadingRace]);
 
@@ -427,7 +433,7 @@ export default function RaceDetailPage() {
                         )}
                         {race.status === 'upcoming' && 'SẮP DIỄN RA'}
                       </div>
-                      {courseStatsMap[course.id] && (courseStatsMap[course.id]?.starters ?? 0) > 0 && (
+                      {!race.enablePrivateList && courseStatsMap[course.id] && (courseStatsMap[course.id]?.starters ?? 0) > 0 && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">
                           <span>STARTERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.starters}</strong></span>
                           {(courseStatsMap[course.id]?.finishers ?? 0) > 0 && (
@@ -489,10 +495,12 @@ export default function RaceDetailPage() {
                                 style={{ width: `${rate}%` }}
                               />
                             </div>
-                            <div className="flex justify-between mt-1">
-                              <span className="text-[10px] text-slate-400">{s.finishers} {t('race.finishers')}</span>
-                              <span className="text-[10px] text-slate-400">{s.starters} {t('race.starters')}</span>
-                            </div>
+                            {!race.enablePrivateList && (
+                              <div className="flex justify-between mt-1">
+                                <span className="text-[10px] text-slate-400">{s.finishers} {t('race.finishers')}</span>
+                                <span className="text-[10px] text-slate-400">{s.starters} {t('race.starters')}</span>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}

@@ -245,6 +245,7 @@ export default function AthleteDetailPage() {
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const raceData = useMemo(() => (raceRaw as any)?.data ?? raceRaw, [raceRaw]);
   const raceId = raceData?._id || raceData?.id || '';
+  const hideStats = (raceData?.enableHideStats ?? false) || (raceData?.enablePrivateList ?? false);
 
   const { data: athleteRaw, isLoading: loadingAthlete } = useAthleteDetail(raceId, bib, { enabled: !!raceId });
 
@@ -737,7 +738,7 @@ export default function AthleteDetailPage() {
               carried no signal for the athlete, just visual noise. Race name
               <p> also dropped since the new race-header row inside the time
               card shows the race title in full. */}
-          {raceId && athlete.Bib != null && !isUpcoming && (
+          {raceId && athlete.Bib != null && !isUpcoming && !hideStats && (
             <div className="flex justify-center flex-wrap gap-2 mt-2">
               <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} />
             </div>
@@ -989,7 +990,7 @@ export default function AthleteDetailPage() {
             · DNF/DSQ/DNS + splits → 1-col: PaceZone only (rank chart is
               meaningless for non-finishers — they never finished the course)
             · No splits → neither chart renders */}
-        {hasSplits && !isUpcoming && (
+        {hasSplits && !isUpcoming && !hideStats && (
           <div
             data-reveal
             className={`grid gap-4 ${finalStatus === 'finisher' ? 'md:grid-cols-2' : ''}`}
@@ -1022,7 +1023,7 @@ export default function AthleteDetailPage() {
         )}
 
         {/* === PERCENTILE GAUGE (F-06) === */}
-        {!isUpcoming && (
+        {!isUpcoming && !hideStats && (
           <div data-reveal>
             <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} />
           </div>

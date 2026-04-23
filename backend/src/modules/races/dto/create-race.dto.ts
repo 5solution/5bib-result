@@ -125,4 +125,20 @@ export class CreateRaceDto {
   @IsInt()
   @Min(1)
   cacheTtlSeconds?: number;
+
+  @ApiPropertyOptional({ description: 'Hide stats charts (completion, time distribution, country ranking)', default: false })
+  @IsOptional()
+  @IsBoolean()
+  enableHideStats?: boolean;
+
+  @ApiPropertyOptional({ description: 'Limit athlete list visibility — hide absolute counts, cap list when no search', default: false })
+  @IsOptional()
+  @IsBoolean()
+  enablePrivateList?: boolean;
+
+  @ApiPropertyOptional({ description: 'Max athletes shown without search when enablePrivateList=true', default: 20 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  privateListLimit?: number;
 }

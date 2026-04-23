@@ -151,6 +151,9 @@ interface Race {
   enable5pix?: boolean;
   pixEventUrl?: string;
   cacheTtlSeconds?: number;
+  enableHideStats?: boolean;
+  enablePrivateList?: boolean;
+  privateListLimit?: number;
   courses?: Course[];
   statusHistory?: StatusHistoryEntry[];
 }
@@ -283,6 +286,9 @@ export default function RaceDetailPage() {
         enable5pix: raceData.enable5pix ?? false,
         pixEventUrl: raceData.pixEventUrl,
         cacheTtlSeconds: raceData.cacheTtlSeconds ?? 60,
+        enableHideStats: raceData.enableHideStats ?? false,
+        enablePrivateList: raceData.enablePrivateList ?? false,
+        privateListLimit: raceData.privateListLimit ?? 20,
       });
     } catch {
       toast.error("Không thể tải thông tin giải");
@@ -1695,6 +1701,58 @@ export default function RaceDetailPage() {
                     />
                   </div>
                 )}
+
+                {/* ── Privacy toggles ── */}
+                <div className="pt-2 border-t">
+                  <p className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Quyền riêng tư</p>
+
+                  <div className="flex items-center justify-between rounded-lg border p-4 mb-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Ẩn biểu đồ thống kê</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Ẩn tỉ lệ hoàn thành, phân bổ thời gian, xếp hạng quốc gia trên trang công khai
+                      </p>
+                    </div>
+                    <Switch
+                      checked={editForm.enableHideStats ?? false}
+                      onCheckedChange={(checked) =>
+                        setEditForm((p) => ({ ...p, enableHideStats: checked }))
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Danh sách riêng tư</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Ẩn tổng số VĐV, giới hạn danh sách khi không tìm kiếm (vẫn search được theo BIB/tên)
+                      </p>
+                    </div>
+                    <Switch
+                      checked={editForm.enablePrivateList ?? false}
+                      onCheckedChange={(checked) =>
+                        setEditForm((p) => ({ ...p, enablePrivateList: checked }))
+                      }
+                    />
+                  </div>
+
+                  {editForm.enablePrivateList && (
+                    <div className="flex flex-col gap-2 pl-4 border-l-2 border-primary/20 mt-3">
+                      <Label htmlFor="private-limit">Số VĐV hiển thị tối đa (khi không search)</Label>
+                      <Input
+                        id="private-limit"
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={editForm.privateListLimit ?? 20}
+                        onChange={(e) =>
+                          setEditForm((p) => ({ ...p, privateListLimit: Math.max(1, parseInt(e.target.value) || 20) }))
+                        }
+                        className="w-32"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end">
