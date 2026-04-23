@@ -197,6 +197,8 @@ export class CertificatesController {
       runner_name: athlete.Name,
       bib: athlete.Bib,
       finish_time: athlete.ChipTime,
+      chip_time: athlete.ChipTime,
+      gun_time: athlete.GunTime ?? '',
       pace: athlete.Pace,
       distance: athlete.distance,
       event_name: race?.title ?? '',

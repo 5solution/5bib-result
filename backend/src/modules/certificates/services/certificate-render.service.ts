@@ -62,6 +62,8 @@ export interface RenderData {
   runner_name?: string;
   bib?: string | number;
   finish_time?: string;
+  chip_time?: string;
+  gun_time?: string;
   pace?: string;
   distance?: string;
   event_name?: string;
@@ -246,6 +248,8 @@ export class CertificateRenderService {
       .replace(/\{runner_name\}/g, String(data.runner_name ?? ''))
       .replace(/\{bib\}/g, String(data.bib ?? ''))
       .replace(/\{finish_time\}/g, String(data.finish_time ?? ''))
+      .replace(/\{chip_time\}/g, String(data.chip_time ?? data.finish_time ?? ''))
+      .replace(/\{gun_time\}/g, String(data.gun_time ?? ''))
       .replace(/\{pace\}/g, String(data.pace ?? ''))
       .replace(/\{distance\}/g, String(data.distance ?? ''))
       .replace(/\{event_name\}/g, String(data.event_name ?? ''))

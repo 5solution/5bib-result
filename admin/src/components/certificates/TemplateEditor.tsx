@@ -512,7 +512,7 @@ export default function TemplateEditor({ template, token }: Props) {
       width: 600,
       variable,
       text: variable ? undefined : "Text mới",
-      font: "Inter",
+      font: "Be Vietnam Pro",
       size: 36,
       color: "#111111",
       textAlign: "left",

@@ -395,7 +395,9 @@ export function certificateRenderUrl(
 export const TEMPLATE_VARIABLES = [
   { key: "runner_name", label: "Tên VĐV" },
   { key: "bib", label: "BIB" },
-  { key: "finish_time", label: "Thời gian" },
+  { key: "chip_time", label: "Chip Time" },
+  { key: "gun_time", label: "Gun Time" },
+  { key: "finish_time", label: "Thời gian (chip)" },
   { key: "pace", label: "Pace" },
   { key: "distance", label: "Cự ly" },
   { key: "nation", label: "Quốc gia" },
