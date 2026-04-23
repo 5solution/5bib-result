@@ -55,6 +55,8 @@ interface Props {
 const SAMPLE_DATA: Record<string, string> = {
   runner_name: "NGUYỄN VĂN A",
   bib: "1234",
+  chip_time: "1:12:13",
+  gun_time: "1:12:45",
   finish_time: "1:12:13",
   pace: "5:24",
   distance: "21K",
@@ -359,17 +361,25 @@ function PhotoAreaNode({
         onTap={onSelect}
         onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
         clipFunc={(ctx) => {
-          const r = layer.borderRadius ?? 0;
+          const r = Math.min(layer.borderRadius ?? 0, w / 2, h / 2);
           ctx.beginPath();
-          ctx.moveTo(r, 0);
-          ctx.lineTo(w - r, 0);
-          ctx.quadraticCurveTo(w, 0, w, r);
-          ctx.lineTo(w, h - r);
-          ctx.quadraticCurveTo(w, h, w - r, h);
-          ctx.lineTo(r, h);
-          ctx.quadraticCurveTo(0, h, 0, h - r);
-          ctx.lineTo(0, r);
-          ctx.quadraticCurveTo(0, 0, r, 0);
+          if (r >= Math.min(w, h) / 2 - 0.5) {
+            // Perfect ellipse/circle
+            ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+          } else if (r > 0) {
+            // Rounded rectangle
+            ctx.moveTo(r, 0);
+            ctx.lineTo(w - r, 0);
+            ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, h - r);
+            ctx.quadraticCurveTo(w, h, w - r, h);
+            ctx.lineTo(r, h);
+            ctx.quadraticCurveTo(0, h, 0, h - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
+          } else {
+            ctx.rect(0, 0, w, h);
+          }
           ctx.closePath();
         }}
       >
@@ -1358,8 +1368,51 @@ function PropertiesPanel({
       {layer.type === "photo" && (
         <>
           <Separator />
+          <div>
+            <Label className="text-xs">Hình dạng ảnh</Label>
+            <div className="mt-1 grid grid-cols-3 gap-1">
+              {(
+                [
+                  { label: "Vuông", br: 0 },
+                  {
+                    label: "Tròn",
+                    br: Math.round(
+                      Math.min(layer.width ?? 200, layer.height ?? 200) / 2,
+                    ),
+                  },
+                  { label: "Bo góc", br: 16 },
+                ] as { label: string; br: number }[]
+              ).map(({ label, br }) => {
+                const w2 = layer.width ?? 200;
+                const h2 = layer.height ?? 200;
+                const isActive =
+                  label === "Tròn"
+                    ? (layer.borderRadius ?? 0) >=
+                      Math.min(w2, h2) / 2 - 0.5
+                    : label === "Vuông"
+                      ? (layer.borderRadius ?? 0) === 0
+                      : (layer.borderRadius ?? 0) > 0 &&
+                        (layer.borderRadius ?? 0) <
+                          Math.min(w2, h2) / 2 - 0.5;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => onChange({ borderRadius: br })}
+                    className={`rounded border px-2 py-1 text-xs transition-colors ${
+                      isActive
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-muted hover:bg-accent"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <NumField
-            label="Border Radius"
+            label="Border Radius (px)"
             value={layer.borderRadius ?? 0}
             onChange={(v) => onChange({ borderRadius: v })}
           />
