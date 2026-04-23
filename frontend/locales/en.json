@@ -245,6 +245,7 @@
         "title": "Performance percentile"
       },
       "summary": "You finished faster than {{count}} of {{total}} finishers — top {{pct}}%.",
+      "summaryPrivate": "You finished in the top {{pct}}% of all finishers.",
       "compare": {
         "you": "You",
         "avg": "Average",

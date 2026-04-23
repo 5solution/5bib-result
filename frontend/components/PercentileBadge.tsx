@@ -25,6 +25,8 @@ import { usePercentile } from '@/lib/api-hooks';
 interface Props {
   raceId: string;
   bib: string;
+  /** Khi true (enablePrivateList): ẩn số tuyệt đối "X/Y VĐV", chỉ hiện "top X%" */
+  hideAbsoluteCounts?: boolean;
 }
 
 function tierOf(p: number): {
@@ -90,6 +92,7 @@ function buildInsights(
   totalFinishers: number,
   lang: string,
   p: number,
+  hideAbsoluteCounts = false,
 ): string[] {
   const vi = lang.startsWith('vi');
   const insights: string[] = [];
@@ -97,9 +100,11 @@ function buildInsights(
   // 1. Rank-1 / fastest highlight
   if (isRankOne) {
     insights.push(
-      vi
-        ? `🏆 Bạn là VĐV về đích đầu tiên trong số ${totalFinishers} người hoàn thành cự ly này.`
-        : `🏆 You crossed the finish line first among all ${totalFinishers} finishers.`,
+      hideAbsoluteCounts
+        ? (vi ? `🏆 Bạn là VĐV về đích đầu tiên cự ly này.` : `🏆 You crossed the finish line first in this course.`)
+        : (vi
+            ? `🏆 Bạn là VĐV về đích đầu tiên trong số ${totalFinishers} người hoàn thành cự ly này.`
+            : `🏆 You crossed the finish line first among all ${totalFinishers} finishers.`),
     );
   }
 
@@ -200,7 +205,7 @@ export function PercentileBadge({ raceId, bib }: Props) {
   );
 }
 
-export function PercentileGauge({ raceId, bib }: Props) {
+export function PercentileGauge({ raceId, bib, hideAbsoluteCounts = false }: Props) {
   const { i18n, t } = useTranslation();
   const { data, isLoading } = usePercentile(raceId, bib);
 
@@ -258,18 +263,23 @@ export function PercentileGauge({ raceId, bib }: Props) {
     data.totalFinishers,
     lang,
     displayPct,
+    hideAbsoluteCounts,
   );
 
-  // Summary line: different wording for rank-1 vs others
+  // Summary line: different wording for rank-1 vs others, private vs public
   const summaryLine = isRankOne
-    ? (lang.startsWith('vi')
-        ? `Về đích đầu tiên trong số ${data.totalFinishers} VĐV hoàn thành.`
-        : `First across the finish line among ${data.totalFinishers} finishers.`)
-    : t('athlete.percentile.summary', {
-        pct: displayPct,
-        count: data.slowerCount,
-        total: data.totalFinishers,
-      });
+    ? (hideAbsoluteCounts
+        ? (lang.startsWith('vi') ? `Về đích đầu tiên cự ly này.` : `First across the finish line in this course.`)
+        : (lang.startsWith('vi')
+            ? `Về đích đầu tiên trong số ${data.totalFinishers} VĐV hoàn thành.`
+            : `First across the finish line among ${data.totalFinishers} finishers.`))
+    : (hideAbsoluteCounts
+        ? t('athlete.percentile.summaryPrivate', { pct: displayPct })
+        : t('athlete.percentile.summary', {
+            pct: displayPct,
+            count: data.slowerCount,
+            total: data.totalFinishers,
+          }));
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">

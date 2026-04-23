@@ -245,6 +245,7 @@
         "title": "Xếp hạng thành tích"
       },
       "summary": "Bạn về đích nhanh hơn {{count}}/{{total}} VĐV hoàn thành — top {{pct}}%.",
+      "summaryPrivate": "Bạn nằm trong top {{pct}}% VĐV hoàn thành cự ly.",
       "compare": {
         "you": "Bạn",
         "avg": "Trung bình",

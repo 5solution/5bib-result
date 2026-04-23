@@ -741,7 +741,7 @@ export default function AthleteDetailPage() {
               card shows the race title in full. */}
           {raceId && athlete.Bib != null && !isUpcoming && (
             <div className="flex justify-center flex-wrap gap-2 mt-2">
-              <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} />
+              <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} hideAbsoluteCounts={raceData?.enablePrivateList ?? false} />
             </div>
           )}
         </div>
@@ -1026,7 +1026,7 @@ export default function AthleteDetailPage() {
         {/* === PERCENTILE GAUGE (F-06) === */}
         {!isUpcoming && (
           <div data-reveal>
-            <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} />
+            <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} hideAbsoluteCounts={raceData?.enablePrivateList ?? false} />
           </div>
         )}
 
