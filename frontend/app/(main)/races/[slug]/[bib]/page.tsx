@@ -245,7 +245,10 @@ export default function AthleteDetailPage() {
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const raceData = useMemo(() => (raceRaw as any)?.data ?? raceRaw, [raceRaw]);
   const raceId = raceData?._id || raceData?.id || '';
-  const hideStats = (raceData?.enableHideStats ?? false) || (raceData?.enablePrivateList ?? false);
+  // enableHideStats chỉ ẩn stats tổng hợp trên trang ranking (biểu đồ race-wide).
+  // Trang chi tiết VĐV chỉ bị ảnh hưởng bởi enablePrivateList vì percentile/rank
+  // có thể tiết lộ tổng số VĐV (ví dụ "Top 5 trong 76").
+  const hideStats = raceData?.enablePrivateList ?? false;
 
   const { data: athleteRaw, isLoading: loadingAthlete } = useAthleteDetail(raceId, bib, { enabled: !!raceId });
 
