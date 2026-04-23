@@ -355,7 +355,7 @@ export default function CourseRankingPage() {
     );
   }
 
-  const statusLabel = race.status === 'live' ? t('status.live') : race.status === 'completed' ? t('status.completed') : t('status.upcoming');
+  const statusLabel = race.status === 'live' ? t('status.live') : race.status === 'ended' ? t('status.completed') : t('status.upcoming');
 
   const infoItems = [
     { label: t('race.startLocation'), value: course.startLocation || race.location },
@@ -505,7 +505,7 @@ export default function CourseRankingPage() {
               Chỉ hiện khi race đã hoàn thành — số liệu giữa chừng dễ gây
               hiểu lầm, và hero card "Xuất phát / Hoàn thành / DNF" chưa có
               nghĩa khi race đang live / chưa diễn ra. */}
-          {courseId && race.status === 'completed' && !race.enableHideStats && !race.enablePrivateList && (
+          {courseId && race.status === 'ended' && !race.enableHideStats && !race.enablePrivateList && (
             <div className="mt-8 space-y-4">
               <CourseStatsViz
                 courseId={courseId}
