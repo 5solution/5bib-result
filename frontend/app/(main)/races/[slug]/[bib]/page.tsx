@@ -245,10 +245,8 @@ export default function AthleteDetailPage() {
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const raceData = useMemo(() => (raceRaw as any)?.data ?? raceRaw, [raceRaw]);
   const raceId = raceData?._id || raceData?.id || '';
-  // enableHideStats chỉ ẩn stats tổng hợp trên trang ranking (biểu đồ race-wide).
-  // Trang chi tiết VĐV chỉ bị ảnh hưởng bởi enablePrivateList vì percentile/rank
-  // có thể tiết lộ tổng số VĐV (ví dụ "Top 5 trong 76").
-  const hideStats = raceData?.enablePrivateList ?? false;
+  // Các biểu đồ cá nhân VĐV (RankProgression, PaceZone, PercentileGauge, PercentileBadge)
+  // là thông tin của chính VĐV đó — không bị ẩn bởi bất kỳ privacy toggle nào.
 
   const { data: athleteRaw, isLoading: loadingAthlete } = useAthleteDetail(raceId, bib, { enabled: !!raceId });
 
@@ -741,7 +739,7 @@ export default function AthleteDetailPage() {
               carried no signal for the athlete, just visual noise. Race name
               <p> also dropped since the new race-header row inside the time
               card shows the race title in full. */}
-          {raceId && athlete.Bib != null && !isUpcoming && !hideStats && (
+          {raceId && athlete.Bib != null && !isUpcoming && (
             <div className="flex justify-center flex-wrap gap-2 mt-2">
               <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} />
             </div>
@@ -993,7 +991,7 @@ export default function AthleteDetailPage() {
             · DNF/DSQ/DNS + splits → 1-col: PaceZone only (rank chart is
               meaningless for non-finishers — they never finished the course)
             · No splits → neither chart renders */}
-        {hasSplits && !isUpcoming && !hideStats && (
+        {hasSplits && !isUpcoming && (
           <div
             data-reveal
             className={`grid gap-4 ${finalStatus === 'finisher' ? 'md:grid-cols-2' : ''}`}
@@ -1026,7 +1024,7 @@ export default function AthleteDetailPage() {
         )}
 
         {/* === PERCENTILE GAUGE (F-06) === */}
-        {!isUpcoming && !hideStats && (
+        {!isUpcoming && (
           <div data-reveal>
             <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} />
           </div>
