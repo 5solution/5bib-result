@@ -654,6 +654,21 @@ export default function CourseRankingPage() {
               </p>
             )}
 
+            {/* BIB shortcut — when query is a pure number, offer a direct link to
+                athlete detail regardless of list limits or pagination. This guarantees
+                any athlete can be found by BIB even when enablePrivateList is on. */}
+            {/^\d+$/.test(searchQuery.trim()) && searchQuery.trim().length >= 1 && (
+              <div className="mb-4 flex justify-center">
+                <Link
+                  href={`/races/${slug}/${searchQuery.trim()}`}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-sm font-semibold rounded-xl transition-colors"
+                >
+                  <Search className="w-4 h-4" />
+                  Xem kết quả VĐV BIB <strong>{searchQuery.trim()}</strong> →
+                </Link>
+              </div>
+            )}
+
             {/* Table */}
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               {loadingResults ? (
