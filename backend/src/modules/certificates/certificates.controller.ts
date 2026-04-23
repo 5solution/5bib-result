@@ -327,7 +327,7 @@ export class CertificatesController {
           y: photoLayer.y,
           width: photoLayer.width as number,
           height: photoLayer.height as number,
-          borderRadius: photoLayer.photoBorderRadius ?? 0,
+          borderRadius: photoLayer.borderRadius ?? 0,
         };
       }
     }

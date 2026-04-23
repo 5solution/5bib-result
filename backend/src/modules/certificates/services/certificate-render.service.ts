@@ -365,7 +365,7 @@ export class CertificateRenderService {
     const img = await this.loadImageCached(url);
     const w = layer.width ?? img.width;
     const h = layer.height ?? img.height;
-    const r = layer.photoBorderRadius ?? 0;
+    const r = layer.borderRadius ?? 0;
 
     ctx.save();
     if (r > 0) {
