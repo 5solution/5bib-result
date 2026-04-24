@@ -148,8 +148,10 @@ export default function ResultImageCreator({
   // Ref so the settings-change effect can always read the latest effective photo
   // (croppedBlob if crop is confirmed, else the raw file) without adding either
   // to the effect's dep array (which would cause loops).
+  // Updated SYNCHRONOUSLY inside every handler that changes photo state
+  // (handleFile, handleCropConfirm, removeCustomPhoto) — never via useEffect,
+  // which would leave a 1-frame async gap where the ref is stale.
   const effectivePhotoRef = useRef<File | Blob | null>(null);
-  useEffect(() => { effectivePhotoRef.current = croppedBlob ?? customPhoto; }, [croppedBlob, customPhoto]);
   // Keep appliedMessageRef in sync so effects can read it without stale closures
   useEffect(() => { appliedMessageRef.current = appliedMessage; }, [appliedMessage]);
 
@@ -223,7 +225,10 @@ export default function ResultImageCreator({
     // Claim this generation slot — any in-flight request from a prior settings
     // change will see a stale ID on resolve and self-discard its blob URL.
     const myId = ++generationIdRef.current;
-    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    // NOTE: we do NOT clear generatedUrl here.
+    // Keeping the previous blob visible while the new POST is in-flight means
+    // the user always sees their photo (old template) instead of a blank gap.
+    // The new result atomically replaces the old blob when it arrives.
 
     // Debounce: rapid template / gradient clicks only fire ONE POST, 500ms
     // after the user settles on a choice.
@@ -243,7 +248,8 @@ export default function ResultImageCreator({
           URL.revokeObjectURL(result.objectUrl); // discard stale result
           return;
         }
-        setGeneratedUrl(result.objectUrl);
+        // Atomically swap: revoke old blob + set new one in a single setState call
+        setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return result.objectUrl; });
         setLastFallback(result.templateFallback);
       }).catch(() => {});
     }, 500);
@@ -309,6 +315,7 @@ export default function ResultImageCreator({
     }
     if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
     const thumbUrl = URL.createObjectURL(file);
+    effectivePhotoRef.current = file; // sync — settings-change effect reads this immediately
     setCustomPhoto(file);
     setCustomPhotoPreview(thumbUrl);
     setCroppedBlob(null); // reset any previous crop so editor opens
@@ -320,9 +327,14 @@ export default function ResultImageCreator({
    * Crop confirmed → receive JPEG blob, fire POST generate immediately.
    */
   const handleCropConfirm = useCallback(async (blob: Blob) => {
+    // Sync ref first — settings-change effect reads this; must be up-to-date
+    // before any subsequent template switch can fire a POST.
+    effectivePhotoRef.current = blob;
     setCroppedBlob(blob);
-    if (generatedUrl) URL.revokeObjectURL(generatedUrl);
-    setGeneratedUrl(null);
+    // Claim generation ID so any in-flight crop POST doesn't overwrite a later
+    // template-switch result if the user switches templates before this resolves.
+    const myId = ++generationIdRef.current;
+    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     try {
       const result = await generateMutation.mutateAsync({
         template,
@@ -334,15 +346,21 @@ export default function ResultImageCreator({
         customMessage: appliedMessageRef.current || undefined,
         customPhoto: blob,
       });
+      // Discard if a newer generation (e.g. template switch) beat us.
+      if (generationIdRef.current !== myId) {
+        URL.revokeObjectURL(result.objectUrl);
+        return;
+      }
       setGeneratedUrl(result.objectUrl);
       setLastFallback(result.templateFallback);
     } catch {
       // error toast already handled by generate()
     }
-  }, [generatedUrl, generateMutation, template, size, gradient,
-      showBadges, showQrCode, showSplits]);
+  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits]);
 
   const removeCustomPhoto = useCallback(() => {
+    effectivePhotoRef.current = null; // sync — must clear before next settings-change effect
+    ++generationIdRef.current; // cancel any in-flight auto-gen POST
     if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
     if (generatedUrl) URL.revokeObjectURL(generatedUrl);
     setCustomPhoto(null);
