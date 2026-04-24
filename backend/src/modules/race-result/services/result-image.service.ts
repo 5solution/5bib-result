@@ -15,7 +15,6 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import {
   S3Client,
-  HeadObjectCommand,
   PutObjectCommand,
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
@@ -238,25 +237,52 @@ export class ResultImageService implements OnModuleInit {
       }
     }
 
-    // Stampede protection — check if another worker is rendering the same config
-    const lockKey = `render-lock:${cacheKey}`;
+    // Stampede protection — check if another worker is rendering the same config.
+    //
+    // Full-res: use render-lock + poll S3 (10s × 1s) — result is persisted to S3.
+    // Preview:  use preview-lock + poll Redis (5s × 500ms) — result lives in Redis.
+    //   Without a lock, 1000 concurrent preview requests for the same key would all
+    //   enter the semaphore queue and render sequentially instead of sharing a single
+    //   result. The lock ensures only one render runs; others poll until it's cached.
+    const lockKey = config.preview
+      ? `preview-lock:${cacheKey}`
+      : `render-lock:${cacheKey}`;
     let haveLock = false;
-    if (!config.preview) {
-      try {
-        const acquired = await this.redis.set(
-          lockKey,
-          '1',
-          'EX',
-          RENDER_LOCK_TTL_SECONDS,
-          'NX',
-        );
-        haveLock = acquired === 'OK';
-      } catch {
-        // Redis down — proceed anyway
-      }
+    try {
+      const acquired = await this.redis.set(
+        lockKey,
+        '1',
+        'EX',
+        config.preview ? 10 : RENDER_LOCK_TTL_SECONDS, // preview renders fast (< 500ms)
+        'NX',
+      );
+      haveLock = acquired === 'OK';
+    } catch {
+      // Redis down — proceed anyway (no stampede protection, but still correct)
+    }
 
-      if (!haveLock) {
-        // Another worker rendering — poll S3 for up to 10s
+    if (!haveLock) {
+      if (config.preview) {
+        // Another worker rendering the preview — poll Redis for up to 5s
+        for (let i = 0; i < 10; i++) {
+          await sleep(500);
+          try {
+            const cached = await this.redis.getBuffer(`preview-img:${cacheKey}`);
+            if (cached) {
+              return {
+                buffer: cached,
+                fromCache: true,
+                cacheKey,
+                templateRequested: config.template,
+                templateActual: config.template,
+                fallback: false,
+              };
+            }
+          } catch { /* Redis down — keep polling */ }
+        }
+        // Poll timed out — render ourselves (lock expired or render was very slow)
+      } else {
+        // Another worker rendering the full-res — poll S3 for up to 10s
         for (let i = 0; i < 10; i++) {
           await sleep(1000);
           const cached = await this.tryFetchFromS3(cacheKey);
@@ -578,20 +604,8 @@ export class ResultImageService implements OnModuleInit {
   private async tryFetchFromS3(
     key: string,
   ): Promise<{ buffer: Buffer; url: string } | null> {
-    try {
-      await this.s3Client.send(
-        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
-      );
-    } catch (err) {
-      // 404 is expected for cache miss — don't log
-      const code = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
-      if (code !== 404 && code !== 403) {
-        this.logger.warn(
-          `S3 HEAD unexpected error for ${key}: ${(err as Error).message}`,
-        );
-      }
-      return null;
-    }
+    // Single GET request — avoids the HEAD+GET double round-trip (2× S3 API
+    // calls per cache miss under load). 404/403 = cache miss, anything else logs.
     try {
       const obj = await this.s3Client.send(
         new GetObjectCommand({ Bucket: this.bucket, Key: key }),
@@ -606,7 +620,11 @@ export class ResultImageService implements OnModuleInit {
       const url = await this.getPresignedUrl(key);
       return { buffer, url };
     } catch (err) {
-      this.logger.warn(`S3 GET failed for ${key}: ${(err as Error).message}`);
+      const code = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+      if (code !== 404 && code !== 403) {
+        // Unexpected error (network, permissions, etc.) — log for visibility
+        this.logger.warn(`S3 GET failed for ${key}: ${(err as Error).message}`);
+      }
       return null;
     }
   }

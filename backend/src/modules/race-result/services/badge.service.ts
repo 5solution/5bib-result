@@ -196,6 +196,7 @@ export class BadgeService {
   ): Promise<Badge[]> {
     const result = await this.resultModel
       .findOne({ raceId, bib })
+      .maxTimeMS(BADGE_TIMEOUT_MS)
       .lean()
       .exec();
 
@@ -282,7 +283,9 @@ export class BadgeService {
     const normalizedName = normalizeName(result.name);
     if (!normalizedName) return null;
 
-    // Find athlete's other finishes at same distance with the same name+bib
+    // Find athlete's other finishes at same distance with the same name+bib.
+    // maxTimeMS caps the server-side cursor so it doesn't linger as an orphan
+    // query if withTimeout fires and the promise race resolves the fallback first.
     const history = await this.resultModel
       .find({
         bib: result.bib,
@@ -291,6 +294,7 @@ export class BadgeService {
         chipTime: { $exists: true, $ne: null },
       })
       .select({ chipTime: 1, raceId: 1, name: 1 })
+      .maxTimeMS(BADGE_TIMEOUT_MS)
       .lean()
       .exec();
 
@@ -326,7 +330,8 @@ export class BadgeService {
     // NOTE: bib is not globally unique across races — this is a weak signal.
     // A stronger version would require athlete identity resolution. For v1, skip
     // unless we have < 2 bibs, otherwise too noisy.
-    const count = await this.resultModel.countDocuments({ bib }).exec();
+    // maxTimeMS prevents this from becoming an orphan query if withTimeout fires first.
+    const count = await this.resultModel.countDocuments({ bib }).maxTimeMS(BADGE_TIMEOUT_MS).exec();
     if (count === 1) {
       return {
         type: 'FIRST_RACE',

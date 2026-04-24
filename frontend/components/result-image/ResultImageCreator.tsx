@@ -103,6 +103,10 @@ export default function ResultImageCreator({
   // Settings-change effect reads this ref to skip auto-gen POSTs while the user
   // hasn't committed a crop yet — prevents posting the raw uncropped file.
   const cropPendingRef = useRef(false);
+  // Track latest blob URLs in refs so the unmount cleanup can always revoke the
+  // current value (an empty-deps effect closes over the initial null values).
+  const latestGeneratedUrlRef = useRef<string | null>(null);
+  const latestCustomPhotoPreviewRef = useRef<string | null>(null);
 
   // Force 9:16 size for story
   const size: SizeKey = template === 'story' ? '9:16' : '4:5';
@@ -158,15 +162,17 @@ export default function ResultImageCreator({
   const effectivePhotoRef = useRef<File | Blob | null>(null);
   // Keep appliedMessageRef in sync so effects can read it without stale closures
   useEffect(() => { appliedMessageRef.current = appliedMessage; }, [appliedMessage]);
+  // Keep blob URL refs in sync so unmount cleanup always has current values.
+  // (Cannot close over state inside an empty-dep effect — the closure captures null.)
+  useEffect(() => { latestGeneratedUrlRef.current = generatedUrl; }, [generatedUrl]);
+  useEffect(() => { latestCustomPhotoPreviewRef.current = customPhotoPreview; }, [customPhotoPreview]);
 
-  // Cleanup object URL on unmount
+  // Cleanup object URLs on unmount — reads from refs, not stale closure values.
   useEffect(() => {
     return () => {
-      if (generatedUrl) URL.revokeObjectURL(generatedUrl);
-      if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
+      if (latestGeneratedUrlRef.current) URL.revokeObjectURL(latestGeneratedUrlRef.current);
+      if (latestCustomPhotoPreviewRef.current) URL.revokeObjectURL(latestCustomPhotoPreviewRef.current);
     };
-    // Intentionally not including generatedUrl in deps — cleanup only on unmount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Keyboard: Escape closes ──────────────────────────────
@@ -389,7 +395,7 @@ export default function ResultImageCreator({
   const generate = useCallback(async () => {
     // Claim generation slot — any queued debounced auto-gen will see a stale
     // ID and self-abort before firing its POST.
-    ++generationIdRef.current;
+    const myId = ++generationIdRef.current;
     // Functional update — always gets the latest generatedUrl regardless of closure staleness
     setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     try {
@@ -403,6 +409,13 @@ export default function ResultImageCreator({
         customMessage: appliedMessageRef.current || undefined,
         customPhoto: croppedBlob ?? customPhoto,
       });
+      // Guard: if a rapid auto-gen triggered by a settings change between the
+      // time the user clicked Download and now has incremented the counter,
+      // discard this result to avoid overwriting the newer preview.
+      if (generationIdRef.current !== myId) {
+        URL.revokeObjectURL(result.objectUrl);
+        throw Object.assign(new Error('superseded'), { superseded: true });
+      }
       setGeneratedUrl(result.objectUrl);
       setLastFallback(result.templateFallback);
       if (result.templateFallback) {
@@ -410,6 +423,8 @@ export default function ResultImageCreator({
       }
       return result;
     } catch (err) {
+      // 'superseded' is an internal signal — not a real error, no toast needed.
+      if ((err as { superseded?: boolean }).superseded) throw err;
       if (err instanceof ResultImageError) {
         if (err.status === 429 || err.status === 503) {
           toast.error(`${err.message}${err.retryAfterSeconds ? ` (thử lại sau ${err.retryAfterSeconds}s)` : ''}`);
@@ -486,8 +501,13 @@ export default function ResultImageCreator({
           templateFallback: lastFallback,
         });
       } else {
-        // Fallback: open in new tab so user can right-click → save / long-press → save
-        window.open(result.objectUrl, '_blank', 'noopener');
+        // Fallback: open in new tab so user can right-click → save / long-press → save.
+        // Create a SEPARATE blob URL (not the tracked generatedUrl) so it won't be
+        // revoked if the user switches templates while the tab is still loading.
+        const shareUrl = URL.createObjectURL(result.blob);
+        window.open(shareUrl, '_blank', 'noopener');
+        // Give the browser 30s to load the blob before revoking.
+        setTimeout(() => URL.revokeObjectURL(shareUrl), 30_000);
         toast.info('Nhấn giữ ảnh để lưu về máy');
         incrementShare.mutate('fallback-share');
         logShareEvent.mutate({

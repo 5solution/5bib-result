@@ -279,14 +279,22 @@ export default function AthleteDetailPage() {
   const loading = loadingRace || loadingAthlete;
 
   const [linkCopied, setLinkCopied] = useState(false);
+  const linkCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cleanup the reset timer if the component unmounts while it's running
+  // (prevents setState on unmounted component in React strict mode).
+  useEffect(() => {
+    return () => { if (linkCopiedTimerRef.current) clearTimeout(linkCopiedTimerRef.current); };
+  }, []);
 
-  const handleCopyLink = () => {
+  const handleCopyLink = useCallback(() => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setLinkCopied(true);
       toast.success(t('common.copiedLink'));
-      setTimeout(() => setLinkCopied(false), 2000);
+      // Clear any existing timer so rapid clicks don't stack.
+      if (linkCopiedTimerRef.current) clearTimeout(linkCopiedTimerRef.current);
+      linkCopiedTimerRef.current = setTimeout(() => setLinkCopied(false), 2000);
     });
-  };
+  }, [t]);
 
   const handleShareFacebook = () => {
     const url = encodeURIComponent(window.location.href);
@@ -356,6 +364,9 @@ export default function AthleteDetailPage() {
   const hasCelebWorthyBadge = athleteBadges.some((b) => CELEBRATION_WORTHY.includes(b.type));
 
   const [showRicCelebration, setShowRicCelebration] = useState(false);
+  // Stable callback so CelebrationOverlay's autoDismiss effect doesn't reset
+  // its timer on every parent re-render (TanStack Query causes frequent re-renders).
+  const handleDismissCelebration = useCallback(() => setShowRicCelebration(false), []);
   useEffect(() => {
     if (!raceId || !athlete?.Bib || athleteBadges.length === 0) return;
     if (!hasCelebWorthyBadge) return;
@@ -1598,7 +1609,7 @@ export default function AthleteDetailPage() {
           raceId={raceId}
           bib={athlete.Bib}
           badges={athleteBadges}
-          onDismiss={() => setShowRicCelebration(false)}
+          onDismiss={handleDismissCelebration}
         />
       )}
 
