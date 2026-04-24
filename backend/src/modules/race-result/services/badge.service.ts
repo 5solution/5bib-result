@@ -204,13 +204,14 @@ export class BadgeService {
     const badges: Badge[] = [];
 
     // Run independent checks in parallel
-    const [pbBadge, firstRaceBadge, streakBadge] = await Promise.all([
+    // Note: detectStreak is intentionally excluded — BIB is not globally unique
+    // across races so streak counts are unreliable (false positives).
+    const [pbBadge, firstRaceBadge] = await Promise.all([
       this.detectPersonalBest(result).catch((err) => {
         this.logger.warn(`PB detect failed: ${err.message}`);
         return null;
       }),
       this.detectFirstRace(bib).catch(() => null),
-      this.detectStreak(bib).catch(() => null),
     ]);
 
     // Podium (synchronous from result data)
@@ -230,7 +231,6 @@ export class BadgeService {
 
     if (pbBadge) badges.push(pbBadge);
     if (firstRaceBadge) badges.push(firstRaceBadge);
-    if (streakBadge) badges.push(streakBadge);
 
     // Sort by priority: PB > PODIUM > AG_PODIUM > Sub-X > others
     return sortBadges(badges);
