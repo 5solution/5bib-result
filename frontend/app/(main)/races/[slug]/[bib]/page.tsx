@@ -967,34 +967,30 @@ export default function AthleteDetailPage() {
                   for finishers with at least one badge. Replaces the standalone
                   AchievementBanner card that lived above the time card. */}
               {finalStatus === 'finisher' && athleteBadges.length > 0 && (
-                <div className="border-t border-gray-100 px-5 py-3 md:px-6 flex items-center justify-between gap-3 bg-gradient-to-r from-amber-50/50 to-white">
-                  {/* Left: labelled achievement tags — clearly informational */}
-                  <div className="min-w-0 flex-1">
+                <div className="border-t border-gray-100 px-5 py-3 md:px-6 bg-gradient-to-r from-amber-50/50 to-white flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                  {/* Badges — label + horizontally scrollable pill row */}
+                  <div className="min-w-0">
                     <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-700/60 mb-1.5">
                       🏅 Thành tích
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {athleteBadges.slice(0, 5).map((b) => (
+                    {/* Scroll ngang trên mobile thay vì wrap nhiều dòng */}
+                    <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                      {athleteBadges.map((b) => (
                         <span
                           key={b.type}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-white"
+                          className="inline-flex shrink-0 items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-white"
                           style={{ backgroundColor: b.color ?? '#1d4ed8' }}
                         >
                           {b.label}
                         </span>
                       ))}
-                      {athleteBadges.length > 5 && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                          +{athleteBadges.length - 5}
-                        </span>
-                      )}
                     </div>
                   </div>
-                  {/* Right: action button — rounded-lg + shadow to clearly signal "clickable" */}
+                  {/* CTA — full-width trên mobile, auto-width trên sm+ */}
                   <button
                     type="button"
                     onClick={() => setShowImageEditor(true)}
-                    className={`shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${
+                    className={`w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${
                       hasCelebWorthyBadge
                         ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-200'
                         : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 shadow-sm'
