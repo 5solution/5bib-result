@@ -5,6 +5,7 @@ import {
   drawQrCode,
   drawRoundedRect,
   drawWatermark,
+  fillCustomPhotoBackground,
   formatName,
   scale,
   truncateText,
@@ -21,24 +22,34 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
   const PAD_X = scale(data, 72);
   const contentW = W - PAD_X * 2;
 
-  // ─── Background: cream base ─────────────────────────────────
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#fffbeb'); // amber-50
-  bg.addColorStop(0.6, '#fef3c7'); // amber-100
-  bg.addColorStop(1, '#fde68a'); // amber-200
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
+  // ─── Background ─────────────────────────────────────────────
+  // Custom photo replaces the cream gradient.  When photo is absent, draw
+  // the signature cream base + confetti pattern.
+  const hasPhoto = !!data.customPhoto;
+  if (hasPhoto) {
+    fillCustomPhotoBackground(ctx, data, 0.55);
+  } else {
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#fffbeb'); // amber-50
+    bg.addColorStop(0.6, '#fef3c7'); // amber-100
+    bg.addColorStop(1, '#fde68a'); // amber-200
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    drawConfetti(ctx, W, H, data.preview ? 40 : 80);
+  }
 
-  // Confetti dot pattern — deterministic (same hash → same pattern)
-  drawConfetti(ctx, W, H, data.preview ? 40 : 80);
+  // Adapt text colours for photo (dark) vs cream (light) background
+  const textPrimary   = hasPhoto ? '#ffffff'              : '#0f172a';
+  const textSecondary = hasPhoto ? 'rgba(255,255,255,0.75)' : '#475569';
+  const textMuted     = hasPhoto ? 'rgba(255,255,255,0.55)' : '#64748b';
 
   // ─── Top strip: race name ───────────────────────────────────
-  ctx.fillStyle = '#475569'; // slate-600
+  ctx.fillStyle = textSecondary;
   ctx.font = `600 ${scale(data, 24)}px "${data.assets.monoFontFamily}", sans-serif`;
   const raceName = truncateText(ctx, data.raceName || '', contentW);
   ctx.fillText(raceName, PAD_X, scale(data, 100));
 
-  ctx.fillStyle = '#64748b';
+  ctx.fillStyle = textMuted;
   ctx.font = `400 ${scale(data, 20)}px "${data.assets.monoFontFamily}", sans-serif`;
   const subtitle = [data.courseName, data.distance].filter(Boolean).join(' · ');
   if (subtitle) {
@@ -65,7 +76,7 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
   ctx.fillText(celebrationText, PAD_X, bannerY);
 
   // ─── Athlete name ───────────────────────────────────────────
-  ctx.fillStyle = '#0f172a';
+  ctx.fillStyle = textPrimary;
   const nameSize = scale(data, 56);
   ctx.font = `900 ${nameSize}px "${data.assets.fontFamily}", sans-serif`;
   const name = formatName(data.athleteName);
@@ -76,7 +87,7 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     nameY += Math.round(nameSize * 1.1);
   }
 
-  ctx.fillStyle = '#64748b';
+  ctx.fillStyle = textMuted;
   ctx.font = `500 ${scale(data, 22)}px "${data.assets.monoFontFamily}", sans-serif`;
   ctx.fillText(
     `BIB ${data.bib} · ${data.category || ''}`,
@@ -84,17 +95,18 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     nameY + scale(data, 8),
   );
 
-  // ─── Huge chip time (gold) ──────────────────────────────────
-  const chipY = nameY + scale(data, 100);
-  ctx.fillStyle = '#1d4ed8';
+  // ─── Huge chip time ─────────────────────────────────────────
   const chipSize = scale(data, 108);
+  const chipY = nameY + scale(data, 56) + chipSize; // baseline = gap + font-height
+  ctx.fillStyle = hasPhoto ? '#60a5fa' : '#1d4ed8';  // lighter blue on dark photo bg
   ctx.font = `900 ${chipSize}px "${data.assets.monoFontFamily}", sans-serif`;
   ctx.fillText(data.chipTime || '--:--:--', PAD_X, chipY);
 
-  ctx.fillStyle = '#475569';
+  // "CHIP TIME" label sits ABOVE the chip time number (baseline at chipY - chipSize - gap)
+  ctx.fillStyle = textSecondary;
   ctx.font = `600 ${scale(data, 22)}px "${data.assets.monoFontFamily}", sans-serif`;
   ctx.letterSpacing = '3px';
-  ctx.fillText('CHIP TIME', PAD_X, chipY - scale(data, 84));
+  ctx.fillText('CHIP TIME', PAD_X, chipY - chipSize - scale(data, 12));
   ctx.letterSpacing = '0px';
 
   // PB delta (if PB badge has meta)

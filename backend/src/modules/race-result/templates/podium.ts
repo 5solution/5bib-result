@@ -6,6 +6,7 @@ import {
   drawQrCode,
   drawRoundedRect,
   drawWatermark,
+  fillCustomPhotoBackground,
   formatName,
   scale,
   truncateText,
@@ -47,21 +48,26 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
 
   const theme = TIER_THEMES[tierRank];
 
-  // ─── Background: metallic vertical gradient ─────────────────
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, theme.bg[0]);
-  bg.addColorStop(0.5, theme.bg[1]);
-  bg.addColorStop(1, theme.bg[2]);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // Diagonal sheen overlay
-  const sheen = ctx.createLinearGradient(0, 0, W, H);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.18)');
-  sheen.addColorStop(0.5, 'rgba(255,255,255,0)');
-  sheen.addColorStop(1, 'rgba(0,0,0,0.25)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(0, 0, W, H);
+  // ─── Background ─────────────────────────────────────────────
+  // Custom photo replaces the metallic gradient.  The podium text elements
+  // (all white) remain readable against the photo + dark overlay.
+  if (data.customPhoto) {
+    fillCustomPhotoBackground(ctx, data, 0.50);
+  } else {
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, theme.bg[0]);
+    bg.addColorStop(0.5, theme.bg[1]);
+    bg.addColorStop(1, theme.bg[2]);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    // Diagonal sheen overlay
+    const sheen = ctx.createLinearGradient(0, 0, W, H);
+    sheen.addColorStop(0, 'rgba(255,255,255,0.18)');
+    sheen.addColorStop(0.5, 'rgba(255,255,255,0)');
+    sheen.addColorStop(1, 'rgba(0,0,0,0.25)');
+    ctx.fillStyle = sheen;
+    ctx.fillRect(0, 0, W, H);
+  }
 
   // ─── Top eyebrow ────────────────────────────────────────────
   ctx.fillStyle = 'rgba(255,255,255,0.85)';

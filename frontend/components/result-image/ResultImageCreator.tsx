@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Download, Loader2, ImagePlus, RotateCcw, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Download, Loader2, ImagePlus, RotateCcw, Share2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import TemplatePicker, { TEMPLATE_META } from './TemplatePicker';
 import {
@@ -80,6 +80,8 @@ export default function ResultImageCreator({
   const [customPhoto, setCustomPhoto] = useState<File | null>(null);
   const [customPhotoPreview, setCustomPhotoPreview] = useState<string | null>(null);
   const [previewToken, setPreviewToken] = useState(0);
+  // Mobile UX: template section collapsed by default (user swipes the preview to switch)
+  const [templateSectionOpen, setTemplateSectionOpen] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -501,27 +503,51 @@ export default function ResultImageCreator({
 
             {/* Right: controls */}
             <div className="p-4 sm:p-5 space-y-5 border-t lg:border-t-0 lg:border-l border-gray-100 overflow-y-auto">
-              {/* Template picker */}
+              {/* Template picker — collapsible on mobile, always open on desktop */}
               <section>
-                <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
-                  Template
-                </h3>
-                <TemplatePicker
-                  raceId={raceId}
-                  bib={String(athlete.Bib)}
-                  selected={template}
-                  onChange={setTemplate}
-                  overallRank={athlete.OverallRank}
-                  categoryRank={athlete.CatRank}
-                  previewToken={previewToken}
-                  gradient={gradient}
-                  showBadges={showBadges}
-                />
-                <p className="text-[11px] text-gray-500 mt-2">
-                  {template === 'story'
-                    ? 'Template Story chỉ xuất ở tỉ lệ 9:16 (Instagram/FB Story)'
-                    : TEMPLATE_META.find((t) => t.key === template)?.subtitle}
-                </p>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between lg:cursor-default"
+                  onClick={() => setTemplateSectionOpen((o) => !o)}
+                  aria-expanded={templateSectionOpen}
+                >
+                  <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                    Template
+                    <span className="lg:hidden ml-2 text-[10px] font-normal normal-case text-gray-400">
+                      {TEMPLATE_META.find((t) => t.key === template)?.label}
+                    </span>
+                  </h3>
+                  <ChevronDown
+                    className={[
+                      'w-4 h-4 text-gray-400 transition-transform duration-200 lg:hidden',
+                      templateSectionOpen ? 'rotate-180' : '',
+                    ].join(' ')}
+                  />
+                </button>
+
+                {/* Visible always on desktop (lg:block), toggled on mobile */}
+                <div className={[
+                  'mt-2',
+                  templateSectionOpen ? 'block' : 'hidden',
+                  'lg:block',
+                ].join(' ')}>
+                  <TemplatePicker
+                    raceId={raceId}
+                    bib={String(athlete.Bib)}
+                    selected={template}
+                    onChange={setTemplate}
+                    overallRank={athlete.OverallRank}
+                    categoryRank={athlete.CatRank}
+                    previewToken={previewToken}
+                    gradient={gradient}
+                    showBadges={showBadges}
+                  />
+                  <p className="text-[11px] text-gray-500 mt-2">
+                    {template === 'story'
+                      ? 'Template Story chỉ xuất ở tỉ lệ 9:16 (Instagram/FB Story)'
+                      : TEMPLATE_META.find((t) => t.key === template)?.subtitle}
+                  </p>
+                </div>
               </section>
 
               {/* Gradient picker (only when no custom photo) */}

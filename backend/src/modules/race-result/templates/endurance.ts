@@ -6,6 +6,7 @@ import {
   drawQrCode,
   drawRoundedRect,
   drawWatermark,
+  fillCustomPhotoBackground,
   formatName,
   scale,
   truncateText,
@@ -38,15 +39,20 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
   const PAD_BOTTOM = scale(data, 72);
   const contentW = W - PAD_X * 2;
 
-  // ─── Background: deep slate gradient + topo contour overlay ──
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#0f172a'); // slate-900
-  bg.addColorStop(0.6, '#14532d'); // green-900
-  bg.addColorStop(1, '#052e16'); // deep forest
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  drawTopoContours(ctx, W, H, data.preview ? 8 : 14);
+  // ─── Background ─────────────────────────────────────────────
+  // Custom photo replaces the slate/forest gradient.  Topo contours are
+  // skipped on photo so they don't muddy the athlete image.
+  if (data.customPhoto) {
+    fillCustomPhotoBackground(ctx, data, 0.60); // slightly heavier overlay for readability on varied photos
+  } else {
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0f172a'); // slate-900
+    bg.addColorStop(0.6, '#14532d'); // green-900
+    bg.addColorStop(1, '#052e16'); // deep forest
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    drawTopoContours(ctx, W, H, data.preview ? 8 : 14);
+  }
 
   // ─── Top eyebrow strip ──────────────────────────────────────
   ctx.fillStyle = '#a3e635'; // lime accent
