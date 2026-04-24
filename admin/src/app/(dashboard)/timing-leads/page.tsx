@@ -87,7 +87,10 @@ export default function TimingLeadsPage() {
   const [exporting, setExporting] = useState(false);
 
   const fetchLeads = useCallback(async () => {
-    if (!token) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams({

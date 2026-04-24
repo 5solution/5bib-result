@@ -118,7 +118,12 @@ export default function DashboardLayout({
   }
 
   if (!isAuthenticated) {
-    return null;
+    // Don't flash a blank screen while the redirect fires — keep the spinner visible.
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Đang tải...</div>
+      </div>
+    );
   }
 
   if (userRole !== "admin") {
