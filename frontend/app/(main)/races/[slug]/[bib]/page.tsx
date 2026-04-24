@@ -968,28 +968,21 @@ export default function AthleteDetailPage() {
                   AchievementBanner card that lived above the time card. */}
               {finalStatus === 'finisher' && athleteBadges.length > 0 && (
                 <div className="border-t border-gray-100 px-5 py-3 md:px-6 bg-gradient-to-r from-amber-50/50 to-white flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                  {/* Badges — label + horizontally scrollable pill row */}
+                  {/* Badges — label + 2-row wrap */}
                   <div className="min-w-0 sm:flex-1">
                     <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-700/60 mb-1.5">
                       🏅 Thành tích
                     </div>
-                    {/* relative wrapper để đặt gradient fade hint ở cạnh phải */}
-                    <div className="relative">
-                      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5 pr-6">
-                        {athleteBadges.map((b) => (
-                          <span
-                            key={b.type}
-                            className="inline-flex shrink-0 items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-white"
-                            style={{ backgroundColor: b.color ?? '#1d4ed8' }}
-                          >
-                            {b.label}
-                          </span>
-                        ))}
-                      </div>
-                      {/* Fade hint — chỉ hiện trên mobile khi có nhiều badge */}
-                      {athleteBadges.length > 2 && (
-                        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-amber-50/90 to-transparent sm:hidden" />
-                      )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {athleteBadges.map((b) => (
+                        <span
+                          key={b.type}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-white"
+                          style={{ backgroundColor: b.color ?? '#1d4ed8' }}
+                        >
+                          {b.label}
+                        </span>
+                      ))}
                     </div>
                   </div>
                   {/* CTA — full-width trên mobile, auto-width trên sm+ */}
