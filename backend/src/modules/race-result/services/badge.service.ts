@@ -10,15 +10,55 @@ const CACHE_TTL_SECONDS = 3600; // 1h per PRD BR-04
 const BADGE_TIMEOUT_MS = 2000; // BR-04 — fallback to empty badges if > 2s
 const LOCK_TTL_SECONDS = 10; // stampede prevention
 
-/** Sub-X thresholds by normalized distance bucket. */
+/**
+ * Parse distance string to kilometers.
+ * Handles: "21km", "21 km", "21K", "42.195km", "Marathon", "Half Marathon",
+ *          "HM", "FM", "10k", "5K", "100M" (miles).
+ *
+ * WHY regex \b failed: \b between digit↔letter (both word chars) does NOT match.
+ * So `/\b21\b/` didn't match "21km". We parse numerically instead.
+ */
+function parseDistanceKm(raw: string): number {
+  if (!raw) return 0;
+  const s = raw.toLowerCase().trim();
+
+  // Name aliases first (exact aliases, not \b-bound)
+  if (/\bfull\s*marathon|marathon|^fm$/i.test(s) && !/half/i.test(s)) return 42;
+  if (/\bhalf\s*marathon|^hm$|half/i.test(s)) return 21;
+
+  // Miles → convert to km (100M = 160.93km, 50M = 80.46km)
+  const miMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:mi|miles|m)\b/);
+  if (miMatch && !/km|k$/i.test(s)) {
+    return parseFloat(miMatch[1]) * 1.60934;
+  }
+
+  // Numeric + km/k suffix (the common case in 5BIB DB)
+  const kmMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:km|k)\b/);
+  if (kmMatch) return parseFloat(kmMatch[1]);
+
+  // Bare number fallback — treat as km if 1-300, else 0
+  const bare = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (bare) {
+    const n = parseFloat(bare[1]);
+    if (n > 0 && n < 300) return n;
+  }
+  return 0;
+}
+
+/**
+ * Sub-X thresholds keyed on km-range buckets.
+ * Using numeric compare instead of brittle regex word-boundaries.
+ */
 const SUBX_THRESHOLDS: Array<{
   distanceMatch: (d: string) => boolean;
   thresholds: { seconds: number; type: BadgeType; label: string }[];
 }> = [
   {
-    // Marathon ~ 42K
-    distanceMatch: (d) =>
-      /\b(42|marathon|full)\b/i.test(d) && !/half/i.test(d),
+    // Marathon: 41-44 km
+    distanceMatch: (d) => {
+      const km = parseDistanceKm(d);
+      return km >= 41 && km <= 44;
+    },
     thresholds: [
       { seconds: 3 * 3600, type: 'SUB3H', label: 'Sub-3H' },
       { seconds: 3.5 * 3600, type: 'SUB3_30H', label: 'Sub-3:30H' },
@@ -26,8 +66,11 @@ const SUBX_THRESHOLDS: Array<{
     ],
   },
   {
-    // Half marathon ~ 21K
-    distanceMatch: (d) => /\b(21|half)\b/i.test(d),
+    // Half marathon: 20-22 km
+    distanceMatch: (d) => {
+      const km = parseDistanceKm(d);
+      return km >= 20 && km <= 22;
+    },
     thresholds: [
       { seconds: 90 * 60, type: 'SUB90M', label: 'Sub-90M' },
       { seconds: 105 * 60, type: 'SUB_1_45H', label: 'Sub-1:45H' },
@@ -35,14 +78,22 @@ const SUBX_THRESHOLDS: Array<{
     ],
   },
   {
-    distanceMatch: (d) => /\b10\b/i.test(d) && !/\b21|42/i.test(d),
+    // 10K: 9-11 km
+    distanceMatch: (d) => {
+      const km = parseDistanceKm(d);
+      return km >= 9 && km <= 11;
+    },
     thresholds: [
       { seconds: 45 * 60, type: 'SUB45M', label: 'Sub-45M' },
       { seconds: 60 * 60, type: 'SUB_1H', label: 'Sub-1H' },
     ],
   },
   {
-    distanceMatch: (d) => /\b5\b/i.test(d) && !/\b(15|25|50)/i.test(d),
+    // 5K: 4.5-5.9 km
+    distanceMatch: (d) => {
+      const km = parseDistanceKm(d);
+      return km >= 4.5 && km <= 5.9;
+    },
     thresholds: [
       { seconds: 20 * 60, type: 'SUB20M', label: 'Sub-20M' },
       { seconds: 25 * 60, type: 'SUB25M', label: 'Sub-25M' },
@@ -252,16 +303,15 @@ export class BadgeService {
 
   private detectUltra(result: { distance?: string }): Badge | null {
     const distance = result.distance || '';
-    // Match 50K+, 100K, 100M, "Ultra", "UTMB", etc.
-    const match = distance.match(/(\d+)\s*k/i);
-    const km = match ? parseInt(match[1], 10) : 0;
-    if (km >= 50 || /ultra|100\s*m|utmb/i.test(distance)) {
+    const km = parseDistanceKm(distance);
+    // Ultra = ≥50km, or keyword markers (UTMB, "ultra", 100M miles)
+    if (km >= 50 || /ultra|utmb|\b100\s*mi|\b100\s*miles/i.test(distance)) {
       return {
         type: 'ULTRA',
         label: '🏔️ Ultra Finisher',
         shortLabel: 'Ultra',
         color: '#059669',
-        meta: { distance },
+        meta: { distance, km: Math.round(km) },
       };
     }
     return null;
@@ -272,12 +322,20 @@ export class BadgeService {
     distance?: string;
     chipTime?: string;
     raceId?: string;
+    name?: string;
   }): Promise<Badge | null> {
     if (!result.distance || !result.chipTime) return null;
     const currentSec = parseChipTime(result.chipTime);
     if (currentSec <= 0) return null;
 
-    // Find athlete's other finishes at same distance
+    // `bib` is NOT globally unique (uniqueness is per {raceId, courseId, bib}),
+    // so querying by bib alone matches unrelated athletes across races.
+    // Require normalized-name match to prevent false PBs. If name is missing we
+    // skip PB detection entirely — correctness > coverage.
+    const normalizedName = normalizeName(result.name);
+    if (!normalizedName) return null;
+
+    // Find athlete's other finishes at same distance with the same name+bib
     const history = await this.resultModel
       .find({
         bib: result.bib,
@@ -285,13 +343,17 @@ export class BadgeService {
         raceId: { $ne: result.raceId },
         chipTime: { $exists: true, $ne: null },
       })
-      .select({ chipTime: 1, raceId: 1 })
+      .select({ chipTime: 1, raceId: 1, name: 1 })
       .lean()
       .exec();
 
-    if (history.length === 0) return null; // first race at this distance → no PB
+    // Narrow to same athlete by normalized name
+    const sameAthlete = history.filter(
+      (h) => normalizeName(h.name) === normalizedName,
+    );
+    if (sameAthlete.length === 0) return null; // first race at this distance → no PB
 
-    const prevBest = history
+    const prevBest = sameAthlete
       .map((h) => parseChipTime(h.chipTime ?? ''))
       .filter((s) => s > 0)
       .reduce((min, s) => Math.min(min, s), Infinity);
@@ -428,4 +490,21 @@ function sortBadges(badges: Badge[]): Badge[] {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Normalize athlete name for cross-race identity matching in PB detection.
+ * - Lowercase
+ * - Strip diacritics (NFD + combining marks)
+ * - Collapse whitespace
+ * Returns '' for empty/falsy input.
+ */
+function normalizeName(name?: string | null): string {
+  if (!name) return '';
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }

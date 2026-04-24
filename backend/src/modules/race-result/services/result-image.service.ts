@@ -102,6 +102,12 @@ export interface AthleteInput {
   distance: string;
   /** Split times (parsed from Chiptimes JSON) */
   splits?: SplitData[];
+  /**
+   * Result-doc version tag. When admin edits the result via
+   * `RaceResultService.editResult`, `updated_at` bumps → cache key changes →
+   * cache invalidates automatically without needing a purge hook.
+   */
+  updatedAt?: string | Date | null;
 }
 
 export interface GenerateImageInput {
@@ -325,12 +331,24 @@ export class ResultImageService implements OnModuleInit {
           .slice(0, 12)
       : 'none';
 
-    // Include a snapshot of athlete fields the image depends on so cache invalidates
-    // automatically if admin edits the result.
+    // Include ALL athlete fields the image depends on so cache invalidates
+    // automatically when admin edits the result. `updatedAt` is the canonical
+    // version tag — any edit bumps it. Other fields are defense-in-depth in
+    // case updatedAt isn't propagated for some reason.
     const athleteSnapshot = {
       chip: input.athlete.ChipTime,
-      rank: input.athlete.OverallRank,
+      gun: input.athlete.GunTime,
+      overall: input.athlete.OverallRank,
+      gender: input.athlete.GenderRank,
+      cat: input.athlete.CatRank ?? '',
+      pace: input.athlete.Pace,
+      gap: input.athlete.Gap ?? '',
       name: input.athlete.Name,
+      category: input.athlete.Category,
+      dist: input.athlete.distance,
+      v: input.athlete.updatedAt
+        ? new Date(input.athlete.updatedAt).getTime()
+        : 0,
     };
 
     const configHash = crypto
@@ -367,6 +385,16 @@ export class ResultImageService implements OnModuleInit {
     const canvas = createCanvas(dims.width, dims.height);
     const ctx = canvas.getContext('2d');
 
+    // QR needs a race slug — skip silently if empty (prevents generating a
+    // broken URL like https://result.5bib.com/races//{bib} when the race
+    // doc has no slug or races service lookup failed).
+    const canRenderQr = config.showQrCode && !!input.raceSlug;
+    if (config.showQrCode && !input.raceSlug) {
+      this.logger.warn(
+        `QR skipped for race=${input.raceId} bib=${input.bib}: empty raceSlug`,
+      );
+    }
+
     // Load assets in parallel
     const [badges, customPhoto, qrImage] = await Promise.all([
       config.showBadges
@@ -375,7 +403,7 @@ export class ResultImageService implements OnModuleInit {
       input.customPhotoBuffer
         ? loadImage(input.customPhotoBuffer).catch(() => null)
         : Promise.resolve(null),
-      config.showQrCode
+      canRenderQr
         ? this.generateQrImage(
             `${this.resultBaseUrl}/races/${input.raceSlug}/${input.bib}`,
           )
@@ -405,7 +433,9 @@ export class ResultImageService implements OnModuleInit {
       badges,
       customMessage: config.customMessage,
 
-      resultUrl: `${this.resultBaseUrl}/races/${input.raceSlug}/${input.bib}`,
+      resultUrl: input.raceSlug
+        ? `${this.resultBaseUrl}/races/${input.raceSlug}/${input.bib}`
+        : `${this.resultBaseUrl}/races/${input.raceId}/${input.bib}`,
       textColorScheme: config.textColor === 'light' ? 'light' : 'dark',
 
       template: config.template,
@@ -425,7 +455,7 @@ export class ResultImageService implements OnModuleInit {
       },
 
       showSplits: config.showSplits,
-      showQrCode: config.showQrCode && !!qrImage,
+      showQrCode: canRenderQr && !!qrImage,
       showBadges: config.showBadges,
       textColorMode: config.textColor,
     };

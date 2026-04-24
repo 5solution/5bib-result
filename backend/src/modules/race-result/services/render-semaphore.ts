@@ -36,10 +36,15 @@ export class RenderSemaphore {
     const cpuCount = os.cpus().length || 2;
     const envMax = parseInt(process.env.RENDER_MAX_CONCURRENT || '', 10);
     const envQueue = parseInt(process.env.RENDER_MAX_QUEUE || '', 10);
-    this.maxConcurrent = !isNaN(envMax) && envMax > 0 ? envMax : Math.max(2, cpuCount);
-    this.maxQueueDepth = !isNaN(envQueue) && envQueue > 0 ? envQueue : 100;
+    // Canvas rendering releases the event loop during image decode (loadImage)
+    // and PNG encode (toBuffer uses a native thread pool). So we can safely
+    // oversubscribe vs. CPU count. Default = cpuCount × 2 (min 4), capped at 16.
+    const defaultMax = Math.max(4, Math.min(16, cpuCount * 2));
+    this.maxConcurrent =
+      !isNaN(envMax) && envMax > 0 ? envMax : defaultMax;
+    this.maxQueueDepth = !isNaN(envQueue) && envQueue > 0 ? envQueue : 200;
     this.logger.log(
-      `RenderSemaphore initialized: maxConcurrent=${this.maxConcurrent}, maxQueueDepth=${this.maxQueueDepth}`,
+      `RenderSemaphore initialized: cpus=${cpuCount}, maxConcurrent=${this.maxConcurrent}, maxQueueDepth=${this.maxQueueDepth}`,
     );
   }
 
@@ -67,9 +72,13 @@ export class RenderSemaphore {
       this.logger.warn(
         `Render queue full (${this.queue.length}/${this.maxQueueDepth}) — rejecting request`,
       );
-      throw new ServiceUnavailableException(
-        'Hệ thống đang tải cao, vui lòng thử lại sau ít phút',
-      );
+      throw new ServiceUnavailableException({
+        statusCode: 503,
+        message: 'Hệ thống đang tải cao, vui lòng thử lại sau ít phút',
+        // Hint to the client to back off; nginx/gateway can map this to the
+        // Retry-After header.
+        retryAfterSeconds: 10,
+      });
     }
     return new Promise((resolve) => {
       this.queue.push(resolve);

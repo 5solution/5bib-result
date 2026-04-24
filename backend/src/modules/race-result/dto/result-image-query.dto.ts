@@ -131,6 +131,16 @@ export interface NormalizedImageConfig {
   preview: boolean;
 }
 
+/**
+ * Templates that are actually registered in Phase 1. Phase 2 adds endurance /
+ * story / sticker / podium. Kept here (not imported from templates/index to avoid
+ * circular dep) — update this set when a template is added to the registry.
+ */
+const PHASE_1_IMPLEMENTED_TEMPLATES: ReadonlySet<TemplateKey> = new Set([
+  'classic',
+  'celebration',
+]);
+
 export function normalizeImageConfig(
   dto: ResultImageQueryDto,
 ): NormalizedImageConfig {
@@ -148,9 +158,12 @@ export function normalizeImageConfig(
     ? (dto.template as TemplateKey)
     : 'classic';
 
-  // Story template is 9:16 only — auto-correct
-  if (template === 'story' && size !== '9:16') {
-    size = '9:16';
+  // Story template is 9:16 only — BUT only force the size if `story` is actually
+  // implemented. Otherwise the registry would fall back to Classic while the
+  // canvas would already be 1080×1920, breaking the Classic layout (which is
+  // tuned for 4:5). In Phase 1 story is not implemented, so we leave size alone.
+  if (template === 'story' && PHASE_1_IMPLEMENTED_TEMPLATES.has('story')) {
+    if (size !== '9:16') size = '9:16';
   }
 
   return {

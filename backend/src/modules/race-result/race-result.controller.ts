@@ -9,6 +9,7 @@ import {
   BadRequestException,
   NotFoundException,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
   UseGuards,
 } from '@nestjs/common';
@@ -23,7 +24,10 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  FileInterceptor,
+  FileFieldsInterceptor,
+} from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { GetRaceResultsDto } from './dto/get-race-results.dto';
 import { RaceResultsPaginatedDto } from './dto/race-result-response.dto';
@@ -455,6 +459,9 @@ export class RaceResultController {
     @Query() query: ResultImageQueryDto,
     @Res() res: Response,
   ) {
+    this.assertSafePathParam(raceId, 'raceId');
+    this.assertSafePathParam(bib, 'bib');
+
     const athleteInput = await this.loadAthleteInput(raceId, bib);
     const { raceName, raceSlug, courseName } = await this.loadRaceMeta(raceId);
 
@@ -548,19 +555,37 @@ export class RaceResultController {
     status: 503,
     description: 'Render queue full — retry later',
   })
+  // Accept BOTH field names: `customPhoto` (new) and `customBg` (legacy from
+  // previous POST endpoint). Prevents silent data loss for clients still
+  // using the old field name.
   @UseInterceptors(
-    FileInterceptor('customPhoto', {
-      storage: memoryStorage(),
-      limits: { fileSize: 10 * 1024 * 1024 },
-    }),
+    FileFieldsInterceptor(
+      [
+        { name: 'customPhoto', maxCount: 1 },
+        { name: 'customBg', maxCount: 1 },
+      ],
+      {
+        storage: memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+      },
+    ),
   )
   async generateResultImage(
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
     @Body() body: ResultImageQueryDto,
-    @UploadedFile() customPhoto: Express.Multer.File | undefined,
+    @UploadedFiles()
+    files:
+      | { customPhoto?: Express.Multer.File[]; customBg?: Express.Multer.File[] }
+      | undefined,
     @Res() res: Response,
   ) {
+    this.assertSafePathParam(raceId, 'raceId');
+    this.assertSafePathParam(bib, 'bib');
+
+    const customPhotoFile =
+      files?.customPhoto?.[0] ?? files?.customBg?.[0] ?? undefined;
+
     const athleteInput = await this.loadAthleteInput(raceId, bib);
     const { raceName, raceSlug, courseName } = await this.loadRaceMeta(raceId);
 
@@ -574,7 +599,7 @@ export class RaceResultController {
       raceSlug,
       courseName,
       config,
-      customPhotoBuffer: customPhoto?.buffer,
+      customPhotoBuffer: customPhotoFile?.buffer,
     });
 
     res.set({
@@ -601,6 +626,9 @@ export class RaceResultController {
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
   ) {
+    this.assertSafePathParam(raceId, 'raceId');
+    this.assertSafePathParam(bib, 'bib');
+
     // Confirm athlete exists before running badge detection
     const athlete = await this.raceResultService.getAthleteDetail(raceId, bib);
     if (!athlete) {
@@ -615,6 +643,7 @@ export class RaceResultController {
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiResponse({ status: 200, description: 'Returns share count' })
   async getShareCount(@Param('raceId') raceId: string) {
+    this.assertSafePathParam(raceId, 'raceId');
     const count = await this.resultImageService.getShareCount(raceId);
     return { data: { raceId, count }, success: true };
   }
@@ -629,11 +658,25 @@ export class RaceResultController {
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiResponse({ status: 201, description: 'Returns updated share count' })
   async incrementShareCount(@Param('raceId') raceId: string) {
+    this.assertSafePathParam(raceId, 'raceId');
     const count = await this.resultImageService.incrementShareCount(raceId);
     return { data: { raceId, count }, success: true };
   }
 
   // ─── Helpers for result-image endpoints ──────────────────────
+
+  /**
+   * Path params flow into S3 keys + Redis keys. A bib like `"../../"` would
+   * not escape S3 (no `..` resolution) but could pollute cache with garbage.
+   * Allow only alphanumeric + `_` + `-`, 1-24 chars.
+   */
+  private assertSafePathParam(value: string, name: string): void {
+    if (!value || !/^[A-Za-z0-9_-]{1,24}$/.test(value)) {
+      throw new BadRequestException(
+        `Invalid ${name}: must be 1-24 alphanumeric / dash / underscore chars`,
+      );
+    }
+  }
 
   private async loadAthleteInput(
     raceId: string,
@@ -643,6 +686,7 @@ export class RaceResultController {
     if (!athlete) {
       throw new NotFoundException('Athlete not found');
     }
+    const a = athlete as typeof athlete & { updated_at?: string | Date | null };
     return {
       Name: athlete.Name ?? '',
       Bib: athlete.Bib ?? bib,
@@ -659,6 +703,7 @@ export class RaceResultController {
       splits: Array.isArray(athlete.splits)
         ? (athlete.splits as AthleteInput['splits'])
         : undefined,
+      updatedAt: a.updated_at ?? null,
     };
   }
 
