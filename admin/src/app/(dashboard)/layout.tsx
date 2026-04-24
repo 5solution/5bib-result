@@ -27,6 +27,7 @@ import {
   Users,
   Award,
   Timer,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
@@ -43,6 +44,7 @@ const navItems = [
   { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
   { href: "/claims", label: "Khiếu nại", icon: FileWarning },
   { href: "/timing-leads", label: "Timing Leads", icon: Timer },
+  { href: "/result-image-stats", label: "Ảnh kết quả", icon: ImageIcon },
 ];
 
 function NavLink({
@@ -118,7 +120,12 @@ export default function DashboardLayout({
   }
 
   if (!isAuthenticated) {
-    return null;
+    // Don't flash a blank screen while the redirect fires — keep the spinner visible.
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Đang tải...</div>
+      </div>
+    );
   }
 
   if (userRole !== "admin") {

@@ -58,7 +58,10 @@ export default function TimingLeadDetailPage() {
   const [staffNotes, setStaffNotes] = useState("");
 
   const fetchLead = useCallback(async () => {
-    if (!token || !id) return;
+    if (!token || !id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/timing/leads/${id}`, {

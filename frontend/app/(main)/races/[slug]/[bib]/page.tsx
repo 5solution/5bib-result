@@ -1,15 +1,20 @@
 'use client';
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Clock, Link2, Check, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
+import { ChevronLeft, Clock, Check, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { useTranslation } from 'react-i18next';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachment } from '@/lib/api-hooks';
-import ResultImageEditor from '@/components/ResultImageEditor';
+import ResultImageCreator from '@/components/result-image/ResultImageCreator';
+import CelebrationOverlay, {
+  hasCelebrationBeenSeen,
+  markCelebrationSeen,
+} from '@/components/result-image/CelebrationOverlay';
+import { useAthleteBadges } from '@/lib/api-hooks/result-image';
 import CertificateV2DownloadButtons from '@/components/CertificateV2DownloadButtons';
 import CertificateWithPhotoCta from '@/components/CertificateWithPhotoCta';
 import RankProgressionChart from '@/components/RankProgressionChart';
@@ -274,14 +279,22 @@ export default function AthleteDetailPage() {
   const loading = loadingRace || loadingAthlete;
 
   const [linkCopied, setLinkCopied] = useState(false);
+  const linkCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cleanup the reset timer if the component unmounts while it's running
+  // (prevents setState on unmounted component in React strict mode).
+  useEffect(() => {
+    return () => { if (linkCopiedTimerRef.current) clearTimeout(linkCopiedTimerRef.current); };
+  }, []);
 
-  const handleCopyLink = () => {
+  const handleCopyLink = useCallback(() => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setLinkCopied(true);
       toast.success(t('common.copiedLink'));
-      setTimeout(() => setLinkCopied(false), 2000);
+      // Clear any existing timer so rapid clicks don't stack.
+      if (linkCopiedTimerRef.current) clearTimeout(linkCopiedTimerRef.current);
+      linkCopiedTimerRef.current = setTimeout(() => setLinkCopied(false), 2000);
     });
-  };
+  }, [t]);
 
   const handleShareFacebook = () => {
     const url = encodeURIComponent(window.location.href);
@@ -340,6 +353,32 @@ export default function AthleteDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [showImageEditor, setShowImageEditor] = useState(false);
   const celebrationAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Result Image Creator v1.0 — badges + first-open celebration
+  const { data: athleteBadges = [] } = useAthleteBadges(
+    raceId,
+    String(athlete?.Bib ?? ''),
+    { enabled: !!raceId && !!athlete?.Bib },
+  );
+  const CELEBRATION_WORTHY = ['PB', 'PODIUM', 'AG_PODIUM', 'ULTRA', 'SUB3H', 'SUB90M', 'SUB45M', 'SUB20M'];
+  const hasCelebWorthyBadge = athleteBadges.some((b) => CELEBRATION_WORTHY.includes(b.type));
+
+  const [showRicCelebration, setShowRicCelebration] = useState(false);
+  // Stable callback so CelebrationOverlay's autoDismiss effect doesn't reset
+  // its timer on every parent re-render (TanStack Query causes frequent re-renders).
+  const handleDismissCelebration = useCallback(() => setShowRicCelebration(false), []);
+  useEffect(() => {
+    if (!raceId || !athlete?.Bib || athleteBadges.length === 0) return;
+    if (!hasCelebWorthyBadge) return;
+    if (hasCelebrationBeenSeen(raceId, String(athlete.Bib))) return;
+    // Small delay so overlay appears after hero paints, not on first frame
+    const t = setTimeout(() => {
+      setShowRicCelebration(true);
+      markCelebrationSeen(raceId, String(athlete.Bib));
+    }, 500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raceId, athlete?.Bib, hasCelebWorthyBadge]);
 
   // Claim form state
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -649,8 +688,8 @@ export default function AthleteDetailPage() {
               <ChevronLeft className="w-4 h-4" />
               <span>{t('athlete.resultDistance', { distance: athlete.distance })}</span>
             </Link>
-            {/* Top nav actions: cert downloads + copy link only.
-                Ảnh KQ + Chia sẻ moved to FAB (persistent while scrolling). */}
+            {/* Top nav actions: cert downloads only.
+                Copy link, Ảnh KQ + Chia sẻ moved to FAB (persistent while scrolling). */}
             <div className="flex flex-wrap items-center gap-2 sm:justify-end [&>button]:flex-1 [&>button]:min-w-[104px] sm:[&>button]:flex-none sm:[&>button]:min-w-0">
               <CertificateV2DownloadButtons
                 raceId={raceId}
@@ -659,13 +698,6 @@ export default function AthleteDetailPage() {
                 runnerName={athlete.Name}
                 variant="glass"
               />
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
-              >
-                {linkCopied ? <Check className="w-4 h-4 shrink-0" /> : <Link2 className="w-4 h-4 shrink-0" />}
-                <span className="whitespace-nowrap">{linkCopied ? t('athlete.copied') : t('athlete.copyLink')}</span>
-              </button>
             </div>
           </div>
         </div>
@@ -942,6 +974,44 @@ export default function AthleteDetailPage() {
                   Shows only for finishers on races with cert feature on.
                   Reuses `downloadCertificateAsPng` (same endpoint + confetti
                   as the old cert section further down). */}
+              {/* Achievement badges + image CTA — compact footer row, shown only
+                  for finishers with at least one badge. Replaces the standalone
+                  AchievementBanner card that lived above the time card. */}
+              {finalStatus === 'finisher' && athleteBadges.length > 0 && (
+                <div className="border-t border-gray-100 px-5 py-3 md:px-6 bg-gradient-to-r from-amber-50/50 to-white flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                  {/* Badges — label + 2-row wrap */}
+                  <div className="min-w-0 sm:flex-1">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-700/60 mb-1.5">
+                      🏅 Thành tích
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {athleteBadges.map((b) => (
+                        <span
+                          key={b.type}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-white"
+                          style={{ backgroundColor: b.color ?? '#1d4ed8' }}
+                        >
+                          {b.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {/* CTA — full-width trên mobile, auto-width trên sm+ */}
+                  <button
+                    type="button"
+                    onClick={() => setShowImageEditor(true)}
+                    className={`w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${
+                      hasCelebWorthyBadge
+                        ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-200'
+                        : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 shadow-sm'
+                    }`}
+                  >
+                    <span aria-hidden>🎨</span>
+                    <span>{hasCelebWorthyBadge ? 'Tạo ảnh ăn mừng' : 'Tạo ảnh kết quả'}</span>
+                  </button>
+                </div>
+              )}
+
               {certCtaVisible && (
                 <div className="border-t border-gray-100 bg-gradient-to-br from-amber-50/70 via-white to-emerald-50/40 px-5 py-4 md:px-6 md:py-5">
                   {/* Inline cert CTA intentionally NOT using ap-cert-frame:
@@ -1521,12 +1591,25 @@ export default function AthleteDetailPage() {
         </div>
       </div>
 
-      {/* Result Image Editor Modal */}
+      {/* Result Image Creator Modal — v2 (Phase 2) */}
       {showImageEditor && (
-        <ResultImageEditor
+        <ResultImageCreator
           athlete={athlete}
           raceId={raceId}
+          raceName={raceData?.title || athlete.race_name}
           onClose={() => setShowImageEditor(false)}
+        />
+      )}
+
+      {/* Celebration overlay — fires once per bib on first visit if a
+          celebration-worthy badge is present (PB / Podium / Ultra / Sub-X). */}
+      {raceId && athlete?.Bib != null && (
+        <CelebrationOverlay
+          show={showRicCelebration}
+          raceId={raceId}
+          bib={athlete.Bib}
+          badges={athleteBadges}
+          onDismiss={handleDismissCelebration}
         />
       )}
 
@@ -1661,6 +1744,8 @@ export default function AthleteDetailPage() {
             const el = document.getElementById('athlete-certificate-cta');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }}
+          onCopyLink={handleCopyLink}
+          linkCopied={linkCopied}
         />
       )}
     </RaceTheme>
