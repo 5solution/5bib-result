@@ -280,11 +280,13 @@ export default function ResultImageCreator({
     appliedMessageRef.current = msg;
     setAppliedMessage(msg);
 
-    // If photo active → POST with the new applied message immediately
+    // If photo active → POST with the new applied message immediately.
+    // NOTE: do NOT clear generatedUrl before the POST — keep the current photo
+    // preview visible while the server regenerates. Atomically swap old→new when
+    // the result arrives (same pattern as the settings-change effect).
     const file = effectivePhotoRef.current;
     if (!file) return;
     const myId = ++generationIdRef.current;
-    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     void generateMutation.mutateAsync({
       template,
       size,
@@ -299,7 +301,7 @@ export default function ResultImageCreator({
         URL.revokeObjectURL(result.objectUrl);
         return;
       }
-      setGeneratedUrl(result.objectUrl);
+      setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return result.objectUrl; });
       setLastFallback(result.templateFallback);
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
