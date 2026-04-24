@@ -27,13 +27,14 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, Eye } from "lucide-react";
 
 type LeadStatus = "new" | "contacted" | "quoted" | "closed_won" | "closed_lost";
-type LeadSource = "timing" | "solution";
+type LeadSource = "timing" | "solution" | "5sport-btc" | "5sport-athlete";
 
 interface TimingLead {
   _id: string;
   lead_number: number;
   full_name: string;
   phone: string;
+  email?: string;
   organization: string;
   athlete_count_range: string;
   package_interest: "basic" | "advanced" | "professional" | "unspecified";
@@ -42,6 +43,10 @@ interface TimingLead {
   status: LeadStatus;
   is_archived: boolean;
   staff_notes: string;
+  city?: string;
+  sport_type?: string;
+  tournament_scale?: string;
+  tournament_timing?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,6 +76,8 @@ const PACKAGE_LABEL: Record<TimingLead["package_interest"], string> = {
 const SOURCE_BADGE: Record<LeadSource, { label: string; className: string }> = {
   timing: { label: "Timing", className: "bg-sky-100 text-sky-700 border-sky-200" },
   solution: { label: "Solution", className: "bg-pink-100 text-pink-700 border-pink-200" },
+  "5sport-btc": { label: "5Sport BTC", className: "bg-lime-100 text-lime-700 border-lime-200" },
+  "5sport-athlete": { label: "5Sport VĐV", className: "bg-violet-100 text-violet-700 border-violet-200" },
 };
 
 export default function TimingLeadsPage() {
@@ -219,6 +226,8 @@ export default function TimingLeadsPage() {
               <SelectItem value="all">Tất cả nguồn</SelectItem>
               <SelectItem value="timing">Timing</SelectItem>
               <SelectItem value="solution">Solution</SelectItem>
+              <SelectItem value="5sport-btc">5Sport BTC</SelectItem>
+              <SelectItem value="5sport-athlete">5Sport VĐV</SelectItem>
             </SelectContent>
           </Select>
         </div>
