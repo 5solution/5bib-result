@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Download, Loader2, ImagePlus, RotateCcw, Share2 } from 'lucide-react';
+import { X, Download, Loader2, ImagePlus, RotateCcw, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import TemplatePicker, { TEMPLATE_META } from './TemplatePicker';
 import {
@@ -84,14 +84,47 @@ export default function ResultImageCreator({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const touchStartXRef = useRef<number | null>(null);
 
   // Force 9:16 size for story
   const size: SizeKey = template === 'story' ? '9:16' : '4:5';
 
   // ─── Generation mutation ──────────────────────────────────
+  // Declared early so swipe callbacks can read isPending without TDZ issues.
   const generateMutation = useGenerateResultImage(raceId, String(athlete.Bib));
   const incrementShare = useIncrementShareCount(raceId, String(athlete.Bib));
   const logShareEvent = useLogShareEvent();
+
+  // ─── Template carousel navigation (mobile swipe) ──────────
+  const TEMPLATE_KEYS = TEMPLATE_META.map((t) => t.key) as TemplateKey[];
+  const currentTemplateIdx = TEMPLATE_KEYS.indexOf(template);
+
+  const goToPrevTemplate = useCallback(() => {
+    if (generateMutation.isPending) return;
+    const idx = TEMPLATE_KEYS.indexOf(template);
+    setTemplate(TEMPLATE_KEYS[(idx - 1 + TEMPLATE_KEYS.length) % TEMPLATE_KEYS.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, generateMutation.isPending]);
+
+  const goToNextTemplate = useCallback(() => {
+    if (generateMutation.isPending) return;
+    const idx = TEMPLATE_KEYS.indexOf(template);
+    setTemplate(TEMPLATE_KEYS[(idx + 1) % TEMPLATE_KEYS.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, generateMutation.isPending]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartXRef.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartXRef.current;
+    touchStartXRef.current = null;
+    if (Math.abs(dx) < 50) return; // ignore taps / micro-drags
+    if (dx < 0) goToNextTemplate(); // swipe left → next
+    else goToPrevTemplate();        // swipe right → prev
+  }, [goToNextTemplate, goToPrevTemplate]);
 
   // Tracks whether backend fell back to classic (podium → classic, etc.)
   const [lastFallback, setLastFallback] = useState<boolean>(false);
@@ -386,8 +419,12 @@ export default function ResultImageCreator({
         {/* Body: 2-column on desktop, stacked on mobile */}
         <div className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-0 lg:gap-0">
-            {/* Left: live preview */}
-            <div className="bg-gray-900 p-4 sm:p-8 flex items-center justify-center min-h-[360px]">
+            {/* Left: live preview — touch area for swipe-to-change-template */}
+            <div
+              className="bg-gray-900 p-4 sm:p-8 flex flex-col items-center justify-center min-h-[360px] select-none"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
               <div
                 className={`relative bg-gray-800 rounded-lg overflow-hidden shadow-2xl ${
                   size === '9:16' ? 'aspect-[9/16] max-h-[520px]' : 'aspect-[4/5] max-h-[520px]'
@@ -410,6 +447,55 @@ export default function ResultImageCreator({
                     <Loader2 className="w-8 h-8 animate-spin text-white" />
                   </div>
                 )}
+                {/* Template name pill — mobile only, fades on top of image */}
+                <div className="lg:hidden absolute bottom-2 inset-x-0 flex justify-center pointer-events-none">
+                  <span className="bg-black/55 backdrop-blur-sm text-white text-[11px] font-medium px-3 py-1 rounded-full">
+                    {TEMPLATE_META[currentTemplateIdx]?.label}
+                  </span>
+                </div>
+              </div>
+
+              {/* ── Mobile dot navigator ── */}
+              <div className="lg:hidden mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={goToPrevTemplate}
+                  disabled={pending}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 flex items-center justify-center text-white disabled:opacity-40 transition"
+                  aria-label="Template trước"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center gap-1.5" role="tablist" aria-label="Chọn template">
+                  {TEMPLATE_META.map((t, i) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={i === currentTemplateIdx}
+                      aria-label={t.label}
+                      onClick={() => !pending && setTemplate(t.key)}
+                      disabled={pending}
+                      className={[
+                        'rounded-full transition-all duration-200',
+                        i === currentTemplateIdx
+                          ? 'w-5 h-2 bg-white'
+                          : 'w-2 h-2 bg-white/40 hover:bg-white/60',
+                      ].join(' ')}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={goToNextTemplate}
+                  disabled={pending}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 flex items-center justify-center text-white disabled:opacity-40 transition"
+                  aria-label="Template tiếp theo"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
