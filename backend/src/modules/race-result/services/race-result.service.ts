@@ -535,6 +535,8 @@ export class RaceResultService {
       synced_at: doc.syncedAt,
       splits: doc.splits ?? [],
       avatarUrl: doc.avatarUrl ?? null,
+      // Used by ResultImageService to invalidate S3 cache on admin edits
+      updated_at: doc.updated_at ?? doc.updatedAt ?? null,
     };
   }
 
@@ -1636,10 +1638,36 @@ export class RaceResultService {
       { new: true },
     ).lean().exec();
 
-    // Invalidate course-level cache + athlete-level cache
+    // Invalidate course-level cache + athlete-level cache + badge cache.
+    // Result-image S3 cache self-invalidates because `updated_at` flows into
+    // the cache key (see ResultImageService.computeCacheKey athleteSnapshot.v).
     if (updated) {
       await this.purgeCache(updated.courseId);
       await this.redis.del(`athlete:${updated.raceId}:${updated.bib}`);
+      // Edit may change podium / PB eligibility — wipe this athlete's badges.
+      // When overallRank changes, sibling podium athletes (rank 1-3) could
+      // also need refresh → wipe rank 1-3 in same race for safety.
+      await this.redis.del(`badge:${updated.raceId}:${updated.bib}`);
+      if (fields.overallRank !== undefined && fields.overallRank <= 5) {
+        // Top-5 shuffle affects podium positions → best-effort scan
+        try {
+          const top = await this.resultModel
+            .find({
+              raceId: updated.raceId,
+              overallRankNumeric: { $lte: 5 },
+            })
+            .select({ bib: 1 })
+            .lean()
+            .exec();
+          for (const t of top) {
+            if (t.bib) {
+              await this.redis.del(`badge:${updated.raceId}:${t.bib}`);
+            }
+          }
+        } catch {
+          /* ignore — badge TTL 1h is the fallback */
+        }
+      }
     }
 
     return {
