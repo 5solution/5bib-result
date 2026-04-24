@@ -162,7 +162,7 @@ export default function RaceDetailPage() {
         gpxUrl: c.gpxUrl,
       })),
       logoUrl: r.logoUrl,
-      imageUrl: r.imageUrl,
+      imageUrl: r.bannerUrl || r.imageUrl,
       description: r.description,
       organizer: r.organizer,
       enableHideStats: r.enableHideStats ?? false,
