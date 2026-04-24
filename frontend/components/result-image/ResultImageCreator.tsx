@@ -96,6 +96,11 @@ export default function ResultImageCreator({
   // Tracks whether backend fell back to classic (podium → classic, etc.)
   const [lastFallback, setLastFallback] = useState<boolean>(false);
 
+  // Ref so the settings-change effect can always read the latest customPhoto
+  // without adding it to the effect's dep array (which would cause loops).
+  const customPhotoRef = useRef<File | null>(customPhoto);
+  useEffect(() => { customPhotoRef.current = customPhoto; }, [customPhoto]);
+
   // Cleanup object URL on unmount
   useEffect(() => {
     return () => {
@@ -131,13 +136,47 @@ export default function ResultImageCreator({
     [raceId, athlete.Bib, template, size, gradient, showBadges, showQrCode, showSplits, customMessage, previewToken],
   );
 
-  // When gradient/badges/etc change, bump token so preview refetches
+  // When template/gradient/etc change:
+  //  - Always bump previewToken → GET preview img refetches for no-photo case
+  //  - If a custom photo is active → auto-regenerate via POST so the preview
+  //    stays in sync (GET endpoint can't accept file uploads, so we must use
+  //    the full generate path every time settings change while a photo is set)
+  //  - If no custom photo → just clear any stale generated blob
   useEffect(() => {
     setPreviewToken((t) => t + 1);
+
+    const file = customPhotoRef.current;
+    if (!file) {
+      setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+      return;
+    }
+
+    // Custom photo is active — regenerate with new settings immediately.
+    // Read template/size/gradient etc. from closure (they're the trigger deps).
+    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    void generateMutation.mutateAsync({
+      template,
+      size,
+      gradient,
+      showBadges,
+      showQrCode,
+      showSplits,
+      customPhoto: file,
+    }).then((result) => {
+      setGeneratedUrl(result.objectUrl);
+      setLastFallback(result.templateFallback);
+    }).catch(() => { /* error toast handled by mutation / generate() */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template, gradient, showBadges, showQrCode, showSplits]);
 
   // ─── File upload handler ──────────────────────────────────
-  const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * When user picks a custom photo we immediately fire the POST generate
+   * endpoint with that file so the main preview updates in-place.
+   * The GET preview endpoint is query-params-only and cannot receive a file,
+   * so auto-generating is the only way to show a live preview.
+   */
+  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -149,18 +188,46 @@ export default function ResultImageCreator({
       return;
     }
     if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
-    const url = URL.createObjectURL(file);
+    const thumbUrl = URL.createObjectURL(file);
     setCustomPhoto(file);
-    setCustomPhotoPreview(url);
+    setCustomPhotoPreview(thumbUrl);
     // Reset input so same file can be re-selected after remove
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [customPhotoPreview]);
+
+    // Auto-generate preview with the new file.
+    // Use the local `file` variable (not state) because React state isn't
+    // flushed yet when this callback runs.
+    if (generatedUrl) URL.revokeObjectURL(generatedUrl);
+    setGeneratedUrl(null);
+    try {
+      const result = await generateMutation.mutateAsync({
+        template,
+        size,
+        gradient,
+        showBadges,
+        showQrCode,
+        showSplits,
+        customMessage: customMessage.slice(0, 50) || undefined,
+        customPhoto: file,
+      });
+      setGeneratedUrl(result.objectUrl);
+      setLastFallback(result.templateFallback);
+    } catch {
+      // error toast already shown by the mutation error handler in generate()
+    }
+  }, [customPhotoPreview, generatedUrl, generateMutation, template, size, gradient,
+      showBadges, showQrCode, showSplits, customMessage]);
 
   const removeCustomPhoto = useCallback(() => {
     if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
+    // Revoke the blob generated for the custom-photo preview
+    if (generatedUrl) URL.revokeObjectURL(generatedUrl);
     setCustomPhoto(null);
     setCustomPhotoPreview(null);
-  }, [customPhotoPreview]);
+    setGeneratedUrl(null);
+    // Bump token so the GET preview img refetches without the custom photo
+    setPreviewToken((t) => t + 1);
+  }, [customPhotoPreview, generatedUrl]);
 
   // ─── Generate + download/share ────────────────────────────
   const generate = useCallback(async () => {
@@ -329,8 +396,11 @@ export default function ResultImageCreator({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  key={previewToken}
-                  src={previewUrl}
+                  // When a custom photo is uploaded we auto-generate via POST
+                  // and store the blob URL in `generatedUrl`. The GET preview
+                  // endpoint is query-params-only so it cannot show custom photos.
+                  key={generatedUrl ?? previewToken}
+                  src={generatedUrl ?? previewUrl}
                   alt="Preview kết quả"
                   className="absolute inset-0 w-full h-full object-cover"
                   loading="eager"

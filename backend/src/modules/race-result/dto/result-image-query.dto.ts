@@ -119,6 +119,17 @@ export class ResultImageQueryDto {
   @Transform(({ value }) => value === true || value === 'true' || value === '1')
   @IsBoolean()
   preview?: boolean = false;
+
+  /**
+   * Cache-buster token used by frontend `<img>` tags to force reload when
+   * template/gradient/size flip but URL body stays the same. Not consumed by
+   * render logic — whitelisted here so `forbidNonWhitelisted` doesn't 400.
+   */
+  @ApiProperty({ required: false, maxLength: 32 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  t?: string;
 }
 
 /**
