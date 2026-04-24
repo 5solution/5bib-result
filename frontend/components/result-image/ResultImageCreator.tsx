@@ -78,6 +78,12 @@ export default function ResultImageCreator({
   const [showQrCode, setShowQrCode] = useState(false);
   const [showSplits, setShowSplits] = useState(false);
   const [customMessage, setCustomMessage] = useState('');
+  // Only updated when user explicitly clicks ✓ — drives GET preview URL and
+  // auto-gen POSTs. customMessage is the live input; appliedMessage is the
+  // "committed" value that actually reaches the server.
+  const [appliedMessage, setAppliedMessage] = useState('');
+  // Ref keeps appliedMessage readable inside effects without adding to their dep array
+  const appliedMessageRef = useRef('');
   const [customPhoto, setCustomPhoto] = useState<File | null>(null);
   const [customPhotoPreview, setCustomPhotoPreview] = useState<string | null>(null);
   // Blob output from the crop editor (null = not cropped yet)
@@ -144,6 +150,8 @@ export default function ResultImageCreator({
   // to the effect's dep array (which would cause loops).
   const effectivePhotoRef = useRef<File | Blob | null>(null);
   useEffect(() => { effectivePhotoRef.current = croppedBlob ?? customPhoto; }, [croppedBlob, customPhoto]);
+  // Keep appliedMessageRef in sync so effects can read it without stale closures
+  useEffect(() => { appliedMessageRef.current = appliedMessage; }, [appliedMessage]);
 
   // Cleanup object URL on unmount
   useEffect(() => {
@@ -165,6 +173,8 @@ export default function ResultImageCreator({
   }, [onClose, generateMutation.isPending]);
 
   // ─── Preview URL (changes bump previewToken → new `<img src>`) ──
+  // Uses appliedMessage (not raw customMessage) so GET preview only fires
+  // when the user explicitly clicks ✓, NOT on every keystroke.
   const previewUrl = useMemo(
     () =>
       buildPreviewUrl(raceId, String(athlete.Bib), {
@@ -174,10 +184,10 @@ export default function ResultImageCreator({
         showBadges,
         showQrCode,
         showSplits,
-        customMessage: customMessage.slice(0, 50),
+        customMessage: appliedMessage,
         token: previewToken,
       }),
-    [raceId, athlete.Bib, template, size, gradient, showBadges, showQrCode, showSplits, customMessage, previewToken],
+    [raceId, athlete.Bib, template, size, gradient, showBadges, showQrCode, showSplits, appliedMessage, previewToken],
   );
 
   // Debounce the main preview img — 350ms after last settings change.
@@ -196,11 +206,11 @@ export default function ResultImageCreator({
   //    Generation ID ensures out-of-order / stale responses are discarded so
   //    rapid template clicks never produce broken or wrong previews.
   //
-  // NOTE: customMessage is intentionally NOT in the deps array.
-  //   - GET preview (no photo): previewUrl useMemo already includes customMessage → the
-  //     debouncedPreviewUrl mechanism handles it without extra server hits per keystroke.
-  //   - Photo POST: customMessage is read from closure at fire time (always fresh).
-  //     User applies message explicitly via the "Áp dụng" button (handleApplyMessage).
+  // NOTE: neither customMessage nor appliedMessage is in the deps array.
+  //   - GET preview (no photo): previewUrl useMemo uses appliedMessage — only
+  //     updates when user clicks ✓, never on keystroke.
+  //   - Photo POST: appliedMessageRef.current is read at fire time.
+  //     Applying a message is handled exclusively by handleApplyMessage.
   useEffect(() => {
     setPreviewToken((t) => t + 1);
 
@@ -226,7 +236,7 @@ export default function ResultImageCreator({
         showBadges,
         showQrCode,
         showSplits,
-        customMessage: customMessage.slice(0, 50) || undefined, // closure read — always fresh
+        customMessage: appliedMessageRef.current || undefined, // ref read — only applied messages
         customPhoto: file,
       }).then((result) => {
         if (generationIdRef.current !== myId) {
@@ -247,10 +257,15 @@ export default function ResultImageCreator({
   // previewToken refreshes it immediately without a POST.
   // Photo POST: user explicitly applies the message, fires a single POST with current settings.
   const handleApplyMessage = useCallback(() => {
-    // Refresh GET preview with latest message
-    setPreviewToken((t) => t + 1);
+    const msg = customMessage.slice(0, 50);
 
-    // If photo active → re-generate with the new message
+    // Commit the message — this updates appliedMessage state which:
+    //   (a) recomputes previewUrl → fires GET preview for no-photo path
+    //   (b) updates appliedMessageRef so future auto-gen POSTs use it
+    appliedMessageRef.current = msg;
+    setAppliedMessage(msg);
+
+    // If photo active → POST with the new applied message immediately
     const file = effectivePhotoRef.current;
     if (!file) return;
     const myId = ++generationIdRef.current;
@@ -262,7 +277,7 @@ export default function ResultImageCreator({
       showBadges,
       showQrCode,
       showSplits,
-      customMessage: customMessage.slice(0, 50) || undefined,
+      customMessage: msg || undefined,
       customPhoto: file,
     }).then((result) => {
       if (generationIdRef.current !== myId) {
@@ -316,7 +331,7 @@ export default function ResultImageCreator({
         showBadges,
         showQrCode,
         showSplits,
-        customMessage: customMessage.slice(0, 50) || undefined,
+        customMessage: appliedMessageRef.current || undefined,
         customPhoto: blob,
       });
       setGeneratedUrl(result.objectUrl);
@@ -325,7 +340,7 @@ export default function ResultImageCreator({
       // error toast already handled by generate()
     }
   }, [generatedUrl, generateMutation, template, size, gradient,
-      showBadges, showQrCode, showSplits, customMessage]);
+      showBadges, showQrCode, showSplits]);
 
   const removeCustomPhoto = useCallback(() => {
     if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
@@ -353,7 +368,7 @@ export default function ResultImageCreator({
         showBadges,
         showQrCode,
         showSplits,
-        customMessage: customMessage.slice(0, 50) || undefined,
+        customMessage: appliedMessageRef.current || undefined,
         customPhoto: croppedBlob ?? customPhoto,
       });
       setGeneratedUrl(result.objectUrl);
@@ -374,7 +389,7 @@ export default function ResultImageCreator({
       }
       throw err;
     }
-  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, customMessage, croppedBlob, customPhoto, generatedUrl]);
+  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, croppedBlob, customPhoto, generatedUrl]);
 
   const handleDownload = useCallback(async () => {
     try {
