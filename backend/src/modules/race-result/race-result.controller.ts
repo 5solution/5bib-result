@@ -5,6 +5,7 @@ import {
   Query,
   Param,
   Body,
+  Req,
   Res,
   BadRequestException,
   NotFoundException,
@@ -13,7 +14,7 @@ import {
   UseInterceptors,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import {
   ApiOperation,
   ApiResponse,
@@ -48,6 +49,11 @@ import {
   AthleteInput,
 } from './services/result-image.service';
 import { BadgeService } from './services/badge.service';
+import { ShareEventService } from './services/share-event.service';
+import {
+  LogShareEventDto,
+  ShareStatsDto,
+} from './dto/share-event.dto';
 import { RacesService } from '../races/races.service';
 import { UploadService } from '../upload/upload.service';
 import { LogtoAdminGuard } from '../logto-auth';
@@ -59,6 +65,7 @@ export class RaceResultController {
     private readonly raceResultService: RaceResultService,
     private readonly resultImageService: ResultImageService,
     private readonly badgeService: BadgeService,
+    private readonly shareEventService: ShareEventService,
     private readonly racesService: RacesService,
     private readonly uploadService: UploadService,
   ) {}
@@ -463,7 +470,7 @@ export class RaceResultController {
     this.assertSafePathParam(bib, 'bib');
 
     const athleteInput = await this.loadAthleteInput(raceId, bib);
-    const { raceName, raceSlug, courseName } = await this.loadRaceMeta(raceId);
+    const { raceName, raceSlug, courseName, hideRanks } = await this.loadRaceMeta(raceId);
 
     const config = normalizeImageConfig({ ...query, preview: true });
 
@@ -475,14 +482,23 @@ export class RaceResultController {
       raceSlug,
       courseName,
       config,
+      hideRanks,
     });
 
-    res.set({
+    const headers: Record<string, string> = {
       'Content-Type': 'image/png',
       'Content-Length': result.buffer.length.toString(),
       'Cache-Control': 'no-store',
       'Content-Disposition': `inline; filename="preview-${bib}.png"`,
-    });
+      'X-Template-Actual': result.templateActual,
+    };
+    if (result.fallback) {
+      headers['X-Template-Fallback'] = '1';
+      if (result.fallbackReason) {
+        headers['X-Template-Fallback-Reason'] = result.fallbackReason;
+      }
+    }
+    res.set(headers);
     res.send(result.buffer);
   }
 
@@ -587,7 +603,7 @@ export class RaceResultController {
       files?.customPhoto?.[0] ?? files?.customBg?.[0] ?? undefined;
 
     const athleteInput = await this.loadAthleteInput(raceId, bib);
-    const { raceName, raceSlug, courseName } = await this.loadRaceMeta(raceId);
+    const { raceName, raceSlug, courseName, hideRanks } = await this.loadRaceMeta(raceId);
 
     const config = normalizeImageConfig({ ...body, preview: false });
 
@@ -600,16 +616,25 @@ export class RaceResultController {
       courseName,
       config,
       customPhotoBuffer: customPhotoFile?.buffer,
+      hideRanks,
     });
 
-    res.set({
+    const headers: Record<string, string> = {
       'Content-Type': 'image/png',
       'Content-Length': result.buffer.length.toString(),
       // Let CDN/browser cache the same payload we just returned (same key = same bytes)
       'Cache-Control': 'public, max-age=300',
       'Content-Disposition': `inline; filename="result-${bib}.png"`,
       'X-From-Cache': result.fromCache ? '1' : '0',
-    });
+      'X-Template-Actual': result.templateActual,
+    };
+    if (result.fallback) {
+      headers['X-Template-Fallback'] = '1';
+      if (result.fallbackReason) {
+        headers['X-Template-Fallback-Reason'] = result.fallbackReason;
+      }
+    }
+    res.set(headers);
     res.send(result.buffer);
   }
 
@@ -663,6 +688,77 @@ export class RaceResultController {
     return { data: { raceId, count }, success: true };
   }
 
+  // ─── Analytics (D-1) + Admin stats (D-3) ──────────────────────
+
+  @Post('result-image-share')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  @ApiOperation({
+    summary:
+      'Log a result-image share event (fire-and-forget analytics endpoint)',
+    description:
+      'Called by the frontend after a user downloads / shares / copies a ' +
+      'generated image. Persisted to `share_events` collection for admin ' +
+      'dashboard aggregation + the 24h nurture cron. Does not increment the ' +
+      'Redis share counter — that has its own endpoint for legacy callers.',
+  })
+  @ApiBody({ type: LogShareEventDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Event accepted',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+      },
+    },
+  })
+  async logShareEvent(
+    @Body() body: LogShareEventDto,
+    @Req() req: Request,
+  ): Promise<{ success: boolean }> {
+    const ua =
+      typeof req.headers['user-agent'] === 'string'
+        ? req.headers['user-agent']
+        : undefined;
+    await this.shareEventService.log({
+      raceId: body.raceId,
+      bib: body.bib,
+      template: body.template,
+      channel: body.channel,
+      gradient: body.gradient,
+      size: body.size,
+      templateFallback: body.templateFallback,
+      userAgent: ua,
+    });
+    // Also bump the Redis counter so UI sees the live increment immediately.
+    await this.resultImageService.incrementShareCount(body.raceId);
+    return { success: true };
+  }
+
+  @Get('admin/result-image-stats')
+  @UseGuards(LogtoAdminGuard)
+  @ApiOperation({
+    summary: 'Aggregate share-event stats for the admin dashboard',
+    description:
+      'Returns totals + breakdowns by template and channel, plus the ' +
+      'backend-fallback rate. Optional filters: `raceId`, `since` (ISO ' +
+      'timestamp).',
+  })
+  @ApiResponse({ status: 200, type: ShareStatsDto })
+  async getShareStats(
+    @Query('raceId') raceId?: string,
+    @Query('since') sinceIso?: string,
+  ): Promise<{ data: ShareStatsDto; success: boolean }> {
+    if (raceId) this.assertSafePathParam(raceId, 'raceId');
+    const since = sinceIso ? new Date(sinceIso) : undefined;
+    const stats = await this.shareEventService.getStats({
+      raceId,
+      since: since && !isNaN(since.getTime()) ? since : undefined,
+    });
+    return { data: stats, success: true };
+  }
+
   // ─── Helpers for result-image endpoints ──────────────────────
 
   /**
@@ -709,16 +805,30 @@ export class RaceResultController {
 
   private async loadRaceMeta(
     raceId: string,
-  ): Promise<{ raceName: string; raceSlug: string; courseName: string }> {
+  ): Promise<{
+    raceName: string;
+    raceSlug: string;
+    courseName: string;
+    hideRanks: boolean;
+  }> {
     try {
       const race = await this.racesService.getRaceById(raceId);
+      const data = (race?.data ?? {}) as {
+        title?: string;
+        slug?: string;
+        enablePrivateList?: boolean;
+        enableHideStats?: boolean;
+      };
       return {
-        raceName: race?.data?.title ?? '',
-        raceSlug: race?.data?.slug ?? '',
+        raceName: data.title ?? '',
+        raceSlug: data.slug ?? '',
         courseName: '',
+        // E-3: either privacy toggle → strip rank fields from render data
+        hideRanks:
+          data.enablePrivateList === true || data.enableHideStats === true,
       };
     } catch {
-      return { raceName: '', raceSlug: '', courseName: '' };
+      return { raceName: '', raceSlug: '', courseName: '', hideRanks: false };
     }
   }
 

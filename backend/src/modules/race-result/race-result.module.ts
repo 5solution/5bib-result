@@ -5,12 +5,15 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { RaceResult, RaceResultSchema } from './schemas/race-result.schema';
 import { SyncLog, SyncLogSchema } from './schemas/sync-log.schema';
 import { ResultClaim, ResultClaimSchema } from './schemas/result-claim.schema';
+import { ShareEvent, ShareEventSchema } from './schemas/share-event.schema';
 import { RaceResultController } from './race-result.controller';
 import { RaceResultService } from './services/race-result.service';
 import { ResultImageService } from './services/result-image.service';
 import { BadgeService } from './services/badge.service';
 import { RenderSemaphore } from './services/render-semaphore';
 import { RaceSyncCron } from './services/race-sync.cron';
+import { ShareEventService } from './services/share-event.service';
+import { ShareNurtureCron } from './services/share-nurture.cron';
 import { RacesModule } from '../races/races.module';
 import { UploadModule } from '../upload/upload.module';
 
@@ -20,6 +23,7 @@ import { UploadModule } from '../upload/upload.module';
       { name: RaceResult.name, schema: RaceResultSchema },
       { name: SyncLog.name, schema: SyncLogSchema },
       { name: ResultClaim.name, schema: ResultClaimSchema },
+      { name: ShareEvent.name, schema: ShareEventSchema },
     ]),
     HttpModule,
     // Module-scoped throttler so @Throttle decorators on result-image /
@@ -41,7 +45,9 @@ import { UploadModule } from '../upload/upload.module';
     BadgeService,
     RenderSemaphore,
     RaceSyncCron,
+    ShareEventService,
+    ShareNurtureCron,
   ],
-  exports: [RaceResultService, BadgeService],
+  exports: [RaceResultService, BadgeService, ShareEventService],
 })
 export class RaceResultModule {}

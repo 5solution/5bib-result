@@ -127,12 +127,38 @@ cd admin && npx next build     # Next.js build
 ```
 NODE_ENV, PORT=8081, MONGODB_URL, MONGODB_DB_NAME, REDIS_URL, JWT_SECRET
 AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET
+
+# Result Image Creator v1.0
+RENDER_MAX_CONCURRENT=8              # In-process semaphore cap for canvas renders (tune per CPU)
+RESULT_PUBLIC_URL=https://result.5bib.com  # Used to embed QR code + share links in canvas
 ```
 
 ### Frontend / Admin (runtime)
 ```
 BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at build time
 ```
+
+## Redis Keys Registry (Result Image Creator v1.0)
+| Prefix | Purpose | TTL |
+|--------|---------|-----|
+| `badge:<raceId>:<bib>` | Cached BadgeService detection result | 24h |
+| `badge-lock:<raceId>:<bib>` | SETNX lock during badge computation (anti-stampede) | 30s |
+| `render-lock:<raceId>:<bib>:<hash>` | Dedupe concurrent identical renders | 60s |
+| `share-count:<raceId>` | INCR-based race-level share counter | ∞ |
+| `bib-count:<raceId>:<bib>` | INCR-based athlete-level share counter | ∞ |
+
+Flush pattern (careful — global):
+```bash
+ssh 5solution-vps "docker exec 5bib-result-backend node -e \"require('ioredis').createClient(process.env.REDIS_URL).keys('badge:*').then(k => ...)\""
+```
+
+## S3 Lifecycle (Result Image Creator v1.0)
+Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
+Required lifecycle rule (configure via AWS console or CDK):
+- **Prefix**: `result-images/`
+- **Expiration**: 24 hours after creation
+- **Reason**: Generated PNGs are re-creatable from canvas; no need for long-term storage. Keeps bucket clean and cost low.
+
 
 ## Development Rules
 

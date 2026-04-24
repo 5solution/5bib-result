@@ -18,7 +18,7 @@ const LOCK_TTL_SECONDS = 10; // stampede prevention
  * WHY regex \b failed: \b between digit↔letter (both word chars) does NOT match.
  * So `/\b21\b/` didn't match "21km". We parse numerically instead.
  */
-function parseDistanceKm(raw: string): number {
+export function parseDistanceKm(raw: string): number {
   if (!raw) return 0;
   const s = raw.toLowerCase().trim();
 
@@ -236,24 +236,13 @@ export class BadgeService {
     return sortBadges(badges);
   }
 
-  // ─── Detection methods ──────────────────────────────────────
+  // ─── Detection methods (thin wrappers around exported pure fns) ──
 
   private detectPodium(result: {
     overallRankNumeric?: number;
     overallRank?: string;
   }): Badge | null {
-    const rank =
-      result.overallRankNumeric ?? parseInt(result.overallRank || '', 10);
-    if (isNaN(rank) || rank < 1 || rank > 3) return null;
-    const labels = ['🥇 Vô địch chung cuộc', '🥈 Á quân chung cuộc', '🥉 Hạng 3 chung cuộc'];
-    const colors = ['#f59e0b', '#94a3b8', '#d97706'];
-    return {
-      type: 'PODIUM',
-      label: labels[rank - 1],
-      shortLabel: `#${rank}`,
-      color: colors[rank - 1],
-      meta: { rank },
-    };
+    return detectPodiumLogic(result);
   }
 
   private detectAgePodium(result: {
@@ -261,60 +250,18 @@ export class BadgeService {
     categoryRank?: string;
     category?: string;
   }): Badge | null {
-    const rank =
-      result.categoryRankNumeric ?? parseInt(result.categoryRank || '', 10);
-    if (isNaN(rank) || rank < 1 || rank > 3) return null;
-    return {
-      type: 'AG_PODIUM',
-      label: `🏅 Top ${rank} ${result.category || 'Age Group'}`,
-      shortLabel: `AG#${rank}`,
-      color: '#7c3aed',
-      meta: { rank, category: result.category ?? '' },
-    };
+    return detectAgePodiumLogic(result);
   }
 
   private detectSubX(result: {
     distance?: string;
     chipTime?: string;
   }): Badge[] {
-    const distance = result.distance || '';
-    const chipSeconds = parseChipTime(result.chipTime);
-    if (chipSeconds <= 0) return [];
-
-    const ruleset = SUBX_THRESHOLDS.find((r) => r.distanceMatch(distance));
-    if (!ruleset) return [];
-
-    // Pick the HIGHEST tier achieved (fastest threshold that the athlete beat).
-    for (const threshold of ruleset.thresholds) {
-      if (chipSeconds < threshold.seconds) {
-        return [
-          {
-            type: threshold.type,
-            label: `⚡ ${threshold.label}`,
-            shortLabel: threshold.label,
-            color: '#0ea5e9',
-            meta: { distance, chipSeconds },
-          },
-        ];
-      }
-    }
-    return [];
+    return detectSubXLogic(result);
   }
 
   private detectUltra(result: { distance?: string }): Badge | null {
-    const distance = result.distance || '';
-    const km = parseDistanceKm(distance);
-    // Ultra = ≥50km, or keyword markers (UTMB, "ultra", 100M miles)
-    if (km >= 50 || /ultra|utmb|\b100\s*mi|\b100\s*miles/i.test(distance)) {
-      return {
-        type: 'ULTRA',
-        label: '🏔️ Ultra Finisher',
-        shortLabel: 'Ultra',
-        color: '#059669',
-        meta: { distance, km: Math.round(km) },
-      };
-    }
-    return null;
+    return detectUltraLogic(result);
   }
 
   private async detectPersonalBest(result: {
@@ -499,7 +446,94 @@ function sleep(ms: number): Promise<void> {
  * - Collapse whitespace
  * Returns '' for empty/falsy input.
  */
-function normalizeName(name?: string | null): string {
+// ─── Pure detection helpers (exported for unit testing) ────────
+
+/** Podium = overallRank 1-3. */
+export function detectPodiumLogic(result: {
+  overallRankNumeric?: number;
+  overallRank?: string;
+}): Badge | null {
+  const rank =
+    result.overallRankNumeric ?? parseInt(result.overallRank || '', 10);
+  if (isNaN(rank) || rank < 1 || rank > 3) return null;
+  const labels = [
+    '🥇 Vô địch chung cuộc',
+    '🥈 Á quân chung cuộc',
+    '🥉 Hạng 3 chung cuộc',
+  ];
+  const colors = ['#f59e0b', '#94a3b8', '#d97706'];
+  return {
+    type: 'PODIUM',
+    label: labels[rank - 1],
+    shortLabel: `#${rank}`,
+    color: colors[rank - 1],
+    meta: { rank },
+  };
+}
+
+/** Age-group podium = categoryRank 1-3. */
+export function detectAgePodiumLogic(result: {
+  categoryRankNumeric?: number;
+  categoryRank?: string;
+  category?: string;
+}): Badge | null {
+  const rank =
+    result.categoryRankNumeric ?? parseInt(result.categoryRank || '', 10);
+  if (isNaN(rank) || rank < 1 || rank > 3) return null;
+  return {
+    type: 'AG_PODIUM',
+    label: `🏅 Top ${rank} ${result.category || 'Age Group'}`,
+    shortLabel: `AG#${rank}`,
+    color: '#7c3aed',
+    meta: { rank, category: result.category ?? '' },
+  };
+}
+
+/** Sub-X threshold — returns the highest tier achieved (fastest). */
+export function detectSubXLogic(result: {
+  distance?: string;
+  chipTime?: string;
+}): Badge[] {
+  const distance = result.distance || '';
+  const chipSeconds = parseChipTime(result.chipTime);
+  if (chipSeconds <= 0) return [];
+
+  const ruleset = SUBX_THRESHOLDS.find((r) => r.distanceMatch(distance));
+  if (!ruleset) return [];
+
+  for (const threshold of ruleset.thresholds) {
+    if (chipSeconds < threshold.seconds) {
+      return [
+        {
+          type: threshold.type,
+          label: `⚡ ${threshold.label}`,
+          shortLabel: threshold.label,
+          color: '#0ea5e9',
+          meta: { distance, chipSeconds },
+        },
+      ];
+    }
+  }
+  return [];
+}
+
+/** Ultra = ≥50km or keyword marker (UTMB, ultra, 100M). */
+export function detectUltraLogic(result: { distance?: string }): Badge | null {
+  const distance = result.distance || '';
+  const km = parseDistanceKm(distance);
+  if (km >= 50 || /ultra|utmb|\b100\s*mi|\b100\s*miles/i.test(distance)) {
+    return {
+      type: 'ULTRA',
+      label: '🏔️ Ultra Finisher',
+      shortLabel: 'Ultra',
+      color: '#059669',
+      meta: { distance, km: Math.round(km) },
+    };
+  }
+  return null;
+}
+
+export function normalizeName(name?: string | null): string {
   if (!name) return '';
   return name
     .normalize('NFD')

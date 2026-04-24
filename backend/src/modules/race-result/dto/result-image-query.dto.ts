@@ -41,20 +41,26 @@ export type TextColorMode = (typeof TEXT_COLOR_MODES)[number];
  * Backward-compat: `bg` → alias to `gradient`, `ratio` → alias to `size`.
  */
 export class ResultImageQueryDto {
+  // NOTE on defaults: we INTENTIONALLY do not set class-field defaults on
+  // `template`, `size`, `gradient`. Class field initializers run on every
+  // `new ResultImageQueryDto()` — which would clobber the backward-compat
+  // `bg`/`ratio` aliases (old clients that only send `bg=sunset` would still
+  // land with `gradient='blue'` from the default). Instead, `normalizeImageConfig`
+  // applies defaults AFTER resolving the alias chain.
   @ApiProperty({ enum: TEMPLATE_KEYS, default: 'classic', required: false })
   @IsOptional()
   @IsIn([...TEMPLATE_KEYS])
-  template?: TemplateKey = 'classic';
+  template?: TemplateKey;
 
   @ApiProperty({ enum: SIZE_KEYS, default: '4:5', required: false })
   @IsOptional()
   @IsIn([...SIZE_KEYS])
-  size?: SizeKey = '4:5';
+  size?: SizeKey;
 
   @ApiProperty({ enum: GRADIENT_KEYS, default: 'blue', required: false })
   @IsOptional()
   @IsIn([...GRADIENT_KEYS])
-  gradient?: GradientKey = 'blue';
+  gradient?: GradientKey;
 
   /**
    * Deprecated alias for `gradient` — kept for backward compat with old frontend.
@@ -132,13 +138,19 @@ export interface NormalizedImageConfig {
 }
 
 /**
- * Templates that are actually registered in Phase 1. Phase 2 adds endurance /
- * story / sticker / podium. Kept here (not imported from templates/index to avoid
- * circular dep) — update this set when a template is added to the registry.
+ * Templates that are actually registered. Kept here (not imported from
+ * templates/index to avoid circular dep) — update this set when a template is
+ * added to / removed from the registry.
+ *
+ * Phase 2: all 6 templates implemented.
  */
-const PHASE_1_IMPLEMENTED_TEMPLATES: ReadonlySet<TemplateKey> = new Set([
+const IMPLEMENTED_TEMPLATES: ReadonlySet<TemplateKey> = new Set([
   'classic',
   'celebration',
+  'endurance',
+  'story',
+  'sticker',
+  'podium',
 ]);
 
 export function normalizeImageConfig(
@@ -158,11 +170,10 @@ export function normalizeImageConfig(
     ? (dto.template as TemplateKey)
     : 'classic';
 
-  // Story template is 9:16 only — BUT only force the size if `story` is actually
-  // implemented. Otherwise the registry would fall back to Classic while the
-  // canvas would already be 1080×1920, breaking the Classic layout (which is
-  // tuned for 4:5). In Phase 1 story is not implemented, so we leave size alone.
-  if (template === 'story' && PHASE_1_IMPLEMENTED_TEMPLATES.has('story')) {
+  // Story template is 9:16 only — force the size when story is registered.
+  // If story is removed from the registry the guard lets the classic layout
+  // stay at the requested size instead of a half-filled 9:16 canvas.
+  if (template === 'story' && IMPLEMENTED_TEMPLATES.has('story')) {
     if (size !== '9:16') size = '9:16';
   }
 

@@ -30,7 +30,7 @@ import {
   ResultImageQueryDto,
   normalizeImageConfig,
 } from '../dto/result-image-query.dto';
-import { resolveTemplate } from '../templates';
+import { resolveTemplateResult } from '../templates';
 import type {
   RenderData,
   Badge,
@@ -120,6 +120,13 @@ export interface GenerateImageInput {
   courseName?: string;
   config: NormalizedImageConfig;
   customPhotoBuffer?: Buffer;
+  /**
+   * E-3 privacy gate — when true, service strips rank fields from render
+   * data (podium+celebration still render because they gate on `top-3` in
+   * templates themselves, but classic/endurance/story/sticker will show
+   * chip time only without ranks).
+   */
+  hideRanks?: boolean;
 }
 
 export interface GenerateImageResult {
@@ -131,6 +138,14 @@ export interface GenerateImageResult {
   cacheKey: string;
   /** Optional presigned S3 URL (if caller prefers redirect) */
   s3Url?: string;
+  /** Template actually rendered (may differ from requested if gated/unknown) */
+  templateActual: string;
+  /** Template that was requested by caller */
+  templateRequested: string;
+  /** True when service fell back to classic due to gating / unknown key */
+  fallback: boolean;
+  /** Reason code when fallback=true (e.g. "ineligible:podium") */
+  fallbackReason?: string;
 }
 
 @Injectable()
@@ -187,7 +202,17 @@ export class ResultImageService implements OnModuleInit {
     if (!config.preview) {
       const cached = await this.tryFetchFromS3(cacheKey);
       if (cached) {
-        return { buffer: cached.buffer, fromCache: true, cacheKey, s3Url: cached.url };
+        // Cached result: template resolution was already baked into the
+        // cacheKey, so if we hit, the request matches the cached output.
+        return {
+          buffer: cached.buffer,
+          fromCache: true,
+          cacheKey,
+          s3Url: cached.url,
+          templateRequested: config.template,
+          templateActual: config.template,
+          fallback: false,
+        };
       }
     }
 
@@ -219,6 +244,9 @@ export class ResultImageService implements OnModuleInit {
               fromCache: true,
               cacheKey,
               s3Url: cached.url,
+              templateRequested: config.template,
+              templateActual: config.template,
+              fallback: false,
             };
           }
         }
@@ -228,18 +256,27 @@ export class ResultImageService implements OnModuleInit {
 
     try {
       // Run render under semaphore (caps concurrent canvas renders)
-      const buffer = await this.semaphore.run(() => this.renderImage(input));
+      const rendered = await this.semaphore.run(() => this.renderImage(input));
 
       // Upload to S3 (unless preview)
       let s3Url: string | undefined;
       if (!config.preview) {
-        s3Url = await this.uploadToS3(cacheKey, buffer).catch((err) => {
+        s3Url = await this.uploadToS3(cacheKey, rendered.buffer).catch((err) => {
           this.logger.warn(`S3 upload failed for ${cacheKey}: ${err.message}`);
           return undefined;
         });
       }
 
-      return { buffer, fromCache: false, cacheKey, s3Url };
+      return {
+        buffer: rendered.buffer,
+        fromCache: false,
+        cacheKey,
+        s3Url,
+        templateRequested: config.template,
+        templateActual: rendered.templateActual,
+        fallback: rendered.fallback,
+        fallbackReason: rendered.fallbackReason,
+      };
     } catch (err) {
       if (err instanceof ServiceUnavailableException) throw err;
       this.logger.error(
@@ -376,7 +413,9 @@ export class ResultImageService implements OnModuleInit {
   /**
    * Core render function — runs under semaphore.
    */
-  private async renderImage(input: GenerateImageInput): Promise<Buffer> {
+  private async renderImage(
+    input: GenerateImageInput,
+  ): Promise<{ buffer: Buffer; templateActual: string; fallback: boolean; fallbackReason?: string }> {
     const { config } = input;
     const dims = config.preview
       ? PREVIEW_DIMENSIONS[config.size]
@@ -460,10 +499,27 @@ export class ResultImageService implements OnModuleInit {
       textColorMode: config.textColor,
     };
 
-    const template = resolveTemplate(config.template, renderData);
-    await template.render(ctx, renderData);
+    // E-3: Strip rank fields from renderData when privacy gate active. Templates
+    // that key on rank (podium) already refuse via eligibility; the remaining
+    // ones (classic/endurance/story/sticker/celebration) degrade gracefully
+    // when the value is an empty string.
+    if (input.hideRanks) {
+      renderData.overallRank = '';
+      renderData.genderRank = '';
+      renderData.categoryRank = '';
+      renderData.totalFinishers = 0;
+      renderData.gap = '';
+    }
 
-    return Buffer.from(canvas.toBuffer('image/png'));
+    const resolved = resolveTemplateResult(config.template, renderData);
+    await resolved.template.render(ctx, renderData);
+
+    return {
+      buffer: Buffer.from(canvas.toBuffer('image/png')),
+      templateActual: resolved.template.name,
+      fallback: resolved.fallback,
+      fallbackReason: resolved.reason,
+    };
   }
 
   private async generateQrImage(url: string): Promise<Image | null> {

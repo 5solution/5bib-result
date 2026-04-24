@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Clock, Link2, Check, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
@@ -9,7 +9,13 @@ import confetti from 'canvas-confetti';
 import { useTranslation } from 'react-i18next';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachment } from '@/lib/api-hooks';
-import ResultImageEditor from '@/components/ResultImageEditor';
+import ResultImageCreator from '@/components/result-image/ResultImageCreator';
+import AchievementBanner from '@/components/result-image/AchievementBanner';
+import CelebrationOverlay, {
+  hasCelebrationBeenSeen,
+  markCelebrationSeen,
+} from '@/components/result-image/CelebrationOverlay';
+import { useAthleteBadges } from '@/lib/api-hooks/result-image';
 import CertificateV2DownloadButtons from '@/components/CertificateV2DownloadButtons';
 import CertificateWithPhotoCta from '@/components/CertificateWithPhotoCta';
 import RankProgressionChart from '@/components/RankProgressionChart';
@@ -340,6 +346,30 @@ export default function AthleteDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [showImageEditor, setShowImageEditor] = useState(false);
   const celebrationAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Result Image Creator v1.0 — badges + first-open celebration
+  const { data: athleteBadges = [] } = useAthleteBadges(
+    raceId,
+    String(athlete?.Bib ?? ''),
+    { enabled: !!raceId && !!athlete?.Bib },
+  );
+  const [showRicCelebration, setShowRicCelebration] = useState(false);
+  useEffect(() => {
+    if (!raceId || !athlete?.Bib || athleteBadges.length === 0) return;
+    // Only celebrate PB / Podium / AG_PODIUM / Ultra / Sub-X — the
+    // "celebration-worthy" set. Other badges (FINISHER etc) don't trigger.
+    const worthy = athleteBadges.some((b) =>
+      ['PB', 'PODIUM', 'AG_PODIUM', 'ULTRA', 'SUB3H', 'SUB90M', 'SUB45M', 'SUB20M'].includes(b.type),
+    );
+    if (!worthy) return;
+    if (hasCelebrationBeenSeen(raceId, String(athlete.Bib))) return;
+    // Small delay so overlay appears after hero paints, not on first frame
+    const t = setTimeout(() => {
+      setShowRicCelebration(true);
+      markCelebrationSeen(raceId, String(athlete.Bib));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [raceId, athlete?.Bib, athleteBadges]);
 
   // Claim form state
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -752,6 +782,14 @@ export default function AthleteDetailPage() {
           card sits closer to the avatar now that the country / race-name
           rows are gone. */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-20 relative z-10 pb-12 space-y-6">
+
+        {/* === ACHIEVEMENT BANNER (Result Image Creator v1.0) === */}
+        {finalStatus === 'finisher' && athleteBadges.length > 0 && (
+          <AchievementBanner
+            badges={athleteBadges}
+            onCreateImage={() => setShowImageEditor(true)}
+          />
+        )}
 
         {/* === TIME CARD (floating over hero) === */}
         <div
@@ -1521,12 +1559,25 @@ export default function AthleteDetailPage() {
         </div>
       </div>
 
-      {/* Result Image Editor Modal */}
+      {/* Result Image Creator Modal — v2 (Phase 2) */}
       {showImageEditor && (
-        <ResultImageEditor
+        <ResultImageCreator
           athlete={athlete}
           raceId={raceId}
+          raceName={raceData?.title || athlete.race_name}
           onClose={() => setShowImageEditor(false)}
+        />
+      )}
+
+      {/* Celebration overlay — fires once per bib on first visit if a
+          celebration-worthy badge is present (PB / Podium / Ultra / Sub-X). */}
+      {raceId && athlete?.Bib != null && (
+        <CelebrationOverlay
+          show={showRicCelebration}
+          raceId={raceId}
+          bib={athlete.Bib}
+          badges={athleteBadges}
+          onDismiss={() => setShowRicCelebration(false)}
         />
       )}
 

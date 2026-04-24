@@ -31,6 +31,15 @@ const setMiddleware = (app: NestExpressApplication) => {
       'Wallet-Address',
       'wallet-address',
     ],
+    // Allow browsers to read custom response headers used by the Result Image
+    // Creator (template-fallback signal + cache provenance + retry hint).
+    exposedHeaders: [
+      'X-Template-Fallback',
+      'X-Template-Fallback-Reason',
+      'X-Template-Actual',
+      'X-From-Cache',
+      'Retry-After',
+    ],
   });
 
   app.use(morgan('combined'));
