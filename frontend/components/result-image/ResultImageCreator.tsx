@@ -234,10 +234,11 @@ export default function ResultImageCreator({
     // Claim this generation slot — any in-flight request from a prior settings
     // change will see a stale ID on resolve and self-discard its blob URL.
     const myId = ++generationIdRef.current;
-    // NOTE: we do NOT clear generatedUrl here.
-    // Keeping the previous blob visible while the new POST is in-flight means
-    // the user always sees their photo (old template) instead of a blank gap.
-    // The new result atomically replaces the old blob when it arrives.
+    // Clear the old result so the GET preview (correct template, no photo) shows
+    // immediately while the new photo-POST is in flight. This gives instant visual
+    // feedback that the template changed. The photo result replaces it when ready.
+    // (Keeping the old blob here made it look like template switching was broken.)
+    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
 
     // Debounce: rapid template / gradient clicks only fire ONE POST, 500ms
     // after the user settles on a choice.
