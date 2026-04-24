@@ -99,6 +99,10 @@ export default function ResultImageCreator({
   // Monotonically-increasing counter: each generate() or auto-gen claims a slot.
   // Any older in-flight request sees a stale ID on resolve and self-discards.
   const generationIdRef = useRef(0);
+  // True while the crop editor is open (customPhoto set but crop not confirmed).
+  // Settings-change effect reads this ref to skip auto-gen POSTs while the user
+  // hasn't committed a crop yet — prevents posting the raw uncropped file.
+  const cropPendingRef = useRef(false);
 
   // Force 9:16 size for story
   const size: SizeKey = template === 'story' ? '9:16' : '4:5';
@@ -222,6 +226,11 @@ export default function ResultImageCreator({
       return;
     }
 
+    // Crop editor is open → user hasn't confirmed a crop yet. Skip auto-gen:
+    // posting the raw uncropped file here would produce a wrong/confusing result.
+    // handleCropConfirm will trigger the first POST once the user confirms.
+    if (cropPendingRef.current) return;
+
     // Claim this generation slot — any in-flight request from a prior settings
     // change will see a stale ID on resolve and self-discard its blob URL.
     const myId = ++generationIdRef.current;
@@ -316,6 +325,7 @@ export default function ResultImageCreator({
     if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
     const thumbUrl = URL.createObjectURL(file);
     effectivePhotoRef.current = file; // sync — settings-change effect reads this immediately
+    cropPendingRef.current = true;    // block auto-gen until crop is confirmed
     setCustomPhoto(file);
     setCustomPhotoPreview(thumbUrl);
     setCroppedBlob(null); // reset any previous crop so editor opens
@@ -327,9 +337,9 @@ export default function ResultImageCreator({
    * Crop confirmed → receive JPEG blob, fire POST generate immediately.
    */
   const handleCropConfirm = useCallback(async (blob: Blob) => {
-    // Sync ref first — settings-change effect reads this; must be up-to-date
-    // before any subsequent template switch can fire a POST.
+    // Sync refs first — settings-change effect reads both immediately.
     effectivePhotoRef.current = blob;
+    cropPendingRef.current = false; // crop confirmed — auto-gen is allowed now
     setCroppedBlob(blob);
     // Claim generation ID so any in-flight crop POST doesn't overwrite a later
     // template-switch result if the user switches templates before this resolves.
@@ -360,24 +370,25 @@ export default function ResultImageCreator({
 
   const removeCustomPhoto = useCallback(() => {
     effectivePhotoRef.current = null; // sync — must clear before next settings-change effect
+    cropPendingRef.current = false;
     ++generationIdRef.current; // cancel any in-flight auto-gen POST
     if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
-    if (generatedUrl) URL.revokeObjectURL(generatedUrl);
+    // Functional update — always gets the current generatedUrl even if stale in closure
+    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     setCustomPhoto(null);
     setCustomPhotoPreview(null);
     setCroppedBlob(null);
-    setGeneratedUrl(null);
     // Bump token so the GET preview img refetches without the custom photo
     setPreviewToken((t) => t + 1);
-  }, [customPhotoPreview, generatedUrl]);
+  }, [customPhotoPreview]);
 
   // ─── Generate + download/share ────────────────────────────
   const generate = useCallback(async () => {
     // Claim generation slot — any queued debounced auto-gen will see a stale
     // ID and self-abort before firing its POST.
     ++generationIdRef.current;
-    if (generatedUrl) URL.revokeObjectURL(generatedUrl);
-    setGeneratedUrl(null);
+    // Functional update — always gets the latest generatedUrl regardless of closure staleness
+    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     try {
       const result = await generateMutation.mutateAsync({
         template,
@@ -407,7 +418,7 @@ export default function ResultImageCreator({
       }
       throw err;
     }
-  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, croppedBlob, customPhoto, generatedUrl]);
+  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, croppedBlob, customPhoto]);
 
   const handleDownload = useCallback(async () => {
     try {
@@ -711,7 +722,12 @@ export default function ResultImageCreator({
                     </span>
                     <button
                       type="button"
-                      onClick={() => setCroppedBlob(null)}
+                      onClick={() => {
+                        // Reset to raw file — crop not confirmed, block auto-gen
+                        effectivePhotoRef.current = customPhoto;
+                        cropPendingRef.current = true;
+                        setCroppedBlob(null);
+                      }}
                       className="text-xs text-blue-600 hover:underline whitespace-nowrap shrink-0"
                     >
                       Chỉnh lại
