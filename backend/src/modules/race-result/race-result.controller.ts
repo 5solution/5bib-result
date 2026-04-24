@@ -452,7 +452,10 @@ export class RaceResultController {
 
   @Get('result-image/:raceId/:bib')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  // Generous limit — a single modal open = 7 preview requests (6 thumbs + 1
+  // main), and toggling gradient/template bumps the token → fresh requests.
+  // 120/min allows ~15 modal interactions per minute per IP before throttling.
+  @Throttle({ default: { ttl: 60_000, limit: 120 } })
   @ApiOperation({
     summary: 'Preview result image (lowres, ~480px, no cache) — for template picker',
   })
@@ -488,7 +491,9 @@ export class RaceResultController {
     const headers: Record<string, string> = {
       'Content-Type': 'image/png',
       'Content-Length': result.buffer.length.toString(),
-      'Cache-Control': 'no-store',
+      // 60s browser cache — t= token in the URL acts as cache-buster when
+      // settings change, so stale responses are never served.
+      'Cache-Control': 'public, max-age=60',
       'Content-Disposition': `inline; filename="preview-${bib}.png"`,
       'X-Template-Actual': result.templateActual,
     };

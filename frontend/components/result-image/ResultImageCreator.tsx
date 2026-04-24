@@ -177,6 +177,16 @@ export default function ResultImageCreator({
     [raceId, athlete.Bib, template, size, gradient, showBadges, showQrCode, showSplits, customMessage, previewToken],
   );
 
+  // Debounce the main preview img — 350ms after last settings change.
+  // Prevents spamming the server when users click through templates quickly.
+  // TemplatePicker thumbnails use previewToken directly (not debounced) so
+  // they still update immediately for that grid.
+  const [debouncedPreviewUrl, setDebouncedPreviewUrl] = useState(previewUrl);
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedPreviewUrl(previewUrl), 350);
+    return () => clearTimeout(id);
+  }, [previewUrl]);
+
   // When template/gradient/etc change:
   //  - Always bump previewToken → GET preview img refetches for no-photo case
   //  - If a custom photo is active → auto-regenerate via POST so the preview
@@ -447,8 +457,8 @@ export default function ResultImageCreator({
                   // When a custom photo is uploaded we auto-generate via POST
                   // and store the blob URL in `generatedUrl`. The GET preview
                   // endpoint is query-params-only so it cannot show custom photos.
-                  key={generatedUrl ?? previewToken}
-                  src={generatedUrl ?? previewUrl}
+                  key={generatedUrl ?? debouncedPreviewUrl}
+                  src={generatedUrl ?? debouncedPreviewUrl}
                   alt="Preview kết quả"
                   className="absolute inset-0 w-full h-full object-cover"
                   loading="eager"

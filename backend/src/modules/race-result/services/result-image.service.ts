@@ -198,7 +198,29 @@ export class ResultImageService implements OnModuleInit {
 
     const cacheKey = await this.computeCacheKey(input);
 
-    // Preview mode: skip S3 cache (cheap, low-res, short-lived)
+    // ── Preview fast path: Redis cache (TTL 3 min) ──────────────────────────
+    // Preview renders are cheap/low-res and only live in the modal — no need
+    // for S3.  A Redis hit returns in ~2ms vs 200-500ms for a full canvas render.
+    // Key is prefixed so it never collides with render-lock keys.
+    if (config.preview) {
+      try {
+        const cached = await this.redis.getBuffer(`preview-img:${cacheKey}`);
+        if (cached) {
+          return {
+            buffer: cached,
+            fromCache: true,
+            cacheKey,
+            templateRequested: config.template,
+            templateActual: config.template,
+            fallback: false,
+          };
+        }
+      } catch {
+        // Redis unavailable — fall through to render
+      }
+    }
+
+    // Full-res: S3 cache (cheap, low-res, short-lived)
     if (!config.preview) {
       const cached = await this.tryFetchFromS3(cacheKey);
       if (cached) {
@@ -258,13 +280,18 @@ export class ResultImageService implements OnModuleInit {
       // Run render under semaphore (caps concurrent canvas renders)
       const rendered = await this.semaphore.run(() => this.renderImage(input));
 
-      // Upload to S3 (unless preview)
+      // Upload to S3 (unless preview); cache preview in Redis
       let s3Url: string | undefined;
       if (!config.preview) {
         s3Url = await this.uploadToS3(cacheKey, rendered.buffer).catch((err) => {
           this.logger.warn(`S3 upload failed for ${cacheKey}: ${err.message}`);
           return undefined;
         });
+      } else {
+        // Store preview in Redis (TTL 3 min, fire-and-forget)
+        this.redis
+          .set(`preview-img:${cacheKey}`, rendered.buffer, 'EX', 180)
+          .catch(() => {/* Redis down — ignore */});
       }
 
       return {
