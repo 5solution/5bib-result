@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Clock, Link2, Check, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
+import { ChevronLeft, Clock, Check, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { useTranslation } from 'react-i18next';
@@ -677,8 +677,8 @@ export default function AthleteDetailPage() {
               <ChevronLeft className="w-4 h-4" />
               <span>{t('athlete.resultDistance', { distance: athlete.distance })}</span>
             </Link>
-            {/* Top nav actions: cert downloads + copy link only.
-                Ảnh KQ + Chia sẻ moved to FAB (persistent while scrolling). */}
+            {/* Top nav actions: cert downloads only.
+                Copy link, Ảnh KQ + Chia sẻ moved to FAB (persistent while scrolling). */}
             <div className="flex flex-wrap items-center gap-2 sm:justify-end [&>button]:flex-1 [&>button]:min-w-[104px] sm:[&>button]:flex-none sm:[&>button]:min-w-0">
               <CertificateV2DownloadButtons
                 raceId={raceId}
@@ -687,13 +687,6 @@ export default function AthleteDetailPage() {
                 runnerName={athlete.Name}
                 variant="glass"
               />
-              <button
-                onClick={handleCopyLink}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-sm text-white rounded-full text-xs sm:text-[13px] font-semibold transition-all border border-white/30 shadow-sm min-h-[40px]"
-              >
-                {linkCopied ? <Check className="w-4 h-4 shrink-0" /> : <Link2 className="w-4 h-4 shrink-0" />}
-                <span className="whitespace-nowrap">{linkCopied ? t('athlete.copied') : t('athlete.copyLink')}</span>
-              </button>
             </div>
           </div>
         </div>
@@ -974,33 +967,41 @@ export default function AthleteDetailPage() {
                   for finishers with at least one badge. Replaces the standalone
                   AchievementBanner card that lived above the time card. */}
               {finalStatus === 'finisher' && athleteBadges.length > 0 && (
-                <div className="border-t border-gray-100 px-5 py-3 md:px-6 flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-amber-50/60 to-white">
-                  <div className="flex flex-wrap gap-1.5 min-w-0 flex-1">
-                    {athleteBadges.slice(0, 5).map((b) => (
-                      <span
-                        key={b.type}
-                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-white shadow-sm"
-                        style={{ backgroundColor: b.color ?? '#1d4ed8' }}
-                      >
-                        {b.label}
-                      </span>
-                    ))}
-                    {athleteBadges.length > 5 && (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-white text-amber-800 border border-amber-200">
-                        +{athleteBadges.length - 5}
-                      </span>
-                    )}
+                <div className="border-t border-gray-100 px-5 py-3 md:px-6 flex items-center justify-between gap-3 bg-gradient-to-r from-amber-50/50 to-white">
+                  {/* Left: labelled achievement tags — clearly informational */}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-700/60 mb-1.5">
+                      🏅 Thành tích
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {athleteBadges.slice(0, 5).map((b) => (
+                        <span
+                          key={b.type}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-white"
+                          style={{ backgroundColor: b.color ?? '#1d4ed8' }}
+                        >
+                          {b.label}
+                        </span>
+                      ))}
+                      {athleteBadges.length > 5 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                          +{athleteBadges.length - 5}
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {/* Right: action button — rounded-lg + shadow to clearly signal "clickable" */}
                   <button
                     type="button"
                     onClick={() => setShowImageEditor(true)}
-                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm ${
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${
                       hasCelebWorthyBadge
-                        ? 'bg-amber-500 text-white hover:bg-amber-600'
-                        : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50'
+                        ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-200'
+                        : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 shadow-sm'
                     }`}
                   >
-                    {hasCelebWorthyBadge ? '🎨 Tạo ảnh ăn mừng' : '🎨 Tạo ảnh kết quả'}
+                    <span aria-hidden>🎨</span>
+                    <span>{hasCelebWorthyBadge ? 'Tạo ảnh ăn mừng' : 'Tạo ảnh kết quả'}</span>
                   </button>
                 </div>
               )}
@@ -1737,6 +1738,8 @@ export default function AthleteDetailPage() {
             const el = document.getElementById('athlete-certificate-cta');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }}
+          onCopyLink={handleCopyLink}
+          linkCopied={linkCopied}
         />
       )}
     </RaceTheme>

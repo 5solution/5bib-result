@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { BarChart3, ImageDown, Award } from 'lucide-react';
+import { BarChart3, ImageDown, Award, Link2, Check } from 'lucide-react';
 
 interface Props {
   bib: string | number;
@@ -24,6 +24,8 @@ interface Props {
   onResultImage?: () => void;
   onCertificate?: () => void;
   hasCertificate?: boolean;
+  onCopyLink?: () => void;
+  linkCopied?: boolean;
 }
 
 const SCROLL_THRESHOLD = 360;
@@ -36,6 +38,8 @@ export function FloatingActionBar({
   onResultImage,
   onCertificate,
   hasCertificate,
+  onCopyLink,
+  linkCopied,
 }: Props) {
   const [visible, setVisible] = useState(false);
 
@@ -128,6 +132,15 @@ export function FloatingActionBar({
           </svg>
           <span className="hidden sm:inline">Chia sẻ</span>
         </button>
+        {onCopyLink && (
+          <button
+            type="button"
+            onClick={onCopyLink}
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold transition hover:bg-white/20"
+          >
+            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+          </button>
+        )}
         {hasCertificate && onCertificate && (
           <button
             type="button"
