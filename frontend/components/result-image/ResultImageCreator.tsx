@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Download, Loader2, ImagePlus, RotateCcw, Share2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import TemplatePicker, { TEMPLATE_META } from './TemplatePicker';
+import PhotoCropEditor from './PhotoCropEditor';
 import {
   TemplateKey,
   GradientKey,
@@ -79,6 +80,8 @@ export default function ResultImageCreator({
   const [customMessage, setCustomMessage] = useState('');
   const [customPhoto, setCustomPhoto] = useState<File | null>(null);
   const [customPhotoPreview, setCustomPhotoPreview] = useState<string | null>(null);
+  // Blob output from the crop editor (null = not cropped yet)
+  const [croppedBlob, setCroppedBlob] = useState<Blob | null>(null);
   const [previewToken, setPreviewToken] = useState(0);
   // Mobile UX: template section collapsed by default (user swipes the preview to switch)
   const [templateSectionOpen, setTemplateSectionOpen] = useState(false);
@@ -90,6 +93,8 @@ export default function ResultImageCreator({
 
   // Force 9:16 size for story
   const size: SizeKey = template === 'story' ? '9:16' : '4:5';
+  // Aspect ratio (width / height) passed to the crop editor canvas
+  const aspectRatio = size === '9:16' ? 9 / 16 : 4 / 5;
 
   // ─── Generation mutation ──────────────────────────────────
   // Declared early so swipe callbacks can read isPending without TDZ issues.
@@ -131,10 +136,11 @@ export default function ResultImageCreator({
   // Tracks whether backend fell back to classic (podium → classic, etc.)
   const [lastFallback, setLastFallback] = useState<boolean>(false);
 
-  // Ref so the settings-change effect can always read the latest customPhoto
-  // without adding it to the effect's dep array (which would cause loops).
-  const customPhotoRef = useRef<File | null>(customPhoto);
-  useEffect(() => { customPhotoRef.current = customPhoto; }, [customPhoto]);
+  // Ref so the settings-change effect can always read the latest effective photo
+  // (croppedBlob if crop is confirmed, else the raw file) without adding either
+  // to the effect's dep array (which would cause loops).
+  const effectivePhotoRef = useRef<File | Blob | null>(null);
+  useEffect(() => { effectivePhotoRef.current = croppedBlob ?? customPhoto; }, [croppedBlob, customPhoto]);
 
   // Cleanup object URL on unmount
   useEffect(() => {
@@ -180,7 +186,7 @@ export default function ResultImageCreator({
   useEffect(() => {
     setPreviewToken((t) => t + 1);
 
-    const file = customPhotoRef.current;
+    const file = effectivePhotoRef.current;
     if (!file) {
       setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
       return;
@@ -206,12 +212,11 @@ export default function ResultImageCreator({
 
   // ─── File upload handler ──────────────────────────────────
   /**
-   * When user picks a custom photo we immediately fire the POST generate
-   * endpoint with that file so the main preview updates in-place.
-   * The GET preview endpoint is query-params-only and cannot receive a file,
-   * so auto-generating is the only way to show a live preview.
+   * File picked → open the crop editor.
+   * We do NOT auto-generate here; generation happens after crop is confirmed
+   * so users can adjust framing before burning a server round-trip.
    */
-  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -226,12 +231,16 @@ export default function ResultImageCreator({
     const thumbUrl = URL.createObjectURL(file);
     setCustomPhoto(file);
     setCustomPhotoPreview(thumbUrl);
-    // Reset input so same file can be re-selected after remove
+    setCroppedBlob(null); // reset any previous crop so editor opens
+    // Reset input so the same file can be re-selected after remove
     if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [customPhotoPreview]);
 
-    // Auto-generate preview with the new file.
-    // Use the local `file` variable (not state) because React state isn't
-    // flushed yet when this callback runs.
+  /**
+   * Crop confirmed → receive JPEG blob, fire POST generate immediately.
+   */
+  const handleCropConfirm = useCallback(async (blob: Blob) => {
+    setCroppedBlob(blob);
     if (generatedUrl) URL.revokeObjectURL(generatedUrl);
     setGeneratedUrl(null);
     try {
@@ -243,22 +252,22 @@ export default function ResultImageCreator({
         showQrCode,
         showSplits,
         customMessage: customMessage.slice(0, 50) || undefined,
-        customPhoto: file,
+        customPhoto: blob,
       });
       setGeneratedUrl(result.objectUrl);
       setLastFallback(result.templateFallback);
     } catch {
-      // error toast already shown by the mutation error handler in generate()
+      // error toast already handled by generate()
     }
-  }, [customPhotoPreview, generatedUrl, generateMutation, template, size, gradient,
+  }, [generatedUrl, generateMutation, template, size, gradient,
       showBadges, showQrCode, showSplits, customMessage]);
 
   const removeCustomPhoto = useCallback(() => {
     if (customPhotoPreview) URL.revokeObjectURL(customPhotoPreview);
-    // Revoke the blob generated for the custom-photo preview
     if (generatedUrl) URL.revokeObjectURL(generatedUrl);
     setCustomPhoto(null);
     setCustomPhotoPreview(null);
+    setCroppedBlob(null);
     setGeneratedUrl(null);
     // Bump token so the GET preview img refetches without the custom photo
     setPreviewToken((t) => t + 1);
@@ -277,7 +286,7 @@ export default function ResultImageCreator({
         showQrCode,
         showSplits,
         customMessage: customMessage.slice(0, 50) || undefined,
-        customPhoto,
+        customPhoto: croppedBlob ?? customPhoto,
       });
       setGeneratedUrl(result.objectUrl);
       setLastFallback(result.templateFallback);
@@ -297,7 +306,7 @@ export default function ResultImageCreator({
       }
       throw err;
     }
-  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, customMessage, customPhoto, generatedUrl]);
+  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, customMessage, croppedBlob, customPhoto, generatedUrl]);
 
   const handleDownload = useCallback(async () => {
     try {
@@ -580,24 +589,42 @@ export default function ResultImageCreator({
                 <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
                   Ảnh nền (tuỳ chọn)
                 </h3>
-                {customPhoto ? (
+
+                {/* ── State 1: photo picked, crop not yet confirmed → show editor ── */}
+                {customPhoto && !croppedBlob ? (
+                  <PhotoCropEditor
+                    file={customPhoto}
+                    aspectRatio={aspectRatio}
+                    onConfirm={handleCropConfirm}
+                    onCancel={removeCustomPhoto}
+                  />
+                ) : customPhoto && croppedBlob ? (
+                  /* ── State 2: crop confirmed → thumbnail + action buttons ── */
                   <div className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
                     {customPhotoPreview && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={customPhotoPreview} alt="" className="w-12 h-12 rounded object-cover" />
+                      <img src={customPhotoPreview} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
                     )}
-                    <span className="flex-1 text-xs text-gray-600 truncate">
+                    <span className="flex-1 text-xs text-gray-600 truncate min-w-0">
                       {customPhoto.name}
                     </span>
                     <button
                       type="button"
+                      onClick={() => setCroppedBlob(null)}
+                      className="text-xs text-blue-600 hover:underline whitespace-nowrap shrink-0"
+                    >
+                      Chỉnh lại
+                    </button>
+                    <button
+                      type="button"
                       onClick={removeCustomPhoto}
-                      className="text-xs text-red-600 hover:underline flex items-center gap-1"
+                      className="text-xs text-red-600 hover:underline flex items-center gap-1 shrink-0"
                     >
                       <RotateCcw className="w-3 h-3" /> Bỏ
                     </button>
                   </div>
                 ) : (
+                  /* ── State 3: no photo → upload button ── */
                   <label className="flex items-center justify-center gap-2 w-full border-2 border-dashed border-gray-300 rounded-lg p-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition">
                     <ImagePlus className="w-4 h-4 text-gray-500" />
                     <span className="text-xs text-gray-600">Tải ảnh nền (JPG/PNG ≤ 10MB)</span>

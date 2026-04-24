@@ -44,7 +44,7 @@ export interface ResultImageRequestBody {
   showBadges?: boolean;
   customMessage?: string;
   /** Custom photo/background. Must pass magic-byte validation on the server. */
-  customPhoto?: File | null;
+  customPhoto?: File | Blob | null; // File = raw upload, Blob = after client-side crop
   /** Deprecated alias — keep for back-compat with old callers. */
   customBg?: File | null;
 }
