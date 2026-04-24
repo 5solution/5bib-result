@@ -234,3 +234,42 @@ export function scale(data: RenderData, value: number): number {
   // Preview = width/1080, so scale everything by that ratio
   return Math.round((value * data.canvasWidth) / 1080);
 }
+
+/**
+ * Render the custom message as a centered quote pill at the VERY BOTTOM of
+ * the canvas — below watermark / QR row. The semi-transparent dark pill ensures
+ * readability on any background (dark gradient, light cream, custom photo).
+ *
+ * Call this LAST in any template render function so it paints on top.
+ */
+export function drawBottomQuote(
+  ctx: SKRSContext2D,
+  data: RenderData,
+  contentW: number,
+): void {
+  if (!data.customMessage) return;
+
+  const W = data.canvasWidth;
+  const H = data.canvasHeight;
+
+  const fontSize = scale(data, 19);
+  ctx.font = `500 italic ${fontSize}px "${data.assets.fontFamily}", sans-serif`;
+
+  const raw = `"${data.customMessage}"`;
+  const msg = truncateText(ctx, raw, contentW - scale(data, 40));
+  const textW = ctx.measureText(msg).width;
+
+  const pillPadX = scale(data, 20);
+  const pillH = scale(data, 36);
+  const pillW = textW + pillPadX * 2;
+  const pillX = (W - pillW) / 2;
+  // 56px from bottom edge — sits below the watermark row (watermarks end ≥72px from bottom)
+  const pillY = H - scale(data, 56);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.38)';
+  drawRoundedRect(ctx, pillX, pillY, pillW, pillH, scale(data, 18));
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.fillText(msg, pillX + pillPadX, pillY + scale(data, 24));
+}

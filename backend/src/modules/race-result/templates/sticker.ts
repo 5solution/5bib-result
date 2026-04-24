@@ -1,6 +1,7 @@
 import type { SKRSContext2D } from '@napi-rs/canvas';
 import type { RenderData, TemplateConfig } from './types';
 import {
+  drawBottomQuote,
   drawRoundedRect,
   drawWatermark,
   formatName,
@@ -216,6 +217,9 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     alpha: 0.75,
     anchor: 'center',
   });
+
+  // ─── Bottom quote (always last — over sticker backdrop) ──────
+  drawBottomQuote(ctx, data, W - scale(data, 144));
 }
 
 function drawStickerBackdrop(ctx: SKRSContext2D, data: RenderData): void {

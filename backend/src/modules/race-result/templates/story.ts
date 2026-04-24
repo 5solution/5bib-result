@@ -2,6 +2,7 @@ import type { SKRSContext2D } from '@napi-rs/canvas';
 import type { RenderData, TemplateConfig } from './types';
 import {
   drawBadgesRow,
+  drawBottomQuote,
   drawQrCode,
   drawWatermark,
   fillCustomPhotoBackground,
@@ -174,16 +175,8 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     ctx.restore();
   }
 
-  // ─── Bottom CTA: custom message + QR + watermark ───────────
+  // ─── Bottom CTA: QR + watermark ────────────────────────────
   const bottomY = H - scale(data, 100);
-
-  // Custom message
-  if (data.customMessage) {
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.font = `500 italic ${scale(data, 22)}px "${data.assets.fontFamily}", sans-serif`;
-    const msg = truncateText(ctx, `"${data.customMessage}"`, contentW - scale(data, 140));
-    ctx.fillText(msg, PAD_X, bottomY - scale(data, 30));
-  }
 
   // QR right-bottom
   if (data.showQrCode && data.qrImage) {
@@ -210,6 +203,9 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
   ctx.font = `500 ${scale(data, 14)}px "${data.assets.monoFontFamily}", sans-serif`;
   const hint = `result.5bib.com · #${data.bib}`;
   ctx.fillText(hint, PAD_X, bottomY + scale(data, 10));
+
+  // ─── Bottom quote (always last — below URL hint, bottom of frame) ──
+  drawBottomQuote(ctx, data, contentW);
 }
 
 export const STORY_TEMPLATE: TemplateConfig = {

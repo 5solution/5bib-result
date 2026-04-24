@@ -2,6 +2,7 @@ import type { SKRSContext2D } from '@napi-rs/canvas';
 import type { RenderData, TemplateConfig } from './types';
 import {
   drawBadgesRow,
+  drawBottomQuote,
   drawPill,
   drawQrCode,
   drawRoundedRect,
@@ -33,24 +34,19 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
   const PAD_X = scale(data, 72);
   const contentW = W - PAD_X * 2;
 
-  // Determine which rank drives the tier
+  // Determine which rank drives the tier (overall preferred; category as fallback)
   const overallRank = parseRank(data.overallRank);
   const categoryRank = parseRank(data.categoryRank);
-  // Prefer overall if top-3; else category
-  const tierRank =
+  const tierRank: 1 | 2 | 3 =
     overallRank && overallRank <= 3
-      ? overallRank
+      ? (overallRank as 1 | 2 | 3)
       : categoryRank && categoryRank <= 3
-        ? categoryRank
-        : 1; // defensive fallback, shouldn't happen if gate applied
-  const tierScope =
-    overallRank && overallRank <= 3 ? 'OVERALL' : 'CATEGORY';
-
+        ? (categoryRank as 1 | 2 | 3)
+        : 1;
+  const tierScope = overallRank && overallRank <= 3 ? 'OVERALL' : 'CATEGORY';
   const theme = TIER_THEMES[tierRank];
 
   // ─── Background ─────────────────────────────────────────────
-  // Custom photo replaces the metallic gradient.  The podium text elements
-  // (all white) remain readable against the photo + dark overlay.
   if (data.customPhoto) {
     fillCustomPhotoBackground(ctx, data, 0.50);
   } else {
@@ -60,7 +56,6 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     bg.addColorStop(1, theme.bg[2]);
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
-    // Diagonal sheen overlay
     const sheen = ctx.createLinearGradient(0, 0, W, H);
     sheen.addColorStop(0, 'rgba(255,255,255,0.18)');
     sheen.addColorStop(0.5, 'rgba(255,255,255,0)');
@@ -69,34 +64,51 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     ctx.fillRect(0, 0, W, H);
   }
 
-  // ─── Top eyebrow ────────────────────────────────────────────
+  // ─── Top: eyebrow + race meta ────────────────────────────────
+  // Kept small so they don't compete with the hero number below.
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.font = `900 ${scale(data, 18)}px "${data.assets.monoFontFamily}", sans-serif`;
   ctx.letterSpacing = '6px';
-  ctx.fillText(`${theme.eyebrow} · ${tierScope}`, PAD_X, scale(data, 100));
+  ctx.fillText(`${theme.eyebrow} · ${tierScope}`, PAD_X, scale(data, 88));
   ctx.letterSpacing = '0px';
 
-  // Race name
   ctx.fillStyle = 'white';
-  ctx.font = `700 ${scale(data, 28)}px "${data.assets.fontFamily}", sans-serif`;
+  ctx.font = `600 ${scale(data, 24)}px "${data.assets.fontFamily}", sans-serif`;
   const raceName = truncateText(ctx, data.raceName || '', contentW);
-  ctx.fillText(raceName, PAD_X, scale(data, 140));
+  ctx.fillText(raceName, PAD_X, scale(data, 128));
 
-  ctx.fillStyle = 'rgba(255,255,255,0.65)';
-  ctx.font = `500 ${scale(data, 20)}px "${data.assets.monoFontFamily}", sans-serif`;
   const subtitle = [data.courseName, data.distance].filter(Boolean).join(' · ');
-  if (subtitle) ctx.fillText(subtitle, PAD_X, scale(data, 172));
+  if (subtitle) {
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = `500 ${scale(data, 18)}px "${data.assets.monoFontFamily}", sans-serif`;
+    ctx.fillText(subtitle, PAD_X, scale(data, 160));
+  }
+
+  // ─── Medal emoji (centered, above hero) ─────────────────────
+  // Smaller than before (80px vs 180px) and positioned clearly ABOVE the
+  // hero number so there's no overlap with race meta or hero text.
+  // heroY baseline = 500 → visual top ≈ 500-165 = 335.
+  // Medal baseline = 306 → medal visually ends ~306, hero starts ~335. ✓
+  const medalSize = scale(data, 80);
+  try {
+    ctx.font = `${medalSize}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+    const mw = ctx.measureText(theme.medal).width;
+    ctx.fillText(theme.medal, (W - Math.max(mw, medalSize)) / 2, scale(data, 306));
+  } catch {
+    // emoji rendering not supported on this platform — silently skip
+  }
 
   // ─── HERO rank number: #1 / #2 / #3 ────────────────────────
-  // Rendered large-centered with medal emoji beside it.
-  const heroY = scale(data, 340);
+  // Reduced from 320→220px so the visual top (~335) clears race meta (~160).
+  // Moving heroY down from 340→500 prevents the giant glyph from swallowing
+  // the race name and subtitle that share the top section.
+  const heroSize = scale(data, 220);
+  const heroY = scale(data, 500);
   ctx.fillStyle = 'white';
-  const heroSize = scale(data, 320);
   ctx.font = `900 ${heroSize}px "${data.assets.monoFontFamily}", sans-serif`;
   const heroText = `#${tierRank}`;
   const heroW = ctx.measureText(heroText).width;
   const heroX = (W - heroW) / 2;
-  // Soft shadow behind hero for depth
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.4)';
   ctx.shadowBlur = scale(data, 30);
@@ -104,24 +116,12 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
   ctx.fillText(heroText, heroX, heroY);
   ctx.restore();
 
-  // Medal emoji (big, left of hero)
-  ctx.font = `${scale(data, 180)}px "Apple Color Emoji", sans-serif`;
-  const medalText = theme.medal;
-  const medalW = ctx.measureText(medalText).width;
-  ctx.fillStyle = 'white';
-  // attempt — canvas emoji rendering varies; fallback is fine (renders nothing)
-  try {
-    ctx.fillText(medalText, heroX - medalW - scale(data, 30), heroY - scale(data, 20));
-  } catch {
-    // ignore emoji failure
-  }
-
   // ─── Athlete name (centered, below hero) ────────────────────
+  const nameSize = scale(data, 58);
   const nameY = heroY + scale(data, 90);
   ctx.fillStyle = 'white';
-  const name = formatName(data.athleteName);
-  let nameSize = scale(data, 62);
   ctx.font = `900 ${nameSize}px "${data.assets.fontFamily}", sans-serif`;
+  const name = formatName(data.athleteName);
   const nameLines = wrapText(ctx, name, contentW).slice(0, 2);
   let curY = nameY;
   for (const line of nameLines) {
@@ -130,30 +130,28 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     curY += Math.round(nameSize * 1.05);
   }
 
-  // BIB + category pills row (centered)
+  // ─── BIB + category pills row (centered) ────────────────────
   const tagFontSize = scale(data, 22);
   ctx.font = `700 ${tagFontSize}px "Inter", "${data.assets.fontFamily}", sans-serif`;
   const bibLabel = `BIB ${data.bib}`;
   const catLabel = data.category || '';
-  const bibW = ctx.measureText(bibLabel).width + 36;
-  const catW = catLabel ? ctx.measureText(catLabel).width + 36 : 0;
-  const gap = scale(data, 12);
-  const totalPillW = bibW + (catLabel ? gap + catW : 0);
+  const bibPillW = ctx.measureText(bibLabel).width + 36;
+  const catPillW = catLabel ? ctx.measureText(catLabel).width + 36 : 0;
+  const pillGap = scale(data, 12);
+  const totalPillW = bibPillW + (catLabel ? pillGap + catPillW : 0);
   let tagX = (W - totalPillW) / 2;
-  const tagY = curY + scale(data, 20);
+  const tagY = curY + scale(data, 24);
   tagX +=
-    drawPill(ctx, bibLabel, tagX, tagY, tagFontSize, {
-      bg: 'rgba(0,0,0,0.3)',
-    }) + gap;
+    drawPill(ctx, bibLabel, tagX, tagY, tagFontSize, { bg: 'rgba(0,0,0,0.3)' }) + pillGap;
   if (catLabel) {
-    drawPill(ctx, catLabel, tagX, tagY, tagFontSize, {
-      bg: 'rgba(0,0,0,0.3)',
-    });
+    drawPill(ctx, catLabel, tagX, tagY, tagFontSize, { bg: 'rgba(0,0,0,0.3)' });
   }
 
-  // ─── Chip time pane (bottom third) ──────────────────────────
+  // ─── Chip time pane ──────────────────────────────────────────
+  // chipPaneY = H - 420px at full-res → leaves ~150px strip below for
+  // message + watermark without crowding the athlete name/pills above.
   const chipPaneH = scale(data, 210);
-  const chipPaneY = H - chipPaneH - scale(data, 140);
+  const chipPaneY = H - chipPaneH - scale(data, 210);
   ctx.fillStyle = 'rgba(0,0,0,0.28)';
   drawRoundedRect(ctx, PAD_X, chipPaneY, contentW, chipPaneH, scale(data, 36));
   ctx.fill();
@@ -167,34 +165,30 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
 
   // Chip value
   ctx.fillStyle = 'white';
-  const chipSize = scale(data, 90);
-  ctx.font = `900 ${chipSize}px "${data.assets.monoFontFamily}", sans-serif`;
-  const chipText = data.chipTime || '--:--:--';
-  ctx.fillText(chipText, PAD_X + scale(data, 36), chipPaneY + scale(data, 130));
+  ctx.font = `900 ${scale(data, 90)}px "${data.assets.monoFontFamily}", sans-serif`;
+  ctx.fillText(data.chipTime || '--:--:--', PAD_X + scale(data, 36), chipPaneY + scale(data, 130));
 
-  // Right-side mini stats (pace + gap)
+  // Pace + gap (right-aligned inside chip pane)
   const miniRight = PAD_X + contentW - scale(data, 36);
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
   ctx.font = `600 ${scale(data, 20)}px "${data.assets.monoFontFamily}", sans-serif`;
   const paceText = `${data.pace || '--'} /km`;
-  const pw = ctx.measureText(paceText).width;
-  ctx.fillText(paceText, miniRight - pw, chipPaneY + scale(data, 60));
+  ctx.fillText(paceText, miniRight - ctx.measureText(paceText).width, chipPaneY + scale(data, 60));
 
   if (data.gap && data.gap !== '-' && data.gap !== '--') {
     ctx.font = `500 ${scale(data, 18)}px "${data.assets.monoFontFamily}", sans-serif`;
     const gapText = `Gap ${data.gap}`;
-    const gw = ctx.measureText(gapText).width;
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.fillText(gapText, miniRight - gw, chipPaneY + scale(data, 92));
+    ctx.fillText(gapText, miniRight - ctx.measureText(gapText).width, chipPaneY + scale(data, 92));
   }
 
-  // Badges strip inside chip pane
+  // Badges strip inside chip pane (bottom of pane)
   if (data.showBadges && data.badges && data.badges.length > 0) {
     drawBadgesRow(
       ctx,
       data,
       PAD_X + scale(data, 36),
-      chipPaneY + scale(data, 150),
+      chipPaneY + scale(data, 152),
       contentW - scale(data, 72),
       scale(data, 18),
     );
@@ -220,13 +214,8 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     });
   }
 
-  // Custom message (right of watermark, compact)
-  if (data.customMessage) {
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.font = `500 italic ${scale(data, 18)}px "${data.assets.fontFamily}", sans-serif`;
-    const msg = truncateText(ctx, `"${data.customMessage}"`, contentW - scale(data, 280));
-    ctx.fillText(msg, PAD_X + scale(data, 180), bottomY - scale(data, 14));
-  }
+  // ─── Bottom quote (always last — paints over metallic gradient) ──
+  drawBottomQuote(ctx, data, contentW);
 }
 
 function parseRank(rank: string | number | undefined): number | null {

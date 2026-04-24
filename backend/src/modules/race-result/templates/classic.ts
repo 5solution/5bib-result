@@ -2,6 +2,7 @@ import type { SKRSContext2D } from '@napi-rs/canvas';
 import type { RenderData, TemplateConfig } from './types';
 import {
   drawBadgesRow,
+  drawBottomQuote,
   drawPill,
   drawQrCode,
   drawRoundedRect,
@@ -197,14 +198,6 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     );
   }
 
-  // ─── Optional custom message (below chip time box) ──────────
-  if (data.customMessage) {
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.font = `500 italic ${scale(data, 20)}px "${data.assets.fontFamily}", sans-serif`;
-    const msg = truncateText(ctx, `"${data.customMessage}"`, contentW);
-    ctx.fillText(msg, PAD_X, chipBoxY + chipBoxH + scale(data, 36));
-  }
-
   // ─── Splits table (if enabled and available) ────────────────
   if (data.showSplits && data.splits && data.splits.length > 0) {
     const splitsY = chipBoxY - scale(data, 140);
@@ -216,6 +209,9 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
       .join('  ·  ');
     ctx.fillText(truncateText(ctx, splitText, contentW), PAD_X, splitsY);
   }
+
+  // ─── Bottom quote (always last — renders on top of background) ──
+  drawBottomQuote(ctx, data, contentW);
 }
 
 export const CLASSIC_TEMPLATE: TemplateConfig = {

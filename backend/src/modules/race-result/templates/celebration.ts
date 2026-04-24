@@ -2,6 +2,7 @@ import type { SKRSContext2D } from '@napi-rs/canvas';
 import type { RenderData, TemplateConfig } from './types';
 import {
   drawBadgesRow,
+  drawBottomQuote,
   drawQrCode,
   drawRoundedRect,
   drawWatermark,
@@ -161,14 +162,6 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     bandY + scale(data, 130),
   );
 
-  // Custom message (if any)
-  if (data.customMessage) {
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    ctx.font = `500 italic ${scale(data, 20)}px "${data.assets.fontFamily}", sans-serif`;
-    const msg = truncateText(ctx, `"${data.customMessage}"`, contentW);
-    ctx.fillText(msg, PAD_X, bandY + scale(data, 165));
-  }
-
   // Badges strip in dark band
   if (data.showBadges && data.badges && data.badges.length > 0) {
     drawBadgesRow(
@@ -199,6 +192,9 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
       size: qrSize,
     });
   }
+
+  // ─── Bottom quote (always last — renders on top of dark band) ──
+  drawBottomQuote(ctx, data, contentW);
 }
 
 /**

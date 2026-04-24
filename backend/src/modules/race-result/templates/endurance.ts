@@ -2,6 +2,7 @@ import type { SKRSContext2D } from '@napi-rs/canvas';
 import type { RenderData, TemplateConfig } from './types';
 import {
   drawBadgesRow,
+  drawBottomQuote,
   drawPill,
   drawQrCode,
   drawRoundedRect,
@@ -185,13 +186,8 @@ async function render(ctx: SKRSContext2D, data: RenderData): Promise<void> {
     );
   }
 
-  // Custom message
-  if (data.customMessage) {
-    ctx.fillStyle = 'rgba(163,230,53,0.85)';
-    ctx.font = `500 italic ${scale(data, 20)}px "${data.assets.fontFamily}", sans-serif`;
-    const msg = truncateText(ctx, `"${data.customMessage}"`, contentW - qrBlockWidth);
-    ctx.fillText(msg, PAD_X, bottomY - scale(data, 30));
-  }
+  // ─── Bottom quote (always last — renders over topo/gradient background) ──
+  drawBottomQuote(ctx, data, contentW);
 }
 
 /**

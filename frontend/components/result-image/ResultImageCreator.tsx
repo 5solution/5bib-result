@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Download, Loader2, ImagePlus, RotateCcw, Share2, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { X, Download, Loader2, ImagePlus, RotateCcw, Share2, ChevronLeft, ChevronRight, ChevronDown, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import TemplatePicker, { TEMPLATE_META } from './TemplatePicker';
 import PhotoCropEditor from './PhotoCropEditor';
@@ -90,6 +90,9 @@ export default function ResultImageCreator({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const touchStartXRef = useRef<number | null>(null);
+  // Monotonically-increasing counter: each generate() or auto-gen claims a slot.
+  // Any older in-flight request sees a stale ID on resolve and self-discards.
+  const generationIdRef = useRef(0);
 
   // Force 9:16 size for story
   const size: SizeKey = template === 'story' ? '9:16' : '4:5';
@@ -187,12 +190,17 @@ export default function ResultImageCreator({
     return () => clearTimeout(id);
   }, [previewUrl]);
 
-  // When template/gradient/etc change:
-  //  - Always bump previewToken → GET preview img refetches for no-photo case
-  //  - If a custom photo is active → auto-regenerate via POST so the preview
-  //    stays in sync (GET endpoint can't accept file uploads, so we must use
-  //    the full generate path every time settings change while a photo is set)
-  //  - If no custom photo → just clear any stale generated blob
+  // When template / gradient / toggles change:
+  //  - Always bump previewToken  → GET preview refetches (no-photo path)
+  //  - If custom photo active    → debounce 500ms then POST with current settings.
+  //    Generation ID ensures out-of-order / stale responses are discarded so
+  //    rapid template clicks never produce broken or wrong previews.
+  //
+  // NOTE: customMessage is intentionally NOT in the deps array.
+  //   - GET preview (no photo): previewUrl useMemo already includes customMessage → the
+  //     debouncedPreviewUrl mechanism handles it without extra server hits per keystroke.
+  //   - Photo POST: customMessage is read from closure at fire time (always fresh).
+  //     User applies message explicitly via the "Áp dụng" button (handleApplyMessage).
   useEffect(() => {
     setPreviewToken((t) => t + 1);
 
@@ -202,8 +210,50 @@ export default function ResultImageCreator({
       return;
     }
 
-    // Custom photo is active — regenerate with new settings immediately.
-    // Read template/size/gradient etc. from closure (they're the trigger deps).
+    // Claim this generation slot — any in-flight request from a prior settings
+    // change will see a stale ID on resolve and self-discard its blob URL.
+    const myId = ++generationIdRef.current;
+    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+
+    // Debounce: rapid template / gradient clicks only fire ONE POST, 500ms
+    // after the user settles on a choice.
+    const tid = setTimeout(() => {
+      if (generationIdRef.current !== myId) return; // superseded by newer change
+      void generateMutation.mutateAsync({
+        template,
+        size,
+        gradient,
+        showBadges,
+        showQrCode,
+        showSplits,
+        customMessage: customMessage.slice(0, 50) || undefined, // closure read — always fresh
+        customPhoto: file,
+      }).then((result) => {
+        if (generationIdRef.current !== myId) {
+          URL.revokeObjectURL(result.objectUrl); // discard stale result
+          return;
+        }
+        setGeneratedUrl(result.objectUrl);
+        setLastFallback(result.templateFallback);
+      }).catch(() => {});
+    }, 500);
+
+    return () => clearTimeout(tid);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, gradient, showBadges, showQrCode, showSplits]);
+
+  // ─── Apply message (explicit submit — no auto-fire per keystroke) ────
+  // GET preview (no photo): previewUrl already includes customMessage via useMemo → bumping
+  // previewToken refreshes it immediately without a POST.
+  // Photo POST: user explicitly applies the message, fires a single POST with current settings.
+  const handleApplyMessage = useCallback(() => {
+    // Refresh GET preview with latest message
+    setPreviewToken((t) => t + 1);
+
+    // If photo active → re-generate with the new message
+    const file = effectivePhotoRef.current;
+    if (!file) return;
+    const myId = ++generationIdRef.current;
     setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     void generateMutation.mutateAsync({
       template,
@@ -212,13 +262,18 @@ export default function ResultImageCreator({
       showBadges,
       showQrCode,
       showSplits,
+      customMessage: customMessage.slice(0, 50) || undefined,
       customPhoto: file,
     }).then((result) => {
+      if (generationIdRef.current !== myId) {
+        URL.revokeObjectURL(result.objectUrl);
+        return;
+      }
       setGeneratedUrl(result.objectUrl);
       setLastFallback(result.templateFallback);
-    }).catch(() => { /* error toast handled by mutation / generate() */ });
+    }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template, gradient, showBadges, showQrCode, showSplits]);
+  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, customMessage]);
 
   // ─── File upload handler ──────────────────────────────────
   /**
@@ -285,6 +340,9 @@ export default function ResultImageCreator({
 
   // ─── Generate + download/share ────────────────────────────
   const generate = useCallback(async () => {
+    // Claim generation slot — any queued debounced auto-gen will see a stale
+    // ID and self-abort before firing its POST.
+    ++generationIdRef.current;
     if (generatedUrl) URL.revokeObjectURL(generatedUrl);
     setGeneratedUrl(null);
     try {
@@ -320,9 +378,9 @@ export default function ResultImageCreator({
 
   const handleDownload = useCallback(async () => {
     try {
-      const result = generatedUrl
-        ? { objectUrl: generatedUrl, blob: null as Blob | null }
-        : await generate();
+      // Always generate fresh — guarantees current settings (including
+      // customMessage) are applied. generate() self-revokes any stale blob.
+      const result = await generate();
       const url = result.objectUrl;
       const a = document.createElement('a');
       a.href = url;
@@ -344,13 +402,13 @@ export default function ResultImageCreator({
     } catch {
       // error already toasted in generate()
     }
-  }, [generate, generatedUrl, athlete.Bib, template, incrementShare, logShareEvent, raceId, gradient, size, lastFallback]);
+  }, [generate, athlete.Bib, template, incrementShare, logShareEvent, raceId, gradient, size, lastFallback]);
 
   const handleShare = useCallback(async () => {
     try {
-      const result = generatedUrl && generateMutation.data
-        ? { blob: generateMutation.data.blob, objectUrl: generatedUrl }
-        : await generate();
+      // Always generate fresh — ensures current settings are applied and
+      // we always have a Blob for Web Share API (no stale URL reuse).
+      const result = await generate();
 
       const navShare = typeof navigator !== 'undefined' ? navigator.share : undefined;
       const canShareFiles =
@@ -398,7 +456,7 @@ export default function ResultImageCreator({
     } catch {
       // error already toasted
     }
-  }, [generatedUrl, generateMutation.data, generate, athlete.Bib, athlete.Name, athlete.ChipTime, raceName, incrementShare, logShareEvent, raceId, template, gradient, size, lastFallback]);
+  }, [generate, athlete.Bib, athlete.Name, athlete.ChipTime, raceName, incrementShare, logShareEvent, raceId, template, gradient, size, lastFallback]);
 
   const pending = generateMutation.isPending;
 
@@ -666,18 +724,30 @@ export default function ResultImageCreator({
                 <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
                   Lời nhắn (≤ 50 ký tự)
                 </h3>
-                <input
-                  type="text"
-                  value={customMessage}
-                  onChange={(e) => setCustomMessage(e.target.value.slice(0, 50))}
-                  onBlur={() => setPreviewToken((t) => t + 1)}
-                  placeholder='vd: "Đích đến không phải là dấu chấm hết"'
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
-                  maxLength={50}
-                />
-                <div className="text-[11px] text-gray-400 text-right mt-0.5">
-                  {customMessage.length}/50
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customMessage}
+                    onChange={(e) => setCustomMessage(e.target.value.slice(0, 50))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleApplyMessage(); }}
+                    placeholder='vd: "Đích đến không phải là dấu chấm hết"'
+                    className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                    maxLength={50}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyMessage}
+                    disabled={pending}
+                    title="Áp dụng lời nhắn"
+                    className="shrink-0 w-9 h-9 rounded-lg bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-700 flex items-center justify-center disabled:opacity-50 transition"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
                 </div>
+                <p className="text-[11px] text-gray-400 mt-1 flex justify-between">
+                  <span>Nhấn ✓ hoặc Enter để áp dụng lên ảnh</span>
+                  <span>{customMessage.length}/50</span>
+                </p>
               </section>
             </div>
           </div>
