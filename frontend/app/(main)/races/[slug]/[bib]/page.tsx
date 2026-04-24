@@ -10,7 +10,6 @@ import { useTranslation } from 'react-i18next';
 import { countryToFlag } from '@/lib/country-flags';
 import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachment } from '@/lib/api-hooks';
 import ResultImageCreator from '@/components/result-image/ResultImageCreator';
-import AchievementBanner from '@/components/result-image/AchievementBanner';
 import CelebrationOverlay, {
   hasCelebrationBeenSeen,
   markCelebrationSeen,
@@ -353,15 +352,13 @@ export default function AthleteDetailPage() {
     String(athlete?.Bib ?? ''),
     { enabled: !!raceId && !!athlete?.Bib },
   );
+  const CELEBRATION_WORTHY = ['PB', 'PODIUM', 'AG_PODIUM', 'ULTRA', 'SUB3H', 'SUB90M', 'SUB45M', 'SUB20M'];
+  const hasCelebWorthyBadge = athleteBadges.some((b) => CELEBRATION_WORTHY.includes(b.type));
+
   const [showRicCelebration, setShowRicCelebration] = useState(false);
   useEffect(() => {
     if (!raceId || !athlete?.Bib || athleteBadges.length === 0) return;
-    // Only celebrate PB / Podium / AG_PODIUM / Ultra / Sub-X — the
-    // "celebration-worthy" set. Other badges (FINISHER etc) don't trigger.
-    const worthy = athleteBadges.some((b) =>
-      ['PB', 'PODIUM', 'AG_PODIUM', 'ULTRA', 'SUB3H', 'SUB90M', 'SUB45M', 'SUB20M'].includes(b.type),
-    );
-    if (!worthy) return;
+    if (!hasCelebWorthyBadge) return;
     if (hasCelebrationBeenSeen(raceId, String(athlete.Bib))) return;
     // Small delay so overlay appears after hero paints, not on first frame
     const t = setTimeout(() => {
@@ -369,7 +366,8 @@ export default function AthleteDetailPage() {
       markCelebrationSeen(raceId, String(athlete.Bib));
     }, 500);
     return () => clearTimeout(t);
-  }, [raceId, athlete?.Bib, athleteBadges]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raceId, athlete?.Bib, hasCelebWorthyBadge]);
 
   // Claim form state
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -783,14 +781,6 @@ export default function AthleteDetailPage() {
           rows are gone. */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-20 relative z-10 pb-12 space-y-6">
 
-        {/* === ACHIEVEMENT BANNER (Result Image Creator v1.0) === */}
-        {finalStatus === 'finisher' && athleteBadges.length > 0 && (
-          <AchievementBanner
-            badges={athleteBadges}
-            onCreateImage={() => setShowImageEditor(true)}
-          />
-        )}
-
         {/* === TIME CARD (floating over hero) === */}
         <div
           data-reveal
@@ -980,6 +970,41 @@ export default function AthleteDetailPage() {
                   Shows only for finishers on races with cert feature on.
                   Reuses `downloadCertificateAsPng` (same endpoint + confetti
                   as the old cert section further down). */}
+              {/* Achievement badges + image CTA — compact footer row, shown only
+                  for finishers with at least one badge. Replaces the standalone
+                  AchievementBanner card that lived above the time card. */}
+              {finalStatus === 'finisher' && athleteBadges.length > 0 && (
+                <div className="border-t border-gray-100 px-5 py-3 md:px-6 flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-amber-50/60 to-white">
+                  <div className="flex flex-wrap gap-1.5 min-w-0 flex-1">
+                    {athleteBadges.slice(0, 5).map((b) => (
+                      <span
+                        key={b.type}
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-white shadow-sm"
+                        style={{ backgroundColor: b.color ?? '#1d4ed8' }}
+                      >
+                        {b.label}
+                      </span>
+                    ))}
+                    {athleteBadges.length > 5 && (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-white text-amber-800 border border-amber-200">
+                        +{athleteBadges.length - 5}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowImageEditor(true)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors shadow-sm ${
+                      hasCelebWorthyBadge
+                        ? 'bg-amber-500 text-white hover:bg-amber-600'
+                        : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50'
+                    }`}
+                  >
+                    {hasCelebWorthyBadge ? '🎨 Tạo ảnh ăn mừng' : '🎨 Tạo ảnh kết quả'}
+                  </button>
+                </div>
+              )}
+
               {certCtaVisible && (
                 <div className="border-t border-gray-100 bg-gradient-to-br from-amber-50/70 via-white to-emerald-50/40 px-5 py-4 md:px-6 md:py-5">
                   {/* Inline cert CTA intentionally NOT using ap-cert-frame:
