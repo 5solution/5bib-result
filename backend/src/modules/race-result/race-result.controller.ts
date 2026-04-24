@@ -22,10 +22,15 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { GetRaceResultsDto } from './dto/get-race-results.dto';
 import { RaceResultsPaginatedDto } from './dto/race-result-response.dto';
+import {
+  ResultImageQueryDto,
+  normalizeImageConfig,
+} from './dto/result-image-query.dto';
 import { SubmitClaimDto } from './dto/submit-claim.dto';
 import {
   TimeDistributionResponseDto,
@@ -34,7 +39,11 @@ import {
   PercentileResponseDto,
 } from './dto/stats-viz.dto';
 import { RaceResultService } from './services/race-result.service';
-import { ResultImageService } from './services/result-image.service';
+import {
+  ResultImageService,
+  AthleteInput,
+} from './services/result-image.service';
+import { BadgeService } from './services/badge.service';
 import { RacesService } from '../races/races.service';
 import { UploadService } from '../upload/upload.service';
 import { LogtoAdminGuard } from '../logto-auth';
@@ -45,6 +54,7 @@ export class RaceResultController {
   constructor(
     private readonly raceResultService: RaceResultService,
     private readonly resultImageService: ResultImageService,
+    private readonly badgeService: BadgeService,
     private readonly racesService: RacesService,
     private readonly uploadService: UploadService,
   ) {}
@@ -419,25 +429,127 @@ export class RaceResultController {
     return this.raceResultService.submitClaim(dto);
   }
 
+  // ─── Result Image Creator v1.0 ────────────────────────────────
+  //
+  // Three public endpoints:
+  //   GET  /race-results/result-image/:raceId/:bib  → lowres preview (no cache)
+  //   POST /race-results/result-image/:raceId/:bib  → full-res PNG (S3-cached)
+  //   GET  /race-results/badges/:raceId/:bib        → badge list (cached 1h)
+  //
+  // All are PUBLIC per PRD BR-01 (no login required).
+  // Rate-limited per IP to protect against scraping + brute-force cache busting.
+
+  @Get('result-image/:raceId/:bib')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  @ApiOperation({
+    summary: 'Preview result image (lowres, ~480px, no cache) — for template picker',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
+  @ApiResponse({ status: 200, description: 'Returns preview PNG' })
+  @ApiResponse({ status: 404, description: 'Athlete not found' })
+  async previewResultImage(
+    @Param('raceId') raceId: string,
+    @Param('bib') bib: string,
+    @Query() query: ResultImageQueryDto,
+    @Res() res: Response,
+  ) {
+    const athleteInput = await this.loadAthleteInput(raceId, bib);
+    const { raceName, raceSlug, courseName } = await this.loadRaceMeta(raceId);
+
+    const config = normalizeImageConfig({ ...query, preview: true });
+
+    const result = await this.resultImageService.generate({
+      raceId,
+      bib,
+      athlete: athleteInput,
+      raceName,
+      raceSlug,
+      courseName,
+      config,
+    });
+
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Length': result.buffer.length.toString(),
+      'Cache-Control': 'no-store',
+      'Content-Disposition': `inline; filename="preview-${bib}.png"`,
+    });
+    res.send(result.buffer);
+  }
+
   @Post('result-image/:raceId/:bib')
-  @ApiOperation({ summary: 'Generate result image for an athlete' })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @ApiOperation({
+    summary: 'Generate full-res result image for an athlete (S3-cached)',
+  })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
+    description:
+      'Full config: template, size, gradient, show* toggles, optional customPhoto + customMessage. ' +
+      'Backward-compat: `bg` aliases to `gradient`, `ratio` aliases to `size`.',
     schema: {
       type: 'object',
       properties: {
-        bg: { type: 'string', enum: ['blue', 'dark', 'sunset', 'forest', 'purple'], default: 'blue' },
-        ratio: { type: 'string', enum: ['4:5', '1:1', '9:16'], default: '4:5', description: 'F-07 ratio — 4:5 Instagram Portrait, 1:1 Square, 9:16 Story' },
-        customBg: { type: 'string', format: 'binary', description: 'Custom background image' },
+        template: {
+          type: 'string',
+          enum: [
+            'classic',
+            'celebration',
+            'endurance',
+            'story',
+            'sticker',
+            'podium',
+          ],
+          default: 'classic',
+        },
+        size: {
+          type: 'string',
+          enum: ['4:5', '1:1', '9:16'],
+          default: '4:5',
+        },
+        gradient: {
+          type: 'string',
+          enum: ['blue', 'dark', 'sunset', 'forest', 'purple'],
+          default: 'blue',
+        },
+        bg: {
+          type: 'string',
+          description: 'DEPRECATED — alias for `gradient`',
+        },
+        ratio: {
+          type: 'string',
+          description: 'DEPRECATED — alias for `size`',
+        },
+        showSplits: { type: 'boolean', default: false },
+        showQrCode: { type: 'boolean', default: false },
+        showBadges: { type: 'boolean', default: true },
+        textColor: {
+          type: 'string',
+          enum: ['auto', 'light', 'dark'],
+          default: 'auto',
+        },
+        customMessage: { type: 'string', maxLength: 50 },
+        customPhoto: {
+          type: 'string',
+          format: 'binary',
+          description: 'Custom background photo (JPG/PNG/WebP, ≤10MB)',
+        },
       },
     },
   })
   @ApiResponse({ status: 200, description: 'Returns result image as PNG' })
   @ApiResponse({ status: 404, description: 'Athlete not found' })
+  @ApiResponse({
+    status: 503,
+    description: 'Render queue full — retry later',
+  })
   @UseInterceptors(
-    FileInterceptor('customBg', {
+    FileInterceptor('customPhoto', {
       storage: memoryStorage(),
       limits: { fileSize: 10 * 1024 * 1024 },
     }),
@@ -445,57 +557,124 @@ export class RaceResultController {
   async generateResultImage(
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
-    @Body('bg') bg: string,
-    @Body('ratio') ratio: string | undefined,
-    @UploadedFile() customBg: Express.Multer.File | undefined,
+    @Body() body: ResultImageQueryDto,
+    @UploadedFile() customPhoto: Express.Multer.File | undefined,
     @Res() res: Response,
   ) {
+    const athleteInput = await this.loadAthleteInput(raceId, bib);
+    const { raceName, raceSlug, courseName } = await this.loadRaceMeta(raceId);
+
+    const config = normalizeImageConfig({ ...body, preview: false });
+
+    const result = await this.resultImageService.generate({
+      raceId,
+      bib,
+      athlete: athleteInput,
+      raceName,
+      raceSlug,
+      courseName,
+      config,
+      customPhotoBuffer: customPhoto?.buffer,
+    });
+
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Length': result.buffer.length.toString(),
+      // Let CDN/browser cache the same payload we just returned (same key = same bytes)
+      'Cache-Control': 'public, max-age=300',
+      'Content-Disposition': `inline; filename="result-${bib}.png"`,
+      'X-From-Cache': result.fromCache ? '1' : '0',
+    });
+    res.send(result.buffer);
+  }
+
+  @Get('badges/:raceId/:bib')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  @ApiOperation({
+    summary: 'Get badges (PB / Podium / Sub-X / Ultra / Streak) for an athlete',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
+  @ApiResponse({ status: 200, description: 'Returns badge list' })
+  async getAthleteBadges(
+    @Param('raceId') raceId: string,
+    @Param('bib') bib: string,
+  ) {
+    // Confirm athlete exists before running badge detection
     const athlete = await this.raceResultService.getAthleteDetail(raceId, bib);
     if (!athlete) {
       throw new NotFoundException('Athlete not found');
     }
+    const badges = await this.badgeService.detectBadges(raceId, bib);
+    return { data: badges, success: true };
+  }
 
-    // Get race name from the races module
-    let raceName = '';
+  @Get('share-count/:raceId')
+  @ApiOperation({ summary: 'Get current share counter for a race' })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiResponse({ status: 200, description: 'Returns share count' })
+  async getShareCount(@Param('raceId') raceId: string) {
+    const count = await this.resultImageService.getShareCount(raceId);
+    return { data: { raceId, count }, success: true };
+  }
+
+  @Post('share-count/:raceId')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  @ApiOperation({
+    summary:
+      'Increment share counter for a race (called after user shares an image)',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiResponse({ status: 201, description: 'Returns updated share count' })
+  async incrementShareCount(@Param('raceId') raceId: string) {
+    const count = await this.resultImageService.incrementShareCount(raceId);
+    return { data: { raceId, count }, success: true };
+  }
+
+  // ─── Helpers for result-image endpoints ──────────────────────
+
+  private async loadAthleteInput(
+    raceId: string,
+    bib: string,
+  ): Promise<AthleteInput> {
+    const athlete = await this.raceResultService.getAthleteDetail(raceId, bib);
+    if (!athlete) {
+      throw new NotFoundException('Athlete not found');
+    }
+    return {
+      Name: athlete.Name ?? '',
+      Bib: athlete.Bib ?? bib,
+      ChipTime: athlete.ChipTime ?? '',
+      GunTime: athlete.GunTime ?? '',
+      Pace: athlete.Pace ?? '',
+      Gap: athlete.Gap || '--',
+      Gender: athlete.Gender ?? '',
+      Category: athlete.Category ?? '',
+      OverallRank: athlete.OverallRank ?? '',
+      GenderRank: athlete.GenderRank ?? '',
+      CatRank: athlete.CatRank ?? '',
+      distance: athlete.distance ?? '',
+      splits: Array.isArray(athlete.splits)
+        ? (athlete.splits as AthleteInput['splits'])
+        : undefined,
+    };
+  }
+
+  private async loadRaceMeta(
+    raceId: string,
+  ): Promise<{ raceName: string; raceSlug: string; courseName: string }> {
     try {
       const race = await this.racesService.getRaceById(raceId);
-      raceName = race?.data?.title || '';
-    } catch { /* ignore */ }
-
-    const validRatios = ['4:5', '1:1', '9:16'] as const;
-    type ValidRatio = (typeof validRatios)[number];
-    const chosenRatio: ValidRatio = validRatios.includes(ratio as ValidRatio)
-      ? (ratio as ValidRatio)
-      : '4:5';
-
-    const pngBuffer = await this.resultImageService.generateImage(
-      {
-        Name: athlete.Name,
-        Bib: athlete.Bib,
-        ChipTime: athlete.ChipTime,
-        GunTime: athlete.GunTime,
-        Pace: athlete.Pace,
-        Gap: athlete.Gap || '--',
-        Gender: athlete.Gender,
-        Category: athlete.Category,
-        OverallRank: athlete.OverallRank,
-        GenderRank: athlete.GenderRank,
-        CatRank: athlete.CatRank,
-        distance: athlete.distance,
-        race_name: raceName,
-      },
-      bg || 'blue',
-      customBg?.buffer,
-      chosenRatio,
-    );
-
-    res.set({
-      'Content-Type': 'image/png',
-      'Content-Length': pngBuffer.length.toString(),
-      'Cache-Control': 'no-cache',
-      'Content-Disposition': `inline; filename="result-${bib}.png"`,
-    });
-    res.send(pngBuffer);
+      return {
+        raceName: race?.data?.title ?? '',
+        raceSlug: race?.data?.slug ?? '',
+        courseName: '',
+      };
+    } catch {
+      return { raceName: '', raceSlug: '', courseName: '' };
+    }
   }
 
   @UseGuards(LogtoAdminGuard)
