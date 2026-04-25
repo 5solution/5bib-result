@@ -36,6 +36,11 @@ import {
   SignContractResponseDto,
 } from './dto/sign-contract.dto';
 import {
+  AcceptanceViewDto,
+  SignAcceptanceDto,
+  SignAcceptanceResponseDto,
+} from './dto/acceptance.dto';
+import {
   CheckinResponseDto,
   SelfCheckinDto,
 } from './dto/checkin.dto';
@@ -47,6 +52,7 @@ import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamPhotoService } from './services/team-photo.service';
 import { TeamContractService } from './services/team-contract.service';
+import { TeamAcceptanceService } from './services/team-acceptance.service';
 import { TeamCheckinService } from './services/team-checkin.service';
 import { TeamStationService } from './services/team-station.service';
 import { MyStationViewDto } from './dto/station.dto';
@@ -60,6 +66,7 @@ export class TeamRegistrationController {
     private readonly registrations: TeamRegistrationService,
     private readonly photos: TeamPhotoService,
     private readonly contracts: TeamContractService,
+    private readonly acceptance: TeamAcceptanceService,
     private readonly checkin: TeamCheckinService,
     private readonly stations: TeamStationService,
   ) {}
@@ -154,6 +161,65 @@ export class TeamRegistrationController {
       dto.confirmed_name,
       dto.signature_image,
       dto.ip ?? ip,
+    );
+  }
+
+  // ───── Biên bản nghiệm thu — crew magic-token flow ─────
+
+  @Get('team-acceptance/:token')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'View acceptance HTML for signing (magic token). Returns rendered HTML + current status + (when signed) a short-lived presigned PDF URL.',
+  })
+  @ApiResponse({ status: 200, type: AcceptanceViewDto })
+  viewAcceptance(@Param('token') token: string): Promise<AcceptanceViewDto> {
+    return this.acceptance.viewAcceptance(token);
+  }
+
+  @Get('team-acceptance-pdf/:token')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Return a 10-minute presigned URL for the signed acceptance PDF (magic token). Fails 400 before the crew has signed.',
+  })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string' },
+        expires_in: { type: 'number' },
+      },
+    },
+  })
+  async getSignedAcceptancePdf(
+    @Param('token') token: string,
+  ): Promise<{ url: string; expires_in: number }> {
+    const url = await this.acceptance.getSignedAcceptanceUrlForToken(
+      token,
+      600,
+    );
+    return { url, expires_in: 600 };
+  }
+
+  @Post('team-acceptance/:token/sign')
+  @Throttle({ default: { limit: 3, ttl: 300_000 } })
+  @ApiOperation({
+    summary:
+      'Sign biên bản nghiệm thu — generates the PDF with the embedded signature, stores the SHA-256 hash, flips status to signed. Idempotent on a second call (400 "already signed").',
+  })
+  @ApiResponse({ status: 201, type: SignAcceptanceResponseDto })
+  signAcceptance(
+    @Param('token') token: string,
+    @Body() dto: SignAcceptanceDto,
+    @Ip() ip: string,
+  ): Promise<SignAcceptanceResponseDto> {
+    return this.acceptance.signAcceptance(
+      token,
+      dto.confirmed_name,
+      dto.signature_image,
+      ip,
     );
   }
 

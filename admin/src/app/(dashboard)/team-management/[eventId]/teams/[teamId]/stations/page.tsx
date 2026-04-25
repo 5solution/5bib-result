@@ -11,7 +11,10 @@ import {
   deleteStation,
   updateStationStatus,
   getTeamCategory,
+  downloadStationsTemplate,
+  importStations,
   type CreateStationInput,
+  type ImportStationsResult,
   type Station,
   type StationStatus,
   type TeamCategory,
@@ -38,6 +41,8 @@ import {
   Users,
   ExternalLink,
   Package,
+  Upload,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AssignPersonnelModal } from "./_assign-personnel-modal";
@@ -68,6 +73,7 @@ export default function TeamStationsPage(): React.ReactElement {
   const [editTarget, setEditTarget] = useState<Station | null>(null);
   const [assignTarget, setAssignTarget] = useState<Station | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -146,9 +152,14 @@ export default function TeamStationsPage(): React.ReactElement {
             người" để assign Leader/Crew/TNV của team vào trạm.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 size-4" /> Tạo trạm mới
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="mr-2 size-4" /> Import XLSX/CSV
+          </Button>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 size-4" /> Tạo trạm mới
+          </Button>
+        </div>
       </div>
 
       {error ? (
@@ -376,9 +387,217 @@ export default function TeamStationsPage(): React.ReactElement {
           void load();
         }}
       />
+
+      <ImportStationsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        teamId={teamId}
+        onImported={() => void load()}
+      />
     </div>
   );
 }
+
+// ─── Import stations dialog ──────────────────────────────────────────────────
+
+function ImportStationsDialog({
+  open,
+  onOpenChange,
+  teamId,
+  onImported,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  teamId: number;
+  onImported: () => void;
+}): React.ReactElement {
+  const { token } = useAuth();
+  const [step, setStep] = useState<"idle" | "uploading">("idle");
+  const [result, setResult] = useState<ImportStationsResult | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [showInserted, setShowInserted] = useState(false);
+  const [showSkipped, setShowSkipped] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+
+  function handleClose(o: boolean): void {
+    if (!o) {
+      setResult(null);
+      setStep("idle");
+      setShowInserted(false);
+      setShowSkipped(false);
+      setShowErrors(false);
+    }
+    onOpenChange(o);
+  }
+
+  async function handleDownloadTemplate(): Promise<void> {
+    if (!token) return;
+    setDownloading(true);
+    try {
+      const blob = await downloadStationsTemplate(token, teamId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `stations-import-template-team${teamId}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function handleFileChange(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+    setStep("uploading");
+    setResult(null);
+    try {
+      const r = await importStations(token, teamId, file);
+      setResult(r);
+      if (r.inserted.length > 0) onImported();
+    } catch (err) {
+      toast.error((err as Error).message);
+      setStep("idle");
+    } finally {
+      setStep("idle");
+      e.target.value = "";
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Import trạm từ XLSX / CSV</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 text-sm">
+          {/* Step 1 – download template */}
+          <div className="rounded-lg border p-3 space-y-2">
+            <p className="font-medium">Bước 1 — Tải file mẫu</p>
+            <p className="text-muted-foreground text-xs">
+              Điền danh sách trạm vào sheet &quot;Trạm&quot;. Cột{" "}
+              <code className="bg-muted px-1 rounded">station_name</code> là bắt
+              buộc.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={downloading}
+              onClick={() => void handleDownloadTemplate()}
+            >
+              <Download className="mr-2 size-4" />
+              {downloading ? "Đang tải..." : "Tải template .xlsx"}
+            </Button>
+          </div>
+
+          {/* Step 2 – upload */}
+          <div className="rounded-lg border p-3 space-y-2">
+            <p className="font-medium">Bước 2 — Upload file đã điền</p>
+            <p className="text-muted-foreground text-xs">
+              Hỗ trợ .xlsx và .csv · Tối đa 500 dòng · 2 MB
+            </p>
+            <label className="inline-block">
+              <span
+                className={`inline-flex items-center gap-2 cursor-pointer rounded-md border px-3 py-1.5 text-sm font-medium transition hover:bg-muted ${
+                  step === "uploading" ? "opacity-50 pointer-events-none" : ""
+                }`}
+              >
+                <Upload className="size-4" />
+                {step === "uploading" ? "Đang upload..." : "Chọn file"}
+              </span>
+              <input
+                type="file"
+                accept=".xlsx,.csv"
+                className="sr-only"
+                onChange={(e) => void handleFileChange(e)}
+                disabled={step === "uploading"}
+              />
+            </label>
+          </div>
+
+          {/* Result */}
+          {result ? (
+            <div className="rounded-lg border p-3 space-y-2 bg-muted/40">
+              <p className="font-medium">Kết quả import</p>
+              <div className="flex flex-wrap gap-4 text-xs">
+                <span className="text-muted-foreground">
+                  Tổng dòng: <b>{result.total_rows}</b>
+                </span>
+                <span className="text-green-700">
+                  Đã thêm:{" "}
+                  <b
+                    className="cursor-pointer underline"
+                    onClick={() => setShowInserted((v) => !v)}
+                  >
+                    {result.inserted.length}
+                  </b>
+                </span>
+                <span className="text-yellow-700">
+                  Bỏ qua:{" "}
+                  <b
+                    className="cursor-pointer underline"
+                    onClick={() => setShowSkipped((v) => !v)}
+                  >
+                    {result.skipped.length}
+                  </b>
+                </span>
+                <span className="text-red-700">
+                  Lỗi:{" "}
+                  <b
+                    className="cursor-pointer underline"
+                    onClick={() => setShowErrors((v) => !v)}
+                  >
+                    {result.errors.length}
+                  </b>
+                </span>
+              </div>
+              {showInserted && result.inserted.length > 0 ? (
+                <ul className="text-xs text-green-800 space-y-0.5 max-h-32 overflow-auto">
+                  {result.inserted.map((r) => (
+                    <li key={r.row}>
+                      Dòng {r.row}: ✅ {r.station_name} (id={r.id})
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {showSkipped && result.skipped.length > 0 ? (
+                <ul className="text-xs text-yellow-800 space-y-0.5 max-h-32 overflow-auto">
+                  {result.skipped.map((r) => (
+                    <li key={r.row}>
+                      Dòng {r.row}: ⏭ {r.station_name} ({r.reason})
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {showErrors && result.errors.length > 0 ? (
+                <ul className="text-xs text-red-800 space-y-0.5 max-h-32 overflow-auto">
+                  {result.errors.map((r) => (
+                    <li key={r.row}>
+                      Dòng {r.row}: ❌ {r.errors.join(", ")}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => handleClose(false)}>
+            Đóng
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Station CRUD dialog ──────────────────────────────────────────────────────
 
 function StationDialog({
   open,

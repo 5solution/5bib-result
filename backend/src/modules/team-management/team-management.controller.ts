@@ -34,6 +34,7 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateRegistrationDto } from './dto/update-registration.dto';
+import { BackfillBenBDto } from './dto/backfill-ben-b.dto';
 import { RejectRegistrationDto } from './dto/reject-registration.dto';
 import { RejectChangesDto } from './dto/reject-changes.dto';
 import { CancelRegistrationDto } from './dto/cancel-registration.dto';
@@ -295,6 +296,20 @@ export class TeamManagementController {
     @Body() dto: UpdateRegistrationDto,
   ): Promise<VolRegistration> {
     return this.registrations.updateRegistration(id, dto);
+  }
+
+  @Patch('registrations/:id/backfill-ben-b')
+  @ApiOperation({
+    summary:
+      'Backfill Bên B fields (birth_date, CCCD issue date/place, bank, address) required for contract/acceptance rendering. All fields optional — only explicit keys are updated.',
+  })
+  @ApiResponse({ status: 200, type: VolRegistration })
+  backfillBenB(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: BackfillBenBDto,
+    @Req() req: JwtRequest,
+  ): Promise<VolRegistration> {
+    return this.registrations.backfillBenB(id, dto, identifyAdmin(req));
   }
 
   // ---- v1.4 state-machine endpoints ----

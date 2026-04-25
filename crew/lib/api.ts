@@ -69,6 +69,14 @@ export interface StatusResponse {
   // checked_in, completed}, else null.
   chat_platform?: "zalo" | "telegram" | "whatsapp" | "other" | null;
   chat_group_url?: string | null;
+  // v2.0 — Acceptance (biên bản nghiệm thu) + payment surfacing.
+  // `acceptance_notes` is only populated when status='disputed'.
+  acceptance_status?: "not_ready" | "pending_sign" | "signed" | "disputed";
+  acceptance_sent_at?: string | null;
+  acceptance_signed_at?: string | null;
+  acceptance_value?: number | null;
+  acceptance_notes?: string | null;
+  payment_status?: "pending" | "paid";
 }
 
 export interface UpdateProfilePatch {
@@ -165,6 +173,31 @@ export async function getContract(token: string): Promise<ContractView> {
     throw new Error(body?.message ?? `HTTP ${res.status}`);
   }
   return res.json() as Promise<ContractView>;
+}
+
+// ---- v2.0 Acceptance (Biên bản nghiệm thu) ----
+
+export interface AcceptanceView {
+  html_content: string;
+  acceptance_status: "not_ready" | "pending_sign" | "signed" | "disputed";
+  signed_at: string | null;
+  pdf_url: string | null;
+  full_name: string;
+  contract_number: string;
+  acceptance_value: number;
+  notes: string | null;
+}
+
+export async function getAcceptance(token: string): Promise<AcceptanceView> {
+  const res = await fetch(
+    `${BACKEND_URL}/api/public/team-acceptance/${token}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<AcceptanceView>;
 }
 
 // ---- Magic-link recovery (browser-only, hits /api proxy) ----

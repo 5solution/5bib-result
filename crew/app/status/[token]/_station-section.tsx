@@ -120,13 +120,13 @@ export function StationSection({
             <MemberList title="👥 Đồng đội" members={teammate_list} />
           ) : null}
 
-          {isSupervisor ? (
-            <CrewSupplyBlock
-              token={token}
-              stationId={station.id}
-              leaderSupply={leaderSupply}
-            />
-          ) : null}
+          {/* v1.9: anyone assigned to a station can confirm supply receipt —
+               supervisor or worker. Station chief is often alone on-site. */}
+          <CrewSupplyBlock
+            token={token}
+            stationId={station.id}
+            leaderSupply={leaderSupply}
+          />
         </>
       )}
     </section>
@@ -405,6 +405,53 @@ function extractStationRows(
     });
   }
   return rows;
+}
+
+/**
+ * Read-only supply view for supervisors (is_leader_role = true).
+ * Supervisors can SEE what's allocated to their station but cannot
+ * confirm receipt — that's the crew worker's job (BR-SUP-09).
+ */
+function SupervisorSupplySummary({
+  leaderSupply,
+  stationId,
+}: {
+  leaderSupply: LeaderSupplyView | null;
+  stationId: number;
+}): React.ReactElement | null {
+  const rows = useMemo(
+    () => extractStationRows(leaderSupply, stationId),
+    [leaderSupply, stationId],
+  );
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+        📦 Vật tư trạm của bạn
+      </h3>
+      <p className="text-xs text-gray-500">
+        Xác nhận nhận hàng sẽ do thành viên crew tại trạm thực hiện.
+      </p>
+      <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden">
+        {rows.map((row) => (
+          <li key={row.allocation_id} className="px-3 py-3 bg-white flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-gray-800 truncate">{row.item_name}</span>
+            <span className="text-xs text-gray-500 whitespace-nowrap shrink-0">
+              {row.is_locked ? (
+                <span className="text-green-700 font-semibold">
+                  ✅ {row.confirmed_qty ?? 0}/{row.allocated_qty} {row.unit}
+                </span>
+              ) : (
+                <span>
+                  Kế hoạch: <strong>{row.allocated_qty}</strong> {row.unit}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function CrewSupplyBlock({

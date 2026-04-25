@@ -9,7 +9,10 @@ import {
   updateSupplyItem,
   deleteSupplyItem,
   listTeamRoles,
+  downloadSupplyItemsTemplate,
+  importSupplyItems,
   type CreateSupplyItemInput,
+  type ImportSupplyItemsResult,
   type SupplyItem,
   type TeamRole,
 } from "@/lib/team-api";
@@ -32,7 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SupplyItemsPage(): React.ReactElement {
@@ -46,6 +49,7 @@ export default function SupplyItemsPage(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SupplyItem | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -103,6 +107,9 @@ export default function SupplyItemsPage(): React.ReactElement {
           <Package className="size-6 sm:size-7 text-blue-600" /> Vật Tư Sự Kiện
         </h1>
         <div className="flex-1" />
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <Upload className="mr-2 size-4" /> Import XLSX/CSV
+        </Button>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="mr-2 size-4" /> Thêm vật tư
         </Button>
@@ -236,6 +243,13 @@ export default function SupplyItemsPage(): React.ReactElement {
           void load();
         }}
       />
+
+      <ImportSupplyItemsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        eventId={eventId}
+        onDone={() => void load()}
+      />
     </div>
   );
 }
@@ -351,6 +365,198 @@ function SupplyItemDialog({
             }}
           >
             {saving ? "Đang lưu..." : target ? "Lưu" : "Thêm"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Import dialog ────────────────────────────────────────────
+
+function ImportSupplyItemsDialog({
+  open,
+  onOpenChange,
+  eventId,
+  onDone,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  eventId: number;
+  onDone: () => void;
+}): React.ReactElement {
+  const { token } = useAuth();
+  const [file, setFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<ImportSupplyItemsResult | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setFile(null);
+      setResult(null);
+    }
+  }, [open]);
+
+  async function handleDownloadTemplate(): Promise<void> {
+    if (!token) return;
+    try {
+      const blob = await downloadSupplyItemsTemplate(token, eventId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `supply-items-template-event${eventId}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  async function handleImport(): Promise<void> {
+    if (!token || !file) return;
+    setImporting(true);
+    setResult(null);
+    try {
+      const res = await importSupplyItems(token, eventId, file);
+      setResult(res);
+      if (res.inserted > 0) {
+        toast.success(
+          `Import thành công: ${res.inserted} vật tư mới${res.skipped ? `, bỏ qua ${res.skipped}` : ""}`,
+        );
+        onDone();
+      } else {
+        toast.info(
+          `Không có vật tư nào được thêm. Bỏ qua: ${res.skipped}, Lỗi: ${res.errors}`,
+        );
+      }
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="size-4" /> Import vật tư từ file
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 text-sm">
+          {/* Step 1: Download template */}
+          <div className="rounded-lg border p-3 space-y-2">
+            <p className="font-medium text-gray-800">
+              Bước 1 — Tải file mẫu
+            </p>
+            <p className="text-xs text-gray-500">
+              File XLSX có 2 cột: <code className="bg-gray-100 px-1 rounded">item_name</code> và{" "}
+              <code className="bg-gray-100 px-1 rounded">unit</code>. Điền vào rồi upload lại.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void handleDownloadTemplate()}
+            >
+              <Download className="mr-2 size-3.5" />
+              Tải file mẫu (.xlsx)
+            </Button>
+          </div>
+
+          {/* Step 2: Upload */}
+          <div className="rounded-lg border p-3 space-y-2">
+            <p className="font-medium text-gray-800">
+              Bước 2 — Chọn file để import
+            </p>
+            <Input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null);
+                setResult(null);
+              }}
+            />
+            <p className="text-xs text-gray-400">
+              Hỗ trợ .xlsx, .xls, .csv. Tối đa 500 dòng.
+            </p>
+          </div>
+
+          {/* Result summary */}
+          {result ? (
+            <div className="rounded-lg border p-3 space-y-2">
+              <p className="font-medium text-gray-800">Kết quả import:</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div
+                  className="rounded-lg p-2"
+                  style={{ background: "#dcfce7" }}
+                >
+                  <p className="text-lg font-bold text-green-700">
+                    {result.inserted}
+                  </p>
+                  <p className="text-xs text-green-600">Đã thêm</p>
+                </div>
+                <div
+                  className="rounded-lg p-2"
+                  style={{ background: "#fef9c3" }}
+                >
+                  <p className="text-lg font-bold text-yellow-700">
+                    {result.skipped}
+                  </p>
+                  <p className="text-xs text-yellow-600">Bỏ qua</p>
+                </div>
+                <div
+                  className="rounded-lg p-2"
+                  style={{ background: "#fee2e2" }}
+                >
+                  <p className="text-lg font-bold text-red-700">
+                    {result.errors}
+                  </p>
+                  <p className="text-xs text-red-600">Lỗi</p>
+                </div>
+              </div>
+              {result.rows_errors.length > 0 ? (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-red-600 font-medium">
+                    Chi tiết lỗi ({result.rows_errors.length})
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 text-gray-600">
+                    {result.rows_errors.map((e) => (
+                      <li key={e.row}>
+                        Dòng {e.row}: {e.message}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+              {result.rows_skipped.length > 0 ? (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-yellow-600 font-medium">
+                    Dòng bỏ qua ({result.rows_skipped.length})
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 text-gray-600">
+                    {result.rows_skipped.map((s) => (
+                      <li key={`${s.row}-${s.item_name}`}>
+                        Dòng {s.row}: {s.item_name} — {s.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Đóng
+          </Button>
+          <Button
+            disabled={!file || importing}
+            onClick={() => void handleImport()}
+          >
+            {importing ? "Đang import..." : "Bắt đầu import"}
           </Button>
         </DialogFooter>
       </DialogContent>

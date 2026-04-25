@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,14 +9,22 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Req,
+  Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
+import { UploadedFile } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import {
   AssignableMemberDto,
@@ -26,7 +35,16 @@ import {
   UpdateStationDto,
   UpdateStationStatusDto,
 } from './dto/station.dto';
+import { ImportStationsResponseDto } from './dto/import-stations.dto';
 import { TeamStationService } from './services/team-station.service';
+import { TeamStationImportService } from './services/team-station-import.service';
+
+interface JwtRequest extends Request {
+  user?: { userId?: string; email?: string; sub?: string };
+}
+function identifyAdmin(req: JwtRequest): string {
+  return req.user?.email ?? req.user?.userId ?? req.user?.sub ?? 'admin';
+}
 
 // v1.8: stations pivoted from role → category. Routes now group under
 // /team-categories/:categoryId/stations. Old role-scoped routes removed.
@@ -35,7 +53,10 @@ import { TeamStationService } from './services/team-station.service';
 @UseGuards(JwtAuthGuard)
 @Controller('team-management')
 export class TeamStationController {
-  constructor(private readonly stations: TeamStationService) {}
+  constructor(
+    private readonly stations: TeamStationService,
+    private readonly stationsImport: TeamStationImportService,
+  ) {}
 
   @Get('events/:eventId/stations')
   @ApiOperation({
@@ -137,5 +158,67 @@ export class TeamStationController {
     @Param('assignmentId', ParseIntPipe) assignmentId: number,
   ): Promise<void> {
     await this.stations.removeAssignment(assignmentId);
+  }
+
+  // ─── Station bulk import (v1.9) ────────────────────────────────────────
+
+  @Get('team-categories/:categoryId/stations/import/template')
+  @ApiOperation({
+    summary:
+      'Download XLSX template for bulk station import under a team (category). Columns: station_name *, location_description, gps_lat, gps_lng, sort_order.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Binary XLSX file.',
+  })
+  async downloadStationsTemplate(
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Res() res: Response,
+  ): Promise<void> {
+    const buf = await this.stationsImport.generateTemplateXlsx(categoryId);
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="stations-import-template-team${categoryId}.xlsx"`,
+      'Content-Length': String(buf.length),
+    });
+    res.send(buf);
+  }
+
+  @Post('team-categories/:categoryId/stations/import')
+  @ApiOperation({
+    summary:
+      'Single-step bulk import of stations for a team (category) from XLSX/CSV. Inserts valid rows immediately; duplicate names skipped, rows with validation errors reported.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 201, type: ImportStationsResponseDto })
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 2 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const name = (file.originalname ?? '').toLowerCase();
+        const extOk = name.endsWith('.csv') || name.endsWith('.xlsx');
+        const allowed = new Set([
+          'text/csv',
+          'application/csv',
+          'text/plain',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/octet-stream',
+        ]);
+        if (!extOk || !allowed.has(file.mimetype ?? '')) {
+          return cb(new BadRequestException('Chỉ hỗ trợ .csv và .xlsx'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  importStations(
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: JwtRequest,
+  ): Promise<ImportStationsResponseDto> {
+    return this.stationsImport.importStations(categoryId, file, identifyAdmin(req));
   }
 }

@@ -86,6 +86,20 @@ export default function RegisterForm({ event }: RegisterFormProps): React.ReactE
       });
       return;
     }
+    // Client-side gate: required photo fields must be uploaded before submit.
+    // file inputs don't support HTML5 `required` reliably — check the value
+    // (set to the S3 URL after upload) instead.
+    const missingPhoto = selectedRole.form_fields.find(
+      (f) => f.type === "photo" && f.required && !formData[f.key],
+    );
+    if (missingPhoto) {
+      setMessage({
+        type: "error",
+        text: `Vui lòng tải lên: ${missingPhoto.label}.`,
+      });
+      return;
+    }
+
     // Client-side sanity check for account number — the field strips
     // non-digits on change already, but catch the length rule here.
     const acct = (formData["bank_account_number"] ?? "").toString();
@@ -114,16 +128,24 @@ export default function RegisterForm({ event }: RegisterFormProps): React.ReactE
           form_data: formData,
         }),
       });
-      const body = (await res.json()) as { message?: string; magic_link?: string; id?: number };
+      const body = (await res.json()) as {
+        message?: string;
+        id?: number;
+        status?: string;
+      };
       if (!res.ok) throw new Error(body.message ?? `HTTP ${res.status}`);
-      setMessage({ type: "success", text: body.message ?? "Đăng ký thành công" });
-      // Forward to status page after a short beat
-      if (body.magic_link) {
-        const token = body.magic_link.split("/status/")[1];
-        if (token) {
-          setTimeout(() => router.push(`/status/${token}`), 1200);
-        }
-      }
+      // SECURITY: do NOT redirect to the portal here. The backend returns
+      // only id + status + message — no token, no link. The crew member
+      // will receive a portal link by email ONLY after admin approves. This
+      // prevents any anonymous register submission from reading/editing a
+      // profile attached to someone else's email.
+      //
+      // Bug #9 fix: redirect to a dedicated success page instead of showing
+      // the success message inline (which left the user stuck on the form).
+      const successStatus = body.status ?? "pending_approval";
+      router.push(
+        `/events/${event.id}/register/success?status=${encodeURIComponent(successStatus)}`,
+      );
     } catch (err) {
       setMessage({ type: "error", text: (err as Error).message });
     } finally {
@@ -179,28 +201,42 @@ export default function RegisterForm({ event }: RegisterFormProps): React.ReactE
         autoComplete="email"
       />
 
-      {selectedRole?.form_fields.map((field) => {
+      {selectedRole && selectedRole.form_fields.length > 0 && (
+        <SectionDivider label="Thông tin bổ sung" className="mt-2 mb-1" />
+      )}
+
+      {selectedRole?.form_fields.map((field, idx) => {
         // Surface client-side errors on the specific field they apply to.
         const fieldError =
           field.key === "bank_holder_name" && holderMismatch
             ? "Tên chủ tài khoản phải khớp với họ tên đăng ký"
             : null;
+
+        // Insert banking section divider before the first bank_* field.
+        const isBankField = field.key.startsWith("bank_");
+        const prevIsBankField = idx > 0 && selectedRole.form_fields[idx - 1].key.startsWith("bank_");
+        const showBankingDivider = isBankField && !prevIsBankField;
+
         return (
-          <DynamicField
-            key={field.key}
-            field={field}
-            value={formData[field.key] ?? ""}
-            onChange={(v) => updateField(field.key, v)}
-            onBlur={() => handleFieldBlur(field.key)}
-            error={fieldError}
-            onPhotoUpload={(file) =>
-              handlePhotoUpload(
-                field.key,
-                file,
-                field.key === "avatar_photo" ? "avatar" : "cccd",
-              )
-            }
-          />
+          <div key={field.key}>
+            {showBankingDivider && (
+              <SectionDivider label="Thông tin thanh toán" className="mb-4" />
+            )}
+            <DynamicField
+              field={field}
+              value={formData[field.key] ?? ""}
+              onChange={(v) => updateField(field.key, v)}
+              onBlur={() => handleFieldBlur(field.key)}
+              error={fieldError}
+              onPhotoUpload={(file) =>
+                handlePhotoUpload(
+                  field.key,
+                  file,
+                  field.key === "avatar_photo" ? "avatar" : "cccd",
+                )
+              }
+            />
+          </div>
         );
       })}
 
@@ -297,6 +333,27 @@ export default function RegisterForm({ event }: RegisterFormProps): React.ReactE
         Thông tin của bạn chỉ dùng cho công tác tổ chức sự kiện và được bảo mật.
       </p>
     </form>
+  );
+}
+
+function SectionDivider({
+  label,
+  className = "",
+}: {
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center gap-3 ${className}`}>
+      <div className="flex-1 border-t" style={{ borderColor: "#e5e7eb" }} />
+      <span
+        className="shrink-0 text-xs font-semibold uppercase tracking-wider"
+        style={{ color: "#9ca3af" }}
+      >
+        {label}
+      </span>
+      <div className="flex-1 border-t" style={{ borderColor: "#e5e7eb" }} />
+    </div>
   );
 }
 

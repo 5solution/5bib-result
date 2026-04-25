@@ -187,6 +187,11 @@ export default function ContractTemplatesPage(): React.ReactElement {
           </Button>
         </Link>
         <h1 className="font-display text-3xl font-bold tracking-tight text-gradient">Mẫu hợp đồng</h1>
+        <Link href="/team-management/acceptance-templates">
+          <Button variant="ghost" size="sm">
+            Mẫu nghiệm thu →
+          </Button>
+        </Link>
         <div className="flex-1" />
         <Link href="/team-management/contract-templates/new">
           <Button>

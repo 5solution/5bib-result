@@ -49,6 +49,19 @@ export class RegistrationListRowDto {
   // v1.4.1 — admin list indicator for pending profile-edit requests.
   @ApiProperty({ description: 'True when TNV has an unapproved profile edit.' })
   has_pending_changes!: boolean;
+
+  // v2.0 — Acceptance gate surfacing. Lets the admin acceptance tab list
+  // "sẵn sàng gửi", "đã ký", "tranh chấp" without an extra fetch per row.
+  @ApiProperty({ enum: ['not_ready', 'pending_sign', 'signed', 'disputed'] })
+  acceptance_status!: 'not_ready' | 'pending_sign' | 'signed' | 'disputed';
+  @ApiProperty({ required: false, nullable: true })
+  acceptance_sent_at!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  acceptance_signed_at!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  acceptance_value!: number | null;
+  @ApiProperty({ required: false, nullable: true })
+  contract_number!: string | null;
 }
 
 export class ListRegistrationsResponseDto {

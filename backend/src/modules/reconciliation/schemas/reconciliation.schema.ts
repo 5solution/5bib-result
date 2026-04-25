@@ -151,18 +151,18 @@ export class Reconciliation {
   @Prop({ type: String, default: null })
   docx_url: string | null;
 
-  // Audit
-  @Prop({ type: Number, default: null })
-  created_by: number | null;
+  // Audit — admin user IDs are Mongo ObjectIds (stored as string)
+  @Prop({ type: String, default: null })
+  created_by: string | null;
 
-  @Prop({ type: Number, default: null })
-  reviewed_by: number | null;
+  @Prop({ type: String, default: null })
+  reviewed_by: string | null;
 
   @Prop({ type: Date, default: null })
   reviewed_at: Date | null;
 
-  @Prop({ type: Number, default: null })
-  approved_by: number | null;
+  @Prop({ type: String, default: null })
+  approved_by: string | null;
 
   @Prop({ type: Date, default: null })
   approved_at: Date | null;

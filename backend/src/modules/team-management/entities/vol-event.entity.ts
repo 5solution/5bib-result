@@ -29,6 +29,13 @@ export class VolEvent {
   @Column({ type: 'varchar', length: 255 })
   event_name!: string;
 
+  // Short uppercase code used in contract_number format
+  // `NNN-{PREFIX}-HDDV/CTV-5BIB` (e.g. HNLLT). UNIQUE cross-event.
+  // Admin sets once per event — service-layer guard rejects edits
+  // after the first contract_number has been issued for the event.
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  contract_code_prefix!: string | null;
+
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 

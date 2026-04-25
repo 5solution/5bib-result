@@ -43,6 +43,7 @@ import {
   sanitizeHtml,
   wrapContractDocument,
 } from './pdf-renderer';
+import { TeamContractNumberService } from './team-contract-number.service';
 
 /**
  * Canonical list of template variables the contract renderer knows how to
@@ -55,6 +56,13 @@ export const VALID_VARIABLES = [
   'email',
   'cccd',
   'dob',
+  'birth_date',
+  'cccd_issue_date',
+  'cccd_issue_place',
+  'address',
+  'bank_account_number',
+  'bank_name',
+  'tax_code',
   'event_name',
   'event_start_date',
   'event_end_date',
@@ -64,6 +72,8 @@ export const VALID_VARIABLES = [
   'working_days',
   'total_compensation',
   'signed_date',
+  'contract_number',
+  'signature_image',
 ];
 
 @Injectable()
@@ -84,6 +94,7 @@ export class TeamContractService {
     private readonly s3: S3Client,
     private readonly mail: MailService,
     @InjectRedis() private readonly redis: Redis,
+    private readonly contractNumbers: TeamContractNumberService,
   ) {}
 
   private signLockKey(regId: number): string {
@@ -240,11 +251,22 @@ export class TeamContractService {
   ): Record<string, string> {
     const form = (reg.form_data ?? {}) as Record<string, unknown>;
     const asStr = (v: unknown) => (typeof v === 'string' ? v : '');
+    const cccd = asStr(form.cccd);
     return {
       full_name: reg.full_name,
       email: reg.email,
       phone: reg.phone,
-      cccd: asStr(form.cccd),
+      cccd,
+      // `dob` kept as alias for legacy templates; new field is `birth_date`.
+      dob: reg.birth_date ? formatDate(reg.birth_date) : '',
+      birth_date: reg.birth_date ? formatDate(reg.birth_date) : '',
+      cccd_issue_date: reg.cccd_issue_date ? formatDate(reg.cccd_issue_date) : '',
+      cccd_issue_place: reg.cccd_issue_place ?? '',
+      address: asStr(form.address),
+      bank_account_number: asStr(form.bank_account_number),
+      bank_name: asStr(form.bank_name),
+      // MST = CCCD — no separate field (Option chốt).
+      tax_code: cccd,
       role_name: role.role_name,
       daily_rate: formatVnd(Number(role.daily_rate)),
       working_days: String(role.working_days),
@@ -256,6 +278,7 @@ export class TeamContractService {
       event_end_date: formatDate(event.event_end_date),
       event_location: event.location ?? '',
       signed_date: formatDate(new Date()),
+      contract_number: reg.contract_number ?? '',
       // Empty string when no signature yet (preview path) — results in
       // `<img src="">` which renders nothing in puppeteer.
       signature_image: signatureImage ?? '',
@@ -617,25 +640,67 @@ export class TeamContractService {
         `Cannot send contract — registration status is "${reg.status}", expected "approved"`,
       );
     }
-    const magicLink = `${env.teamManagement.crewBaseUrl}/contract/${reg.magic_token}`;
-    await this.mail.sendTeamContractSent({
-      toEmail: reg.email,
-      fullName: reg.full_name,
-      eventName: event.event_name,
-      roleName: role.role_name,
-      magicLink,
+    // v2.0 — reserve contract_number inside the status-transition
+    // transaction. Sequence row is locked FOR UPDATE so concurrent batch
+    // runs serialize naturally. If reg already has a contract_number
+    // (legacy or resent flow), keep the original — contract numbers are
+    // append-only per event.
+    const result = await this.dataSource.transaction('SERIALIZABLE', async (m) => {
+      // Re-read inside txn so we see the committed contract_number if any.
+      const latest = await m
+        .getRepository(VolRegistration)
+        .findOne({ where: { id: reg.id } });
+      if (!latest) {
+        throw new NotFoundException('Registration vanished mid-transaction');
+      }
+      let contractNumber = latest.contract_number;
+      if (!contractNumber) {
+        contractNumber = await this.contractNumbers.reserveNextInTransaction(
+          m,
+          event.id,
+        );
+      }
+      const upd = await m
+        .getRepository(VolRegistration)
+        .createQueryBuilder()
+        .update()
+        .set({
+          status: 'contract_sent',
+          contract_status: 'sent',
+          contract_number: contractNumber,
+        })
+        .where('id = :id', { id: reg.id })
+        .andWhere('status = :from', { from: 'approved' })
+        .execute();
+      // Refresh the in-memory object so downstream email/log has the number.
+      reg.contract_number = contractNumber;
+      return upd;
     });
-    const result = await this.regRepo
-      .createQueryBuilder()
-      .update()
-      .set({ status: 'contract_sent', contract_status: 'sent' })
-      .where('id = :id', { id: reg.id })
-      .andWhere('status = :from', { from: 'approved' })
-      .execute();
+
     if (!result.affected) {
       this.logger.warn(
-        `sendContractToRegistration reg=${reg.id}: status changed under us, skip transition`,
+        `sendContractToRegistration reg=${reg.id}: status changed under us, skip transition (contract_number reserved=${reg.contract_number})`,
       );
+      // Still attempt the email so admin retry isn't wasted — the reg is
+      // already in contract_sent so the email link works.
+    }
+
+    const magicLink = `${env.teamManagement.crewBaseUrl}/contract/${reg.magic_token}`;
+    try {
+      await this.mail.sendTeamContractSent({
+        toEmail: reg.email,
+        fullName: reg.full_name,
+        eventName: event.event_name,
+        roleName: role.role_name,
+        magicLink,
+      });
+    } catch (err) {
+      // Don't revert the contract_number / status — reserving a gap is
+      // acceptable (audit-safe), rolling back a committed sequence isn't.
+      this.logger.warn(
+        `send-contract email failed reg=${reg.id} (state already contract_sent): ${(err as Error).message}`,
+      );
+      throw err;
     }
     return reg.id;
   }
@@ -709,10 +774,66 @@ export class TeamContractService {
     if (!reg) throw new NotFoundException('Registration not found');
     if (!reg.role) throw new NotFoundException('Role not loaded');
     if (!reg.event) throw new NotFoundException('Event not loaded');
+
+    // No-contract fast-path: when the role has no contract template
+    // configured, skip contract_sent/contract_signed and deliver the QR
+    // + portal email directly. Status: approved → qr_sent.
     if (!reg.role.contract_template_id) {
-      throw new BadRequestException('Role has no contract template configured');
+      await this.sendApprovedNoContract(reg, reg.role, reg.event);
+      return reg.id;
     }
+
     return this.sendContractToRegistration(reg, reg.role, reg.event);
+  }
+
+  /**
+   * Fired when a registration is approved but the role has NO contract
+   * template configured. Sends the "you're approved — here's your QR +
+   * portal link" email and transitions approved → qr_sent atomically.
+   *
+   * Keeps the same final state as the contract flow so downstream
+   * check-in / completion logic doesn't need a second branch.
+   */
+  private async sendApprovedNoContract(
+    reg: VolRegistration,
+    role: VolRole,
+    event: VolEvent,
+  ): Promise<void> {
+    if (reg.status !== 'approved') {
+      this.logger.warn(
+        `sendApprovedNoContract reg=${reg.id}: status=${reg.status}, skipping`,
+      );
+      return;
+    }
+    const qrToken = reg.magic_token;
+    const qrDataUrl = await QRCode.toDataURL(qrToken);
+    const magicLink = `${env.teamManagement.crewBaseUrl}/status/${reg.magic_token}`;
+
+    await this.mail.sendTeamRegistrationApproved({
+      toEmail: reg.email,
+      fullName: reg.full_name,
+      eventName: event.event_name,
+      roleName: role.role_name,
+      magicLink,
+      qrDataUrl,
+    });
+
+    const result = await this.regRepo
+      .createQueryBuilder()
+      .update()
+      .set({ status: 'qr_sent', qr_code: qrToken })
+      .where('id = :id', { id: reg.id })
+      .andWhere('status = :from', { from: 'approved' })
+      .execute();
+    if (!result.affected) {
+      this.logger.warn(
+        `sendApprovedNoContract reg=${reg.id}: status changed under us, not transitioning to qr_sent`,
+      );
+    } else {
+      this.logger.log(
+        `APPROVE_NO_CONTRACT reg=${reg.id} role=${role.id} → qr_sent (role has no contract_template_id)`,
+      );
+    }
   }
 }
 

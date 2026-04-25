@@ -41,6 +41,7 @@ import {
   RegistrationListRowDto,
 } from '../dto/registration-row.dto';
 import { UpdateRegistrationDto } from '../dto/update-registration.dto';
+import { BackfillBenBDto } from '../dto/backfill-ben-b.dto';
 import { UpdateProfileDto, UpdateProfileResponseDto } from '../dto/update-profile.dto';
 import {
   BulkAction,
@@ -72,7 +73,11 @@ function escapeHtml(s: string): string {
  */
 const ALLOWED_TRANSITIONS: Readonly<Record<RegistrationStatus, RegistrationStatus[]>> = {
   pending_approval: ['approved', 'rejected', 'waitlisted', 'cancelled'],
-  approved: ['contract_sent', 'rejected', 'cancelled'],
+  // approved → qr_sent is the "no-contract" fast-path: when the role has
+  // no contract_template_id, we skip contract_sent/contract_signed and
+  // deliver the QR + portal email directly (see TeamContractService
+  // .sendContractForRegistrationId). Contract flow is unchanged.
+  approved: ['contract_sent', 'qr_sent', 'rejected', 'cancelled'],
   contract_sent: ['contract_signed', 'cancelled'],
   contract_signed: ['qr_sent', 'cancelled'],
   qr_sent: ['checked_in', 'cancelled'],
@@ -248,12 +253,18 @@ export class TeamRegistrationService {
       outcome.status === 'waitlisted'
         ? `Bạn đang ở danh sách chờ (vị trí ${outcome.waitlist_position}). Chúng tôi sẽ email khi có slot.`
         : 'Đã nhận đăng ký. Ban tổ chức sẽ duyệt và thông báo qua email trong vòng 24h.';
+    // SECURITY: DO NOT return magic_link here. The portal token is sent to
+    // the crew member by email only after admin approval. Echoing it to the
+    // anonymous register caller would let anyone who submits a form (with
+    // or without a valid email) hit /status/:token and see the profile
+    // they just posted, and for auto_approve=true roles they'd bypass
+    // approval entirely. magic_link is only ever returned on admin
+    // manual-register responses (see manualRegister below).
     return {
       id: regId,
       status: outcome.status,
       waitlist_position: outcome.waitlist_position,
       message,
-      magic_link: this.buildMagicLink(outcome.magic_token),
     };
   }
 
@@ -469,6 +480,20 @@ export class TeamRegistrationService {
         : null,
       chat_platform: reg.role?.chat_platform ?? null,
       chat_group_url: canSeeChatLink ? (reg.role?.chat_group_url ?? null) : null,
+      // v2.0 — acceptance + payment surfacing for the crew status page.
+      acceptance_status: reg.acceptance_status,
+      acceptance_sent_at: reg.acceptance_sent_at
+        ? reg.acceptance_sent_at.toISOString()
+        : null,
+      acceptance_signed_at: reg.acceptance_signed_at
+        ? reg.acceptance_signed_at.toISOString()
+        : null,
+      acceptance_value: reg.acceptance_value,
+      // Only expose dispute reason when actually disputed — otherwise the
+      // notes column may carry admin working notes the crew shouldn't see.
+      acceptance_notes:
+        reg.acceptance_status === 'disputed' ? reg.acceptance_notes : null,
+      payment_status: reg.payment_status,
     };
   }
 
@@ -607,9 +632,45 @@ export class TeamRegistrationService {
       // Magic-link recovery — expose to admin so they can resend manually.
       // Audit-logged below. Token is already leaked through contract/status
       // emails, so admin access here adds no net privilege escalation.
+      //
+      // v1.8 Leader portal expiry: for leader roles, the magic link stays valid
+      // until event_end_date + 7 days (see validateLeaderToken). Display the
+      // REAL expiry so the admin doesn't think the link is dead after 7 days.
       magic_link: this.buildMagicLink(reg.magic_token),
       magic_token: reg.magic_token,
-      magic_token_expires: reg.magic_token_expires.toISOString(),
+      magic_token_expires: (() => {
+        if (reg.role?.is_leader_role && reg.event?.event_end_date) {
+          const d = new Date(reg.event.event_end_date);
+          d.setDate(d.getDate() + 7);
+          d.setHours(23, 59, 59, 999);
+          return d.toISOString();
+        }
+        return reg.magic_token_expires.toISOString();
+      })(),
+      // v2.0 — Acceptance + contract_number
+      contract_number: reg.contract_number,
+      acceptance_status: reg.acceptance_status,
+      acceptance_value: reg.acceptance_value,
+      acceptance_sent_at: reg.acceptance_sent_at
+        ? reg.acceptance_sent_at.toISOString()
+        : null,
+      acceptance_signed_at: reg.acceptance_signed_at
+        ? reg.acceptance_signed_at.toISOString()
+        : null,
+      // Return the raw S3 key — admin UI opens via the public token
+      // endpoint GET /public/team-acceptance-pdf/:magic_token when needed.
+      acceptance_pdf_url: reg.acceptance_pdf_url,
+      acceptance_notes: reg.acceptance_notes,
+      // Bên B (birth_date / cccd issue) — required for contract rendering.
+      birth_date: reg.birth_date,
+      cccd_issue_date: reg.cccd_issue_date,
+      cccd_issue_place: reg.cccd_issue_place,
+      // Force-paid audit trail (NULL on standard markPaid flow)
+      payment_forced_reason: reg.payment_forced_reason,
+      payment_forced_at: reg.payment_forced_at
+        ? reg.payment_forced_at.toISOString()
+        : null,
+      payment_forced_by: reg.payment_forced_by,
     };
   }
 
@@ -948,10 +1009,35 @@ export class TeamRegistrationService {
       if (dto.notes != null) reg.notes = dto.notes;
 
       if (dto.payment_status != null) {
+        // v2.0 — paid transitions go through TeamPaymentService.markPaid so
+        // the acceptance-signed gate isn't bypassed. The old in-place set
+        // here would let an admin flip to 'paid' without a signed biên bản
+        // nghiệm thu. Only allow pending→pending (no-op) or paid→pending
+        // (revert) inline; pending→paid must call POST /:id/payment/mark-paid
+        // or /force-paid.
+        if (dto.payment_status === 'paid' && reg.payment_status !== 'paid') {
+          throw new BadRequestException(
+            'Dùng endpoint POST /registrations/:id/payment/mark-paid (hoặc force-paid) để chuyển sang "đã thanh toán". ' +
+              'Endpoint này không bypass được cổng nghiệm thu.',
+          );
+        }
         if (dto.payment_status === 'paid' && reg.suspicious_checkin) {
           throw new BadRequestException(
             'Cần xem xét trước khi thanh toán — registration is flagged as suspicious. Clear the flag first.',
           );
+        }
+        // QC F-3: when reverting paid → pending, clear force-paid audit
+        // columns so a later markPaid via the standard gate starts fresh
+        // (and `was_forced` in MarkPaidResponseDto doesn't lie). Mirror
+        // of TeamPaymentService.revertPaid. Without this, the stale
+        // payment_forced_reason silently resurfaces on the next mark-paid.
+        if (
+          dto.payment_status === 'pending' &&
+          reg.payment_status === 'paid'
+        ) {
+          reg.payment_forced_reason = null;
+          reg.payment_forced_at = null;
+          reg.payment_forced_by = null;
         }
         reg.payment_status = dto.payment_status;
       }
@@ -970,6 +1056,55 @@ export class TeamRegistrationService {
 
       return m.getRepository(VolRegistration).save(reg);
     });
+    await this.cache.invalidateEvent(updated.event_id, [updated.role_id]);
+    return updated;
+  }
+
+  /**
+   * v2.0 — Admin backfill Bên B fields required for contract/acceptance
+   * rendering. Writes entity columns (birth_date, cccd_issue_*) and
+   * merges bank/address into form_data JSON.
+   *
+   * Any field left undefined on the DTO is NOT touched. Explicit null
+   * clears the value. Admin fills this via the "Bổ sung thông tin Bên B"
+   * modal on the registration detail page before sending HĐ.
+   */
+  async backfillBenB(
+    id: number,
+    dto: BackfillBenBDto,
+    adminIdentity: string,
+  ): Promise<VolRegistration> {
+    const updated = await this.dataSource.transaction(async (m) => {
+      const reg = await m
+        .getRepository(VolRegistration)
+        .findOne({ where: { id } });
+      if (!reg) throw new NotFoundException('Registration not found');
+
+      if (dto.birth_date !== undefined) reg.birth_date = dto.birth_date;
+      if (dto.cccd_issue_date !== undefined)
+        reg.cccd_issue_date = dto.cccd_issue_date;
+      if (dto.cccd_issue_place !== undefined)
+        reg.cccd_issue_place = dto.cccd_issue_place;
+
+      // Merge bank/address into form_data JSON. Only touch keys the admin
+      // explicitly sent.
+      const form: Record<string, unknown> = { ...(reg.form_data ?? {}) };
+      if (dto.bank_account_number !== undefined) {
+        form.bank_account_number = dto.bank_account_number;
+      }
+      if (dto.bank_name !== undefined) {
+        form.bank_name = dto.bank_name;
+      }
+      if (dto.address !== undefined) {
+        form.address = dto.address;
+      }
+      reg.form_data = form;
+
+      return m.getRepository(VolRegistration).save(reg);
+    });
+    this.logger.log(
+      `BACKFILL_BEN_B admin=${adminIdentity} reg=${id} event=${updated.event_id}`,
+    );
     await this.cache.invalidateEvent(updated.event_id, [updated.role_id]);
     return updated;
   }
@@ -1287,7 +1422,7 @@ export class TeamRegistrationService {
     if (!fullReg) return;
     const eventName = fullReg.event?.event_name ?? '';
     const roleName = fullReg.role?.role_name ?? '';
-    const subject = `TNV yêu cầu sửa thông tin: ${fullReg.full_name} — ${eventName}`;
+    const subject = `[5BIB Crew] - TNV yêu cầu sửa thông tin - ${eventName} (${fullReg.full_name})`;
     const adminLink = `${env.teamManagement.crewBaseUrl.replace(/\/?$/, '')
       .replace('crew.', 'admin.')}/team-management/${fullReg.event_id}/registrations?highlight=${fullReg.id}`;
 
@@ -1317,7 +1452,7 @@ export class TeamRegistrationService {
       relations: { event: true, role: true },
     });
     if (!fullReg) return;
-    const subject = `Yêu cầu sửa thông tin bị từ chối — ${fullReg.event?.event_name ?? ''}`;
+    const subject = `[5BIB Crew] - Yêu cầu sửa thông tin bị từ chối - ${fullReg.event?.event_name ?? ''}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width:560px; margin:0 auto; color:#1c1917;">
         <h2>Chào ${escapeHtml(fullReg.full_name)},</h2>
@@ -1509,6 +1644,17 @@ export class TeamRegistrationService {
       notes: r.notes,
       created_at: r.created_at.toISOString(),
       has_pending_changes: r.has_pending_changes,
+      // v2.0 — acceptance gate so the admin list can filter/sort
+      // by "sẵn sàng gửi nghiệm thu" / "đã ký" / "tranh chấp".
+      acceptance_status: r.acceptance_status,
+      acceptance_sent_at: r.acceptance_sent_at
+        ? r.acceptance_sent_at.toISOString()
+        : null,
+      acceptance_signed_at: r.acceptance_signed_at
+        ? r.acceptance_signed_at.toISOString()
+        : null,
+      acceptance_value: r.acceptance_value,
+      contract_number: r.contract_number,
     };
   }
 

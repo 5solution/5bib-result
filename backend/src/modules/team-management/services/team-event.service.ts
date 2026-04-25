@@ -13,6 +13,7 @@ import { CreateRoleDto } from '../dto/create-role.dto';
 import { UpdateRoleDto } from '../dto/update-role.dto';
 import { TeamCacheService } from './team-cache.service';
 import { TeamRoleHierarchyService } from './team-role-hierarchy.service';
+import { TeamContractNumberService } from './team-contract-number.service';
 
 // v1.6 Option B2 — response shape augmenting the VolRole entity with the
 // materialized list of direct children (id + name) plus a flat id[] helper.
@@ -55,6 +56,7 @@ export class TeamEventService {
     private readonly roleRepo: Repository<VolRole>,
     private readonly cache: TeamCacheService,
     private readonly hierarchy: TeamRoleHierarchyService,
+    private readonly contractNumbers: TeamContractNumberService,
   ) {}
 
   /**
@@ -258,6 +260,19 @@ export class TeamEventService {
     if (!event) throw new NotFoundException('Event not found');
     if (event.status === 'completed') {
       throw new BadRequestException('Cannot edit event in completed status');
+    }
+
+    // v2.0 QC F-1: if the admin tries to edit contract_code_prefix after
+    // contracts have been issued, reject. The prefix is baked into every
+    // issued contract_number — editing it mid-event would break the 1:1
+    // map between issued contracts and the letter-code on the document.
+    //
+    // contract_code_prefix is NOT yet in UpdateEventDto (Phase C adds the
+    // admin form field). Read via index-access to handle forward compat
+    // when the DTO field lands — the guard is already wired.
+    const rawPrefix = (dto as Record<string, unknown>).contract_code_prefix;
+    if (rawPrefix !== undefined && rawPrefix !== event.contract_code_prefix) {
+      await this.contractNumbers.assertPrefixEditable(id);
     }
 
     // v1.8 QC fix: cross-field validation on the merged effective values so

@@ -21,6 +21,8 @@ const ITEMS: NavItem[] = [
   { slug: "teams", label: "Team" },
   { slug: "roles", label: "Vai trò" },
   { slug: "registrations", label: "Nhân sự" },
+  // v2.0 — post-event contract + payout gate
+  { slug: "acceptance", label: "Nghiệm thu" },
   { slug: "supply-items", label: "Kho vật tư" },
   { slug: "supply", label: "Kế hoạch vật tư" },
   { slug: "contacts", label: "Liên lạc khẩn cấp" },
