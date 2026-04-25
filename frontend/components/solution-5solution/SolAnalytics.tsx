@@ -22,8 +22,15 @@ function dl(payload: Record<string, unknown>) {
 
 const SCROLL_SECTIONS = [
   'top',
+  'about',
   'ecosystem',
+  '5bib',
+  '5ticket',
+  'result',
+  '5pix',
   'why',
+  'process',
+  'testimonials',
   'partners',
   'contact',
 ] as const;

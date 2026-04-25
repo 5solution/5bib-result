@@ -5,8 +5,10 @@ import { SolWordmark } from './sol-shared';
 
 const NAV_ITEMS = [
   { href: '#ecosystem', label: 'Hệ sinh thái' },
-  { href: '#why', label: 'Vì sao chọn' },
-  { href: '#partners', label: 'Đối tác' },
+  { href: '#5bib', label: '5BIB' },
+  { href: '#5ticket', label: '5Ticket' },
+  { href: '#5pix', label: '5Pix' },
+  { href: '#process', label: 'Quy trình' },
   { href: '#contact', label: 'Liên hệ' },
 ];
 
