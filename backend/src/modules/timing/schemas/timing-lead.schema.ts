@@ -52,7 +52,9 @@ export class TimingLead {
   @Prop({ required: true, trim: true, maxlength: 20, index: true })
   phone: string;
 
-  @Prop({ required: true, trim: true, maxlength: 200 })
+  // Optional in schema — controllers/services enforce per-source rules
+  // (timing/solution/5sport-btc require it; 5solution-umbrella + 5sport-athlete do not).
+  @Prop({ required: false, default: '', trim: true, maxlength: 200 })
   organization: string;
 
   @Prop({ default: '', maxlength: 100 })
