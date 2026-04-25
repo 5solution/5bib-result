@@ -151,9 +151,9 @@ export type CreateReconciliationDto = {
      */
     generate_docx?: boolean;
     /**
-     * Admin user id — Mongo ObjectId string (set from JWT in controller)
+     * Admin user id (set from JWT in controller)
      */
-    created_by?: string | null;
+    created_by?: number;
 };
 
 export type ExportZipByIdsDto = {
@@ -188,13 +188,13 @@ export type UpdateReconciliationStatusDto = {
      */
     status: 'draft' | 'flagged' | 'ready' | 'approved' | 'sent' | 'reviewed' | 'signed' | 'completed';
     /**
-     * Admin user id — Mongo ObjectId string (for reviewed status)
+     * Admin user id (for reviewed status)
      */
-    reviewed_by?: string;
+    reviewed_by?: number;
     /**
-     * Admin user id — Mongo ObjectId string (for approved status)
+     * Admin user id (for approved status)
      */
-    approved_by?: string;
+    approved_by?: number;
     /**
      * Signed date ISO string (for signed status)
      */
@@ -227,10 +227,6 @@ export type CreateEventDto = {
      * Plain-text terms & conditions shown on the crew register page. TNV must agree before submitting. Send null to clear.
      */
     terms_conditions?: string | null;
-    /**
-     * Uppercase letter-code baked into every contract_number issued for this event (format: NNN-{PREFIX}-HDDV/CTV-5BIB). UNIQUE cross-event. Locked after the first contract has been issued — further edits rejected 400.
-     */
-    contract_code_prefix?: string | null;
 };
 
 export type VolEvent = {
@@ -259,11 +255,34 @@ export type UpdateEventDto = {
      * Plain-text terms & conditions shown on the crew register page. TNV must agree before submitting. Send null to clear.
      */
     terms_conditions?: string | null;
-    /**
-     * Uppercase letter-code baked into every contract_number issued for this event (format: NNN-{PREFIX}-HDDV/CTV-5BIB). UNIQUE cross-event. Locked after the first contract has been issued — further edits rejected 400.
-     */
-    contract_code_prefix?: string | null;
     status?: 'draft' | 'open' | 'closed' | 'completed';
+};
+
+export type EventFeaturesConfigDto = {
+    event_id: number;
+    feature_mode: 'full' | 'lite';
+    feature_nghiem_thu: boolean;
+};
+
+export type UpdateEventFeaturesDto = {
+    /**
+     * full = all features; lite = personnel + contract only (no QR, station, supply)
+     */
+    feature_mode: 'full' | 'lite';
+    /**
+     * true = admin must confirm nghiem thu before marking completed; false = skip
+     */
+    feature_nghiem_thu: boolean;
+};
+
+export type ConfirmNghiemThuDto = {
+    note?: string;
+};
+
+export type NghiemThuResponseDto = {
+    id: number;
+    status: string;
+    completed_at: string;
 };
 
 export type ParsedRoleRowDto = {
@@ -450,11 +469,6 @@ export type RegistrationListRowDto = {
      * True when TNV has an unapproved profile edit.
      */
     has_pending_changes: boolean;
-    acceptance_status: 'not_ready' | 'pending_sign' | 'signed' | 'disputed';
-    acceptance_sent_at?: string | null;
-    acceptance_signed_at?: string | null;
-    acceptance_value?: number | null;
-    contract_number?: string | null;
 };
 
 export type ListRegistrationsResponseDto = {
@@ -476,24 +490,6 @@ export type UpdateRegistrationDto = {
 
 export type VolRegistration = {
     [key: string]: unknown;
-};
-
-export type BackfillBenBDto = {
-    birth_date?: string | null;
-    cccd_issue_date?: string | null;
-    cccd_issue_place?: string | null;
-    /**
-     * Written to form_data.bank_account_number
-     */
-    bank_account_number?: string | null;
-    /**
-     * Written to form_data.bank_name
-     */
-    bank_name?: string | null;
-    /**
-     * Written to form_data.address
-     */
-    address?: string | null;
 };
 
 export type RejectRegistrationDto = {
@@ -593,34 +589,6 @@ export type RegistrationDetailDto = {
      * ISO timestamp when the magic token expires. After this, TNV must request a new link.
      */
     magic_token_expires: string;
-    /**
-     * Contract number issued at contract-send time. Format: NNN-{PREFIX}-HDDV/CTV-5BIB. Null until HĐ is sent.
-     */
-    contract_number?: string | null;
-    /**
-     * Acceptance (biên bản nghiệm thu) workflow state.
-     */
-    acceptance_status: 'not_ready' | 'pending_sign' | 'signed' | 'disputed';
-    /**
-     * Tổng giá trị nghiệm thu (VND). Populated on send; admin editable before send.
-     */
-    acceptance_value?: number | null;
-    acceptance_sent_at?: string | null;
-    acceptance_signed_at?: string | null;
-    /**
-     * Short-lived presigned URL (24h) for the signed acceptance PDF. Null when not yet signed.
-     */
-    acceptance_pdf_url?: string | null;
-    /**
-     * Dispute reason or admin note on the acceptance (surfaces in "Tranh chấp" tab).
-     */
-    acceptance_notes?: string | null;
-    birth_date?: string | null;
-    cccd_issue_date?: string | null;
-    cccd_issue_place?: string | null;
-    payment_forced_reason?: string | null;
-    payment_forced_at?: string | null;
-    payment_forced_by?: string | null;
 };
 
 export type AdminManualRegisterDto = {
@@ -646,10 +614,7 @@ export type RegisterResponseDto = {
     status: 'pending_approval' | 'approved' | 'waitlisted';
     waitlist_position?: number | null;
     message: string;
-    /**
-     * Magic link to the crew portal. Populated only for admin manual-register responses. Public register responses omit this to prevent token leaks.
-     */
-    magic_link?: string | null;
+    magic_link: string;
 };
 
 export type BulkUpdateRegistrationsDto = {
@@ -879,21 +844,6 @@ export type StatusResponseDto = {
     } | null;
     chat_platform?: 'zalo' | 'telegram' | 'whatsapp' | 'other';
     chat_group_url?: string | null;
-    /**
-     * Acceptance (biên bản nghiệm thu) gate. Payment cannot be marked paid until status=signed unless admin force-pays.
-     */
-    acceptance_status: 'not_ready' | 'pending_sign' | 'signed' | 'disputed';
-    acceptance_sent_at?: string | null;
-    acceptance_signed_at?: string | null;
-    acceptance_value?: number | null;
-    /**
-     * Dispute reason (only populated when acceptance_status=disputed). Rendered read-only to the crew.
-     */
-    acceptance_notes?: string | null;
-    /**
-     * Payment status — flips to paid only after acceptance signed or admin force-pay.
-     */
-    payment_status: 'pending' | 'paid';
 };
 
 export type UpdateProfileDto = {
@@ -947,58 +897,6 @@ export type SignContractDto = {
 
 export type SignContractResponseDto = {
     success: boolean;
-    pdf_url: string;
-    signed_at: string;
-};
-
-export type AcceptanceViewDto = {
-    /**
-     * Fully rendered HTML document (already wrapped)
-     */
-    html_content: string;
-    /**
-     * Current acceptance_status value
-     */
-    acceptance_status: string;
-    signed_at: string | null;
-    /**
-     * Short-lived presigned URL for the signed PDF. Null when not yet signed.
-     */
-    pdf_url: string | null;
-    /**
-     * Bên B full_name for the signing confirmation
-     */
-    full_name: string;
-    /**
-     * Contract number this acceptance references
-     */
-    contract_number: string;
-    /**
-     * Acceptance value in VND
-     */
-    acceptance_value: number;
-    /**
-     * Dispute reason (if disputed)
-     */
-    notes: string | null;
-};
-
-export type SignAcceptanceDto = {
-    /**
-     * Full name typed by the crew member — must match registration.full_name exactly (case-insensitive, trimmed).
-     */
-    confirmed_name: string;
-    /**
-     * Signature PNG as base64 data URL (data:image/png;base64,...). Max 500KB decoded.
-     */
-    signature_image: string;
-};
-
-export type SignAcceptanceResponseDto = {
-    success: boolean;
-    /**
-     * Presigned URL for the signed acceptance PDF (24h)
-     */
     pdf_url: string;
     signed_at: string;
 };
@@ -1172,92 +1070,6 @@ export type ImportDocxResponseDto = {
     warnings: Array<string>;
 };
 
-export type VolAcceptanceTemplate = {
-    [key: string]: unknown;
-};
-
-export type CreateAcceptanceTemplateDto = {
-    template_name: string;
-    /**
-     * HTML body with {{placeholders}}
-     */
-    content_html: string;
-    /**
-     * Whitelist of placeholder keys used in content_html
-     */
-    variables: Array<string>;
-    /**
-     * Event ID this template is scoped to. Omit/null for a global default template.
-     */
-    event_id?: number;
-    is_active?: boolean;
-};
-
-export type UpdateAcceptanceTemplateDto = {
-    template_name?: string;
-    content_html?: string;
-    variables?: Array<string>;
-    is_active?: boolean;
-};
-
-export type SendAcceptanceBatchDto = {
-    /**
-     * Registration IDs scoped to the event whose acceptance to send. Only regs with status=completed are eligible; ineligible IDs are reported in response.skipped.
-     */
-    registration_ids: Array<number>;
-    /**
-     * Optional override value in VND for all selected regs. When omitted, each reg uses role.unit_price × days_checked_in.
-     */
-    acceptance_value?: number;
-    /**
-     * Optional template_id override. When omitted, uses the global default acceptance template (event_id=NULL, is_default=TRUE).
-     */
-    template_id?: number;
-};
-
-export type SendAcceptanceBatchResponseDto = {
-    /**
-     * Count of regs transitioned to pending_sign
-     */
-    queued: number;
-    /**
-     * Reg IDs skipped (wrong status, missing Bên B fields, already signed, etc.)
-     */
-    skipped: Array<number>;
-    /**
-     * Per-reg failure reasons aligned by index with .skipped
-     */
-    skip_reasons: Array<string>;
-};
-
-export type DisputeAcceptanceDto = {
-    /**
-     * Reason the admin marked the acceptance as disputed. Surfaces in the "Tranh chấp" tab and on the crew status page.
-     */
-    reason: string;
-};
-
-export type MarkPaidResponseDto = {
-    success: boolean;
-    registration_id: number;
-    payment_status: string;
-    /**
-     * ISO 8601 timestamp when status flipped to paid
-     */
-    paid_at: string;
-    /**
-     * True if the force-paid path was taken
-     */
-    was_forced: boolean;
-};
-
-export type ForcePaidDto = {
-    /**
-     * Required justification for bypassing the signed-acceptance gate. Persisted to vol_registration.payment_forced_reason and emitted to the app log as a structured audit line.
-     */
-    force_reason: string;
-};
-
 export type CheckinScanDto = {
     /**
      * QR payload — same value as magic_token
@@ -1391,67 +1203,6 @@ export type LeaderConfirmCompletionBulkDto = {
     note?: string;
 };
 
-export type StationWithAssignmentSummaryDto = {
-    id: number;
-    event_id: number;
-    station_name: string;
-    location_description?: string | null;
-    gps_lat?: string | null;
-    gps_lng?: string | null;
-    status: 'setup' | 'active' | 'closed';
-    sort_order: number;
-    is_active: boolean;
-    category_id: number;
-    category_name?: string | null;
-    category_color?: string | null;
-    supervisors: Array<AssignmentMemberBriefDto>;
-    workers: Array<AssignmentMemberBriefDto>;
-    supervisor_count: number;
-    worker_count: number;
-    has_supervisor: boolean;
-};
-
-export type CreateStationDto = {
-    station_name: string;
-    location_description?: string | null;
-    gps_lat?: number | null;
-    gps_lng?: number | null;
-    sort_order?: number;
-};
-
-export type UpdateStationDto = {
-    station_name?: string;
-    location_description?: string | null;
-    gps_lat?: number | null;
-    gps_lng?: number | null;
-    sort_order?: number;
-};
-
-export type UpdateStationStatusDto = {
-    status: 'setup' | 'active' | 'closed';
-};
-
-export type AssignableMemberDto = {
-    registration_id: number;
-    full_name: string;
-    phone: string;
-    email: string;
-    status: string;
-    role_id: number;
-    role_name: string;
-    is_leader_role: boolean;
-    avatar_url?: string | null;
-};
-
-export type CreateAssignmentDto = {
-    registration_id: number;
-    /**
-     * Chuyên môn / nhiệm vụ cụ thể tại trạm (VD: phát nước, sơ cứu, timing)
-     */
-    duty?: string | null;
-    note?: string | null;
-};
-
 export type EventContactDto = {
     id: number;
     event_id: number;
@@ -1527,43 +1278,65 @@ export type TeamDirectoryResponseDto = {
     team_leaders: Array<LeaderContactDto>;
 };
 
-export type ImportStationsRowInsertedDto = {
-    /**
-     * 1-based data row index (header excluded)
-     */
-    row: number;
+export type StationWithAssignmentSummaryDto = {
     id: number;
+    event_id: number;
     station_name: string;
+    location_description?: string | null;
+    gps_lat?: string | null;
+    gps_lng?: string | null;
+    status: 'setup' | 'active' | 'closed';
+    sort_order: number;
+    is_active: boolean;
+    category_id: number;
+    category_name?: string | null;
+    category_color?: string | null;
+    supervisors: Array<AssignmentMemberBriefDto>;
+    workers: Array<AssignmentMemberBriefDto>;
+    supervisor_count: number;
+    worker_count: number;
+    has_supervisor: boolean;
 };
 
-export type ImportStationsRowSkippedDto = {
-    /**
-     * 1-based data row index
-     */
-    row: number;
+export type CreateStationDto = {
     station_name: string;
-    /**
-     * Why skipped: "duplicate_in_file" | "duplicate_in_db"
-     */
-    reason: string;
+    location_description?: string | null;
+    gps_lat?: number | null;
+    gps_lng?: number | null;
+    sort_order?: number;
 };
 
-export type ImportStationsRowErrorDto = {
-    /**
-     * 1-based data row index
-     */
-    row: number;
-    errors: Array<string>;
+export type UpdateStationDto = {
+    station_name?: string;
+    location_description?: string | null;
+    gps_lat?: number | null;
+    gps_lng?: number | null;
+    sort_order?: number;
 };
 
-export type ImportStationsResponseDto = {
+export type UpdateStationStatusDto = {
+    status: 'setup' | 'active' | 'closed';
+};
+
+export type AssignableMemberDto = {
+    registration_id: number;
+    full_name: string;
+    phone: string;
+    email: string;
+    status: string;
+    role_id: number;
+    role_name: string;
+    is_leader_role: boolean;
+    avatar_url?: string | null;
+};
+
+export type CreateAssignmentDto = {
+    registration_id: number;
     /**
-     * Total non-empty rows parsed from the file
+     * Chuyên môn / nhiệm vụ cụ thể tại trạm (VD: phát nước, sơ cứu, timing)
      */
-    total_rows: number;
-    inserted: Array<ImportStationsRowInsertedDto>;
-    skipped: Array<ImportStationsRowSkippedDto>;
-    errors: Array<ImportStationsRowErrorDto>;
+    duty?: string | null;
+    note?: string | null;
 };
 
 export type SupplyItemDto = {
@@ -1594,46 +1367,6 @@ export type CreateSupplyItemDto = {
      * NULL = admin tạo; set = leader tạo (Q7: phân quyền edit). Chỉ admin được gửi field này.
      */
     created_by_role_id?: number | null;
-};
-
-export type ImportSupplyItemsRowInsertedDto = {
-    /**
-     * 1-based data row index (header excluded)
-     */
-    row: number;
-    id: number;
-    item_name: string;
-    unit: string;
-};
-
-export type ImportSupplyItemsRowSkippedDto = {
-    /**
-     * 1-based data row index
-     */
-    row: number;
-    item_name: string;
-    /**
-     * Why the row was skipped. Either "duplicate_in_file" or "duplicate_in_db".
-     */
-    reason: string;
-};
-
-export type ImportSupplyItemsRowErrorDto = {
-    /**
-     * 1-based data row index
-     */
-    row: number;
-    errors: Array<string>;
-};
-
-export type ImportSupplyItemsResponseDto = {
-    /**
-     * Total non-empty rows parsed from the file
-     */
-    total_rows: number;
-    inserted: Array<ImportSupplyItemsRowInsertedDto>;
-    skipped: Array<ImportSupplyItemsRowSkippedDto>;
-    errors: Array<ImportSupplyItemsRowErrorDto>;
 };
 
 export type UpdateSupplyItemDto = {
@@ -2058,6 +1791,18 @@ export type CreateRaceDto = {
      * Cache TTL in seconds
      */
     cacheTtlSeconds?: number;
+    /**
+     * Hide stats charts (completion, time distribution, country ranking)
+     */
+    enableHideStats?: boolean;
+    /**
+     * Limit athlete list visibility — hide absolute counts, cap list when no search
+     */
+    enablePrivateList?: boolean;
+    /**
+     * Max athletes shown without search when enablePrivateList=true
+     */
+    privateListLimit?: number;
 };
 
 export type UpdateRaceDto = {
@@ -2149,6 +1894,18 @@ export type UpdateRaceDto = {
      * Cache TTL in seconds
      */
     cacheTtlSeconds?: number;
+    /**
+     * Hide stats charts (completion, time distribution, country ranking)
+     */
+    enableHideStats?: boolean;
+    /**
+     * Limit athlete list visibility — hide absolute counts, cap list when no search
+     */
+    enablePrivateList?: boolean;
+    /**
+     * Max athletes shown without search when enablePrivateList=true
+     */
+    privateListLimit?: number;
 };
 
 export type UpdateStatusDto = {
@@ -2371,6 +2128,144 @@ export type RaceResultsPaginatedDto = {
     pagination: PaginationMeta;
 };
 
+export type TimeDistributionBucketDto = {
+    /**
+     * Time range label
+     */
+    range: string;
+    /**
+     * Lower bound in seconds (inclusive)
+     */
+    minSeconds: number;
+    /**
+     * Upper bound in seconds (exclusive)
+     */
+    maxSeconds: number;
+    /**
+     * Count of athletes in this range
+     */
+    count: number;
+    /**
+     * Percentage of total finishers (0–100, 1 decimal)
+     */
+    percentage: number;
+};
+
+export type TimeDistributionDataDto = {
+    buckets: Array<TimeDistributionBucketDto>;
+    /**
+     * Total finishers counted
+     */
+    totalFinishers: number;
+    /**
+     * Fastest finish time seconds
+     */
+    minSeconds: number;
+    /**
+     * Slowest finish time seconds
+     */
+    maxSeconds: number;
+    /**
+     * Average finish time seconds
+     */
+    avgSeconds: number;
+    /**
+     * True if aggregation was computed on a sample (>10k finishers) rather than full set
+     */
+    sampled: boolean;
+};
+
+export type TimeDistributionResponseDto = {
+    data: TimeDistributionDataDto;
+    success: boolean;
+};
+
+export type CountryStatsItemDto = {
+    /**
+     * Raw nationality string from data
+     */
+    nationality: string;
+    /**
+     * ISO-2 code when resolvable, else empty
+     */
+    iso2: string;
+    /**
+     * Number of finishers from this country
+     */
+    count: number;
+    /**
+     * Best chip time string (HH:MM:SS)
+     */
+    bestTime: string;
+    /**
+     * Best chip time in seconds
+     */
+    bestSeconds: number;
+};
+
+export type CountryStatsDataDto = {
+    countries: Array<CountryStatsItemDto>;
+    /**
+     * Total distinct countries
+     */
+    totalCountries: number;
+};
+
+export type CountryStatsResponseDto = {
+    data: CountryStatsDataDto;
+    success: boolean;
+};
+
+export type CountryRankDataDto = {
+    /**
+     * Rank among same-nationality athletes (1-based)
+     */
+    rank: number | null;
+    /**
+     * Total same-nationality finishers on this course
+     */
+    total: number;
+    nationality: string;
+    iso2: string;
+};
+
+export type CountryRankResponseDto = {
+    data: CountryRankDataDto;
+    success: boolean;
+};
+
+export type PercentileDataDto = {
+    /**
+     * Top X% position (1–100, LOWER = faster). The fastest finisher on a course lands at Top 1%, the slowest at Top 100%. Formula: max(1, ceil(rank / totalFinishers * 100)) where rank = 1 + count(strictly faster finishers). Null if athlete is DNF or chipTime invalid.
+     */
+    percentile: number | null;
+    /**
+     * Count of finishers slower than this athlete. Kept for the summary copy ("beat N of M finishers"); NOT used to derive percentile in v2.
+     */
+    slowerCount: number;
+    /**
+     * Total finishers on this course
+     */
+    totalFinishers: number;
+    /**
+     * Athlete chipTime seconds
+     */
+    athleteSeconds: number;
+    /**
+     * Course average seconds
+     */
+    avgSeconds: number;
+    /**
+     * Course fastest seconds
+     */
+    minSeconds: number;
+};
+
+export type PercentileResponseDto = {
+    data: PercentileDataDto;
+    success: boolean;
+};
+
 export type SubmitClaimDto = {
     /**
      * Race ID
@@ -2404,6 +2299,46 @@ export type SubmitClaimDto = {
      * Attachment URLs (tracklog, screenshots)
      */
     attachments?: Array<string>;
+};
+
+export type LogShareEventDto = {
+    /**
+     * Race ObjectId
+     */
+    raceId: string;
+    /**
+     * Athlete bib number
+     */
+    bib: string;
+    template: 'classic' | 'celebration' | 'endurance' | 'story' | 'sticker' | 'podium';
+    channel: 'download' | 'web-share' | 'copy-link' | 'unknown';
+    gradient?: 'blue' | 'dark' | 'sunset' | 'forest' | 'purple';
+    size?: '4:5' | '1:1' | '9:16';
+    /**
+     * True when backend fell back to classic (template ineligible)
+     */
+    templateFallback?: boolean;
+};
+
+export type TemplateCountDto = {
+    template: string;
+    count: number;
+};
+
+export type ChannelCountDto = {
+    channel: string;
+    count: number;
+};
+
+export type ShareStatsDto = {
+    totalShares: number;
+    totalUniqueBibs: number;
+    byTemplate: Array<TemplateCountDto>;
+    byChannel: Array<ChannelCountDto>;
+    /**
+     * Fraction of shares that hit template fallback (0..1)
+     */
+    fallbackRate: number;
 };
 
 export type ResolveClaimV2Dto = {
@@ -2453,11 +2388,6 @@ export type EditResultDto = {
      * Reason for edit (min 10 chars, required per BR-03)
      */
     reason: string;
-};
-
-export type LoginDto = {
-    email: string;
-    password: string;
 };
 
 export type CreateSponsorDto = {
@@ -2593,6 +2523,368 @@ export type SearchResultDto = {
 export type SearchResponseDto = {
     data: SearchResultDto;
     success: boolean;
+};
+
+export type TemplateCanvasDto = {
+    width: number;
+    height: number;
+    backgroundColor?: string;
+    backgroundImageUrl?: string;
+};
+
+export type TemplateLayerDto = {
+    type: 'text' | 'image' | 'shape' | 'photo';
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+    opacity?: number;
+    rotation?: number;
+    /**
+     * Text or template. Supported vars: {runner_name}, {bib}, {finish_time}, {pace}, {distance}, {event_name}, {event_date}, {nation}, {gender_rank}, {ag_rank}, {overall_rank}
+     */
+    text?: string;
+    fontFamily?: string;
+    fontSize?: number;
+    fontWeight?: string;
+    textAlign?: 'left' | 'center' | 'right';
+    color?: string;
+    letterSpacing?: number;
+    lineHeight?: number;
+    imageUrl?: string;
+    shape?: 'rect' | 'rounded_rect' | 'circle' | 'line';
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    borderRadius?: number;
+    photoBorderRadius?: number;
+    photoBorderColor?: string;
+    photoBorderWidth?: number;
+};
+
+export type PhotoAreaDto = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    borderRadius?: number;
+};
+
+export type CreateTemplateDto = {
+    name: string;
+    race_id: string;
+    /**
+     * Null = applies to all courses in race
+     */
+    course_id?: string | null;
+    type: 'certificate' | 'share_card';
+    canvas: TemplateCanvasDto;
+    layers: Array<TemplateLayerDto>;
+    photo_area?: PhotoAreaDto | null;
+    placeholder_photo_url?: string;
+    /**
+     * When true, photo_area and "photo" layers render BELOW canvas.backgroundImageUrl (for transparent PNG frames with a cut-out photo window, e.g. VMM finisher frame).
+     */
+    photo_behind_background?: boolean;
+    is_archived?: boolean;
+};
+
+export type TemplateResponseDto = {
+    id: string;
+    name: string;
+    race_id: string;
+    course_id?: string | null;
+    type: 'certificate' | 'share_card';
+    canvas: TemplateCanvasDto;
+    layers: Array<TemplateLayerDto>;
+    photo_area?: PhotoAreaDto | null;
+    placeholder_photo_url?: string;
+    /**
+     * When true, photo_area and "photo" layers render BELOW canvas.backgroundImageUrl (for transparent PNG frames).
+     */
+    photo_behind_background: boolean;
+    is_archived: boolean;
+    created_at: string;
+    updated_at: string;
+};
+
+export type TemplateListResponseDto = {
+    data: Array<TemplateResponseDto>;
+    total: number;
+    page: number;
+    pageSize: number;
+};
+
+export type UpdateTemplateDto = {
+    name?: string;
+    race_id?: string;
+    /**
+     * Null = applies to all courses in race
+     */
+    course_id?: string | null;
+    type?: 'certificate' | 'share_card';
+    canvas?: TemplateCanvasDto;
+    layers?: Array<TemplateLayerDto>;
+    photo_area?: PhotoAreaDto | null;
+    placeholder_photo_url?: string;
+    /**
+     * When true, photo_area and "photo" layers render BELOW canvas.backgroundImageUrl (for transparent PNG frames with a cut-out photo window, e.g. VMM finisher frame).
+     */
+    photo_behind_background?: boolean;
+    is_archived?: boolean;
+};
+
+export type CourseTemplateOverrideResponseDto = {
+    course_id: string;
+    template_certificate?: string | null;
+    template_share_card?: string | null;
+};
+
+export type RaceConfigResponseDto = {
+    id: string;
+    race_id: string;
+    default_template_certificate?: string | null;
+    default_template_share_card?: string | null;
+    course_overrides: Array<CourseTemplateOverrideResponseDto>;
+    enabled: boolean;
+    created_at: string;
+    updated_at: string;
+};
+
+export type CourseTemplateOverrideDto = {
+    course_id: string;
+    template_certificate?: string | null;
+    template_share_card?: string | null;
+};
+
+export type UpsertRaceConfigDto = {
+    default_template_certificate?: string | null;
+    default_template_share_card?: string | null;
+    course_overrides?: Array<CourseTemplateOverrideDto>;
+    enabled?: boolean;
+};
+
+export type StarAthleteDto = {
+    /**
+     * Race Mongo _id
+     */
+    raceId: string;
+    /**
+     * Course ID slug
+     */
+    courseId: string;
+    /**
+     * Bib number
+     */
+    bib: string;
+};
+
+export type AthleteStarResponseDto = {
+    _id?: string;
+    userId?: string;
+    raceId?: string;
+    courseId?: string;
+    bib?: string;
+    athleteName?: string;
+    athleteGender?: string;
+    athleteCategory?: string;
+    raceName?: string;
+    raceSlug?: string;
+    courseName?: string;
+    starred_at?: string;
+};
+
+export type AthleteStarListResponseDto = {
+    data?: Array<AthleteStarResponseDto>;
+    total?: number;
+    pageNo?: number;
+    pageSize?: number;
+};
+
+export type CreateLeadDto = {
+    full_name: string;
+    phone?: string;
+    organization?: string;
+    athlete_count_range?: string;
+    package_interest?: 'basic' | 'advanced' | 'professional' | 'unspecified';
+    notes?: string;
+    email?: string;
+    sport_type?: 'pickleball' | 'badminton' | 'both';
+    tournament_scale?: 'lt50' | '50-200' | 'gt200';
+    tournament_timing?: '1-3m' | '3-6m' | 'tbd';
+    city?: string;
+    track?: '5sport-btc' | '5sport-athlete';
+    /**
+     * Honeypot — leave empty
+     */
+    website?: string;
+};
+
+export type TimingLeadCreateResponseDto = {
+    success: boolean;
+    lead_number: number;
+};
+
+export type TimingLeadResponseDto = {
+    _id: string;
+    lead_number: number;
+    full_name: string;
+    phone: string;
+    organization: string;
+    athlete_count_range: string;
+    package_interest: 'basic' | 'advanced' | 'professional' | 'unspecified';
+    notes: string;
+    source: 'timing' | 'solution';
+    status: 'new' | 'contacted' | 'quoted' | 'closed_won' | 'closed_lost';
+    is_archived: boolean;
+    staff_notes: string;
+    /**
+     * IP masked (x.x.x.x)
+     */
+    ip_address: string;
+    user_agent: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type TimingLeadListResponseDto = {
+    items: Array<TimingLeadResponseDto>;
+    total: number;
+    page: number;
+    limit: number;
+};
+
+export type UpdateLeadDto = {
+    status?: 'new' | 'contacted' | 'quoted' | 'closed_won' | 'closed_lost';
+    staff_notes?: string;
+    is_archived?: boolean;
+};
+
+export type CreateTrackingEventDto = {
+    /**
+     * Event name (snake_case)
+     */
+    event_name: string;
+    /**
+     * Event category
+     */
+    event_category: string;
+    session_id: string;
+    /**
+     * ISO 8601 timestamp
+     */
+    timestamp: string;
+    page_url: string;
+    page_path: string;
+    user_id?: string | null;
+    referrer?: string | null;
+    utm_source?: string;
+    utm_medium?: string;
+    utm_campaign?: string;
+    utm_content?: string;
+    utm_term?: string;
+    ref_code?: string;
+    device_type?: 'mobile' | 'tablet' | 'desktop';
+    /**
+     * Flexible per-event payload — must not contain PII (email/phone/name)
+     */
+    event_data?: {
+        [key: string]: unknown;
+    };
+};
+
+export type CreateSponsoredSlotDto = {
+    package_tier: 'diamond' | 'gold' | 'silver';
+    display_order?: number;
+    is_hero?: boolean;
+    rotation_interval_seconds?: number;
+    display_start_at: string;
+    display_end_at: string;
+    is_active?: boolean;
+};
+
+export type SlotOrderItemDto = {
+    slotId: string;
+    display_order: number;
+};
+
+export type ReorderSlotsDto = {
+    slots: Array<SlotOrderItemDto>;
+};
+
+export type UpdateSponsoredSlotDto = {
+    package_tier?: 'diamond' | 'gold' | 'silver';
+    display_order?: number;
+    is_hero?: boolean;
+    rotation_interval_seconds?: number;
+    display_start_at?: string;
+    display_end_at?: string;
+    is_active?: boolean;
+};
+
+export type CreateSponsoredItemDto = {
+    race_slug: string;
+    event_name: string;
+    event_type?: string | null;
+    event_date_start: string;
+    event_date_end?: string | null;
+    event_location: string;
+    cover_image_url: string;
+    /**
+     * Price in VNĐ (integer)
+     */
+    price_from: number;
+    cta_text?: string;
+    /**
+     * Absolute (https://…) or relative (/races/{slug}) URL. null → auto-build /races/{race_slug}
+     */
+    cta_url?: string | null;
+    promo_label?: string | null;
+    promo_label_expires_at?: string | null;
+    badge_labels?: Array<string>;
+    show_countdown?: boolean;
+    countdown_target_at?: string | null;
+    /**
+     * Auto-set to max(item_order) + 1 if omitted
+     */
+    item_order?: number;
+};
+
+export type ItemOrderEntryDto = {
+    itemId: string;
+    item_order: number;
+};
+
+export type ReorderItemsDto = {
+    items: Array<ItemOrderEntryDto>;
+};
+
+export type UpdateSponsoredItemDto = {
+    race_slug?: string;
+    event_name?: string;
+    event_type?: string | null;
+    event_date_start?: string;
+    event_date_end?: string | null;
+    event_location?: string;
+    cover_image_url?: string;
+    /**
+     * Price in VNĐ (integer)
+     */
+    price_from?: number;
+    cta_text?: string;
+    /**
+     * Absolute (https://…) or relative (/races/{slug}) URL. null → auto-build /races/{race_slug}
+     */
+    cta_url?: string | null;
+    promo_label?: string | null;
+    promo_label_expires_at?: string | null;
+    badge_labels?: Array<string>;
+    show_countdown?: boolean;
+    countdown_target_at?: string | null;
+    /**
+     * Auto-set to max(item_order) + 1 if omitted
+     */
+    item_order?: number;
 };
 
 export type MerchantControllerFindAllData = {
@@ -3660,6 +3952,58 @@ export type TeamManagementControllerUpdateEventResponses = {
 
 export type TeamManagementControllerUpdateEventResponse = TeamManagementControllerUpdateEventResponses[keyof TeamManagementControllerUpdateEventResponses];
 
+export type TeamManagementControllerGetEventConfigData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/team-management/events/{id}/config';
+};
+
+export type TeamManagementControllerGetEventConfigResponses = {
+    200: EventFeaturesConfigDto;
+};
+
+export type TeamManagementControllerGetEventConfigResponse = TeamManagementControllerGetEventConfigResponses[keyof TeamManagementControllerGetEventConfigResponses];
+
+export type TeamManagementControllerUpdateEventFeaturesData = {
+    body: UpdateEventFeaturesDto;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/team-management/events/{id}/features';
+};
+
+export type TeamManagementControllerUpdateEventFeaturesErrors = {
+    /**
+     * Cannot switch to Lite — conflicting registrations
+     */
+    409: unknown;
+};
+
+export type TeamManagementControllerUpdateEventFeaturesResponses = {
+    200: EventFeaturesConfigDto;
+};
+
+export type TeamManagementControllerUpdateEventFeaturesResponse = TeamManagementControllerUpdateEventFeaturesResponses[keyof TeamManagementControllerUpdateEventFeaturesResponses];
+
+export type TeamManagementControllerConfirmNghiemThuData = {
+    body: ConfirmNghiemThuDto;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/team-management/registrations/{id}/nghiem-thu';
+};
+
+export type TeamManagementControllerConfirmNghiemThuResponses = {
+    200: NghiemThuResponseDto;
+};
+
+export type TeamManagementControllerConfirmNghiemThuResponse = TeamManagementControllerConfirmNghiemThuResponses[keyof TeamManagementControllerConfirmNghiemThuResponses];
+
 export type TeamManagementControllerGetImportTemplateData = {
     body?: never;
     path?: never;
@@ -3807,21 +4151,6 @@ export type TeamManagementControllerUpdateRegistrationResponses = {
 };
 
 export type TeamManagementControllerUpdateRegistrationResponse = TeamManagementControllerUpdateRegistrationResponses[keyof TeamManagementControllerUpdateRegistrationResponses];
-
-export type TeamManagementControllerBackfillBenBData = {
-    body: BackfillBenBDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/backfill-ben-b';
-};
-
-export type TeamManagementControllerBackfillBenBResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerBackfillBenBResponse = TeamManagementControllerBackfillBenBResponses[keyof TeamManagementControllerBackfillBenBResponses];
 
 export type TeamManagementControllerApproveRegistrationData = {
     body?: never;
@@ -4223,54 +4552,6 @@ export type TeamRegistrationControllerSignContractResponses = {
 
 export type TeamRegistrationControllerSignContractResponse = TeamRegistrationControllerSignContractResponses[keyof TeamRegistrationControllerSignContractResponses];
 
-export type TeamRegistrationControllerViewAcceptanceData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-acceptance/{token}';
-};
-
-export type TeamRegistrationControllerViewAcceptanceResponses = {
-    200: AcceptanceViewDto;
-};
-
-export type TeamRegistrationControllerViewAcceptanceResponse = TeamRegistrationControllerViewAcceptanceResponses[keyof TeamRegistrationControllerViewAcceptanceResponses];
-
-export type TeamRegistrationControllerGetSignedAcceptancePdfData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-acceptance-pdf/{token}';
-};
-
-export type TeamRegistrationControllerGetSignedAcceptancePdfResponses = {
-    200: {
-        url?: string;
-        expires_in?: number;
-    };
-};
-
-export type TeamRegistrationControllerGetSignedAcceptancePdfResponse = TeamRegistrationControllerGetSignedAcceptancePdfResponses[keyof TeamRegistrationControllerGetSignedAcceptancePdfResponses];
-
-export type TeamRegistrationControllerSignAcceptanceData = {
-    body: SignAcceptanceDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-acceptance/{token}/sign';
-};
-
-export type TeamRegistrationControllerSignAcceptanceResponses = {
-    201: SignAcceptanceResponseDto;
-};
-
-export type TeamRegistrationControllerSignAcceptanceResponse = TeamRegistrationControllerSignAcceptanceResponses[keyof TeamRegistrationControllerSignAcceptanceResponses];
-
 export type TeamRegistrationControllerSelfCheckinData = {
     body: SelfCheckinDto;
     path: {
@@ -4300,6 +4581,21 @@ export type TeamRegistrationControllerGetMyStationResponses = {
 };
 
 export type TeamRegistrationControllerGetMyStationResponse = TeamRegistrationControllerGetMyStationResponses[keyof TeamRegistrationControllerGetMyStationResponses];
+
+export type TeamRegistrationControllerGetEventConfigForPortalData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/api/public/team-registration/{token}/event-config';
+};
+
+export type TeamRegistrationControllerGetEventConfigForPortalResponses = {
+    200: EventFeaturesConfigDto;
+};
+
+export type TeamRegistrationControllerGetEventConfigForPortalResponse = TeamRegistrationControllerGetEventConfigForPortalResponses[keyof TeamRegistrationControllerGetEventConfigForPortalResponses];
 
 export type TeamRegistrationControllerUploadPhotoData = {
     body: {
@@ -4474,189 +4770,6 @@ export type TeamContractTemplateControllerImportDocxResponses = {
 };
 
 export type TeamContractTemplateControllerImportDocxResponse = TeamContractTemplateControllerImportDocxResponses[keyof TeamContractTemplateControllerImportDocxResponses];
-
-export type TeamAcceptanceTemplateControllerListData = {
-    body?: never;
-    path?: never;
-    query: {
-        event_id: string;
-    };
-    url: '/api/team-management/acceptance-templates';
-};
-
-export type TeamAcceptanceTemplateControllerListResponses = {
-    200: Array<VolAcceptanceTemplate>;
-};
-
-export type TeamAcceptanceTemplateControllerListResponse = TeamAcceptanceTemplateControllerListResponses[keyof TeamAcceptanceTemplateControllerListResponses];
-
-export type TeamAcceptanceTemplateControllerCreateData = {
-    body: CreateAcceptanceTemplateDto;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/acceptance-templates';
-};
-
-export type TeamAcceptanceTemplateControllerCreateResponses = {
-    201: VolAcceptanceTemplate;
-};
-
-export type TeamAcceptanceTemplateControllerCreateResponse = TeamAcceptanceTemplateControllerCreateResponses[keyof TeamAcceptanceTemplateControllerCreateResponses];
-
-export type TeamAcceptanceTemplateControllerRemoveData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/acceptance-templates/{id}';
-};
-
-export type TeamAcceptanceTemplateControllerRemoveResponses = {
-    200: unknown;
-};
-
-export type TeamAcceptanceTemplateControllerGetData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/acceptance-templates/{id}';
-};
-
-export type TeamAcceptanceTemplateControllerGetResponses = {
-    200: VolAcceptanceTemplate;
-};
-
-export type TeamAcceptanceTemplateControllerGetResponse = TeamAcceptanceTemplateControllerGetResponses[keyof TeamAcceptanceTemplateControllerGetResponses];
-
-export type TeamAcceptanceTemplateControllerUpdateData = {
-    body: UpdateAcceptanceTemplateDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/acceptance-templates/{id}';
-};
-
-export type TeamAcceptanceTemplateControllerUpdateResponses = {
-    200: VolAcceptanceTemplate;
-};
-
-export type TeamAcceptanceTemplateControllerUpdateResponse = TeamAcceptanceTemplateControllerUpdateResponses[keyof TeamAcceptanceTemplateControllerUpdateResponses];
-
-export type TeamAcceptanceTemplateControllerValidateData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/acceptance-templates/validate';
-};
-
-export type TeamAcceptanceTemplateControllerValidateResponses = {
-    201: {
-        valid?: boolean;
-        unknownVars?: Array<string>;
-    };
-};
-
-export type TeamAcceptanceTemplateControllerValidateResponse = TeamAcceptanceTemplateControllerValidateResponses[keyof TeamAcceptanceTemplateControllerValidateResponses];
-
-export type TeamAcceptanceControllerSendBatchData = {
-    body: SendAcceptanceBatchDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/acceptance/send-batch';
-};
-
-export type TeamAcceptanceControllerSendBatchResponses = {
-    201: SendAcceptanceBatchResponseDto;
-};
-
-export type TeamAcceptanceControllerSendBatchResponse = TeamAcceptanceControllerSendBatchResponses[keyof TeamAcceptanceControllerSendBatchResponses];
-
-export type TeamAcceptanceControllerSendOneData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/acceptance/send';
-};
-
-export type TeamAcceptanceControllerSendOneResponses = {
-    201: {
-        success?: boolean;
-    };
-};
-
-export type TeamAcceptanceControllerSendOneResponse = TeamAcceptanceControllerSendOneResponses[keyof TeamAcceptanceControllerSendOneResponses];
-
-export type TeamAcceptanceControllerDisputeData = {
-    body: DisputeAcceptanceDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/acceptance/dispute';
-};
-
-export type TeamAcceptanceControllerDisputeResponses = {
-    200: {
-        success?: boolean;
-    };
-};
-
-export type TeamAcceptanceControllerDisputeResponse = TeamAcceptanceControllerDisputeResponses[keyof TeamAcceptanceControllerDisputeResponses];
-
-export type TeamPaymentControllerMarkPaidData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/payment/mark-paid';
-};
-
-export type TeamPaymentControllerMarkPaidResponses = {
-    201: MarkPaidResponseDto;
-};
-
-export type TeamPaymentControllerMarkPaidResponse = TeamPaymentControllerMarkPaidResponses[keyof TeamPaymentControllerMarkPaidResponses];
-
-export type TeamPaymentControllerForcePaidData = {
-    body: ForcePaidDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/payment/force-paid';
-};
-
-export type TeamPaymentControllerForcePaidResponses = {
-    201: MarkPaidResponseDto;
-};
-
-export type TeamPaymentControllerForcePaidResponse = TeamPaymentControllerForcePaidResponses[keyof TeamPaymentControllerForcePaidResponses];
-
-export type TeamPaymentControllerRevertData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/payment/revert';
-};
-
-export type TeamPaymentControllerRevertResponses = {
-    201: {
-        success?: boolean;
-    };
-};
-
-export type TeamPaymentControllerRevertResponse = TeamPaymentControllerRevertResponses[keyof TeamPaymentControllerRevertResponses];
 
 export type TeamCheckinControllerScanData = {
     body: CheckinScanDto;
@@ -4851,133 +4964,6 @@ export type TeamLeaderControllerConfirmBulkData = {
 export type TeamLeaderControllerConfirmBulkResponses = {
     201: unknown;
 };
-
-export type TeamLeaderControllerLeaderListStationsData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/stations';
-};
-
-export type TeamLeaderControllerLeaderListStationsResponses = {
-    200: Array<StationWithAssignmentSummaryDto>;
-};
-
-export type TeamLeaderControllerLeaderListStationsResponse = TeamLeaderControllerLeaderListStationsResponses[keyof TeamLeaderControllerLeaderListStationsResponses];
-
-export type TeamLeaderControllerLeaderCreateStationData = {
-    body: CreateStationDto;
-    path: {
-        token: string;
-        categoryId: number;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/categories/{categoryId}/stations';
-};
-
-export type TeamLeaderControllerLeaderCreateStationResponses = {
-    201: StationWithAssignmentSummaryDto;
-};
-
-export type TeamLeaderControllerLeaderCreateStationResponse = TeamLeaderControllerLeaderCreateStationResponses[keyof TeamLeaderControllerLeaderCreateStationResponses];
-
-export type TeamLeaderControllerLeaderDeleteStationData = {
-    body?: never;
-    path: {
-        token: string;
-        stationId: number;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/stations/{stationId}';
-};
-
-export type TeamLeaderControllerLeaderDeleteStationResponses = {
-    204: void;
-};
-
-export type TeamLeaderControllerLeaderDeleteStationResponse = TeamLeaderControllerLeaderDeleteStationResponses[keyof TeamLeaderControllerLeaderDeleteStationResponses];
-
-export type TeamLeaderControllerLeaderUpdateStationData = {
-    body: UpdateStationDto;
-    path: {
-        token: string;
-        stationId: number;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/stations/{stationId}';
-};
-
-export type TeamLeaderControllerLeaderUpdateStationResponses = {
-    200: StationWithAssignmentSummaryDto;
-};
-
-export type TeamLeaderControllerLeaderUpdateStationResponse = TeamLeaderControllerLeaderUpdateStationResponses[keyof TeamLeaderControllerLeaderUpdateStationResponses];
-
-export type TeamLeaderControllerLeaderUpdateStationStatusData = {
-    body: UpdateStationStatusDto;
-    path: {
-        token: string;
-        stationId: number;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/stations/{stationId}/status';
-};
-
-export type TeamLeaderControllerLeaderUpdateStationStatusResponses = {
-    200: StationWithAssignmentSummaryDto;
-};
-
-export type TeamLeaderControllerLeaderUpdateStationStatusResponse = TeamLeaderControllerLeaderUpdateStationStatusResponses[keyof TeamLeaderControllerLeaderUpdateStationStatusResponses];
-
-export type TeamLeaderControllerLeaderListAssignableMembersData = {
-    body?: never;
-    path: {
-        token: string;
-        stationId: number;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/stations/{stationId}/assignable-members';
-};
-
-export type TeamLeaderControllerLeaderListAssignableMembersResponses = {
-    200: Array<AssignableMemberDto>;
-};
-
-export type TeamLeaderControllerLeaderListAssignableMembersResponse = TeamLeaderControllerLeaderListAssignableMembersResponses[keyof TeamLeaderControllerLeaderListAssignableMembersResponses];
-
-export type TeamLeaderControllerLeaderCreateAssignmentData = {
-    body: CreateAssignmentDto;
-    path: {
-        token: string;
-        stationId: number;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/stations/{stationId}/assignments';
-};
-
-export type TeamLeaderControllerLeaderCreateAssignmentResponses = {
-    201: AssignmentMemberBriefDto;
-};
-
-export type TeamLeaderControllerLeaderCreateAssignmentResponse = TeamLeaderControllerLeaderCreateAssignmentResponses[keyof TeamLeaderControllerLeaderCreateAssignmentResponses];
-
-export type TeamLeaderControllerLeaderRemoveAssignmentData = {
-    body?: never;
-    path: {
-        token: string;
-        assignmentId: number;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/station-assignments/{assignmentId}';
-};
-
-export type TeamLeaderControllerLeaderRemoveAssignmentResponses = {
-    204: void;
-};
-
-export type TeamLeaderControllerLeaderRemoveAssignmentResponse = TeamLeaderControllerLeaderRemoveAssignmentResponses[keyof TeamLeaderControllerLeaderRemoveAssignmentResponses];
 
 export type TeamContactControllerListAdminData = {
     body?: never;
@@ -5217,37 +5203,6 @@ export type TeamStationControllerRemoveAssignmentResponses = {
 
 export type TeamStationControllerRemoveAssignmentResponse = TeamStationControllerRemoveAssignmentResponses[keyof TeamStationControllerRemoveAssignmentResponses];
 
-export type TeamStationControllerDownloadStationsTemplateData = {
-    body?: never;
-    path: {
-        categoryId: number;
-    };
-    query?: never;
-    url: '/api/team-management/team-categories/{categoryId}/stations/import/template';
-};
-
-export type TeamStationControllerDownloadStationsTemplateResponses = {
-    /**
-     * Binary XLSX file.
-     */
-    200: unknown;
-};
-
-export type TeamStationControllerImportStationsData = {
-    body?: never;
-    path: {
-        categoryId: number;
-    };
-    query?: never;
-    url: '/api/team-management/team-categories/{categoryId}/stations/import';
-};
-
-export type TeamStationControllerImportStationsResponses = {
-    201: ImportStationsResponseDto;
-};
-
-export type TeamStationControllerImportStationsResponse = TeamStationControllerImportStationsResponses[keyof TeamStationControllerImportStationsResponses];
-
 export type TeamSupplyControllerListItemsData = {
     body?: never;
     path: {
@@ -5277,37 +5232,6 @@ export type TeamSupplyControllerCreateItemResponses = {
 };
 
 export type TeamSupplyControllerCreateItemResponse = TeamSupplyControllerCreateItemResponses[keyof TeamSupplyControllerCreateItemResponses];
-
-export type TeamSupplyControllerDownloadSupplyItemsTemplateData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/supply-items/import/template';
-};
-
-export type TeamSupplyControllerDownloadSupplyItemsTemplateResponses = {
-    /**
-     * Binary XLSX file (application/vnd.openxmlformats-...).
-     */
-    200: unknown;
-};
-
-export type TeamSupplyControllerImportSupplyItemsData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/supply-items/import';
-};
-
-export type TeamSupplyControllerImportSupplyItemsResponses = {
-    201: ImportSupplyItemsResponseDto;
-};
-
-export type TeamSupplyControllerImportSupplyItemsResponse = TeamSupplyControllerImportSupplyItemsResponses[keyof TeamSupplyControllerImportSupplyItemsResponses];
 
 export type TeamSupplyControllerDeleteItemData = {
     body?: never;
@@ -6263,6 +6187,98 @@ export type RaceResultControllerGetCourseStatsResponses = {
     200: unknown;
 };
 
+export type RaceResultControllerGetTimeDistributionData = {
+    body?: never;
+    path: {
+        /**
+         * Course ID
+         */
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/race-results/stats/{courseId}/distribution';
+};
+
+export type RaceResultControllerGetTimeDistributionResponses = {
+    /**
+     * Returns histogram buckets + summary stats
+     */
+    200: TimeDistributionResponseDto;
+};
+
+export type RaceResultControllerGetTimeDistributionResponse = RaceResultControllerGetTimeDistributionResponses[keyof RaceResultControllerGetTimeDistributionResponses];
+
+export type RaceResultControllerGetCountryStatsData = {
+    body?: never;
+    path: {
+        /**
+         * Course ID
+         */
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/race-results/stats/{courseId}/countries';
+};
+
+export type RaceResultControllerGetCountryStatsResponses = {
+    /**
+     * Returns top countries with finisher count + best chip time
+     */
+    200: CountryStatsResponseDto;
+};
+
+export type RaceResultControllerGetCountryStatsResponse = RaceResultControllerGetCountryStatsResponses[keyof RaceResultControllerGetCountryStatsResponses];
+
+export type RaceResultControllerGetCountryRankData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+        /**
+         * Bib number
+         */
+        bib: string;
+    };
+    query?: never;
+    url: '/api/race-results/athlete/{raceId}/{bib}/country-rank';
+};
+
+export type RaceResultControllerGetCountryRankResponses = {
+    /**
+     * Returns rank (null if DNF) + total same-nationality finishers
+     */
+    200: CountryRankResponseDto;
+};
+
+export type RaceResultControllerGetCountryRankResponse = RaceResultControllerGetCountryRankResponses[keyof RaceResultControllerGetCountryRankResponses];
+
+export type RaceResultControllerGetPercentileData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+        /**
+         * Bib number
+         */
+        bib: string;
+    };
+    query?: never;
+    url: '/api/race-results/athlete/{raceId}/{bib}/percentile';
+};
+
+export type RaceResultControllerGetPercentileResponses = {
+    /**
+     * Returns percentile + comparison metrics
+     */
+    200: PercentileResponseDto;
+};
+
+export type RaceResultControllerGetPercentileResponse = RaceResultControllerGetPercentileResponses[keyof RaceResultControllerGetPercentileResponses];
+
 export type RaceResultControllerRequestAvatarOtpData = {
     body: {
         raceId: string;
@@ -6348,13 +6364,80 @@ export type RaceResultControllerSubmitClaimResponses = {
     201: unknown;
 };
 
-export type RaceResultControllerGenerateResultImageData = {
-    body: {
-        bg?: 'blue' | 'dark' | 'sunset' | 'forest' | 'purple';
+export type RaceResultControllerPreviewResultImageData = {
+    body?: never;
+    path: {
         /**
-         * Custom background image
+         * Race ID
          */
-        customBg?: Blob | File;
+        raceId: string;
+        /**
+         * Bib number
+         */
+        bib: string;
+    };
+    query?: {
+        template?: 'classic' | 'celebration' | 'endurance' | 'story' | 'sticker' | 'podium';
+        size?: '4:5' | '1:1' | '9:16';
+        gradient?: 'blue' | 'dark' | 'sunset' | 'forest' | 'purple';
+        /**
+         * @deprecated
+         */
+        bg?: string;
+        /**
+         * @deprecated
+         */
+        ratio?: string;
+        showSplits?: boolean;
+        showQrCode?: boolean;
+        showBadges?: boolean;
+        customMessage?: string;
+        textColor?: 'auto' | 'light' | 'dark';
+        preview?: boolean;
+        t?: string;
+    };
+    url: '/api/race-results/result-image/{raceId}/{bib}';
+};
+
+export type RaceResultControllerPreviewResultImageErrors = {
+    /**
+     * Athlete not found
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerPreviewResultImageResponses = {
+    /**
+     * Returns preview PNG
+     */
+    200: unknown;
+};
+
+export type RaceResultControllerGenerateResultImageData = {
+    /**
+     * Full config: template, size, gradient, show* toggles, optional customPhoto + customMessage. Backward-compat: `bg` aliases to `gradient`, `ratio` aliases to `size`.
+     */
+    body: {
+        template?: 'classic' | 'celebration' | 'endurance' | 'story' | 'sticker' | 'podium';
+        size?: '4:5' | '1:1' | '9:16';
+        gradient?: 'blue' | 'dark' | 'sunset' | 'forest' | 'purple';
+        /**
+         * DEPRECATED — alias for `gradient`
+         */
+        bg?: string;
+        /**
+         * DEPRECATED — alias for `size`
+         */
+        ratio?: string;
+        showSplits?: boolean;
+        showQrCode?: boolean;
+        showBadges?: boolean;
+        textColor?: 'auto' | 'light' | 'dark';
+        customMessage?: string;
+        /**
+         * Custom background photo (JPG/PNG/WebP, ≤10MB)
+         */
+        customPhoto?: Blob | File;
     };
     path: {
         /**
@@ -6375,6 +6458,10 @@ export type RaceResultControllerGenerateResultImageErrors = {
      * Athlete not found
      */
     404: unknown;
+    /**
+     * Render queue full — retry later
+     */
+    503: unknown;
 };
 
 export type RaceResultControllerGenerateResultImageResponses = {
@@ -6383,6 +6470,101 @@ export type RaceResultControllerGenerateResultImageResponses = {
      */
     200: unknown;
 };
+
+export type RaceResultControllerGetAthleteBadgesData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+        /**
+         * Bib number
+         */
+        bib: string;
+    };
+    query?: never;
+    url: '/api/race-results/badges/{raceId}/{bib}';
+};
+
+export type RaceResultControllerGetAthleteBadgesResponses = {
+    /**
+     * Returns badge list
+     */
+    200: unknown;
+};
+
+export type RaceResultControllerGetShareCountData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-results/share-count/{raceId}';
+};
+
+export type RaceResultControllerGetShareCountResponses = {
+    /**
+     * Returns share count
+     */
+    200: unknown;
+};
+
+export type RaceResultControllerIncrementShareCountData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-results/share-count/{raceId}';
+};
+
+export type RaceResultControllerIncrementShareCountResponses = {
+    /**
+     * Returns updated share count
+     */
+    201: unknown;
+};
+
+export type RaceResultControllerLogShareEventData = {
+    body: LogShareEventDto;
+    path?: never;
+    query?: never;
+    url: '/api/race-results/result-image-share';
+};
+
+export type RaceResultControllerLogShareEventResponses = {
+    /**
+     * Event accepted
+     */
+    201: {
+        success?: boolean;
+    };
+};
+
+export type RaceResultControllerLogShareEventResponse = RaceResultControllerLogShareEventResponses[keyof RaceResultControllerLogShareEventResponses];
+
+export type RaceResultControllerGetShareStatsData = {
+    body?: never;
+    path?: never;
+    query: {
+        raceId: string;
+        since: string;
+    };
+    url: '/api/race-results/admin/result-image-stats';
+};
+
+export type RaceResultControllerGetShareStatsResponses = {
+    200: ShareStatsDto;
+};
+
+export type RaceResultControllerGetShareStatsResponse = RaceResultControllerGetShareStatsResponses[keyof RaceResultControllerGetShareStatsResponses];
 
 export type RaceResultControllerManualSyncData = {
     body?: never;
@@ -6638,48 +6820,6 @@ export type AdminControllerTestOtpEmailResponses = {
     201: unknown;
 };
 
-export type AuthControllerLoginData = {
-    body: LoginDto;
-    path?: never;
-    query?: never;
-    url: '/api/auth/login';
-};
-
-export type AuthControllerLoginErrors = {
-    /**
-     * Invalid credentials
-     */
-    401: unknown;
-};
-
-export type AuthControllerLoginResponses = {
-    /**
-     * Login successful, returns token and user info
-     */
-    200: unknown;
-};
-
-export type AuthControllerProfileData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/auth/profile';
-};
-
-export type AuthControllerProfileErrors = {
-    /**
-     * Unauthorized
-     */
-    401: unknown;
-};
-
-export type AuthControllerProfileResponses = {
-    /**
-     * Returns current user profile
-     */
-    200: unknown;
-};
-
 export type UploadControllerUploadFileData = {
     body: {
         file?: Blob | File;
@@ -6850,3 +6990,687 @@ export type SearchControllerSearchResponses = {
 };
 
 export type SearchControllerSearchResponse = SearchControllerSearchResponses[keyof SearchControllerSearchResponses];
+
+export type CertificatesControllerListTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        raceId?: string;
+        courseId?: string;
+        type?: 'certificate' | 'share_card';
+        includeArchived?: boolean;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/certificate-templates';
+};
+
+export type CertificatesControllerListTemplatesResponses = {
+    200: TemplateListResponseDto;
+};
+
+export type CertificatesControllerListTemplatesResponse = CertificatesControllerListTemplatesResponses[keyof CertificatesControllerListTemplatesResponses];
+
+export type CertificatesControllerCreateTemplateData = {
+    body: CreateTemplateDto;
+    path?: never;
+    query?: never;
+    url: '/api/certificate-templates';
+};
+
+export type CertificatesControllerCreateTemplateResponses = {
+    201: TemplateResponseDto;
+};
+
+export type CertificatesControllerCreateTemplateResponse = CertificatesControllerCreateTemplateResponses[keyof CertificatesControllerCreateTemplateResponses];
+
+export type CertificatesControllerRemoveTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/certificate-templates/{id}';
+};
+
+export type CertificatesControllerRemoveTemplateErrors = {
+    /**
+     * Template in use by a race config
+     */
+    409: unknown;
+};
+
+export type CertificatesControllerRemoveTemplateResponses = {
+    200: unknown;
+};
+
+export type CertificatesControllerGetTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/certificate-templates/{id}';
+};
+
+export type CertificatesControllerGetTemplateErrors = {
+    404: unknown;
+};
+
+export type CertificatesControllerGetTemplateResponses = {
+    200: TemplateResponseDto;
+};
+
+export type CertificatesControllerGetTemplateResponse = CertificatesControllerGetTemplateResponses[keyof CertificatesControllerGetTemplateResponses];
+
+export type CertificatesControllerUpdateTemplateData = {
+    body: UpdateTemplateDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/certificate-templates/{id}';
+};
+
+export type CertificatesControllerUpdateTemplateResponses = {
+    200: TemplateResponseDto;
+};
+
+export type CertificatesControllerUpdateTemplateResponse = CertificatesControllerUpdateTemplateResponses[keyof CertificatesControllerUpdateTemplateResponses];
+
+export type CertificatesControllerGetRaceConfigData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-certificate-configs/{raceId}';
+};
+
+export type CertificatesControllerGetRaceConfigErrors = {
+    404: unknown;
+};
+
+export type CertificatesControllerGetRaceConfigResponses = {
+    200: RaceConfigResponseDto;
+};
+
+export type CertificatesControllerGetRaceConfigResponse = CertificatesControllerGetRaceConfigResponses[keyof CertificatesControllerGetRaceConfigResponses];
+
+export type CertificatesControllerUpsertRaceConfigData = {
+    body: UpsertRaceConfigDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-certificate-configs/{raceId}';
+};
+
+export type CertificatesControllerUpsertRaceConfigResponses = {
+    200: RaceConfigResponseDto;
+};
+
+export type CertificatesControllerUpsertRaceConfigResponse = CertificatesControllerUpsertRaceConfigResponses[keyof CertificatesControllerUpsertRaceConfigResponses];
+
+export type CertificatesControllerRenderCertificateData = {
+    body?: never;
+    path: {
+        raceId: string;
+        bib: string;
+    };
+    query: {
+        type: 'certificate' | 'share_card';
+        /**
+         * Course ID to resolve course-specific template override. If omitted, athlete course from result data is used.
+         */
+        courseId?: string;
+        /**
+         * When false, photo_area and photo layers are skipped. The client can composite an athlete-uploaded photo over the returned PNG inside the photo_area bounds (returned by /certificates/render-meta).
+         */
+        includePhoto?: boolean;
+    };
+    url: '/api/certificates/render/{raceId}/{bib}';
+};
+
+export type CertificatesControllerRenderCertificateErrors = {
+    /**
+     * Template or athlete not found
+     */
+    404: unknown;
+};
+
+export type CertificatesControllerRenderCertificateResponses = {
+    /**
+     * PNG binary
+     */
+    200: unknown;
+};
+
+export type CertificatesControllerRenderMetaData = {
+    body?: never;
+    path: {
+        raceId: string;
+        bib: string;
+    };
+    query: {
+        type: 'certificate' | 'share_card';
+        /**
+         * Course ID to resolve course-specific template override. If omitted, athlete course from result data is used.
+         */
+        courseId?: string;
+        /**
+         * When false, photo_area and photo layers are skipped. The client can composite an athlete-uploaded photo over the returned PNG inside the photo_area bounds (returned by /certificates/render-meta).
+         */
+        includePhoto?: boolean;
+    };
+    url: '/api/certificates/render-meta/{raceId}/{bib}';
+};
+
+export type CertificatesControllerRenderMetaResponses = {
+    200: {
+        canvas?: {
+            width?: number;
+            height?: number;
+        };
+        photo_area?: {
+            x?: number;
+            y?: number;
+            width?: number;
+            height?: number;
+            borderRadius?: number;
+        } | null;
+        photo_behind_background?: boolean;
+        placeholder_photo_url?: string | null;
+        default_photo_url?: string | null;
+    };
+};
+
+export type CertificatesControllerRenderMetaResponse = CertificatesControllerRenderMetaResponses[keyof CertificatesControllerRenderMetaResponses];
+
+export type CertificatesControllerCheckAvailabilityData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        courseId?: string;
+    };
+    url: '/api/certificates/check/{raceId}';
+};
+
+export type CertificatesControllerCheckAvailabilityResponses = {
+    200: {
+        hasCertificate?: boolean;
+        hasShareCard?: boolean;
+        certificateHasPhotoArea?: boolean;
+    };
+};
+
+export type CertificatesControllerCheckAvailabilityResponse = CertificatesControllerCheckAvailabilityResponses[keyof CertificatesControllerCheckAvailabilityResponses];
+
+export type UsersControllerMeDebugData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/users/me/debug';
+};
+
+export type UsersControllerMeDebugResponses = {
+    200: unknown;
+};
+
+export type UsersControllerMeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/users/me';
+};
+
+export type UsersControllerMeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+};
+
+export type UsersControllerMeResponses = {
+    /**
+     * User info from verified JWT
+     */
+    200: unknown;
+};
+
+export type UsersControllerUploadAvatarData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/users/me/avatar';
+};
+
+export type UsersControllerUploadAvatarResponses = {
+    /**
+     * Avatar uploaded and synced
+     */
+    201: unknown;
+};
+
+export type AthleteStarsControllerUnstarData = {
+    body: StarAthleteDto;
+    path?: never;
+    query?: never;
+    url: '/api/athlete-stars';
+};
+
+export type AthleteStarsControllerUnstarResponses = {
+    /**
+     * { deleted: boolean }
+     */
+    200: unknown;
+};
+
+export type AthleteStarsControllerListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageNo?: number;
+        pageSize?: number;
+    };
+    url: '/api/athlete-stars';
+};
+
+export type AthleteStarsControllerListResponses = {
+    200: AthleteStarListResponseDto;
+};
+
+export type AthleteStarsControllerListResponse = AthleteStarsControllerListResponses[keyof AthleteStarsControllerListResponses];
+
+export type AthleteStarsControllerStarData = {
+    body: StarAthleteDto;
+    path?: never;
+    query?: never;
+    url: '/api/athlete-stars';
+};
+
+export type AthleteStarsControllerStarResponses = {
+    201: AthleteStarResponseDto;
+};
+
+export type AthleteStarsControllerStarResponse = AthleteStarsControllerStarResponses[keyof AthleteStarsControllerStarResponses];
+
+export type AthleteStarsControllerByCourseData = {
+    body?: never;
+    path?: never;
+    query: {
+        raceId: string;
+        courseId: string;
+    };
+    url: '/api/athlete-stars/by-course';
+};
+
+export type AthleteStarsControllerByCourseResponses = {
+    /**
+     * { data: string[] }
+     */
+    200: unknown;
+};
+
+export type TimingPublicControllerCreateLeadData = {
+    body: CreateLeadDto;
+    headers: {
+        'user-agent': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/timing/leads';
+};
+
+export type TimingPublicControllerCreateLeadErrors = {
+    /**
+     * Quá nhiều yêu cầu
+     */
+    429: unknown;
+};
+
+export type TimingPublicControllerCreateLeadResponses = {
+    200: TimingLeadCreateResponseDto;
+};
+
+export type TimingPublicControllerCreateLeadResponse = TimingPublicControllerCreateLeadResponses[keyof TimingPublicControllerCreateLeadResponses];
+
+export type SolutionPublicControllerCreateLeadData = {
+    body: CreateLeadDto;
+    headers: {
+        'user-agent': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/solution/leads';
+};
+
+export type SolutionPublicControllerCreateLeadErrors = {
+    /**
+     * Quá nhiều yêu cầu
+     */
+    429: unknown;
+};
+
+export type SolutionPublicControllerCreateLeadResponses = {
+    200: TimingLeadCreateResponseDto;
+};
+
+export type SolutionPublicControllerCreateLeadResponse = SolutionPublicControllerCreateLeadResponses[keyof SolutionPublicControllerCreateLeadResponses];
+
+export type Sport5PublicControllerCreateLeadData = {
+    body: CreateLeadDto;
+    headers: {
+        'user-agent': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/5sport/leads';
+};
+
+export type Sport5PublicControllerCreateLeadErrors = {
+    /**
+     * Quá nhiều yêu cầu
+     */
+    429: unknown;
+};
+
+export type Sport5PublicControllerCreateLeadResponses = {
+    200: TimingLeadCreateResponseDto;
+};
+
+export type Sport5PublicControllerCreateLeadResponse = Sport5PublicControllerCreateLeadResponses[keyof Sport5PublicControllerCreateLeadResponses];
+
+export type TimingAdminControllerListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        q?: string;
+        status?: 'new' | 'contacted' | 'quoted' | 'closed_won' | 'closed_lost';
+        include_archived?: boolean;
+        source?: 'timing' | 'solution';
+    };
+    url: '/api/admin/timing/leads';
+};
+
+export type TimingAdminControllerListResponses = {
+    200: TimingLeadListResponseDto;
+};
+
+export type TimingAdminControllerListResponse = TimingAdminControllerListResponses[keyof TimingAdminControllerListResponses];
+
+export type TimingAdminControllerExportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        q?: string;
+        status?: 'new' | 'contacted' | 'quoted' | 'closed_won' | 'closed_lost';
+        include_archived?: boolean;
+        source?: 'timing' | 'solution';
+    };
+    url: '/api/admin/timing/leads/export';
+};
+
+export type TimingAdminControllerExportResponses = {
+    200: unknown;
+};
+
+export type TimingAdminControllerGetData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing/leads/{id}';
+};
+
+export type TimingAdminControllerGetResponses = {
+    200: TimingLeadResponseDto;
+};
+
+export type TimingAdminControllerGetResponse = TimingAdminControllerGetResponses[keyof TimingAdminControllerGetResponses];
+
+export type TimingAdminControllerUpdateData = {
+    body: UpdateLeadDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing/leads/{id}';
+};
+
+export type TimingAdminControllerUpdateResponses = {
+    200: TimingLeadResponseDto;
+};
+
+export type TimingAdminControllerUpdateResponse = TimingAdminControllerUpdateResponses[keyof TimingAdminControllerUpdateResponses];
+
+export type EventTrackingControllerTrackEventData = {
+    body: CreateTrackingEventDto;
+    path?: never;
+    query?: never;
+    url: '/api/event-tracking/events';
+};
+
+export type EventTrackingControllerTrackEventErrors = {
+    /**
+     * Validation error — missing required fields
+     */
+    400: unknown;
+    /**
+     * Invalid or missing x-analytics-key header
+     */
+    401: unknown;
+    /**
+     * Rate limit exceeded (100 req/s per IP)
+     */
+    429: unknown;
+};
+
+export type EventTrackingControllerTrackEventResponses = {
+    /**
+     * Event accepted
+     */
+    201: unknown;
+};
+
+export type SponsoredControllerFindAllData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/sponsored';
+};
+
+export type SponsoredControllerFindAllResponses = {
+    /**
+     * All slots including inactive
+     */
+    200: unknown;
+};
+
+export type SponsoredControllerCreateData = {
+    body: CreateSponsoredSlotDto;
+    path?: never;
+    query?: never;
+    url: '/api/admin/sponsored';
+};
+
+export type SponsoredControllerCreateErrors = {
+    /**
+     * Validation error
+     */
+    400: unknown;
+};
+
+export type SponsoredControllerCreateResponses = {
+    /**
+     * Slot created. diamond_conflict=true if another diamond slot is already active.
+     */
+    201: unknown;
+};
+
+export type SponsoredControllerRemoveData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/sponsored/{id}';
+};
+
+export type SponsoredControllerRemoveErrors = {
+    404: unknown;
+};
+
+export type SponsoredControllerRemoveResponses = {
+    204: void;
+};
+
+export type SponsoredControllerRemoveResponse = SponsoredControllerRemoveResponses[keyof SponsoredControllerRemoveResponses];
+
+export type SponsoredControllerFindOneData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/sponsored/{id}';
+};
+
+export type SponsoredControllerFindOneErrors = {
+    /**
+     * Slot not found
+     */
+    404: unknown;
+};
+
+export type SponsoredControllerFindOneResponses = {
+    200: unknown;
+};
+
+export type SponsoredControllerUpdateData = {
+    body: UpdateSponsoredSlotDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/sponsored/{id}';
+};
+
+export type SponsoredControllerUpdateErrors = {
+    404: unknown;
+};
+
+export type SponsoredControllerUpdateResponses = {
+    200: unknown;
+};
+
+export type SponsoredControllerReorderSlotsData = {
+    body: ReorderSlotsDto;
+    path?: never;
+    query?: never;
+    url: '/api/admin/sponsored/reorder';
+};
+
+export type SponsoredControllerReorderSlotsResponses = {
+    204: void;
+};
+
+export type SponsoredControllerReorderSlotsResponse = SponsoredControllerReorderSlotsResponses[keyof SponsoredControllerReorderSlotsResponses];
+
+export type SponsoredControllerAddItemData = {
+    body: CreateSponsoredItemDto;
+    path: {
+        slotId: string;
+    };
+    query?: never;
+    url: '/api/admin/sponsored/{slotId}/items';
+};
+
+export type SponsoredControllerAddItemErrors = {
+    /**
+     * Slot not found
+     */
+    404: unknown;
+};
+
+export type SponsoredControllerAddItemResponses = {
+    201: unknown;
+};
+
+export type SponsoredControllerReorderItemsData = {
+    body: ReorderItemsDto;
+    path: {
+        slotId: string;
+    };
+    query?: never;
+    url: '/api/admin/sponsored/{slotId}/items/reorder';
+};
+
+export type SponsoredControllerReorderItemsResponses = {
+    204: void;
+};
+
+export type SponsoredControllerReorderItemsResponse = SponsoredControllerReorderItemsResponses[keyof SponsoredControllerReorderItemsResponses];
+
+export type SponsoredControllerDeleteItemData = {
+    body?: never;
+    path: {
+        slotId: string;
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/admin/sponsored/{slotId}/items/{itemId}';
+};
+
+export type SponsoredControllerDeleteItemErrors = {
+    /**
+     * Cannot delete last item in slot
+     */
+    400: unknown;
+    404: unknown;
+};
+
+export type SponsoredControllerDeleteItemResponses = {
+    204: void;
+};
+
+export type SponsoredControllerDeleteItemResponse = SponsoredControllerDeleteItemResponses[keyof SponsoredControllerDeleteItemResponses];
+
+export type SponsoredControllerUpdateItemData = {
+    body: UpdateSponsoredItemDto;
+    path: {
+        slotId: string;
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/admin/sponsored/{slotId}/items/{itemId}';
+};
+
+export type SponsoredControllerUpdateItemErrors = {
+    404: unknown;
+};
+
+export type SponsoredControllerUpdateItemResponses = {
+    200: unknown;
+};
+
+export type PublicSponsoredControllerGetHomepageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/public/homepage/sponsored';
+};
+
+export type PublicSponsoredControllerGetHomepageResponses = {
+    /**
+     * Active sponsored slots with items
+     */
+    200: unknown;
+};

@@ -26,8 +26,18 @@ export interface TeamEvent {
   terms_conditions?: string | null;
   // TypeORM DECIMAL column returns as string from the driver.
   min_work_hours_for_completion?: string | number | null;
+  // v1.9: feature toggles
+  feature_mode?: "full" | "lite";
+  feature_nghiem_thu?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// v1.9: Feature config response type
+export interface EventFeaturesConfig {
+  event_id: number;
+  feature_mode: "full" | "lite";
+  feature_nghiem_thu: boolean;
 }
 
 // v1.8 — Team (category) layer. Roles belong to a Team; Team owns stations +
@@ -395,6 +405,15 @@ export async function deleteTeamRole(token: string, id: number): Promise<void> {
   await assertOk(res);
 }
 
+// v1.8: Party A (company) config embedded in contract and acceptance templates
+export interface PartyAConfig {
+  party_a_company_name: string | null;
+  party_a_address: string | null;
+  party_a_tax_code: string | null;
+  party_a_representative: string | null;
+  party_a_position: string | null;
+}
+
 export interface ContractTemplate {
   id: number;
   template_name: string;
@@ -404,6 +423,12 @@ export interface ContractTemplate {
   created_by: string;
   created_at: string;
   updated_at: string;
+  // v1.8: Party A fields
+  party_a_company_name?: string | null;
+  party_a_address?: string | null;
+  party_a_tax_code?: string | null;
+  party_a_representative?: string | null;
+  party_a_position?: string | null;
 }
 
 export async function listContractTemplates(token: string): Promise<ContractTemplate[]> {
@@ -842,6 +867,20 @@ export async function patchRegistration(
     notes?: string;
     payment_status?: string;
     actual_working_days?: number;
+    // Profile / backfill fields
+    full_name?: string;
+    phone?: string;
+    email?: string;
+    shirt_size?: string | null;
+    birth_date?: string | null;
+    cccd?: string | null;
+    cccd_issue_date?: string | null;
+    cccd_issue_place?: string | null;
+    bank_account_number?: string | null;
+    bank_holder_name?: string | null;
+    bank_name?: string | null;
+    bank_branch?: string | null;
+    address?: string | null;
   },
 ): Promise<RegistrationListRow> {
   const res = await fetch(`/api/team-management/registrations/${id}`, {
@@ -1140,7 +1179,7 @@ export async function sendContracts(
   token: string,
   roleId: number,
   dryRun = false,
-): Promise<{ queued: number; already_sent: number; skipped: number }> {
+): Promise<{ queued: number; already_sent: number; skipped: number; skip_reasons?: string[] }> {
   const res = await fetch(
     `/api/team-management/roles/${roleId}/send-contracts`,
     {
@@ -2393,6 +2432,12 @@ export interface AcceptanceTemplate {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // v1.8: Party A fields
+  party_a_company_name?: string | null;
+  party_a_address?: string | null;
+  party_a_tax_code?: string | null;
+  party_a_representative?: string | null;
+  party_a_position?: string | null;
 }
 
 export interface AcceptanceTemplateInput {
@@ -2401,6 +2446,12 @@ export interface AcceptanceTemplateInput {
   content_html: string;
   variables?: string[];
   is_default?: boolean;
+  is_active?: boolean;
+  party_a_company_name?: string | null;
+  party_a_address?: string | null;
+  party_a_tax_code?: string | null;
+  party_a_representative?: string | null;
+  party_a_position?: string | null;
 }
 
 export async function listAcceptanceTemplates(
@@ -2469,4 +2520,65 @@ export async function deleteAcceptanceTemplate(
     { method: "DELETE", headers: authedHeaders(token) },
   );
   await assertOk(res);
+}
+
+export async function sendContractForRegistration(
+  token: string,
+  registrationId: number,
+): Promise<void> {
+  const res = await fetch(
+    `/api/team-management/registrations/${registrationId}/send-contract`,
+    { method: "POST", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v1.9: Feature mode config
+// ─────────────────────────────────────────────────────────────────────
+
+export async function getEventFeaturesConfig(
+  token: string,
+  eventId: number,
+): Promise<EventFeaturesConfig> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/config`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateEventFeatures(
+  token: string,
+  eventId: number,
+  dto: { feature_mode: "full" | "lite"; feature_nghiem_thu: boolean },
+): Promise<EventFeaturesConfig> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/features`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify(dto),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function confirmNghiemThu(
+  token: string,
+  registrationId: number,
+  note?: string,
+): Promise<{ id: number; status: string; completed_at: string }> {
+  const res = await fetch(
+    `/api/team-management/registrations/${registrationId}/nghiem-thu`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify(note ? { note } : {}),
+    },
+  );
+  await assertOk(res);
+  return res.json();
 }

@@ -7,8 +7,6 @@ import { VolEvent } from './entities/vol-event.entity';
 import { VolRole } from './entities/vol-role.entity';
 import { VolRegistration } from './entities/vol-registration.entity';
 import { VolContractTemplate } from './entities/vol-contract-template.entity';
-import { VolAcceptanceTemplate } from './entities/vol-acceptance-template.entity';
-import { VolContractNumberSequence } from './entities/vol-contract-number-sequence.entity';
 import { VolShirtStock } from './entities/vol-shirt-stock.entity';
 import { VolTeamScheduleEmail } from './entities/vol-team-schedule-email.entity';
 import { VolEventContact } from './entities/vol-event-contact.entity';
@@ -24,10 +22,6 @@ import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamPhotoService } from './services/team-photo.service';
 import { TeamCacheService } from './services/team-cache.service';
 import { TeamContractService } from './services/team-contract.service';
-import { TeamContractNumberService } from './services/team-contract-number.service';
-import { TeamAcceptanceService } from './services/team-acceptance.service';
-import { TeamAcceptanceTemplateService } from './services/team-acceptance-template.service';
-import { TeamPaymentService } from './services/team-payment.service';
 import { TeamCheckinService } from './services/team-checkin.service';
 import { TeamReminderService } from './services/team-reminder.service';
 import { TeamShirtService } from './services/team-shirt.service';
@@ -40,9 +34,7 @@ import { TeamLeaderService } from './services/team-leader.service';
 import { TeamContactService } from './services/team-contact.service';
 import { TeamDirectoryService } from './services/team-directory.service';
 import { TeamStationService } from './services/team-station.service';
-import { TeamStationImportService } from './services/team-station-import.service';
 import { TeamSupplyItemService } from './services/team-supply-item.service';
-import { TeamSupplyItemImportService } from './services/team-supply-item-import.service';
 import { TeamSupplyPlanService } from './services/team-supply-plan.service';
 import { TeamSupplyAllocationService } from './services/team-supply-allocation.service';
 import { TeamSupplySupplementService } from './services/team-supply-supplement.service';
@@ -50,14 +42,12 @@ import { TeamSupplyLeaderService } from './services/team-supply-leader.service';
 import { TeamRoleHierarchyService } from './services/team-role-hierarchy.service';
 import { TeamCategoryService } from './services/team-category.service';
 import { TeamRecoverService } from './services/team-recover.service';
+import { FeatureModeGuard } from './guards/feature-mode.guard';
 import { TeamManagementController } from './team-management.controller';
 import { TeamRegistrationController } from './team-registration.controller';
 import { TeamRecoverController } from './team-recover.controller';
 import { TeamRegistrationImportController } from './team-registration-import.controller';
 import { TeamContractTemplateController } from './team-contract-template.controller';
-import { TeamAcceptanceTemplateController } from './team-acceptance-template.controller';
-import { TeamAcceptanceController } from './team-acceptance.controller';
-import { TeamPaymentController } from './team-payment.controller';
 import { TeamCheckinController } from './team-checkin.controller';
 import { TeamScheduleEmailController } from './team-schedule-email.controller';
 import { TeamLeaderController } from './team-leader.controller';
@@ -77,8 +67,6 @@ import { env } from 'src/config';
         VolRole,
         VolRegistration,
         VolContractTemplate,
-        VolAcceptanceTemplate,
-        VolContractNumberSequence,
         VolShirtStock,
         VolTeamScheduleEmail,
         VolEventContact,
@@ -104,9 +92,6 @@ import { env } from 'src/config';
     TeamRegistrationController,
     TeamRegistrationImportController,
     TeamContractTemplateController,
-    TeamAcceptanceTemplateController,
-    TeamAcceptanceController,
-    TeamPaymentController,
     TeamCheckinController,
     TeamScheduleEmailController,
     TeamLeaderController,
@@ -124,10 +109,6 @@ import { env } from 'src/config';
     TeamPhotoService,
     TeamCacheService,
     TeamContractService,
-    TeamContractNumberService,
-    TeamAcceptanceService,
-    TeamAcceptanceTemplateService,
-    TeamPaymentService,
     TeamCheckinService,
     TeamReminderService,
     TeamShirtService,
@@ -140,9 +121,7 @@ import { env } from 'src/config';
     TeamContactService,
     TeamDirectoryService,
     TeamStationService,
-    TeamStationImportService,
     TeamSupplyItemService,
-    TeamSupplyItemImportService,
     TeamSupplyPlanService,
     TeamSupplyAllocationService,
     TeamSupplySupplementService,
@@ -150,19 +129,12 @@ import { env } from 'src/config';
     TeamRoleHierarchyService,
     TeamCategoryService,
     TeamRecoverService,
+    FeatureModeGuard,
     s3ClientProvider,
     // Make every route within this module subject to @Throttle decorators.
     // Without this provider the @Throttle calls on public endpoints are no-ops.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
-  exports: [
-    TeamEventService,
-    TeamRegistrationService,
-    TeamContractService,
-    TeamContractNumberService,
-    TeamAcceptanceService,
-    TeamAcceptanceTemplateService,
-    TeamPaymentService,
-  ],
+  exports: [TeamEventService, TeamRegistrationService, TeamContractService],
 })
 export class TeamManagementModule {}

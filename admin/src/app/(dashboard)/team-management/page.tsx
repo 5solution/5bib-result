@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { EventFeatureModeBadge } from "@/components/EventFeatureModeBadge";
 
 const STATUS_COLORS: Record<TeamEvent["status"], string> = {
   draft: "bg-yellow-500/20 text-yellow-400",
@@ -159,12 +160,17 @@ export default function TeamManagementPage(): React.ReactElement {
               {events.map((e) => (
                 <TableRow key={e.id} className="result-row-hover">
                   <TableCell className="font-medium">
-                    <Link
-                      href={`/team-management/${e.id}/roles`}
-                      className="underline-offset-2 hover:underline"
-                    >
-                      {e.event_name}
-                    </Link>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link
+                        href={`/team-management/${e.id}/roles`}
+                        className="underline-offset-2 hover:underline"
+                      >
+                        {e.event_name}
+                      </Link>
+                      {e.feature_mode != null ? (
+                        <EventFeatureModeBadge mode={e.feature_mode} />
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge className={STATUS_COLORS[e.status]}>

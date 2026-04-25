@@ -7,6 +7,7 @@ import {
   getTeamEvent,
   updateTeamEvent,
   uploadTeamPhoto,
+  updateEventFeatures,
   type TeamEvent,
 } from "@/lib/team-api";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Settings, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -104,12 +114,29 @@ export default function EventSettingsPage(): React.ReactElement {
   const [saving, setSaving] = useState(false);
   const [uploadingBenefits, setUploadingBenefits] = useState(false);
 
+  // v1.9: Feature mode state
+  const [featureMode, setFeatureMode] = useState<"full" | "lite">("full");
+  const [nghiemThu, setNghiemThu] = useState(true);
+  const [showLiteConfirm, setShowLiteConfirm] = useState(false);
+  const [savingFeatures, setSavingFeatures] = useState(false);
+
+  function handleLiteModeSelect(): void {
+    if (featureMode === "full") {
+      setShowLiteConfirm(true);
+    } else {
+      setFeatureMode("lite");
+    }
+  }
+
   const load = useCallback(async () => {
     if (!token || !Number.isFinite(eventId)) return;
     try {
       const e = await getTeamEvent(token, eventId);
       setEvent(e);
       setForm(eventToForm(e));
+      // v1.9: initialise feature mode state from loaded event
+      setFeatureMode(e.feature_mode ?? "full");
+      setNghiemThu(e.feature_nghiem_thu ?? true);
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -205,6 +232,22 @@ export default function EventSettingsPage(): React.ReactElement {
       toast.error((err as Error).message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveFeatures(): Promise<void> {
+    if (!token) return;
+    setSavingFeatures(true);
+    try {
+      await updateEventFeatures(token, eventId, {
+        feature_mode: featureMode,
+        feature_nghiem_thu: nghiemThu,
+      });
+      toast.success("Đã lưu cấu hình tính năng");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSavingFeatures(false);
     }
   }
 
@@ -481,6 +524,113 @@ export default function EventSettingsPage(): React.ReactElement {
           </p>
         </div>
       </section>
+
+      {/* Group 6 — v1.9 Feature mode */}
+      <section className="space-y-4 border-t pt-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Chế độ tính năng</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Full mode: toàn bộ tính năng. Lite mode: chỉ nhân sự + hợp đồng + liên lạc.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label
+            className={[
+              "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+              featureMode === "full"
+                ? "border-blue-500 bg-blue-50"
+                : "border-gray-200 hover:bg-gray-50",
+            ].join(" ")}
+          >
+            <input
+              type="radio"
+              value="full"
+              checked={featureMode === "full"}
+              onChange={() => setFeatureMode("full")}
+              className="mt-0.5"
+            />
+            <div>
+              <div className="text-sm font-medium">Full mode</div>
+              <div className="text-xs text-gray-500">QR check-in, Trạm, Vật tư</div>
+            </div>
+          </label>
+
+          <label
+            className={[
+              "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+              featureMode === "lite"
+                ? "border-gray-500 bg-gray-50"
+                : "border-gray-200 hover:bg-gray-50",
+            ].join(" ")}
+          >
+            <input
+              type="radio"
+              value="lite"
+              checked={featureMode === "lite"}
+              onChange={handleLiteModeSelect}
+              className="mt-0.5"
+            />
+            <div>
+              <div className="text-sm font-medium">Lite mode</div>
+              <div className="text-xs text-gray-500">Chỉ nhân sự + hợp đồng + liên lạc</div>
+            </div>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+          <div>
+            <div className="text-sm font-medium">Xác nhận nghiệm thu</div>
+            <div className="text-xs text-gray-500">
+              Bật = admin phải xác nhận trước khi chuyển trạng thái Hoàn thành
+            </div>
+          </div>
+          <Switch checked={nghiemThu} onCheckedChange={setNghiemThu} />
+        </div>
+
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            disabled={savingFeatures}
+            onClick={() => void handleSaveFeatures()}
+          >
+            {savingFeatures ? "Đang lưu..." : "Lưu tính năng"}
+          </Button>
+        </div>
+      </section>
+
+      {/* Confirm dialog for Full → Lite switch */}
+      <Dialog open={showLiteConfirm} onOpenChange={setShowLiteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chuyển sang Lite Mode?</DialogTitle>
+            <DialogDescription>
+              Sau khi chuyển, các tính năng sau sẽ bị ẩn: QR Check-in, Phân
+              công trạm &amp; vật tư. Dữ liệu đã nhập sẽ được giữ lại. Bạn có
+              thể chuyển lại Full mode bất cứ lúc nào.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setFeatureMode("full");
+                setShowLiteConfirm(false);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={() => {
+                setFeatureMode("lite");
+                setShowLiteConfirm(false);
+              }}
+            >
+              Xác nhận chuyển Lite
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Save bar */}
       <div className="sticky bottom-0 flex justify-end gap-2 bg-white border-t py-3 -mx-4 px-4">

@@ -26,12 +26,14 @@ export function PersonalTab({
   signedPdfUrl,
   myStation,
   leaderSupply,
+  featureMode = "full",
 }: {
   token: string;
   status: StatusResponse;
   signedPdfUrl: string | null;
   myStation: MyStationView | null;
   leaderSupply: LeaderSupplyView | null;
+  featureMode?: "full" | "lite";
 }): React.ReactElement {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -222,13 +224,15 @@ export function PersonalTab({
         ) : null}
       </section>
 
-      {/* ---------- v1.6: Vị trí & nhiệm vụ (station + supply for crew) ---------- */}
-      <StationSection
-        token={token}
-        myStation={myStation}
-        leaderSupply={leaderSupply}
-        roleName={status.role_name}
-      />
+      {/* ---------- v1.6: Vị trí & nhiệm vụ — hidden in Lite mode (v1.9) ---------- */}
+      {featureMode !== "lite" ? (
+        <StationSection
+          token={token}
+          myStation={myStation}
+          leaderSupply={leaderSupply}
+          roleName={status.role_name}
+        />
+      ) : null}
 
       {/* ---------- QR code (second, for quick scan) ---------- */}
       {showQr ? (
@@ -389,137 +393,7 @@ export function PersonalTab({
         ) : null}
       </section>
 
-      {/* ---------- v2.0 Acceptance + payment (post-event) ---------- */}
-      <AcceptancePaymentSection token={token} status={status} />
-
     </div>
-  );
-}
-
-/**
- * v2.0 — Post-event acceptance & payment section. Rendered only when the
- * admin has actually moved this registration forward (status !=
- * not_ready). Four display states:
- *
- *   - pending_sign → CTA to /acceptance/{token} so the crew can sign
- *   - signed       → confirmation + optional payment status line
- *   - disputed     → red banner with reason, admin will re-send after fix
- *   - (paid) overrides everything with a green banner
- */
-function AcceptancePaymentSection({
-  token,
-  status,
-}: {
-  token: string;
-  status: StatusResponse;
-}): React.ReactElement | null {
-  const acc = status.acceptance_status ?? "not_ready";
-  const paid = status.payment_status === "paid";
-
-  // Admin hasn't sent the acceptance yet and payment isn't forced — hide
-  // the whole section to avoid confusing the crew with empty states.
-  if (acc === "not_ready" && !paid) return null;
-
-  const value = status.acceptance_value;
-  const formattedValue =
-    typeof value === "number" && value > 0
-      ? `${value.toLocaleString("vi-VN")} VNĐ`
-      : null;
-
-  return (
-    <section className="card space-y-3">
-      <h2 className="font-semibold">Nghiệm thu & Thanh toán</h2>
-
-      {paid ? (
-        <div
-          className="rounded-lg border p-3 text-sm"
-          style={{
-            borderColor: "#86efac",
-            background: "#dcfce7",
-            color: "#15803d",
-          }}
-        >
-          <p className="font-semibold">✅ Đã thanh toán</p>
-          <p className="mt-0.5 text-xs">
-            5BIB đã hoàn tất thanh toán. Cảm ơn bạn đã đồng hành!
-          </p>
-        </div>
-      ) : null}
-
-      {acc === "disputed" ? (
-        <div
-          className="rounded-lg border p-3 text-sm"
-          style={{
-            borderColor: "#fca5a5",
-            background: "#fee2e2",
-            color: "#b91c1c",
-          }}
-        >
-          <p className="font-semibold">⚠️ Biên bản đang tranh chấp</p>
-          {status.acceptance_notes ? (
-            <p className="mt-1 whitespace-pre-wrap text-xs">
-              <span className="font-semibold">Lý do:</span>{" "}
-              {status.acceptance_notes}
-            </p>
-          ) : null}
-          <p className="mt-1 text-xs">
-            Admin sẽ liên hệ để giải quyết. Biên bản mới sẽ được gửi lại sau
-            khi thống nhất.
-          </p>
-        </div>
-      ) : null}
-
-      {acc === "pending_sign" && !paid ? (
-        <div className="space-y-2">
-          <p className="text-sm">
-            Biên bản nghiệm thu của bạn đã sẵn sàng.
-            {formattedValue ? (
-              <>
-                {" "}Giá trị:{" "}
-                <span className="font-semibold">{formattedValue}</span>{" "}
-                <span className="text-xs text-[color:var(--color-muted)]">
-                  (đã bao gồm thuế TNCN)
-                </span>
-              </>
-            ) : null}
-          </p>
-          <a
-            href={`/acceptance/${token}`}
-            className="inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            Xem & ký biên bản →
-          </a>
-        </div>
-      ) : null}
-
-      {acc === "signed" && !paid ? (
-        <div className="space-y-2">
-          <p className="text-sm">
-            ✅ Đã ký biên bản nghiệm thu
-            {status.acceptance_signed_at
-              ? ` — ${new Date(status.acceptance_signed_at).toLocaleString("vi-VN")}`
-              : ""}
-            .
-          </p>
-          {formattedValue ? (
-            <p className="text-sm">
-              Giá trị nghiệm thu:{" "}
-              <span className="font-semibold">{formattedValue}</span>
-            </p>
-          ) : null}
-          <a
-            href={`/acceptance/${token}`}
-            className="inline-flex items-center gap-1 text-sm font-medium text-[color:var(--color-accent)] hover:underline"
-          >
-            Xem biên bản đã ký →
-          </a>
-          <p className="text-xs text-[color:var(--color-muted)]">
-            5BIB đang xử lý thanh toán. Bạn sẽ nhận email xác nhận khi hoàn
-            tất.
-          </p>
-        </div>
-      ) : null}
-    </section>
   );
 }
 

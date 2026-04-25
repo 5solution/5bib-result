@@ -10,22 +10,17 @@ import {
   Post,
   Put,
   Req,
-  Res,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { Throttle } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import {
   ApiBearerAuth,
-  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
+import { FeatureModeGuard, RequireFullMode } from './guards/feature-mode.guard';
 import {
   AllocationRowDto,
   CreateSupplementDto,
@@ -40,9 +35,7 @@ import {
   UpsertSupplyPlanFulfillDto,
   UpsertSupplyPlanRequestDto,
 } from './dto/supply.dto';
-import { ImportSupplyItemsResponseDto } from './dto/import-supply-items.dto';
 import { TeamSupplyItemService } from './services/team-supply-item.service';
-import { TeamSupplyItemImportService } from './services/team-supply-item-import.service';
 import { TeamSupplyPlanService } from './services/team-supply-plan.service';
 import { TeamSupplyAllocationService } from './services/team-supply-allocation.service';
 import { TeamSupplySupplementService } from './services/team-supply-supplement.service';
@@ -57,14 +50,15 @@ function identifyAdmin(req: AuthenticatedRequest): string {
  * Admin calls pass `actorRoleId=null` into services so the leader-gate
  * checks are skipped.
  */
+// v1.9: FeatureModeGuard blocks access in Lite mode events.
 @ApiTags('Team Management (supply)')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@RequireFullMode()
+@UseGuards(LogtoAdminGuard, FeatureModeGuard)
 @Controller('team-management')
 export class TeamSupplyController {
   constructor(
     private readonly items: TeamSupplyItemService,
-    private readonly itemsImport: TeamSupplyItemImportService,
     private readonly plans: TeamSupplyPlanService,
     private readonly allocations: TeamSupplyAllocationService,
     private readonly supplements: TeamSupplySupplementService,
@@ -93,71 +87,6 @@ export class TeamSupplyController {
   ): Promise<SupplyItemDto> {
     // Admin path — actorRoleId=null. DTO's created_by_role_id is honored.
     return this.items.createItem(eventId, dto, null);
-  }
-
-  // ---- items: bulk import (v1.8.1) ----
-
-  @Get('events/:eventId/supply-items/import/template')
-  @ApiOperation({
-    summary:
-      'Download XLSX template for bulk supply items import. Columns: item_name, unit, sort_order, owner_role_name (optional, maps to created_by_role_id).',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Binary XLSX file (application/vnd.openxmlformats-...).',
-  })
-  async downloadSupplyItemsTemplate(
-    @Param('eventId', ParseIntPipe) eventId: number,
-    @Res() res: Response,
-  ): Promise<void> {
-    const buf = await this.itemsImport.generateTemplateXlsx(eventId);
-    res.set({
-      'Content-Type':
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="supply-items-import-template-event-${eventId}.xlsx"`,
-      'Content-Length': String(buf.length),
-    });
-    res.send(buf);
-  }
-
-  @Post('events/:eventId/supply-items/import')
-  @ApiOperation({
-    summary:
-      'Single-step bulk import of supply items from XLSX/CSV. Inserts valid rows immediately; duplicates (same item_name in-file or in-DB) are skipped, rows with validation errors are reported.',
-  })
-  @ApiConsumes('multipart/form-data')
-  @ApiResponse({ status: 201, type: ImportSupplyItemsResponseDto })
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { fileSize: 2 * 1024 * 1024 },
-      fileFilter: (_req, file, cb) => {
-        const allowed = new Set([
-          'text/csv',
-          'application/csv',
-          'text/plain',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'application/octet-stream',
-        ]);
-        const name = (file.originalname ?? '').toLowerCase();
-        const extOk = name.endsWith('.csv') || name.endsWith('.xlsx');
-        if (!extOk || !allowed.has(file.mimetype ?? '')) {
-          return cb(
-            new BadRequestException('Chỉ hỗ trợ .csv và .xlsx'),
-            false,
-          );
-        }
-        cb(null, true);
-      },
-    }),
-  )
-  importSupplyItems(
-    @Param('eventId', ParseIntPipe) eventId: number,
-    @UploadedFile() file: Express.Multer.File,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<ImportSupplyItemsResponseDto> {
-    return this.itemsImport.importItems(eventId, file, identifyAdmin(req));
   }
 
   @Patch('supply-items/:id')

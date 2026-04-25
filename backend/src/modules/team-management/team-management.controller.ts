@@ -15,11 +15,13 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiConsumes,
   ApiOperation,
   ApiResponse,
@@ -34,7 +36,6 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateRegistrationDto } from './dto/update-registration.dto';
-import { BackfillBenBDto } from './dto/backfill-ben-b.dto';
 import { RejectRegistrationDto } from './dto/reject-registration.dto';
 import { RejectChangesDto } from './dto/reject-changes.dto';
 import { CancelRegistrationDto } from './dto/cancel-registration.dto';
@@ -60,6 +61,12 @@ import { AdminManualRegisterDto } from './dto/manual-register.dto';
 import { RegisterResponseDto } from './dto/response.dto';
 import { DashboardQueryDto, DashboardResponseDto } from './dto/dashboard.dto';
 import { ShirtAggregateDto, UpsertShirtStockDto } from './dto/shirt-stock.dto';
+import {
+  ConfirmNghiemThuDto,
+  EventFeaturesConfigDto,
+  NghiemThuResponseDto,
+  UpdateEventFeaturesDto,
+} from './dto/event-features.dto';
 import { VolShirtStock } from './entities/vol-shirt-stock.entity';
 import {
   TeamEventService,
@@ -143,6 +150,41 @@ export class TeamManagementController {
   ): Promise<{ success: true }> {
     await this.events.deleteEvent(id);
     return { success: true };
+  }
+
+  // ── v1.9 Feature mode config ──────────────────────────────────────────────
+
+  @ApiOperation({ summary: 'Get event feature config (mode + nghiem_thu)' })
+  @ApiResponse({ status: 200, type: EventFeaturesConfigDto })
+  @Get('events/:id/config')
+  getEventConfig(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<EventFeaturesConfigDto> {
+    return this.registrations.getEventFeaturesConfig(id);
+  }
+
+  @ApiOperation({ summary: 'Update event feature mode + nghiem_thu toggle' })
+  @ApiBody({ type: UpdateEventFeaturesDto })
+  @ApiResponse({ status: 200, type: EventFeaturesConfigDto })
+  @ApiResponse({ status: 409, description: 'Cannot switch to Lite — conflicting registrations' })
+  @Patch('events/:id/features')
+  updateEventFeatures(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(ValidationPipe) dto: UpdateEventFeaturesDto,
+  ): Promise<EventFeaturesConfigDto> {
+    return this.registrations.updateEventFeatures(id, dto);
+  }
+
+  @ApiOperation({ summary: 'Admin confirms nghiem thu (formal completion acceptance)' })
+  @ApiBody({ type: ConfirmNghiemThuDto })
+  @ApiResponse({ status: 200, type: NghiemThuResponseDto })
+  @Patch('registrations/:id/nghiem-thu')
+  confirmNghiemThu(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ConfirmNghiemThuDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<NghiemThuResponseDto> {
+    return this.registrations.confirmNghiemThu(id, identifyAdmin(req), dto.note);
   }
 
   // -------- Roles --------
@@ -255,6 +297,16 @@ export class TeamManagementController {
     return this.contracts.sendContractsForRole(roleId, dto.dry_run ?? false);
   }
 
+  @Post('registrations/:id/send-contract')
+  @ApiOperation({ summary: 'Send (or resend) contract magic link to a specific registration' })
+  @ApiResponse({ status: 201, description: 'Contract sent successfully' })
+  async sendContractForRegistration(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<{ success: boolean }> {
+    await this.contracts.sendContractForRegistrationId(id);
+    return { success: true };
+  }
+
   // -------- Registrations (admin view) --------
 
   @Get('events/:id/registrations')
@@ -285,20 +337,6 @@ export class TeamManagementController {
     @Body() dto: UpdateRegistrationDto,
   ): Promise<VolRegistration> {
     return this.registrations.updateRegistration(id, dto);
-  }
-
-  @Patch('registrations/:id/backfill-ben-b')
-  @ApiOperation({
-    summary:
-      'Backfill Bên B fields (birth_date, CCCD issue date/place, bank, address) required for contract/acceptance rendering. All fields optional — only explicit keys are updated.',
-  })
-  @ApiResponse({ status: 200, type: VolRegistration })
-  backfillBenB(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: BackfillBenBDto,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<VolRegistration> {
-    return this.registrations.backfillBenB(id, dto, identifyAdmin(req));
   }
 
   // ---- v1.4 state-machine endpoints ----

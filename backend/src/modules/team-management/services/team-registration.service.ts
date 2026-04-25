@@ -6,6 +6,11 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import type {
+  EventFeaturesConfigDto,
+  UpdateEventFeaturesDto,
+  NghiemThuResponseDto,
+} from '../dto/event-features.dto';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository, QueryFailedError } from 'typeorm';
 import * as crypto from 'crypto';
@@ -1854,5 +1859,122 @@ export class TeamRegistrationService {
       roleName: full.role?.role_name ?? '',
       reason,
     });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // v1.9 — Feature mode config
+  // ──────────────────────────────────────────────────────────────────────
+
+  async getEventFeaturesConfig(eventId: number): Promise<EventFeaturesConfigDto> {
+    const cached = await this.cache.getEventConfig(eventId);
+    if (cached) {
+      return {
+        event_id: eventId,
+        feature_mode: cached.feature_mode as 'full' | 'lite',
+        feature_nghiem_thu: cached.feature_nghiem_thu,
+      };
+    }
+    const event = await this.eventRepo.findOne({
+      where: { id: eventId },
+      select: ['id', 'feature_mode', 'feature_nghiem_thu'],
+    });
+    if (!event) throw new NotFoundException(`Event ${eventId} not found`);
+    const config = { feature_mode: event.feature_mode, feature_nghiem_thu: event.feature_nghiem_thu };
+    await this.cache.cacheEventConfig(eventId, config);
+    return { event_id: eventId, ...config };
+  }
+
+  async getEventFeaturesConfigByToken(token: string): Promise<EventFeaturesConfigDto> {
+    const reg = await this.regRepo.findOne({
+      where: { magic_token: token },
+      select: ['event_id'],
+    });
+    if (!reg) throw new NotFoundException('Token not found');
+    return this.getEventFeaturesConfig(reg.event_id);
+  }
+
+  async updateEventFeatures(
+    eventId: number,
+    dto: UpdateEventFeaturesDto,
+  ): Promise<EventFeaturesConfigDto> {
+    const event = await this.eventRepo.findOne({ where: { id: eventId } });
+    if (!event) throw new NotFoundException(`Event ${eventId} not found`);
+
+    // BR-FT-03: Full → Lite only if no qr_sent or checked_in records exist.
+    if (dto.feature_mode === 'lite' && event.feature_mode === 'full') {
+      const [qrSentCount, checkedInCount] = await Promise.all([
+        this.regRepo.count({ where: { event_id: eventId, status: 'qr_sent' } }),
+        this.regRepo.count({ where: { event_id: eventId, status: 'checked_in' } }),
+      ]);
+      if (qrSentCount > 0 || checkedInCount > 0) {
+        throw new ConflictException({
+          message: 'Có nhân sự đang ở trạng thái không tương thích với Lite mode',
+          details: { qr_sent_count: qrSentCount, checked_in_count: checkedInCount },
+        });
+      }
+    }
+
+    await this.eventRepo.update(eventId, {
+      feature_mode: dto.feature_mode,
+      feature_nghiem_thu: dto.feature_nghiem_thu,
+    });
+    await this.cache.invalidateEventConfig(eventId);
+
+    this.logger.log(
+      `EVENT_FEATURES_UPDATED eventId=${eventId} mode=${dto.feature_mode} nghiem_thu=${dto.feature_nghiem_thu}`,
+    );
+    return {
+      event_id: eventId,
+      feature_mode: dto.feature_mode,
+      feature_nghiem_thu: dto.feature_nghiem_thu,
+    };
+  }
+
+  async confirmNghiemThu(
+    regId: number,
+    adminEmail: string,
+    note?: string,
+  ): Promise<NghiemThuResponseDto> {
+    const reg = await this.regRepo.findOne({
+      where: { id: regId },
+      relations: { event: true },
+    });
+    if (!reg) throw new NotFoundException(`Registration ${regId} not found`);
+    if (reg.status === 'completed') {
+      throw new ConflictException('Registration đã ở trạng thái completed');
+    }
+
+    const event = reg.event!;
+    if (!event.feature_nghiem_thu) {
+      throw new BadRequestException('Tính năng nghiệm thu chưa được bật cho sự kiện này');
+    }
+
+    const requiredStatus = event.feature_mode === 'full' ? 'checked_in' : 'contract_signed';
+    if (reg.status !== requiredStatus) {
+      throw new BadRequestException(
+        `Nghiệm thu ${event.feature_mode === 'full' ? 'Full' : 'Lite'} mode yêu cầu status "${requiredStatus}", hiện tại: "${reg.status}"`,
+      );
+    }
+
+    const now = new Date();
+    const stamp = this.timestamp();
+    const newNotes = note
+      ? [reg.notes, `[${stamp}] [Nghiệm thu] ${note.trim()}`]
+          .filter((x): x is string => !!x)
+          .join('\n')
+      : reg.notes;
+
+    await this.regRepo.update(regId, {
+      status: 'completed',
+      completion_confirmed_at: now,
+      completion_confirmed_by: 'admin',
+      notes: newNotes,
+    });
+
+    await this.cache.invalidateEvent(reg.event_id, [reg.role_id]);
+    this.logger.log(
+      `NGHIEM_THU_CONFIRMED regId=${regId} by=${adminEmail} mode=${event.feature_mode}`,
+    );
+    return { id: regId, status: 'completed', completed_at: now.toISOString() };
   }
 }
