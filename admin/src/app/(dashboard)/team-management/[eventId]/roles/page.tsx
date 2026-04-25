@@ -130,12 +130,26 @@ export default function RolesPage(): React.ReactElement {
     if (!token) return;
     try {
       const preview = await sendContracts(token, roleId, true);
+      // No eligible registrations (all already sent or no approved)
+      if (preview.queued === 0) {
+        toast.info(
+          `Không có ai cần gửi. Đã gửi trước đó: ${preview.already_sent} người.` +
+          ` Chỉ gửi được cho registrations ở trạng thái "Đã duyệt".`,
+        );
+        return;
+      }
       const ok = confirm(
-        `Sẽ gửi HĐ cho ${preview.queued} người (đã gửi: ${preview.already_sent}, skip: ${preview.skipped}). Xác nhận?`,
+        `Sẽ gửi HĐ cho ${preview.queued} người (đã gửi trước: ${preview.already_sent}, bỏ qua: ${preview.skipped}). Xác nhận?`,
       );
       if (!ok) return;
       const result = await sendContracts(token, roleId, false);
-      toast.success(`Đã gửi ${result.queued} hợp đồng`);
+      if (result.skipped > 0) {
+        toast.warning(
+          `Đã gửi ${result.queued} hợp đồng. Lỗi ${result.skipped}: ${result.skip_reasons?.slice(0, 2).join("; ")}`,
+        );
+      } else {
+        toast.success(`Đã gửi ${result.queued} hợp đồng thành công`);
+      }
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -529,15 +543,14 @@ function EditRoleDialog({
               <div>
                 <Label>Đơn giá VNĐ/ngày</Label>
                 <Input
-                  type="number"
-                  min={0}
-                  value={form.daily_rate}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      daily_rate: Number(e.target.value) || 0,
-                    })
-                  }
+                  type="text"
+                  inputMode="numeric"
+                  value={form.daily_rate === 0 ? "" : form.daily_rate.toLocaleString("vi-VN")}
+                  placeholder="0"
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/\./g, "").replace(/[^0-9]/g, "");
+                    setForm({ ...form, daily_rate: Number(raw) || 0 });
+                  }}
                 />
               </div>
               <div className="flex items-center justify-between rounded-lg border px-3 py-2">
@@ -904,12 +917,14 @@ function CreateRoleDialog({
             <div>
               <Label>Đơn giá VNĐ/ngày (0 = tình nguyện)</Label>
               <Input
-                type="number"
-                min={0}
-                value={form.daily_rate}
-                onChange={(e) =>
-                  setForm({ ...form, daily_rate: Number(e.target.value) || 0 })
-                }
+                type="text"
+                inputMode="numeric"
+                value={form.daily_rate === 0 ? "" : form.daily_rate.toLocaleString("vi-VN")}
+                placeholder="0"
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\./g, "").replace(/[^0-9]/g, "");
+                  setForm({ ...form, daily_rate: Number(raw) || 0 });
+                }}
               />
             </div>
             <div className="flex items-center justify-between rounded-lg border px-3 py-2">
