@@ -19,7 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import {
   CheckinLookupResponseDto,
   CheckinResponseDto,
@@ -28,17 +28,14 @@ import {
 } from './dto/checkin.dto';
 import { TeamCheckinService } from './services/team-checkin.service';
 
-interface JwtRequest extends Request {
-  user?: { username?: string; email?: string; sub?: string };
-}
 
-function identifyAdmin(req: JwtRequest): string {
+function identifyAdmin(req: AuthenticatedRequest): string {
   return req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
 }
 
 @ApiTags('Team Management — Check-in (staff)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management/checkin')
 export class TeamCheckinController {
   constructor(private readonly checkin: TeamCheckinService) {}
@@ -62,7 +59,7 @@ export class TeamCheckinController {
   lookup(
     @Query('q') q: string,
     @Query('event_id') eventIdRaw: string,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<CheckinLookupResponseDto> {
     const eventId = Number(eventIdRaw);
     if (!Number.isFinite(eventId) || eventId <= 0) {

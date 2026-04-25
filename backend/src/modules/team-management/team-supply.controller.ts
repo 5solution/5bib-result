@@ -25,7 +25,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import {
   AllocationRowDto,
   CreateSupplementDto,
@@ -47,22 +47,19 @@ import { TeamSupplyPlanService } from './services/team-supply-plan.service';
 import { TeamSupplyAllocationService } from './services/team-supply-allocation.service';
 import { TeamSupplySupplementService } from './services/team-supply-supplement.service';
 
-interface JwtRequest extends Request {
-  user?: { username?: string; email?: string; sub?: string };
-}
 
-function identifyAdmin(req: JwtRequest): string {
+function identifyAdmin(req: AuthenticatedRequest): string {
   return req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
 }
 
 /**
- * v1.6 Supply admin endpoints — all guarded by JwtAuthGuard.
+ * v1.6 Supply admin endpoints — all guarded by LogtoAdminGuard.
  * Admin calls pass `actorRoleId=null` into services so the leader-gate
  * checks are skipped.
  */
 @ApiTags('Team Management (supply)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management')
 export class TeamSupplyController {
   constructor(
@@ -158,7 +155,7 @@ export class TeamSupplyController {
   importSupplyItems(
     @Param('eventId', ParseIntPipe) eventId: number,
     @UploadedFile() file: Express.Multer.File,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<ImportSupplyItemsResponseDto> {
     return this.itemsImport.importItems(eventId, file, identifyAdmin(req));
   }
@@ -271,7 +268,7 @@ export class TeamSupplyController {
   unlockAllocation(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UnlockAllocationDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<AllocationRowDto> {
     return this.allocations.unlockAllocation(id, identifyAdmin(req), dto);
   }

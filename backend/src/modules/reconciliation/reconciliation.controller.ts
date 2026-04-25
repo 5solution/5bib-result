@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { LogtoAdminGuard } from '../logto-auth';
 import { ReconciliationService } from './reconciliation.service';
 import { ReconciliationQueryService } from './services/reconciliation-query.service';
 import { ReconciliationPreflightService } from './services/reconciliation-preflight.service';
@@ -45,7 +45,7 @@ function buildRecFilename(doc: any, ext: string): string {
 
 @ApiTags('reconciliations')
 @Controller('reconciliations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(LogtoAdminGuard)
 export class ReconciliationController {
   constructor(
     private readonly reconciliationService: ReconciliationService,
@@ -60,7 +60,12 @@ export class ReconciliationController {
   @ApiOperation({ summary: 'Pre-flight check for a single merchant + period' })
   @ApiResponse({ status: 200, description: 'Pre-flight result with warnings' })
   @ApiQuery({ name: 'merchant_id', required: true, type: Number })
-  @ApiQuery({ name: 'period', required: true, type: String, description: 'YYYY-MM' })
+  @ApiQuery({
+    name: 'period',
+    required: true,
+    type: String,
+    description: 'YYYY-MM',
+  })
   @ApiQuery({ name: 'race_id', required: false, type: Number })
   preflight(
     @Query('merchant_id') merchant_id: string,
@@ -76,7 +81,10 @@ export class ReconciliationController {
 
   @Post('preflight/batch')
   @ApiOperation({ summary: 'Batch pre-flight check for multiple merchants' })
-  @ApiResponse({ status: 200, description: 'Pre-flight results for all merchants' })
+  @ApiResponse({
+    status: 200,
+    description: 'Pre-flight results for all merchants',
+  })
   async preflightBatch(
     @Body() body: { period: string; merchant_ids: number[] | 'all' },
   ) {
@@ -93,21 +101,27 @@ export class ReconciliationController {
   }
 
   @Post('batch')
-  @ApiOperation({ summary: 'Batch create reconciliations for multiple merchants' })
+  @ApiOperation({
+    summary: 'Batch create reconciliations for multiple merchants',
+  })
   @ApiResponse({ status: 201 })
   batchCreate(@Body() dto: BatchCreateReconciliationDto) {
     return this.reconciliationService.batchCreate(dto);
   }
 
   @Post('preview')
-  @ApiOperation({ summary: 'Preview reconciliation data from MySQL without saving' })
+  @ApiOperation({
+    summary: 'Preview reconciliation data from MySQL without saving',
+  })
   @ApiResponse({ status: 200, description: 'Preview data returned' })
   preview(@Body() dto: PreviewReconciliationDto) {
     return this.reconciliationService.preview(dto);
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new reconciliation, generate XLSX/DOCX, upload to S3' })
+  @ApiOperation({
+    summary: 'Create a new reconciliation, generate XLSX/DOCX, upload to S3',
+  })
   @ApiResponse({ status: 201, description: 'Reconciliation created' })
   create(@Body() dto: CreateReconciliationDto, @Request() req: any) {
     dto.created_by = req.user?.userId ?? req.user?.sub ?? null;
@@ -180,14 +194,18 @@ export class ReconciliationController {
   // ── Export ZIP endpoints ──────────────────────────────────────────────
 
   @Post('export/zip/by-ids')
-  @ApiOperation({ summary: 'Trigger async ZIP export for selected reconciliation IDs' })
+  @ApiOperation({
+    summary: 'Trigger async ZIP export for selected reconciliation IDs',
+  })
   @ApiResponse({ status: 201, description: 'Export job created' })
   exportByIds(@Body() dto: ExportZipByIdsDto) {
     return this.batchExportService.triggerByIds(dto.ids, dto.label);
   }
 
   @Post('export/zip/by-period')
-  @ApiOperation({ summary: 'Trigger async ZIP export for all reconciliations in a period' })
+  @ApiOperation({
+    summary: 'Trigger async ZIP export for all reconciliations in a period',
+  })
   @ApiResponse({ status: 201, description: 'Export job created' })
   exportByPeriod(@Body() dto: ExportZipByPeriodDto) {
     return this.batchExportService.triggerByPeriod(
@@ -208,17 +226,23 @@ export class ReconciliationController {
 
   @Get('export-jobs/:jobId/download')
   @ApiOperation({ summary: 'Download ZIP file' })
-  @ApiResponse({ status: 200, description: 'ZIP file stream or redirect to S3' })
+  @ApiResponse({
+    status: 200,
+    description: 'ZIP file stream or redirect to S3',
+  })
   async downloadExportJob(@Param('jobId') jobId: string, @Res() res: Response) {
     const job = await this.batchExportService.getJobStatus(jobId);
     if (!job) throw new NotFoundException(`Export job ${jobId} not found`);
     if (job.status !== 'done' || !job.zipUrl) {
-      return res.status(400).json({ message: 'Export not ready yet', status: job.status });
+      return res
+        .status(400)
+        .json({ message: 'Export not ready yet', status: job.status });
     }
 
     if (job.isLocal) {
       const buf = await this.batchExportService.getLocalZipBuffer(jobId);
-      if (!buf) return res.status(404).json({ message: 'Local ZIP file not found' });
+      if (!buf)
+        return res.status(404).json({ message: 'Local ZIP file not found' });
       res.set({
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="batch_doi_soat.zip"`,
@@ -231,7 +255,9 @@ export class ReconciliationController {
     // so the browser always downloads rather than opening the file.
     const s3Res = await fetch(job.zipUrl);
     if (!s3Res.ok) {
-      return res.status(502).json({ message: `Failed to fetch ZIP from S3: HTTP ${s3Res.status}` });
+      return res
+        .status(502)
+        .json({ message: `Failed to fetch ZIP from S3: HTTP ${s3Res.status}` });
     }
     const buf = Buffer.from(await s3Res.arrayBuffer());
     res.set({

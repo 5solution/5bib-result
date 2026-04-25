@@ -8,12 +8,16 @@ import { env } from 'src/config';
 import { RacesModule } from './races/races.module';
 import { RaceResultModule } from './race-result/race-result.module';
 import { AdminModule } from './admin/admin.module';
-import { AuthModule } from './auth/auth.module';
+import { LogtoAuthModule } from './logto-auth';
 import { UploadModule } from './upload/upload.module';
 import { SponsorsModule } from './sponsors/sponsors.module';
 import { NotificationModule } from './notification/notification.module';
 import { HomepageModule } from './homepage/homepage.module';
 import { SearchModule } from './search/search.module';
+import { CertificatesModule } from './certificates/certificates.module';
+import { UsersModule } from './users/users.module';
+import { AthleteStarsModule } from './athlete-stars/athlete-stars.module';
+import { TimingModule } from './timing/timing.module';
 import { MerchantModule } from './merchant/merchant.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -110,12 +114,16 @@ const volunteerDbModules = env.volunteerDb.host
     RacesModule,
     RaceResultModule,
     AdminModule,
-    AuthModule,
+    LogtoAuthModule,
     UploadModule,
     SponsorsModule,
     NotificationModule,
     HomepageModule,
     SearchModule,
+    CertificatesModule,
+    UsersModule,
+    AthleteStarsModule,
+    TimingModule,
   ],
 })
 export class AppModule {}

@@ -17,8 +17,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import { VolAcceptanceTemplate } from './entities/vol-acceptance-template.entity';
 import {
   CreateAcceptanceTemplateDto,
@@ -26,9 +25,6 @@ import {
 } from './dto/acceptance-template.dto';
 import { TeamAcceptanceTemplateService } from './services/team-acceptance-template.service';
 
-interface JwtRequest extends Request {
-  user?: { username?: string; email?: string; sub?: string };
-}
 
 /**
  * Admin CRUD for biên bản nghiệm thu templates. Mirrors the shape of
@@ -43,7 +39,7 @@ interface JwtRequest extends Request {
  */
 @ApiTags('Team Management — Acceptance Templates (admin)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management/acceptance-templates')
 export class TeamAcceptanceTemplateController {
   constructor(
@@ -85,7 +81,7 @@ export class TeamAcceptanceTemplateController {
   @ApiResponse({ status: 201, type: VolAcceptanceTemplate })
   create(
     @Body() dto: CreateAcceptanceTemplateDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<VolAcceptanceTemplate> {
     const createdBy =
       req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';

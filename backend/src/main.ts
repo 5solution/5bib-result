@@ -1,3 +1,4 @@
+// build: 2026-04-22
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -29,6 +30,15 @@ const setMiddleware = (app: NestExpressApplication) => {
       'X-Requested-With',
       'Wallet-Address',
       'wallet-address',
+    ],
+    // Allow browsers to read custom response headers used by the Result Image
+    // Creator (template-fallback signal + cache provenance + retry hint).
+    exposedHeaders: [
+      'X-Template-Fallback',
+      'X-Template-Fallback-Reason',
+      'X-Template-Actual',
+      'X-From-Cache',
+      'Retry-After',
     ],
   });
 

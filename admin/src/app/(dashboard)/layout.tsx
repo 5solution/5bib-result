@@ -25,6 +25,9 @@ import {
   ReceiptText,
   BarChart2,
   Users,
+  Award,
+  Timer,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
@@ -36,9 +39,12 @@ const navItems = [
   { href: "/reconciliations", label: "Đối soát", icon: ReceiptText },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/sponsors", label: "Nhà tài trợ", icon: Handshake },
+  { href: "/certificates", label: "Certificates", icon: Award },
   { href: "/team-management", label: "Quản lý nhân sự", icon: Users },
   { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
   { href: "/claims", label: "Khiếu nại", icon: FileWarning },
+  { href: "/timing-leads", label: "Timing Leads", icon: Timer },
+  { href: "/result-image-stats", label: "Ảnh kết quả", icon: ImageIcon },
 ];
 
 function NavLink({
@@ -95,13 +101,13 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, logout } = useAuth();
+  const { isAuthenticated, isLoading, logout, userRole } = useAuth();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace("/login");
+      router.replace("/sign-in");
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -114,12 +120,38 @@ export default function DashboardLayout({
   }
 
   if (!isAuthenticated) {
-    return null;
+    // Don't flash a blank screen while the redirect fires — keep the spinner visible.
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Đang tải...</div>
+      </div>
+    );
+  }
+
+  if (userRole !== "admin") {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="max-w-md text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto">
+            <LogOut className="size-7 text-red-600" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">
+            Không có quyền truy cập
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Tài khoản của bạn chưa được cấp role admin. Vui lòng liên hệ
+            superadmin để cấp quyền, hoặc đăng nhập tài khoản khác.
+          </p>
+          <Button variant="default" onClick={() => logout()}>
+            Đăng xuất
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   function handleLogout() {
     logout();
-    router.replace("/login");
   }
 
   return (

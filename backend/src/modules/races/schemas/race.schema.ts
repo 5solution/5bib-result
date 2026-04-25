@@ -95,6 +95,14 @@ export class Race {
   @Prop({ default: false }) enable5pix: boolean;
   @Prop() pixEventUrl: string; // 5Pix integration URL (mock)
 
+  // Privacy toggles
+  /** Ẩn toàn bộ biểu đồ thống kê (completion chart, time distribution, country ranking) */
+  @Prop({ default: false }) enableHideStats: boolean;
+  /** Giới hạn danh sách VĐV: ẩn absolute counts, không phân trang khi không search */
+  @Prop({ default: false }) enablePrivateList: boolean;
+  /** Số VĐV hiển thị tối đa khi không có search query (chỉ dùng khi enablePrivateList=true) */
+  @Prop({ default: 20 }) privateListLimit: number;
+
   // Cache config
   @Prop({ default: 60 }) cacheTtlSeconds: number;
 

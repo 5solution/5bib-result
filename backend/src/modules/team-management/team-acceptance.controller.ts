@@ -14,8 +14,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import {
   DisputeAcceptanceDto,
   SendAcceptanceBatchDto,
@@ -24,11 +23,7 @@ import {
 } from './dto/acceptance.dto';
 import { TeamAcceptanceService } from './services/team-acceptance.service';
 
-interface JwtRequest extends Request {
-  user?: { username?: string; email?: string; sub?: string };
-}
-
-function actorOf(req: JwtRequest): string {
+function actorOf(req: AuthenticatedRequest): string {
   return req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
 }
 
@@ -37,12 +32,12 @@ function actorOf(req: JwtRequest): string {
  * (view by token, sign, presigned PDF URL) live on TeamRegistrationController
  * under the /public prefix — same pattern as contract signing.
  *
- * All three routes here are admin-gated via JwtAuthGuard. Guard applies at
+ * All three routes here are admin-gated via LogtoAdminGuard. Guard applies at
  * the class level; every handler inherits it.
  */
 @ApiTags('Team Management — Acceptance (admin)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management')
 export class TeamAcceptanceController {
   constructor(private readonly acceptance: TeamAcceptanceService) {}
@@ -56,7 +51,7 @@ export class TeamAcceptanceController {
   sendBatch(
     @Param('id', ParseIntPipe) eventId: number,
     @Body() dto: SendAcceptanceBatchDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<SendAcceptanceBatchResponseDto> {
     return this.acceptance.sendAcceptanceBatch(eventId, dto, actorOf(req));
   }
@@ -76,7 +71,7 @@ export class TeamAcceptanceController {
   async sendOne(
     @Param('id', ParseIntPipe) regId: number,
     @Body() dto: SendAcceptanceSingleDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<{ success: true }> {
     await this.acceptance.sendAcceptanceForRegistration(
       regId,
@@ -102,7 +97,7 @@ export class TeamAcceptanceController {
   async dispute(
     @Param('id', ParseIntPipe) regId: number,
     @Body() dto: DisputeAcceptanceDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<{ success: true }> {
     await this.acceptance.markDisputed(regId, dto.reason, actorOf(req));
     return { success: true };

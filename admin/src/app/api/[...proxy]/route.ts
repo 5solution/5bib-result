@@ -1,24 +1,35 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { getAccessToken } from "@logto/next/server-actions";
+import { logtoConfig, LOGTO_API_RESOURCE } from "@/lib/logto";
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081';
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8081";
 
+/**
+ * Admin API proxy — forwards /api/* to backend with a Logto access token
+ * fetched server-side from the session cookie. Clients never touch tokens.
+ */
 async function proxyRequest(req: NextRequest) {
   const url = new URL(req.url);
   const targetPath = url.pathname;
   const targetUrl = `${BACKEND_URL}${targetPath}${url.search}`;
 
   const headers = new Headers();
-  const auth = req.headers.get('authorization');
-  if (auth) headers.set('Authorization', auth);
 
-  // Forward content-type as-is (important for multipart/form-data boundary)
-  const contentType = req.headers.get('content-type');
-  if (contentType) headers.set('Content-Type', contentType);
+  // Inject Logto access token server-side.
+  try {
+    const accessToken = await getAccessToken(logtoConfig, LOGTO_API_RESOURCE);
+    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  } catch {
+    // Unauthenticated or token refresh failed — forward anyway; backend
+    // endpoints gated by LogtoAdminGuard will return 401/403.
+  }
+
+  const contentType = req.headers.get("content-type");
+  if (contentType) headers.set("Content-Type", contentType);
 
   const init: RequestInit = { method: req.method, headers };
 
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    // Use arrayBuffer to preserve binary data (files, images)
+  if (req.method !== "GET" && req.method !== "HEAD") {
     try {
       init.body = Buffer.from(await req.arrayBuffer());
     } catch {}
@@ -28,10 +39,10 @@ async function proxyRequest(req: NextRequest) {
   const data = await res.arrayBuffer();
 
   const responseHeaders: Record<string, string> = {
-    'Content-Type': res.headers.get('Content-Type') || 'application/json',
+    "Content-Type": res.headers.get("Content-Type") || "application/json",
   };
-  const disposition = res.headers.get('Content-Disposition');
-  if (disposition) responseHeaders['Content-Disposition'] = disposition;
+  const disposition = res.headers.get("Content-Disposition");
+  if (disposition) responseHeaders["Content-Disposition"] = disposition;
 
   return new NextResponse(data, {
     status: res.status,

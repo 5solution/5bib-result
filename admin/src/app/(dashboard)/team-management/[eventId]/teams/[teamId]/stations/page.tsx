@@ -91,7 +91,7 @@ export default function TeamStationsPage(): React.ReactElement {
   }, [token, teamId]);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
+    if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {

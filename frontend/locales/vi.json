@@ -133,7 +133,16 @@
     "firstPage": "Trang đầu",
     "prevPage": "Trang trước",
     "nextPage": "Trang sau",
-    "lastPage": "Trang cuối"
+    "lastPage": "Trang cuối",
+    "countryRanking": {
+      "title": "Xếp hạng theo quốc gia",
+      "country": "Quốc gia",
+      "finishers": "Hoàn thành",
+      "bestTime": "Thời gian tốt nhất",
+      "empty": "Chưa có dữ liệu quốc gia",
+      "showAll": "Xem tất cả ({{count}})",
+      "showLess": "Thu gọn"
+    }
   },
   "athlete": {
     "notFound": "Không tìm thấy vận động viên",
@@ -143,6 +152,17 @@
     "resultImage": "Ảnh KQ",
     "copyLink": "Copy link",
     "copied": "Đã sao chép",
+    "fab": {
+      "ranking": "BXH",
+      "share": "Chia sẻ",
+      "certificate": "Chứng chỉ"
+    },
+    "paceStrip": {
+      "avgPace": "Pace TB",
+      "distance": "Cự ly",
+      "category": "Nhóm tuổi",
+      "raceDate": "Ngày đua"
+    },
     "upcomingTitle": "Giải chưa diễn ra",
     "upcomingSubtitle": "Kết quả sẽ được cập nhật khi giải bắt đầu",
     "chipTime": "Chip Time",
@@ -173,9 +193,77 @@
     "loadingCertificate": "Đang tải chứng nhận...",
     "certificateSuccess": "Tải chứng nhận thành công!",
     "certificateNotReady": "Chứng nhận chưa sẵn sàng. Vui lòng thử lại sau.",
+    "certificateV2": "Tải Certificate",
+    "shareCardV2": "Tải Share Card",
+    "downloadingV2": "Đang tải...",
+    "downloadV2Success": "Tải thành công!",
+    "downloadV2Failed": "Tải thất bại",
     "start": "Xuất phát",
     "finish": "Về đích",
-    "backToRanking": "Quay lại bảng xếp hạng"
+    "backToRanking": "Quay lại bảng xếp hạng",
+    "rankProgression": {
+      "title": "Diễn biến thứ hạng",
+      "rank": "Hạng",
+      "trend": {
+        "up": "↑ Leo hạng",
+        "down": "↓ Tụt hạng",
+        "flat": "— Giữ hạng"
+      }
+    },
+    "paceZone": {
+      "title": "Phân tích Pace theo chặng",
+      "avg": "Pace TB",
+      "axisHint": "Cột càng cao = pace càng chậm. Đường đứt xanh = pace trung bình.",
+      "vsAvgFaster": "nhanh hơn TB",
+      "vsAvgSlower": "chậm hơn TB",
+      "vsAvgEqual": "ngang TB",
+      "zones": {
+        "fast": "Nhanh",
+        "steady": "Ổn định",
+        "slow": "Chậm",
+        "alert": "Sụt tốc"
+      },
+      "strategy": {
+        "even": "Even Pacer",
+        "negative": "Negative Split",
+        "positive": "Positive Split",
+        "erratic": "Dao động"
+      }
+    },
+    "countryRank": {
+      "label": "Đồng hương"
+    },
+    "percentile": {
+      "label": "Top",
+      "tier": {
+        "top10": "Xuất sắc",
+        "top25": "Vượt trội",
+        "top50": "Tốt",
+        "midpack": "Trung bình"
+      },
+      "panel": {
+        "title": "Xếp hạng thành tích"
+      },
+      "summary": "Bạn về đích nhanh hơn {{count}}/{{total}} VĐV hoàn thành — top {{pct}}%.",
+      "summaryPrivate": "Bạn nằm trong top {{pct}}% VĐV hoàn thành cự ly.",
+      "compare": {
+        "you": "Bạn",
+        "avg": "Trung bình",
+        "fastest": "Nhanh nhất"
+      }
+    },
+    "statusBadge": {
+      "lastCheckpoint": "Điểm cuối đã qua",
+      "noCheckpoint": "Chưa có dữ liệu checkpoint",
+      "status": {
+        "label": "Trạng thái",
+        "finisher": "HOÀN THÀNH",
+        "dnf": "DNF",
+        "dsq": "BỊ LOẠI",
+        "dns": "KHÔNG XUẤT PHÁT"
+      },
+      "getCertificate": "TẢI CHỨNG NHẬN"
+    }
   },
   "claim": {
     "title": "Khiếu nại kết quả",
@@ -314,5 +402,28 @@
     "overallRank": "Hạng tổng",
     "genderRank": "Hạng giới tính",
     "categoryRank": "Hạng nhóm tuổi"
+  },
+  "stats": {
+    "cards": {
+      "started": "Xuất phát",
+      "finished": "Hoàn thành",
+      "dnf": "DNF",
+      "dns": "Không xuất phát",
+      "avgTime": "Thời gian TB",
+      "bestTime": "Thời gian tốt nhất"
+    },
+    "finishRate": {
+      "title": "Tỉ lệ hoàn thành",
+      "label": "Tỉ lệ về đích"
+    },
+    "timeDistribution": {
+      "title": "Phân bố thời gian về đích",
+      "subtitle": "Dựa trên {{total}} VĐV hoàn thành",
+      "sampled": "Mẫu ước tính",
+      "fastest": "Nhanh nhất",
+      "avg": "Trung bình",
+      "athletes": "VĐV",
+      "you": "Bạn"
+    }
   }
 }

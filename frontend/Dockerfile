@@ -13,6 +13,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Logto config is entirely runtime — no build-time ARGs required.
+# All LOGTO_* env vars are consumed server-side and can be overridden
+# per container (dev vs production) without rebuilding the image.
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 

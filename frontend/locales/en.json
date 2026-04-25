@@ -133,7 +133,16 @@
     "firstPage": "First page",
     "prevPage": "Previous page",
     "nextPage": "Next page",
-    "lastPage": "Last page"
+    "lastPage": "Last page",
+    "countryRanking": {
+      "title": "Country rankings",
+      "country": "Country",
+      "finishers": "Finishers",
+      "bestTime": "Best time",
+      "empty": "No country data yet",
+      "showAll": "Show all ({{count}})",
+      "showLess": "Show less"
+    }
   },
   "athlete": {
     "notFound": "Athlete not found",
@@ -143,6 +152,17 @@
     "resultImage": "Image",
     "copyLink": "Copy link",
     "copied": "Copied",
+    "fab": {
+      "ranking": "Ranking",
+      "share": "Share",
+      "certificate": "Certificate"
+    },
+    "paceStrip": {
+      "avgPace": "Avg Pace",
+      "distance": "Distance",
+      "category": "Category",
+      "raceDate": "Race Date"
+    },
     "upcomingTitle": "Race not started",
     "upcomingSubtitle": "Results will be updated when the race starts",
     "chipTime": "Chip Time",
@@ -173,9 +193,77 @@
     "loadingCertificate": "Loading certificate...",
     "certificateSuccess": "Certificate downloaded!",
     "certificateNotReady": "Certificate not ready. Please try again later.",
+    "certificateV2": "Download Certificate",
+    "shareCardV2": "Download Share Card",
+    "downloadingV2": "Downloading...",
+    "downloadV2Success": "Downloaded successfully!",
+    "downloadV2Failed": "Download failed",
     "start": "Start",
     "finish": "Finish",
-    "backToRanking": "Back to rankings"
+    "backToRanking": "Back to rankings",
+    "rankProgression": {
+      "title": "Rank progression",
+      "rank": "Rank",
+      "trend": {
+        "up": "↑ Climbed",
+        "down": "↓ Dropped",
+        "flat": "— Held Rank"
+      }
+    },
+    "paceZone": {
+      "title": "Pace zone analysis",
+      "avg": "Avg pace",
+      "axisHint": "Taller bar = slower pace. Dashed blue line = average pace.",
+      "vsAvgFaster": "vs avg (faster)",
+      "vsAvgSlower": "vs avg (slower)",
+      "vsAvgEqual": "on avg",
+      "zones": {
+        "fast": "Fast",
+        "steady": "Steady",
+        "slow": "Slow",
+        "alert": "Fade"
+      },
+      "strategy": {
+        "even": "Even Pacer",
+        "negative": "Negative Split",
+        "positive": "Positive Split",
+        "erratic": "Erratic"
+      }
+    },
+    "countryRank": {
+      "label": "Fellow countrymen"
+    },
+    "percentile": {
+      "label": "Top",
+      "tier": {
+        "top10": "Elite",
+        "top25": "Strong",
+        "top50": "Solid",
+        "midpack": "Midpack"
+      },
+      "panel": {
+        "title": "Performance percentile"
+      },
+      "summary": "You finished faster than {{count}} of {{total}} finishers — top {{pct}}%.",
+      "summaryPrivate": "You finished in the top {{pct}}% of all finishers.",
+      "compare": {
+        "you": "You",
+        "avg": "Average",
+        "fastest": "Fastest"
+      }
+    },
+    "statusBadge": {
+      "lastCheckpoint": "Last Checkpoint",
+      "noCheckpoint": "No checkpoint recorded",
+      "status": {
+        "label": "Status",
+        "finisher": "FINISHER",
+        "dnf": "DNF",
+        "dsq": "DISQUALIFIED",
+        "dns": "DID NOT START"
+      },
+      "getCertificate": "GET MY CERTIFICATE"
+    }
   },
   "claim": {
     "title": "Appeal Result",
@@ -314,5 +402,28 @@
     "overallRank": "Overall Rank",
     "genderRank": "Gender Rank",
     "categoryRank": "Category Rank"
+  },
+  "stats": {
+    "cards": {
+      "started": "Started",
+      "finished": "Finished",
+      "dnf": "DNF",
+      "dns": "DNS",
+      "avgTime": "Avg time",
+      "bestTime": "Best time"
+    },
+    "finishRate": {
+      "title": "Completion breakdown",
+      "label": "Finish rate"
+    },
+    "timeDistribution": {
+      "title": "Finish time distribution",
+      "subtitle": "Based on {{total}} finishers",
+      "sampled": "Sampled",
+      "fastest": "Fastest",
+      "avg": "Average",
+      "athletes": "athletes",
+      "you": "You"
+    }
   }
 }

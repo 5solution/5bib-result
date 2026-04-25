@@ -88,7 +88,7 @@ export default function ScanPage(): React.ReactElement {
   const isProcessingRef = useRef(false);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
+    if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   const handleResult = useCallback(

@@ -41,6 +41,20 @@ const envVarsSchema = Joi.object()
     // (dev / self-hosted). In prod BOTH keys must be set.
     CLOUDFLARE_TURNSTILE_SITE_KEY: Joi.string().optional().allow(''),
     CLOUDFLARE_TURNSTILE_SECRET_KEY: Joi.string().optional().allow(''),
+    // Logto OIDC (self-hosted at auth.5bib.com) — replaces Clerk
+    LOGTO_ENDPOINT: Joi.string().default('https://auth.5bib.com'),
+    LOGTO_API_RESOURCE: Joi.string().default('https://api.5bib.com'),
+    LOGTO_M2M_APP_ID: Joi.string().optional().allow(''),
+    LOGTO_M2M_APP_SECRET: Joi.string().optional().allow(''),
+    // Timing landing (timing.5bib.com) — lead notification emails + admin link
+    TIMING_NOTIFY_EMAILS: Joi.string()
+      .optional()
+      .allow('')
+      .default('danny@5bib.com,khanhnguyen@5bib.com'),
+    TIMING_ADMIN_BASE_URL: Joi.string()
+      .optional()
+      .allow('')
+      .default('https://result-admin.5bib.com'),
   })
   .unknown();
 
@@ -98,5 +112,18 @@ export const env = {
   turnstile: {
     siteKey: (envVars.CLOUDFLARE_TURNSTILE_SITE_KEY as string) || '',
     secretKey: (envVars.CLOUDFLARE_TURNSTILE_SECRET_KEY as string) || '',
+  },
+  logto: {
+    endpoint: (envVars.LOGTO_ENDPOINT as string).replace(/\/$/, ''),
+    apiResource: envVars.LOGTO_API_RESOURCE as string,
+    m2mAppId: (envVars.LOGTO_M2M_APP_ID as string) || '',
+    m2mAppSecret: (envVars.LOGTO_M2M_APP_SECRET as string) || '',
+  },
+  timing: {
+    notifyEmails: ((envVars.TIMING_NOTIFY_EMAILS as string) || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    adminBaseUrl: (envVars.TIMING_ADMIN_BASE_URL as string) || '',
   },
 };

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth-context";
+import { QueryProvider } from "@/lib/query-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,9 +39,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <QueryProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryProvider>
         <Toaster richColors position="top-right" />
       </body>
     </html>

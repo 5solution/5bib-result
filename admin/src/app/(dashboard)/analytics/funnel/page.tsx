@@ -237,7 +237,7 @@ export default function SalesFunnelPage() {
     fetch("/api/merchants?pageSize=200", { headers: authHeaders(token).headers })
       .then((r) => r.json())
       .then((j) => setMerchants((j.data?.list ?? j.data ?? []).map((m: any) => ({ id: m.id, name: m.name }))))
-      .catch(() => {});
+      .catch(() => { });
   }, [token]);
 
   const fetchData = useCallback(async () => {

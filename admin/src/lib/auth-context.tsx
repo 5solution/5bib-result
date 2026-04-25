@@ -3,103 +3,107 @@
 import {
   createContext,
   useContext,
-  useState,
   useEffect,
-  useCallback,
-  useRef,
+  useState,
   type ReactNode,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 import "./api"; // ensure client baseUrl is configured
-import { authControllerLogin } from "./api-generated";
+
+interface LogtoUserInfo {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+  username?: string;
+  roles?: string[];
+  custom_data?: Record<string, unknown>;
+}
 
 interface AuthContextType {
+  /** Kept for API compat — always null now (access token is injected server-side by the proxy). */
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** No-op. Legacy bcrypt login removed. Use /api/logto/sign-in instead. */
   login: (email: string, password: string) => Promise<void>;
+  /** Redirects to Logto end-session endpoint. */
   logout: () => void;
+  userRole: string | null;
+  /** Logto userInfo response (claims + custom_data). */
+  userInfo: LogtoUserInfo | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const TOKEN_KEY = "5bib_admin_token";
-
+/**
+ * Admin auth context — wraps the Logto `/api/logto/user` response so downstream
+ * components keep consuming `useAuth()` with the same shape as the Clerk era.
+ *
+ * Token plumbing is now invisible to clients: the `/api/[...proxy]` route
+ * pulls a Logto access token server-side and forwards it as `Authorization`
+ * before proxying to backend. Components just `fetch('/api/...')`.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const logoutRef = useRef<() => void>(() => {});
+  const { data, isLoading } = useQuery({
+    queryKey: ["logto-user"],
+    queryFn: async () => {
+      const res = await fetch("/api/logto/user", {
+        credentials: "same-origin",
+      });
+      if (!res.ok) throw new Error("Failed to load Logto context");
+      return res.json() as Promise<{
+        isAuthenticated: boolean;
+        userInfo: LogtoUserInfo | null;
+        claims: LogtoUserInfo | null;
+      }>;
+    },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const [redirecting, setRedirecting] = useState(false);
+
+  const isAuthenticated = !!data?.isAuthenticated;
+  const userInfo = data?.userInfo ?? data?.claims ?? null;
+  const roles = (userInfo?.roles as string[] | undefined) ?? [];
+  const userRole = roles.includes("admin") ? "admin" : roles[0] ?? null;
 
   useEffect(() => {
-    const stored = localStorage.getItem(TOKEN_KEY);
-    if (stored) {
-      setToken(stored);
+    // Legacy LOCAL_STORAGE token cleanup — remove on first mount
+    try {
+      localStorage.removeItem("5bib_admin_token");
+    } catch {
+      /* ignore */
     }
-    setIsLoading(false);
   }, []);
 
-  // Global fetch interceptor: auto-redirect to /login on 401
-  useEffect(() => {
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = async (...args: Parameters<typeof fetch>) => {
-      const res = await originalFetch(...args);
-      if (res.status === 401 && !window.location.pathname.startsWith("/login")) {
-        logoutRef.current();
-        window.location.href = "/login";
-      }
-      return res;
-    };
-    return () => {
-      window.fetch = originalFetch;
-    };
-  }, []);
+  const value: AuthContextType = {
+    // Sentinel string — legacy pages gate on `if (!token) return`.
+    // Actual auth token is injected by the server-side proxy route.
+    token: isAuthenticated ? "logto-session" : null,
+    isAuthenticated,
+    isLoading: isLoading || redirecting,
+    login: async () => {
+      setRedirecting(true);
+      window.location.href = "/api/logto/sign-in";
+      // Wait forever — redirect takes over
+      await new Promise(() => {});
+    },
+    logout: () => {
+      setRedirecting(true);
+      window.location.href = "/api/logto/sign-out";
+    },
+    userRole,
+    userInfo,
+  };
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { data, error } = await authControllerLogin({
-      body: { email, password },
-    });
-
-    if (error) {
-      throw new Error("Sai email hoac mat khau");
-    }
-
-    const result = data as unknown as { access_token?: string; token?: string };
-    const accessToken = result?.access_token || result?.token;
-
-    if (!accessToken) {
-      throw new Error("Khong nhan duoc token");
-    }
-
-    localStorage.setItem(TOKEN_KEY, accessToken);
-    setToken(accessToken);
-  }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    setToken(null);
-  }, []);
-
-  // Keep ref in sync so the fetch interceptor always calls the latest logout
-  useEffect(() => {
-    logoutRef.current = logout;
-  }, [logout]);
-
-  return (
-    <AuthContext value={{
-      token,
-      isAuthenticated: !!token,
-      isLoading,
-      login,
-      logout,
-    }}>
-      {children}
-    </AuthContext>
-  );
+  return <AuthContext value={value}>{children}</AuthContext>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
 }

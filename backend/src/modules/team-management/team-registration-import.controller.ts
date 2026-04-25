@@ -22,7 +22,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import {
   ConfirmImportRegistrationsDto,
   ConfirmImportRegistrationsResponseDto,
@@ -30,17 +30,14 @@ import {
 } from './dto/import-registrations.dto';
 import { TeamRegistrationImportService } from './services/team-registration-import.service';
 
-interface JwtRequest extends Request {
-  user?: { username?: string; email?: string; sub?: string };
-}
 
-function identifyAdmin(req: JwtRequest): string {
+function identifyAdmin(req: AuthenticatedRequest): string {
   return req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
 }
 
 @ApiTags('Team Registration Import (admin)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management/events/:eventId/registrations/import')
 export class TeamRegistrationImportController {
   constructor(private readonly svc: TeamRegistrationImportService) {}
@@ -117,7 +114,7 @@ export class TeamRegistrationImportController {
   confirm(
     @Param('eventId', ParseIntPipe) eventId: number,
     @Body() dto: ConfirmImportRegistrationsDto,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<ConfirmImportRegistrationsResponseDto> {
     return this.svc.confirmImport(eventId, dto, identifyAdmin(req));
   }

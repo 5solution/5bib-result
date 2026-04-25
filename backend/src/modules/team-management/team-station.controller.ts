@@ -24,8 +24,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { UploadedFile } from '@nestjs/common';
-import type { Request, Response } from 'express';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import type { Response } from 'express';
+import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
 import {
   AssignableMemberDto,
   AssignmentMemberBriefDto,
@@ -39,10 +39,7 @@ import { ImportStationsResponseDto } from './dto/import-stations.dto';
 import { TeamStationService } from './services/team-station.service';
 import { TeamStationImportService } from './services/team-station-import.service';
 
-interface JwtRequest extends Request {
-  user?: { userId?: string; email?: string; sub?: string };
-}
-function identifyAdmin(req: JwtRequest): string {
+function identifyAdmin(req: AuthenticatedRequest): string {
   return req.user?.email ?? req.user?.userId ?? req.user?.sub ?? 'admin';
 }
 
@@ -50,7 +47,7 @@ function identifyAdmin(req: JwtRequest): string {
 // /team-categories/:categoryId/stations. Old role-scoped routes removed.
 @ApiTags('Team Management (stations)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(LogtoAdminGuard)
 @Controller('team-management')
 export class TeamStationController {
   constructor(
@@ -217,7 +214,7 @@ export class TeamStationController {
   importStations(
     @Param('categoryId', ParseIntPipe) categoryId: number,
     @UploadedFile() file: Express.Multer.File,
-    @Req() req: JwtRequest,
+    @Req() req: AuthenticatedRequest,
   ): Promise<ImportStationsResponseDto> {
     return this.stationsImport.importStations(categoryId, file, identifyAdmin(req));
   }

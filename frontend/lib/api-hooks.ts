@@ -280,6 +280,125 @@ export function useRaceSponsors(raceId: string, options?: { enabled?: boolean })
   });
 }
 
+// ─── Stats Visualisations (F-03 / F-04 / F-06) ──────────────────
+// NOTE: Pending `pnpm generate:api` — once backend swagger is regenerated,
+// swap these typed-fetch hooks for generated SDK calls.
+
+export interface TimeDistributionBucket {
+  range: string;
+  minSeconds: number;
+  maxSeconds: number;
+  count: number;
+  percentage: number;
+}
+
+export interface TimeDistributionData {
+  buckets: TimeDistributionBucket[];
+  totalFinishers: number;
+  minSeconds: number;
+  maxSeconds: number;
+  avgSeconds: number;
+  sampled: boolean;
+}
+
+export interface CountryStatsItem {
+  nationality: string;
+  iso2: string;
+  count: number;
+  bestTime: string;
+  bestSeconds: number;
+}
+
+export interface CountryStatsData {
+  countries: CountryStatsItem[];
+  totalCountries: number;
+}
+
+export interface CountryRankData {
+  rank: number | null;
+  total: number;
+  nationality: string;
+  iso2: string;
+}
+
+export interface PercentileData {
+  percentile: number | null;
+  slowerCount: number;
+  totalFinishers: number;
+  athleteSeconds: number;
+  avgSeconds: number;
+  minSeconds: number;
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Fetch ${url} failed: ${res.status}`);
+  const payload = (await res.json()) as { data: T; success: boolean };
+  return payload.data;
+}
+
+export function useTimeDistribution(
+  courseId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['time-distribution', courseId],
+    queryFn: () =>
+      fetchJson<TimeDistributionData>(
+        `/api/race-results/stats/${encodeURIComponent(courseId)}/distribution`,
+      ),
+    enabled: options?.enabled ?? !!courseId,
+    staleTime: 2 * 60 * 1000, // 2 min (matches backend cache)
+  });
+}
+
+export function useCountryStats(
+  courseId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['country-stats', courseId],
+    queryFn: () =>
+      fetchJson<CountryStatsData>(
+        `/api/race-results/stats/${encodeURIComponent(courseId)}/countries`,
+      ),
+    enabled: options?.enabled ?? !!courseId,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+export function useCountryRank(
+  raceId: string,
+  bib: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['country-rank', raceId, bib],
+    queryFn: () =>
+      fetchJson<CountryRankData>(
+        `/api/race-results/athlete/${encodeURIComponent(raceId)}/${encodeURIComponent(bib)}/country-rank`,
+      ),
+    enabled: options?.enabled ?? !!(raceId && bib),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function usePercentile(
+  raceId: string,
+  bib: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['percentile', raceId, bib],
+    queryFn: () =>
+      fetchJson<PercentileData>(
+        `/api/race-results/athlete/${encodeURIComponent(raceId)}/${encodeURIComponent(bib)}/percentile`,
+      ),
+    enabled: options?.enabled ?? !!(raceId && bib),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 // ─── Mutations ──────────────────────────────────────────────────
 
 export function useSubmitClaim() {

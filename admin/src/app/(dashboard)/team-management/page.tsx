@@ -70,7 +70,7 @@ export default function TeamManagementPage(): React.ReactElement {
   }, [token]);
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) router.replace("/login");
+    if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {

@@ -49,6 +49,9 @@ export class RaceDto {
   @ApiProperty({ example: false }) enable5pix: boolean;
   @ApiPropertyOptional() pixEventUrl: string;
   @ApiPropertyOptional({ example: 60 }) cacheTtlSeconds: number;
+  @ApiProperty({ example: false }) enableHideStats: boolean;
+  @ApiProperty({ example: false }) enablePrivateList: boolean;
+  @ApiPropertyOptional({ example: 20 }) privateListLimit: number;
   @ApiProperty({ type: [RaceCourseDto] }) courses: RaceCourseDto[];
   @ApiPropertyOptional() externalRaceId: string;
 }

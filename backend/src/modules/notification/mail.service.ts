@@ -104,6 +104,18 @@ export interface TeamPaymentCompletedData {
   acceptanceValue: string;
 }
 
+export interface TimingLeadNotificationData {
+  toEmails: string[];
+  lead_number: number;
+  full_name: string;
+  phone: string;
+  organization: string;
+  athlete_count_range: string;
+  package_interest: string;
+  notes: string;
+  adminUrl: string;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -554,6 +566,68 @@ export class MailService {
     } catch (error) {
       this.logger.error(
         `Failed payment-completed email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTimingLeadNotification(
+    data: TimingLeadNotificationData,
+  ): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Timing lead #${data.lead_number} from ${data.full_name} (${data.phone}) @ ${data.organization}`,
+      );
+      return;
+    }
+    const subject = `[5BIB Timing] Lead #${data.lead_number} — ${data.organization}`;
+    const pkgLabel: Record<string, string> = {
+      basic: 'Basic',
+      advanced: 'Advanced',
+      professional: 'Professional',
+      unspecified: 'Chưa xác định',
+    };
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #1d4ed8;">🏁 Lead mới từ timing.5bib.com</h2>
+        <p><strong>Số lead:</strong> #${data.lead_number}</p>
+        <table style="width:100%; border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding:6px 0; color:#78716c; width:140px;">Họ tên</td><td><strong>${escapeHtml(data.full_name)}</strong></td></tr>
+          <tr><td style="padding:6px 0; color:#78716c;">SĐT</td><td><a href="tel:${escapeHtml(data.phone)}"><strong>${escapeHtml(data.phone)}</strong></a></td></tr>
+          <tr><td style="padding:6px 0; color:#78716c;">Tổ chức</td><td>${escapeHtml(data.organization)}</td></tr>
+          <tr><td style="padding:6px 0; color:#78716c;">Quy mô</td><td>${escapeHtml(data.athlete_count_range || '-')}</td></tr>
+          <tr><td style="padding:6px 0; color:#78716c;">Gói</td><td>${escapeHtml(pkgLabel[data.package_interest] || data.package_interest)}</td></tr>
+        </table>
+        ${
+          data.notes
+            ? `<div style="margin:16px 0;"><div style="color:#78716c; font-size:12px; margin-bottom:4px;">Ghi chú</div><div style="background:#fafaf9; padding:12px; border-radius:8px; white-space:pre-wrap;">${escapeHtml(data.notes)}</div></div>`
+            : ''
+        }
+        <p style="text-align:center; margin: 24px 0;">
+          <a href="${data.adminUrl}"
+             style="display:inline-block; background:#1d4ed8; color:white; padding:12px 22px; border-radius:8px; text-decoration:none; font-weight:600;">
+            Mở lead trong admin →
+          </a>
+        </p>
+        <p style="color:#78716c; font-size:12px;">Email này được gửi tự động khi có yêu cầu báo giá mới.</p>
+      </div>
+    `;
+    const recipients = data.toEmails.map((email) => ({ email, type: 'to' as const }));
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: 'info@5bib.com',
+          from_name: '5BIB Timing',
+          subject,
+          html,
+          to: recipients,
+        },
+      });
+      this.logger.log(
+        `Timing lead notification sent to ${data.toEmails.join(', ')} (lead #${data.lead_number})`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed timing lead notification for #${data.lead_number}: ${(error as Error).message}`,
       );
     }
   }

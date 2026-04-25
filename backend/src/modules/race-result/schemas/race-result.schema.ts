@@ -112,3 +112,7 @@ export const RaceResultSchema = SchemaFactory.createForClass(RaceResult);
 RaceResultSchema.index({ raceId: 1, courseId: 1, bib: 1 }, { unique: true });
 // Index for sorting
 RaceResultSchema.index({ overallRankNumeric: 1 });
+// Compound index for stats/distribution/country aggregations (F-03, F-04, F-06)
+// Supports: filter by courseId + timingPoint + overallRankNumeric range, group by nationality
+RaceResultSchema.index({ courseId: 1, timingPoint: 1, overallRankNumeric: 1 });
+RaceResultSchema.index({ courseId: 1, nationality: 1, overallRankNumeric: 1 });

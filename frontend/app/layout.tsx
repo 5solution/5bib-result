@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from 'next'
-import { Plus_Jakarta_Sans, Be_Vietnam_Pro } from 'next/font/google'
+import { Plus_Jakarta_Sans, Be_Vietnam_Pro, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from 'sonner'
 import './globals.css'
-import Header from '@/components/Header'
-import Footer from '@/components/Footer'
 import { QueryProvider } from '@/lib/query-provider'
 import I18nProvider from '@/components/I18nProvider'
 
@@ -17,6 +15,13 @@ const beVietnamPro = Be_Vietnam_Pro({
   subsets: ['latin', 'vietnamese'],
   weight: ['400', '500', '600', '700', '800', '900'],
   variable: '--font-heading',
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
@@ -56,14 +61,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="vi" className={`${plusJakarta.variable} ${beVietnamPro.variable}`}>
+    <html lang="vi" className={`${plusJakarta.variable} ${beVietnamPro.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans antialiased bg-[var(--5bib-bg)] text-[var(--5bib-text)] min-h-screen flex flex-col">
         <I18nProvider>
-        <QueryProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-        </QueryProvider>
+          <QueryProvider>{children}</QueryProvider>
         </I18nProvider>
         <Toaster
           position="top-right"

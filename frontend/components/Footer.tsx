@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+  const pathname = usePathname();
 
   const socialLinks = [
     {
@@ -68,8 +70,10 @@ export default function Footer() {
     { label: 'Quy trình giải quyết tranh chấp, khiếu nại', href: '#' },
   ];
 
+  if (pathname?.startsWith('/timing')) return null;
+
   return (
-    <footer className="bg-white border-t border-gray-200">
+    <footer data-site-footer className="bg-white border-t border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
 

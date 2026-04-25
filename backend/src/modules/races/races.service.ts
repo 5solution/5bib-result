@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, isValidObjectId } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
@@ -26,13 +31,16 @@ import { UpdateCourseDto } from './dto/update-course.dto';
  * - statusHistory      → admin audit trail (changedBy userIds + reasons)
  */
 const STRIPPED_RACE_FIELDS = [
-  '_id', '__v',
-  'productId', 'externalRaceId',
-  'rawData', 'cacheTtlSeconds',
+  '_id',
+  '__v',
+  'productId',
+  'externalRaceId',
+  'rawData',
+  'cacheTtlSeconds',
   'statusHistory',
 ] as const;
 
-type StrippedRaceKey = typeof STRIPPED_RACE_FIELDS[number];
+type StrippedRaceKey = (typeof STRIPPED_RACE_FIELDS)[number];
 
 /** Course fields that are internal sync config — stripped from public courses[]. */
 const STRIPPED_COURSE_FIELDS = ['apiUrl', 'apiFormat', 'importStatus'] as const;
@@ -51,14 +59,22 @@ export class RacesService {
     try {
       const raw = await this.redis.get(key);
       if (raw) return JSON.parse(raw);
-    } catch { /* Redis down — fall through to DB */ }
+    } catch {
+      /* Redis down — fall through to DB */
+    }
     return null;
   }
 
-  private async setRaceCache(key: string, value: any, ttl = 300): Promise<void> {
+  private async setRaceCache(
+    key: string,
+    value: any,
+    ttl = 300,
+  ): Promise<void> {
     try {
       await this.redis.set(key, JSON.stringify(value), 'EX', ttl);
-    } catch { /* Redis down — non-fatal */ }
+    } catch {
+      /* Redis down — non-fatal */
+    }
   }
 
   private async invalidateRaceCache(id: string, slug?: string): Promise<void> {
@@ -66,7 +82,9 @@ export class RacesService {
       const keys = [`race:id:${id}`];
       if (slug) keys.push(`race:slug:${slug}`);
       await this.redis.del(...keys);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   /**
@@ -74,16 +92,18 @@ export class RacesService {
    * Admin callers pass isPrivileged=true to bypass (they need _id, rawData, etc.).
    * Also scrubs STRIPPED_COURSE_FIELDS from nested courses[].
    */
-  private stripRacePrivateFields<T extends Partial<Record<StrippedRaceKey, unknown>> & { courses?: unknown }>(
-    race: T,
-  ): Omit<T, StrippedRaceKey> & { id: string } {
+  private stripRacePrivateFields<
+    T extends Partial<Record<StrippedRaceKey, unknown>> & { courses?: unknown },
+  >(race: T): Omit<T, StrippedRaceKey> & { id: string } {
     // Expose `id` (string) before stripping `_id` so the public API has a stable identifier
     // that the frontend can use as raceId when querying /race-results.
     const rawId = (race as Record<string, unknown>)['_id'];
     const publicId: string = rawId != null ? String(rawId) : '';
 
     const result = Object.fromEntries(
-      Object.entries(race).filter(([k]) => !(STRIPPED_RACE_FIELDS as readonly string[]).includes(k)),
+      Object.entries(race).filter(
+        ([k]) => !(STRIPPED_RACE_FIELDS as readonly string[]).includes(k),
+      ),
     ) as Omit<T, StrippedRaceKey> & { id: string };
 
     result.id = publicId;
@@ -94,7 +114,9 @@ export class RacesService {
         (race as Record<string, unknown>).courses as Record<string, unknown>[]
       ).map((c) =>
         Object.fromEntries(
-          Object.entries(c).filter(([k]) => !(STRIPPED_COURSE_FIELDS as readonly string[]).includes(k)),
+          Object.entries(c).filter(
+            ([k]) => !(STRIPPED_COURSE_FIELDS as readonly string[]).includes(k),
+          ),
         ),
       );
     }
@@ -160,12 +182,19 @@ export class RacesService {
 
     // State machine: enforce valid transitions
     type RaceStatus = 'draft' | 'pre_race' | 'live' | 'ended';
-    const ORDER: Record<RaceStatus, number> = { draft: 0, pre_race: 1, live: 2, ended: 3 };
+    const ORDER: Record<RaceStatus, number> = {
+      draft: 0,
+      pre_race: 1,
+      live: 2,
+      ended: 3,
+    };
     const current = race.status as RaceStatus;
     const next = dto.status as RaceStatus;
 
     if (current === 'ended') {
-      throw new BadRequestException(`Cannot transition from 'ended' to any other status`);
+      throw new BadRequestException(
+        `Cannot transition from 'ended' to any other status`,
+      );
     }
     if (ORDER[next] < ORDER[current]) {
       throw new BadRequestException(
@@ -186,7 +215,11 @@ export class RacesService {
    * Admin override: bypass forward-only state machine. Requires reason (audit).
    * Every override is appended to race.statusHistory.
    */
-  async forceUpdateStatus(id: string, dto: ForceUpdateStatusDto, adminId: string) {
+  async forceUpdateStatus(
+    id: string,
+    dto: ForceUpdateStatusDto,
+    adminId: string,
+  ) {
     const race = await this.raceModel.findById(id).lean().exec();
     if (!race) {
       throw new NotFoundException('Race not found');
@@ -240,11 +273,7 @@ export class RacesService {
     }
 
     const race = await this.raceModel
-      .findByIdAndUpdate(
-        raceId,
-        { $push: { courses: dto } },
-        { new: true },
-      )
+      .findByIdAndUpdate(raceId, { $push: { courses: dto } }, { new: true })
       .lean()
       .exec();
 
@@ -360,7 +389,9 @@ export class RacesService {
     const totalPages = Math.ceil(totalItems / pageSize);
 
     // Strip internal/sensitive fields from every item on public responses.
-    const publicList = isPrivileged ? list : list.map((r) => this.stripRacePrivateFields(r));
+    const publicList = isPrivileged
+      ? list
+      : list.map((r) => this.stripRacePrivateFields(r));
 
     return {
       data: {
@@ -376,13 +407,20 @@ export class RacesService {
   async getRaceById(id: string, isPrivileged = false) {
     const cacheKey = `race:id:${id}`;
     const cached = await this.getRaceFromCache(cacheKey);
-    if (cached && (!cached.status || isPrivileged || cached.status !== 'draft')) {
+    if (
+      cached &&
+      (!cached.status || isPrivileged || cached.status !== 'draft')
+    ) {
       if (!isPrivileged && cached.status === 'draft') {
         return { data: null, success: false, message: 'Race not found' };
       }
-      const payload = isPrivileged ? cached : this.stripRacePrivateFields(cached);
+      const payload = isPrivileged
+        ? cached
+        : this.stripRacePrivateFields(cached);
       return { data: payload, success: true };
     }
+
+    console.log('RACE_ID', id);
 
     const race = await this.raceModel.findById(id).lean().exec();
 
@@ -402,7 +440,9 @@ export class RacesService {
       if (!isPrivileged && cached.status === 'draft') {
         return { data: null, success: false, message: 'Race not found' };
       }
-      const payload = isPrivileged ? cached : this.stripRacePrivateFields(cached);
+      const payload = isPrivileged
+        ? cached
+        : this.stripRacePrivateFields(cached);
       return { data: payload, success: true };
     }
 
@@ -424,10 +464,7 @@ export class RacesService {
   }
 
   async getRaceByProductId(productId: string) {
-    const race = await this.raceModel
-      .findOne({ productId })
-      .lean()
-      .exec();
+    const race = await this.raceModel.findOne({ productId }).lean().exec();
 
     if (!race) {
       return {
@@ -456,7 +493,10 @@ export class RacesService {
   }
 
   async findByIds(ids: string[]): Promise<RaceDocument[]> {
-    return this.raceModel.find({ _id: { $in: ids } }).lean().exec();
+    return this.raceModel
+      .find({ _id: { $in: ids } })
+      .lean()
+      .exec();
   }
 
   async syncRacesFromSource() {
@@ -502,7 +542,9 @@ export class RacesService {
   }
 
   /** Map upstream status enums (from 5BIB platform) to our lowercase schema values */
-  private normalizeUpstreamStatus(raw: string): 'draft' | 'pre_race' | 'live' | 'ended' {
+  private normalizeUpstreamStatus(
+    raw: string,
+  ): 'draft' | 'pre_race' | 'live' | 'ended' {
     const map: Record<string, 'draft' | 'pre_race' | 'live' | 'ended'> = {
       draft: 'draft',
       DRAFT: 'draft',
@@ -558,7 +600,10 @@ export class RacesService {
     // Build embedded courses from race_course_bases
     if (race_course_bases && Array.isArray(race_course_bases)) {
       // Load existing race to preserve manually-set apiUrl and checkpoints (H-02 fix)
-      const existingRace = await this.raceModel.findOne({ productId }).lean().exec();
+      const existingRace = await this.raceModel
+        .findOne({ productId })
+        .lean()
+        .exec();
       const existingCourseMap = new Map(
         (existingRace?.courses || []).map((c: any) => [c.courseId, c]),
       );
@@ -573,7 +618,10 @@ export class RacesService {
           courseType: courseData.course_type,
           // Preserve manually-set apiUrl if API returns null/empty
           apiUrl: courseData.race_result_url || existing?.apiUrl || null,
-          importStatus: courseData.race_result_import_status || existing?.importStatus || 'idle',
+          importStatus:
+            courseData.race_result_import_status ||
+            existing?.importStatus ||
+            'idle',
           checkpoints: existing?.checkpoints || [],
         };
       });
@@ -585,8 +633,6 @@ export class RacesService {
       { upsert: true, new: true },
     );
 
-    this.logger.log(
-      `Synced race: ${raceDoc.title} (productId: ${productId})`,
-    );
+    this.logger.log(`Synced race: ${raceDoc.title} (productId: ${productId})`);
   }
 }
