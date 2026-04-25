@@ -146,6 +146,7 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `render-lock:<raceId>:<bib>:<hash>` | Dedupe concurrent identical renders | 60s |
 | `share-count:<raceId>` | INCR-based race-level share counter | ∞ |
 | `bib-count:<raceId>:<bib>` | INCR-based athlete-level share counter | ∞ |
+| `homepage:sponsored` | SponsoredModule public API cache | 300s |
 
 Flush pattern (careful — global):
 ```bash

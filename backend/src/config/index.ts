@@ -55,6 +55,8 @@ const envVarsSchema = Joi.object()
       .optional()
       .allow('')
       .default('https://result-admin.5bib.com'),
+    // Event Tracking — behavioral analytics ingest endpoint
+    ANALYTICS_API_KEY: Joi.string().optional().allow(''),
   })
   .unknown();
 

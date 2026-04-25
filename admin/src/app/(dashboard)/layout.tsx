@@ -28,6 +28,7 @@ import {
   Award,
   Timer,
   Image as ImageIcon,
+  Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
@@ -39,6 +40,7 @@ const navItems = [
   { href: "/reconciliations", label: "Đối soát", icon: ReceiptText },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/sponsors", label: "Nhà tài trợ", icon: Handshake },
+  { href: "/sponsored", label: "Banner Zone", icon: Megaphone },
   { href: "/certificates", label: "Certificates", icon: Award },
   { href: "/team-management", label: "Quản lý nhân sự", icon: Users },
   { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
