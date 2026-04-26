@@ -53,8 +53,10 @@ const FIELD_LABELS: Record<string, string> = {
   dob: "Ngày sinh",
   shirt_size: "Size áo",
   experience: "Kinh nghiệm",
-  cccd_photo: "Ảnh CCCD",
+  cccd_photo: "Ảnh CCCD (mặt trước)",
+  cccd_back_photo: "Ảnh CCCD (mặt sau)",
   avatar_photo: "Ảnh đại diện",
+  expertise: "Trình độ chuyên môn",
   address: "Địa chỉ",
   bank_account_number: "Số tài khoản",
   bank_holder_name: "Chủ tài khoản",
@@ -1083,13 +1085,17 @@ export function RegistrationDetailView({
                 const DATE_KEYS = new Set(["dob", "birth_date"]);
                 const renderEntry = ([key, value]: [string, unknown]) => {
                   const isPhoto =
-                    key === "cccd_photo" || key === "avatar_photo";
+                    key === "cccd_photo" ||
+                    key === "cccd_back_photo" ||
+                    key === "avatar_photo";
                   const photoUrl =
                     key === "cccd_photo"
                       ? detail.cccd_photo_url
-                      : key === "avatar_photo"
-                        ? detail.avatar_photo_url
-                        : null;
+                      : key === "cccd_back_photo"
+                        ? detail.cccd_back_photo_url
+                        : key === "avatar_photo"
+                          ? detail.avatar_photo_url
+                          : null;
                   return (
                     <div key={key}>
                       <dt className="text-xs font-medium text-muted-foreground">

@@ -32,9 +32,23 @@ export class RegistrationDetailDto {
   @ApiProperty({
     required: false,
     nullable: true,
-    description: 'S3 presigned URL for CCCD photo, expires in 1 hour',
+    description: 'S3 presigned URL for CCCD photo (front), expires in 1 hour',
   })
   cccd_photo_url!: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'S3 presigned URL for CCCD back-face photo, expires in 1 hour',
+  })
+  cccd_back_photo_url!: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'TNV professional background / qualification (free text).',
+  })
+  expertise!: string | null;
 
   @ApiProperty({
     type: 'object',

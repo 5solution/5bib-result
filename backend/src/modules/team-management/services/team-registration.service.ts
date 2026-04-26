@@ -202,6 +202,17 @@ export class TeamRegistrationService {
       const shirtSize = this.extractShirtSize(dto.form_data);
       const avatarUrl = this.extractString(dto.form_data, 'avatar_photo');
       const cccdUrl = this.extractString(dto.form_data, 'cccd_photo');
+      // v037: CCCD back face is required for the contract / acceptance to
+      // render with full identity data — enforce here regardless of role
+      // form_fields config so existing roles don't bypass the requirement.
+      const cccdBackUrl = this.extractString(dto.form_data, 'cccd_back_photo');
+      if (!cccdBackUrl) {
+        throw new BadRequestException(
+          'Vui lòng chụp và upload ảnh CCCD/CMND mặt sau (bắt buộc để lập hợp đồng).',
+        );
+      }
+      // v037: Free-text professional background. Optional.
+      const expertise = this.extractString(dto.form_data, 'expertise');
 
       const reg = m.getRepository(VolRegistration).create({
         role_id: dto.role_id,
@@ -213,6 +224,8 @@ export class TeamRegistrationService {
         shirt_size: shirtSize,
         avatar_photo_url: avatarUrl,
         cccd_photo_url: cccdUrl,
+        cccd_back_photo_url: cccdBackUrl,
+        expertise: expertise || null,
         status: assignedStatus,
         waitlist_position: waitlistPosition,
         magic_token: magicToken,
@@ -346,6 +359,10 @@ export class TeamRegistrationService {
       const shirtSize = this.extractShirtSize(dto.form_data);
       const avatarUrl = this.extractString(dto.form_data, 'avatar_photo');
       const cccdUrl = this.extractString(dto.form_data, 'cccd_photo');
+      // v037 — admin manual register: CCCD back + expertise optional (admin
+      // can fill via backfill modal). Public register path enforces CCCD back.
+      const cccdBackUrl = this.extractString(dto.form_data, 'cccd_back_photo');
+      const expertise = this.extractString(dto.form_data, 'expertise');
 
       const reg = m.getRepository(VolRegistration).create({
         role_id: dto.role_id,
@@ -357,6 +374,8 @@ export class TeamRegistrationService {
         shirt_size: shirtSize,
         avatar_photo_url: avatarUrl,
         cccd_photo_url: cccdUrl,
+        cccd_back_photo_url: cccdBackUrl,
+        expertise: expertise || null,
         status: assignedStatus,
         waitlist_position: waitlistPosition,
         magic_token: magicToken,
@@ -590,6 +609,22 @@ export class TeamRegistrationService {
       }
     }
 
+    // v037: presign back face URL for admin display. Same audit/log path as
+    // the front face — this is identity data and must never leak to non-admin.
+    let cccdBackPhotoUrl: string | null = null;
+    if (reg.cccd_back_photo_url) {
+      try {
+        cccdBackPhotoUrl = await this.photos.presignCccd(
+          reg.cccd_back_photo_url,
+          3600,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Failed to presign CCCD-back reg=${id} admin=${adminIdentity}: ${(err as Error).message}`,
+        );
+      }
+    }
+
     // Audit every detail-view that exposes the magic token — lets us trace
     // any "a TNV's account was used without their knowledge" incident back to
     // which admin pulled the token and when.
@@ -608,6 +643,8 @@ export class TeamRegistrationService {
       shirt_size: reg.shirt_size,
       avatar_photo_url: reg.avatar_photo_url,
       cccd_photo_url: cccdPhotoUrl,
+      cccd_back_photo_url: cccdBackPhotoUrl,
+      expertise: reg.expertise,
       form_data: reg.form_data,
       status: reg.status,
       waitlist_position: reg.waitlist_position,
