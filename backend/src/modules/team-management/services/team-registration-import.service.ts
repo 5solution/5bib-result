@@ -524,14 +524,43 @@ export class TeamRegistrationImportService {
       // v037+ Danny request: phone format → WARNING (TNV bổ sung qua portal).
       push(warnings, validatePhoneVN(phone));
 
-      // Role resolution — either role_id or role_name column accepted.
-      const roleRef = resolveRoleRef(
-        raw.role_id ?? raw.role_name ?? '',
-        rolesById,
-        roleIdByNameLower,
-      );
-      const resolved_role_id = roleRef.id;
-      if (roleRef.error) errors.push(roleRef.error);
+      // v037+ — Role resolution với 2-step fallback:
+      //   1. Try role_id (numeric column). Nếu OK → use.
+      //   2. Nếu role_id sai/empty, try role_name. Nếu OK → use + warn.
+      //   3. Nếu cả 2 fail → hard error (FK target missing, không thể insert).
+      // Đây là smart fallback giúp admin import file template từ event khác
+      // (role_id stale) miễn là role_name khớp với role hiện tại.
+      const rawRoleId = String(raw.role_id ?? '').trim();
+      const rawRoleName = String(raw.role_name ?? '').trim();
+      let resolved_role_id: number | null = null;
+      if (rawRoleId) {
+        const tryById = resolveRoleRef(rawRoleId, rolesById, roleIdByNameLower);
+        if (tryById.id) {
+          resolved_role_id = tryById.id;
+        } else if (rawRoleName) {
+          // role_id sai, fall back to role_name.
+          const tryByName = resolveRoleRef(rawRoleName, rolesById, roleIdByNameLower);
+          if (tryByName.id) {
+            resolved_role_id = tryByName.id;
+            warnings.push(
+              `${tryById.error ?? `role_id=${rawRoleId} sai`} — fallback theo role_name "${rawRoleName}"`,
+            );
+          } else {
+            errors.push(`Cả role_id=${rawRoleId} và role_name="${rawRoleName}" đều không tồn tại trong event`);
+          }
+        } else {
+          errors.push(tryById.error ?? `role_id=${rawRoleId} không tồn tại trong event`);
+        }
+      } else if (rawRoleName) {
+        const tryByName = resolveRoleRef(rawRoleName, rolesById, roleIdByNameLower);
+        if (tryByName.id) {
+          resolved_role_id = tryByName.id;
+        } else {
+          errors.push(tryByName.error ?? `Vai trò "${rawRoleName}" không tìm thấy`);
+        }
+      } else {
+        errors.push('Thiếu vai trò (role_id hoặc role_name)');
+      }
       const role = resolved_role_id ? rolesById.get(resolved_role_id) : undefined;
 
       // v037+ Danny request: tất cả validation về data shape (CCCD format,
