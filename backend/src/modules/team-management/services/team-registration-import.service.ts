@@ -244,7 +244,10 @@ export class TeamRegistrationImportService {
       { header: 'role_id *', key: 'role_id', width: 10, required: true },
       { header: 'role_name (tham khảo)', key: 'role_name', width: 28, required: false },
       { header: 'cccd *', key: 'cccd', width: 16, required: true },
+      // v037+ identity fields — TNV bổ sung qua portal nếu admin để trống
       { header: 'dob (DD/MM/YYYY)', key: 'dob', width: 14, required: false },
+      { header: 'cccd_issue_date (DD/MM/YYYY)', key: 'cccd_issue_date', width: 18, required: false },
+      { header: 'cccd_issue_place', key: 'cccd_issue_place', width: 28, required: false },
       { header: 'address', key: 'address', width: 36, required: false },
       { header: 'shirt_size', key: 'shirt_size', width: 10, required: false },
       { header: 'bank_account_number', key: 'bank_account_number', width: 22, required: false },
@@ -252,6 +255,7 @@ export class TeamRegistrationImportService {
       { header: 'bank_name', key: 'bank_name', width: 26, required: false },
       { header: 'bank_branch', key: 'bank_branch', width: 20, required: false },
       { header: 'experience', key: 'experience', width: 40, required: false },
+      { header: 'expertise', key: 'expertise', width: 40, required: false },
       { header: 'notes', key: 'notes', width: 30, required: false },
       // v1.6 station assignment columns — all optional.
       { header: 'station_id', key: 'station_id', width: 12, required: false },

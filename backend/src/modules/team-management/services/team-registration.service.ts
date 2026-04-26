@@ -2232,6 +2232,9 @@ export class TeamRegistrationService {
   ): Promise<{ url: string; column: string }> {
     const reg = await this.regRepo.findOne({ where: { id: regId } });
     if (!reg) throw new NotFoundException('Registration not found');
+    // TODO (multi-tenant): when Logto roles include per-event scope, verify
+    // adminIdentity has permission for reg.event_id here. Today's
+    // LogtoAdminGuard is single-tenant (any admin can edit any event).
     const result = await this.photos.upload(file, photoType);
     let column: string;
     if (photoType === 'avatar') {

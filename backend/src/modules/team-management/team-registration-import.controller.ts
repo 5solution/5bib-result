@@ -125,6 +125,9 @@ export class TeamRegistrationImportController {
       'Resend welcome/invite email to a single imported registration with dynamic missing-fields list.',
   })
   @ApiResponse({ status: 201 })
+  // v037+ — throttle 5 resend per minute per IP. Admin có thể spam click
+  // → tránh bombarding TNV email + protect Mailchimp rate limit.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async resendInvite(
     @Param('regId', ParseIntPipe) regId: number,
     @Req() req: AuthenticatedRequest,

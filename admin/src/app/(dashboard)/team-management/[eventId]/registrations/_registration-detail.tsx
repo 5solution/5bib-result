@@ -590,6 +590,14 @@ export function RegistrationDetailView({
 
   async function handleResendInvite(): Promise<void> {
     if (!token || !detail) return;
+    // v037+ BUG-003 fix — confirm trước khi gửi để tránh misclick.
+    if (
+      !confirm(
+        `Gửi lại email mời cho ${detail.full_name} (${detail.email})?\n\nLink magic không đổi — TNV vẫn dùng được link cũ.`,
+      )
+    ) {
+      return;
+    }
     setResendingInvite(true);
     try {
       await resendImportInvite(token, detail.event_id, regId);

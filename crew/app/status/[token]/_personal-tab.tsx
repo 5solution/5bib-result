@@ -379,26 +379,31 @@ export function PersonalTab({
                 ? "Tên chủ tài khoản phải khớp với họ tên đăng ký"
                 : null;
             return (
-              <DynamicField
-                key={field.key}
-                field={field}
-                value={stringVal}
-                onChange={(next) =>
-                  setFormData((prev) => ({ ...prev, [field.key]: next }))
-                }
-                error={error}
-                onPhotoUpload={(file) =>
-                  handlePhotoUpload(
-                    field.key,
-                    file,
-                    field.key === "avatar_photo"
-                      ? "avatar"
-                      : field.key === "cccd_back_photo"
-                        ? "cccd_back"
-                        : "cccd",
-                  )
-                }
-              />
+              // v037+ — `data-field` enables auto-scroll-to-missing-field
+              // when crew arrives via welcome-email link `?missing=cccd,photo`.
+              // The useEffect above runs querySelector('[data-field=cccd_photo]')
+              // — without this attr the auto-scroll silently no-ops.
+              <div key={field.key} data-field={field.key}>
+                <DynamicField
+                  field={field}
+                  value={stringVal}
+                  onChange={(next) =>
+                    setFormData((prev) => ({ ...prev, [field.key]: next }))
+                  }
+                  error={error}
+                  onPhotoUpload={(file) =>
+                    handlePhotoUpload(
+                      field.key,
+                      file,
+                      field.key === "avatar_photo"
+                        ? "avatar"
+                        : field.key === "cccd_back_photo"
+                          ? "cccd_back"
+                          : "cccd",
+                    )
+                  }
+                />
+              </div>
             );
           })}
 
