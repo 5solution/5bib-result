@@ -76,6 +76,34 @@ export interface TeamCancelledData {
   reason?: string;
 }
 
+export interface TeamAcceptanceSentData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  contractNumber: string;
+  /** Pre-formatted "1.234.567" VND string. */
+  acceptanceValue: string;
+  magicLink: string;
+}
+
+export interface TeamAcceptanceSignedData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  contractNumber: string;
+  acceptanceValue: string;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+}
+
+export interface TeamPaymentCompletedData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  contractNumber: string;
+  acceptanceValue: string;
+}
+
 export interface TimingLeadNotificationData {
   toEmails: string[];
   lead_number: number;
@@ -187,7 +215,7 @@ export class MailService {
       );
       return;
     }
-    const subject = `Đăng ký thành công — ${data.eventName}`;
+    const subject = `[5BIB Crew] - Đăng ký thành công - ${data.eventName}`;
     const base64 = data.qrDataUrl.replace(/^data:image\/png;base64,/, '');
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
@@ -203,7 +231,7 @@ export class MailService {
       await this.client.messages.send({
         message: {
           from_email: env.teamManagement.emailFrom,
-          from_name: '5BIB Team',
+          from_name: '5BIB - Crew Notifications',
           subject,
           html,
           to: [{ email: data.toEmail, type: 'to' }],
@@ -225,7 +253,7 @@ export class MailService {
       this.logger.warn(`[DEV] Contract sent: ${data.fullName} → ${data.magicLink}`);
       return;
     }
-    const subject = `Hợp đồng cộng tác — ${data.eventName}`;
+    const subject = `[5BIB Crew] - Hợp đồng cộng tác - ${data.eventName}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
         <h2 style="color: #1d4ed8;">Chào ${escapeHtml(data.fullName)},</h2>
@@ -244,7 +272,7 @@ export class MailService {
       await this.client.messages.send({
         message: {
           from_email: env.teamManagement.emailFrom,
-          from_name: '5BIB Team',
+          from_name: '5BIB - Crew Notifications',
           subject,
           html,
           to: [{ email: data.toEmail, type: 'to' }],
@@ -265,7 +293,7 @@ export class MailService {
       );
       return;
     }
-    const subject = `Xác nhận ký hợp đồng — ${data.eventName}`;
+    const subject = `[5BIB Crew] - Xác nhận ký hợp đồng - ${data.eventName}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
         <h2 style="color: #166534;">Đã ký hợp đồng thành công</h2>
@@ -279,7 +307,7 @@ export class MailService {
       await this.client.messages.send({
         message: {
           from_email: env.teamManagement.emailFrom,
-          from_name: '5BIB Team',
+          from_name: '5BIB - Crew Notifications',
           subject,
           html,
           to: [{ email: data.toEmail, type: 'to' }],
@@ -307,7 +335,7 @@ export class MailService {
       );
       return;
     }
-    const subject = `Nhắc nhở sự kiện ${data.eventName} — còn 3 ngày`;
+    const subject = `[5BIB Crew] - Nhắc nhở sự kiện - ${data.eventName}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
         <h2 style="color: #ea580c;">Chào ${escapeHtml(data.fullName)},</h2>
@@ -325,7 +353,7 @@ export class MailService {
       await this.client.messages.send({
         message: {
           from_email: env.teamManagement.emailFrom,
-          from_name: '5BIB Team',
+          from_name: '5BIB - Crew Notifications',
           subject,
           html,
           to: [{ email: data.toEmail, type: 'to' }],
@@ -344,7 +372,7 @@ export class MailService {
       this.logger.warn(`[DEV] Cancelled: ${data.fullName} event=${data.eventName}`);
       return;
     }
-    const subject = `Hủy đăng ký — ${data.eventName}`;
+    const subject = `[5BIB Crew] - Hủy đăng ký - ${data.eventName}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
         <h2>Chào ${escapeHtml(data.fullName)},</h2>
@@ -361,7 +389,7 @@ export class MailService {
       await this.client.messages.send({
         message: {
           from_email: env.teamManagement.emailFrom,
-          from_name: '5BIB Team',
+          from_name: '5BIB - Crew Notifications',
           subject,
           html,
           to: [{ email: data.toEmail, type: 'to' }],
@@ -398,7 +426,7 @@ export class MailService {
       await this.client.messages.send({
         message: {
           from_email: env.teamManagement.emailFrom,
-          from_name: '5BIB Team',
+          from_name: '5BIB - Crew Notifications',
           subject,
           html,
           to: [{ email: toEmail, type: 'to' }],
@@ -411,6 +439,134 @@ export class MailService {
         `sendCustomHtml failed to=${toEmail}: ${(error as Error).message}`,
       );
       return false;
+    }
+  }
+
+  async sendTeamAcceptanceSent(data: TeamAcceptanceSentData): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Acceptance sent: ${data.fullName} contract=${data.contractNumber} value=${data.acceptanceValue} → ${data.magicLink}`,
+      );
+      return;
+    }
+    const subject = `[5BIB Crew] - Biên bản nghiệm thu - ${data.eventName}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #1d4ed8;">Chào ${escapeHtml(data.fullName)},</h2>
+        <p>Ban tổ chức <strong>${escapeHtml(data.eventName)}</strong> đã gửi biên bản nghiệm thu cho hợp đồng <strong>${escapeHtml(data.contractNumber)}</strong>.</p>
+        <p>Tổng giá trị nghiệm thu: <strong>${escapeHtml(data.acceptanceValue)} VNĐ</strong> <span style="color:#78716c; font-size:11px;">(đã bao gồm thuế TNCN)</span></p>
+        <p>Vui lòng xem và ký xác nhận tại liên kết dưới. Sau khi bạn ký, ban tổ chức sẽ xử lý thanh toán trong 3–5 ngày làm việc.</p>
+        <p style="text-align:center;">
+          <a href="${data.magicLink}"
+             style="display:inline-block; background:#1d4ed8; color:white; padding:12px 22px; border-radius:8px; text-decoration:none; font-weight:600;">
+            Xem và ký biên bản
+          </a>
+        </p>
+        <p style="color:#78716c; font-size:12px;">Nếu có sai sót (số tiền, số ngày công, thông tin tài khoản), vui lòng liên hệ admin trước khi ký.</p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB - Crew Notifications',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+        },
+      });
+      this.logger.log(`Team acceptance-sent email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed acceptance-sent email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTeamAcceptanceSigned(
+    data: TeamAcceptanceSignedData,
+  ): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Acceptance signed: ${data.fullName} contract=${data.contractNumber} value=${data.acceptanceValue}`,
+      );
+      return;
+    }
+    const subject = `[5BIB Crew] - Xác nhận biên bản nghiệm thu - ${data.eventName}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #166534;">Đã ký biên bản nghiệm thu</h2>
+        <p>Chào ${escapeHtml(data.fullName)},</p>
+        <p>Biên bản nghiệm thu cho hợp đồng <strong>${escapeHtml(data.contractNumber)}</strong> — sự kiện <strong>${escapeHtml(data.eventName)}</strong> — đã được ký thành công.</p>
+        <p>Tổng giá trị nghiệm thu: <strong>${escapeHtml(data.acceptanceValue)} VNĐ</strong></p>
+        <p>Ban tổ chức sẽ tiến hành thanh toán trong 3–5 ngày làm việc. Bản PDF được đính kèm trong email này.</p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB - Crew Notifications',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+          attachments: [
+            {
+              type: 'application/pdf',
+              name: data.pdfFilename,
+              content: data.pdfBuffer.toString('base64'),
+            },
+          ],
+        },
+      });
+      this.logger.log(`Team acceptance-signed email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed acceptance-signed email to ${data.toEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTeamPaymentCompleted(
+    data: TeamPaymentCompletedData,
+  ): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Payment completed: ${data.fullName} contract=${data.contractNumber} value=${data.acceptanceValue}`,
+      );
+      return;
+    }
+    // Event name is optional in the payload — the payment service emits
+    // this without loading the event relation. Fallback to contract number
+    // in the subject so the email is still intelligible.
+    const eventLabel = data.eventName || data.contractNumber || 'sự kiện';
+    const subject = `[5BIB Crew] - Thanh toán đã hoàn tất - ${eventLabel}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #166534;">Thanh toán đã hoàn tất</h2>
+        <p>Chào ${escapeHtml(data.fullName)},</p>
+        <p>Ban tổ chức đã chuyển khoản <strong>${escapeHtml(data.acceptanceValue)} VNĐ</strong> cho hợp đồng <strong>${escapeHtml(data.contractNumber)}</strong>${
+          data.eventName ? ` — sự kiện <strong>${escapeHtml(data.eventName)}</strong>` : ''
+        }.</p>
+        <p>Vui lòng kiểm tra tài khoản ngân hàng. Nếu sau 24h chưa nhận được, liên hệ admin để xử lý.</p>
+        <p style="color:#78716c; font-size:12px;">Cảm ơn bạn đã đồng hành cùng 5BIB!</p>
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB - Crew Notifications',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+        },
+      });
+      this.logger.log(`Team payment-completed email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed payment-completed email to ${data.toEmail}: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -483,7 +639,7 @@ export class MailService {
       );
       return;
     }
-    const subject = `Danh sách chờ — ${data.eventName}`;
+    const subject = `[5BIB Crew] - Danh sách chờ - ${data.eventName}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #1c1917;">
         <h2 style="color: #ea580c;">Chào ${escapeHtml(data.fullName)},</h2>
@@ -496,7 +652,7 @@ export class MailService {
       await this.client.messages.send({
         message: {
           from_email: env.teamManagement.emailFrom,
-          from_name: '5BIB Team',
+          from_name: '5BIB - Crew Notifications',
           subject,
           html,
           to: [{ email: data.toEmail, type: 'to' }],

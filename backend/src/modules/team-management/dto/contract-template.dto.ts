@@ -4,8 +4,17 @@ import {
   IsBoolean,
   IsOptional,
   IsString,
+  MaxLength,
   MinLength,
 } from 'class-validator';
+
+const PARTY_A_PROPS = {
+  party_a_company_name: { description: 'Tên công ty Bên A', maxLength: 200 },
+  party_a_address:      { description: 'Địa chỉ Bên A',     maxLength: 500 },
+  party_a_tax_code:     { description: 'Mã số thuế Bên A',   maxLength: 20  },
+  party_a_representative: { description: 'Người đại diện Bên A', maxLength: 100 },
+  party_a_position:     { description: 'Chức vụ người đại diện Bên A', maxLength: 100 },
+} as const;
 
 export class CreateContractTemplateDto {
   @ApiProperty()
@@ -30,6 +39,26 @@ export class CreateContractTemplateDto {
   @IsBoolean()
   @IsOptional()
   is_active?: boolean = true;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_company_name.description, required: false })
+  @IsString() @IsOptional() @MaxLength(200)
+  party_a_company_name?: string | null;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_address.description, required: false })
+  @IsString() @IsOptional() @MaxLength(500)
+  party_a_address?: string | null;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_tax_code.description, required: false })
+  @IsString() @IsOptional() @MaxLength(20)
+  party_a_tax_code?: string | null;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_representative.description, required: false })
+  @IsString() @IsOptional() @MaxLength(100)
+  party_a_representative?: string | null;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_position.description, required: false })
+  @IsString() @IsOptional() @MaxLength(100)
+  party_a_position?: string | null;
 }
 
 export class UpdateContractTemplateDto {
@@ -55,6 +84,26 @@ export class UpdateContractTemplateDto {
   @IsBoolean()
   @IsOptional()
   is_active?: boolean;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_company_name.description, required: false })
+  @IsString() @IsOptional() @MaxLength(200)
+  party_a_company_name?: string | null;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_address.description, required: false })
+  @IsString() @IsOptional() @MaxLength(500)
+  party_a_address?: string | null;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_tax_code.description, required: false })
+  @IsString() @IsOptional() @MaxLength(20)
+  party_a_tax_code?: string | null;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_representative.description, required: false })
+  @IsString() @IsOptional() @MaxLength(100)
+  party_a_representative?: string | null;
+
+  @ApiProperty({ description: PARTY_A_PROPS.party_a_position.description, required: false })
+  @IsString() @IsOptional() @MaxLength(100)
+  party_a_position?: string | null;
 }
 
 export class ImportDocxResponseDto {

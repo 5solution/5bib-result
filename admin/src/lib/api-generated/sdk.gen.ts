@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AdminControllerEditResultData, AdminControllerEditResultErrors, AdminControllerEditResultResponses, AdminControllerForceSyncData, AdminControllerForceSyncErrors, AdminControllerForceSyncResponses, AdminControllerGetAthleteDetailData, AdminControllerGetAthleteDetailErrors, AdminControllerGetAthleteDetailResponses, AdminControllerGetClaimsData, AdminControllerGetClaimsResponses, AdminControllerGetSyncLogsData, AdminControllerGetSyncLogsResponses, AdminControllerPurgeCacheData, AdminControllerPurgeCacheResponses, AdminControllerResetDataData, AdminControllerResetDataResponses, AdminControllerResolveClaimData, AdminControllerResolveClaimErrors, AdminControllerResolveClaimResponses, AdminControllerResolveClaimV2Data, AdminControllerResolveClaimV2Errors, AdminControllerResolveClaimV2Responses, AdminControllerTestOtpEmailData, AdminControllerTestOtpEmailResponses, AnalyticsControllerGetBookingPatternsData, AnalyticsControllerGetBookingPatternsResponses, AnalyticsControllerGetDailyRevenueData, AnalyticsControllerGetDailyRevenueResponses, AnalyticsControllerGetFunnelData, AnalyticsControllerGetFunnelResponses, AnalyticsControllerGetMerchantComparisonData, AnalyticsControllerGetMerchantComparisonResponses, AnalyticsControllerGetOverviewData, AnalyticsControllerGetOverviewResponses, AnalyticsControllerGetRaceDetailData, AnalyticsControllerGetRaceDetailResponses, AnalyticsControllerGetRacePerformanceData, AnalyticsControllerGetRacePerformanceResponses, AnalyticsControllerGetRevenueByCategoryData, AnalyticsControllerGetRevenueByCategoryResponses, AnalyticsControllerGetRunnerBehaviorData, AnalyticsControllerGetRunnerBehaviorResponses, AnalyticsControllerGetTopRacesData, AnalyticsControllerGetTopRacesResponses, AuthControllerLoginData, AuthControllerLoginErrors, AuthControllerLoginResponses, AuthControllerProfileData, AuthControllerProfileErrors, AuthControllerProfileResponses, MerchantControllerApproveData, MerchantControllerApproveResponses, MerchantControllerFindAllData, MerchantControllerFindAllResponses, MerchantControllerFindOneData, MerchantControllerFindOneErrors, MerchantControllerFindOneResponses, MerchantControllerGetFeeHistoryData, MerchantControllerGetFeeHistoryResponses, MerchantControllerGetRacesData, MerchantControllerGetRacesResponses, MerchantControllerToggleStarData, MerchantControllerToggleStarResponses, MerchantControllerUpdateCompanyData, MerchantControllerUpdateCompanyResponses, MerchantControllerUpdateFeeData, MerchantControllerUpdateFeeResponses, RaceResultControllerCompareAthletesData, RaceResultControllerCompareAthletesResponses, RaceResultControllerGenerateResultImageData, RaceResultControllerGenerateResultImageErrors, RaceResultControllerGenerateResultImageResponses, RaceResultControllerGetAthleteDetailData, RaceResultControllerGetAthleteDetailResponses, RaceResultControllerGetCertificateData, RaceResultControllerGetCertificateErrors, RaceResultControllerGetCertificateResponses, RaceResultControllerGetCourseStatsData, RaceResultControllerGetCourseStatsResponses, RaceResultControllerGetFilterOptionsData, RaceResultControllerGetFilterOptionsResponses, RaceResultControllerGetLeaderboardData, RaceResultControllerGetLeaderboardResponses, RaceResultControllerGetRaceDistancesData, RaceResultControllerGetRaceDistancesResponses, RaceResultControllerGetRaceResultsData, RaceResultControllerGetRaceResultsResponses, RaceResultControllerGlobalSearchData, RaceResultControllerGlobalSearchResponses, RaceResultControllerManualSyncData, RaceResultControllerManualSyncErrors, RaceResultControllerManualSyncResponses, RaceResultControllerRequestAvatarOtpData, RaceResultControllerRequestAvatarOtpErrors, RaceResultControllerRequestAvatarOtpResponses, RaceResultControllerSubmitClaimData, RaceResultControllerSubmitClaimResponses, RaceResultControllerUploadAvatarData, RaceResultControllerUploadAvatarErrors, RaceResultControllerUploadAvatarResponses, RaceResultControllerUploadClaimAttachmentData, RaceResultControllerUploadClaimAttachmentResponses, RacesControllerAddCourseData, RacesControllerAddCourseErrors, RacesControllerAddCourseResponses, RacesControllerCreateRaceData, RacesControllerCreateRaceResponses, RacesControllerDeleteRaceData, RacesControllerDeleteRaceErrors, RacesControllerDeleteRaceResponses, RacesControllerForceUpdateStatusData, RacesControllerForceUpdateStatusErrors, RacesControllerForceUpdateStatusResponses, RacesControllerGetRaceByIdData, RacesControllerGetRaceByIdErrors, RacesControllerGetRaceByIdResponses, RacesControllerGetRaceByProductIdData, RacesControllerGetRaceByProductIdErrors, RacesControllerGetRaceByProductIdResponses, RacesControllerGetRaceBySlugData, RacesControllerGetRaceBySlugErrors, RacesControllerGetRaceBySlugResponses, RacesControllerRemoveCourseData, RacesControllerRemoveCourseErrors, RacesControllerRemoveCourseResponses, RacesControllerSearchRacesData, RacesControllerSearchRacesResponses, RacesControllerSyncRacesData, RacesControllerSyncRacesErrors, RacesControllerSyncRacesResponses, RacesControllerUpdateCourseData, RacesControllerUpdateCourseErrors, RacesControllerUpdateCourseResponses, RacesControllerUpdateRaceData, RacesControllerUpdateRaceErrors, RacesControllerUpdateRaceResponses, RacesControllerUpdateStatusData, RacesControllerUpdateStatusErrors, RacesControllerUpdateStatusResponses, ReconciliationControllerBatchCreateData, ReconciliationControllerBatchCreateResponses, ReconciliationControllerCreateData, ReconciliationControllerCreateResponses, ReconciliationControllerDeleteData, ReconciliationControllerDeleteResponses, ReconciliationControllerDownloadDocxData, ReconciliationControllerDownloadDocxResponses, ReconciliationControllerDownloadExportJobData, ReconciliationControllerDownloadExportJobResponses, ReconciliationControllerDownloadXlsxData, ReconciliationControllerDownloadXlsxResponses, ReconciliationControllerExportByIdsData, ReconciliationControllerExportByIdsResponses, ReconciliationControllerExportByPeriodData, ReconciliationControllerExportByPeriodResponses, ReconciliationControllerFindAllData, ReconciliationControllerFindAllResponses, ReconciliationControllerFindOneData, ReconciliationControllerFindOneResponses, ReconciliationControllerGetCronLogsData, ReconciliationControllerGetCronLogsResponses, ReconciliationControllerGetExportJobData, ReconciliationControllerGetExportJobResponses, ReconciliationControllerGetRacesData, ReconciliationControllerGetRacesResponses, ReconciliationControllerPreflightBatchData, ReconciliationControllerPreflightBatchResponses, ReconciliationControllerPreflightData, ReconciliationControllerPreflightResponses, ReconciliationControllerPreviewData, ReconciliationControllerPreviewResponses, ReconciliationControllerRegenerateData, ReconciliationControllerRegenerateResponses, ReconciliationControllerUpdateStatusData, ReconciliationControllerUpdateStatusResponses, SponsorsControllerCreateData, SponsorsControllerCreateResponses, SponsorsControllerFindAllActiveData, SponsorsControllerFindAllActiveResponses, SponsorsControllerFindAllData, SponsorsControllerFindAllResponses, SponsorsControllerFindByRaceIdData, SponsorsControllerFindByRaceIdResponses, SponsorsControllerRemoveData, SponsorsControllerRemoveErrors, SponsorsControllerRemoveResponses, SponsorsControllerUpdateData, SponsorsControllerUpdateErrors, SponsorsControllerUpdateResponses, UploadControllerUploadFileData, UploadControllerUploadFileResponses } from './types.gen';
+import type { AdminControllerEditResultData, AdminControllerEditResultErrors, AdminControllerEditResultResponses, AdminControllerForceSyncData, AdminControllerForceSyncErrors, AdminControllerForceSyncResponses, AdminControllerGetAthleteDetailData, AdminControllerGetAthleteDetailErrors, AdminControllerGetAthleteDetailResponses, AdminControllerGetClaimsData, AdminControllerGetClaimsResponses, AdminControllerGetSyncLogsData, AdminControllerGetSyncLogsResponses, AdminControllerPurgeCacheData, AdminControllerPurgeCacheResponses, AdminControllerResetDataData, AdminControllerResetDataResponses, AdminControllerResolveClaimData, AdminControllerResolveClaimErrors, AdminControllerResolveClaimResponses, AdminControllerResolveClaimV2Data, AdminControllerResolveClaimV2Errors, AdminControllerResolveClaimV2Responses, AdminControllerTestOtpEmailData, AdminControllerTestOtpEmailResponses, AnalyticsControllerGetBookingPatternsData, AnalyticsControllerGetBookingPatternsResponses, AnalyticsControllerGetDailyRevenueData, AnalyticsControllerGetDailyRevenueResponses, AnalyticsControllerGetFunnelData, AnalyticsControllerGetFunnelResponses, AnalyticsControllerGetMerchantComparisonData, AnalyticsControllerGetMerchantComparisonResponses, AnalyticsControllerGetOverviewData, AnalyticsControllerGetOverviewResponses, AnalyticsControllerGetRaceDetailData, AnalyticsControllerGetRaceDetailResponses, AnalyticsControllerGetRacePerformanceData, AnalyticsControllerGetRacePerformanceResponses, AnalyticsControllerGetRevenueByCategoryData, AnalyticsControllerGetRevenueByCategoryResponses, AnalyticsControllerGetRunnerBehaviorData, AnalyticsControllerGetRunnerBehaviorResponses, AnalyticsControllerGetTopRacesData, AnalyticsControllerGetTopRacesResponses, AthleteStarsControllerByCourseData, AthleteStarsControllerByCourseResponses, AthleteStarsControllerListData, AthleteStarsControllerListResponses, AthleteStarsControllerStarData, AthleteStarsControllerStarResponses, AthleteStarsControllerUnstarData, AthleteStarsControllerUnstarResponses, CertificatesControllerCheckAvailabilityData, CertificatesControllerCheckAvailabilityResponses, CertificatesControllerCreateTemplateData, CertificatesControllerCreateTemplateResponses, CertificatesControllerGetRaceConfigData, CertificatesControllerGetRaceConfigErrors, CertificatesControllerGetRaceConfigResponses, CertificatesControllerGetTemplateData, CertificatesControllerGetTemplateErrors, CertificatesControllerGetTemplateResponses, CertificatesControllerListTemplatesData, CertificatesControllerListTemplatesResponses, CertificatesControllerRemoveTemplateData, CertificatesControllerRemoveTemplateErrors, CertificatesControllerRemoveTemplateResponses, CertificatesControllerRenderCertificateData, CertificatesControllerRenderCertificateErrors, CertificatesControllerRenderCertificateResponses, CertificatesControllerRenderMetaData, CertificatesControllerRenderMetaResponses, CertificatesControllerUpdateTemplateData, CertificatesControllerUpdateTemplateResponses, CertificatesControllerUpsertRaceConfigData, CertificatesControllerUpsertRaceConfigResponses, EventTrackingControllerTrackEventData, EventTrackingControllerTrackEventErrors, EventTrackingControllerTrackEventResponses, HomepageControllerGetEndedRacesData, HomepageControllerGetEndedRacesResponses, HomepageControllerGetSummaryData, HomepageControllerGetSummaryResponses, MerchantControllerApproveData, MerchantControllerApproveResponses, MerchantControllerFindAllData, MerchantControllerFindAllResponses, MerchantControllerFindOneData, MerchantControllerFindOneErrors, MerchantControllerFindOneResponses, MerchantControllerGetFeeHistoryData, MerchantControllerGetFeeHistoryResponses, MerchantControllerGetRacesData, MerchantControllerGetRacesResponses, MerchantControllerToggleStarData, MerchantControllerToggleStarResponses, MerchantControllerUpdateCompanyData, MerchantControllerUpdateCompanyResponses, MerchantControllerUpdateFeeData, MerchantControllerUpdateFeeResponses, PublicSponsoredControllerGetHomepageData, PublicSponsoredControllerGetHomepageResponses, RaceResultControllerCompareAthletesData, RaceResultControllerCompareAthletesResponses, RaceResultControllerGenerateResultImageData, RaceResultControllerGenerateResultImageErrors, RaceResultControllerGenerateResultImageResponses, RaceResultControllerGetAthleteBadgesData, RaceResultControllerGetAthleteBadgesResponses, RaceResultControllerGetAthleteDetailData, RaceResultControllerGetAthleteDetailResponses, RaceResultControllerGetCertificateData, RaceResultControllerGetCertificateErrors, RaceResultControllerGetCertificateResponses, RaceResultControllerGetCountryRankData, RaceResultControllerGetCountryRankResponses, RaceResultControllerGetCountryStatsData, RaceResultControllerGetCountryStatsResponses, RaceResultControllerGetCourseStatsData, RaceResultControllerGetCourseStatsResponses, RaceResultControllerGetFilterOptionsData, RaceResultControllerGetFilterOptionsResponses, RaceResultControllerGetLeaderboardData, RaceResultControllerGetLeaderboardResponses, RaceResultControllerGetPercentileData, RaceResultControllerGetPercentileResponses, RaceResultControllerGetRaceDistancesData, RaceResultControllerGetRaceDistancesResponses, RaceResultControllerGetRaceResultsData, RaceResultControllerGetRaceResultsResponses, RaceResultControllerGetShareCountData, RaceResultControllerGetShareCountResponses, RaceResultControllerGetShareStatsData, RaceResultControllerGetShareStatsResponses, RaceResultControllerGetTimeDistributionData, RaceResultControllerGetTimeDistributionResponses, RaceResultControllerGlobalSearchData, RaceResultControllerGlobalSearchResponses, RaceResultControllerIncrementShareCountData, RaceResultControllerIncrementShareCountResponses, RaceResultControllerLogShareEventData, RaceResultControllerLogShareEventResponses, RaceResultControllerManualSyncData, RaceResultControllerManualSyncErrors, RaceResultControllerManualSyncResponses, RaceResultControllerPreviewResultImageData, RaceResultControllerPreviewResultImageErrors, RaceResultControllerPreviewResultImageResponses, RaceResultControllerRequestAvatarOtpData, RaceResultControllerRequestAvatarOtpErrors, RaceResultControllerRequestAvatarOtpResponses, RaceResultControllerSubmitClaimData, RaceResultControllerSubmitClaimResponses, RaceResultControllerUploadAvatarData, RaceResultControllerUploadAvatarErrors, RaceResultControllerUploadAvatarResponses, RaceResultControllerUploadClaimAttachmentData, RaceResultControllerUploadClaimAttachmentResponses, RacesControllerAddCourseData, RacesControllerAddCourseErrors, RacesControllerAddCourseResponses, RacesControllerCreateRaceData, RacesControllerCreateRaceResponses, RacesControllerDeleteRaceData, RacesControllerDeleteRaceErrors, RacesControllerDeleteRaceResponses, RacesControllerForceUpdateStatusData, RacesControllerForceUpdateStatusErrors, RacesControllerForceUpdateStatusResponses, RacesControllerGetRaceByIdData, RacesControllerGetRaceByIdErrors, RacesControllerGetRaceByIdResponses, RacesControllerGetRaceByProductIdData, RacesControllerGetRaceByProductIdErrors, RacesControllerGetRaceByProductIdResponses, RacesControllerGetRaceBySlugData, RacesControllerGetRaceBySlugErrors, RacesControllerGetRaceBySlugResponses, RacesControllerRemoveCourseData, RacesControllerRemoveCourseErrors, RacesControllerRemoveCourseResponses, RacesControllerSearchRacesData, RacesControllerSearchRacesResponses, RacesControllerSyncRacesData, RacesControllerSyncRacesErrors, RacesControllerSyncRacesResponses, RacesControllerUpdateCourseData, RacesControllerUpdateCourseErrors, RacesControllerUpdateCourseResponses, RacesControllerUpdateRaceData, RacesControllerUpdateRaceErrors, RacesControllerUpdateRaceResponses, RacesControllerUpdateStatusData, RacesControllerUpdateStatusErrors, RacesControllerUpdateStatusResponses, ReconciliationControllerBatchCreateData, ReconciliationControllerBatchCreateResponses, ReconciliationControllerCreateData, ReconciliationControllerCreateResponses, ReconciliationControllerDeleteData, ReconciliationControllerDeleteResponses, ReconciliationControllerDownloadDocxData, ReconciliationControllerDownloadDocxResponses, ReconciliationControllerDownloadExportJobData, ReconciliationControllerDownloadExportJobResponses, ReconciliationControllerDownloadXlsxData, ReconciliationControllerDownloadXlsxResponses, ReconciliationControllerExportByIdsData, ReconciliationControllerExportByIdsResponses, ReconciliationControllerExportByPeriodData, ReconciliationControllerExportByPeriodResponses, ReconciliationControllerFindAllData, ReconciliationControllerFindAllResponses, ReconciliationControllerFindOneData, ReconciliationControllerFindOneResponses, ReconciliationControllerGetCronLogsData, ReconciliationControllerGetCronLogsResponses, ReconciliationControllerGetExportJobData, ReconciliationControllerGetExportJobResponses, ReconciliationControllerGetRacesData, ReconciliationControllerGetRacesResponses, ReconciliationControllerPreflightBatchData, ReconciliationControllerPreflightBatchResponses, ReconciliationControllerPreflightData, ReconciliationControllerPreflightResponses, ReconciliationControllerPreviewData, ReconciliationControllerPreviewResponses, ReconciliationControllerRegenerateData, ReconciliationControllerRegenerateResponses, ReconciliationControllerUpdateStatusData, ReconciliationControllerUpdateStatusResponses, SearchControllerSearchData, SearchControllerSearchResponses, SolutionPublicControllerCreateLeadData, SolutionPublicControllerCreateLeadErrors, SolutionPublicControllerCreateLeadResponses, SponsoredControllerAddItemData, SponsoredControllerAddItemErrors, SponsoredControllerAddItemResponses, SponsoredControllerCreateData, SponsoredControllerCreateErrors, SponsoredControllerCreateResponses, SponsoredControllerDeleteItemData, SponsoredControllerDeleteItemErrors, SponsoredControllerDeleteItemResponses, SponsoredControllerFindAllData, SponsoredControllerFindAllResponses, SponsoredControllerFindOneData, SponsoredControllerFindOneErrors, SponsoredControllerFindOneResponses, SponsoredControllerRemoveData, SponsoredControllerRemoveErrors, SponsoredControllerRemoveResponses, SponsoredControllerReorderItemsData, SponsoredControllerReorderItemsResponses, SponsoredControllerReorderSlotsData, SponsoredControllerReorderSlotsResponses, SponsoredControllerUpdateData, SponsoredControllerUpdateErrors, SponsoredControllerUpdateItemData, SponsoredControllerUpdateItemErrors, SponsoredControllerUpdateItemResponses, SponsoredControllerUpdateResponses, SponsorsControllerCreateData, SponsorsControllerCreateResponses, SponsorsControllerFindAllActiveData, SponsorsControllerFindAllActiveResponses, SponsorsControllerFindAllData, SponsorsControllerFindAllResponses, SponsorsControllerFindByRaceIdData, SponsorsControllerFindByRaceIdResponses, SponsorsControllerRemoveData, SponsorsControllerRemoveErrors, SponsorsControllerRemoveResponses, SponsorsControllerUpdateData, SponsorsControllerUpdateErrors, SponsorsControllerUpdateResponses, Sport5PublicControllerCreateLeadData, Sport5PublicControllerCreateLeadErrors, Sport5PublicControllerCreateLeadResponses, TeamCategoryControllerCreateData, TeamCategoryControllerCreateResponses, TeamCategoryControllerGetByIdData, TeamCategoryControllerGetByIdResponses, TeamCategoryControllerListData, TeamCategoryControllerListResponses, TeamCategoryControllerRemoveData, TeamCategoryControllerRemoveResponses, TeamCategoryControllerUpdateData, TeamCategoryControllerUpdateResponses, TeamCheckinControllerLookupData, TeamCheckinControllerLookupResponses, TeamCheckinControllerScanData, TeamCheckinControllerScanResponses, TeamCheckinControllerStatsData, TeamCheckinControllerStatsResponses, TeamContactControllerCreateData, TeamContactControllerCreateResponses, TeamContactControllerListAdminData, TeamContactControllerListAdminResponses, TeamContactControllerPublicContactsData, TeamContactControllerPublicContactsResponses, TeamContactControllerRemoveData, TeamContactControllerRemoveResponses, TeamContactControllerToggleActiveData, TeamContactControllerToggleActiveResponses, TeamContactControllerUpdateData, TeamContactControllerUpdateResponses, TeamContractTemplateControllerCreateData, TeamContractTemplateControllerCreateResponses, TeamContractTemplateControllerDuplicateData, TeamContractTemplateControllerDuplicateResponses, TeamContractTemplateControllerGetData, TeamContractTemplateControllerGetResponses, TeamContractTemplateControllerImportDocxData, TeamContractTemplateControllerImportDocxResponses, TeamContractTemplateControllerListData, TeamContractTemplateControllerListResponses, TeamContractTemplateControllerRemoveData, TeamContractTemplateControllerRemoveResponses, TeamContractTemplateControllerUpdateData, TeamContractTemplateControllerUpdateResponses, TeamContractTemplateControllerValidateData, TeamContractTemplateControllerValidateResponses, TeamDirectoryControllerGetDirectoryData, TeamDirectoryControllerGetDirectoryResponses, TeamLeaderControllerCheckinData, TeamLeaderControllerCheckinResponses, TeamLeaderControllerConfirmBulkData, TeamLeaderControllerConfirmBulkResponses, TeamLeaderControllerConfirmData, TeamLeaderControllerConfirmResponses, TeamLeaderControllerGetTeamData, TeamLeaderControllerGetTeamResponses, TeamManagementControllerApproveProfileChangesData, TeamManagementControllerApproveProfileChangesResponses, TeamManagementControllerApproveRegistrationData, TeamManagementControllerApproveRegistrationResponses, TeamManagementControllerBulkUpdateData, TeamManagementControllerBulkUpdateResponses, TeamManagementControllerCancelRegistrationData, TeamManagementControllerCancelRegistrationResponses, TeamManagementControllerClearSuspiciousData, TeamManagementControllerClearSuspiciousResponses, TeamManagementControllerConfirmCompletionData, TeamManagementControllerConfirmCompletionResponses, TeamManagementControllerConfirmNghiemThuData, TeamManagementControllerConfirmNghiemThuResponses, TeamManagementControllerConfirmRoleImportData, TeamManagementControllerConfirmRoleImportResponses, TeamManagementControllerCreateEventData, TeamManagementControllerCreateEventResponses, TeamManagementControllerCreateRoleData, TeamManagementControllerCreateRoleResponses, TeamManagementControllerDeleteEventData, TeamManagementControllerDeleteEventResponses, TeamManagementControllerDeleteRoleData, TeamManagementControllerDeleteRoleResponses, TeamManagementControllerExportPersonnelData, TeamManagementControllerExportPersonnelResponses, TeamManagementControllerExportReportData, TeamManagementControllerExportReportResponses, TeamManagementControllerGetContractPdfUrlData, TeamManagementControllerGetContractPdfUrlResponses, TeamManagementControllerGetDashboardData, TeamManagementControllerGetDashboardResponses, TeamManagementControllerGetDetailData, TeamManagementControllerGetDetailResponses, TeamManagementControllerGetEventConfigData, TeamManagementControllerGetEventConfigResponses, TeamManagementControllerGetEventData, TeamManagementControllerGetEventResponses, TeamManagementControllerGetImportTemplateData, TeamManagementControllerGetImportTemplateResponses, TeamManagementControllerGetSignatureUrlData, TeamManagementControllerGetSignatureUrlResponses, TeamManagementControllerListEventsData, TeamManagementControllerListEventsResponses, TeamManagementControllerListRegistrationsData, TeamManagementControllerListRegistrationsResponses, TeamManagementControllerListRolesData, TeamManagementControllerListRolesResponses, TeamManagementControllerListShirtStockData, TeamManagementControllerListShirtStockResponses, TeamManagementControllerManualRegisterData, TeamManagementControllerManualRegisterResponses, TeamManagementControllerPreviewRoleImportData, TeamManagementControllerPreviewRoleImportResponses, TeamManagementControllerRejectProfileChangesData, TeamManagementControllerRejectProfileChangesResponses, TeamManagementControllerRejectRegistrationData, TeamManagementControllerRejectRegistrationResponses, TeamManagementControllerSendContractsData, TeamManagementControllerSendContractsResponses, TeamManagementControllerShirtAggregateData, TeamManagementControllerShirtAggregateResponses, TeamManagementControllerUpdateEventData, TeamManagementControllerUpdateEventFeaturesData, TeamManagementControllerUpdateEventFeaturesErrors, TeamManagementControllerUpdateEventFeaturesResponses, TeamManagementControllerUpdateEventResponses, TeamManagementControllerUpdateRegistrationData, TeamManagementControllerUpdateRegistrationResponses, TeamManagementControllerUpdateRoleData, TeamManagementControllerUpdateRoleResponses, TeamManagementControllerUpsertShirtStockData, TeamManagementControllerUpsertShirtStockResponses, TeamRecoverControllerRequestData, TeamRecoverControllerRequestResponses, TeamRecoverControllerVerifyData, TeamRecoverControllerVerifyResponses, TeamRegistrationControllerGetEventConfigForPortalData, TeamRegistrationControllerGetEventConfigForPortalResponses, TeamRegistrationControllerGetMyStationData, TeamRegistrationControllerGetMyStationResponses, TeamRegistrationControllerGetPublicEventData, TeamRegistrationControllerGetPublicEventResponses, TeamRegistrationControllerGetSignedContractPdfData, TeamRegistrationControllerGetSignedContractPdfResponses, TeamRegistrationControllerListPublicEventsData, TeamRegistrationControllerListPublicEventsResponses, TeamRegistrationControllerRegisterData, TeamRegistrationControllerRegisterResponses, TeamRegistrationControllerSelfCheckinData, TeamRegistrationControllerSelfCheckinResponses, TeamRegistrationControllerSignContractData, TeamRegistrationControllerSignContractResponses, TeamRegistrationControllerStatusData, TeamRegistrationControllerStatusResponses, TeamRegistrationControllerUpdateProfileData, TeamRegistrationControllerUpdateProfileResponses, TeamRegistrationControllerUploadPhotoData, TeamRegistrationControllerUploadPhotoResponses, TeamRegistrationControllerViewContractData, TeamRegistrationControllerViewContractResponses, TeamRegistrationImportControllerConfirmData, TeamRegistrationImportControllerConfirmResponses, TeamRegistrationImportControllerDownloadTemplateData, TeamRegistrationImportControllerDownloadTemplateResponses, TeamRegistrationImportControllerPreviewData, TeamRegistrationImportControllerPreviewResponses, TeamScheduleEmailControllerGetData, TeamScheduleEmailControllerGetErrors, TeamScheduleEmailControllerGetResponses, TeamScheduleEmailControllerListData, TeamScheduleEmailControllerListResponses, TeamScheduleEmailControllerSendBulkData, TeamScheduleEmailControllerSendBulkResponses, TeamScheduleEmailControllerSendTestData, TeamScheduleEmailControllerSendTestResponses, TeamScheduleEmailControllerUpsertData, TeamScheduleEmailControllerUpsertResponses, TeamStationControllerCreateAssignmentData, TeamStationControllerCreateAssignmentResponses, TeamStationControllerCreateStationData, TeamStationControllerCreateStationResponses, TeamStationControllerDeleteStationData, TeamStationControllerDeleteStationResponses, TeamStationControllerListAllStationsInEventData, TeamStationControllerListAllStationsInEventResponses, TeamStationControllerListAssignableMembersData, TeamStationControllerListAssignableMembersResponses, TeamStationControllerListStationsData, TeamStationControllerListStationsResponses, TeamStationControllerRemoveAssignmentData, TeamStationControllerRemoveAssignmentResponses, TeamStationControllerUpdateStationData, TeamStationControllerUpdateStationResponses, TeamStationControllerUpdateStatusData, TeamStationControllerUpdateStatusResponses, TeamSupplyControllerCreateItemData, TeamSupplyControllerCreateItemResponses, TeamSupplyControllerCreateSupplementData, TeamSupplyControllerCreateSupplementResponses, TeamSupplyControllerDeleteItemData, TeamSupplyControllerDeleteItemResponses, TeamSupplyControllerGetAllocationsData, TeamSupplyControllerGetAllocationsResponses, TeamSupplyControllerGetOverviewData, TeamSupplyControllerGetOverviewResponses, TeamSupplyControllerGetPlanData, TeamSupplyControllerGetPlanResponses, TeamSupplyControllerListItemsData, TeamSupplyControllerListItemsResponses, TeamSupplyControllerListSupplementsData, TeamSupplyControllerListSupplementsResponses, TeamSupplyControllerUnlockAllocationData, TeamSupplyControllerUnlockAllocationResponses, TeamSupplyControllerUpdateItemData, TeamSupplyControllerUpdateItemResponses, TeamSupplyControllerUpsertAllocationsData, TeamSupplyControllerUpsertAllocationsResponses, TeamSupplyControllerUpsertFulfillData, TeamSupplyControllerUpsertFulfillResponses, TeamSupplyControllerUpsertRequestData, TeamSupplyControllerUpsertRequestResponses, TeamSupplyPublicControllerConfirmSupplementData, TeamSupplyPublicControllerConfirmSupplementResponses, TeamSupplyPublicControllerConfirmSupplyData, TeamSupplyPublicControllerConfirmSupplyResponses, TeamSupplyPublicControllerCreateSupplementData, TeamSupplyPublicControllerCreateSupplementResponses, TeamSupplyPublicControllerGetLeaderSupplyViewData, TeamSupplyPublicControllerGetLeaderSupplyViewResponses, TeamSupplyPublicControllerUpsertAllocationsData, TeamSupplyPublicControllerUpsertAllocationsResponses, TeamSupplyPublicControllerUpsertRequestData, TeamSupplyPublicControllerUpsertRequestResponses, TimingAdminControllerExportData, TimingAdminControllerExportResponses, TimingAdminControllerGetData, TimingAdminControllerGetResponses, TimingAdminControllerListData, TimingAdminControllerListResponses, TimingAdminControllerUpdateData, TimingAdminControllerUpdateResponses, TimingPublicControllerCreateLeadData, TimingPublicControllerCreateLeadErrors, TimingPublicControllerCreateLeadResponses, UploadControllerUploadFileData, UploadControllerUploadFileResponses, UsersControllerMeData, UsersControllerMeDebugData, UsersControllerMeDebugResponses, UsersControllerMeErrors, UsersControllerMeResponses, UsersControllerUploadAvatarData, UsersControllerUploadAvatarResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -262,6 +262,951 @@ export const analyticsControllerGetBookingPatterns = <ThrowOnError extends boole
 export const analyticsControllerGetFunnel = <ThrowOnError extends boolean = false>(options?: Options<AnalyticsControllerGetFunnelData, ThrowOnError>) => (options?.client ?? client).get<AnalyticsControllerGetFunnelResponses, unknown, ThrowOnError>({ url: '/api/analytics/funnel', ...options });
 
 /**
+ * List events
+ */
+export const teamManagementControllerListEvents = <ThrowOnError extends boolean = false>(options?: Options<TeamManagementControllerListEventsData, ThrowOnError>) => (options?.client ?? client).get<TeamManagementControllerListEventsResponses, unknown, ThrowOnError>({ url: '/api/team-management/events', ...options });
+
+/**
+ * Create a team-management event
+ */
+export const teamManagementControllerCreateEvent = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerCreateEventData, ThrowOnError>) => (options.client ?? client).post<TeamManagementControllerCreateEventResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete event (draft only)
+ */
+export const teamManagementControllerDeleteEvent = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerDeleteEventData, ThrowOnError>) => (options.client ?? client).delete<TeamManagementControllerDeleteEventResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}', ...options });
+
+/**
+ * Get event detail with roles
+ */
+export const teamManagementControllerGetEvent = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerGetEventData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerGetEventResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}', ...options });
+
+/**
+ * Update event
+ */
+export const teamManagementControllerUpdateEvent = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerUpdateEventData, ThrowOnError>) => (options.client ?? client).put<TeamManagementControllerUpdateEventResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get event feature config (mode + nghiem_thu)
+ */
+export const teamManagementControllerGetEventConfig = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerGetEventConfigData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerGetEventConfigResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/config', ...options });
+
+/**
+ * Update event feature mode + nghiem_thu toggle
+ */
+export const teamManagementControllerUpdateEventFeatures = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerUpdateEventFeaturesData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerUpdateEventFeaturesResponses, TeamManagementControllerUpdateEventFeaturesErrors, ThrowOnError>({
+    url: '/api/team-management/events/{id}/features',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Admin confirms nghiem thu (formal completion acceptance)
+ */
+export const teamManagementControllerConfirmNghiemThu = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerConfirmNghiemThuData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerConfirmNghiemThuResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/registrations/{id}/nghiem-thu',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Download a CSV template for bulk role import
+ */
+export const teamManagementControllerGetImportTemplate = <ThrowOnError extends boolean = false>(options?: Options<TeamManagementControllerGetImportTemplateData, ThrowOnError>) => (options?.client ?? client).get<TeamManagementControllerGetImportTemplateResponses, unknown, ThrowOnError>({ url: '/api/team-management/roles/import-template', ...options });
+
+/**
+ * Parse & validate a CSV/XLSX file of roles — returns preview, does not insert
+ */
+export const teamManagementControllerPreviewRoleImport = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerPreviewRoleImportData, ThrowOnError>) => (options.client ?? client).post<TeamManagementControllerPreviewRoleImportResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/roles/import/preview', ...options });
+
+/**
+ * Commit parsed role rows (re-validates server-side, batch inserts, returns full roles list)
+ */
+export const teamManagementControllerConfirmRoleImport = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerConfirmRoleImportData, ThrowOnError>) => (options.client ?? client).post<TeamManagementControllerConfirmRoleImportResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{id}/roles/import/confirm',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List roles for event
+ */
+export const teamManagementControllerListRoles = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerListRolesData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerListRolesResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/roles', ...options });
+
+/**
+ * Add role to event
+ */
+export const teamManagementControllerCreateRole = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerCreateRoleData, ThrowOnError>) => (options.client ?? client).post<TeamManagementControllerCreateRoleResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{id}/roles',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete role (must have 0 filled_slots)
+ */
+export const teamManagementControllerDeleteRole = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerDeleteRoleData, ThrowOnError>) => (options.client ?? client).delete<TeamManagementControllerDeleteRoleResponses, unknown, ThrowOnError>({ url: '/api/team-management/roles/{id}', ...options });
+
+/**
+ * Update role
+ */
+export const teamManagementControllerUpdateRole = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerUpdateRoleData, ThrowOnError>) => (options.client ?? client).put<TeamManagementControllerUpdateRoleResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/roles/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Batch-send contract magic links to all approved registrants of a role
+ */
+export const teamManagementControllerSendContracts = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerSendContractsData, ThrowOnError>) => (options.client ?? client).post<TeamManagementControllerSendContractsResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/roles/{id}/send-contracts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List registrations for event
+ */
+export const teamManagementControllerListRegistrations = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerListRegistrationsData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerListRegistrationsResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/registrations', ...options });
+
+/**
+ * Update registration field-level edits (notes / payment / working_days). State transitions use dedicated endpoints.
+ */
+export const teamManagementControllerUpdateRegistration = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerUpdateRegistrationData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerUpdateRegistrationResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/registrations/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Approve a pending_approval registration. Transitions → approved then auto-sends the contract email (→ contract_sent).
+ */
+export const teamManagementControllerApproveRegistration = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerApproveRegistrationData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerApproveRegistrationResponses, unknown, ThrowOnError>({ url: '/api/team-management/registrations/{id}/approve', ...options });
+
+/**
+ * Reject a pending_approval (or approved) registration with a required reason. Auto-promotes next waitlisted.
+ */
+export const teamManagementControllerRejectRegistration = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerRejectRegistrationData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerRejectRegistrationResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/registrations/{id}/reject',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Cancel a registration (any non-terminal state). Auto-promotes next waitlisted if a slot opens.
+ */
+export const teamManagementControllerCancelRegistration = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerCancelRegistrationData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerCancelRegistrationResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/registrations/{id}/cancel',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Admin-override completion (checked_in → completed). Snapshots daily_rate × working_days and clears the suspicious flag.
+ */
+export const teamManagementControllerConfirmCompletion = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerConfirmCompletionData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerConfirmCompletionResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/registrations/{id}/confirm-completion',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Clear the suspicious_checkin flag. Requires an admin note (audit trail).
+ */
+export const teamManagementControllerClearSuspicious = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerClearSuspiciousData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerClearSuspiciousResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/registrations/{id}/clear-suspicious',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * v1.4.1 — Admin approves a queued profile edit. Applies pending_changes to the main row and clears the flag.
+ */
+export const teamManagementControllerApproveProfileChanges = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerApproveProfileChangesData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerApproveProfileChangesResponses, unknown, ThrowOnError>({ url: '/api/team-management/registrations/{id}/approve-changes', ...options });
+
+/**
+ * v1.4.1 — Admin rejects a queued profile edit with a required reason. Emails the TNV.
+ */
+export const teamManagementControllerRejectProfileChanges = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerRejectProfileChangesData, ThrowOnError>) => (options.client ?? client).patch<TeamManagementControllerRejectProfileChangesResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/registrations/{id}/reject-changes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Full personnel detail with presigned CCCD photo URL (1h). Unmasked form data. Access is audit-logged.
+ */
+export const teamManagementControllerGetDetail = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerGetDetailData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerGetDetailResponses, unknown, ThrowOnError>({ url: '/api/team-management/registrations/{id}/detail', ...options });
+
+/**
+ * Return a 10-min presigned URL for the handwritten signature PNG. Audit-logged.
+ */
+export const teamManagementControllerGetSignatureUrl = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerGetSignatureUrlData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerGetSignatureUrlResponses, unknown, ThrowOnError>({ url: '/api/team-management/registrations/{id}/signature-url', ...options });
+
+/**
+ * Return a short-lived (10 min) presigned S3 URL for the signed contract PDF.
+ */
+export const teamManagementControllerGetContractPdfUrl = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerGetContractPdfUrlData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerGetContractPdfUrlResponses, unknown, ThrowOnError>({ url: '/api/team-management/registrations/{id}/contract-pdf-url', ...options });
+
+/**
+ * Admin adds a registration directly (walk-in, phone referral). Bypasses public throttle + can auto-approve. When auto_approve=true and slot is available, fires the contract-send chain automatically.
+ */
+export const teamManagementControllerManualRegister = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerManualRegisterData, ThrowOnError>) => (options.client ?? client).post<TeamManagementControllerManualRegisterResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{id}/registrations/manual',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Apply approve/reject/cancel to many registrations
+ */
+export const teamManagementControllerBulkUpdate = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerBulkUpdateData, ThrowOnError>) => (options.client ?? client).post<TeamManagementControllerBulkUpdateResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/registrations/bulk-update',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * 1-call dashboard aggregate (KPI + headcount + shirt + people)
+ */
+export const teamManagementControllerGetDashboard = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerGetDashboardData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerGetDashboardResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/dashboard', ...options });
+
+/**
+ * List shirt stock rows for event
+ */
+export const teamManagementControllerListShirtStock = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerListShirtStockData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerListShirtStockResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/shirt-stock', ...options });
+
+/**
+ * Upsert shirt stock rows (by size)
+ */
+export const teamManagementControllerUpsertShirtStock = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerUpsertShirtStockData, ThrowOnError>) => (options.client ?? client).put<TeamManagementControllerUpsertShirtStockResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{id}/shirt-stock',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Registered-vs-stock aggregate per shirt size
+ */
+export const teamManagementControllerShirtAggregate = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerShirtAggregateData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerShirtAggregateResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/shirt-aggregate', ...options });
+
+/**
+ * Generate payment-report .xlsx and return 10-min presigned URL
+ */
+export const teamManagementControllerExportReport = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerExportReportData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerExportReportResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/export', ...options });
+
+/**
+ * Export full personnel list (admin) — all matching rows, unmasked CCCD, returns 10-min presigned .xlsx URL.
+ */
+export const teamManagementControllerExportPersonnel = <ThrowOnError extends boolean = false>(options: Options<TeamManagementControllerExportPersonnelData, ThrowOnError>) => (options.client ?? client).get<TeamManagementControllerExportPersonnelResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{id}/export-personnel', ...options });
+
+/**
+ * List open events
+ */
+export const teamRegistrationControllerListPublicEvents = <ThrowOnError extends boolean = false>(options?: Options<TeamRegistrationControllerListPublicEventsData, ThrowOnError>) => (options?.client ?? client).get<TeamRegistrationControllerListPublicEventsResponses, unknown, ThrowOnError>({ url: '/api/public/team-events', ...options });
+
+/**
+ * Get open event with available roles
+ */
+export const teamRegistrationControllerGetPublicEvent = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerGetPublicEventData, ThrowOnError>) => (options.client ?? client).get<TeamRegistrationControllerGetPublicEventResponses, unknown, ThrowOnError>({ url: '/api/public/team-events/{id}', ...options });
+
+/**
+ * Register for a role (public, no auth)
+ */
+export const teamRegistrationControllerRegister = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerRegisterData, ThrowOnError>) => (options.client ?? client).post<TeamRegistrationControllerRegisterResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-register',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get registration status via magic token
+ */
+export const teamRegistrationControllerStatus = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerStatusData, ThrowOnError>) => (options.client ?? client).get<TeamRegistrationControllerStatusResponses, unknown, ThrowOnError>({ url: '/api/public/team-status/{token}', ...options });
+
+/**
+ * v1.4.1 — TNV submits profile edits via magic token. Pending_approval rows are applied directly; approved+ rows go into pending_changes awaiting admin re-approval.
+ */
+export const teamRegistrationControllerUpdateProfile = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerUpdateProfileData, ThrowOnError>) => (options.client ?? client).patch<TeamRegistrationControllerUpdateProfileResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-registration/{token}/profile',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * View contract HTML for signing (magic token)
+ */
+export const teamRegistrationControllerViewContract = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerViewContractData, ThrowOnError>) => (options.client ?? client).get<TeamRegistrationControllerViewContractResponses, unknown, ThrowOnError>({ url: '/api/public/team-contract/{token}', ...options });
+
+/**
+ * Return a 10-minute presigned URL for the signed contract PDF (magic token).
+ */
+export const teamRegistrationControllerGetSignedContractPdf = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerGetSignedContractPdfData, ThrowOnError>) => (options.client ?? client).get<TeamRegistrationControllerGetSignedContractPdfResponses, unknown, ThrowOnError>({ url: '/api/public/team-contract-pdf/{token}', ...options });
+
+/**
+ * Sign contract — generates PDF, stores hash
+ */
+export const teamRegistrationControllerSignContract = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerSignContractData, ThrowOnError>) => (options.client ?? client).post<TeamRegistrationControllerSignContractResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-contract/{token}/sign',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Self check-in via GPS (magic token)
+ */
+export const teamRegistrationControllerSelfCheckin = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerSelfCheckinData, ThrowOnError>) => (options.client ?? client).post<TeamRegistrationControllerSelfCheckinResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-checkin/{token}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * v1.6 THAY ĐỔI 3 — TNV/Crew portal view: the caller's station + crew + teammates
+ */
+export const teamRegistrationControllerGetMyStation = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerGetMyStationData, ThrowOnError>) => (options.client ?? client).get<TeamRegistrationControllerGetMyStationResponses, unknown, ThrowOnError>({ url: '/api/public/team-registration/{token}/station', ...options });
+
+/**
+ * Get event feature config for portal (magic token)
+ */
+export const teamRegistrationControllerGetEventConfigForPortal = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerGetEventConfigForPortalData, ThrowOnError>) => (options.client ?? client).get<TeamRegistrationControllerGetEventConfigForPortalResponses, unknown, ThrowOnError>({ url: '/api/public/team-registration/{token}/event-config', ...options });
+
+/**
+ * Upload avatar or CCCD photo
+ */
+export const teamRegistrationControllerUploadPhoto = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationControllerUploadPhotoData, ThrowOnError>) => (options.client ?? client).post<TeamRegistrationControllerUploadPhotoResponses, unknown, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/public/team-upload-photo',
+    ...options,
+    headers: {
+        'Content-Type': null,
+        ...options.headers
+    }
+});
+
+/**
+ * Download XLSX template for bulk registration import. Includes Roles + Banks + Stations (v1.6) reference sheets and dropdown validations. Station columns (station_id / station_name / assignment_role) are optional — if set, admin imports the TNV AND assigns them to the station in one step.
+ */
+export const teamRegistrationImportControllerDownloadTemplate = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationImportControllerDownloadTemplateData, ThrowOnError>) => (options.client ?? client).get<TeamRegistrationImportControllerDownloadTemplateResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/registrations/import/template', ...options });
+
+/**
+ * Parse & validate an XLSX/CSV of registrations — returns preview, does NOT insert. Stores parsed rows under an import_token (10-min TTL) for the /confirm call.
+ */
+export const teamRegistrationImportControllerPreview = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationImportControllerPreviewData, ThrowOnError>) => (options.client ?? client).post<TeamRegistrationImportControllerPreviewResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/registrations/import/preview', ...options });
+
+/**
+ * Commit the parsed import using the import_token from /preview. Skips invalid/duplicate rows.
+ */
+export const teamRegistrationImportControllerConfirm = <ThrowOnError extends boolean = false>(options: Options<TeamRegistrationImportControllerConfirmData, ThrowOnError>) => (options.client ?? client).post<TeamRegistrationImportControllerConfirmResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{eventId}/registrations/import/confirm',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List contract templates
+ */
+export const teamContractTemplateControllerList = <ThrowOnError extends boolean = false>(options?: Options<TeamContractTemplateControllerListData, ThrowOnError>) => (options?.client ?? client).get<TeamContractTemplateControllerListResponses, unknown, ThrowOnError>({ url: '/api/team-management/contract-templates', ...options });
+
+/**
+ * Create template from HTML
+ */
+export const teamContractTemplateControllerCreate = <ThrowOnError extends boolean = false>(options: Options<TeamContractTemplateControllerCreateData, ThrowOnError>) => (options.client ?? client).post<TeamContractTemplateControllerCreateResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/contract-templates',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete template (must not be assigned to any role)
+ */
+export const teamContractTemplateControllerRemove = <ThrowOnError extends boolean = false>(options: Options<TeamContractTemplateControllerRemoveData, ThrowOnError>) => (options.client ?? client).delete<TeamContractTemplateControllerRemoveResponses, unknown, ThrowOnError>({ url: '/api/team-management/contract-templates/{id}', ...options });
+
+/**
+ * Get template detail
+ */
+export const teamContractTemplateControllerGet = <ThrowOnError extends boolean = false>(options: Options<TeamContractTemplateControllerGetData, ThrowOnError>) => (options.client ?? client).get<TeamContractTemplateControllerGetResponses, unknown, ThrowOnError>({ url: '/api/team-management/contract-templates/{id}', ...options });
+
+/**
+ * Update template
+ */
+export const teamContractTemplateControllerUpdate = <ThrowOnError extends boolean = false>(options: Options<TeamContractTemplateControllerUpdateData, ThrowOnError>) => (options.client ?? client).put<TeamContractTemplateControllerUpdateResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/contract-templates/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Duplicate a template — returns a new row with "(bản sao)" suffix
+ */
+export const teamContractTemplateControllerDuplicate = <ThrowOnError extends boolean = false>(options: Options<TeamContractTemplateControllerDuplicateData, ThrowOnError>) => (options.client ?? client).post<TeamContractTemplateControllerDuplicateResponses, unknown, ThrowOnError>({ url: '/api/team-management/contract-templates/{id}/duplicate', ...options });
+
+/**
+ * Validate template HTML — returns list of unknown {{variables}}
+ */
+export const teamContractTemplateControllerValidate = <ThrowOnError extends boolean = false>(options: Options<TeamContractTemplateControllerValidateData, ThrowOnError>) => (options.client ?? client).post<TeamContractTemplateControllerValidateResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/contract-templates/validate',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Convert a .docx upload to HTML (returns without saving)
+ */
+export const teamContractTemplateControllerImportDocx = <ThrowOnError extends boolean = false>(options: Options<TeamContractTemplateControllerImportDocxData, ThrowOnError>) => (options.client ?? client).post<TeamContractTemplateControllerImportDocxResponses, unknown, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/team-management/contract-templates/import-docx',
+    ...options,
+    headers: {
+        'Content-Type': null,
+        ...options.headers
+    }
+});
+
+/**
+ * Scan a QR and check the person in
+ */
+export const teamCheckinControllerScan = <ThrowOnError extends boolean = false>(options: Options<TeamCheckinControllerScanData, ThrowOnError>) => (options.client ?? client).post<TeamCheckinControllerScanResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/checkin/scan',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Fallback lookup by name / phone / CCCD for race-day staff when QR scan fails
+ */
+export const teamCheckinControllerLookup = <ThrowOnError extends boolean = false>(options: Options<TeamCheckinControllerLookupData, ThrowOnError>) => (options.client ?? client).get<TeamCheckinControllerLookupResponses, unknown, ThrowOnError>({ url: '/api/team-management/checkin/lookup', ...options });
+
+/**
+ * Realtime check-in stats for an event
+ */
+export const teamCheckinControllerStats = <ThrowOnError extends boolean = false>(options: Options<TeamCheckinControllerStatsData, ThrowOnError>) => (options.client ?? client).get<TeamCheckinControllerStatsResponses, unknown, ThrowOnError>({ url: '/api/team-management/checkin/stats/{eventId}', ...options });
+
+/**
+ * List every role in the event with its schedule-email config + eligible member count
+ */
+export const teamScheduleEmailControllerList = <ThrowOnError extends boolean = false>(options: Options<TeamScheduleEmailControllerListData, ThrowOnError>) => (options.client ?? client).get<TeamScheduleEmailControllerListResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/schedule-emails', ...options });
+
+/**
+ * Get schedule-email config for a single role
+ */
+export const teamScheduleEmailControllerGet = <ThrowOnError extends boolean = false>(options: Options<TeamScheduleEmailControllerGetData, ThrowOnError>) => (options.client ?? client).get<TeamScheduleEmailControllerGetResponses, TeamScheduleEmailControllerGetErrors, ThrowOnError>({ url: '/api/team-management/events/{eventId}/schedule-emails/{roleId}', ...options });
+
+/**
+ * Upsert schedule-email config for a role (sanitizes body_html)
+ */
+export const teamScheduleEmailControllerUpsert = <ThrowOnError extends boolean = false>(options: Options<TeamScheduleEmailControllerUpsertData, ThrowOnError>) => (options.client ?? client).put<TeamScheduleEmailControllerUpsertResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{eventId}/schedule-emails/{roleId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Render with SAMPLE_DATA + role customs and send a single preview email
+ */
+export const teamScheduleEmailControllerSendTest = <ThrowOnError extends boolean = false>(options: Options<TeamScheduleEmailControllerSendTestData, ThrowOnError>) => (options.client ?? client).post<TeamScheduleEmailControllerSendTestResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{eventId}/schedule-emails/{roleId}/send-test',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Send the schedule email to every eligible registration in the role
+ */
+export const teamScheduleEmailControllerSendBulk = <ThrowOnError extends boolean = false>(options: Options<TeamScheduleEmailControllerSendBulkData, ThrowOnError>) => (options.client ?? client).post<TeamScheduleEmailControllerSendBulkResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/schedule-emails/{roleId}/send-bulk', ...options });
+
+/**
+ * Return the leader portal data: leader info + all members of the same event. CCCD photo URLs are presigned for 1h and access is audit-logged.
+ */
+export const teamLeaderControllerGetTeam = <ThrowOnError extends boolean = false>(options: Options<TeamLeaderControllerGetTeamData, ThrowOnError>) => (options.client ?? client).get<TeamLeaderControllerGetTeamResponses, unknown, ThrowOnError>({ url: '/api/public/team-leader/{token}/team', ...options });
+
+/**
+ * Leader checks in a member. Member must be in the same event, status=qr_sent. For qr_scan method, qr_code must match.
+ */
+export const teamLeaderControllerCheckin = <ThrowOnError extends boolean = false>(options: Options<TeamLeaderControllerCheckinData, ThrowOnError>) => (options.client ?? client).post<TeamLeaderControllerCheckinResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-leader/{token}/checkin',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Leader confirms completion for one member (checked_in → completed). Flags suspicious if worked time < event.min_work_hours_for_completion.
+ */
+export const teamLeaderControllerConfirm = <ThrowOnError extends boolean = false>(options: Options<TeamLeaderControllerConfirmData, ThrowOnError>) => (options.client ?? client).post<TeamLeaderControllerConfirmResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-leader/{token}/confirm-completion',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Bulk confirm — skips (no error) members not in checked_in or wrong event. Returns counts + suspicious tally.
+ */
+export const teamLeaderControllerConfirmBulk = <ThrowOnError extends boolean = false>(options: Options<TeamLeaderControllerConfirmBulkData, ThrowOnError>) => (options.client ?? client).post<TeamLeaderControllerConfirmBulkResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-leader/{token}/confirm-completion-bulk',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List all emergency contacts for event (admin, includes inactive)
+ */
+export const teamContactControllerListAdmin = <ThrowOnError extends boolean = false>(options: Options<TeamContactControllerListAdminData, ThrowOnError>) => (options.client ?? client).get<TeamContactControllerListAdminResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/contacts', ...options });
+
+/**
+ * Create emergency contact for event
+ */
+export const teamContactControllerCreate = <ThrowOnError extends boolean = false>(options: Options<TeamContactControllerCreateData, ThrowOnError>) => (options.client ?? client).post<TeamContactControllerCreateResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{eventId}/contacts',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete emergency contact (hard-delete)
+ */
+export const teamContactControllerRemove = <ThrowOnError extends boolean = false>(options: Options<TeamContactControllerRemoveData, ThrowOnError>) => (options.client ?? client).delete<TeamContactControllerRemoveResponses, unknown, ThrowOnError>({ url: '/api/team-management/contacts/{id}', ...options });
+
+/**
+ * Update emergency contact
+ */
+export const teamContactControllerUpdate = <ThrowOnError extends boolean = false>(options: Options<TeamContactControllerUpdateData, ThrowOnError>) => (options.client ?? client).patch<TeamContactControllerUpdateResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/contacts/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Flip is_active flag on a contact
+ */
+export const teamContactControllerToggleActive = <ThrowOnError extends boolean = false>(options: Options<TeamContactControllerToggleActiveData, ThrowOnError>) => (options.client ?? client).patch<TeamContactControllerToggleActiveResponses, unknown, ThrowOnError>({ url: '/api/team-management/contacts/{id}/toggle-active', ...options });
+
+/**
+ * v1.5 — Emergency contacts grouped by type for the registered TNV. Token-gated (member OR leader); independent of registration status.
+ */
+export const teamContactControllerPublicContacts = <ThrowOnError extends boolean = false>(options: Options<TeamContactControllerPublicContactsData, ThrowOnError>) => (options.client ?? client).get<TeamContactControllerPublicContactsResponses, unknown, ThrowOnError>({ url: '/api/public/team-registration/{token}/contacts', ...options });
+
+/**
+ * Return team directory: my team members + leaders of other teams. Leaders additionally see ALL members of other teams (BR-DIR-03).
+ */
+export const teamDirectoryControllerGetDirectory = <ThrowOnError extends boolean = false>(options: Options<TeamDirectoryControllerGetDirectoryData, ThrowOnError>) => (options.client ?? client).get<TeamDirectoryControllerGetDirectoryResponses, unknown, ThrowOnError>({ url: '/api/public/team-registration/{token}/directory', ...options });
+
+/**
+ * v1.6: flat event-wide station list. Each row carries category_id + category_name + category_color for client-side filtering/grouping.
+ */
+export const teamStationControllerListAllStationsInEvent = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerListAllStationsInEventData, ThrowOnError>) => (options.client ?? client).get<TeamStationControllerListAllStationsInEventResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/stations', ...options });
+
+/**
+ * List all stations under a Team (category) with member summary. v1.8 replacement for events/:eventId/roles/:roleId/stations.
+ */
+export const teamStationControllerListStations = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerListStationsData, ThrowOnError>) => (options.client ?? client).get<TeamStationControllerListStationsResponses, unknown, ThrowOnError>({ url: '/api/team-management/team-categories/{categoryId}/stations', ...options });
+
+/**
+ * Create a station under a Team (category)
+ */
+export const teamStationControllerCreateStation = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerCreateStationData, ThrowOnError>) => (options.client ?? client).post<TeamStationControllerCreateStationResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/team-categories/{categoryId}/stations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete a station (409 if any assignments still attached)
+ */
+export const teamStationControllerDeleteStation = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerDeleteStationData, ThrowOnError>) => (options.client ?? client).delete<TeamStationControllerDeleteStationResponses, unknown, ThrowOnError>({ url: '/api/team-management/stations/{id}', ...options });
+
+/**
+ * Partial update of a station
+ */
+export const teamStationControllerUpdateStation = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerUpdateStationData, ThrowOnError>) => (options.client ?? client).patch<TeamStationControllerUpdateStationResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/stations/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Change station lifecycle status (setup/active/closed — any transition allowed)
+ */
+export const teamStationControllerUpdateStatus = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerUpdateStatusData, ThrowOnError>) => (options.client ?? client).patch<TeamStationControllerUpdateStatusResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/stations/{id}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List members eligible for assignment: same-team roles (any rank), approved+, not already assigned. v1.8: leaders allowed (BR-STN-03 relaxed to warning).
+ */
+export const teamStationControllerListAssignableMembers = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerListAssignableMembersData, ThrowOnError>) => (options.client ?? client).get<TeamStationControllerListAssignableMembersResponses, unknown, ThrowOnError>({ url: '/api/team-management/stations/{id}/assignable-members', ...options });
+
+/**
+ * Assign a member to a station. Supervisor-vs-worker derived from role.is_leader_role.
+ */
+export const teamStationControllerCreateAssignment = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerCreateAssignmentData, ThrowOnError>) => (options.client ?? client).post<TeamStationControllerCreateAssignmentResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/stations/{id}/assignments',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Remove an assignment
+ */
+export const teamStationControllerRemoveAssignment = <ThrowOnError extends boolean = false>(options: Options<TeamStationControllerRemoveAssignmentData, ThrowOnError>) => (options.client ?? client).delete<TeamStationControllerRemoveAssignmentResponses, unknown, ThrowOnError>({ url: '/api/team-management/station-assignments/{assignmentId}', ...options });
+
+/**
+ * List supply items for an event
+ */
+export const teamSupplyControllerListItems = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerListItemsData, ThrowOnError>) => (options.client ?? client).get<TeamSupplyControllerListItemsResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/supply-items', ...options });
+
+/**
+ * Create a supply item. Admin may set created_by_role_id=null (admin-owned) or assign to a leader role.
+ */
+export const teamSupplyControllerCreateItem = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerCreateItemData, ThrowOnError>) => (options.client ?? client).post<TeamSupplyControllerCreateItemResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{eventId}/supply-items',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete a supply item. Rejects with 409 if any plan/allocation references it.
+ */
+export const teamSupplyControllerDeleteItem = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerDeleteItemData, ThrowOnError>) => (options.client ?? client).delete<TeamSupplyControllerDeleteItemResponses, unknown, ThrowOnError>({ url: '/api/team-management/supply-items/{id}', ...options });
+
+/**
+ * Update a supply item (admin can edit any)
+ */
+export const teamSupplyControllerUpdateItem = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerUpdateItemData, ThrowOnError>) => (options.client ?? client).patch<TeamSupplyControllerUpdateItemResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/supply-items/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * v1.8 — Get supply plan for a Team (category). Rows cover every item in the event.
+ */
+export const teamSupplyControllerGetPlan = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerGetPlanData, ThrowOnError>) => (options.client ?? client).get<TeamSupplyControllerGetPlanResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/team-categories/{categoryId}/supply-plan', ...options });
+
+/**
+ * v1.8 — Admin-on-behalf-of-leader upsert of request_qty for a Team. Bulk atomic by item_id (INSERT … ON DUPLICATE KEY UPDATE).
+ */
+export const teamSupplyControllerUpsertRequest = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerUpsertRequestData, ThrowOnError>) => (options.client ?? client).put<TeamSupplyControllerUpsertRequestResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{eventId}/team-categories/{categoryId}/supply-plan/request',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * v1.8 — Admin upsert of fulfilled_qty for a Team. Bulk atomic by item_id.
+ */
+export const teamSupplyControllerUpsertFulfill = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerUpsertFulfillData, ThrowOnError>) => (options.client ?? client).put<TeamSupplyControllerUpsertFulfillResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{eventId}/team-categories/{categoryId}/supply-plan/fulfill',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Matrix view (items × roles) with plan + SUM(allocated) + SUM(confirmed).
+ */
+export const teamSupplyControllerGetOverview = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerGetOverviewData, ThrowOnError>) => (options.client ?? client).get<TeamSupplyControllerGetOverviewResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/supply-overview', ...options });
+
+/**
+ * List allocations for a station
+ */
+export const teamSupplyControllerGetAllocations = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerGetAllocationsData, ThrowOnError>) => (options.client ?? client).get<TeamSupplyControllerGetAllocationsResponses, unknown, ThrowOnError>({ url: '/api/team-management/stations/{stationId}/allocations', ...options });
+
+/**
+ * Bulk upsert allocations for a station. Rejects if SUM exceeds role.fulfilled_qty or any row is_locked.
+ */
+export const teamSupplyControllerUpsertAllocations = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerUpsertAllocationsData, ThrowOnError>) => (options.client ?? client).put<TeamSupplyControllerUpsertAllocationsResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/stations/{stationId}/allocations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Unlock a crew-confirmed allocation so leader can edit. admin_note required.
+ */
+export const teamSupplyControllerUnlockAllocation = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerUnlockAllocationData, ThrowOnError>) => (options.client ?? client).patch<TeamSupplyControllerUnlockAllocationResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/supply-allocations/{id}/unlock',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List supplement rounds for an allocation
+ */
+export const teamSupplyControllerListSupplements = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerListSupplementsData, ThrowOnError>) => (options.client ?? client).get<TeamSupplyControllerListSupplementsResponses, unknown, ThrowOnError>({ url: '/api/team-management/supply-allocations/{id}/supplements', ...options });
+
+/**
+ * Admin creates a supplement round on behalf of leader. Requires allocation to be is_locked=true.
+ */
+export const teamSupplyControllerCreateSupplement = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyControllerCreateSupplementData, ThrowOnError>) => (options.client ?? client).post<TeamSupplyControllerCreateSupplementResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/supply-allocations/{id}/supplements',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Crew confirms receipt of allocated supply at their station. Sets confirmed_qty + is_locked=TRUE.
+ */
+export const teamSupplyPublicControllerConfirmSupply = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyPublicControllerConfirmSupplyData, ThrowOnError>) => (options.client ?? client).post<TeamSupplyPublicControllerConfirmSupplyResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-registration/{token}/station/confirm-supply',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Crew confirms a supplement round at their station.
+ */
+export const teamSupplyPublicControllerConfirmSupplement = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyPublicControllerConfirmSupplementData, ThrowOnError>) => (options.client ?? client).post<TeamSupplyPublicControllerConfirmSupplementResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-registration/{token}/station/confirm-supplement',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Leader supply view — plan + per-station allocations + supplements for the leader's role.
+ */
+export const teamSupplyPublicControllerGetLeaderSupplyView = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyPublicControllerGetLeaderSupplyViewData, ThrowOnError>) => (options.client ?? client).get<TeamSupplyPublicControllerGetLeaderSupplyViewResponses, unknown, ThrowOnError>({ url: '/api/public/team-registration/{token}/supply-plan', ...options });
+
+/**
+ * v1.8 — Leader upserts requested_qty + request_note for a specific managed TEAM (category). Client passes `target_category_id`; service validates it sits inside the leader's managed category set.
+ */
+export const teamSupplyPublicControllerUpsertRequest = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyPublicControllerUpsertRequestData, ThrowOnError>) => (options.client ?? client).put<TeamSupplyPublicControllerUpsertRequestResponses, unknown, ThrowOnError>({ url: '/api/public/team-registration/{token}/supply-plan/request', ...options });
+
+/**
+ * Leader bulk upsert allocations for a station of the MANAGED role (v1.6). Service enforces cross-station sum ≤ fulfilled_qty.
+ */
+export const teamSupplyPublicControllerUpsertAllocations = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyPublicControllerUpsertAllocationsData, ThrowOnError>) => (options.client ?? client).put<TeamSupplyPublicControllerUpsertAllocationsResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-registration/{token}/stations/{stationId}/allocations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Leader creates a supplement round on an allocation. Allocation must already be is_locked=TRUE.
+ */
+export const teamSupplyPublicControllerCreateSupplement = <ThrowOnError extends boolean = false>(options: Options<TeamSupplyPublicControllerCreateSupplementData, ThrowOnError>) => (options.client ?? client).post<TeamSupplyPublicControllerCreateSupplementResponses, unknown, ThrowOnError>({
+    url: '/api/public/team-registration/{token}/supply-allocations/{allocationId}/supplements',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List all Teams (categories) of an event
+ */
+export const teamCategoryControllerList = <ThrowOnError extends boolean = false>(options: Options<TeamCategoryControllerListData, ThrowOnError>) => (options.client ?? client).get<TeamCategoryControllerListResponses, unknown, ThrowOnError>({ url: '/api/team-management/events/{eventId}/team-categories', ...options });
+
+/**
+ * Create a Team (category) under an event
+ */
+export const teamCategoryControllerCreate = <ThrowOnError extends boolean = false>(options: Options<TeamCategoryControllerCreateData, ThrowOnError>) => (options.client ?? client).post<TeamCategoryControllerCreateResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/events/{eventId}/team-categories',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete a Team (category). 409 nếu còn trạm hoặc supply-plan attached. Roles thuộc team tự unlink (SET NULL).
+ */
+export const teamCategoryControllerRemove = <ThrowOnError extends boolean = false>(options: Options<TeamCategoryControllerRemoveData, ThrowOnError>) => (options.client ?? client).delete<TeamCategoryControllerRemoveResponses, unknown, ThrowOnError>({ url: '/api/team-management/team-categories/{id}', ...options });
+
+/**
+ * Get a Team (category) detail + counts
+ */
+export const teamCategoryControllerGetById = <ThrowOnError extends boolean = false>(options: Options<TeamCategoryControllerGetByIdData, ThrowOnError>) => (options.client ?? client).get<TeamCategoryControllerGetByIdResponses, unknown, ThrowOnError>({ url: '/api/team-management/team-categories/{id}', ...options });
+
+/**
+ * Update a Team (category)
+ */
+export const teamCategoryControllerUpdate = <ThrowOnError extends boolean = false>(options: Options<TeamCategoryControllerUpdateData, ThrowOnError>) => (options.client ?? client).patch<TeamCategoryControllerUpdateResponses, unknown, ThrowOnError>({
+    url: '/api/team-management/team-categories/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Request an OTP to recover the magic link. Always returns 200 — does not confirm whether the email exists.
+ */
+export const teamRecoverControllerRequest = <ThrowOnError extends boolean = false>(options: Options<TeamRecoverControllerRequestData, ThrowOnError>) => (options.client ?? client).post<TeamRecoverControllerRequestResponses, unknown, ThrowOnError>({
+    url: '/api/public/recover/request',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Verify OTP and return all active registrations with their magic links.
+ */
+export const teamRecoverControllerVerify = <ThrowOnError extends boolean = false>(options: Options<TeamRecoverControllerVerifyData, ThrowOnError>) => (options.client ?? client).post<TeamRecoverControllerVerifyResponses, unknown, ThrowOnError>({
+    url: '/api/public/recover/verify',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Search and list races with filters and pagination
  */
 export const racesControllerSearchRaces = <ThrowOnError extends boolean = false>(options?: Options<RacesControllerSearchRacesData, ThrowOnError>) => (options?.client ?? client).get<RacesControllerSearchRacesResponses, unknown, ThrowOnError>({ url: '/api/races', ...options });
@@ -432,6 +1377,26 @@ export const raceResultControllerGetFilterOptions = <ThrowOnError extends boolea
 export const raceResultControllerGetCourseStats = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetCourseStatsData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetCourseStatsResponses, unknown, ThrowOnError>({ url: '/api/race-results/stats/{courseId}', ...options });
 
 /**
+ * Get finish time distribution histogram for a course (F-03)
+ */
+export const raceResultControllerGetTimeDistribution = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetTimeDistributionData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetTimeDistributionResponses, unknown, ThrowOnError>({ url: '/api/race-results/stats/{courseId}/distribution', ...options });
+
+/**
+ * Get per-country stats (count + best time) for a course (F-04)
+ */
+export const raceResultControllerGetCountryStats = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetCountryStatsData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetCountryStatsResponses, unknown, ThrowOnError>({ url: '/api/race-results/stats/{courseId}/countries', ...options });
+
+/**
+ * Get athlete rank among same-nationality finishers (F-04)
+ */
+export const raceResultControllerGetCountryRank = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetCountryRankData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetCountryRankResponses, unknown, ThrowOnError>({ url: '/api/race-results/athlete/{raceId}/{bib}/country-rank', ...options });
+
+/**
+ * Get athlete's performance percentile on this course (F-06)
+ */
+export const raceResultControllerGetPercentile = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetPercentileData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetPercentileResponses, unknown, ThrowOnError>({ url: '/api/race-results/athlete/{raceId}/{bib}/percentile', ...options });
+
+/**
  * Request OTP to verify email before avatar upload
  */
 export const raceResultControllerRequestAvatarOtp = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerRequestAvatarOtpData, ThrowOnError>) => (options.client ?? client).post<RaceResultControllerRequestAvatarOtpResponses, RaceResultControllerRequestAvatarOtpErrors, ThrowOnError>({
@@ -482,7 +1447,12 @@ export const raceResultControllerSubmitClaim = <ThrowOnError extends boolean = f
 });
 
 /**
- * Generate result image for an athlete
+ * Preview result image (lowres, ~480px, no cache) — for template picker
+ */
+export const raceResultControllerPreviewResultImage = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerPreviewResultImageData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerPreviewResultImageResponses, RaceResultControllerPreviewResultImageErrors, ThrowOnError>({ url: '/api/race-results/result-image/{raceId}/{bib}', ...options });
+
+/**
+ * Generate full-res result image for an athlete (S3-cached)
  */
 export const raceResultControllerGenerateResultImage = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGenerateResultImageData, ThrowOnError>) => (options.client ?? client).post<RaceResultControllerGenerateResultImageResponses, RaceResultControllerGenerateResultImageErrors, ThrowOnError>({
     ...formDataBodySerializer,
@@ -493,6 +1463,42 @@ export const raceResultControllerGenerateResultImage = <ThrowOnError extends boo
         ...options.headers
     }
 });
+
+/**
+ * Get badges (PB / Podium / Sub-X / Ultra / Streak) for an athlete
+ */
+export const raceResultControllerGetAthleteBadges = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetAthleteBadgesData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetAthleteBadgesResponses, unknown, ThrowOnError>({ url: '/api/race-results/badges/{raceId}/{bib}', ...options });
+
+/**
+ * Get current share counter for a race
+ */
+export const raceResultControllerGetShareCount = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetShareCountData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetShareCountResponses, unknown, ThrowOnError>({ url: '/api/race-results/share-count/{raceId}', ...options });
+
+/**
+ * Increment share counter for a race (called after user shares an image)
+ */
+export const raceResultControllerIncrementShareCount = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerIncrementShareCountData, ThrowOnError>) => (options.client ?? client).post<RaceResultControllerIncrementShareCountResponses, unknown, ThrowOnError>({ url: '/api/race-results/share-count/{raceId}', ...options });
+
+/**
+ * Log a result-image share event (fire-and-forget analytics endpoint)
+ *
+ * Called by the frontend after a user downloads / shares / copies a generated image. Persisted to `share_events` collection for admin dashboard aggregation + the 24h nurture cron. Does not increment the Redis share counter — that has its own endpoint for legacy callers.
+ */
+export const raceResultControllerLogShareEvent = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerLogShareEventData, ThrowOnError>) => (options.client ?? client).post<RaceResultControllerLogShareEventResponses, unknown, ThrowOnError>({
+    url: '/api/race-results/result-image-share',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Aggregate share-event stats for the admin dashboard
+ *
+ * Returns totals + breakdowns by template and channel, plus the backend-fallback rate. Optional filters: `raceId`, `since` (ISO timestamp).
+ */
+export const raceResultControllerGetShareStats = <ThrowOnError extends boolean = false>(options: Options<RaceResultControllerGetShareStatsData, ThrowOnError>) => (options.client ?? client).get<RaceResultControllerGetShareStatsResponses, unknown, ThrowOnError>({ url: '/api/race-results/admin/result-image-stats', ...options });
 
 /**
  * Manually trigger race results sync
@@ -601,27 +1607,6 @@ export const adminControllerTestOtpEmail = <ThrowOnError extends boolean = false
     ...options
 });
 
-/**
- * Admin login — returns JWT token
- */
-export const authControllerLogin = <ThrowOnError extends boolean = false>(options: Options<AuthControllerLoginData, ThrowOnError>) => (options.client ?? client).post<AuthControllerLoginResponses, AuthControllerLoginErrors, ThrowOnError>({
-    url: '/api/auth/login',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Get current authenticated admin profile
- */
-export const authControllerProfile = <ThrowOnError extends boolean = false>(options?: Options<AuthControllerProfileData, ThrowOnError>) => (options?.client ?? client).get<AuthControllerProfileResponses, AuthControllerProfileErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/auth/profile',
-    ...options
-});
-
 export const uploadControllerUploadFile = <ThrowOnError extends boolean = false>(options: Options<UploadControllerUploadFileData, ThrowOnError>) => (options.client ?? client).post<UploadControllerUploadFileResponses, unknown, ThrowOnError>({
     ...formDataBodySerializer,
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -686,3 +1671,350 @@ export const sponsorsControllerUpdate = <ThrowOnError extends boolean = false>(o
         ...options.headers
     }
 });
+
+/**
+ * Homepage summary — stats + live/upcoming/ended(page 1) races
+ *
+ * Public endpoint. Cached via Redis (TTL 300s). Use X-Cache response header to verify HIT/MISS.
+ */
+export const homepageControllerGetSummary = <ThrowOnError extends boolean = false>(options?: Options<HomepageControllerGetSummaryData, ThrowOnError>) => (options?.client ?? client).get<HomepageControllerGetSummaryResponses, unknown, ThrowOnError>({ url: '/api/homepage/summary', ...options });
+
+/**
+ * Paginated ended races for homepage "Xem thêm" button
+ *
+ * Public endpoint. Cached per-page via Redis (TTL 120s). Default limit 9.
+ */
+export const homepageControllerGetEndedRaces = <ThrowOnError extends boolean = false>(options?: Options<HomepageControllerGetEndedRacesData, ThrowOnError>) => (options?.client ?? client).get<HomepageControllerGetEndedRacesResponses, unknown, ThrowOnError>({ url: '/api/homepage/ended', ...options });
+
+/**
+ * Global search — race name (fuzzy) or bib (exact)
+ *
+ * Public endpoint. Activates at ≥2 chars (client-side). Auto-detects bib if query is digits only; otherwise searches race names. Bib lookups are cached for 60 seconds.
+ */
+export const searchControllerSearch = <ThrowOnError extends boolean = false>(options: Options<SearchControllerSearchData, ThrowOnError>) => (options.client ?? client).get<SearchControllerSearchResponses, unknown, ThrowOnError>({ url: '/api/search', ...options });
+
+/**
+ * List certificate templates with filters (admin)
+ */
+export const certificatesControllerListTemplates = <ThrowOnError extends boolean = false>(options?: Options<CertificatesControllerListTemplatesData, ThrowOnError>) => (options?.client ?? client).get<CertificatesControllerListTemplatesResponses, unknown, ThrowOnError>({ url: '/api/certificate-templates', ...options });
+
+/**
+ * Create a certificate template (admin)
+ */
+export const certificatesControllerCreateTemplate = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerCreateTemplateData, ThrowOnError>) => (options.client ?? client).post<CertificatesControllerCreateTemplateResponses, unknown, ThrowOnError>({
+    url: '/api/certificate-templates',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete certificate template (admin)
+ */
+export const certificatesControllerRemoveTemplate = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerRemoveTemplateData, ThrowOnError>) => (options.client ?? client).delete<CertificatesControllerRemoveTemplateResponses, CertificatesControllerRemoveTemplateErrors, ThrowOnError>({ url: '/api/certificate-templates/{id}', ...options });
+
+/**
+ * Get certificate template by id (admin)
+ */
+export const certificatesControllerGetTemplate = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerGetTemplateData, ThrowOnError>) => (options.client ?? client).get<CertificatesControllerGetTemplateResponses, CertificatesControllerGetTemplateErrors, ThrowOnError>({ url: '/api/certificate-templates/{id}', ...options });
+
+/**
+ * Update certificate template (admin)
+ */
+export const certificatesControllerUpdateTemplate = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerUpdateTemplateData, ThrowOnError>) => (options.client ?? client).patch<CertificatesControllerUpdateTemplateResponses, unknown, ThrowOnError>({
+    url: '/api/certificate-templates/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get race certificate config (admin)
+ */
+export const certificatesControllerGetRaceConfig = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerGetRaceConfigData, ThrowOnError>) => (options.client ?? client).get<CertificatesControllerGetRaceConfigResponses, CertificatesControllerGetRaceConfigErrors, ThrowOnError>({ url: '/api/race-certificate-configs/{raceId}', ...options });
+
+/**
+ * Upsert race certificate config (admin)
+ */
+export const certificatesControllerUpsertRaceConfig = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerUpsertRaceConfigData, ThrowOnError>) => (options.client ?? client).put<CertificatesControllerUpsertRaceConfigResponses, unknown, ThrowOnError>({
+    url: '/api/race-certificate-configs/{raceId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Render a certificate or share card PNG for a specific athlete (public)
+ */
+export const certificatesControllerRenderCertificate = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerRenderCertificateData, ThrowOnError>) => (options.client ?? client).get<CertificatesControllerRenderCertificateResponses, CertificatesControllerRenderCertificateErrors, ThrowOnError>({ url: '/api/certificates/render/{raceId}/{bib}', ...options });
+
+/**
+ * Return canvas size + photo_area bounds for client-side photo compositing (public)
+ */
+export const certificatesControllerRenderMeta = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerRenderMetaData, ThrowOnError>) => (options.client ?? client).get<CertificatesControllerRenderMetaResponses, unknown, ThrowOnError>({ url: '/api/certificates/render-meta/{raceId}/{bib}', ...options });
+
+/**
+ * Check which template types are available for a race/course (public)
+ */
+export const certificatesControllerCheckAvailability = <ThrowOnError extends boolean = false>(options: Options<CertificatesControllerCheckAvailabilityData, ThrowOnError>) => (options.client ?? client).get<CertificatesControllerCheckAvailabilityResponses, unknown, ThrowOnError>({ url: '/api/certificates/check/{raceId}', ...options });
+
+export const usersControllerMeDebug = <ThrowOnError extends boolean = false>(options?: Options<UsersControllerMeDebugData, ThrowOnError>) => (options?.client ?? client).get<UsersControllerMeDebugResponses, unknown, ThrowOnError>({ url: '/api/users/me/debug', ...options });
+
+/**
+ * Get current user — networkless, from OIDC access token claims
+ *
+ * Claims populated by Logto access token (sub, email, roles, scope). Extra profile fields (username, name, picture) require the matching OIDC scopes on the application.
+ */
+export const usersControllerMe = <ThrowOnError extends boolean = false>(options?: Options<UsersControllerMeData, ThrowOnError>) => (options?.client ?? client).get<UsersControllerMeResponses, UsersControllerMeErrors, ThrowOnError>({ url: '/api/users/me', ...options });
+
+/**
+ * Upload custom avatar → S3 → persist URL into Logto user customData
+ */
+export const usersControllerUploadAvatar = <ThrowOnError extends boolean = false>(options?: Options<UsersControllerUploadAvatarData, ThrowOnError>) => (options?.client ?? client).post<UsersControllerUploadAvatarResponses, unknown, ThrowOnError>({ url: '/api/users/me/avatar', ...options });
+
+/**
+ * Unstar an athlete
+ */
+export const athleteStarsControllerUnstar = <ThrowOnError extends boolean = false>(options: Options<AthleteStarsControllerUnstarData, ThrowOnError>) => (options.client ?? client).delete<AthleteStarsControllerUnstarResponses, unknown, ThrowOnError>({
+    url: '/api/athlete-stars',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List all starred athletes of current user
+ */
+export const athleteStarsControllerList = <ThrowOnError extends boolean = false>(options?: Options<AthleteStarsControllerListData, ThrowOnError>) => (options?.client ?? client).get<AthleteStarsControllerListResponses, unknown, ThrowOnError>({ url: '/api/athlete-stars', ...options });
+
+/**
+ * Star an athlete (idempotent upsert)
+ */
+export const athleteStarsControllerStar = <ThrowOnError extends boolean = false>(options: Options<AthleteStarsControllerStarData, ThrowOnError>) => (options.client ?? client).post<AthleteStarsControllerStarResponses, unknown, ThrowOnError>({
+    url: '/api/athlete-stars',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List starred bibs in a course (for ranking page UI marking)
+ */
+export const athleteStarsControllerByCourse = <ThrowOnError extends boolean = false>(options: Options<AthleteStarsControllerByCourseData, ThrowOnError>) => (options.client ?? client).get<AthleteStarsControllerByCourseResponses, unknown, ThrowOnError>({ url: '/api/athlete-stars/by-course', ...options });
+
+/**
+ * Submit timing lead (landing form)
+ */
+export const timingPublicControllerCreateLead = <ThrowOnError extends boolean = false>(options: Options<TimingPublicControllerCreateLeadData, ThrowOnError>) => (options.client ?? client).post<TimingPublicControllerCreateLeadResponses, TimingPublicControllerCreateLeadErrors, ThrowOnError>({
+    url: '/api/timing/leads',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Submit solution lead (solution.5bib.com form)
+ */
+export const solutionPublicControllerCreateLead = <ThrowOnError extends boolean = false>(options: Options<SolutionPublicControllerCreateLeadData, ThrowOnError>) => (options.client ?? client).post<SolutionPublicControllerCreateLeadResponses, SolutionPublicControllerCreateLeadErrors, ThrowOnError>({
+    url: '/api/solution/leads',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Submit 5Sport lead (solution.5sport.vn form)
+ */
+export const sport5PublicControllerCreateLead = <ThrowOnError extends boolean = false>(options: Options<Sport5PublicControllerCreateLeadData, ThrowOnError>) => (options.client ?? client).post<Sport5PublicControllerCreateLeadResponses, Sport5PublicControllerCreateLeadErrors, ThrowOnError>({
+    url: '/api/5sport/leads',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List timing leads (paginated, filterable)
+ */
+export const timingAdminControllerList = <ThrowOnError extends boolean = false>(options?: Options<TimingAdminControllerListData, ThrowOnError>) => (options?.client ?? client).get<TimingAdminControllerListResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/timing/leads',
+    ...options
+});
+
+/**
+ * Export leads CSV (up to 10k rows)
+ */
+export const timingAdminControllerExport = <ThrowOnError extends boolean = false>(options?: Options<TimingAdminControllerExportData, ThrowOnError>) => (options?.client ?? client).get<TimingAdminControllerExportResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/timing/leads/export',
+    ...options
+});
+
+/**
+ * Get single lead
+ */
+export const timingAdminControllerGet = <ThrowOnError extends boolean = false>(options: Options<TimingAdminControllerGetData, ThrowOnError>) => (options.client ?? client).get<TimingAdminControllerGetResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/timing/leads/{id}',
+    ...options
+});
+
+/**
+ * Update lead (status / staff_notes / archive)
+ */
+export const timingAdminControllerUpdate = <ThrowOnError extends boolean = false>(options: Options<TimingAdminControllerUpdateData, ThrowOnError>) => (options.client ?? client).patch<TimingAdminControllerUpdateResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/timing/leads/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Ingest behavioral tracking event from 5bib.com frontend
+ */
+export const eventTrackingControllerTrackEvent = <ThrowOnError extends boolean = false>(options: Options<EventTrackingControllerTrackEventData, ThrowOnError>) => (options.client ?? client).post<EventTrackingControllerTrackEventResponses, EventTrackingControllerTrackEventErrors, ThrowOnError>({
+    url: '/api/event-tracking/events',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List all sponsored slots (admin)
+ */
+export const sponsoredControllerFindAll = <ThrowOnError extends boolean = false>(options?: Options<SponsoredControllerFindAllData, ThrowOnError>) => (options?.client ?? client).get<SponsoredControllerFindAllResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored',
+    ...options
+});
+
+/**
+ * Create sponsored slot (admin)
+ */
+export const sponsoredControllerCreate = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerCreateData, ThrowOnError>) => (options.client ?? client).post<SponsoredControllerCreateResponses, SponsoredControllerCreateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete slot and all its items (admin)
+ */
+export const sponsoredControllerRemove = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerRemoveData, ThrowOnError>) => (options.client ?? client).delete<SponsoredControllerRemoveResponses, SponsoredControllerRemoveErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored/{id}',
+    ...options
+});
+
+/**
+ * Get single sponsored slot (admin)
+ */
+export const sponsoredControllerFindOne = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerFindOneData, ThrowOnError>) => (options.client ?? client).get<SponsoredControllerFindOneResponses, SponsoredControllerFindOneErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored/{id}',
+    ...options
+});
+
+/**
+ * Update sponsored slot config (admin)
+ */
+export const sponsoredControllerUpdate = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerUpdateData, ThrowOnError>) => (options.client ?? client).patch<SponsoredControllerUpdateResponses, SponsoredControllerUpdateErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Reorder slot display positions (admin)
+ */
+export const sponsoredControllerReorderSlots = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerReorderSlotsData, ThrowOnError>) => (options.client ?? client).patch<SponsoredControllerReorderSlotsResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored/reorder',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Add item to slot (admin)
+ */
+export const sponsoredControllerAddItem = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerAddItemData, ThrowOnError>) => (options.client ?? client).post<SponsoredControllerAddItemResponses, SponsoredControllerAddItemErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored/{slotId}/items',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Reorder items within a slot (admin)
+ */
+export const sponsoredControllerReorderItems = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerReorderItemsData, ThrowOnError>) => (options.client ?? client).patch<SponsoredControllerReorderItemsResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored/{slotId}/items/reorder',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete item from slot (admin). Fails if slot only has 1 item.
+ */
+export const sponsoredControllerDeleteItem = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerDeleteItemData, ThrowOnError>) => (options.client ?? client).delete<SponsoredControllerDeleteItemResponses, SponsoredControllerDeleteItemErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored/{slotId}/items/{itemId}',
+    ...options
+});
+
+/**
+ * Update item in slot (admin)
+ */
+export const sponsoredControllerUpdateItem = <ThrowOnError extends boolean = false>(options: Options<SponsoredControllerUpdateItemData, ThrowOnError>) => (options.client ?? client).patch<SponsoredControllerUpdateItemResponses, SponsoredControllerUpdateItemErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/admin/sponsored/{slotId}/items/{itemId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Public homepage sponsored banner zone — called by 5bib.com (Redis-cached 300s)
+ */
+export const publicSponsoredControllerGetHomepage = <ThrowOnError extends boolean = false>(options?: Options<PublicSponsoredControllerGetHomepageData, ThrowOnError>) => (options?.client ?? client).get<PublicSponsoredControllerGetHomepageResponses, unknown, ThrowOnError>({ url: '/api/public/homepage/sponsored', ...options });

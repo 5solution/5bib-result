@@ -124,7 +124,7 @@ export class ReconciliationController {
   })
   @ApiResponse({ status: 201, description: 'Reconciliation created' })
   create(@Body() dto: CreateReconciliationDto, @Request() req: any) {
-    dto.created_by = req.user?.userId ?? req.user?.id ?? 0;
+    dto.created_by = req.user?.userId ?? req.user?.sub ?? null;
     return this.reconciliationService.create(dto);
   }
 

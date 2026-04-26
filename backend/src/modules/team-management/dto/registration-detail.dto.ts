@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type {
+  AcceptanceStatus,
   ContractStatus,
   PaymentStatus,
   RegistrationStatus,
@@ -121,4 +122,69 @@ export class RegistrationDetailDto {
       'ISO timestamp when the magic token expires. After this, TNV must request a new link.',
   })
   magic_token_expires!: string;
+
+  // ─── v2.0: Acceptance (Biên bản nghiệm thu) + contract_number ───
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'Contract number issued at contract-send time. Format: NNN-{PREFIX}-HDDV/CTV-5BIB. Null until HĐ is sent.',
+  })
+  contract_number!: string | null;
+
+  @ApiProperty({
+    enum: ['not_ready', 'pending_sign', 'signed', 'disputed'],
+    description: 'Acceptance (biên bản nghiệm thu) workflow state.',
+  })
+  acceptance_status!: AcceptanceStatus;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'Tổng giá trị nghiệm thu (VND). Populated on send; admin editable before send.',
+  })
+  acceptance_value!: number | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  acceptance_sent_at!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  acceptance_signed_at!: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'Short-lived presigned URL (24h) for the signed acceptance PDF. Null when not yet signed.',
+  })
+  acceptance_pdf_url!: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'Dispute reason or admin note on the acceptance (surfaces in "Tranh chấp" tab).',
+  })
+  acceptance_notes!: string | null;
+
+  // ─── v2.0: Extended Bên B fields for contract/acceptance rendering ───
+  @ApiProperty({ required: false, nullable: true })
+  birth_date!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  cccd_issue_date!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  cccd_issue_place!: string | null;
+
+  // ─── v2.0: Force-paid audit trail (populated ONLY by force-paid endpoint) ───
+  @ApiProperty({ required: false, nullable: true })
+  payment_forced_reason!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  payment_forced_at!: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  payment_forced_by!: string | null;
 }

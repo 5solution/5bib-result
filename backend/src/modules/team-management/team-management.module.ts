@@ -17,6 +17,8 @@ import { VolSupplyItem } from './entities/vol-supply-item.entity';
 import { VolSupplyPlan } from './entities/vol-supply-plan.entity';
 import { VolSupplyAllocation } from './entities/vol-supply-allocation.entity';
 import { VolSupplySupplement } from './entities/vol-supply-supplement.entity';
+import { VolAcceptanceTemplate } from './entities/vol-acceptance-template.entity';
+import { VolContractNumberSequence } from './entities/vol-contract-number-sequence.entity';
 import { TeamEventService } from './services/team-event.service';
 import { TeamRegistrationService } from './services/team-registration.service';
 import { TeamPhotoService } from './services/team-photo.service';
@@ -42,11 +44,17 @@ import { TeamSupplyLeaderService } from './services/team-supply-leader.service';
 import { TeamRoleHierarchyService } from './services/team-role-hierarchy.service';
 import { TeamCategoryService } from './services/team-category.service';
 import { TeamRecoverService } from './services/team-recover.service';
+import { TeamContractNumberService } from './services/team-contract-number.service';
+import { TeamAcceptanceService } from './services/team-acceptance.service';
+import { TeamAcceptanceTemplateService } from './services/team-acceptance-template.service';
+import { FeatureModeGuard } from './guards/feature-mode.guard';
 import { TeamManagementController } from './team-management.controller';
 import { TeamRegistrationController } from './team-registration.controller';
 import { TeamRecoverController } from './team-recover.controller';
 import { TeamRegistrationImportController } from './team-registration-import.controller';
 import { TeamContractTemplateController } from './team-contract-template.controller';
+import { TeamAcceptanceTemplateController } from './team-acceptance-template.controller';
+import { TeamAcceptanceController } from './team-acceptance.controller';
 import { TeamCheckinController } from './team-checkin.controller';
 import { TeamScheduleEmailController } from './team-schedule-email.controller';
 import { TeamLeaderController } from './team-leader.controller';
@@ -76,6 +84,8 @@ import { env } from 'src/config';
         VolSupplyPlan,
         VolSupplyAllocation,
         VolSupplySupplement,
+        VolAcceptanceTemplate,
+        VolContractNumberSequence,
       ],
       'volunteer',
     ),
@@ -91,6 +101,8 @@ import { env } from 'src/config';
     TeamRegistrationController,
     TeamRegistrationImportController,
     TeamContractTemplateController,
+    TeamAcceptanceTemplateController,
+    TeamAcceptanceController,
     TeamCheckinController,
     TeamScheduleEmailController,
     TeamLeaderController,
@@ -128,6 +140,10 @@ import { env } from 'src/config';
     TeamRoleHierarchyService,
     TeamCategoryService,
     TeamRecoverService,
+    TeamContractNumberService,
+    TeamAcceptanceService,
+    TeamAcceptanceTemplateService,
+    FeatureModeGuard,
     s3ClientProvider,
     // Make every route within this module subject to @Throttle decorators.
     // Without this provider the @Throttle calls on public endpoints are no-ops.

@@ -20,6 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
+import { FeatureModeGuard, RequireFullMode } from './guards/feature-mode.guard';
 import {
   AllocationRowDto,
   CreateSupplementDto,
@@ -49,9 +50,11 @@ function identifyAdmin(req: AuthenticatedRequest): string {
  * Admin calls pass `actorRoleId=null` into services so the leader-gate
  * checks are skipped.
  */
+// v1.9: FeatureModeGuard blocks access in Lite mode events.
 @ApiTags('Team Management (supply)')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@RequireFullMode()
+@UseGuards(LogtoAdminGuard, FeatureModeGuard)
 @Controller('team-management')
 export class TeamSupplyController {
   constructor(

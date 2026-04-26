@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export class UpdateReconciliationStatusDto {
   @ApiProperty({
@@ -9,15 +9,15 @@ export class UpdateReconciliationStatusDto {
   @IsIn(['draft', 'flagged', 'ready', 'approved', 'sent', 'reviewed', 'signed', 'completed'])
   status: string;
 
-  @ApiPropertyOptional({ description: 'Admin user id (for reviewed status)' })
+  @ApiPropertyOptional({ description: 'Admin user id \u2014 Mongo ObjectId string (for reviewed status)' })
   @IsOptional()
-  @IsNumber()
-  reviewed_by?: number;
+  @IsString()
+  reviewed_by?: string;
 
-  @ApiPropertyOptional({ description: 'Admin user id (for approved status)' })
+  @ApiPropertyOptional({ description: 'Admin user id \u2014 Mongo ObjectId string (for approved status)' })
   @IsOptional()
-  @IsNumber()
-  approved_by?: number;
+  @IsString()
+  approved_by?: string;
 
   @ApiPropertyOptional({ description: 'Signed date ISO string (for signed status)' })
   @IsOptional()

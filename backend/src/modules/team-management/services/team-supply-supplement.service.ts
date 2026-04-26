@@ -182,13 +182,9 @@ export class TeamSupplySupplementService {
     if (!assignment) {
       throw new ForbiddenException('You are not assigned to a station');
     }
-    // v1.8: assignment_role field dropped. Supervisor-vs-worker derived
-    // from registration.role.is_leader_role — leaders cannot confirm supply.
-    if (assignment.registration?.role?.is_leader_role === true) {
-      throw new ForbiddenException(
-        'Only crew can confirm supply (BR-SUP-09)',
-      );
-    }
+    // v1.9: BR-SUP-09 relaxed — anyone assigned to a station may confirm
+    // receipt. Station chief (is_leader_role) is often alone on-site with
+    // no crew below them. Gate: must be assigned (checked above).
 
     const sup = await this.supRepo.findOne({
       where: { id: supplementId },

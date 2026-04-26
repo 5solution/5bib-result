@@ -29,6 +29,11 @@ export class VolEvent {
   @Column({ type: 'varchar', length: 255 })
   event_name!: string;
 
+  // Admin sets once per event — service-layer guard rejects edits
+  // after the first contract_number has been issued for the event.
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  contract_code_prefix!: string | null;
+
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 
@@ -87,9 +92,24 @@ export class VolEvent {
   @Column({ type: 'decimal', precision: 4, scale: 1, default: 2.0 })
   min_work_hours_for_completion!: string;
 
+  // v1.9: Feature toggle — lite mode hides QR, station, supply.
+  @Column({
+    type: 'enum',
+    enum: ['full', 'lite'],
+    default: 'full',
+    comment: 'full = all features; lite = personnel + contract only',
+  })
+  feature_mode!: 'full' | 'lite';
+
+  // v1.9: Whether admin must confirm nghiem thu before marking completed.
+  @Column({ type: 'boolean', default: true, comment: 'require formal acceptance before completed' })
+  feature_nghiem_thu!: boolean;
+
   @CreateDateColumn({ type: 'datetime' })
   created_at!: Date;
 
   @UpdateDateColumn({ type: 'datetime' })
   updated_at!: Date;
 }
+
+export type FeatureMode = 'full' | 'lite';

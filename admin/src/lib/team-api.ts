@@ -26,8 +26,18 @@ export interface TeamEvent {
   terms_conditions?: string | null;
   // TypeORM DECIMAL column returns as string from the driver.
   min_work_hours_for_completion?: string | number | null;
+  // v1.9: feature toggles
+  feature_mode?: "full" | "lite";
+  feature_nghiem_thu?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// v1.9: Feature config response type
+export interface EventFeaturesConfig {
+  event_id: number;
+  feature_mode: "full" | "lite";
+  feature_nghiem_thu: boolean;
 }
 
 // v1.8 — Team (category) layer. Roles belong to a Team; Team owns stations +
@@ -395,6 +405,15 @@ export async function deleteTeamRole(token: string, id: number): Promise<void> {
   await assertOk(res);
 }
 
+// v1.8: Party A (company) config embedded in contract and acceptance templates
+export interface PartyAConfig {
+  party_a_company_name: string | null;
+  party_a_address: string | null;
+  party_a_tax_code: string | null;
+  party_a_representative: string | null;
+  party_a_position: string | null;
+}
+
 export interface ContractTemplate {
   id: number;
   template_name: string;
@@ -404,6 +423,12 @@ export interface ContractTemplate {
   created_by: string;
   created_at: string;
   updated_at: string;
+  // v1.8: Party A fields
+  party_a_company_name?: string | null;
+  party_a_address?: string | null;
+  party_a_tax_code?: string | null;
+  party_a_representative?: string | null;
+  party_a_position?: string | null;
 }
 
 export async function listContractTemplates(token: string): Promise<ContractTemplate[]> {
@@ -630,7 +655,19 @@ export interface RegistrationListRow {
   completion_confirmed_id?: number | null;
   // v1.4.1 profile-edit indicator
   has_pending_changes?: boolean;
+  // v2.0 — acceptance gate surfacing on list rows
+  acceptance_status?: AcceptanceStatus;
+  acceptance_sent_at?: string | null;
+  acceptance_signed_at?: string | null;
+  acceptance_value?: number | null;
+  contract_number?: string | null;
 }
+
+export type AcceptanceStatus =
+  | "not_ready"
+  | "pending_sign"
+  | "signed"
+  | "disputed";
 
 export interface RegistrationDetail extends RegistrationListRow {
   cccd_photo_url: string | null;
@@ -649,6 +686,20 @@ export interface RegistrationDetail extends RegistrationListRow {
   magic_link: string;
   magic_token: string;
   magic_token_expires: string;
+  // v2.0 — Acceptance (Biên bản nghiệm thu) + contract_number
+  contract_number: string | null;
+  acceptance_status: AcceptanceStatus;
+  acceptance_value: number | null;
+  acceptance_sent_at: string | null;
+  acceptance_signed_at: string | null;
+  acceptance_pdf_url: string | null;
+  acceptance_notes: string | null;
+  birth_date: string | null;
+  cccd_issue_date: string | null;
+  cccd_issue_place: string | null;
+  payment_forced_reason: string | null;
+  payment_forced_at: string | null;
+  payment_forced_by: string | null;
 }
 
 export async function approveProfileChanges(
@@ -816,6 +867,20 @@ export async function patchRegistration(
     notes?: string;
     payment_status?: string;
     actual_working_days?: number;
+    // Profile / backfill fields
+    full_name?: string;
+    phone?: string;
+    email?: string;
+    shirt_size?: string | null;
+    birth_date?: string | null;
+    cccd?: string | null;
+    cccd_issue_date?: string | null;
+    cccd_issue_place?: string | null;
+    bank_account_number?: string | null;
+    bank_holder_name?: string | null;
+    bank_name?: string | null;
+    bank_branch?: string | null;
+    address?: string | null;
   },
 ): Promise<RegistrationListRow> {
   const res = await fetch(`/api/team-management/registrations/${id}`, {
@@ -1114,7 +1179,7 @@ export async function sendContracts(
   token: string,
   roleId: number,
   dryRun = false,
-): Promise<{ queued: number; already_sent: number; skipped: number }> {
+): Promise<{ queued: number; already_sent: number; skipped: number; skip_reasons?: string[] }> {
   const res = await fetch(
     `/api/team-management/roles/${roleId}/send-contracts`,
     {
@@ -1898,6 +1963,51 @@ export async function deleteSupplyItem(
   await assertOk(res);
 }
 
+// ---- supply items bulk import ----
+
+export interface ImportSupplyItemsResult {
+  inserted: number;
+  skipped: number;
+  errors: number;
+  rows_inserted: Array<{ row: number; item_name: string; unit: string }>;
+  rows_skipped: Array<{ row: number; item_name: string; reason: string }>;
+  rows_errors: Array<{ row: number; message: string }>;
+}
+
+/**
+ * Download the XLSX template for bulk supply item import.
+ * Returns a Blob so the caller can trigger a browser download.
+ */
+export async function downloadSupplyItemsTemplate(
+  token: string,
+  eventId: number,
+): Promise<Blob> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/supply-items/import-template`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.blob();
+}
+
+/**
+ * POST an XLSX or CSV file to bulk-import supply items for the event.
+ */
+export async function importSupplyItems(
+  token: string,
+  eventId: number,
+  file: File,
+): Promise<ImportSupplyItemsResult> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/supply-items/import`,
+    { method: "POST", headers: { Authorization: `Bearer ${token}` }, body },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
 // ---- plan ----
 
 export async function getSupplyPlan(
@@ -2013,6 +2123,48 @@ export async function getSupplyOverview(
   return res.json();
 }
 
+// ---- station bulk import (v1.9) ----
+
+export interface ImportStationsResult {
+  total_rows: number;
+  inserted: Array<{ row: number; id: number; station_name: string }>;
+  skipped: Array<{ row: number; station_name: string; reason: string }>;
+  errors: Array<{ row: number; errors: string[] }>;
+}
+
+/**
+ * Download XLSX template for bulk station import for a team (category).
+ */
+export async function downloadStationsTemplate(
+  token: string,
+  categoryId: number,
+): Promise<Blob> {
+  const res = await fetch(
+    `/api/team-management/team-categories/${categoryId}/stations/import/template`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.blob();
+}
+
+/**
+ * POST XLSX/CSV to bulk-import stations into a team (category).
+ */
+export async function importStations(
+  token: string,
+  categoryId: number,
+  file: File,
+): Promise<ImportStationsResult> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(
+    `/api/team-management/team-categories/${categoryId}/stations/import`,
+    { method: "POST", headers: { Authorization: `Bearer ${token}` }, body },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
 // ---- allocations ----
 
 export async function getStationAllocations(
@@ -2091,6 +2243,340 @@ export async function createSupplement(
         qty,
         note: note ?? null,
       }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v2.0 — Payment (mark-paid, force-paid, revert)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface MarkPaidResponse {
+  id: number;
+  payment_status: "paid";
+  actual_compensation: string | null;
+  was_forced: boolean;
+  paid_at: string;
+}
+
+export async function markPaid(
+  token: string,
+  id: number,
+): Promise<MarkPaidResponse> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/payment/mark-paid`,
+    { method: "POST", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function forcePaid(
+  token: string,
+  id: number,
+  force_reason: string,
+): Promise<MarkPaidResponse> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/payment/force-paid`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ force_reason }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function revertPaid(
+  token: string,
+  id: number,
+): Promise<{ id: number; payment_status: "pending" }> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/payment/revert`,
+    { method: "POST", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v2.0 — Acceptance (Biên bản nghiệm thu) — admin
+// ─────────────────────────────────────────────────────────────────────
+
+export interface SendAcceptanceBatchInput {
+  registration_ids: number[];
+  acceptance_value?: number;
+  template_id?: number;
+}
+
+export interface SendAcceptanceBatchResponse {
+  queued: number;
+  skipped: number[];
+  skip_reasons: string[];
+}
+
+export async function sendAcceptanceBatch(
+  token: string,
+  eventId: number,
+  body: SendAcceptanceBatchInput,
+): Promise<SendAcceptanceBatchResponse> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/acceptance/send-batch`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(body),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function sendAcceptanceOne(
+  token: string,
+  id: number,
+  body: { acceptance_value?: number; template_id?: number } = {},
+): Promise<{ registration_id: number; acceptance_status: "pending_sign" }> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/acceptance/send`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify(body),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function disputeAcceptance(
+  token: string,
+  id: number,
+  reason: string,
+): Promise<{ registration_id: number; acceptance_status: "disputed" }> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/acceptance/dispute`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ reason }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getSignedAcceptanceUrl(
+  token: string,
+  magicToken: string,
+): Promise<{ url: string; expires_in: number }> {
+  // Uses the public-by-token endpoint. No admin JWT needed — acceptance
+  // PDF access is gated by the magic token the crew holds. Admin pulls
+  // the token via the registration detail response and can open the
+  // PDF using the same route.
+  const res = await fetch(
+    `/api/public/team-acceptance-pdf/${encodeURIComponent(magicToken)}`,
+    { cache: "no-store" },
+  );
+  // Suppress unused token param (keep signature consistent with
+  // getSignedContractUrl for ergonomics).
+  void token;
+  await assertOk(res);
+  return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v2.0 — Backfill Bên B (admin)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface BackfillBenBInput {
+  birth_date?: string | null;
+  cccd_issue_date?: string | null;
+  cccd_issue_place?: string | null;
+  bank_account_number?: string | null;
+  bank_name?: string | null;
+  address?: string | null;
+}
+
+export async function backfillBenB(
+  token: string,
+  id: number,
+  body: BackfillBenBInput,
+): Promise<RegistrationListRow> {
+  const res = await fetch(
+    `/api/team-management/registrations/${id}/backfill-ben-b`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify(body),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v2.0 — Acceptance templates (admin CRUD)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface AcceptanceTemplate {
+  id: number;
+  event_id: number | null;
+  template_name: string;
+  content_html: string;
+  variables: string[];
+  is_default: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  // v1.8: Party A fields
+  party_a_company_name?: string | null;
+  party_a_address?: string | null;
+  party_a_tax_code?: string | null;
+  party_a_representative?: string | null;
+  party_a_position?: string | null;
+}
+
+export interface AcceptanceTemplateInput {
+  event_id?: number | null;
+  template_name: string;
+  content_html: string;
+  variables?: string[];
+  is_default?: boolean;
+  is_active?: boolean;
+  party_a_company_name?: string | null;
+  party_a_address?: string | null;
+  party_a_tax_code?: string | null;
+  party_a_representative?: string | null;
+  party_a_position?: string | null;
+}
+
+export async function listAcceptanceTemplates(
+  token: string,
+  params?: { event_id?: number | null },
+): Promise<AcceptanceTemplate[]> {
+  const qs = new URLSearchParams();
+  if (params?.event_id != null) qs.set("event_id", String(params.event_id));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  const res = await fetch(
+    `/api/team-management/acceptance-templates${suffix}`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function getAcceptanceTemplate(
+  token: string,
+  id: number,
+): Promise<AcceptanceTemplate> {
+  const res = await fetch(
+    `/api/team-management/acceptance-templates/${id}`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function createAcceptanceTemplate(
+  token: string,
+  body: AcceptanceTemplateInput,
+): Promise<AcceptanceTemplate> {
+  const res = await fetch(`/api/team-management/acceptance-templates`, {
+    method: "POST",
+    headers: authedHeaders(token),
+    body: JSON.stringify(body),
+  });
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateAcceptanceTemplate(
+  token: string,
+  id: number,
+  body: Partial<AcceptanceTemplateInput>,
+): Promise<AcceptanceTemplate> {
+  const res = await fetch(
+    `/api/team-management/acceptance-templates/${id}`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify(body),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function deleteAcceptanceTemplate(
+  token: string,
+  id: number,
+): Promise<void> {
+  const res = await fetch(
+    `/api/team-management/acceptance-templates/${id}`,
+    { method: "DELETE", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+}
+
+export async function sendContractForRegistration(
+  token: string,
+  registrationId: number,
+): Promise<void> {
+  const res = await fetch(
+    `/api/team-management/registrations/${registrationId}/send-contract`,
+    { method: "POST", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v1.9: Feature mode config
+// ─────────────────────────────────────────────────────────────────────
+
+export async function getEventFeaturesConfig(
+  token: string,
+  eventId: number,
+): Promise<EventFeaturesConfig> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/config`,
+    { headers: authedHeaders(token), cache: "no-store" },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function updateEventFeatures(
+  token: string,
+  eventId: number,
+  dto: { feature_mode: "full" | "lite"; feature_nghiem_thu: boolean },
+): Promise<EventFeaturesConfig> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/features`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify(dto),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function confirmNghiemThu(
+  token: string,
+  registrationId: number,
+  note?: string,
+): Promise<{ id: number; status: string; completed_at: string }> {
+  const res = await fetch(
+    `/api/team-management/registrations/${registrationId}/nghiem-thu`,
+    {
+      method: "PATCH",
+      headers: authedHeaders(token),
+      body: JSON.stringify(note ? { note } : {}),
     },
   );
   await assertOk(res);

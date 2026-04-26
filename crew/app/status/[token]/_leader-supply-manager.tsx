@@ -90,18 +90,17 @@ export function LeaderSupplyManager({
     );
   }
 
-  // v1.6 Option B2: multi-managed. Fall back to single role_name if the
-  // server is pre-B2 (still shipping `role_name` only).
-  const managedNames =
-    view.managed_role_names && view.managed_role_names.length > 0
-      ? view.managed_role_names
-      : view.role_name
-        ? [view.role_name]
-        : [];
-  const managedHeader =
-    managedNames.length === 0
-      ? "Chưa quản lý team nào"
-      : managedNames.join(" + ");
+  // v1.8: prefer category (team) names over role names for the header.
+  // Falls back to role names (v1.6 compat), then single role_name.
+  const managedHeader = (() => {
+    if (view.managed_category_names && view.managed_category_names.length > 0) {
+      return view.managed_category_names.join(" + ");
+    }
+    if (view.managed_role_names && view.managed_role_names.length > 0) {
+      return view.managed_role_names.join(" + ");
+    }
+    return view.role_name ?? "Chưa quản lý team nào";
+  })();
 
   return (
     <div className="space-y-3">

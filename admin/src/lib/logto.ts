@@ -21,7 +21,8 @@ export const logtoConfig: LogtoNextConfig = {
   cookieSecret:
     process.env.LOGTO_COOKIE_SECRET ||
     "dev-fallback-secret-change-in-production-please",
-  cookieSecure: process.env.NODE_ENV === "production",
+  // Explicit flag — avoids "next start sets NODE_ENV=production → cookieSecure=true → HTTP localhost breaks"
+  cookieSecure: process.env.LOGTO_COOKIE_SECURE === "true",
   resources: [LOGTO_API_RESOURCE],
   scopes: ["openid", "profile", "email", "offline_access", "roles", "admin"],
 };

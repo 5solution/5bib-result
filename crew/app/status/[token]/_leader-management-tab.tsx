@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { LeaderPortalResponse } from "@/lib/leader-api";
 import type { LeaderSupplyView } from "@/lib/supply-api";
 import { LeaderTeamTab } from "./_team-tab";
-import { LeaderStationsView } from "./_leader-stations-view";
+import { LeaderStationManager } from "./_leader-stations-view";
 import { LeaderSupplyManager } from "./_leader-supply-manager";
 
 /**
@@ -128,7 +128,7 @@ function StationsAndSupply({
       </div>
 
       {view === "stations" ? (
-        <LeaderStationsView leaderSupply={leaderSupply} />
+        <LeaderStationManager token={token} leaderSupply={leaderSupply} />
       ) : null}
 
       {view === "supply" ? (

@@ -44,16 +44,46 @@ export function validateCCCD(raw: unknown, required: boolean): string | null {
   return null;
 }
 
+/**
+ * Normalize a date string to YYYY-MM-DD ISO format.
+ * Accepts:
+ *   - dd/mm/yyyy  (Vietnamese standard — primary)
+ *   - dd-mm-yyyy
+ *   - dd.mm.yyyy
+ *   - yyyy-mm-dd  (ISO pass-through for backward compat)
+ * Returns null when the format is unrecognised.
+ */
+export function parseDateInput(raw: string): string | null {
+  const s = raw.trim();
+  if (!s) return null;
+
+  // dd/mm/yyyy, dd-mm-yyyy, dd.mm.yyyy
+  const dmy = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (dmy) {
+    const day = dmy[1].padStart(2, '0');
+    const month = dmy[2].padStart(2, '0');
+    const year = dmy[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // yyyy-mm-dd (already ISO)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  return null;
+}
+
 export function validateDob(raw: unknown, required: boolean): string | null {
   const s = String(raw ?? '').trim();
   if (!s) return required ? 'Thiếu ngày sinh' : null;
-  // YYYY-MM-DD
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    return 'Ngày sinh phải theo định dạng YYYY-MM-DD';
+
+  const iso = parseDateInput(s);
+  if (!iso) {
+    return 'Ngày sinh phải theo định dạng DD/MM/YYYY';
   }
-  const d = new Date(`${s}T00:00:00Z`);
+
+  const d = new Date(`${iso}T00:00:00Z`);
   if (isNaN(d.getTime())) return 'Ngày sinh không hợp lệ';
-  const year = Number(s.slice(0, 4));
+  const year = Number(iso.slice(0, 4));
   const currentYear = new Date().getUTCFullYear();
   if (year < 1900 || year > currentYear - 14) {
     return `Năm sinh phải trong khoảng 1900 – ${currentYear - 14}`;

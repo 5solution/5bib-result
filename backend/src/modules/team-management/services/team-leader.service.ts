@@ -14,6 +14,8 @@ import {
   CheckinMethod,
   VolRegistration,
 } from '../entities/vol-registration.entity';
+import { VolStation } from '../entities/vol-station.entity';
+import { VolStationAssignment } from '../entities/vol-station-assignment.entity';
 import { VolTeamCategory } from '../entities/vol-team-category.entity';
 import { TeamCacheService } from './team-cache.service';
 import { TeamPhotoService } from './team-photo.service';
@@ -84,6 +86,10 @@ export class TeamLeaderService {
     private readonly eventRepo: Repository<VolEvent>,
     @InjectRepository(VolTeamCategory, 'volunteer')
     private readonly categoryRepo: Repository<VolTeamCategory>,
+    @InjectRepository(VolStation, 'volunteer')
+    private readonly stationRepo: Repository<VolStation>,
+    @InjectRepository(VolStationAssignment, 'volunteer')
+    private readonly assignmentRepo: Repository<VolStationAssignment>,
     private readonly cache: TeamCacheService,
     private readonly photos: TeamPhotoService,
     private readonly hierarchy: TeamRoleHierarchyService,
@@ -135,11 +141,35 @@ export class TeamLeaderService {
       throw new NotFoundException('Leader context missing relations');
     }
 
-    const members = await this.regRepo.find({
-      where: { event_id: leaderReg.event_id },
-      relations: { role: true },
-      order: { full_name: 'ASC' },
-    });
+    // ── v1.8 fix: resolve managed categories FIRST so we can scope the
+    // member query — prevents a leader from seeing members of OTHER teams.
+    // Pre-v1.8 roles have null category_id → set is empty → fall back to
+    // same role_id lookup (never expose cross-team PII).
+    const managedCategoryIdSet = await this.hierarchy.resolveManagedCategoryIds(
+      leaderReg.role_id,
+    );
+    const managedCategoryIds = Array.from(managedCategoryIdSet).sort(
+      (a, b) => a - b,
+    );
+
+    // Scope query: has categories → roles whose category_id ∈ managed set.
+    // No categories (legacy) → restrict to same role_id only.
+    const qb = this.regRepo
+      .createQueryBuilder('reg')
+      .leftJoinAndSelect('reg.role', 'role')
+      .where('reg.event_id = :eventId', { eventId: leaderReg.event_id })
+      .orderBy('reg.full_name', 'ASC');
+
+    if (managedCategoryIds.length > 0) {
+      qb.andWhere('role.category_id IN (:...categoryIds)', {
+        categoryIds: managedCategoryIds,
+      });
+    } else {
+      // Fallback: only own-role members (safe for unscoped / pre-v1.8 data)
+      qb.andWhere('reg.role_id = :roleId', { roleId: leaderReg.role_id });
+    }
+
+    const members = await qb.getMany();
 
     // Filter out the leader themselves — they don't need to check themselves in.
     const others = members.filter((m) => m.id !== leaderReg.id);
@@ -176,16 +206,6 @@ export class TeamLeaderService {
     const expires = new Date(leaderReg.event.event_end_date);
     expires.setDate(expires.getDate() + LEADER_PORTAL_GRACE_DAYS);
     expires.setHours(23, 59, 59, 999);
-
-    // v1.8 — resolve Teams (categories) this leader manages. Derived from
-    // leader role + descendants. Empty array for pre-v1.8 roles with null
-    // category_id. Names ordered parallel to IDs.
-    const managedCategoryIdSet = await this.hierarchy.resolveManagedCategoryIds(
-      leaderReg.role_id,
-    );
-    const managedCategoryIds = Array.from(managedCategoryIdSet).sort(
-      (a, b) => a - b,
-    );
     const managedCategories =
       managedCategoryIds.length === 0
         ? []
@@ -417,5 +437,71 @@ export class TeamLeaderService {
       failed_ids: failed,
       suspicious_count: suspiciousCount,
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Station management helpers — used by TeamLeaderController
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Return the Set of category IDs managed by this leader (via hierarchy).
+   * Exposed publicly so the controller can use it without re-importing the
+   * hierarchy service.
+   */
+  async getManagedCategoryIds(reg: VolRegistration): Promise<Set<number>> {
+    return this.hierarchy.resolveManagedCategoryIds(reg.role_id);
+  }
+
+  /**
+   * Throw ForbiddenException if the given categoryId is NOT in the leader's
+   * managed set.
+   */
+  async assertManagesCategory(
+    reg: VolRegistration,
+    categoryId: number,
+  ): Promise<void> {
+    const managed = await this.getManagedCategoryIds(reg);
+    if (!managed.has(categoryId)) {
+      throw new ForbiddenException(
+        `Category ${categoryId} is not managed by this leader`,
+      );
+    }
+  }
+
+  /**
+   * Load the station and verify its category is in the leader's managed set.
+   * Returns the station for callers that need it.
+   */
+  async assertManagesStation(
+    reg: VolRegistration,
+    stationId: number,
+  ): Promise<VolStation> {
+    const station = await this.stationRepo.findOne({
+      where: { id: stationId },
+    });
+    if (!station) throw new NotFoundException(`Station ${stationId} not found`);
+    if (station.category_id == null) {
+      throw new ForbiddenException('Station has no team category assigned');
+    }
+    await this.assertManagesCategory(reg, station.category_id);
+    return station;
+  }
+
+  /**
+   * Load the assignment, then verify the underlying station is managed by
+   * this leader.
+   */
+  async assertManagesAssignment(
+    reg: VolRegistration,
+    assignmentId: number,
+  ): Promise<VolStationAssignment> {
+    const assignment = await this.assignmentRepo.findOne({
+      where: { id: assignmentId },
+      relations: { station: true },
+    });
+    if (!assignment)
+      throw new NotFoundException(`Assignment ${assignmentId} not found`);
+    await this.assertManagesStation(reg, assignment.station_id);
+    return assignment;
   }
 }

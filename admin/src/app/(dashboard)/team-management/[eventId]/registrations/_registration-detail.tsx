@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import {
   getRegistrationDetail,
   getSignedContractUrl,
+  getSignedAcceptanceUrl,
   getSignatureUrl,
   patchRegistration,
   approveRegistration,
@@ -13,6 +14,13 @@ import {
   clearSuspicious,
   approveProfileChanges,
   rejectProfileChanges,
+  markPaid,
+  forcePaid,
+  revertPaid,
+  sendAcceptanceOne,
+  disputeAcceptance,
+  backfillBenB,
+  type BackfillBenBInput,
   type RegistrationDetail,
 } from "@/lib/team-api";
 import { Button } from "@/components/ui/button";
@@ -22,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge, deriveStatusKey } from "@/lib/status-style";
+import { formatDateVN, isoToVNField, parseDateVN } from "@/lib/utils";
 import {
   AlertTriangle,
   Ban,
@@ -35,6 +44,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { RejectDialog } from "./_reject-dialog";
+import { ForcePaidDialog } from "./_force-paid-dialog";
+import { BackfillBenBDialog } from "./_backfill-ben-b-dialog";
+import { DisputeDialog } from "./_dispute-dialog";
 
 const FIELD_LABELS: Record<string, string> = {
   cccd: "Số CCCD",
@@ -96,6 +108,33 @@ export function RegistrationDetailView({
   const [rejectChangesOpen, setRejectChangesOpen] = useState(false);
   const [rejectChangesReason, setRejectChangesReason] = useState("");
   const [changesBusy, setChangesBusy] = useState(false);
+  // v2.0 — force-paid / backfill / dispute dialogs
+  const [forcePaidOpen, setForcePaidOpen] = useState(false);
+  const [forcePaidBusy, setForcePaidBusy] = useState(false);
+  const [backfillOpen, setBackfillOpen] = useState(false);
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeBusy, setDisputeBusy] = useState(false);
+  const [acceptanceBusy, setAcceptanceBusy] = useState(false);
+  const [loadingAcceptancePdf, setLoadingAcceptancePdf] = useState(false);
+  // v2.1 — edit profile + Bên B inline form
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [editProfileBusy, setEditProfileBusy] = useState(false);
+  const [editProfile, setEditProfile] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    shirt_size: "",
+    birth_date: "",
+    cccd: "",
+    cccd_issue_date: "",
+    cccd_issue_place: "",
+    bank_account_number: "",
+    bank_holder_name: "",
+    bank_name: "",
+    bank_branch: "",
+    address: "",
+  });
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -106,6 +145,30 @@ export function RegistrationDetailView({
       if (d.actual_working_days != null) setEditingDays(d.actual_working_days);
       else if (d.role_working_days != null) setEditingDays(d.role_working_days);
       else setEditingDays("");
+      // Hydrate edit-profile form from current values. form_data fields
+      // may be missing for old registrations — fall back to "".
+      const fd = (d.form_data ?? {}) as Record<string, unknown>;
+      const pickStr = (v: unknown): string =>
+        typeof v === "string" ? v : v == null ? "" : String(v);
+      // Read from public-register keys: cccd / dob (legacy) — fall back
+      // to entity columns / new keys if old data ever wrote those.
+      // birth_date entity column wins over form_data.dob if both set.
+      setEditProfile({
+        full_name: d.full_name ?? "",
+        phone: d.phone ?? "",
+        email: d.email ?? "",
+        shirt_size: d.shirt_size ?? pickStr(fd.shirt_size),
+        // Store dates as dd/mm/yyyy in edit-form state; convert to ISO on save.
+        birth_date: isoToVNField(d.birth_date ?? pickStr(fd.dob)),
+        cccd: pickStr(fd.cccd) || pickStr(fd.cccd_number),
+        cccd_issue_date: isoToVNField(d.cccd_issue_date),
+        cccd_issue_place: d.cccd_issue_place ?? "",
+        bank_account_number: pickStr(fd.bank_account_number),
+        bank_holder_name: pickStr(fd.bank_holder_name),
+        bank_name: pickStr(fd.bank_name),
+        bank_branch: pickStr(fd.bank_branch),
+        address: pickStr(fd.address),
+      });
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -293,24 +356,217 @@ export function RegistrationDetailView({
     }
   }
 
-  async function savePayment(
-    payment_status: "pending" | "paid",
-  ): Promise<void> {
+  async function saveEditProfile(): Promise<void> {
     if (!token || !detail) return;
+    // Warn before overwriting a signed contract — backend will reset
+    // contract_status='not_sent' + roll back state to 'approved' so admin
+    // must re-send. Old PDF stays in S3 for audit (logged server-side).
+    const fd = (detail.form_data ?? {}) as Record<string, unknown>;
+    const fdStr = (k: string): string =>
+      typeof fd[k] === "string" ? (fd[k] as string) : "";
+    // birth_date / cccd_issue_date in editProfile are VN format (dd/mm/yyyy);
+    // convert the stored ISO values to VN format for comparison.
+    const contractAffectingChanged =
+      editProfile.full_name !== (detail.full_name ?? "") ||
+      editProfile.phone !== (detail.phone ?? "") ||
+      editProfile.email !== (detail.email ?? "") ||
+      editProfile.birth_date !== isoToVNField(detail.birth_date ?? fdStr("dob")) ||
+      editProfile.cccd_issue_date !== isoToVNField(detail.cccd_issue_date) ||
+      editProfile.cccd_issue_place !== (detail.cccd_issue_place ?? "") ||
+      editProfile.cccd !== (fdStr("cccd") || fdStr("cccd_number")) ||
+      editProfile.bank_account_number !== fdStr("bank_account_number") ||
+      editProfile.bank_holder_name !== fdStr("bank_holder_name") ||
+      editProfile.bank_name !== fdStr("bank_name") ||
+      editProfile.bank_branch !== fdStr("bank_branch") ||
+      editProfile.address !== fdStr("address");
+    if (
+      detail.contract_status === "signed" &&
+      contractAffectingChanged &&
+      !window.confirm(
+        "Hợp đồng đã ký sẽ bị huỷ và phải gửi lại để CTV ký mới. " +
+          "PDF cũ vẫn lưu trên S3 cho audit. Tiếp tục?",
+      )
+    ) {
+      return;
+    }
+    // Parse VN-format dates back to ISO before sending to API.
+    const birthDateIso = editProfile.birth_date
+      ? parseDateVN(editProfile.birth_date)
+      : null;
+    const issueDateIso = editProfile.cccd_issue_date
+      ? parseDateVN(editProfile.cccd_issue_date)
+      : null;
+    if (editProfile.birth_date && birthDateIso === null) {
+      toast.error("Ngày sinh không hợp lệ — nhập theo định dạng dd/mm/yyyy");
+      return;
+    }
+    if (editProfile.cccd_issue_date && issueDateIso === null) {
+      toast.error("Ngày cấp CCCD không hợp lệ — nhập theo định dạng dd/mm/yyyy");
+      return;
+    }
+    setEditProfileBusy(true);
+    try {
+      await patchRegistration(token, regId, {
+        full_name: editProfile.full_name,
+        phone: editProfile.phone,
+        email: editProfile.email,
+        shirt_size: editProfile.shirt_size || null,
+        birth_date: birthDateIso,
+        cccd: editProfile.cccd || null,
+        cccd_issue_date: issueDateIso,
+        cccd_issue_place: editProfile.cccd_issue_place || null,
+        bank_account_number: editProfile.bank_account_number || null,
+        bank_holder_name: editProfile.bank_holder_name || null,
+        bank_name: editProfile.bank_name || null,
+        bank_branch: editProfile.bank_branch || null,
+        address: editProfile.address || null,
+      });
+      toast.success(
+        contractAffectingChanged && detail.contract_status === "signed"
+          ? "Đã lưu — HĐ cũ bị huỷ, vào tab Hợp đồng để gửi lại"
+          : "Đã lưu thông tin",
+      );
+      setEditProfileOpen(false);
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setEditProfileBusy(false);
+    }
+  }
+
+  async function saveWorkingDays(): Promise<void> {
+    if (!token || !detail) return;
+    if (typeof editingDays !== "number") return;
     setSaving(true);
     try {
       await patchRegistration(token, regId, {
-        payment_status,
-        actual_working_days:
-          typeof editingDays === "number" ? editingDays : undefined,
+        actual_working_days: editingDays,
       });
-      toast.success("Đã cập nhật thanh toán");
+      toast.success("Đã lưu số ngày công");
       await load();
       onChange?.();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleMarkPaid(): Promise<void> {
+    if (!token || !detail) return;
+    setSaving(true);
+    try {
+      if (typeof editingDays === "number") {
+        await patchRegistration(token, regId, {
+          actual_working_days: editingDays,
+        });
+      }
+      await markPaid(token, regId);
+      toast.success("Đã đánh dấu thanh toán");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleForcePaid(reason: string): Promise<void> {
+    if (!token || !detail) return;
+    setForcePaidBusy(true);
+    try {
+      if (typeof editingDays === "number") {
+        await patchRegistration(token, regId, {
+          actual_working_days: editingDays,
+        });
+      }
+      await forcePaid(token, regId, reason);
+      toast.success("Đã cưỡng bức thanh toán (ghi log)");
+      setForcePaidOpen(false);
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setForcePaidBusy(false);
+    }
+  }
+
+  async function handleRevertPaid(): Promise<void> {
+    if (!token || !detail) return;
+    setSaving(true);
+    try {
+      await revertPaid(token, regId);
+      toast.success("Đã hoàn tác về chờ thanh toán");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSendAcceptance(): Promise<void> {
+    if (!token || !detail) return;
+    setAcceptanceBusy(true);
+    try {
+      await sendAcceptanceOne(token, regId);
+      toast.success("Đã gửi biên bản nghiệm thu — crew nhận email trong vài phút");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAcceptanceBusy(false);
+    }
+  }
+
+  async function handleDispute(reason: string): Promise<void> {
+    if (!token || !detail) return;
+    setDisputeBusy(true);
+    try {
+      await disputeAcceptance(token, regId, reason);
+      toast.success("Đã đánh dấu tranh chấp");
+      setDisputeOpen(false);
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setDisputeBusy(false);
+    }
+  }
+
+  async function handleBackfill(body: BackfillBenBInput): Promise<void> {
+    if (!token || !detail) return;
+    setBackfillBusy(true);
+    try {
+      await backfillBenB(token, regId, body);
+      toast.success("Đã cập nhật thông tin Bên B");
+      setBackfillOpen(false);
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBackfillBusy(false);
+    }
+  }
+
+  async function openAcceptancePdf(): Promise<void> {
+    if (!token || !detail) return;
+    setLoadingAcceptancePdf(true);
+    try {
+      const { url } = await getSignedAcceptanceUrl(token, detail.magic_token);
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLoadingAcceptancePdf(false);
     }
   }
 
@@ -529,6 +785,7 @@ export function RegistrationDetailView({
         <TabsList>
           <TabsTrigger value="info">Thông tin</TabsTrigger>
           <TabsTrigger value="contract">Hợp đồng</TabsTrigger>
+          <TabsTrigger value="acceptance">Nghiệm thu</TabsTrigger>
           <TabsTrigger value="payment">Thanh toán</TabsTrigger>
         </TabsList>
 
@@ -549,6 +806,272 @@ export function RegistrationDetailView({
             </div>
           ) : null}
 
+          {/* v2.1 — admin edit profile + Bên B */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Thông tin Bên B</h3>
+              {!editProfileOpen ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditProfileOpen(true)}
+                >
+                  <Pencil className="size-3.5 mr-1" /> Sửa
+                </Button>
+              ) : null}
+            </div>
+            {editProfileOpen ? (
+              <>
+                {detail.contract_status === "signed" ? (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 flex gap-2">
+                    <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                    <div>
+                      Hợp đồng đã ký. Sửa các trường tên / SĐT / email / CCCD /
+                      ngân hàng / địa chỉ → hệ thống sẽ huỷ HĐ cũ, bạn phải gửi
+                      lại để CTV ký mới. PDF cũ giữ trên S3 cho audit.
+                    </div>
+                  </div>
+                ) : null}
+                <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div>
+                    <Label>Họ tên</Label>
+                    <Input
+                      value={editProfile.full_name}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          full_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>SĐT</Label>
+                    <Input
+                      value={editProfile.phone}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({ ...p, phone: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      value={editProfile.email}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({ ...p, email: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Size áo</Label>
+                    <select
+                      className="w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                      value={editProfile.shirt_size}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          shirt_size: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">— chưa chọn —</option>
+                      {(
+                        ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const
+                      ).map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Ngày sinh</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="dd/mm/yyyy"
+                      value={editProfile.birth_date}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          birth_date: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Số CCCD</Label>
+                    <Input
+                      value={editProfile.cccd}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          cccd: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Ngày cấp CCCD</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="dd/mm/yyyy"
+                      value={editProfile.cccd_issue_date}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          cccd_issue_date: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Nơi cấp CCCD</Label>
+                    <Input
+                      value={editProfile.cccd_issue_place}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          cccd_issue_place: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Địa chỉ</Label>
+                    <Input
+                      value={editProfile.address}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          address: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Số tài khoản</Label>
+                    <Input
+                      value={editProfile.bank_account_number}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          bank_account_number: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Chủ tài khoản</Label>
+                    <Input
+                      value={editProfile.bank_holder_name}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          bank_holder_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Ngân hàng</Label>
+                    <Input
+                      value={editProfile.bank_name}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          bank_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Chi nhánh</Label>
+                    <Input
+                      value={editProfile.bank_branch}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          bank_branch: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      void saveEditProfile();
+                    }}
+                    disabled={editProfileBusy}
+                  >
+                    {editProfileBusy ? "Đang lưu..." : "Lưu"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditProfileOpen(false);
+                      void load();
+                    }}
+                    disabled={editProfileBusy}
+                  >
+                    Huỷ
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Họ tên
+                  </dt>
+                  <dd>{detail.full_name}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    SĐT
+                  </dt>
+                  <dd>{detail.phone}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Email
+                  </dt>
+                  <dd className="break-all">{detail.email}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Size áo
+                  </dt>
+                  <dd>{detail.shirt_size ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Ngày sinh
+                  </dt>
+                  <dd>{formatDateVN(detail.birth_date ?? (detail.form_data?.dob as string | undefined))}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Ngày cấp CCCD
+                  </dt>
+                  <dd>{formatDateVN(detail.cccd_issue_date)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Nơi cấp CCCD
+                  </dt>
+                  <dd>{detail.cccd_issue_place ?? "—"}</dd>
+                </div>
+              </dl>
+            )}
+          </div>
+
           <div className="rounded-lg border p-4 space-y-3">
             <div>
               <h3 className="font-semibold mb-2">Dữ liệu form</h3>
@@ -556,6 +1079,8 @@ export function RegistrationDetailView({
                 const entries = Object.entries(detail.form_data);
                 const nonBank = entries.filter(([k]) => !BANK_KEYS.has(k));
                 const bank = entries.filter(([k]) => BANK_KEYS.has(k));
+                // Keys whose values are date strings (YYYY-MM-DD) — display as dd/mm/yyyy.
+                const DATE_KEYS = new Set(["dob", "birth_date"]);
                 const renderEntry = ([key, value]: [string, unknown]) => {
                   const isPhoto =
                     key === "cccd_photo" || key === "avatar_photo";
@@ -591,6 +1116,8 @@ export function RegistrationDetailView({
                               (chưa có ảnh)
                             </span>
                           )
+                        ) : DATE_KEYS.has(key) && typeof value === "string" ? (
+                          formatDateVN(value)
                         ) : typeof value === "string" ||
                           typeof value === "number" ? (
                           String(value)
@@ -712,24 +1239,47 @@ export function RegistrationDetailView({
           </div>
         </TabsContent>
 
+        <TabsContent value="acceptance" className="space-y-3">
+          <AcceptancePanel
+            detail={detail}
+            busy={acceptanceBusy}
+            loadingPdf={loadingAcceptancePdf}
+            onSend={handleSendAcceptance}
+            onDispute={() => setDisputeOpen(true)}
+            onOpenPdf={openAcceptancePdf}
+            onBackfill={() => setBackfillOpen(true)}
+          />
+        </TabsContent>
+
         <TabsContent value="payment" className="space-y-3">
           <div className="rounded-lg border p-4 space-y-3">
             <div>
               <Label>Số ngày công thực tế</Label>
-              <Input
-                type="number"
-                min={0}
-                value={editingDays === "" ? "" : editingDays}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setEditingDays(v === "" ? "" : Number(v));
-                }}
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  value={editingDays === "" ? "" : editingDays}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setEditingDays(v === "" ? "" : Number(v));
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    void saveWorkingDays();
+                  }}
+                  disabled={saving || typeof editingDays !== "number"}
+                >
+                  Lưu
+                </Button>
+              </div>
               {detail.actual_working_days == null &&
               detail.role_working_days != null ? (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Mặc định theo vai trò: {detail.role_working_days} ngày. Điều
-                  chỉnh rồi bấm &quot;Đánh dấu đã thanh toán&quot;.
+                  Mặc định theo vai trò: {detail.role_working_days} ngày.
                 </p>
               ) : null}
             </div>
@@ -738,6 +1288,12 @@ export function RegistrationDetailView({
                 <span className="text-xs text-muted-foreground">Hiện tại</span>
                 <div className="font-medium">
                   {paid ? "✅ Đã thanh toán" : "⏳ Chờ"}
+                </div>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">Nghiệm thu</span>
+                <div className="font-medium">
+                  {acceptanceStatusLabel(detail.acceptance_status)}
                 </div>
               </div>
               {dailyRate != null ? (
@@ -772,33 +1328,85 @@ export function RegistrationDetailView({
                 </div>
               ) : null}
             </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={paid ? "ghost" : "default"}
-                disabled={saving || paid || suspicious}
-                title={
-                  suspicious
-                    ? "Cần xem xét suspicious flag trước — bấm Xác nhận OK ở banner đỏ bên trên"
-                    : undefined
-                }
-                onClick={() => {
-                  void savePayment("paid");
+
+            {/* Force-paid audit banner when this row was forced */}
+            {detail.payment_forced_reason ? (
+              <div
+                className="rounded-md border p-3 text-xs"
+                style={{
+                  background: "#fffbeb",
+                  borderColor: "#fde68a",
+                  color: "#78350f",
                 }}
               >
-                {paid ? "Đã thanh toán" : "Đánh dấu đã thanh toán"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  void savePayment("pending");
-                }}
-                disabled={saving}
-              >
-                Đặt lại về chờ
-              </Button>
+                <div className="font-semibold">
+                  ⚠️ Đã cưỡng bức thanh toán (bỏ qua nghiệm thu)
+                </div>
+                <div className="mt-0.5">
+                  {detail.payment_forced_at
+                    ? new Date(detail.payment_forced_at).toLocaleString("vi-VN")
+                    : null}
+                  {detail.payment_forced_by
+                    ? ` · bởi ${detail.payment_forced_by}`
+                    : null}
+                </div>
+                <div className="mt-1 whitespace-pre-wrap">
+                  {detail.payment_forced_reason}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              {!paid ? (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={
+                      saving ||
+                      suspicious ||
+                      detail.acceptance_status !== "signed"
+                    }
+                    title={
+                      suspicious
+                        ? "Cần xem xét suspicious flag trước — bấm Xác nhận OK ở banner đỏ bên trên"
+                        : detail.acceptance_status !== "signed"
+                          ? "Crew chưa ký biên bản nghiệm thu. Dùng nút Cưỡng bức nếu cần bypass."
+                          : undefined
+                    }
+                    onClick={() => {
+                      void handleMarkPaid();
+                    }}
+                  >
+                    Đánh dấu đã thanh toán
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={saving || suspicious}
+                    onClick={() => setForcePaidOpen(true)}
+                  >
+                    Cưỡng bức thanh toán
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => {
+                    void handleRevertPaid();
+                  }}
+                >
+                  Hoàn tác về chờ
+                </Button>
+              )}
             </div>
+            {!paid && detail.acceptance_status !== "signed" ? (
+              <p className="text-xs text-muted-foreground">
+                Cổng thanh toán: chỉ cho phép khi biên bản nghiệm thu đã ký.
+                Dùng <em>Cưỡng bức</em> với lý do bắt buộc nếu cần bypass.
+              </p>
+            ) : null}
             {suspicious ? (
               <p className="text-xs text-red-600">
                 Không thể đánh dấu đã thanh toán khi đăng ký đang được flag là
@@ -838,6 +1446,228 @@ export function RegistrationDetailView({
         busy={changesBusy}
         onConfirm={handleRejectChanges}
       />
+
+      <ForcePaidDialog
+        open={forcePaidOpen}
+        onOpenChange={setForcePaidOpen}
+        name={detail.full_name}
+        acceptanceStatus={detail.acceptance_status}
+        busy={forcePaidBusy}
+        onConfirm={handleForcePaid}
+      />
+
+      <BackfillBenBDialog
+        open={backfillOpen}
+        onOpenChange={setBackfillOpen}
+        name={detail.full_name}
+        initial={{
+          birth_date: detail.birth_date,
+          cccd_issue_date: detail.cccd_issue_date,
+          cccd_issue_place: detail.cccd_issue_place,
+          bank_account_number:
+            (detail.form_data?.bank_account_number as string | undefined) ??
+            null,
+          bank_name:
+            (detail.form_data?.bank_name as string | undefined) ?? null,
+          address:
+            (detail.form_data?.address as string | undefined) ?? null,
+        }}
+        busy={backfillBusy}
+        onConfirm={handleBackfill}
+      />
+
+      <DisputeDialog
+        open={disputeOpen}
+        onOpenChange={setDisputeOpen}
+        name={detail.full_name}
+        busy={disputeBusy}
+        onConfirm={handleDispute}
+      />
+    </div>
+  );
+}
+
+// ─── Acceptance tab panel + helpers ────────────────────────────────────
+function acceptanceStatusLabel(status: RegistrationDetail["acceptance_status"]): string {
+  switch (status) {
+    case "not_ready":
+      return "⏸ Chưa gửi";
+    case "pending_sign":
+      return "⏳ Chờ crew ký";
+    case "signed":
+      return "✅ Đã ký";
+    case "disputed":
+      return "⚠️ Tranh chấp";
+    default:
+      return status;
+  }
+}
+
+function AcceptancePanel({
+  detail,
+  busy,
+  loadingPdf,
+  onSend,
+  onDispute,
+  onOpenPdf,
+  onBackfill,
+}: {
+  detail: RegistrationDetail;
+  busy: boolean;
+  loadingPdf: boolean;
+  onSend: () => void | Promise<void>;
+  onDispute: () => void;
+  onOpenPdf: () => void | Promise<void>;
+  onBackfill: () => void;
+}): React.ReactElement {
+  const st = detail.acceptance_status;
+  // Minimum Bên B fields required by server to actually generate PDF.
+  const form = detail.form_data ?? {};
+  const missing: string[] = [];
+  if (!detail.birth_date) missing.push("Ngày sinh");
+  if (!detail.cccd_issue_date) missing.push("Ngày cấp CCCD");
+  if (!detail.cccd_issue_place) missing.push("Nơi cấp CCCD");
+  if (!form.bank_account_number) missing.push("Số tài khoản");
+  if (!form.bank_name) missing.push("Ngân hàng");
+  if (!form.address) missing.push("Địa chỉ");
+
+  const cannotSend =
+    detail.status !== "completed" || missing.length > 0 || busy;
+
+  return (
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex flex-wrap items-center gap-4">
+        <div>
+          <span className="text-xs text-muted-foreground">Trạng thái</span>
+          <div className="font-medium">{acceptanceStatusLabel(st)}</div>
+        </div>
+        <div>
+          <span className="text-xs text-muted-foreground">Số HĐ</span>
+          <div className="font-medium font-mono text-sm">
+            {detail.contract_number ?? "—"}
+          </div>
+        </div>
+        {detail.acceptance_value != null ? (
+          <div>
+            <span className="text-xs text-muted-foreground">Giá trị</span>
+            <div className="font-medium">
+              {detail.acceptance_value.toLocaleString("vi-VN")} ₫
+            </div>
+          </div>
+        ) : null}
+        {detail.acceptance_sent_at ? (
+          <div>
+            <span className="text-xs text-muted-foreground">Đã gửi</span>
+            <div className="font-medium">
+              {new Date(detail.acceptance_sent_at).toLocaleString("vi-VN")}
+            </div>
+          </div>
+        ) : null}
+        {detail.acceptance_signed_at ? (
+          <div>
+            <span className="text-xs text-muted-foreground">Đã ký</span>
+            <div className="font-medium">
+              {new Date(detail.acceptance_signed_at).toLocaleString("vi-VN")}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {st === "disputed" && detail.acceptance_notes ? (
+        <div
+          className="rounded-md border p-3 text-xs"
+          style={{
+            background: "#fef2f2",
+            borderColor: "#fecaca",
+            color: "#7f1d1d",
+          }}
+        >
+          <div className="font-semibold">⚠️ Tranh chấp</div>
+          <div className="mt-1 whitespace-pre-wrap">{detail.acceptance_notes}</div>
+        </div>
+      ) : null}
+
+      {missing.length > 0 ? (
+        <div
+          className="rounded-md border p-3 text-xs"
+          style={{
+            background: "#fffbeb",
+            borderColor: "#fde68a",
+            color: "#78350f",
+          }}
+        >
+          <div className="font-semibold">
+            Thiếu thông tin Bên B — cần bổ sung trước khi gửi
+          </div>
+          <ul className="mt-1 list-disc list-inside">
+            {missing.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2"
+            onClick={onBackfill}
+          >
+            <Pencil className="mr-1 size-3.5" /> Bổ sung thông tin Bên B
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="outline" onClick={onBackfill}>
+          <Pencil className="mr-1 size-3.5" /> Sửa thông tin Bên B
+        </Button>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {st === "not_ready" || st === "pending_sign" || st === "disputed" ? (
+          <Button
+            size="sm"
+            disabled={cannotSend}
+            onClick={() => {
+              void onSend();
+            }}
+            title={
+              detail.status !== "completed"
+                ? "Chỉ gửi nghiệm thu sau khi hoàn thành sự kiện (status=completed)"
+                : missing.length
+                  ? "Bổ sung thông tin Bên B trước"
+                  : undefined
+            }
+          >
+            {busy
+              ? "Đang gửi..."
+              : st === "not_ready"
+                ? "Gửi biên bản nghiệm thu"
+                : "Gửi lại"}
+          </Button>
+        ) : null}
+
+        {(st === "pending_sign" || st === "signed") ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onDispute}
+            disabled={busy}
+          >
+            Đánh dấu tranh chấp
+          </Button>
+        ) : null}
+
+        {st === "signed" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loadingPdf}
+            onClick={() => {
+              void onOpenPdf();
+            }}
+          >
+            <ExternalLink className="mr-2 size-4" />
+            {loadingPdf ? "Đang tạo link..." : "Xem biên bản đã ký"}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -33,6 +33,7 @@ export function StatusTabs({
   contacts,
   myStation,
   leaderSupply,
+  featureMode = "full",
 }: {
   token: string;
   status: StatusResponse;
@@ -42,6 +43,7 @@ export function StatusTabs({
   contacts: PublicEventContactsResponse | null;
   myStation: MyStationView | null;
   leaderSupply: LeaderSupplyView | null;
+  featureMode?: "full" | "lite";
 }): React.ReactElement {
   const isLeader = leaderPortal != null;
   const [tab, setTab] = useState<TabKey>("self");
@@ -83,6 +85,7 @@ export function StatusTabs({
           signedPdfUrl={signedPdfUrl}
           myStation={myStation}
           leaderSupply={leaderSupply}
+          featureMode={featureMode}
         />
       ) : null}
 

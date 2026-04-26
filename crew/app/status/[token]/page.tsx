@@ -9,6 +9,10 @@ import {
 } from "@/lib/directory-api";
 import { getMyStation, type MyStationView } from "@/lib/station-api";
 import { getLeaderSupplyView, type LeaderSupplyView } from "@/lib/supply-api";
+import {
+  getEventConfigByToken,
+  type EventFeaturesConfig,
+} from "@/lib/event-config-api";
 import { StatusTabs } from "./_status-tabs";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8081";
@@ -119,8 +123,8 @@ export default async function StatusPage({
   }
 
   // Fetch signed PDF + leader probe + directory + contacts + station +
-  // leader supply in parallel — all are best-effort. Unauthorized fetches
-  // degrade to null so the tabs render graceful empty states.
+  // leader supply + event config in parallel — all are best-effort. Unauthorized
+  // fetches degrade to null so the tabs render graceful empty states.
   const [
     signedPdfUrl,
     leaderPortal,
@@ -128,6 +132,7 @@ export default async function StatusPage({
     contacts,
     myStation,
     leaderSupply,
+    eventConfig,
   ]: [
     string | null,
     LeaderPortalResponse | null,
@@ -135,6 +140,7 @@ export default async function StatusPage({
     PublicEventContactsResponse | null,
     MyStationView | null,
     LeaderSupplyView | null,
+    EventFeaturesConfig | null,
   ] = await Promise.all([
     status.contract_status === "signed"
       ? fetchSignedPdfUrl(token)
@@ -144,7 +150,10 @@ export default async function StatusPage({
     getContacts(token).catch(() => null),
     tryFetchMyStation(token),
     tryFetchLeaderSupply(token),
+    getEventConfigByToken(token).catch(() => null),
   ]);
+
+  const featureMode: "full" | "lite" = eventConfig?.feature_mode ?? "full";
 
   return (
     <StatusTabs
@@ -156,6 +165,7 @@ export default async function StatusPage({
       contacts={contacts}
       myStation={myStation}
       leaderSupply={leaderSupply}
+      featureMode={featureMode}
     />
   );
 }

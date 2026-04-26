@@ -277,13 +277,11 @@ export class TeamSupplyAllocationService {
     if (!assignment || !assignment.station) {
       throw new ForbiddenException('You are not assigned to a station');
     }
-    // v1.8: assignment_role field dropped. Supervisor-vs-worker derived
-    // from registration.role.is_leader_role — leaders cannot confirm supply.
-    if (assignment.registration?.role?.is_leader_role === true) {
-      throw new ForbiddenException(
-        'Only crew can confirm supply (BR-SUP-09)',
-      );
-    }
+    // v1.9: BR-SUP-09 relaxed. The original rule assumed a crew worker always
+    // sits below a supervisor. In practice the station chief (is_leader_role)
+    // IS on-site and must confirm receipt when no crew is assigned below them.
+    // Gate is now: must be assigned to a station (checked above). Anyone
+    // assigned to a station — supervisor or worker — may confirm.
     const stationId = assignment.station_id;
 
     const itemIds = dto.receipts.map((r) => r.item_id);

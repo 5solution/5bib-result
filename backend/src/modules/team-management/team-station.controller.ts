@@ -17,6 +17,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { LogtoAdminGuard } from 'src/modules/logto-auth';
+import { FeatureModeGuard, RequireFullMode } from './guards/feature-mode.guard';
 import {
   AssignableMemberDto,
   AssignmentMemberBriefDto,
@@ -30,9 +31,11 @@ import { TeamStationService } from './services/team-station.service';
 
 // v1.8: stations pivoted from role → category. Routes now group under
 // /team-categories/:categoryId/stations. Old role-scoped routes removed.
+// v1.9: FeatureModeGuard blocks access in Lite mode events.
 @ApiTags('Team Management (stations)')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@RequireFullMode()
+@UseGuards(LogtoAdminGuard, FeatureModeGuard)
 @Controller('team-management')
 export class TeamStationController {
   constructor(private readonly stations: TeamStationService) {}

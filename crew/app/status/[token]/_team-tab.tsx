@@ -190,7 +190,8 @@ export function LeaderTeamTab({
     );
   }
 
-  const members = portal.members;
+  // Bug #6 — ẩn thành viên bị từ chối khỏi danh sách của leader
+  const members = portal.members.filter((m) => m.status !== "rejected");
 
   return (
     <div className="space-y-4">

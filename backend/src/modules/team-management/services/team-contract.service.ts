@@ -43,6 +43,8 @@ import {
   sanitizeHtml,
   wrapContractDocument,
 } from './pdf-renderer';
+import { TeamContractNumberService } from './team-contract-number.service';
+import { capitaliseFirst, vndToWords } from '../utils/vnd-to-words';
 
 /**
  * Canonical list of template variables the contract renderer knows how to
@@ -55,6 +57,13 @@ export const VALID_VARIABLES = [
   'email',
   'cccd',
   'dob',
+  'birth_date',
+  'cccd_issue_date',
+  'cccd_issue_place',
+  'address',
+  'bank_account_number',
+  'bank_name',
+  'tax_code',
   'event_name',
   'event_start_date',
   'event_end_date',
@@ -64,6 +73,22 @@ export const VALID_VARIABLES = [
   'working_days',
   'total_compensation',
   'signed_date',
+  'contract_number',
+  'signature_image',
+  // Party A (Bên A) — configurable per template
+  'party_a_company_name',
+  'party_a_address',
+  'party_a_tax_code',
+  'party_a_representative',
+  'party_a_position',
+  // Contract-specific aliases — present in the seeded DOCX template.
+  'sign_date',        // alias for signed_date
+  'cccd_number',      // alias for cccd
+  'work_content',     // role.description ?? role.role_name
+  'work_location',    // event.location
+  'work_period',      // "event_start – event_end"
+  'unit_price',       // alias for daily_rate
+  'unit_price_words', // daily_rate in Vietnamese words
 ];
 
 @Injectable()
@@ -84,10 +109,48 @@ export class TeamContractService {
     private readonly s3: S3Client,
     private readonly mail: MailService,
     @InjectRedis() private readonly redis: Redis,
+    private readonly contractNumbers: TeamContractNumberService,
   ) {}
 
   private signLockKey(regId: number): string {
     return `team:contract:signing:${regId}`;
+  }
+
+  /**
+   * Retry helper for MariaDB deadlocks (errno 1213) and lock-wait
+   * timeouts (errno 1205). Used around the contract-number reservation
+   * transaction which races on the `vol_contract_number_sequence` row
+   * lock when batch=5 admin sends fire concurrently.
+   *
+   * 3 attempts with jittered exponential backoff (50/150/450ms ± 50%).
+   * Final failure surfaces as ConflictException so the admin UI can
+   * report which reg IDs need manual retry, instead of a generic 500.
+   */
+  private async withDeadlockRetry<T>(
+    label: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const delays = [50, 150, 450];
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const errno = (err as { errno?: number; code?: string }).errno;
+        const isLockErr = errno === 1213 || errno === 1205;
+        if (!isLockErr) throw err;
+        lastErr = err;
+        const jitter = Math.floor(Math.random() * 50);
+        const waitMs = delays[attempt] + jitter;
+        this.logger.warn(
+          `${label}: lock conflict (errno=${errno}) attempt=${attempt + 1}/3, retry in ${waitMs}ms`,
+        );
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
+    throw new ConflictException(
+      `${label}: lock conflict after 3 retries — concurrent batch may be running. Try again in a moment.`,
+    );
   }
 
   /**
@@ -143,6 +206,11 @@ export class TeamContractService {
       variables: dto.variables,
       is_active: dto.is_active ?? true,
       created_by: createdBy,
+      party_a_company_name: dto.party_a_company_name ?? null,
+      party_a_address: dto.party_a_address ?? null,
+      party_a_tax_code: dto.party_a_tax_code ?? null,
+      party_a_representative: dto.party_a_representative ?? null,
+      party_a_position: dto.party_a_position ?? null,
     });
     return this.templateRepo.save(template);
   }
@@ -157,6 +225,12 @@ export class TeamContractService {
       existing.content_html = sanitizeHtml(dto.content_html);
     if (dto.variables != null) existing.variables = dto.variables;
     if (dto.is_active != null) existing.is_active = dto.is_active;
+    // Party A fields: update if key present in DTO (null = explicit clear).
+    if ('party_a_company_name' in dto) existing.party_a_company_name = dto.party_a_company_name ?? null;
+    if ('party_a_address' in dto) existing.party_a_address = dto.party_a_address ?? null;
+    if ('party_a_tax_code' in dto) existing.party_a_tax_code = dto.party_a_tax_code ?? null;
+    if ('party_a_representative' in dto) existing.party_a_representative = dto.party_a_representative ?? null;
+    if ('party_a_position' in dto) existing.party_a_position = dto.party_a_position ?? null;
     return this.templateRepo.save(existing);
   }
 
@@ -237,14 +311,26 @@ export class TeamContractService {
     role: VolRole,
     event: VolEvent,
     signatureImage?: string,
+    template?: VolContractTemplate,
   ): Record<string, string> {
     const form = (reg.form_data ?? {}) as Record<string, unknown>;
     const asStr = (v: unknown) => (typeof v === 'string' ? v : '');
+    const cccd = asStr(form.cccd);
     return {
       full_name: reg.full_name,
       email: reg.email,
       phone: reg.phone,
-      cccd: asStr(form.cccd),
+      cccd,
+      // `dob` kept as alias for legacy templates; new field is `birth_date`.
+      dob: reg.birth_date ? formatDate(reg.birth_date) : '',
+      birth_date: reg.birth_date ? formatDate(reg.birth_date) : '',
+      cccd_issue_date: reg.cccd_issue_date ? formatDate(reg.cccd_issue_date) : '',
+      cccd_issue_place: reg.cccd_issue_place ?? '',
+      address: asStr(form.address),
+      bank_account_number: asStr(form.bank_account_number),
+      bank_name: asStr(form.bank_name),
+      // MST = CCCD — no separate field (Option chốt).
+      tax_code: cccd,
       role_name: role.role_name,
       daily_rate: formatVnd(Number(role.daily_rate)),
       working_days: String(role.working_days),
@@ -256,9 +342,25 @@ export class TeamContractService {
       event_end_date: formatDate(event.event_end_date),
       event_location: event.location ?? '',
       signed_date: formatDate(new Date()),
+      contract_number: reg.contract_number ?? '',
       // Empty string when no signature yet (preview path) — results in
       // `<img src="">` which renders nothing in puppeteer.
       signature_image: signatureImage ?? '',
+      // Party A fields — sourced from the template so each legal entity
+      // can use its own company info. Falls back to '' if not configured.
+      party_a_company_name: template?.party_a_company_name ?? '',
+      party_a_address: template?.party_a_address ?? '',
+      party_a_tax_code: template?.party_a_tax_code ?? '',
+      party_a_representative: template?.party_a_representative ?? '',
+      party_a_position: template?.party_a_position ?? '',
+      // Aliases used in the seeded DOCX contract template.
+      sign_date: formatDate(new Date()),
+      cccd_number: cccd,
+      work_content: role.description ?? role.role_name,
+      work_location: event.location ?? '',
+      work_period: `${formatDate(event.event_start_date)} – ${formatDate(event.event_end_date)}`,
+      unit_price: formatVnd(Number(role.daily_rate)),
+      unit_price_words: capitaliseFirst(vndToWords(Number(role.daily_rate))),
     };
   }
 
@@ -303,7 +405,7 @@ export class TeamContractService {
 
   async viewContract(token: string): Promise<ContractViewDto> {
     const { reg, role, event, template } = await this.loadContext(token);
-    const vars = this.buildPlaceholders(reg, role, event);
+    const vars = this.buildPlaceholders(reg, role, event, undefined, template);
     const rendered = renderTemplate(template.content_html, vars);
     return {
       html_content: wrapContractDocument(rendered),
@@ -380,7 +482,7 @@ export class TeamContractService {
       // Inject the full data URL into template — renderTemplate's HTML-
       // escape is a no-op on base64 charset. Template was sanitized at
       // save time; skip second sanitize after templating.
-      const vars = this.buildPlaceholders(reg, role, event, signatureImage);
+      const vars = this.buildPlaceholders(reg, role, event, signatureImage, template);
       const body = renderTemplate(template.content_html, vars);
       const pdfHtml = wrapContractDocument(body);
       const pdfBuffer = await htmlToPdfBuffer(pdfHtml);
@@ -568,19 +670,38 @@ export class TeamContractService {
     });
 
     if (dryRun) {
-      return { queued: targets.length, already_sent: alreadySent, skipped: 0 };
+      return {
+        queued: targets.length,
+        already_sent: alreadySent,
+        skipped: 0,
+        skipped_ids: [],
+        skip_reasons: [],
+      };
     }
 
     if (targets.length === 0) {
-      return { queued: 0, already_sent: alreadySent, skipped: 0 };
+      return {
+        queued: 0,
+        already_sent: alreadySent,
+        skipped: 0,
+        skipped_ids: [],
+        skip_reasons: [],
+      };
     }
 
     // Bounded concurrency: chunks of 5 concurrent email sends. Per-reg
     // transition to `contract_sent` runs only after the email resolves,
     // guarded by a conditional UPDATE (WHERE status='approved') so two
     // concurrent batch runs can't both win.
+    //
+    // v2.1 — track failures explicitly. The previous version returned
+    // `skipped: 0` even when N/10 emails actually failed, because the
+    // `Promise.allSettled` rejections were only logged to console. The
+    // admin had no way to know who didn't get the magic link.
     const CONCURRENCY = 5;
     let queued = 0;
+    const skippedIds: number[] = [];
+    const skipReasons: string[] = [];
     for (let i = 0; i < targets.length; i += CONCURRENCY) {
       const chunk = targets.slice(i, i + CONCURRENCY);
       const results = await Promise.allSettled(
@@ -591,14 +712,22 @@ export class TeamContractService {
         if (r.status === 'fulfilled') {
           queued++;
         } else {
-          this.logger.warn(
-            `send-contract email failed reg=${chunk[j].id}: ${(r.reason as Error).message}`,
-          );
+          const regId = chunk[j].id;
+          const reason = (r.reason as Error).message;
+          this.logger.warn(`send-contract failed reg=${regId}: ${reason}`);
+          skippedIds.push(regId);
+          skipReasons.push(reason);
         }
       }
     }
 
-    return { queued, already_sent: alreadySent, skipped: 0 };
+    return {
+      queued,
+      already_sent: alreadySent,
+      skipped: skippedIds.length,
+      skipped_ids: skippedIds,
+      skip_reasons: skipReasons,
+    };
   }
 
   /**
@@ -612,30 +741,116 @@ export class TeamContractService {
     role: VolRole,
     event: VolEvent,
   ): Promise<number> {
-    if (reg.status !== 'approved') {
+    // Allow sending (initial) or re-sending (resend to same magic link).
+    // States further than contract_sent mean the crew already signed —
+    // resending the sign link makes no sense at that point.
+    if (reg.status !== 'approved' && reg.status !== 'contract_sent') {
       throw new BadRequestException(
-        `Cannot send contract — registration status is "${reg.status}", expected "approved"`,
+        `Cannot send contract — registration status is "${reg.status}". ` +
+          `Expected "approved" (initial send) or "contract_sent" (resend).`,
       );
     }
-    const magicLink = `${env.teamManagement.crewBaseUrl}/contract/${reg.magic_token}`;
-    await this.mail.sendTeamContractSent({
-      toEmail: reg.email,
-      fullName: reg.full_name,
-      eventName: event.event_name,
-      roleName: role.role_name,
-      magicLink,
-    });
-    const result = await this.regRepo
-      .createQueryBuilder()
-      .update()
-      .set({ status: 'contract_sent', contract_status: 'sent' })
-      .where('id = :id', { id: reg.id })
-      .andWhere('status = :from', { from: 'approved' })
-      .execute();
+
+    // Resend fast-path: crew already has a contract_number + magic_token,
+    // no status change needed — just re-send the email with the same link.
+    // Always refresh magic_token_expires so a resend never goes to a dead link.
+    if (reg.status === 'contract_sent') {
+      this.logger.log(
+        `sendContractToRegistration reg=${reg.id}: resend to ${reg.email} (already contract_sent)`,
+      );
+      const newExpiry = this.tokenExpiry();
+      await this.regRepo.update(reg.id, { magic_token_expires: newExpiry });
+      const magicLink = `${env.teamManagement.crewBaseUrl}/contract/${reg.magic_token}`;
+      await this.mail.sendTeamContractSent({
+        toEmail: reg.email,
+        fullName: reg.full_name,
+        eventName: event.event_name,
+        roleName: role.role_name,
+        magicLink,
+      });
+      return reg.id;
+    }
+
+    // Initial send path (approved → contract_sent):
+    // v2.0 — reserve contract_number inside the status-transition
+    // transaction. Sequence row is locked FOR UPDATE so concurrent batch
+    // runs serialize naturally on REPEATABLE READ (MariaDB default). The
+    // SERIALIZABLE isolation that was here originally caused 9/10 lock
+    // conflicts under 10x parallel load (gap locks block range scans).
+    // Atomicity comes from the FOR UPDATE row lock alone — verified by
+    // QC: 0 duplicate contract_numbers under 10x burst.
+    //
+    // Wrapped in withDeadlockRetry: even the bare row lock can deadlock
+    // if MariaDB picks competing victims, so retry up to 3x with
+    // exponential backoff before surfacing a 409 to the admin.
+    const result = await this.withDeadlockRetry(
+      `sendContractToRegistration(reg=${reg.id})`,
+      () =>
+        // READ COMMITTED: each statement sees the latest committed
+        // version, so the LAST_INSERT_ID atomic counter UPDATE doesn't
+        // conflict with sister transactions' snapshots. REPEATABLE READ
+        // (MariaDB default) raises errno 1020 "Record has changed since
+        // last read" under 10x concurrent updates because each txn
+        // holds its own row snapshot.
+        this.dataSource.transaction('READ COMMITTED', async (m) => {
+          // Re-read inside txn so we see the committed contract_number if any.
+          const latest = await m
+            .getRepository(VolRegistration)
+            .findOne({ where: { id: reg.id } });
+          if (!latest) {
+            throw new NotFoundException('Registration vanished mid-transaction');
+          }
+          let contractNumber = latest.contract_number;
+          if (!contractNumber) {
+            contractNumber = await this.contractNumbers.reserveNextInTransaction(
+              m,
+              event.id,
+            );
+          }
+          const upd = await m
+            .getRepository(VolRegistration)
+            .createQueryBuilder()
+            .update()
+            .set({
+              status: 'contract_sent',
+              contract_status: 'sent',
+              contract_number: contractNumber,
+              // Refresh expiry so the emailed link is always valid for 7 days.
+              magic_token_expires: this.tokenExpiry(),
+            })
+            .where('id = :id', { id: reg.id })
+            .andWhere('status = :from', { from: 'approved' })
+            .execute();
+          // Refresh the in-memory object so downstream email/log has the number.
+          reg.contract_number = contractNumber;
+          return upd;
+        }),
+    );
+
     if (!result.affected) {
       this.logger.warn(
-        `sendContractToRegistration reg=${reg.id}: status changed under us, skip transition`,
+        `sendContractToRegistration reg=${reg.id}: status changed under us, skip transition (contract_number reserved=${reg.contract_number})`,
       );
+      // Still attempt the email so admin retry isn't wasted — the reg is
+      // already in contract_sent so the email link works.
+    }
+
+    const magicLink = `${env.teamManagement.crewBaseUrl}/contract/${reg.magic_token}`;
+    try {
+      await this.mail.sendTeamContractSent({
+        toEmail: reg.email,
+        fullName: reg.full_name,
+        eventName: event.event_name,
+        roleName: role.role_name,
+        magicLink,
+      });
+    } catch (err) {
+      // Don't revert the contract_number / status — reserving a gap is
+      // acceptable (audit-safe), rolling back a committed sequence isn't.
+      this.logger.warn(
+        `send-contract email failed reg=${reg.id} (state already contract_sent): ${(err as Error).message}`,
+      );
+      throw err;
     }
     return reg.id;
   }
@@ -661,6 +876,17 @@ export class TeamContractService {
       // qr_sent as already-done (idempotent).
       this.logger.warn(
         `sendQrAndTransition reg=${regId}: status=${reg.status}, skipping`,
+      );
+      return;
+    }
+    // v1.9: Skip QR/checkin flow entirely in Lite mode. Crew portal hides
+    // the scan UI and admin manually confirms attendance via /confirm-nghiem-thu
+    // (which requires status='contract_signed' in Lite mode). If we let this
+    // method transition contract_signed → qr_sent, confirm-nghiem-thu would
+    // then reject the reg with "yêu cầu status contract_signed".
+    if (reg.event?.feature_mode === 'lite') {
+      this.logger.log(
+        `sendQrAndTransition reg=${regId}: event is Lite mode, skipping QR transition`,
       );
       return;
     }
@@ -709,10 +935,73 @@ export class TeamContractService {
     if (!reg) throw new NotFoundException('Registration not found');
     if (!reg.role) throw new NotFoundException('Role not loaded');
     if (!reg.event) throw new NotFoundException('Event not loaded');
+
+    // No-contract fast-path: when the role has no contract template
+    // configured, skip contract_sent/contract_signed and deliver the QR
+    // + portal email directly. Status: approved → qr_sent.
     if (!reg.role.contract_template_id) {
-      throw new BadRequestException('Role has no contract template configured');
+      await this.sendApprovedNoContract(reg, reg.role, reg.event);
+      return reg.id;
     }
+
     return this.sendContractToRegistration(reg, reg.role, reg.event);
+  }
+
+  /**
+   * Fired when a registration is approved but the role has NO contract
+   * template configured. Sends the "you're approved — here's your QR +
+   * portal link" email and transitions approved → qr_sent atomically.
+   *
+   * Keeps the same final state as the contract flow so downstream
+   * check-in / completion logic doesn't need a second branch.
+   */
+  private async sendApprovedNoContract(
+    reg: VolRegistration,
+    role: VolRole,
+    event: VolEvent,
+  ): Promise<void> {
+    if (reg.status !== 'approved') {
+      this.logger.warn(
+        `sendApprovedNoContract reg=${reg.id}: status=${reg.status}, skipping`,
+      );
+      return;
+    }
+    const qrToken = reg.magic_token;
+    const qrDataUrl = await QRCode.toDataURL(qrToken);
+    const magicLink = `${env.teamManagement.crewBaseUrl}/status/${reg.magic_token}`;
+
+    await this.mail.sendTeamRegistrationApproved({
+      toEmail: reg.email,
+      fullName: reg.full_name,
+      eventName: event.event_name,
+      roleName: role.role_name,
+      magicLink,
+      qrDataUrl,
+    });
+
+    const result = await this.regRepo
+      .createQueryBuilder()
+      .update()
+      .set({ status: 'qr_sent', qr_code: qrToken })
+      .where('id = :id', { id: reg.id })
+      .andWhere('status = :from', { from: 'approved' })
+      .execute();
+    if (!result.affected) {
+      this.logger.warn(
+        `sendApprovedNoContract reg=${reg.id}: status changed under us, not transitioning to qr_sent`,
+      );
+    } else {
+      this.logger.log(
+        `APPROVE_NO_CONTRACT reg=${reg.id} role=${role.id} → qr_sent (role has no contract_template_id)`,
+      );
+    }
+  }
+
+  /** Returns a Date that is MAGIC_TOKEN_EXPIRES_DAYS days from now (UTC). */
+  private tokenExpiry(): Date {
+    const d = new Date();
+    d.setDate(d.getDate() + env.teamManagement.magicTokenDays);
+    return d;
   }
 }
 

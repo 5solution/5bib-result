@@ -37,6 +37,33 @@ export type ContractStatus = 'not_sent' | 'sent' | 'signed' | 'expired';
 export type PaymentStatus = 'pending' | 'paid';
 export type CompletionConfirmedBy = 'leader' | 'admin';
 
+/**
+ * Biên bản nghiệm thu state (post-event acceptance minutes).
+ *
+ * Flow:
+ *   not_ready (default)
+ *     → admin sends acceptance ⇒ pending_sign (+ acceptance_sent_at)
+ *         → crew signs ⇒ signed (+ acceptance_signed_at, pdf_url, hash)
+ *         → admin marks dispute ⇒ disputed (+ acceptance_notes)
+ *             → admin re-sends ⇒ pending_sign again
+ *
+ * payment_status='paid' is gated by acceptance_status='signed' in
+ * TeamPaymentService. A force-paid endpoint exists for exceptions
+ * (crew unreachable) — requires `force_reason` + audit log.
+ */
+export type AcceptanceStatus =
+  | 'not_ready'
+  | 'pending_sign'
+  | 'signed'
+  | 'disputed';
+
+export const ACCEPTANCE_STATUS_VALUES: AcceptanceStatus[] = [
+  'not_ready',
+  'pending_sign',
+  'signed',
+  'disputed',
+];
+
 export const REGISTRATION_STATUS_VALUES: RegistrationStatus[] = [
   'pending_approval',
   'approved',
@@ -54,8 +81,12 @@ export const REGISTRATION_STATUS_VALUES: RegistrationStatus[] = [
 @Index('idx_role_status', ['role_id', 'status'])
 @Index('idx_event_status', ['event_id', 'status'])
 @Index('idx_qr_code', ['qr_code'])
+@Index('idx_reg_acceptance_status', ['acceptance_status'])
+@Index('idx_reg_event_acceptance', ['event_id', 'acceptance_status'])
+@Index('idx_reg_payment_forced_at', ['payment_forced_at'])
 @Unique('uq_magic_token', ['magic_token'])
 @Unique('uq_email_role', ['email', 'role_id'])
+@Unique('uq_reg_contract_number', ['contract_number'])
 export class VolRegistration {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -159,6 +190,56 @@ export class VolRegistration {
   @Column({ type: 'varchar', length: 512, nullable: true })
   contract_signature_url!: string | null;
 
+  // ─── v2.0: Contract number + acceptance (biên bản nghiệm thu) ───
+  // Assigned atomically at contract-send time by
+  // TeamContractNumberService. Format: `NNN-{PREFIX}-HDDV/CTV-5BIB`.
+  // UNIQUE cross-event.
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  contract_number!: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: ACCEPTANCE_STATUS_VALUES,
+    default: 'not_ready',
+  })
+  acceptance_status!: AcceptanceStatus;
+
+  @Column({ type: 'int', nullable: true })
+  acceptance_template_id!: number | null;
+
+  // Tổng giá trị nghiệm thu in VND. Default on send =
+  // role.unit_price × days_checked_in, admin editable before send.
+  @Column({ type: 'int', nullable: true })
+  acceptance_value!: number | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  acceptance_sent_at!: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  acceptance_signed_at!: Date | null;
+
+  // S3 key (not a full URL). Short-lived presigned at read time.
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  acceptance_pdf_url!: string | null;
+
+  // SHA-256 of the signed PDF for integrity verification.
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  acceptance_pdf_hash!: string | null;
+
+  // Dispute reason or admin note on the acceptance.
+  @Column({ type: 'text', nullable: true })
+  acceptance_notes!: string | null;
+
+  // ─── v2.0: Extended Bên B fields for contract rendering ───
+  @Column({ type: 'date', nullable: true })
+  birth_date!: string | null;
+
+  @Column({ type: 'date', nullable: true })
+  cccd_issue_date!: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  cccd_issue_place!: string | null;
+
   @Column({ type: 'int', nullable: true })
   actual_working_days!: number | null;
 
@@ -167,6 +248,19 @@ export class VolRegistration {
 
   @Column({ type: 'enum', enum: ['pending', 'paid'], default: 'pending' })
   payment_status!: PaymentStatus;
+
+  // ─── Force-paid audit trail (migration 032) ────────────────────────
+  // Populated ONLY when admin invokes POST /registrations/:id/payment/force-paid
+  // to bypass the acceptance-signed gate (crew unreachable, legacy row, etc.).
+  // Standard markPaid() leaves all three NULL.
+  @Column({ type: 'text', nullable: true })
+  payment_forced_reason!: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  payment_forced_at!: Date | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  payment_forced_by!: string | null;
 
   @Column({ type: 'text', nullable: true })
   notes!: string | null;

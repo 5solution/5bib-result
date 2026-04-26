@@ -138,10 +138,10 @@ export class TeamRecoverService {
 
     // 6. Send email. fire-and-forget — UI already returned 200. If SMTP
     //    flakes the user can request again (rate-limit permitting).
-    const subject = `[5BIB] Mã khôi phục link portal (${otp})`;
     const eventNames = Array.from(
       new Set(regs.map((r) => r.event?.event_name).filter(Boolean)),
     ).join(', ');
+    const subject = `[5BIB Crew] - Khôi phục link portal - ${eventNames}`;
     const html = buildOtpEmailHtml({
       otp,
       eventNames,

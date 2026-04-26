@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "admin", "runtimeExecutable": "npx", "runtimeArgs": ["next", "dev", "--port", "3010"], "port": 3010, "cwd": "admin" },
+    { "name": "crew",  "runtimeExecutable": "npx", "runtimeArgs": ["next", "dev", "--port", "3003"], "port": 3003, "cwd": "crew" }
+  ]
+}

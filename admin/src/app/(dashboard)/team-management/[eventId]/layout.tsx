@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { listRegistrations } from "@/lib/team-api";
+import { listRegistrations, getEventFeaturesConfig } from "@/lib/team-api";
 
 // v1.7 UX update: Trạm is managed per-Role (Role drill-down), not event-wide.
 // Event-wide planner tools stay top-level: Kho vật tư (master stock) + Kế
@@ -13,22 +13,21 @@ import { listRegistrations } from "@/lib/team-api";
 type NavItem = {
   slug: string;
   label: string;
+  fullModeOnly?: boolean;
 };
 
+// v1.9: fullModeOnly items are hidden when event is in Lite mode.
 const ITEMS: NavItem[] = [
   { slug: "dashboard", label: "Tổng quan" },
-  // v1.8 — Team layer sits between event and roles
   { slug: "teams", label: "Team" },
   { slug: "roles", label: "Vai trò" },
   { slug: "registrations", label: "Nhân sự" },
-  { slug: "supply-items", label: "Kho vật tư" },
-  { slug: "supply", label: "Kế hoạch vật tư" },
+  { slug: "supply-items", label: "Kho vật tư", fullModeOnly: true },
+  { slug: "supply", label: "Kế hoạch vật tư", fullModeOnly: true },
   { slug: "contacts", label: "Liên lạc khẩn cấp" },
   { slug: "schedule-emails", label: "Email lịch trình" },
-  { slug: "scan", label: "Scan QR" },
+  { slug: "scan", label: "Scan QR", fullModeOnly: true },
   { slug: "export", label: "Xuất báo cáo" },
-  // v1.8 — Edit event metadata (registration window, location, T&C, etc.)
-  // Placed last so the everyday workflow tabs stay on the left.
   { slug: "settings", label: "Cấu hình" },
 ];
 
@@ -43,6 +42,8 @@ export default function EventLayout({
   const eventId = Number(params.eventId);
   const { token } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
+  // v1.9: default 'full' so all tabs show until we know the mode.
+  const [featureMode, setFeatureMode] = useState<"full" | "lite">("full");
 
   const fetchPending = useCallback(async () => {
     if (!token || !Number.isFinite(eventId)) return;
@@ -58,11 +59,22 @@ export default function EventLayout({
     }
   }, [token, eventId]);
 
+  const fetchFeatureMode = useCallback(async () => {
+    if (!token || !Number.isFinite(eventId)) return;
+    try {
+      const cfg = await getEventFeaturesConfig(token, eventId);
+      setFeatureMode(cfg.feature_mode);
+    } catch {
+      // default to 'full' on error so no tabs are accidentally hidden
+    }
+  }, [token, eventId]);
+
   useEffect(() => {
     void fetchPending();
+    void fetchFeatureMode();
     const t = window.setInterval(() => void fetchPending(), 30_000);
     return () => window.clearInterval(t);
-  }, [fetchPending]);
+  }, [fetchPending, fetchFeatureMode]);
 
   return (
     <div className="space-y-4">
@@ -70,7 +82,9 @@ export default function EventLayout({
         className="flex items-end gap-1 overflow-x-auto border-b scrollbar-hide"
         aria-label="Team management navigation"
       >
-        {ITEMS.map((item) => {
+        {ITEMS.filter(
+          (item) => !item.fullModeOnly || featureMode === "full",
+        ).map((item) => {
           const href = `${base}/${item.slug}`;
           // Match exact path OR nested (e.g. /registrations/:id still highlights "Nhân sự")
           const active =

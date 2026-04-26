@@ -26,12 +26,14 @@ export function PersonalTab({
   signedPdfUrl,
   myStation,
   leaderSupply,
+  featureMode = "full",
 }: {
   token: string;
   status: StatusResponse;
   signedPdfUrl: string | null;
   myStation: MyStationView | null;
   leaderSupply: LeaderSupplyView | null;
+  featureMode?: "full" | "lite";
 }): React.ReactElement {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -222,13 +224,15 @@ export function PersonalTab({
         ) : null}
       </section>
 
-      {/* ---------- v1.6: Vị trí & nhiệm vụ (station + supply for crew) ---------- */}
-      <StationSection
-        token={token}
-        myStation={myStation}
-        leaderSupply={leaderSupply}
-        roleName={status.role_name}
-      />
+      {/* ---------- v1.6: Vị trí & nhiệm vụ — hidden in Lite mode (v1.9) ---------- */}
+      {featureMode !== "lite" ? (
+        <StationSection
+          token={token}
+          myStation={myStation}
+          leaderSupply={leaderSupply}
+          roleName={status.role_name}
+        />
+      ) : null}
 
       {/* ---------- QR code (second, for quick scan) ---------- */}
       {showQr ? (

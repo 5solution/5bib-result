@@ -38,7 +38,19 @@ export class RegisterResponseDto {
   @ApiProperty({ required: false, nullable: true })
   waitlist_position!: number | null;
   @ApiProperty() message!: string;
-  @ApiProperty() magic_link!: string;
+  /**
+   * SECURITY: only populated on admin-auth'd manual-register responses.
+   * The public /team-register endpoint MUST NOT return this — the portal
+   * token is delivered to the crew member by email after approval, never
+   * echoed to the anonymous register caller.
+   */
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'Magic link to the crew portal. Populated only for admin manual-register responses. Public register responses omit this to prevent token leaks.',
+  })
+  magic_link?: string | null;
 }
 
 export class StatusResponseDto {
@@ -115,4 +127,32 @@ export class StatusResponseDto {
 
   @ApiProperty({ required: false, nullable: true })
   chat_group_url!: string | null;
+
+  // v2.0 — Acceptance + payment surfacing so the status page can render
+  // the "Nghiệm thu & Thanh toán" section. `acceptance_notes` carries the
+  // dispute reason when acceptance_status='disputed'.
+  @ApiProperty({
+    enum: ['not_ready', 'pending_sign', 'signed', 'disputed'],
+    description:
+      'Acceptance (biên bản nghiệm thu) gate. Payment cannot be marked paid until status=signed unless admin force-pays.',
+  })
+  acceptance_status!: 'not_ready' | 'pending_sign' | 'signed' | 'disputed';
+  @ApiProperty({ required: false, nullable: true })
+  acceptance_sent_at!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  acceptance_signed_at!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  acceptance_value!: number | null;
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'Dispute reason (only populated when acceptance_status=disputed). Rendered read-only to the crew.',
+  })
+  acceptance_notes!: string | null;
+  @ApiProperty({
+    enum: ['pending', 'paid'],
+    description: 'Payment status — flips to paid only after acceptance signed or admin force-pay.',
+  })
+  payment_status!: 'pending' | 'paid';
 }

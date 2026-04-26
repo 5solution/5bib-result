@@ -66,6 +66,13 @@ function NavLink({
     <Link
       href={href}
       onClick={onClick}
+      // prefetch=false: don't fire an RSC fetch for every nav item on
+      // page load. Without this, F5 on the dashboard triggers ~190
+      // requests (one RSC payload per sidebar entry × every API call
+      // each route's Server Components make). Default Next.js Link
+      // prefetch is fine on hover but eager prefetch of an admin
+      // sidebar with 12+ items is pure waste — the user clicks ONE.
+      prefetch={false}
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         active

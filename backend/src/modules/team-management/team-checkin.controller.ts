@@ -20,6 +20,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
 import { LogtoAdminGuard, type AuthenticatedRequest } from 'src/modules/logto-auth';
+import { FeatureModeGuard, RequireFullMode } from './guards/feature-mode.guard';
 import {
   CheckinLookupResponseDto,
   CheckinResponseDto,
@@ -33,9 +34,11 @@ function identifyAdmin(req: AuthenticatedRequest): string {
   return req.user?.username ?? req.user?.email ?? req.user?.sub ?? 'admin';
 }
 
+// v1.9: QR check-in is a Full-mode-only feature.
 @ApiTags('Team Management — Check-in (staff)')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@RequireFullMode()
+@UseGuards(LogtoAdminGuard, FeatureModeGuard)
 @Controller('team-management/checkin')
 export class TeamCheckinController {
   constructor(private readonly checkin: TeamCheckinService) {}

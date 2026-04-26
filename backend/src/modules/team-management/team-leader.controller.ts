@@ -1,8 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
+  ParseIntPipe,
+  Patch,
   Post,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -24,6 +28,16 @@ import type {
   LeaderMemberView,
   LeaderPortalResponse,
 } from './services/team-leader.service';
+import { TeamStationService } from './services/team-station.service';
+import {
+  AssignableMemberDto,
+  AssignmentMemberBriefDto,
+  CreateAssignmentDto,
+  CreateStationDto,
+  StationWithAssignmentSummaryDto,
+  UpdateStationDto,
+  UpdateStationStatusDto,
+} from './dto/station.dto';
 
 const CHECKIN_METHODS = ['qr_scan', 'manual'] as const;
 
@@ -83,7 +97,10 @@ class LeaderConfirmCompletionBulkDto {
 @ApiTags('Team Management (leader portal)')
 @Controller('public/team-leader')
 export class TeamLeaderController {
-  constructor(private readonly leader: TeamLeaderService) {}
+  constructor(
+    private readonly leader: TeamLeaderService,
+    private readonly stations: TeamStationService,
+  ) {}
 
   @Get(':token/team')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
@@ -185,5 +202,140 @@ export class TeamLeaderController {
       dto.member_registration_ids,
       dto.note,
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Station management — leader can fully manage stations that
+  //  belong to their team(s). All endpoints re-validate the token
+  //  and verify the target category/station is within the leader's
+  //  managed set (via resolveManagedCategoryIds).
+  // ─────────────────────────────────────────────────────────────
+
+  @Get(':token/stations')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'List all stations across all teams managed by this leader. Flat list with assignment summaries.',
+  })
+  @ApiResponse({ status: 200, type: [StationWithAssignmentSummaryDto] })
+  async leaderListStations(
+    @Param('token') token: string,
+  ): Promise<StationWithAssignmentSummaryDto[]> {
+    const { registration } = await this.leader.validateLeaderToken(token);
+    const categoryIds = await this.leader.getManagedCategoryIds(registration);
+    const all = await Promise.all(
+      Array.from(categoryIds).map((cid) =>
+        this.stations.listStationsWithSummary(cid),
+      ),
+    );
+    return all.flat();
+  }
+
+  @Post(':token/categories/:categoryId/stations')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Create a station under a category that belongs to this leader\'s team.',
+  })
+  @ApiResponse({ status: 201, type: StationWithAssignmentSummaryDto })
+  async leaderCreateStation(
+    @Param('token') token: string,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Body() dto: CreateStationDto,
+  ): Promise<StationWithAssignmentSummaryDto> {
+    const { registration } = await this.leader.validateLeaderToken(token);
+    await this.leader.assertManagesCategory(registration, categoryId);
+    return this.stations.createStation(categoryId, dto);
+  }
+
+  @Patch(':token/stations/:stationId')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Update a station owned by this leader\'s team.' })
+  @ApiResponse({ status: 200, type: StationWithAssignmentSummaryDto })
+  async leaderUpdateStation(
+    @Param('token') token: string,
+    @Param('stationId', ParseIntPipe) stationId: number,
+    @Body() dto: UpdateStationDto,
+  ): Promise<StationWithAssignmentSummaryDto> {
+    const { registration } = await this.leader.validateLeaderToken(token);
+    await this.leader.assertManagesStation(registration, stationId);
+    return this.stations.updateStation(stationId, dto);
+  }
+
+  @Patch(':token/stations/:stationId/status')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Change station lifecycle status (setup/active/closed).',
+  })
+  @ApiResponse({ status: 200, type: StationWithAssignmentSummaryDto })
+  async leaderUpdateStationStatus(
+    @Param('token') token: string,
+    @Param('stationId', ParseIntPipe) stationId: number,
+    @Body() dto: UpdateStationStatusDto,
+  ): Promise<StationWithAssignmentSummaryDto> {
+    const { registration } = await this.leader.validateLeaderToken(token);
+    await this.leader.assertManagesStation(registration, stationId);
+    return this.stations.updateStatus(stationId, dto.status);
+  }
+
+  @Delete(':token/stations/:stationId')
+  @HttpCode(204)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Delete a station. 409 if any assignments still attached. Station must belong to leader\'s team.',
+  })
+  @ApiResponse({ status: 204 })
+  async leaderDeleteStation(
+    @Param('token') token: string,
+    @Param('stationId', ParseIntPipe) stationId: number,
+  ): Promise<void> {
+    const { registration } = await this.leader.validateLeaderToken(token);
+    await this.leader.assertManagesStation(registration, stationId);
+    await this.stations.deleteStation(stationId);
+  }
+
+  @Get(':token/stations/:stationId/assignable-members')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'List members eligible for assignment at this station (same team, approved+, not yet assigned here).',
+  })
+  @ApiResponse({ status: 200, type: [AssignableMemberDto] })
+  async leaderListAssignableMembers(
+    @Param('token') token: string,
+    @Param('stationId', ParseIntPipe) stationId: number,
+  ): Promise<AssignableMemberDto[]> {
+    const { registration } = await this.leader.validateLeaderToken(token);
+    await this.leader.assertManagesStation(registration, stationId);
+    return this.stations.listAssignableMembers(stationId);
+  }
+
+  @Post(':token/stations/:stationId/assignments')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Assign a member to a station.' })
+  @ApiResponse({ status: 201, type: AssignmentMemberBriefDto })
+  async leaderCreateAssignment(
+    @Param('token') token: string,
+    @Param('stationId', ParseIntPipe) stationId: number,
+    @Body() dto: CreateAssignmentDto,
+  ): Promise<AssignmentMemberBriefDto> {
+    const { registration } = await this.leader.validateLeaderToken(token);
+    await this.leader.assertManagesStation(registration, stationId);
+    return this.stations.createAssignment(stationId, dto);
+  }
+
+  @Delete(':token/station-assignments/:assignmentId')
+  @HttpCode(204)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Remove an assignment from a station.' })
+  @ApiResponse({ status: 204 })
+  async leaderRemoveAssignment(
+    @Param('token') token: string,
+    @Param('assignmentId', ParseIntPipe) assignmentId: number,
+  ): Promise<void> {
+    const { registration } = await this.leader.validateLeaderToken(token);
+    await this.leader.assertManagesAssignment(registration, assignmentId);
+    await this.stations.removeAssignment(assignmentId);
   }
 }

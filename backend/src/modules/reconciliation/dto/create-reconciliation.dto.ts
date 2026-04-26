@@ -47,8 +47,11 @@ export class CreateReconciliationDto extends PreviewReconciliationDto {
   @IsBoolean()
   generate_docx: boolean;
 
-  @ApiPropertyOptional({ description: 'Admin user id (set from JWT in controller)' })
+  @ApiPropertyOptional({
+    description: 'Admin user id — Mongo ObjectId string (set from JWT in controller)',
+    nullable: true,
+  })
   @IsOptional()
-  @IsNumber()
-  created_by: number;
+  @IsString()
+  created_by: string | null;
 }

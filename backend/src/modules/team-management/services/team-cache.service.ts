@@ -11,6 +11,8 @@ const TTL = {
   supplyOverview: 30,
   supplyPlan: 60,
   stationAllocations: 30,
+  // v1.9 feature config
+  eventConfig: 300,
 } as const;
 
 export const CACHE_TTL = TTL;
@@ -101,6 +103,44 @@ export class TeamCacheService {
     return `team:event:${eventId}:supply-`;
   }
 
+  // v1.9: Feature mode config (mode + nghiem_thu) per event.
+  static keyEventConfig(eventId: number): string {
+    return `team:event:${eventId}:config`;
+  }
+
+  // ── v1.9: Event feature config cache ─────────────────────────────────────
+
+  async cacheEventConfig(
+    eventId: number,
+    config: { feature_mode: string; feature_nghiem_thu: boolean },
+  ): Promise<void> {
+    await this.redis.set(
+      TeamCacheService.keyEventConfig(eventId),
+      JSON.stringify(config),
+      'EX',
+      TTL.eventConfig,
+    );
+  }
+
+  async getEventConfig(
+    eventId: number,
+  ): Promise<{ feature_mode: string; feature_nghiem_thu: boolean } | null> {
+    const raw = await this.redis.get(TeamCacheService.keyEventConfig(eventId));
+    return raw
+      ? (JSON.parse(raw) as { feature_mode: string; feature_nghiem_thu: boolean })
+      : null;
+  }
+
+  async invalidateEventConfig(eventId: number): Promise<void> {
+    try {
+      await this.redis.del(TeamCacheService.keyEventConfig(eventId));
+    } catch (err) {
+      this.logger.warn(
+        `Event config cache invalidate failed for event ${eventId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
   async getJson<T>(key: string): Promise<T | null> {
     const raw = await this.redis.get(key);
     if (!raw) return null;
@@ -142,6 +182,8 @@ export class TeamCacheService {
       // v1.5: emergency-contact list is a single key per event, so we can
       // include it in the fixed-delete pass.
       TeamCacheService.keyEventContacts(eventId),
+      // v1.9: feature config
+      TeamCacheService.keyEventConfig(eventId),
       ...affectedRoleIds.map((rid) => TeamCacheService.keyRoleSlots(rid)),
     ];
     try {

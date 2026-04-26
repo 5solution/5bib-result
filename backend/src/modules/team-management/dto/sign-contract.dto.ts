@@ -62,7 +62,25 @@ export class SendContractsDto {
 }
 
 export class SendContractsResponseDto {
-  @ApiProperty() queued!: number;
-  @ApiProperty() already_sent!: number;
-  @ApiProperty() skipped!: number;
+  @ApiProperty({ description: 'Number of registrations whose contract was successfully queued (email sent + status flipped).' })
+  queued!: number;
+
+  @ApiProperty({ description: 'Already in contract_sent/signed/qr_sent/checked_in/completed.' })
+  already_sent!: number;
+
+  @ApiProperty({ description: 'Number of registrations that failed (lock conflict, email error, etc).' })
+  skipped!: number;
+
+  @ApiProperty({
+    description: 'Registration IDs that failed. Length === skipped.',
+    type: [Number],
+  })
+  skipped_ids!: number[];
+
+  @ApiProperty({
+    description:
+      'Per-failure reason text, parallel to skipped_ids. Same index = same reg. Helps admin retry only the failed rows.',
+    type: [String],
+  })
+  skip_reasons!: string[];
 }

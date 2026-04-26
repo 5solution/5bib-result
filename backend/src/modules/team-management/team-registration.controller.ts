@@ -51,6 +51,7 @@ import { TeamCheckinService } from './services/team-checkin.service';
 import { TeamStationService } from './services/team-station.service';
 import { MyStationViewDto } from './dto/station.dto';
 import { VolRole } from './entities/vol-role.entity';
+import { EventFeaturesConfigDto } from './dto/event-features.dto';
 
 @ApiTags('Team Management (public)')
 @Controller('public')
@@ -177,6 +178,16 @@ export class TeamRegistrationController {
   @ApiResponse({ status: 200, type: MyStationViewDto })
   getMyStation(@Param('token') token: string): Promise<MyStationViewDto> {
     return this.stations.getMyStationView(token);
+  }
+
+  @Get('team-registration/:token/event-config')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Get event feature config for portal (magic token)' })
+  @ApiResponse({ status: 200, type: EventFeaturesConfigDto })
+  getEventConfigForPortal(
+    @Param('token') token: string,
+  ): Promise<EventFeaturesConfigDto> {
+    return this.registrations.getEventFeaturesConfigByToken(token);
   }
 
   @Post('team-upload-photo')

@@ -7,9 +7,11 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
+  MinLength,
   ValidateIf,
 } from 'class-validator';
 
@@ -104,4 +106,22 @@ export class CreateEventDto {
   @IsString()
   @MaxLength(20_000)
   terms_conditions?: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    example: 'HNLL26',
+    description:
+      'Uppercase letter-code baked into every contract_number issued for this event (format: NNN-{PREFIX}-HDDV/CTV-5BIB). UNIQUE cross-event. Locked after the first contract has been issued — further edits rejected 400.',
+  })
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(10)
+  @Matches(/^[A-Z0-9]+$/, {
+    message:
+      'contract_code_prefix chỉ gồm chữ in hoa và số (A-Z, 0-9), 2–10 ký tự',
+  })
+  contract_code_prefix?: string | null;
 }
