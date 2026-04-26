@@ -83,6 +83,7 @@ import { namesMatch } from "@/lib/utils";
 import { RegistrationDetailView } from "./_registration-detail";
 import { RejectDialog } from "./_reject-dialog";
 import { RegistrationImportDialog } from "./_import-dialog";
+import { useConfirm } from "@/components/confirm-dialog";
 
 // Status badges + row styles come from @/lib/status-style.
 
@@ -420,7 +421,13 @@ export default function RegistrationsListPage(): React.ReactElement {
   async function handleBulkApprove(): Promise<void> {
     if (!token || selection.size === 0) return;
     const ids = Array.from(selection);
-    if (!confirm(`Duyệt ${ids.length} đăng ký đã chọn?`)) return;
+    const ok = await confirm({
+      title: 'Duyệt hàng loạt',
+      description: `Duyệt ${ids.length} đăng ký đã chọn?`,
+      confirmText: 'Duyệt',
+      variant: 'default',
+    });
+    if (!ok) return;
     try {
       const result = await bulkUpdateRegistrations(token, {
         ids,
@@ -524,11 +531,18 @@ export default function RegistrationsListPage(): React.ReactElement {
     );
   }, [selectedRows]);
   const [bulkResendBusy, setBulkResendBusy] = useState(false);
+  const confirm = useConfirm();
 
   async function handleBulkResendContract(): Promise<void> {
     if (!token || selection.size === 0) return;
     const ids = Array.from(selection);
-    if (!confirm(`Gửi lại hợp đồng cho ${ids.length} người?`)) return;
+    const ok = await confirm({
+      title: 'Gửi lại hợp đồng',
+      description: `Gửi lại hợp đồng cho ${ids.length} người?`,
+      confirmText: 'Gửi',
+      variant: 'default',
+    });
+    if (!ok) return;
     setBulkResendBusy(true);
     try {
       const r = await sendContractsBatch(token, ids);
@@ -1078,7 +1092,7 @@ export default function RegistrationsListPage(): React.ReactElement {
       >
         <SheetContent
           side="right"
-          className="w-full sm:max-w-2xl overflow-y-auto"
+          className="w-full sm:max-w-3xl lg:max-w-4xl overflow-y-auto"
         >
           <SheetHeader>
             <SheetTitle>Chi tiết đăng ký</SheetTitle>

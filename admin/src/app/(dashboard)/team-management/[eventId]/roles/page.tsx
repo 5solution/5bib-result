@@ -44,6 +44,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Plus, Trash2, Send, Pencil, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 
 type ChatPlatform = "zalo" | "telegram" | "whatsapp" | "other";
 
@@ -72,6 +73,7 @@ export default function RolesPage(): React.ReactElement {
   const eventId = Number(params.eventId);
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
 
+  const openConfirm = useConfirm();
   const [roles, setRoles] = useState<TeamRole[] | null>(null);
   const [teams, setTeams] = useState<TeamCategory[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -115,8 +117,13 @@ export default function RolesPage(): React.ReactElement {
 
   async function handleDelete(id: number): Promise<void> {
     if (!token) return;
-    if (!confirm("Xóa vai trò này? (chỉ được xóa nếu chưa có người đăng ký)"))
-      return;
+    const ok = await openConfirm({
+      title: 'Xóa vai trò',
+      description: 'Xóa vai trò này? (chỉ được xóa nếu chưa có người đăng ký)',
+      confirmText: 'Xóa',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await deleteTeamRole(token, id);
       toast.success("Đã xóa");
@@ -138,9 +145,12 @@ export default function RolesPage(): React.ReactElement {
         );
         return;
       }
-      const ok = confirm(
-        `Sẽ gửi HĐ cho ${preview.queued} người (đã gửi trước: ${preview.already_sent}, bỏ qua: ${preview.skipped}). Xác nhận?`,
-      );
+      const ok = await openConfirm({
+        title: 'Gửi hợp đồng',
+        description: `Sẽ gửi HĐ cho ${preview.queued} người (đã gửi trước: ${preview.already_sent}, bỏ qua: ${preview.skipped}). Xác nhận?`,
+        confirmText: 'Gửi',
+        variant: 'default',
+      });
       if (!ok) return;
       const result = await sendContracts(token, roleId, false);
       if (result.skipped > 0) {

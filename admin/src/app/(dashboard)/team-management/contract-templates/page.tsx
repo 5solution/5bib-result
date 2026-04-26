@@ -34,6 +34,7 @@ import {
   FileCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 
 type Tab = "contract" | "acceptance";
 
@@ -42,6 +43,7 @@ export default function ContractTemplatesPage(): React.ReactElement {
   const searchParams = useSearchParams();
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
 
+  const confirm = useConfirm();
   const [tab, setTab] = useState<Tab>(
     searchParams.get("tab") === "acceptance" ? "acceptance" : "contract",
   );
@@ -89,8 +91,13 @@ export default function ContractTemplatesPage(): React.ReactElement {
 
   async function handleDeleteContract(id: number): Promise<void> {
     if (!token) return;
-    if (!confirm("Xóa template? Chỉ được xóa khi không role nào đang dùng."))
-      return;
+    const ok = await confirm({
+      title: 'Xóa template hợp đồng',
+      description: 'Xóa template? Chỉ được xóa khi không role nào đang dùng.',
+      confirmText: 'Xóa',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await deleteContractTemplate(token, id);
       toast.success("Đã xóa");
@@ -118,12 +125,13 @@ export default function ContractTemplatesPage(): React.ReactElement {
 
   async function handleDeleteAcceptance(id: number): Promise<void> {
     if (!token) return;
-    if (
-      !confirm(
-        "Xoá template nghiệm thu? Chỉ được xoá khi không registration nào đang tham chiếu.",
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: 'Xóa template nghiệm thu',
+      description: 'Xoá template nghiệm thu? Chỉ được xoá khi không registration nào đang tham chiếu.',
+      confirmText: 'Xóa',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await deleteAcceptanceTemplate(token, id);
       toast.success("Đã xoá");

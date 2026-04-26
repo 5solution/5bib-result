@@ -91,8 +91,10 @@ export function PersonalTab({
       status.status === "checked_in" ||
       status.status === "completed");
 
+  // Tolerate both canonical key (avatar_photo) and legacy _url suffix (avatar_photo_url)
   const avatarUrl =
     (typeof formData.avatar_photo === "string" && formData.avatar_photo) ||
+    (typeof formData.avatar_photo_url === "string" && formData.avatar_photo_url) ||
     status.avatar_photo_url ||
     null;
 
@@ -210,11 +212,11 @@ export function PersonalTab({
             registration from Excel and key fields haven't been filled. */}
         {(() => {
           const missing: string[] = [];
-          if (!status.cccd_photo_url && !formData.cccd_photo)
+          if (!status.cccd_photo_url && !formData.cccd_photo && !formData.cccd_photo_url)
             missing.push("Ảnh CCCD mặt trước");
-          if (!status.cccd_back_photo_url && !formData.cccd_back_photo)
+          if (!status.cccd_back_photo_url && !formData.cccd_back_photo && !formData.cccd_back_photo_url)
             missing.push("Ảnh CCCD mặt sau");
-          if (!status.avatar_photo_url && !formData.avatar_photo)
+          if (!status.avatar_photo_url && !formData.avatar_photo && !formData.avatar_photo_url)
             missing.push("Ảnh chân dung");
           if (!status.birth_date && !formData.birth_date && !formData.dob)
             missing.push("Ngày sinh");
@@ -395,9 +397,11 @@ export function PersonalTab({
                     handlePhotoUpload(
                       field.key,
                       file,
-                      field.key === "avatar_photo"
+                      // Tolerate legacy _url suffix keys (avatar_photo_url,
+                      // cccd_photo_url) that some roles were created with.
+                      field.key === "avatar_photo" || field.key === "avatar_photo_url"
                         ? "avatar"
-                        : field.key === "cccd_back_photo"
+                        : field.key === "cccd_back_photo" || field.key === "cccd_back_photo_url"
                           ? "cccd_back"
                           : "cccd",
                     )

@@ -65,6 +65,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 import {
   ArrowLeft,
   Plus,
@@ -204,6 +205,7 @@ export default function RaceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { token } = useAuth();
+  const confirm = useConfirm();
   const raceId = params.id as string;
 
   const [race, setRace] = useState<Race | null>(null);
@@ -791,9 +793,14 @@ export default function RaceDetailPage() {
                         }
                         onClick={() => {
                           if (isCurrent || isDisabled) return;
-                          if (confirm(`Chuyển trạng thái giải sang "${step.label}"?`)) {
-                            handleUpdateStatus(step.key);
-                          }
+                          void confirm({
+                            title: 'Đổi trạng thái giải',
+                            description: `Chuyển trạng thái giải sang "${step.label}"?`,
+                            confirmText: 'Xác nhận',
+                            variant: 'default',
+                          }).then((ok) => {
+                            if (ok) handleUpdateStatus(step.key);
+                          });
                         }}
                         className={`
                           relative flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all text-center

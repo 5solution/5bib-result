@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Settings, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 
 // v1.8 — Team config tab. Edit name/slug/color/sort_order/description + delete.
 // Delete returns 409 if team still has stations or supply_plan rows attached.
@@ -44,6 +45,7 @@ export default function TeamConfigPage(): React.ReactElement {
   const eventId = params.eventId;
   const teamId = Number(params.teamId);
   const { token } = useAuth();
+  const openConfirm = useConfirm();
 
   const [team, setTeam] = useState<TeamCategory | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -91,12 +93,13 @@ export default function TeamConfigPage(): React.ReactElement {
 
   async function handleDelete(): Promise<void> {
     if (!token || !team) return;
-    if (
-      !confirm(
-        `Xoá team "${team.name}"? Roles thuộc team sẽ tự unlink. Không xoá được nếu còn trạm hoặc kế hoạch vật tư.`,
-      )
-    )
-      return;
+    const ok = await openConfirm({
+      title: `Xoá team "${team.name}"?`,
+      description:
+        "Roles thuộc team sẽ tự unlink. Không xoá được nếu còn trạm hoặc kế hoạch vật tư.",
+      variant: "destructive",
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await deleteTeamCategory(token, team.id);

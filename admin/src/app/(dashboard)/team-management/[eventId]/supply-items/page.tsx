@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, Package, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 
 export default function SupplyItemsPage(): React.ReactElement {
   const router = useRouter();
@@ -44,6 +45,7 @@ export default function SupplyItemsPage(): React.ReactElement {
   const eventId = Number(params.eventId);
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
 
+  const confirm = useConfirm();
   const [items, setItems] = useState<SupplyItem[] | null>(null);
   const [roles, setRoles] = useState<TeamRole[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -82,8 +84,13 @@ export default function SupplyItemsPage(): React.ReactElement {
 
   async function handleDelete(item: SupplyItem): Promise<void> {
     if (!token) return;
-    if (!confirm(`Xóa vật tư "${item.item_name}"? Không thể hoàn tác.`))
-      return;
+    const ok = await confirm({
+      title: 'Xóa vật tư',
+      description: `Xóa vật tư "${item.item_name}"? Không thể hoàn tác.`,
+      confirmText: 'Xóa',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await deleteSupplyItem(token, item.id);
       toast.success("Đã xóa vật tư");

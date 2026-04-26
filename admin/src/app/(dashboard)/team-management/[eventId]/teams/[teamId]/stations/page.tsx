@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { AssignPersonnelModal } from "./_assign-personnel-modal";
+import { useConfirm } from "@/components/confirm-dialog";
 
 // v1.8 — Stations now belong to Team (category), not role. assignment_role
 // (crew/volunteer) removed — supervisor/worker derives from role.is_leader_role.
@@ -66,6 +67,7 @@ export default function TeamStationsPage(): React.ReactElement {
   const teamId = Number(params.teamId);
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
 
+  const confirm = useConfirm();
   const [stations, setStations] = useState<Station[] | null>(null);
   const [team, setTeam] = useState<TeamCategory | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,13 @@ export default function TeamStationsPage(): React.ReactElement {
 
   async function handleDelete(id: number): Promise<void> {
     if (!token) return;
-    if (!confirm("Xóa trạm này? Không thể hoàn tác.")) return;
+    const ok = await confirm({
+      title: 'Xóa trạm',
+      description: 'Xóa trạm này? Không thể hoàn tác.',
+      confirmText: 'Xóa',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await deleteStation(token, id);
       toast.success("Đã xóa trạm");

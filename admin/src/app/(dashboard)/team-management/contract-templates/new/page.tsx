@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
+import { useConfirm } from "@/components/confirm-dialog";
 import {
   createContractTemplate,
   importDocxToHtml,
@@ -130,6 +131,7 @@ const BLANK_TEMPLATE = `<div style="font-family: Times New Roman, serif; font-si
 export default function NewContractTemplatePage(): React.ReactElement {
   const router = useRouter();
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const [name, setName] = useState("");
   const [html, setHtml] = useState(BLANK_TEMPLATE);
   const [isActive, setIsActive] = useState(true);
@@ -201,11 +203,12 @@ export default function NewContractTemplatePage(): React.ReactElement {
       return;
     }
     if (unknownVars.length > 0) {
-      const ok = confirm(
-        `Có ${unknownVars.length} biến không hợp lệ: ${unknownVars
-          .map((v) => `{{${v}}}`)
-          .join(", ")}\n\nVẫn lưu?`,
-      );
+      const ok = await confirm({
+        title: 'Biến không hợp lệ',
+        description: `Có ${unknownVars.length} biến không hợp lệ: ${unknownVars.map((v) => `{{${v}}}`).join(', ')}. Vẫn lưu?`,
+        confirmText: 'Vẫn lưu',
+        variant: 'default',
+      });
       if (!ok) return;
     }
     setSaving(true);

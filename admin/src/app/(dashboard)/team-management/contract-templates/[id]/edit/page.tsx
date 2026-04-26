@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
+import { useConfirm } from "@/components/confirm-dialog";
 import {
   getContractTemplate,
   importDocxToHtml,
@@ -43,6 +44,7 @@ export default function EditContractTemplatePage({
 
   const router = useRouter();
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [name, setName] = useState("");
@@ -138,11 +140,12 @@ export default function EditContractTemplatePage({
       return;
     }
     if (unknownVars.length > 0) {
-      const ok = confirm(
-        `Có ${unknownVars.length} biến không hợp lệ: ${unknownVars
-          .map((v) => `{{${v}}}`)
-          .join(", ")}\n\nVẫn lưu?`,
-      );
+      const ok = await confirm({
+        title: 'Biến không hợp lệ',
+        description: `Có ${unknownVars.length} biến không hợp lệ: ${unknownVars.map((v) => `{{${v}}}`).join(', ')}. Vẫn lưu?`,
+        confirmText: 'Vẫn lưu',
+        variant: 'default',
+      });
       if (!ok) return;
     }
     setSaving(true);

@@ -37,6 +37,7 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EventFeatureModeBadge } from "@/components/EventFeatureModeBadge";
+import { useConfirm } from "@/components/confirm-dialog";
 
 const STATUS_COLORS: Record<TeamEvent["status"], string> = {
   draft: "bg-yellow-500/20 text-yellow-400",
@@ -58,6 +59,7 @@ export default function TeamManagementPage(): React.ReactElement {
   const [events, setEvents] = useState<TeamEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const confirm = useConfirm();
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -80,7 +82,13 @@ export default function TeamManagementPage(): React.ReactElement {
 
   async function handleDelete(id: number): Promise<void> {
     if (!token) return;
-    if (!confirm("Xóa sự kiện này? (chỉ cho sự kiện ở trạng thái nháp)")) return;
+    const ok = await confirm({
+      title: 'Xóa sự kiện',
+      description: 'Xóa sự kiện này? (chỉ cho sự kiện ở trạng thái nháp)',
+      confirmText: 'Xóa',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await deleteTeamEvent(token, id);
       toast.success("Đã xóa");
@@ -101,7 +109,13 @@ export default function TeamManagementPage(): React.ReactElement {
       closed: "Đóng đăng ký",
       completed: "Hoàn tất",
     };
-    if (!confirm(`Chuyển sang trạng thái "${labels[next]}"?`)) return;
+    const ok = await confirm({
+      title: 'Đổi trạng thái',
+      description: `Chuyển sang trạng thái "${labels[next]}"?`,
+      confirmText: 'Xác nhận',
+      variant: 'default',
+    });
+    if (!ok) return;
     try {
       await updateTeamEvent(token, id, { status: next });
       toast.success(`Đã chuyển sang ${labels[next]}`);
