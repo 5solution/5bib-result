@@ -518,10 +518,11 @@ export class TeamRegistrationImportService {
       const experience = String(raw.experience ?? '').trim();
       const notes = String(raw.notes ?? '').trim();
 
-      // Core fields
+      // Core fields — full_name + email bắt buộc valid (email cần unique).
       push(errors, validateFullName(full_name));
       push(errors, validateEmail(email));
-      push(errors, validatePhoneVN(phone));
+      // v037+ Danny request: phone format → WARNING (TNV bổ sung qua portal).
+      push(warnings, validatePhoneVN(phone));
 
       // Role resolution — either role_id or role_name column accepted.
       const roleRef = resolveRoleRef(
@@ -533,40 +534,19 @@ export class TeamRegistrationImportService {
       if (roleRef.error) errors.push(roleRef.error);
       const role = resolved_role_id ? rolesById.get(resolved_role_id) : undefined;
 
-      // Optional cells — validated if present.
-      const cccdRequired = fieldRequired(role, 'cccd');
-      push(errors, validateCCCD(cccd, cccdRequired));
-
-      const dobRequired = fieldRequired(role, 'dob');
-      push(errors, validateDob(dob, dobRequired));
-
-      const shirtRequired = fieldRequired(role, 'shirt_size');
+      // v037+ Danny request: tất cả validation về data shape (CCCD format,
+      // DOB, shirt size, bank info) đều là WARNING — KHÔNG block import.
+      // TNV nhận welcome email với danh sách field cần bổ sung/sửa qua portal.
+      // Hard errors chỉ giữ cho: missing full_name, invalid email, role
+      // không tồn tại, role full + không waitlist (operational blockers).
+      push(warnings, validateCCCD(cccd, false));
+      push(warnings, validateDob(dob, false));
       const shirtOpts = fieldOptions(role, 'shirt_size') ?? [...SHIRT_SIZE_OPTIONS];
-      push(errors, validateShirtSize(shirt_size, shirtRequired, shirtOpts));
-
-      // Bank group
-      const bankAcctRequired = fieldRequired(role, 'bank_account_number');
-      if (!bank_account_number && bankAcctRequired) {
-        errors.push('Thiếu số tài khoản ngân hàng');
-      } else {
-        push(errors, validateBankAccount(bank_account_number));
-      }
-
-      const bankNameRequired = fieldRequired(role, 'bank_name');
-      if (!bank_name && bankNameRequired) {
-        errors.push('Thiếu tên ngân hàng');
-      } else {
-        push(errors, validateBankName(bank_name));
-      }
-
-      // Holder name check only when account present.
+      push(warnings, validateShirtSize(shirt_size, false, shirtOpts));
+      push(warnings, validateBankAccount(bank_account_number));
+      push(warnings, validateBankName(bank_name));
       if (bank_account_number) {
-        const holderRequired = fieldRequired(role, 'bank_holder_name');
-        if (!bank_holder_name && holderRequired) {
-          errors.push('Thiếu tên chủ tài khoản');
-        } else {
-          push(errors, validateBankHolderName(bank_holder_name, full_name));
-        }
+        push(warnings, validateBankHolderName(bank_holder_name, full_name));
       }
 
       // Role capacity warnings

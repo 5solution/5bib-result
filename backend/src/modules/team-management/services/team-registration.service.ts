@@ -332,7 +332,11 @@ export class TeamRegistrationService {
       if (!event) throw new NotFoundException('Event not found');
 
       this.validateFormData(role.form_fields, dto.form_data, opts);
-      this.validateBankFields(role.form_fields, dto.form_data, dto.full_name);
+      // v037+ — Bulk import path passes skipAllRequired=true → also relax
+      // bank format checks (TNV bổ sung qua portal sau).
+      this.validateBankFields(role.form_fields, dto.form_data, dto.full_name, {
+        lenient: opts.skipAllRequired === true,
+      });
       this.validatePhotoUrls(dto.form_data);
 
       const existing = await m.getRepository(VolRegistration).findOne({
@@ -1953,7 +1957,12 @@ export class TeamRegistrationService {
     fields: FormFieldConfig[],
     data: Record<string, unknown>,
     fullName: string,
+    opts: { lenient?: boolean } = {},
   ): void {
+    // v037+ — Bulk import flow passes lenient=true so bad bank data doesn't
+    // block import. TNV receives welcome email with the failing field listed
+    // and fixes via portal. Service write still happens with raw data.
+    if (opts.lenient) return;
     const hasField = (key: string) => fields.some((f) => f.key === key);
 
     if (hasField('bank_account_number')) {
