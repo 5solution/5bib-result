@@ -671,6 +671,8 @@ export type AcceptanceStatus =
 
 export interface RegistrationDetail extends RegistrationListRow {
   cccd_photo_url: string | null;
+  cccd_back_photo_url: string | null;
+  expertise: string | null;
   event_name: string;
   checkin_method: string | null;
   contract_signed_at: string | null;

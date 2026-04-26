@@ -130,6 +130,14 @@ export class VolRegistration {
   @Column({ type: 'varchar', length: 500, nullable: true })
   cccd_photo_url!: string | null;
 
+  // v037: CCCD/CMND back face photo. Required on public register.
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  cccd_back_photo_url!: string | null;
+
+  // v037: Free-text professional background / qualification.
+  @Column({ type: 'text', nullable: true })
+  expertise!: string | null;
+
   @Column({
     type: 'enum',
     enum: REGISTRATION_STATUS_VALUES,
