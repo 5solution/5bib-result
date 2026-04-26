@@ -70,15 +70,21 @@ const KNOWN_HEADERS = [
   'role_name',
   'cccd',
   'dob',
+  'birth_date',
+  'cccd_issue_date',
+  'cccd_issue_place',
+  'address',
   'shirt_size',
   'bank_account_number',
   'bank_holder_name',
   'bank_name',
   'bank_branch',
   'experience',
+  'expertise',
   'notes',
   'avatar_photo',
   'cccd_photo',
+  'cccd_back_photo',
   // v1.6: optional station assignment columns.
   'station_id',
   'station_name',
@@ -804,6 +810,9 @@ export class TeamRegistrationImportService {
       const passthrough = [
         'cccd',
         'dob',
+        'birth_date',
+        'cccd_issue_date',
+        'cccd_issue_place',
         'address',
         'shirt_size',
         'bank_account_number',
@@ -811,6 +820,7 @@ export class TeamRegistrationImportService {
         'bank_name',
         'bank_branch',
         'experience',
+        'expertise',
       ];
       for (const k of passthrough) {
         const v = data[k];
@@ -834,9 +844,11 @@ export class TeamRegistrationImportService {
             notes: notesStr || `Imported by ${adminIdentity} (row ${r.row_num})`,
           },
           adminIdentity,
-          // Bulk import: TNV uploads photos later via self-service profile-edit
-          // path. Warning was already surfaced in preview stage.
-          { skipRequiredPhotos: true },
+          // Bulk import: TNV fills the rest later via the welcome-email
+          // magic link (computeMissingSections lists what's missing). Skip
+          // ALL required fields, not just photos — Excel template often
+          // omits cccd_issue_*, address, birth_date for staff records.
+          { skipAllRequired: true },
         );
         inserted_ids.push(result.id);
         // Kick off contract-send chain async if approved.
@@ -880,6 +892,11 @@ export class TeamRegistrationImportService {
         }
       } catch (err) {
         const msg = (err as Error).message || 'unknown error';
+        // v037+ debug: log full error so admin can debug import failures.
+        // Without this, "errors=N" in the summary is opaque.
+        this.logger.warn(
+          `Import row ${r.row_num} fail: ${msg} (email=${data.email}, role=${roleId})`,
+        );
         errors.push(`Dòng ${r.row_num}: ${msg}`);
         skipped += 1;
       }

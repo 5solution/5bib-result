@@ -310,7 +310,7 @@ export class TeamRegistrationService {
   async adminManualRegister(
     dto: AdminManualRegisterDto,
     adminIdentity: string,
-    opts: { skipRequiredPhotos?: boolean } = {},
+    opts: { skipRequiredPhotos?: boolean; skipAllRequired?: boolean } = {},
   ): Promise<RegisterResponseDto> {
     const autoApprove = dto.auto_approve !== false;
 
@@ -1374,8 +1374,60 @@ export class TeamRegistrationService {
       };
     }
 
+    // v037+: When TNV BỔ SUNG (fill missing fields, không phải sửa giá trị
+    // đã có) — apply ngay, không cần admin duyệt. Common case: admin import
+    // staff từ Excel để skeleton, TNV vào portal điền lần đầu identity +
+    // photos. Chỉ khi TNV sửa value đã có (A → B) mới route qua admin queue.
+    const isFillOnly = this.isProfileEditFillOnly(reg, patch);
+    if (isFillOnly) {
+      // Apply directly — same shape as pending_approval branch.
+      if (patch.full_name != null && !reg.full_name) reg.full_name = patch.full_name as string;
+      if (patch.phone != null && !reg.phone) reg.phone = patch.phone as string;
+      if (patch.form_data != null) {
+        const merged = patch.form_data as Record<string, unknown>;
+        reg.form_data = merged;
+        reg.shirt_size = this.extractShirtSize(merged) ?? reg.shirt_size;
+        reg.avatar_photo_url =
+          this.extractString(merged, 'avatar_photo') ?? reg.avatar_photo_url;
+        reg.cccd_photo_url =
+          this.extractString(merged, 'cccd_photo') ?? reg.cccd_photo_url;
+        reg.cccd_back_photo_url =
+          this.extractString(merged, 'cccd_back_photo') ?? reg.cccd_back_photo_url;
+        const bd =
+          this.extractString(merged, 'birth_date') ||
+          this.extractString(merged, 'dob');
+        if (bd && /^\d{4}-\d{2}-\d{2}$/.test(bd) && !reg.birth_date) {
+          reg.birth_date = bd as never;
+        }
+        const id = this.extractString(merged, 'cccd_issue_date');
+        if (id && /^\d{4}-\d{2}-\d{2}$/.test(id) && !reg.cccd_issue_date) {
+          reg.cccd_issue_date = id as never;
+        }
+        const ip = this.extractString(merged, 'cccd_issue_place');
+        if (ip && !reg.cccd_issue_place) reg.cccd_issue_place = ip;
+      }
+      reg.has_pending_changes = false;
+      reg.pending_changes = null;
+      reg.pending_changes_submitted_at = null;
+      const stamp = this.timestamp();
+      reg.notes = [reg.notes, `[${stamp}] TNV bổ sung thông tin (fill-only, áp dụng ngay)`]
+        .filter((x): x is string => !!x)
+        .join('\n');
+      await this.regRepo.save(reg);
+      await this.cache.invalidateEvent(reg.event_id, [reg.role_id]);
+      this.logger.log(
+        `PROFILE_EDIT_FILL reg=${reg.id} status=${reg.status} keys=${Object.keys(patch).join(',')}`,
+      );
+      return {
+        outcome: 'applied',
+        message: 'Đã bổ sung thông tin.',
+        pending_changes_submitted_at: null,
+      };
+    }
+
     // Status ∈ {approved, contract_sent, contract_signed, qr_sent, checked_in,
-    // completed, waitlisted} — queue for admin review.
+    // completed, waitlisted} AND patch sửa field đã có giá trị — queue for
+    // admin review.
     reg.pending_changes = patch;
     reg.has_pending_changes = true;
     reg.pending_changes_submitted_at = now;
@@ -1769,6 +1821,11 @@ export class TeamRegistrationService {
       phone: r.phone,
       shirt_size: r.shirt_size,
       avatar_photo_url: r.avatar_photo_url,
+      // v037+ — for "Hồ sơ" pill in admin table. KEYs (not presigned URLs)
+      // — admin client only checks truthy; for display, use the existing
+      // detail-view path which presigns.
+      cccd_photo_url: r.cccd_photo_url,
+      cccd_back_photo_url: r.cccd_back_photo_url,
       status: r.status,
       waitlist_position: r.waitlist_position,
       contract_status: r.contract_status,
@@ -1814,19 +1871,69 @@ export class TeamRegistrationService {
     return out;
   }
 
+  /**
+   * v037+ — Returns true if every field in `patch` is filling a currently
+   * empty/null value on the registration. If ANY field is overwriting an
+   * existing value (modify, not fill), returns false → route to admin queue.
+   *
+   * Used for the "imported staff first-time fill" case: admin imports a
+   * skeleton row, TNV gets welcome email, fills CCCD/photo/etc. for the
+   * first time → apply immediately. Subsequent edits that change already-
+   * filled values still need admin approval.
+   */
+  private isProfileEditFillOnly(
+    reg: VolRegistration,
+    patch: Record<string, unknown>,
+  ): boolean {
+    const isEmpty = (v: unknown) =>
+      v == null || v === '' || (Array.isArray(v) && v.length === 0);
+    // Compare top-level entity fields.
+    if (patch.full_name !== undefined) {
+      if (!isEmpty(reg.full_name) && reg.full_name !== patch.full_name) return false;
+    }
+    if (patch.phone !== undefined) {
+      if (!isEmpty(reg.phone) && reg.phone !== patch.phone) return false;
+    }
+    // Compare form_data entries (and entity columns synced from form_data).
+    if (patch.form_data) {
+      const newFd = patch.form_data as Record<string, unknown>;
+      const oldFd = (reg.form_data ?? {}) as Record<string, unknown>;
+      for (const [k, newVal] of Object.entries(newFd)) {
+        const oldVal = oldFd[k];
+        // If user sent same value as before → not a change (skip).
+        if (oldVal === newVal) continue;
+        // Special cases: keys synced to entity columns. The entity column
+        // is the source of truth; form_data may lag behind for legacy data.
+        if (k === 'cccd_photo' && !isEmpty(reg.cccd_photo_url)) return false;
+        if (k === 'cccd_back_photo' && !isEmpty(reg.cccd_back_photo_url)) return false;
+        if (k === 'avatar_photo' && !isEmpty(reg.avatar_photo_url)) return false;
+        if ((k === 'birth_date' || k === 'dob') && !isEmpty(reg.birth_date)) return false;
+        if (k === 'cccd_issue_date' && !isEmpty(reg.cccd_issue_date)) return false;
+        if (k === 'cccd_issue_place' && !isEmpty(reg.cccd_issue_place)) return false;
+        // For form_data-only keys (cccd, address, bank_*, shirt_size, etc.):
+        // if old value is non-empty and differs → modify.
+        if (!isEmpty(oldVal)) return false;
+      }
+    }
+    return true;
+  }
+
   private validateFormData(
     fields: FormFieldConfig[],
     data: Record<string, unknown>,
-    opts: { skipRequiredPhotos?: boolean } = {},
+    opts: { skipRequiredPhotos?: boolean; skipAllRequired?: boolean } = {},
   ): void {
     for (const f of fields) {
       const v = data[f.key];
       const isEmpty =
         v == null || v === '' || (Array.isArray(v) && v.length === 0);
-      // Bulk-import flow lets the admin skip photos — TNV uploads them
-      // later via the self-service profile-edit path.
+      // Bulk-import flow lets the admin skip ALL required fields — TNV
+      // fills them later via the welcome-email magic link (computeMissingSections
+      // surfaces what's missing). `skipRequiredPhotos` is the legacy narrower
+      // flag preserved for callers that only want to skip photo requireds.
       const skipThisRequired =
-        opts.skipRequiredPhotos === true && f.type === 'photo';
+        opts.skipAllRequired === true ||
+        (opts.skipRequiredPhotos === true && f.type === 'photo');
       if (f.required && isEmpty && !skipThisRequired) {
         throw new BadRequestException(`Missing required field: ${f.key}`);
       }
