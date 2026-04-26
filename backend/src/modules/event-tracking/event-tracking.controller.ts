@@ -14,17 +14,20 @@ import { EventTrackingService } from './event-tracking.service';
 import { ApiKeyGuard } from './guards/api-key.guard';
 
 @ApiTags('Event Tracking')
-@Controller('event-tracking')
+// Path is intentionally neutral ("log") to avoid ad-blocker pattern matching
+// on keywords like "track", "analytics", "events". Old path /event-tracking/events
+// was blocked by uBlock Origin / AdGuard EasyPrivacy filter lists.
+@Controller('log')
 export class EventTrackingController {
   private readonly logger = new Logger(EventTrackingController.name);
 
   constructor(private readonly eventTrackingService: EventTrackingService) {}
 
-  @Post('events')
+  @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(ApiKeyGuard)
   @Throttle({ default: { limit: 100, ttl: 1000 } })
-  @ApiOperation({ summary: 'Ingest behavioral tracking event from 5bib.com frontend' })
+  @ApiOperation({ summary: 'Ingest behavioral event from 5bib.com frontend' })
   @ApiSecurity('x-analytics-key')
   @ApiResponse({ status: 201, description: 'Event accepted' })
   @ApiResponse({ status: 400, description: 'Validation error — missing required fields' })
