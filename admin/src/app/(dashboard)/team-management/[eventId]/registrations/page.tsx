@@ -15,9 +15,11 @@ import {
   confirmCompletion,
   confirmNghiemThu,
   confirmNghiemThuBatch,
+  confirmAllInEvent,
   getEventFeaturesConfig,
   sendContracts,
   sendContractForRegistration,
+  sendContractsBatch,
   type RegistrationListRow,
   type TeamRole,
   type ManualRegisterInput,
@@ -128,10 +130,15 @@ export default function RegistrationsListPage(): React.ReactElement {
   // v1.9: feature_mode determines what action shows after contract_signed.
   // Lite mode skips QR/check-in → admin xác nhận hoàn thành trực tiếp.
   const [featureMode, setFeatureMode] = useState<"full" | "lite">("full");
-  // Confirm-completion dialog. `kind: 'single'` → 1 row, `kind: 'bulk'` → N ids.
+  // Confirm-completion dialog. 3 modes:
+  //  - single: 1 row by id
+  //  - bulk: N ids (from selection toolbar)
+  //  - all-in-tab: ALL registrations in event matching current filterTab
+  //    (used for Lite mode "xác nhận hoàn thành tất cả 900 người")
   type ConfirmTarget =
     | { kind: "single"; id: number; fullName: string }
-    | { kind: "bulk"; ids: number[] };
+    | { kind: "bulk"; ids: number[] }
+    | { kind: "all"; status: "contract_signed" | "checked_in"; count: number };
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [confirmNote, setConfirmNote] = useState("");
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -303,11 +310,48 @@ export default function RegistrationsListPage(): React.ReactElement {
     setConfirmTarget({ kind: "bulk", ids: Array.from(selection) });
   }
 
+  function handleConfirmAllInTab(): void {
+    if (!token) return;
+    const status = featureMode === "lite" ? "contract_signed" : "checked_in";
+    const count = byStatus[status] ?? 0;
+    if (count === 0) {
+      toast.info("Không có ai sẵn sàng xác nhận hoàn thành");
+      return;
+    }
+    setConfirmNote("");
+    setConfirmTarget({ kind: "all", status, count });
+  }
+
   async function executeConfirm(): Promise<void> {
     if (!token || !confirmTarget) return;
     const note = confirmNote.trim() || undefined;
     setConfirmBusy(true);
     try {
+      if (confirmTarget.kind === "all") {
+        const result = await confirmAllInEvent(
+          token,
+          eventId,
+          confirmTarget.status,
+          note,
+        );
+        const okCount = result.succeeded.length;
+        const failCount = Object.keys(result.failed).length;
+        if (failCount === 0) {
+          toast.success(`Đã xác nhận hoàn thành ${okCount}/${result.total} người`);
+        } else {
+          const sample = Object.entries(result.failed).slice(0, 2)
+            .map(([id, msg]) => `#${id}: ${msg}`)
+            .join("; ");
+          toast.warning(
+            `Xác nhận ${okCount}/${result.total} thành công, ${failCount} lỗi. ${sample}`,
+          );
+        }
+        setSelection(new Set());
+        setConfirmTarget(null);
+        setConfirmNote("");
+        void load();
+        return;
+      }
       if (confirmTarget.kind === "single") {
         // Lite mode → nghiệm-thu endpoint (requires contract_signed)
         // Full mode → legacy confirm-completion (requires checked_in)
@@ -382,9 +426,20 @@ export default function RegistrationsListPage(): React.ReactElement {
         ids,
         action: "approve",
       });
-      toast.success(
-        `Cập nhật: ${result.updated} · bỏ qua: ${result.skipped} · lỗi: ${result.failed_ids.length}`,
-      );
+      const failed = result.failed_ids.length;
+      const summary = `Cập nhật: ${result.updated} · bỏ qua: ${result.skipped} · lỗi: ${failed}`;
+      if (failed > 0) {
+        // Common cause: role.filled_slots >= max_slots → "No slots available".
+        // Show as warning with hint so admin can investigate the failed ids.
+        toast.warning(
+          `${summary}. ${failed > 0 ? `IDs lỗi: ${result.failed_ids.slice(0, 5).join(", ")}${failed > 5 ? "..." : ""}. Thường do role đã hết slot — kiểm tra max_slots ở tab Vai trò.` : ""}`,
+          { duration: 8000 },
+        );
+      } else if (result.updated === 0 && result.skipped > 0) {
+        toast.info(`${summary} — tất cả đã được duyệt từ trước`);
+      } else {
+        toast.success(summary);
+      }
       setSelection(new Set());
       await load();
     } catch (err) {
@@ -405,9 +460,16 @@ export default function RegistrationsListPage(): React.ReactElement {
           action: "reject",
           reason,
         });
-        toast.success(
-          `Cập nhật: ${result.updated} · bỏ qua: ${result.skipped} · lỗi: ${result.failed_ids.length}`,
-        );
+        const failed = result.failed_ids.length;
+        const summary = `Cập nhật: ${result.updated} · bỏ qua: ${result.skipped} · lỗi: ${failed}`;
+        if (failed > 0) {
+          toast.warning(
+            `${summary}. IDs lỗi: ${result.failed_ids.slice(0, 5).join(", ")}${failed > 5 ? "..." : ""}`,
+            { duration: 8000 },
+          );
+        } else {
+          toast.success(summary);
+        }
         setSelection(new Set());
       }
       setRejectTarget(null);
@@ -450,6 +512,42 @@ export default function RegistrationsListPage(): React.ReactElement {
       selectedRows.every((r) => deriveStatusKey(r) === required)
     );
   }, [selectedRows, featureMode]);
+  // Bulk (re)send-contract eligible: rows ở status approved (first send),
+  // contract_sent (resend), or contract_signed (re-issue).
+  const allSelectedResendable = useMemo(() => {
+    return (
+      selectedRows.length > 0 &&
+      selectedRows.every((r) => {
+        const k = deriveStatusKey(r);
+        return k === "approved" || k === "contract_sent" || k === "contract_signed";
+      })
+    );
+  }, [selectedRows]);
+  const [bulkResendBusy, setBulkResendBusy] = useState(false);
+
+  async function handleBulkResendContract(): Promise<void> {
+    if (!token || selection.size === 0) return;
+    const ids = Array.from(selection);
+    if (!confirm(`Gửi lại hợp đồng cho ${ids.length} người?`)) return;
+    setBulkResendBusy(true);
+    try {
+      const r = await sendContractsBatch(token, ids);
+      const ok = r.succeeded.length;
+      const fail = Object.keys(r.failed).length;
+      if (fail === 0) toast.success(`Đã gửi lại HĐ cho ${ok} người`);
+      else {
+        const sample = Object.entries(r.failed).slice(0, 2)
+          .map(([id, msg]) => `#${id}: ${msg}`).join("; ");
+        toast.warning(`${ok} thành công, ${fail} lỗi. ${sample}`);
+      }
+      setSelection(new Set());
+      void load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBulkResendBusy(false);
+    }
+  }
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
 
@@ -610,6 +708,20 @@ export default function RegistrationsListPage(): React.ReactElement {
           <Button
             size="sm"
             variant="outline"
+            disabled={!allSelectedResendable || bulkResendBusy}
+            title={
+              allSelectedResendable
+                ? `Gửi lại hợp đồng cho ${selection.size} người`
+                : "Chỉ gửi được khi tất cả đã chọn ở Đã duyệt / Đã gửi HĐ / Đã ký HĐ"
+            }
+            onClick={() => void handleBulkResendContract()}
+          >
+            <Send className="mr-1 size-4" />
+            {bulkResendBusy ? "Đang gửi..." : `Gửi lại HĐ (${selection.size})`}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             disabled={!allSelectedConfirmable}
             title={
               allSelectedConfirmable
@@ -666,13 +778,16 @@ export default function RegistrationsListPage(): React.ReactElement {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-8">
-                <Checkbox
+              <TableHead className="w-12 bg-slate-100 border-r">
+                <input
+                  type="checkbox"
+                  className="size-5 cursor-pointer accent-blue-600"
                   checked={selection.size > 0 && selection.size === rows.length}
-                  onCheckedChange={(v) => {
-                    if (v) setSelection(new Set(rows.map((r) => r.id)));
+                  onChange={(e) => {
+                    if (e.target.checked) setSelection(new Set(rows.map((r) => r.id)));
                     else setSelection(new Set());
                   }}
+                  aria-label="Chọn tất cả"
                 />
               </TableHead>
               <TableHead>Tên</TableHead>
@@ -680,6 +795,7 @@ export default function RegistrationsListPage(): React.ReactElement {
               <TableHead>Size</TableHead>
               <TableHead>Trạng thái</TableHead>
               <TableHead>Hợp đồng</TableHead>
+              <TableHead>Hồ sơ</TableHead>
               <TableHead>Check-in</TableHead>
               <TableHead className="text-right">Thao tác</TableHead>
             </TableRow>
@@ -687,14 +803,14 @@ export default function RegistrationsListPage(): React.ReactElement {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={9}>
                   <Skeleton className="h-8" />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center text-muted-foreground py-8"
                 >
                   Không có dữ liệu
@@ -718,10 +834,13 @@ export default function RegistrationsListPage(): React.ReactElement {
                     style={rowStyle}
                     data-status={r.status}
                   >
-                    <TableCell>
-                      <Checkbox
+                    <TableCell className="bg-slate-100/60 border-r">
+                      <input
+                        type="checkbox"
+                        className="size-5 cursor-pointer accent-blue-600"
                         checked={selection.has(r.id)}
-                        onCheckedChange={(v) => toggleSelect(r.id, v === true)}
+                        onChange={(e) => toggleSelect(r.id, e.target.checked)}
+                        aria-label={`Chọn ${r.full_name}`}
                       />
                     </TableCell>
                     <TableCell className="font-medium">
@@ -759,6 +878,34 @@ export default function RegistrationsListPage(): React.ReactElement {
                         : r.contract_status === "sent"
                           ? "⏳ Chờ ký"
                           : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {(() => {
+                        // v037+ — Hồ sơ pill: green if all 3 photos + identity present;
+                        // amber if missing CCCD; gray if missing avatar only.
+                        const hasFront = !!r.cccd_photo_url;
+                        const hasBack = !!r.cccd_back_photo_url;
+                        const hasAvatar = !!r.avatar_photo_url;
+                        if (hasFront && hasBack && hasAvatar) {
+                          return (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">
+                              Đầy đủ
+                            </span>
+                          );
+                        }
+                        if (!hasFront || !hasBack) {
+                          return (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">
+                              Thiếu CCCD
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
+                            Thiếu avatar
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-sm">
                       {r.checked_in_at
@@ -879,7 +1026,9 @@ export default function RegistrationsListPage(): React.ReactElement {
             <DialogTitle>
               {confirmTarget?.kind === "single"
                 ? `Xác nhận hoàn thành — ${confirmTarget.fullName}`
-                : `Xác nhận hoàn thành — ${confirmTarget?.ids.length ?? 0} người`}
+                : confirmTarget?.kind === "all"
+                  ? `Xác nhận hoàn thành TẤT CẢ — ${confirmTarget.count} người`
+                  : `Xác nhận hoàn thành — ${confirmTarget?.ids.length ?? 0} người`}
             </DialogTitle>
             <DialogDescription>
               Chuyển trạng thái sang &quot;Hoàn thành&quot;. Sau bước này admin có thể đánh dấu đã thanh toán.

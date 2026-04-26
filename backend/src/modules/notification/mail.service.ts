@@ -40,6 +40,27 @@ export interface TeamWaitlistedData {
   magicLink: string;
 }
 
+/** v037+ — Welcome email after admin imports staff from Excel.
+ * `missingSections` is computed by the service: only sections with at least
+ * 1 empty field are listed (no spam). `deadline` is event_start_date - 24h. */
+export interface TeamImportedWelcomeData {
+  toEmail: string;
+  fullName: string;
+  eventName: string;
+  roleName: string;
+  magicLink: string;
+  /** Vietnamese date string (dd/mm/yyyy). */
+  deadline: string;
+  /** dynamic sections — each lists labels of missing fields. */
+  missingSections: Array<{
+    title: string;
+    items: string[];
+  }>;
+  /** Optional contact info for fallback. */
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+}
+
 export interface TeamContractSentData {
   toEmail: string;
   fullName: string;
@@ -628,6 +649,67 @@ export class MailService {
     } catch (error) {
       this.logger.error(
         `Failed timing lead notification for #${data.lead_number}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async sendTeamImportedWelcome(data: TeamImportedWelcomeData): Promise<void> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] Imported welcome: ${data.fullName} <${data.toEmail}> sections=${data.missingSections.map((s) => s.title).join('|')}`,
+      );
+      return;
+    }
+    const subject = `[5BIB Crew] Bổ sung thông tin để tham gia "${data.eventName}"`;
+    const sectionsHtml = data.missingSections
+      .map(
+        (s) => `
+      <div style="margin-top: 16px;">
+        <p style="margin: 0 0 6px; font-weight: 600; color: #0f172a;">${escapeHtml(s.title)}</p>
+        <ul style="margin: 0; padding-left: 20px; color: #1c1917;">
+          ${s.items.map((it) => `<li style="margin: 2px 0;">☐ ${escapeHtml(it)}</li>`).join('')}
+        </ul>
+      </div>`,
+      )
+      .join('');
+    const contactHtml =
+      data.contactEmail || data.contactPhone
+        ? `<p style="margin-top: 18px; font-size: 13px; color: #57534e;">
+            Mọi thắc mắc liên hệ
+            ${data.contactEmail ? `<a href="mailto:${escapeHtml(data.contactEmail)}">${escapeHtml(data.contactEmail)}</a>` : ''}
+            ${data.contactEmail && data.contactPhone ? ' / ' : ''}
+            ${data.contactPhone ? `<strong>${escapeHtml(data.contactPhone)}</strong>` : ''}.
+          </p>`
+        : '';
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; color: #1c1917;">
+        <h2 style="color: #1d4ed8; margin-bottom: 4px;">Chào ${escapeHtml(data.fullName)},</h2>
+        <p style="margin-top: 0;">BTC sự kiện <strong>${escapeHtml(data.eventName)}</strong> đã thêm bạn vào danh sách cộng tác viên với vai trò <strong>${escapeHtml(data.roleName)}</strong>.</p>
+        <p>Để hoàn tất hồ sơ và chuẩn bị hợp đồng, vui lòng bổ sung các thông tin sau:</p>
+        ${sectionsHtml}
+        <div style="margin: 24px 0;">
+          <a href="${data.magicLink}" style="display: inline-block; padding: 12px 24px; background: #1d4ed8; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600;">Bổ sung thông tin ngay</a>
+        </div>
+        <p style="font-size: 13px; color: #b45309; background: #fef3c7; padding: 8px 12px; border-radius: 4px;">
+          ⚠️ Vui lòng hoàn tất trước <strong>${escapeHtml(data.deadline)}</strong> để BTC kịp gửi hợp đồng.
+        </p>
+        ${contactHtml}
+      </div>
+    `;
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: '5BIB - Crew Notifications',
+          subject,
+          html,
+          to: [{ email: data.toEmail, type: 'to' }],
+        },
+      });
+      this.logger.log(`Imported welcome email sent to ${data.toEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send imported welcome to ${data.toEmail}: ${(error as Error).message}`,
       );
     }
   }

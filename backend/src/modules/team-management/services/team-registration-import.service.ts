@@ -44,6 +44,8 @@ import { TeamRegistrationService } from './team-registration.service';
 import { TeamContractService } from './team-contract.service';
 import { TeamCacheService } from './team-cache.service';
 import { TeamStationService } from './team-station.service';
+import { MailService } from 'src/modules/notification/mail.service';
+import { env } from 'src/config';
 
 const MAX_ROWS = 500;
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -68,15 +70,21 @@ const KNOWN_HEADERS = [
   'role_name',
   'cccd',
   'dob',
+  'birth_date',
+  'cccd_issue_date',
+  'cccd_issue_place',
+  'address',
   'shirt_size',
   'bank_account_number',
   'bank_holder_name',
   'bank_name',
   'bank_branch',
   'experience',
+  'expertise',
   'notes',
   'avatar_photo',
   'cccd_photo',
+  'cccd_back_photo',
   // v1.6: optional station assignment columns.
   'station_id',
   'station_name',
@@ -115,6 +123,48 @@ interface CachedImport {
   created_at: number;
 }
 
+/**
+ * v037+ — Walks a registration and returns dynamic sections of missing
+ * fields. Used to compose the welcome email after import, and the banner
+ * on the crew portal status page (`?missing=cccd,bank,...`).
+ *
+ * Sections are dropped entirely if all their items are present — keeps
+ * email tidy when admin Excel had most fields filled.
+ */
+export function computeMissingSections(
+  reg: VolRegistration,
+): Array<{ tag: string; title: string; items: string[] }> {
+  const fd = (reg.form_data ?? {}) as Record<string, unknown>;
+  const isStr = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+
+  const personal: string[] = [];
+  if (!reg.birth_date) personal.push('Ngày sinh');
+  if (!isStr(fd.cccd)) personal.push('Số CCCD/CMND');
+  if (!reg.cccd_issue_date) personal.push('Ngày cấp CCCD');
+  if (!reg.cccd_issue_place) personal.push('Nơi cấp CCCD');
+  if (!isStr(fd.address)) personal.push('Địa chỉ thường trú');
+
+  const photos: string[] = [];
+  if (!reg.cccd_photo_url) photos.push('Ảnh CCCD/CMND mặt trước');
+  if (!reg.cccd_back_photo_url) photos.push('Ảnh CCCD/CMND mặt sau');
+  if (!reg.avatar_photo_url) photos.push('Ảnh chân dung');
+
+  const bank: string[] = [];
+  if (!isStr(fd.bank_account_number)) bank.push('Số tài khoản ngân hàng');
+  if (!isStr(fd.bank_holder_name)) bank.push('Tên chủ tài khoản');
+  if (!isStr(fd.bank_name)) bank.push('Ngân hàng');
+
+  const other: string[] = [];
+  if (!reg.shirt_size) other.push('Size áo');
+
+  const out: Array<{ tag: string; title: string; items: string[] }> = [];
+  if (personal.length) out.push({ tag: 'personal', title: '📋 THÔNG TIN CÁ NHÂN (cần cho hợp đồng)', items: personal });
+  if (photos.length) out.push({ tag: 'photo', title: '📷 ẢNH (bắt buộc)', items: photos });
+  if (bank.length) out.push({ tag: 'bank', title: '💳 THÔNG TIN THANH TOÁN', items: bank });
+  if (other.length) out.push({ tag: 'other', title: '👕 KHÁC', items: other });
+  return out;
+}
+
 @Injectable()
 export class TeamRegistrationImportService {
   private readonly logger = new Logger(TeamRegistrationImportService.name);
@@ -133,6 +183,7 @@ export class TeamRegistrationImportService {
     private readonly contractSvc: TeamContractService,
     private readonly cache: TeamCacheService,
     private readonly stationSvc: TeamStationService,
+    private readonly mail: MailService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────
@@ -193,7 +244,10 @@ export class TeamRegistrationImportService {
       { header: 'role_id *', key: 'role_id', width: 10, required: true },
       { header: 'role_name (tham khảo)', key: 'role_name', width: 28, required: false },
       { header: 'cccd *', key: 'cccd', width: 16, required: true },
+      // v037+ identity fields — TNV bổ sung qua portal nếu admin để trống
       { header: 'dob (DD/MM/YYYY)', key: 'dob', width: 14, required: false },
+      { header: 'cccd_issue_date (DD/MM/YYYY)', key: 'cccd_issue_date', width: 18, required: false },
+      { header: 'cccd_issue_place', key: 'cccd_issue_place', width: 28, required: false },
       { header: 'address', key: 'address', width: 36, required: false },
       { header: 'shirt_size', key: 'shirt_size', width: 10, required: false },
       { header: 'bank_account_number', key: 'bank_account_number', width: 22, required: false },
@@ -201,6 +255,7 @@ export class TeamRegistrationImportService {
       { header: 'bank_name', key: 'bank_name', width: 26, required: false },
       { header: 'bank_branch', key: 'bank_branch', width: 20, required: false },
       { header: 'experience', key: 'experience', width: 40, required: false },
+      { header: 'expertise', key: 'expertise', width: 40, required: false },
       { header: 'notes', key: 'notes', width: 30, required: false },
       // v1.6 station assignment columns — all optional.
       { header: 'station_id', key: 'station_id', width: 12, required: false },
@@ -463,10 +518,11 @@ export class TeamRegistrationImportService {
       const experience = String(raw.experience ?? '').trim();
       const notes = String(raw.notes ?? '').trim();
 
-      // Core fields
+      // Core fields — full_name + email bắt buộc valid (email cần unique).
       push(errors, validateFullName(full_name));
       push(errors, validateEmail(email));
-      push(errors, validatePhoneVN(phone));
+      // v037+ Danny request: phone format → WARNING (TNV bổ sung qua portal).
+      push(warnings, validatePhoneVN(phone));
 
       // Role resolution — either role_id or role_name column accepted.
       const roleRef = resolveRoleRef(
@@ -478,40 +534,19 @@ export class TeamRegistrationImportService {
       if (roleRef.error) errors.push(roleRef.error);
       const role = resolved_role_id ? rolesById.get(resolved_role_id) : undefined;
 
-      // Optional cells — validated if present.
-      const cccdRequired = fieldRequired(role, 'cccd');
-      push(errors, validateCCCD(cccd, cccdRequired));
-
-      const dobRequired = fieldRequired(role, 'dob');
-      push(errors, validateDob(dob, dobRequired));
-
-      const shirtRequired = fieldRequired(role, 'shirt_size');
+      // v037+ Danny request: tất cả validation về data shape (CCCD format,
+      // DOB, shirt size, bank info) đều là WARNING — KHÔNG block import.
+      // TNV nhận welcome email với danh sách field cần bổ sung/sửa qua portal.
+      // Hard errors chỉ giữ cho: missing full_name, invalid email, role
+      // không tồn tại, role full + không waitlist (operational blockers).
+      push(warnings, validateCCCD(cccd, false));
+      push(warnings, validateDob(dob, false));
       const shirtOpts = fieldOptions(role, 'shirt_size') ?? [...SHIRT_SIZE_OPTIONS];
-      push(errors, validateShirtSize(shirt_size, shirtRequired, shirtOpts));
-
-      // Bank group
-      const bankAcctRequired = fieldRequired(role, 'bank_account_number');
-      if (!bank_account_number && bankAcctRequired) {
-        errors.push('Thiếu số tài khoản ngân hàng');
-      } else {
-        push(errors, validateBankAccount(bank_account_number));
-      }
-
-      const bankNameRequired = fieldRequired(role, 'bank_name');
-      if (!bank_name && bankNameRequired) {
-        errors.push('Thiếu tên ngân hàng');
-      } else {
-        push(errors, validateBankName(bank_name));
-      }
-
-      // Holder name check only when account present.
+      push(warnings, validateShirtSize(shirt_size, false, shirtOpts));
+      push(warnings, validateBankAccount(bank_account_number));
+      push(warnings, validateBankName(bank_name));
       if (bank_account_number) {
-        const holderRequired = fieldRequired(role, 'bank_holder_name');
-        if (!bank_holder_name && holderRequired) {
-          errors.push('Thiếu tên chủ tài khoản');
-        } else {
-          push(errors, validateBankHolderName(bank_holder_name, full_name));
-        }
+        push(warnings, validateBankHolderName(bank_holder_name, full_name));
       }
 
       // Role capacity warnings
@@ -759,6 +794,9 @@ export class TeamRegistrationImportService {
       const passthrough = [
         'cccd',
         'dob',
+        'birth_date',
+        'cccd_issue_date',
+        'cccd_issue_place',
         'address',
         'shirt_size',
         'bank_account_number',
@@ -766,6 +804,7 @@ export class TeamRegistrationImportService {
         'bank_name',
         'bank_branch',
         'experience',
+        'expertise',
       ];
       for (const k of passthrough) {
         const v = data[k];
@@ -789,9 +828,11 @@ export class TeamRegistrationImportService {
             notes: notesStr || `Imported by ${adminIdentity} (row ${r.row_num})`,
           },
           adminIdentity,
-          // Bulk import: TNV uploads photos later via self-service profile-edit
-          // path. Warning was already surfaced in preview stage.
-          { skipRequiredPhotos: true },
+          // Bulk import: TNV fills the rest later via the welcome-email
+          // magic link (computeMissingSections lists what's missing). Skip
+          // ALL required fields, not just photos — Excel template often
+          // omits cccd_issue_*, address, birth_date for staff records.
+          { skipAllRequired: true },
         );
         inserted_ids.push(result.id);
         // Kick off contract-send chain async if approved.
@@ -835,6 +876,11 @@ export class TeamRegistrationImportService {
         }
       } catch (err) {
         const msg = (err as Error).message || 'unknown error';
+        // v037+ debug: log full error so admin can debug import failures.
+        // Without this, "errors=N" in the summary is opaque.
+        this.logger.warn(
+          `Import row ${r.row_num} fail: ${msg} (email=${data.email}, role=${roleId})`,
+        );
         errors.push(`Dòng ${r.row_num}: ${msg}`);
         skipped += 1;
       }
@@ -852,6 +898,15 @@ export class TeamRegistrationImportService {
       `REG_IMPORT admin=${adminIdentity} event=${eventId} inserted=${inserted_ids.length} assigned=${assigned} skipped=${skipped} errors=${errors.length}`,
     );
 
+    // v037+ — Welcome email (opt-in default true). Throttle 20 per second
+    // to stay under Mailchimp tier limits when admin imports 200+ rows.
+    const sendWelcome = dto.send_welcome_email ?? true;
+    if (sendWelcome && inserted_ids.length > 0) {
+      void this.sendWelcomeEmailsBatch(inserted_ids, eventId).catch((err) =>
+        this.logger.warn(`Welcome email batch failed: ${(err as Error).message}`),
+      );
+    }
+
     return {
       inserted: inserted_ids.length,
       skipped,
@@ -859,6 +914,100 @@ export class TeamRegistrationImportService {
       errors,
       assigned,
     };
+  }
+
+  /**
+   * Resend the import-welcome email for a single registration. Used when
+   * admin clicks "Gửi lại lời mời" on registration detail. Reuses same
+   * magic_token (intentional — same TNV; switching the token would break
+   * any earlier links they bookmarked).
+   */
+  async resendImportInvite(regId: number, adminIdentity: string): Promise<void> {
+    const reg = await this.regRepo.findOne({
+      where: { id: regId },
+      relations: { role: true, event: true },
+    });
+    if (!reg) throw new BadRequestException('Registration not found');
+    if (!reg.event) throw new BadRequestException('Event not loaded');
+
+    const missing = computeMissingSections(reg);
+    if (missing.length === 0) {
+      throw new BadRequestException(
+        'TNV đã có đầy đủ thông tin — không cần gửi lại lời mời',
+      );
+    }
+    const startDate = new Date(reg.event.event_start_date);
+    const deadline = new Date(startDate.getTime() - 24 * 3600 * 1000);
+    const magicLink = `${env.teamManagement.crewBaseUrl}/status/${reg.magic_token}?missing=${missing.map((s) => s.tag).join(',')}`;
+    await this.mail.sendTeamImportedWelcome({
+      toEmail: reg.email,
+      fullName: reg.full_name,
+      eventName: reg.event.event_name,
+      roleName: reg.role?.role_name ?? '',
+      magicLink,
+      deadline: deadline.toLocaleDateString('vi-VN'),
+      missingSections: missing.map(({ title, items }) => ({ title, items })),
+      contactEmail: reg.event.contact_email,
+      contactPhone: reg.event.contact_phone,
+    });
+    this.logger.log(`RESEND_INVITE admin=${adminIdentity} reg=${regId}`);
+  }
+
+  /**
+   * v037+ — Send welcome email to imported TNV with dynamic list of missing
+   * fields. Best-effort, fire-and-forget — runs in background after confirm
+   * response is returned. Throttled 20 emails/second to avoid Mailchimp 429.
+   */
+  private async sendWelcomeEmailsBatch(
+    regIds: number[],
+    eventId: number,
+  ): Promise<void> {
+    const event = await this.eventRepo.findOne({ where: { id: eventId } });
+    if (!event) return;
+    // Deadline = event_start_date - 24h, fallback to event_start_date.
+    const startDate = new Date(event.event_start_date);
+    const deadline = new Date(startDate.getTime() - 24 * 3600 * 1000);
+    const deadlineStr = deadline.toLocaleDateString('vi-VN');
+
+    const BATCH = 20;
+    for (let i = 0; i < regIds.length; i += BATCH) {
+      const chunk = regIds.slice(i, i + BATCH);
+      const regs = await this.regRepo.find({
+        where: chunk.map((id) => ({ id })),
+        relations: { role: true },
+      });
+      await Promise.all(
+        regs.map(async (reg) => {
+          const missing = computeMissingSections(reg);
+          if (missing.length === 0) return; // nothing to ask, skip email.
+          const magicLink = `${env.teamManagement.crewBaseUrl}/status/${reg.magic_token}?missing=${missing.map((s) => s.tag).join(',')}`;
+          await this.mail
+            .sendTeamImportedWelcome({
+              toEmail: reg.email,
+              fullName: reg.full_name,
+              eventName: event.event_name,
+              roleName: reg.role?.role_name ?? '',
+              magicLink,
+              deadline: deadlineStr,
+              missingSections: missing.map(({ title, items }) => ({ title, items })),
+              contactEmail: event.contact_email,
+              contactPhone: event.contact_phone,
+            })
+            .catch((err) =>
+              this.logger.warn(
+                `Welcome email reg=${reg.id} failed: ${(err as Error).message}`,
+              ),
+            );
+        }),
+      );
+      // Throttle: 1 second between batches.
+      if (i + BATCH < regIds.length) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    this.logger.log(
+      `WELCOME_BATCH event=${eventId} sent=${regIds.length}`,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────

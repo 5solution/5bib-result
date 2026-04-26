@@ -8,6 +8,7 @@ export interface TeamEvent {
   id: number;
   race_id: string | null;
   event_name: string;
+  contract_code_prefix?: string | null;
   description: string | null;
   location: string | null;
   location_lat: string | number | null;
@@ -341,6 +342,7 @@ export async function getTeamEvent(
 // Backend DTO accepts null via ValidateIf; MySQL columns are nullable.
 export type UpdateTeamEventInput = Partial<{
   event_name: string;
+  contract_code_prefix: string | null;
   description: string | null;
   location: string;
   location_lat: number | null;
@@ -637,6 +639,9 @@ export interface RegistrationListRow {
   phone: string;
   shirt_size: string | null;
   avatar_photo_url: string | null;
+  // v037+ — for "Hồ sơ" pill in table.
+  cccd_photo_url?: string | null;
+  cccd_back_photo_url?: string | null;
   status: string;
   waitlist_position: number | null;
   contract_status: string;
@@ -1308,7 +1313,26 @@ export async function sendBulkScheduleEmail(
 
 export const DEFAULT_FORM_FIELDS: FormFieldConfig[] = [
   { key: "cccd", label: "Số CCCD/CMND", type: "text", required: true },
-  { key: "dob", label: "Ngày sinh", type: "date", required: true },
+  { key: "birth_date", label: "Ngày sinh", type: "date", required: true },
+  {
+    key: "cccd_issue_date",
+    label: "Ngày cấp CCCD/CMND",
+    type: "date",
+    required: true,
+  },
+  {
+    key: "cccd_issue_place",
+    label: "Nơi cấp CCCD/CMND",
+    type: "text",
+    required: true,
+    hint: "VD: Cục CSQLHC về TTXH / Công an TP Hà Nội",
+  },
+  {
+    key: "address",
+    label: "Địa chỉ thường trú",
+    type: "textarea",
+    required: true,
+  },
   {
     key: "shirt_size",
     label: "Size áo vận hành",
@@ -1318,10 +1342,17 @@ export const DEFAULT_FORM_FIELDS: FormFieldConfig[] = [
   },
   {
     key: "cccd_photo",
-    label: "Ảnh CCCD/CMND",
+    label: "Ảnh CCCD/CMND mặt trước",
     type: "photo",
     required: true,
-    hint: "Chụp rõ mặt CCCD — bắt buộc để lập hợp đồng",
+    hint: "Chụp rõ mặt trước CCCD — bắt buộc để lập hợp đồng",
+  },
+  {
+    key: "cccd_back_photo",
+    label: "Ảnh CCCD/CMND mặt sau",
+    type: "photo",
+    required: true,
+    hint: "Chụp rõ mặt sau CCCD — bắt buộc để lập hợp đồng",
   },
   {
     key: "avatar_photo",
@@ -1335,6 +1366,13 @@ export const DEFAULT_FORM_FIELDS: FormFieldConfig[] = [
     label: "Kinh nghiệm tình nguyện",
     type: "textarea",
     required: false,
+  },
+  {
+    key: "expertise",
+    label: "Trình độ chuyên môn",
+    type: "textarea",
+    required: false,
+    hint: "VD: Bác sĩ đa khoa, 5 năm kinh nghiệm cấp cứu",
   },
   // Bank / payout info — required so accountant can transfer payout.
   // Rendered as a grouped "Thông tin thanh toán" section in the detail view.
@@ -2535,6 +2573,64 @@ export async function sendContractForRegistration(
   await assertOk(res);
 }
 
+/**
+ * v037+ — Admin uploads photo on behalf of TNV. Used for imported staff
+ * who don't have access to the magic-link portal yet (BTC chụp CCCD trực
+ * tiếp tại quầy + upload thay).
+ */
+export async function adminUploadPhoto(
+  token: string,
+  registrationId: number,
+  file: File,
+  photoType: "avatar" | "cccd" | "cccd_back",
+): Promise<{ url: string; column: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("photo_type", photoType);
+  const res = await fetch(
+    `/api/team-management/registrations/${registrationId}/photo`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+/**
+ * Resend the welcome / invite email for an imported registration with a
+ * dynamic list of missing fields. Reuses same magic_token (no invalidate).
+ */
+export async function resendImportInvite(
+  token: string,
+  eventId: number,
+  registrationId: number,
+): Promise<void> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/registrations/import/resend-invite/${registrationId}`,
+    { method: "POST", headers: authedHeaders(token) },
+  );
+  await assertOk(res);
+}
+
+export async function sendContractsBatch(
+  token: string,
+  registrationIds: number[],
+): Promise<{ succeeded: number[]; failed: Record<number, string> }> {
+  const res = await fetch(
+    `/api/team-management/registrations/send-contract/batch`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ registration_ids: registrationIds }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // v1.9: Feature mode config
 // ─────────────────────────────────────────────────────────────────────
@@ -2599,6 +2695,24 @@ export async function confirmNghiemThuBatch(
         registration_ids: registrationIds,
         ...(note ? { note } : {}),
       }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function confirmAllInEvent(
+  token: string,
+  eventId: number,
+  status: "contract_signed" | "checked_in",
+  note?: string,
+): Promise<{ succeeded: number[]; failed: Record<number, string>; total: number }> {
+  const res = await fetch(
+    `/api/team-management/events/${eventId}/registrations/confirm-completion-all`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({ status, ...(note ? { note } : {}) }),
     },
   );
   await assertOk(res);

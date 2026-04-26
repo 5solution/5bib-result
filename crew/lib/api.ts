@@ -58,6 +58,12 @@ export interface StatusResponse {
   email?: string;
   phone?: string;
   avatar_photo_url?: string | null;
+  // v037+ — surfaced so crew portal can compute "missing profile" banner.
+  cccd_photo_url?: string | null;
+  cccd_back_photo_url?: string | null;
+  birth_date?: string | null;
+  cccd_issue_date?: string | null;
+  cccd_issue_place?: string | null;
   form_data?: Record<string, unknown>;
   form_fields?: FormFieldConfig[];
   has_pending_changes?: boolean;

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type {
   FormFieldConfig,
   StatusResponse,
@@ -36,7 +36,39 @@ export function PersonalTab({
   featureMode?: "full" | "lite";
 }): React.ReactElement {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // v037+ — When email link contains ?missing=photo,personal,..., open the
+  // edit form immediately and scroll to the section.
+  const missingTags = useMemo(() => {
+    const raw = searchParams?.get("missing") ?? "";
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }, [searchParams]);
   const [editing, setEditing] = useState(false);
+
+  // Auto-open edit + scroll if user came from welcome email.
+  useEffect(() => {
+    if (missingTags.length > 0 && !editing) {
+      setEditing(true);
+      // Small delay to wait for form mount.
+      setTimeout(() => {
+        const el = document.querySelector(
+          missingTags.includes("photo")
+            ? '[data-field="cccd_photo"]'
+            : missingTags.includes("personal")
+              ? '[data-field="cccd"]'
+              : '[data-field="bank_account_number"]',
+        );
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+          (el as HTMLElement).focus?.();
+        }
+      }, 300);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formFields = (status.form_fields ?? []) as FormFieldConfig[];
   const initialFormData = (status.form_data ?? {}) as Record<string, unknown>;
@@ -99,7 +131,7 @@ export function PersonalTab({
   async function handlePhotoUpload(
     key: string,
     file: File,
-    photoType: "avatar" | "cccd",
+    photoType: "avatar" | "cccd" | "cccd_back",
   ): Promise<void> {
     const body = new FormData();
     body.append("file", file);
@@ -173,6 +205,49 @@ export function PersonalTab({
           </div>
           <StatusBadge status={statusKey} />
         </div>
+
+        {/* v037+ — Missing profile banner. Shows when admin imported the
+            registration from Excel and key fields haven't been filled. */}
+        {(() => {
+          const missing: string[] = [];
+          if (!status.cccd_photo_url && !formData.cccd_photo)
+            missing.push("Ảnh CCCD mặt trước");
+          if (!status.cccd_back_photo_url && !formData.cccd_back_photo)
+            missing.push("Ảnh CCCD mặt sau");
+          if (!status.avatar_photo_url && !formData.avatar_photo)
+            missing.push("Ảnh chân dung");
+          if (!status.birth_date && !formData.birth_date && !formData.dob)
+            missing.push("Ngày sinh");
+          if (!status.cccd_issue_date && !formData.cccd_issue_date)
+            missing.push("Ngày cấp CCCD");
+          if (!status.cccd_issue_place && !formData.cccd_issue_place)
+            missing.push("Nơi cấp CCCD");
+          if (missing.length === 0 || isTerminal) return null;
+          return (
+            <div
+              className="rounded-lg border p-3 text-sm"
+              style={{
+                borderColor: "#fb923c",
+                background: "#fff7ed",
+                color: "#9a3412",
+              }}
+            >
+              <p className="font-semibold">Hồ sơ chưa đầy đủ</p>
+              <p className="mt-0.5 text-xs">
+                Bạn cần bổ sung: {missing.join(", ")}.
+              </p>
+              {!editing ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="mt-2 inline-block rounded bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-700"
+                >
+                  Bổ sung ngay
+                </button>
+              ) : null}
+            </div>
+          );
+        })()}
 
         {hasPending ? (
           <div
@@ -304,22 +379,31 @@ export function PersonalTab({
                 ? "Tên chủ tài khoản phải khớp với họ tên đăng ký"
                 : null;
             return (
-              <DynamicField
-                key={field.key}
-                field={field}
-                value={stringVal}
-                onChange={(next) =>
-                  setFormData((prev) => ({ ...prev, [field.key]: next }))
-                }
-                error={error}
-                onPhotoUpload={(file) =>
-                  handlePhotoUpload(
-                    field.key,
-                    file,
-                    field.key === "avatar_photo" ? "avatar" : "cccd",
-                  )
-                }
-              />
+              // v037+ — `data-field` enables auto-scroll-to-missing-field
+              // when crew arrives via welcome-email link `?missing=cccd,photo`.
+              // The useEffect above runs querySelector('[data-field=cccd_photo]')
+              // — without this attr the auto-scroll silently no-ops.
+              <div key={field.key} data-field={field.key}>
+                <DynamicField
+                  field={field}
+                  value={stringVal}
+                  onChange={(next) =>
+                    setFormData((prev) => ({ ...prev, [field.key]: next }))
+                  }
+                  error={error}
+                  onPhotoUpload={(file) =>
+                    handlePhotoUpload(
+                      field.key,
+                      file,
+                      field.key === "avatar_photo"
+                        ? "avatar"
+                        : field.key === "cccd_back_photo"
+                          ? "cccd_back"
+                          : "cccd",
+                    )
+                  }
+                />
+              </div>
             );
           })}
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 import {
   getRegistrationDetail,
   getSignedContractUrl,
@@ -20,6 +21,8 @@ import {
   sendAcceptanceOne,
   disputeAcceptance,
   backfillBenB,
+  adminUploadPhoto,
+  resendImportInvite,
   type BackfillBenBInput,
   type RegistrationDetail,
 } from "@/lib/team-api";
@@ -101,6 +104,9 @@ export function RegistrationDetailView({
   const [saving, setSaving] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  // v037+ — Admin photo upload state.
+  const [photoUploading, setPhotoUploading] = useState<{ [k: string]: boolean }>({});
+  const [resendingInvite, setResendingInvite] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectBusy, setRejectBusy] = useState(false);
   const [clearSusOpen, setClearSusOpen] = useState(false);
@@ -556,6 +562,50 @@ export function RegistrationDetailView({
       toast.error((err as Error).message);
     } finally {
       setBackfillBusy(false);
+    }
+  }
+
+  // v037+ — Admin uploads photo on behalf of TNV (drag/drop or file input).
+  async function handlePhotoUpload(
+    photoType: "avatar" | "cccd" | "cccd_back",
+    file: File,
+  ): Promise<void> {
+    if (!token || !detail) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File quá lớn (tối đa 5MB)");
+      return;
+    }
+    setPhotoUploading((p) => ({ ...p, [photoType]: true }));
+    try {
+      await adminUploadPhoto(token, regId, file, photoType);
+      toast.success("Đã upload ảnh");
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setPhotoUploading((p) => ({ ...p, [photoType]: false }));
+    }
+  }
+
+  async function handleResendInvite(): Promise<void> {
+    if (!token || !detail) return;
+    // v037+ BUG-003 fix — confirm trước khi gửi để tránh misclick.
+    if (
+      !confirm(
+        `Gửi lại email mời cho ${detail.full_name} (${detail.email})?\n\nLink magic không đổi — TNV vẫn dùng được link cũ.`,
+      )
+    ) {
+      return;
+    }
+    setResendingInvite(true);
+    try {
+      await resendImportInvite(token, detail.event_id, regId);
+      toast.success("Đã gửi lại lời mời");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setResendingInvite(false);
     }
   }
 
@@ -1074,11 +1124,78 @@ export function RegistrationDetailView({
             )}
           </div>
 
+          {/* v037+ — Admin photo upload zone (3 slots).
+              Use case: TNV imported từ Excel chưa upload, BTC chụp tại quầy
+              event và upload thay. Khác với section "Ảnh & file đính kèm"
+              dưới (chỉ hiển thị) — section này CÓ input file để upload. */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Ảnh hồ sơ (admin upload)</h3>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleResendInvite()}
+                disabled={resendingInvite}
+                title="Gửi email mời TNV bổ sung thông tin còn thiếu"
+              >
+                {resendingInvite ? "Đang gửi..." : "Gửi lại lời mời"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Drag &amp; drop ảnh hoặc bấm để chọn. Max 5MB. Ảnh CCCD bắt buộc để lập hợp đồng.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <PhotoUploadSlot
+                label="Ảnh chân dung"
+                photoUrl={detail.avatar_photo_url}
+                presigned={detail.avatar_photo_url}
+                uploading={!!photoUploading.avatar}
+                onUpload={(f) => handlePhotoUpload("avatar", f)}
+              />
+              <PhotoUploadSlot
+                label="CCCD mặt trước"
+                photoUrl={detail.cccd_photo_url}
+                presigned={detail.cccd_photo_url}
+                uploading={!!photoUploading.cccd}
+                onUpload={(f) => handlePhotoUpload("cccd", f)}
+                required
+              />
+              <PhotoUploadSlot
+                label="CCCD mặt sau"
+                photoUrl={detail.cccd_back_photo_url}
+                presigned={detail.cccd_back_photo_url}
+                uploading={!!photoUploading.cccd_back}
+                onUpload={(f) => handlePhotoUpload("cccd_back", f)}
+                required
+              />
+            </div>
+          </div>
+
           <div className="rounded-lg border p-4 space-y-3">
             <div>
-              <h3 className="font-semibold mb-2">Dữ liệu form</h3>
+              <h3 className="font-semibold mb-2">Ảnh & file đính kèm</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Ảnh CCCD, ảnh đại diện và các trường tự do (kinh nghiệm, trình độ chuyên môn). Thông tin văn bản đã có trong &quot;Thông tin Bên B&quot; phía trên — chỉnh sửa ở đó.
+              </p>
               {(() => {
-                const entries = Object.entries(detail.form_data);
+                // v2.1 — keys đã có editable inputs ở section "Thông tin Bên B" trên cùng
+                // KHÔNG hiển thị trùng ở đây, chỉ giữ ảnh + free text fields.
+                const HIDE_IN_FORM_DATA = new Set([
+                  "cccd",
+                  "dob",
+                  "birth_date",
+                  "cccd_issue_date",
+                  "cccd_issue_place",
+                  "shirt_size",
+                  "address",
+                  "bank_account_number",
+                  "bank_holder_name",
+                  "bank_name",
+                  "bank_branch",
+                ]);
+                const entries = Object.entries(detail.form_data).filter(
+                  ([k]) => !HIDE_IN_FORM_DATA.has(k),
+                );
                 const nonBank = entries.filter(([k]) => !BANK_KEYS.has(k));
                 const bank = entries.filter(([k]) => BANK_KEYS.has(k));
                 // Keys whose values are date strings (YYYY-MM-DD) — display as dd/mm/yyyy.
@@ -1978,3 +2095,86 @@ function ClearSuspiciousDialog({
     </div>
   );
 }
+
+
+/**
+ * v037+ — Admin photo upload slot. Hover to drag/drop, click to pick.
+ * Shows current photo if uploaded; placeholder + "Bấm để chọn" if empty.
+ */
+function PhotoUploadSlot({
+  label,
+  photoUrl,
+  presigned,
+  uploading,
+  onUpload,
+  required,
+}: {
+  label: string;
+  photoUrl: string | null;
+  presigned: string | null;
+  uploading: boolean;
+  onUpload: (file: File) => Promise<void>;
+  required?: boolean;
+}): React.ReactElement {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const has = !!photoUrl;
+  return (
+    <div
+      className={cn(
+        "rounded-lg border-2 border-dashed p-3 text-center transition-colors",
+        dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300",
+        uploading && "opacity-60 pointer-events-none",
+      )}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragActive(true);
+      }}
+      onDragLeave={() => setDragActive(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragActive(false);
+        const f = e.dataTransfer.files?.[0];
+        if (f) void onUpload(f);
+      }}
+    >
+      <p className="text-xs font-medium mb-2">
+        {label} {required ? <span className="text-red-500">*</span> : null}
+      </p>
+      {has && presigned ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={presigned}
+          alt={label}
+          className="mx-auto h-24 w-auto rounded border object-cover"
+        />
+      ) : (
+        <div className="mx-auto h-24 w-full max-w-[160px] rounded border border-gray-200 bg-gray-50 flex items-center justify-center text-xs text-gray-400">
+          {required ? "(Bắt buộc)" : "(Chưa có)"}
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void onUpload(f);
+          e.target.value = "";
+        }}
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        type="button"
+        className="mt-2 w-full"
+        disabled={uploading}
+        onClick={() => inputRef.current?.click()}
+      >
+        {uploading ? "Đang upload..." : has ? "Thay ảnh" : "Bấm để chọn / kéo thả"}
+      </Button>
+    </div>
+  );
+}
+

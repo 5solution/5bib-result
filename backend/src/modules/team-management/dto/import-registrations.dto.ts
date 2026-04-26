@@ -87,6 +87,16 @@ export class ConfirmImportRegistrationsDto {
   @IsOptional()
   @IsBoolean()
   skip_invalid?: boolean;
+
+  @ApiProperty({
+    required: false,
+    default: true,
+    description:
+      'When true, fire welcome email to each imported TNV with magic link + dynamic list of missing fields.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  send_welcome_email?: boolean;
 }
 
 export class ConfirmImportRegistrationsResponseDto {

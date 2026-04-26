@@ -97,12 +97,17 @@ export class TeamPhotoService {
         .toBuffer();
     }
 
-    const key = `team-photos/${photoType}/${uuidv4()}.webp`;
+    // Route cccd_back to the same private prefix as cccd so the existing
+    // bucket policy (Block Public Access on team-photos/cccd/*) covers both
+    // — no need to add a new policy line for cccd_back.
+    const prefix = photoType === 'cccd_back' ? 'cccd' : photoType;
+    const key = `team-photos/${prefix}/${uuidv4()}.webp`;
     // NOTE: Do NOT set object ACL. Most S3 buckets have Block Public Access
     // enabled and will reject `public-read`. Access is controlled by bucket
     // policy configured out-of-band:
-    //   - `team-photos/avatar/*`  → public GET allowed via bucket policy
-    //   - `team-photos/cccd/*`    → private; served via presignCccd() only
+    //   - `team-photos/avatar/*`     → public GET allowed via bucket policy
+    //   - `team-photos/cccd/*`       → private; served via presignCccd() only
+    //                                  (covers both cccd front + cccd_back)
     await this.s3.send(
       new PutObjectCommand({
         Bucket: this.bucket,

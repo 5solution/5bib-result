@@ -25,6 +25,11 @@ export class RegistrationListRowDto {
   shirt_size!: ShirtSize | null;
   @ApiProperty({ required: false, nullable: true })
   avatar_photo_url!: string | null;
+  // v037+ — for "Hồ sơ" pill display in admin table.
+  @ApiProperty({ required: false, nullable: true })
+  cccd_photo_url!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  cccd_back_photo_url!: string | null;
   @ApiProperty() status!: RegistrationStatus;
   @ApiProperty({ required: false, nullable: true })
   waitlist_position!: number | null;

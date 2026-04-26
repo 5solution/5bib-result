@@ -36,6 +36,7 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateRegistrationDto } from './dto/update-registration.dto';
+import { AdminUploadPhotoDto } from './dto/upload-photo.dto';
 import { RejectRegistrationDto } from './dto/reject-registration.dto';
 import { RejectChangesDto } from './dto/reject-changes.dto';
 import { CancelRegistrationDto } from './dto/cancel-registration.dto';
@@ -65,6 +66,9 @@ import {
   ConfirmNghiemThuDto,
   BatchConfirmNghiemThuDto,
   BatchConfirmNghiemThuResponseDto,
+  ConfirmAllInEventDto,
+  BatchSendContractDto,
+  BatchSendContractResponseDto,
   EventFeaturesConfigDto,
   NghiemThuResponseDto,
   UpdateEventFeaturesDto,
@@ -204,6 +208,24 @@ export class TeamManagementController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Confirm ALL registrations in event matching status filter (Lite mode bulk shortcut)',
+  })
+  @ApiBody({ type: ConfirmAllInEventDto })
+  @Post('events/:id/registrations/confirm-completion-all')
+  confirmAllInEvent(
+    @Param('id', ParseIntPipe) eventId: number,
+    @Body() dto: ConfirmAllInEventDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{ succeeded: number[]; failed: Record<number, string>; total: number }> {
+    return this.registrations.confirmAllInEvent(
+      eventId,
+      dto.status,
+      identifyAdmin(req),
+      dto.note,
+    );
+  }
+
   // -------- Roles --------
 
   @Get('roles/import-template')
@@ -322,6 +344,45 @@ export class TeamManagementController {
   ): Promise<{ success: boolean }> {
     await this.contracts.sendContractForRegistrationId(id);
     return { success: true };
+  }
+
+  @Post('registrations/send-contract/batch')
+  @ApiOperation({ summary: 'Bulk (re)send contract magic link to many registrations' })
+  @ApiBody({ type: BatchSendContractDto })
+  @ApiResponse({ status: 201, type: BatchSendContractResponseDto })
+  sendContractsBatch(
+    @Body() dto: BatchSendContractDto,
+  ): Promise<BatchSendContractResponseDto> {
+    return this.contracts.sendContractForRegistrationIdsBatch(dto.registration_ids);
+  }
+
+  @Post('registrations/:id/photo')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Admin upload photo on behalf of a registration (avatar/cccd/cccd_back)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file', 'photo_type'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        photo_type: { type: 'string', enum: ['avatar', 'cccd', 'cccd_back'] },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Photo uploaded and registration updated' })
+  async adminUploadPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: AdminUploadPhotoDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{ url: string; column: string }> {
+    return this.registrations.adminUploadPhoto(
+      id,
+      file,
+      dto.photo_type,
+      identifyAdmin(req),
+    );
   }
 
   // -------- Registrations (admin view) --------

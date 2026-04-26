@@ -201,7 +201,7 @@ export class TeamRegistrationController {
       required: ['file', 'photo_type'],
       properties: {
         file: { type: 'string', format: 'binary' },
-        photo_type: { type: 'string', enum: ['avatar', 'cccd', 'benefits'] },
+        photo_type: { type: 'string', enum: ['avatar', 'cccd', 'cccd_back', 'benefits'] },
       },
     },
   })
