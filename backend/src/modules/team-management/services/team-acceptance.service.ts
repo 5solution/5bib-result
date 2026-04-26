@@ -125,6 +125,7 @@ export class TeamAcceptanceService {
     role: VolRole,
     event: VolEvent,
     acceptanceValue: number,
+    template: VolAcceptanceTemplate,
     signatureImage?: string,
     acceptanceDate?: Date,
   ): Record<string, string> {
@@ -155,6 +156,14 @@ export class TeamAcceptanceService {
       acceptance_value: formatVnd(acceptanceValue),
       acceptance_value_words: acceptanceValueWords,
       event_name: event.event_name,
+      // v1.9 RT-11 fix: Inject Party A from acceptance template so 5 different
+      // legal entities each render their own info on biên bản nghiệm thu.
+      // Template-scoped (matches contract template Party A binding).
+      party_a_company_name: template.party_a_company_name ?? '',
+      party_a_address: template.party_a_address ?? '',
+      party_a_tax_code: template.party_a_tax_code ?? '',
+      party_a_representative: template.party_a_representative ?? '',
+      party_a_position: template.party_a_position ?? '',
       // `data:image/png;base64,...` — empty string renders no img.
       signature_image: signatureImage ?? '',
     };
@@ -171,8 +180,8 @@ export class TeamAcceptanceService {
    * skipped from the batch so the admin can see it in response.skipped).
    */
   private validateEligibility(reg: VolRegistration): string | null {
-    if (reg.status !== 'completed') {
-      return `Trạng thái phải là "completed" (hiện tại: "${reg.status}")`;
+    if (reg.status !== 'completed' && reg.status !== 'checked_in') {
+      return `Trạng thái phải là "checked_in" hoặc "completed" (hiện tại: "${reg.status}")`;
     }
     if (!reg.contract_number) {
       return 'Thiếu số hợp đồng — hợp đồng chưa được gửi';
@@ -446,7 +455,9 @@ export class TeamAcceptanceService {
           acceptance_notes: null,
         })
         .where('id = :id', { id: reg.id })
-        .andWhere('status = :status', { status: 'completed' })
+        .andWhere('status IN (:...sendable)', {
+          sendable: ['checked_in', 'completed'],
+        })
         .andWhere('acceptance_status IN (:...from)', {
           from: ['not_ready', 'disputed'],
         })
@@ -492,6 +503,7 @@ export class TeamAcceptanceService {
       role,
       event,
       value,
+      template,
       undefined,
       reg.acceptance_signed_at ?? undefined,
     );
@@ -575,6 +587,7 @@ export class TeamAcceptanceService {
         role,
         event,
         value,
+        template,
         signatureImage,
         now,
       );
