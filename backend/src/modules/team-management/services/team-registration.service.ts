@@ -200,12 +200,12 @@ export class TeamRegistrationService {
       const expiresAt = this.expiry();
 
       const shirtSize = this.extractShirtSize(dto.form_data);
-      const avatarUrl = this.extractString(dto.form_data, 'avatar_photo');
-      const cccdUrl = this.extractString(dto.form_data, 'cccd_photo');
+      const avatarUrl = this.extractPhotoUrl(dto.form_data, 'avatar_photo');
+      const cccdUrl = this.extractPhotoUrl(dto.form_data, 'cccd_photo');
       // v037: CCCD back face is required for the contract / acceptance to
       // render with full identity data — enforce here regardless of role
       // form_fields config so existing roles don't bypass the requirement.
-      const cccdBackUrl = this.extractString(dto.form_data, 'cccd_back_photo');
+      const cccdBackUrl = this.extractPhotoUrl(dto.form_data, 'cccd_back_photo');
       if (!cccdBackUrl) {
         throw new BadRequestException(
           'Vui lòng chụp và upload ảnh CCCD/CMND mặt sau (bắt buộc để lập hợp đồng).',
@@ -376,11 +376,11 @@ export class TeamRegistrationService {
       const magicToken = crypto.randomBytes(32).toString('hex');
       const expiresAt = this.expiry();
       const shirtSize = this.extractShirtSize(dto.form_data);
-      const avatarUrl = this.extractString(dto.form_data, 'avatar_photo');
-      const cccdUrl = this.extractString(dto.form_data, 'cccd_photo');
+      const avatarUrl = this.extractPhotoUrl(dto.form_data, 'avatar_photo');
+      const cccdUrl = this.extractPhotoUrl(dto.form_data, 'cccd_photo');
       // v037 — admin manual register: CCCD back + expertise optional (admin
       // can fill via backfill modal). Public register path enforces CCCD back.
-      const cccdBackUrl = this.extractString(dto.form_data, 'cccd_back_photo');
+      const cccdBackUrl = this.extractPhotoUrl(dto.form_data, 'cccd_back_photo');
       const expertise = this.extractString(dto.form_data, 'expertise');
 
       const reg = m.getRepository(VolRegistration).create({
@@ -1337,13 +1337,13 @@ export class TeamRegistrationService {
         reg.form_data = patch.form_data as Record<string, unknown>;
         reg.shirt_size = this.extractShirtSize(reg.form_data) ?? reg.shirt_size;
         reg.avatar_photo_url =
-          this.extractString(reg.form_data, 'avatar_photo') ??
+          this.extractPhotoUrl(reg.form_data, 'avatar_photo') ??
           reg.avatar_photo_url;
         reg.cccd_photo_url =
-          this.extractString(reg.form_data, 'cccd_photo') ?? reg.cccd_photo_url;
+          this.extractPhotoUrl(reg.form_data, 'cccd_photo') ?? reg.cccd_photo_url;
         // v037: sync cccd_back to entity column too — required for contract render.
         reg.cccd_back_photo_url =
-          this.extractString(reg.form_data, 'cccd_back_photo') ??
+          this.extractPhotoUrl(reg.form_data, 'cccd_back_photo') ??
           reg.cccd_back_photo_url;
         // Sync birth_date / cccd_issue_* if TNV provided in form_data.
         const birthDate =
@@ -1392,11 +1392,11 @@ export class TeamRegistrationService {
         reg.form_data = merged;
         reg.shirt_size = this.extractShirtSize(merged) ?? reg.shirt_size;
         reg.avatar_photo_url =
-          this.extractString(merged, 'avatar_photo') ?? reg.avatar_photo_url;
+          this.extractPhotoUrl(merged, 'avatar_photo') ?? reg.avatar_photo_url;
         reg.cccd_photo_url =
-          this.extractString(merged, 'cccd_photo') ?? reg.cccd_photo_url;
+          this.extractPhotoUrl(merged, 'cccd_photo') ?? reg.cccd_photo_url;
         reg.cccd_back_photo_url =
-          this.extractString(merged, 'cccd_back_photo') ?? reg.cccd_back_photo_url;
+          this.extractPhotoUrl(merged, 'cccd_back_photo') ?? reg.cccd_back_photo_url;
         const bd =
           this.extractString(merged, 'birth_date') ||
           this.extractString(merged, 'dob');
@@ -1488,13 +1488,13 @@ export class TeamRegistrationService {
         reg.shirt_size =
           this.extractShirtSize(reg.form_data) ?? reg.shirt_size;
         reg.avatar_photo_url =
-          this.extractString(reg.form_data, 'avatar_photo') ??
+          this.extractPhotoUrl(reg.form_data, 'avatar_photo') ??
           reg.avatar_photo_url;
         reg.cccd_photo_url =
-          this.extractString(reg.form_data, 'cccd_photo') ?? reg.cccd_photo_url;
+          this.extractPhotoUrl(reg.form_data, 'cccd_photo') ?? reg.cccd_photo_url;
         // v037: sync cccd_back + identity fields after admin approval.
         reg.cccd_back_photo_url =
-          this.extractString(reg.form_data, 'cccd_back_photo') ??
+          this.extractPhotoUrl(reg.form_data, 'cccd_back_photo') ??
           reg.cccd_back_photo_url;
         const birthDate =
           this.extractString(reg.form_data, 'birth_date') ||
@@ -2028,6 +2028,23 @@ export class TeamRegistrationService {
   private extractString(form: Record<string, unknown>, key: string): string | null {
     const v = form[key];
     return typeof v === 'string' && v.length > 0 ? v : null;
+  }
+
+  /**
+   * extractPhotoUrl — tolerates legacy _url suffix keys.
+   *
+   * Form fields created before v1.9 used inconsistent keys:
+   *   - Correct:  avatar_photo, cccd_photo
+   *   - Legacy:   avatar_photo_url, cccd_photo_url  (admin accidentally added _url)
+   *
+   * This helper checks the canonical key first, then falls back to the
+   * `key + '_url'` variant so both old and new form_fields work correctly.
+   */
+  private extractPhotoUrl(
+    form: Record<string, unknown>,
+    key: 'avatar_photo' | 'cccd_photo' | 'cccd_back_photo',
+  ): string | null {
+    return this.extractString(form, key) ?? this.extractString(form, `${key}_url`);
   }
 
   private isDupEntry(err: unknown): boolean {
