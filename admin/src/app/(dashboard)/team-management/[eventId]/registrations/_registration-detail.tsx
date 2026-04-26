@@ -46,6 +46,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 import { RejectDialog } from "./_reject-dialog";
 import { ForcePaidDialog } from "./_force-paid-dialog";
 import { BackfillBenBDialog } from "./_backfill-ben-b-dialog";
@@ -97,6 +98,7 @@ export function RegistrationDetailView({
   onChange?: () => void;
 }): React.ReactElement {
   const { token } = useAuth();
+  const confirm = useConfirm();
 
   const [detail, setDetail] = useState<RegistrationDetail | null>(null);
   const [editingNotes, setEditingNotes] = useState("");
@@ -219,7 +221,13 @@ export function RegistrationDetailView({
 
   async function handleApprove(): Promise<void> {
     if (!token || !detail) return;
-    if (!confirm(`Duyệt đăng ký của ${detail.full_name}?`)) return;
+    const ok = await confirm({
+      title: 'Duyệt đăng ký',
+      description: `Duyệt đăng ký của ${detail.full_name}?`,
+      confirmText: 'Duyệt',
+      variant: 'default',
+    });
+    if (!ok) return;
     setSaving(true);
     try {
       await approveRegistration(token, regId);
@@ -314,7 +322,13 @@ export function RegistrationDetailView({
 
   async function handleApproveChanges(): Promise<void> {
     if (!token || !detail) return;
-    if (!confirm(`Duyệt các thay đổi của ${detail.full_name}?`)) return;
+    const ok = await confirm({
+      title: 'Duyệt thay đổi',
+      description: `Duyệt các thay đổi của ${detail.full_name}?`,
+      confirmText: 'Duyệt',
+      variant: 'default',
+    });
+    if (!ok) return;
     setChangesBusy(true);
     try {
       await approveProfileChanges(token, regId);
@@ -387,15 +401,15 @@ export function RegistrationDetailView({
       editProfile.bank_name !== fdStr("bank_name") ||
       editProfile.bank_branch !== fdStr("bank_branch") ||
       editProfile.address !== fdStr("address");
-    if (
-      detail.contract_status === "signed" &&
-      contractAffectingChanged &&
-      !window.confirm(
-        "Hợp đồng đã ký sẽ bị huỷ và phải gửi lại để CTV ký mới. " +
-          "PDF cũ vẫn lưu trên S3 cho audit. Tiếp tục?",
-      )
-    ) {
-      return;
+    if (detail.contract_status === "signed" && contractAffectingChanged) {
+      const ok = await confirm({
+        title: 'Huỷ hợp đồng đã ký',
+        description:
+          'Hợp đồng đã ký sẽ bị huỷ và phải gửi lại để CTV ký mới. PDF cũ vẫn lưu trên S3 cho audit. Tiếp tục?',
+        confirmText: 'Tiếp tục',
+        variant: 'destructive',
+      });
+      if (!ok) return;
     }
     // Parse VN-format dates back to ISO before sending to API.
     const birthDateIso = editProfile.birth_date
@@ -591,13 +605,13 @@ export function RegistrationDetailView({
   async function handleResendInvite(): Promise<void> {
     if (!token || !detail) return;
     // v037+ BUG-003 fix — confirm trước khi gửi để tránh misclick.
-    if (
-      !confirm(
-        `Gửi lại email mời cho ${detail.full_name} (${detail.email})?\n\nLink magic không đổi — TNV vẫn dùng được link cũ.`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Gửi lại lời mời',
+      description: `Gửi lại email mời cho ${detail.full_name} (${detail.email})? Link magic không đổi — TNV vẫn dùng được link cũ.`,
+      confirmText: 'Gửi lại',
+      variant: 'default',
+    });
+    if (!ok) return;
     setResendingInvite(true);
     try {
       await resendImportInvite(token, detail.event_id, regId);

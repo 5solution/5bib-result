@@ -24,6 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Crown, User, UserMinus, Search, X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 
 // v1.8 — Assignment modal. assignment_role enum removed; supervisor/worker
 // is derived from registration.role.is_leader_role. Leader members can be
@@ -39,6 +40,7 @@ export function AssignPersonnelModal({
   onChanged: () => void;
 }): React.ReactElement {
   const { token } = useAuth();
+  const confirm = useConfirm();
   const params = useParams<{ eventId: string; teamId: string }>();
   const teamId = Number(params.teamId);
   const [current, setCurrent] = useState<AssignmentMember[]>([]);
@@ -116,7 +118,13 @@ export function AssignPersonnelModal({
 
   async function handleRemove(assignment: AssignmentMember): Promise<void> {
     if (!token) return;
-    if (!confirm(`Gỡ ${assignment.full_name} khỏi trạm?`)) return;
+    const ok = await confirm({
+      title: 'Gỡ khỏi trạm',
+      description: `Gỡ ${assignment.full_name} khỏi trạm?`,
+      confirmText: 'Gỡ',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     setWorking(assignment.assignment_id);
     try {
       await removeAssignment(token, assignment.assignment_id);
