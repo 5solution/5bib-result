@@ -86,7 +86,17 @@ export class TeamPaymentService {
         'Cần xem xét trước khi thanh toán — registration is flagged as suspicious. Clear the flag first.',
       );
     }
-    if (reg.acceptance_status !== 'signed') {
+
+    // v1.9 CRIT-02 fix: respect feature_nghiem_thu toggle. When the event
+    // turns off acceptance (Lite mode events for short races), the admin
+    // should be able to mark paid directly without the acceptance ceremony.
+    const event = await this.eventRepo.findOne({
+      where: { id: reg.event_id },
+      select: ['id', 'feature_nghiem_thu'],
+    });
+    const requireAcceptance = event?.feature_nghiem_thu ?? true;
+
+    if (requireAcceptance && reg.acceptance_status !== 'signed') {
       // 409 Conflict — state forbids transition. Frontend should prompt the
       // admin to send + wait for the acceptance before retrying (or use the
       // force-paid path with a reason).
@@ -101,15 +111,18 @@ export class TeamPaymentService {
     // Atomic swap: pending → paid, gated by conditional WHERE so two
     // concurrent clicks can't both emit the email.
     const update = await this.dataSource.transaction(async (m) => {
-      return m
+      const qb = m
         .getRepository(VolRegistration)
         .createQueryBuilder()
         .update()
         .set({ payment_status: 'paid' })
         .where('id = :id', { id: regId })
-        .andWhere('payment_status = :from', { from: 'pending' })
-        .andWhere('acceptance_status = :acc', { acc: 'signed' })
-        .execute();
+        .andWhere('payment_status = :from', { from: 'pending' });
+      // Only enforce acceptance check at SQL layer when nghiệm thu is required.
+      if (requireAcceptance) {
+        qb.andWhere('acceptance_status = :acc', { acc: 'signed' });
+      }
+      return qb.execute();
     });
     if (!update.affected) {
       // Lost the race — re-read and return the current state. This is
