@@ -44,6 +44,7 @@ type Status = "draft" | "open" | "closed" | "completed";
 
 interface FormState {
   event_name: string;
+  contract_code_prefix: string;
   description: string;
   location: string;
   location_lat: string;
@@ -80,6 +81,7 @@ function localInputToIso(v: string): string | null {
 function eventToForm(e: TeamEvent): FormState {
   return {
     event_name: e.event_name,
+    contract_code_prefix: e.contract_code_prefix ?? "",
     description: e.description ?? "",
     location: e.location ?? "",
     location_lat: e.location_lat == null ? "" : String(e.location_lat),
@@ -207,8 +209,10 @@ export default function EventSettingsPage(): React.ReactElement {
       // provide a value at all — but if the admin cleared a previously
       // set coordinate, we want to persist that as null.
       const clearedLatLng = !hasLat && !hasLng;
+      const trimmedPrefix = form.contract_code_prefix.trim().toUpperCase();
       await updateTeamEvent(token, event.id, {
         event_name: form.event_name.trim(),
+        contract_code_prefix: trimmedPrefix === "" ? null : trimmedPrefix,
         description: form.description.trim() === "" ? null : form.description.trim(),
         location: form.location.trim(),
         location_lat: clearedLatLng ? null : lat,
@@ -307,6 +311,27 @@ export default function EventSettingsPage(): React.ReactElement {
             value={form.event_name}
             onChange={(e) => setForm({ ...form, event_name: e.target.value })}
           />
+        </div>
+        <div>
+          <Label>Mã prefix hợp đồng</Label>
+          <Input
+            value={form.contract_code_prefix}
+            placeholder="VD: HNLLT, MHST, 5BIB..."
+            maxLength={10}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                contract_code_prefix: e.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9]/g, "")
+                  .slice(0, 10),
+              })
+            }
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            2–10 ký tự (A-Z, 0-9). Số HĐ sẽ format <code>NNN-{form.contract_code_prefix || "PREFIX"}-HDDV/CTV-5BIB</code>.
+            Sau khi đã phát hành 1 HĐ thì <strong>không sửa được</strong> để giữ tính toàn vẹn audit.
+          </p>
         </div>
         <div>
           <Label>Mô tả ngắn</Label>
