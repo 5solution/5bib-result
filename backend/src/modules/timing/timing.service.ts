@@ -84,17 +84,24 @@ export class TimingService {
       return { success: true, lead_number: 0 };
     }
 
-    // Backward-compat: legacy tracks require phone + organization; 5sport-athlete may use email-only.
-    if (source !== '5sport-athlete') {
+    // Source-specific validation rules.
+    if (source === '5sport-athlete') {
+      // Athletes may provide email-only.
+      if (!dto.email && !dto.phone) {
+        throw new BadRequestException('Vui lòng nhập email hoặc số điện thoại');
+      }
+    } else if (source === '5solution-umbrella') {
+      // Umbrella landing — phone required, organization optional.
+      if (!dto.phone) {
+        throw new BadRequestException('Vui lòng nhập số điện thoại');
+      }
+    } else {
+      // Legacy tracks (timing, solution, 5sport-btc) — phone + organization required.
       if (!dto.phone) {
         throw new BadRequestException('Vui lòng nhập số điện thoại');
       }
       if (!dto.organization) {
         throw new BadRequestException('Vui lòng nhập tên tổ chức');
-      }
-    } else {
-      if (!dto.email && !dto.phone) {
-        throw new BadRequestException('Vui lòng nhập email hoặc số điện thoại');
       }
     }
 
@@ -137,6 +144,11 @@ export class TimingService {
       tournament_scale: dto.tournament_scale || '',
       tournament_timing: dto.tournament_timing || '',
       city: (dto.city || '').trim(),
+      // 5Solution umbrella extras
+      event_type: dto.event_type || '',
+      modules: Array.isArray(dto.modules) ? dto.modules : [],
+      // Use athlete_count_range as a generic scale string when 5solution sends event_scale.
+      ...(dto.event_scale ? { athlete_count_range: dto.event_scale } : {}),
       source,
       status: 'new',
       is_archived: false,

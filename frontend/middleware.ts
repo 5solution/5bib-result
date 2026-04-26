@@ -5,9 +5,15 @@ import { NextRequest, NextResponse } from 'next/server';
  * session presence on protected routes.
  *
  * Subdomain routing:
- *   timing.5bib.com       → /timing/*
- *   solution.5bib.com     → /solution/*
- *   solution.5sport.vn    → /solution-5sport/*
+ *   timing.5bib.com           → /timing/*
+ *   solution.5bib.com         → /solution/*
+ *   solution.5sport.vn        → /solution-5sport/*
+ *   5solution.vn (apex)       → /solution-5solution/*
+ *   solution.5solution.vn     → /solution-5solution/*
+ *
+ * IMPORTANT — order matters: the 5solution check MUST run before the generic
+ * `solution.` check, otherwise `solution.5solution.vn` would get caught by
+ * the latter and rewritten to `/solution` (the 5BIB race-result landing).
  *
  * Logto protection:
  *   /account(.*) requires a Logto session cookie. If missing, redirect to
@@ -31,10 +37,22 @@ export default function middleware(req: NextRequest) {
     ''
   ).toLowerCase();
   const isSport5Host = host.includes('5sport');
+  // 5Solution umbrella — must be evaluated BEFORE the generic `solution.`
+  // check, otherwise `solution.5solution.vn` would wrongly match below.
+  const is5SolutionHost =
+    !isSport5Host &&
+    (host === '5solution.vn' ||
+      host === 'www.5solution.vn' ||
+      host.startsWith('5solution.') ||
+      host.startsWith('solution.5solution.') ||
+      host.includes('.5solution.'));
   const isTimingHost =
-    !isSport5Host && (host.startsWith('timing.') || host.startsWith('timing-'));
+    !isSport5Host &&
+    !is5SolutionHost &&
+    (host.startsWith('timing.') || host.startsWith('timing-'));
   const isSolutionHost =
     !isSport5Host &&
+    !is5SolutionHost &&
     (host.startsWith('solution.') || host.startsWith('solution-'));
 
   if (isSport5Host) {
@@ -44,6 +62,17 @@ export default function middleware(req: NextRequest) {
       !url.pathname.startsWith('/solution-5sport')
     ) {
       url.pathname = `/solution-5sport${url.pathname === '/' ? '' : url.pathname}`;
+      return NextResponse.rewrite(url);
+    }
+  }
+
+  if (is5SolutionHost) {
+    const url = req.nextUrl.clone();
+    if (
+      !url.pathname.startsWith('/api') &&
+      !url.pathname.startsWith('/solution-5solution')
+    ) {
+      url.pathname = `/solution-5solution${url.pathname === '/' ? '' : url.pathname}`;
       return NextResponse.rewrite(url);
     }
   }

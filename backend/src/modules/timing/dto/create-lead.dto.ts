@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsEmail,
   IsEnum,
   IsNotEmpty,
@@ -17,6 +19,11 @@ const TOURNAMENT_SCALES = ['lt50', '50-200', 'gt200'] as const;
 const TOURNAMENT_TIMINGS = ['1-3m', '3-6m', 'tbd'] as const;
 const LEAD_TRACKS = ['5sport-btc', '5sport-athlete'] as const;
 type LeadTrack = (typeof LEAD_TRACKS)[number];
+
+/** 5Solution umbrella enums (kept here so DTO sees the same values as schema). */
+const SOL_EVENT_TYPES = ['race', 'concert', 'tournament', 'other'] as const;
+const SOL_SCALES = ['lt500', '500-2000', '2000-10000', 'gt10000'] as const;
+const SOL_MODULES = ['5bib', '5ticket', '5pix', '5sport', '5tech'] as const;
 
 export class CreateLeadDto {
   @ApiProperty({ example: 'Nguyễn Văn A', maxLength: 100 })
@@ -96,4 +103,27 @@ export class CreateLeadDto {
   @IsString()
   @MaxLength(500)
   website?: string;
+
+  // ─── 5Solution umbrella landing extras ──────────────────────────────────
+  @ApiProperty({ required: false, enum: SOL_EVENT_TYPES })
+  @IsOptional()
+  @IsEnum(SOL_EVENT_TYPES)
+  event_type?: (typeof SOL_EVENT_TYPES)[number];
+
+  @ApiProperty({ required: false, enum: SOL_SCALES })
+  @IsOptional()
+  @IsEnum(SOL_SCALES)
+  event_scale?: (typeof SOL_SCALES)[number];
+
+  @ApiProperty({
+    required: false,
+    isArray: true,
+    enum: SOL_MODULES,
+    example: ['5bib', '5pix'],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsEnum(SOL_MODULES, { each: true })
+  modules?: (typeof SOL_MODULES)[number][];
 }

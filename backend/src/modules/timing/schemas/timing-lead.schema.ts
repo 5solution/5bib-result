@@ -20,11 +20,21 @@ export type TimingLeadSource =
   | 'timing'
   | 'solution'
   | '5sport-btc'
-  | '5sport-athlete';
+  | '5sport-athlete'
+  | '5solution-umbrella';
 
 export type SportType = 'pickleball' | 'badminton' | 'both';
 export type TournamentScale = 'lt50' | '50-200' | 'gt200';
 export type TournamentTiming = '1-3m' | '3-6m' | 'tbd';
+
+/** 5Solution umbrella landing — event category + modules of interest. */
+export type SolEventType = 'race' | 'concert' | 'tournament' | 'other';
+export type SolEventScale =
+  | 'lt500'
+  | '500-2000'
+  | '2000-10000'
+  | 'gt10000';
+export type SolModule = '5bib' | '5ticket' | '5pix' | '5sport' | '5tech';
 
 @Schema({
   collection: 'timing_leads',
@@ -42,7 +52,9 @@ export class TimingLead {
   @Prop({ required: true, trim: true, maxlength: 20, index: true })
   phone: string;
 
-  @Prop({ required: true, trim: true, maxlength: 200 })
+  // Optional in schema — controllers/services enforce per-source rules
+  // (timing/solution/5sport-btc require it; 5solution-umbrella + 5sport-athlete do not).
+  @Prop({ required: false, default: '', trim: true, maxlength: 200 })
   organization: string;
 
   @Prop({ default: '', maxlength: 100 })
@@ -68,11 +80,29 @@ export class TimingLead {
 
   @Prop({
     type: String,
-    enum: ['timing', 'solution', '5sport-btc', '5sport-athlete'],
+    enum: [
+      'timing',
+      'solution',
+      '5sport-btc',
+      '5sport-athlete',
+      '5solution-umbrella',
+    ],
     default: 'timing',
     index: true,
   })
   source: TimingLeadSource;
+
+  /** 5Solution umbrella — category of event the lead is asking about. */
+  @Prop({
+    type: String,
+    enum: ['race', 'concert', 'tournament', 'other', ''],
+    default: '',
+  })
+  event_type: SolEventType | '';
+
+  /** 5Solution umbrella — modules of interest (multi-select). */
+  @Prop({ type: [String], default: [] })
+  modules: SolModule[];
 
   @Prop({ default: '', maxlength: 100 })
   email: string;
