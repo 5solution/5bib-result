@@ -118,4 +118,18 @@ export class TeamRegistrationImportController {
   ): Promise<ConfirmImportRegistrationsResponseDto> {
     return this.svc.confirmImport(eventId, dto, identifyAdmin(req));
   }
+
+  @Post('/resend-invite/:regId')
+  @ApiOperation({
+    summary:
+      'Resend welcome/invite email to a single imported registration with dynamic missing-fields list.',
+  })
+  @ApiResponse({ status: 201 })
+  async resendInvite(
+    @Param('regId', ParseIntPipe) regId: number,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{ success: boolean }> {
+    await this.svc.resendImportInvite(regId, identifyAdmin(req));
+    return { success: true };
+  }
 }

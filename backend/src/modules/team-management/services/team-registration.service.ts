@@ -214,6 +214,18 @@ export class TeamRegistrationService {
       // v037: Free-text professional background. Optional.
       const expertise = this.extractString(dto.form_data, 'expertise');
 
+      // v037+: Persist Bên B identity fields directly to dedicated columns
+      // so contract / acceptance rendering can use them without relying on
+      // admin backfill. Form uses `dob` legacy key — alias to birth_date.
+      const birthDateRaw =
+        this.extractString(dto.form_data, 'birth_date') ||
+        this.extractString(dto.form_data, 'dob');
+      const cccdIssueDateRaw = this.extractString(dto.form_data, 'cccd_issue_date');
+      const cccdIssuePlaceRaw = this.extractString(dto.form_data, 'cccd_issue_place');
+      // YYYY-MM-DD strings are stored as-is on date columns (MariaDB casts).
+      const birthDate = birthDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(birthDateRaw) ? birthDateRaw : null;
+      const cccdIssueDate = cccdIssueDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(cccdIssueDateRaw) ? cccdIssueDateRaw : null;
+
       const reg = m.getRepository(VolRegistration).create({
         role_id: dto.role_id,
         event_id: role.event_id,
@@ -226,6 +238,9 @@ export class TeamRegistrationService {
         cccd_photo_url: cccdUrl,
         cccd_back_photo_url: cccdBackUrl,
         expertise: expertise || null,
+        birth_date: birthDate,
+        cccd_issue_date: cccdIssueDate,
+        cccd_issue_place: cccdIssuePlaceRaw || null,
         status: assignedStatus,
         waitlist_position: waitlistPosition,
         magic_token: magicToken,
@@ -493,6 +508,15 @@ export class TeamRegistrationService {
       email: reg.email,
       phone: reg.phone,
       avatar_photo_url: reg.avatar_photo_url,
+      // v037+ — surfaced so crew "missing profile" banner can react.
+      // cccd_photo_url and cccd_back_photo_url are S3 keys (not presigned)
+      // — frontend only checks truthy; the actual image is rendered in
+      // form_data via the public upload endpoint that returned the URL.
+      cccd_photo_url: reg.cccd_photo_url,
+      cccd_back_photo_url: reg.cccd_back_photo_url,
+      birth_date: reg.birth_date ? String(reg.birth_date) : null,
+      cccd_issue_date: reg.cccd_issue_date ? String(reg.cccd_issue_date) : null,
+      cccd_issue_place: reg.cccd_issue_place,
       form_data: this.ownerFormData(reg.form_data),
       form_fields: reg.role?.form_fields ?? [],
       has_pending_changes: reg.has_pending_changes,
@@ -1048,6 +1072,43 @@ export class TeamRegistrationService {
         .findOne({ where: { id } });
       if (!reg) throw new NotFoundException('Registration not found');
 
+      // ─── v2.1 — Profile fields (entity columns) ───
+      // Each field is `undefined` = no change, `null` = clear, value = set.
+      if (dto.full_name !== undefined) reg.full_name = dto.full_name;
+      if (dto.phone !== undefined) reg.phone = dto.phone;
+      if (dto.email !== undefined) reg.email = dto.email;
+      if (dto.shirt_size !== undefined) reg.shirt_size = dto.shirt_size;
+      if (dto.birth_date !== undefined) reg.birth_date = dto.birth_date as never;
+      if (dto.cccd_issue_date !== undefined)
+        reg.cccd_issue_date = dto.cccd_issue_date as never;
+      if (dto.cccd_issue_place !== undefined)
+        reg.cccd_issue_place = dto.cccd_issue_place;
+
+      // ─── v2.1 — form_data JSON fields (legacy origin from public form) ───
+      // Mirror the keys public RegisterDto uses so admin-edited values
+      // surface under "Dữ liệu form" too.
+      const fd: Record<string, unknown> = { ...(reg.form_data ?? {}) };
+      let fdChanged = false;
+      const writeFd = (k: string, v: string | null | undefined) => {
+        if (v === undefined) return;
+        if (v === null || v === '') delete fd[k];
+        else fd[k] = v;
+        fdChanged = true;
+      };
+      writeFd('cccd', dto.cccd);
+      writeFd('bank_account_number', dto.bank_account_number);
+      writeFd('bank_holder_name', dto.bank_holder_name);
+      writeFd('bank_name', dto.bank_name);
+      writeFd('bank_branch', dto.bank_branch);
+      writeFd('address', dto.address);
+      // Sync birth_date → form_data.dob (legacy alias used by some templates)
+      if (dto.birth_date !== undefined) {
+        if (dto.birth_date === null) delete fd.dob;
+        else fd.dob = dto.birth_date;
+        fdChanged = true;
+      }
+      if (fdChanged) reg.form_data = fd;
+
       if (dto.notes != null) reg.notes = dto.notes;
 
       if (dto.payment_status != null) {
@@ -1276,6 +1337,23 @@ export class TeamRegistrationService {
           reg.avatar_photo_url;
         reg.cccd_photo_url =
           this.extractString(reg.form_data, 'cccd_photo') ?? reg.cccd_photo_url;
+        // v037: sync cccd_back to entity column too — required for contract render.
+        reg.cccd_back_photo_url =
+          this.extractString(reg.form_data, 'cccd_back_photo') ??
+          reg.cccd_back_photo_url;
+        // Sync birth_date / cccd_issue_* if TNV provided in form_data.
+        const birthDate =
+          this.extractString(reg.form_data, 'birth_date') ||
+          this.extractString(reg.form_data, 'dob');
+        if (birthDate && /^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+          reg.birth_date = birthDate as never;
+        }
+        const cccdIssueDate = this.extractString(reg.form_data, 'cccd_issue_date');
+        if (cccdIssueDate && /^\d{4}-\d{2}-\d{2}$/.test(cccdIssueDate)) {
+          reg.cccd_issue_date = cccdIssueDate as never;
+        }
+        const cccdIssuePlace = this.extractString(reg.form_data, 'cccd_issue_place');
+        if (cccdIssuePlace) reg.cccd_issue_place = cccdIssuePlace;
       }
       reg.has_pending_changes = false;
       reg.pending_changes = null;
@@ -1358,6 +1436,22 @@ export class TeamRegistrationService {
           reg.avatar_photo_url;
         reg.cccd_photo_url =
           this.extractString(reg.form_data, 'cccd_photo') ?? reg.cccd_photo_url;
+        // v037: sync cccd_back + identity fields after admin approval.
+        reg.cccd_back_photo_url =
+          this.extractString(reg.form_data, 'cccd_back_photo') ??
+          reg.cccd_back_photo_url;
+        const birthDate =
+          this.extractString(reg.form_data, 'birth_date') ||
+          this.extractString(reg.form_data, 'dob');
+        if (birthDate && /^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+          reg.birth_date = birthDate as never;
+        }
+        const cccdIssueDate = this.extractString(reg.form_data, 'cccd_issue_date');
+        if (cccdIssueDate && /^\d{4}-\d{2}-\d{2}$/.test(cccdIssueDate)) {
+          reg.cccd_issue_date = cccdIssueDate as never;
+        }
+        const cccdIssuePlace = this.extractString(reg.form_data, 'cccd_issue_place');
+        if (cccdIssuePlace) reg.cccd_issue_place = cccdIssuePlace;
       }
       reg.has_pending_changes = false;
       reg.pending_changes = null;
@@ -1790,7 +1884,9 @@ export class TeamRegistrationService {
   }
 
   private validatePhotoUrls(data: Record<string, unknown>): void {
-    for (const key of ['avatar_photo', 'cccd_photo']) {
+    // v037: include cccd_back_photo so TNV self-edit can update the back face.
+    // Without this key here, submitProfileEdit silently drops the value.
+    for (const key of ['avatar_photo', 'cccd_photo', 'cccd_back_photo']) {
       const v = data[key];
       if (v == null || v === '') continue;
       if (typeof v !== 'string') {
@@ -2016,6 +2112,47 @@ export class TeamRegistrationService {
   }
 
   /**
+   * v037+ — Admin uploads photo on behalf of TNV (when TNV was imported
+   * from Excel and skipped the public register form). Uses TeamPhotoService
+   * to put the file on S3, then writes the resulting key/URL to the
+   * registration's photo column. Audit log includes admin identity.
+   */
+  async adminUploadPhoto(
+    regId: number,
+    file: Express.Multer.File,
+    photoType: 'avatar' | 'cccd' | 'cccd_back',
+    adminIdentity: string,
+  ): Promise<{ url: string; column: string }> {
+    const reg = await this.regRepo.findOne({ where: { id: regId } });
+    if (!reg) throw new NotFoundException('Registration not found');
+    const result = await this.photos.upload(file, photoType);
+    let column: string;
+    if (photoType === 'avatar') {
+      reg.avatar_photo_url = result.url;
+      column = 'avatar_photo_url';
+    } else if (photoType === 'cccd') {
+      reg.cccd_photo_url = result.url;
+      column = 'cccd_photo_url';
+    } else {
+      reg.cccd_back_photo_url = result.url;
+      column = 'cccd_back_photo_url';
+    }
+    // Mirror into form_data so the "Ảnh & file đính kèm" section + crew
+    // self-edit reads the same value the admin just uploaded.
+    const fd: Record<string, unknown> = { ...(reg.form_data ?? {}) };
+    if (photoType === 'avatar') fd.avatar_photo = result.url;
+    else if (photoType === 'cccd') fd.cccd_photo = result.url;
+    else fd.cccd_back_photo = result.url;
+    reg.form_data = fd;
+    await this.regRepo.save(reg);
+    await this.cache.invalidateEvent(reg.event_id, [reg.role_id]);
+    this.logger.log(
+      `PHOTO_UPLOAD actor=admin:${adminIdentity} reg=${regId} type=${photoType} bytes=${file.size} key=${result.url}`,
+    );
+    return { url: result.url, column };
+  }
+
+  /**
    * Batch confirm-completion. Best-effort — reports per-id success/fail in
    * response. Used by admin "Xác nhận hoàn thành N người" bulk button.
    */
@@ -2039,5 +2176,32 @@ export class TeamRegistrationService {
       `NGHIEM_THU_BATCH by=${adminEmail} succeeded=${succeeded.length} failed=${Object.keys(failed).length}`,
     );
     return { succeeded, failed };
+  }
+
+  /**
+   * Confirm ALL registrations in an event matching a status filter.
+   * Lite-mode shortcut: select all "contract_signed" → "completed" in 1
+   * click. Internally loads ids by event+status (no pagination needed —
+   * idx_event_status covers it) then delegates to confirmNghiemThuBatch.
+   */
+  async confirmAllInEvent(
+    eventId: number,
+    status: 'contract_signed' | 'checked_in',
+    adminEmail: string,
+    note?: string,
+  ): Promise<{ succeeded: number[]; failed: Record<number, string>; total: number }> {
+    const rows = await this.regRepo.find({
+      where: { event_id: eventId, status },
+      select: ['id'],
+    });
+    const ids = rows.map((r) => r.id);
+    if (ids.length === 0) {
+      return { succeeded: [], failed: {}, total: 0 };
+    }
+    this.logger.log(
+      `CONFIRM_ALL_IN_EVENT eventId=${eventId} status=${status} count=${ids.length} by=${adminEmail}`,
+    );
+    const result = await this.confirmNghiemThuBatch(ids, adminEmail, note);
+    return { ...result, total: ids.length };
   }
 }

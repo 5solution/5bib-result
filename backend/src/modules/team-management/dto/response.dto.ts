@@ -86,6 +86,17 @@ export class StatusResponseDto {
   @ApiProperty() phone!: string;
   @ApiProperty({ required: false, nullable: true })
   avatar_photo_url!: string | null;
+  // v037+ — surfaced so crew banner can detect missing profile fields.
+  @ApiProperty({ required: false, nullable: true })
+  cccd_photo_url!: string | null;
+  @ApiProperty({ required: false, nullable: true })
+  cccd_back_photo_url!: string | null;
+  @ApiProperty({ required: false, nullable: true, type: String })
+  birth_date!: string | null;
+  @ApiProperty({ required: false, nullable: true, type: String })
+  cccd_issue_date!: string | null;
+  @ApiProperty({ required: false, nullable: true, type: String })
+  cccd_issue_place!: string | null;
   @ApiProperty({
     type: 'object',
     additionalProperties: true,

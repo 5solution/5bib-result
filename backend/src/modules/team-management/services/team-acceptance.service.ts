@@ -164,8 +164,13 @@ export class TeamAcceptanceService {
       party_a_tax_code: template.party_a_tax_code ?? '',
       party_a_representative: template.party_a_representative ?? '',
       party_a_position: template.party_a_position ?? '',
-      // `data:image/png;base64,...` — empty string renders no img.
-      signature_image: signatureImage ?? '',
+      // Templates use `<img src="{{signature_image}}" ...>`. Empty src
+      // renders as broken-image icon in browsers, so use a 1×1 transparent
+      // PNG before signing. After signing, signatureImage is the full
+      // `data:image/png;base64,...` URL of the user's drawn signature.
+      signature_image:
+        signatureImage ??
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
     };
   }
 

@@ -44,6 +44,8 @@ import { TeamRegistrationService } from './team-registration.service';
 import { TeamContractService } from './team-contract.service';
 import { TeamCacheService } from './team-cache.service';
 import { TeamStationService } from './team-station.service';
+import { MailService } from 'src/modules/notification/mail.service';
+import { env } from 'src/config';
 
 const MAX_ROWS = 500;
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -115,6 +117,48 @@ interface CachedImport {
   created_at: number;
 }
 
+/**
+ * v037+ — Walks a registration and returns dynamic sections of missing
+ * fields. Used to compose the welcome email after import, and the banner
+ * on the crew portal status page (`?missing=cccd,bank,...`).
+ *
+ * Sections are dropped entirely if all their items are present — keeps
+ * email tidy when admin Excel had most fields filled.
+ */
+export function computeMissingSections(
+  reg: VolRegistration,
+): Array<{ tag: string; title: string; items: string[] }> {
+  const fd = (reg.form_data ?? {}) as Record<string, unknown>;
+  const isStr = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+
+  const personal: string[] = [];
+  if (!reg.birth_date) personal.push('Ngày sinh');
+  if (!isStr(fd.cccd)) personal.push('Số CCCD/CMND');
+  if (!reg.cccd_issue_date) personal.push('Ngày cấp CCCD');
+  if (!reg.cccd_issue_place) personal.push('Nơi cấp CCCD');
+  if (!isStr(fd.address)) personal.push('Địa chỉ thường trú');
+
+  const photos: string[] = [];
+  if (!reg.cccd_photo_url) photos.push('Ảnh CCCD/CMND mặt trước');
+  if (!reg.cccd_back_photo_url) photos.push('Ảnh CCCD/CMND mặt sau');
+  if (!reg.avatar_photo_url) photos.push('Ảnh chân dung');
+
+  const bank: string[] = [];
+  if (!isStr(fd.bank_account_number)) bank.push('Số tài khoản ngân hàng');
+  if (!isStr(fd.bank_holder_name)) bank.push('Tên chủ tài khoản');
+  if (!isStr(fd.bank_name)) bank.push('Ngân hàng');
+
+  const other: string[] = [];
+  if (!reg.shirt_size) other.push('Size áo');
+
+  const out: Array<{ tag: string; title: string; items: string[] }> = [];
+  if (personal.length) out.push({ tag: 'personal', title: '📋 THÔNG TIN CÁ NHÂN (cần cho hợp đồng)', items: personal });
+  if (photos.length) out.push({ tag: 'photo', title: '📷 ẢNH (bắt buộc)', items: photos });
+  if (bank.length) out.push({ tag: 'bank', title: '💳 THÔNG TIN THANH TOÁN', items: bank });
+  if (other.length) out.push({ tag: 'other', title: '👕 KHÁC', items: other });
+  return out;
+}
+
 @Injectable()
 export class TeamRegistrationImportService {
   private readonly logger = new Logger(TeamRegistrationImportService.name);
@@ -133,6 +177,7 @@ export class TeamRegistrationImportService {
     private readonly contractSvc: TeamContractService,
     private readonly cache: TeamCacheService,
     private readonly stationSvc: TeamStationService,
+    private readonly mail: MailService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────
@@ -852,6 +897,15 @@ export class TeamRegistrationImportService {
       `REG_IMPORT admin=${adminIdentity} event=${eventId} inserted=${inserted_ids.length} assigned=${assigned} skipped=${skipped} errors=${errors.length}`,
     );
 
+    // v037+ — Welcome email (opt-in default true). Throttle 20 per second
+    // to stay under Mailchimp tier limits when admin imports 200+ rows.
+    const sendWelcome = dto.send_welcome_email ?? true;
+    if (sendWelcome && inserted_ids.length > 0) {
+      void this.sendWelcomeEmailsBatch(inserted_ids, eventId).catch((err) =>
+        this.logger.warn(`Welcome email batch failed: ${(err as Error).message}`),
+      );
+    }
+
     return {
       inserted: inserted_ids.length,
       skipped,
@@ -859,6 +913,100 @@ export class TeamRegistrationImportService {
       errors,
       assigned,
     };
+  }
+
+  /**
+   * Resend the import-welcome email for a single registration. Used when
+   * admin clicks "Gửi lại lời mời" on registration detail. Reuses same
+   * magic_token (intentional — same TNV; switching the token would break
+   * any earlier links they bookmarked).
+   */
+  async resendImportInvite(regId: number, adminIdentity: string): Promise<void> {
+    const reg = await this.regRepo.findOne({
+      where: { id: regId },
+      relations: { role: true, event: true },
+    });
+    if (!reg) throw new BadRequestException('Registration not found');
+    if (!reg.event) throw new BadRequestException('Event not loaded');
+
+    const missing = computeMissingSections(reg);
+    if (missing.length === 0) {
+      throw new BadRequestException(
+        'TNV đã có đầy đủ thông tin — không cần gửi lại lời mời',
+      );
+    }
+    const startDate = new Date(reg.event.event_start_date);
+    const deadline = new Date(startDate.getTime() - 24 * 3600 * 1000);
+    const magicLink = `${env.teamManagement.crewBaseUrl}/status/${reg.magic_token}?missing=${missing.map((s) => s.tag).join(',')}`;
+    await this.mail.sendTeamImportedWelcome({
+      toEmail: reg.email,
+      fullName: reg.full_name,
+      eventName: reg.event.event_name,
+      roleName: reg.role?.role_name ?? '',
+      magicLink,
+      deadline: deadline.toLocaleDateString('vi-VN'),
+      missingSections: missing.map(({ title, items }) => ({ title, items })),
+      contactEmail: reg.event.contact_email,
+      contactPhone: reg.event.contact_phone,
+    });
+    this.logger.log(`RESEND_INVITE admin=${adminIdentity} reg=${regId}`);
+  }
+
+  /**
+   * v037+ — Send welcome email to imported TNV with dynamic list of missing
+   * fields. Best-effort, fire-and-forget — runs in background after confirm
+   * response is returned. Throttled 20 emails/second to avoid Mailchimp 429.
+   */
+  private async sendWelcomeEmailsBatch(
+    regIds: number[],
+    eventId: number,
+  ): Promise<void> {
+    const event = await this.eventRepo.findOne({ where: { id: eventId } });
+    if (!event) return;
+    // Deadline = event_start_date - 24h, fallback to event_start_date.
+    const startDate = new Date(event.event_start_date);
+    const deadline = new Date(startDate.getTime() - 24 * 3600 * 1000);
+    const deadlineStr = deadline.toLocaleDateString('vi-VN');
+
+    const BATCH = 20;
+    for (let i = 0; i < regIds.length; i += BATCH) {
+      const chunk = regIds.slice(i, i + BATCH);
+      const regs = await this.regRepo.find({
+        where: chunk.map((id) => ({ id })),
+        relations: { role: true },
+      });
+      await Promise.all(
+        regs.map(async (reg) => {
+          const missing = computeMissingSections(reg);
+          if (missing.length === 0) return; // nothing to ask, skip email.
+          const magicLink = `${env.teamManagement.crewBaseUrl}/status/${reg.magic_token}?missing=${missing.map((s) => s.tag).join(',')}`;
+          await this.mail
+            .sendTeamImportedWelcome({
+              toEmail: reg.email,
+              fullName: reg.full_name,
+              eventName: event.event_name,
+              roleName: reg.role?.role_name ?? '',
+              magicLink,
+              deadline: deadlineStr,
+              missingSections: missing.map(({ title, items }) => ({ title, items })),
+              contactEmail: event.contact_email,
+              contactPhone: event.contact_phone,
+            })
+            .catch((err) =>
+              this.logger.warn(
+                `Welcome email reg=${reg.id} failed: ${(err as Error).message}`,
+              ),
+            );
+        }),
+      );
+      // Throttle: 1 second between batches.
+      if (i + BATCH < regIds.length) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    this.logger.log(
+      `WELCOME_BATCH event=${eventId} sent=${regIds.length}`,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────

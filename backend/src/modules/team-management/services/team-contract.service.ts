@@ -343,9 +343,14 @@ export class TeamContractService {
       event_location: event.location ?? '',
       signed_date: formatDate(new Date()),
       contract_number: reg.contract_number ?? '',
-      // Empty string when no signature yet (preview path) — results in
-      // `<img src="">` which renders nothing in puppeteer.
-      signature_image: signatureImage ?? '',
+      // Templates use `<img src="{{signature_image}}" ...>` — when the
+      // crew hasn't signed yet, an empty src renders as a broken-image
+      // icon in browsers. We use a 1×1 transparent PNG so the slot
+      // stays empty visually but the <img> tag is valid. After signing,
+      // signatureImage is the full `data:image/png;base64,...` URL.
+      signature_image:
+        signatureImage ??
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
       // Party A fields — sourced from the template so each legal entity
       // can use its own company info. Falls back to '' if not configured.
       party_a_company_name: template?.party_a_company_name ?? '',
@@ -405,13 +410,52 @@ export class TeamContractService {
 
   async viewContract(token: string): Promise<ContractViewDto> {
     const { reg, role, event, template } = await this.loadContext(token);
-    const vars = this.buildPlaceholders(reg, role, event, undefined, template);
+
+    // After signing, embed the actual signature so the HTML preview matches
+    // the signed PDF. Before signing, leave undefined → buildPlaceholders
+    // injects a 1×1 transparent PNG placeholder so empty <img src=""> doesn't
+    // render as a broken-image icon.
+    let signatureDataUrl: string | undefined;
+    if (reg.contract_status === 'signed' && reg.contract_signature_url) {
+      try {
+        const signedUrl = await getSignedUrl(
+          this.s3,
+          new GetObjectCommand({
+            Bucket: this.bucket,
+            Key: reg.contract_signature_url,
+          }),
+          { expiresIn: 3600 },
+        );
+        signatureDataUrl = signedUrl;
+      } catch (err) {
+        this.logger.warn(
+          `viewContract: could not presign signature reg=${reg.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    const vars = this.buildPlaceholders(reg, role, event, signatureDataUrl, template);
     const rendered = renderTemplate(template.content_html, vars);
+
+    // Presign PDF for already-signed contracts so the response carries a
+    // ready-to-open URL (raw S3 key isn't useful to the crew client).
+    let pdfPresigned: string | null = null;
+    if (reg.contract_status === 'signed' && reg.contract_pdf_url) {
+      try {
+        pdfPresigned = await this.presignContract(reg.contract_pdf_url, 3600);
+      } catch (err) {
+        this.logger.warn(
+          `viewContract: presignContract fail reg=${reg.id}: ${(err as Error).message}`,
+        );
+        pdfPresigned = reg.contract_pdf_url;
+      }
+    }
+
     return {
       html_content: wrapContractDocument(rendered),
       already_signed: reg.contract_status === 'signed',
       signed_at: reg.contract_signed_at ? reg.contract_signed_at.toISOString() : null,
-      pdf_url: reg.contract_pdf_url,
+      pdf_url: pdfPresigned,
       full_name: reg.full_name,
     };
   }
@@ -945,6 +989,29 @@ export class TeamContractService {
     }
 
     return this.sendContractToRegistration(reg, reg.role, reg.event);
+  }
+
+  /**
+   * Bulk variant — best-effort per-id resend. Used by admin "Gửi lại HĐ
+   * (N người)" bulk button. Returns succeeded ids + per-id error messages.
+   */
+  async sendContractForRegistrationIdsBatch(
+    regIds: number[],
+  ): Promise<{ succeeded: number[]; failed: Record<number, string> }> {
+    const succeeded: number[] = [];
+    const failed: Record<number, string> = {};
+    for (const id of regIds) {
+      try {
+        await this.sendContractForRegistrationId(id);
+        succeeded.push(id);
+      } catch (err) {
+        failed[id] = err instanceof Error ? err.message : String(err);
+      }
+    }
+    this.logger.log(
+      `BATCH_SEND_CONTRACT succeeded=${succeeded.length} failed=${Object.keys(failed).length}`,
+    );
+    return { succeeded, failed };
   }
 
   /**
