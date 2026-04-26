@@ -1982,21 +1982,21 @@ export class TeamRegistrationService {
     }
 
     const event = reg.event!;
-    if (!event.feature_nghiem_thu) {
-      throw new BadRequestException('Tính năng nghiệm thu chưa được bật cho sự kiện này');
-    }
-
+    // Endpoint name "nghiem-thu" is historical — semantically this is the
+    // manual completion-confirm path. Lite mode uses it to skip QR/check-in;
+    // Full mode uses it after check-in. The `feature_nghiem_thu` toggle
+    // controls payment gate (markPaid vs forcePaid), NOT this transition.
     const requiredStatus = event.feature_mode === 'full' ? 'checked_in' : 'contract_signed';
     if (reg.status !== requiredStatus) {
       throw new BadRequestException(
-        `Nghiệm thu ${event.feature_mode === 'full' ? 'Full' : 'Lite'} mode yêu cầu status "${requiredStatus}", hiện tại: "${reg.status}"`,
+        `Mode ${event.feature_mode === 'full' ? 'Full' : 'Lite'} yêu cầu status "${requiredStatus}", hiện tại: "${reg.status}"`,
       );
     }
 
     const now = new Date();
     const stamp = this.timestamp();
     const newNotes = note
-      ? [reg.notes, `[${stamp}] [Nghiệm thu] ${note.trim()}`]
+      ? [reg.notes, `[${stamp}] [Hoàn thành] ${note.trim()}`]
           .filter((x): x is string => !!x)
           .join('\n')
       : reg.notes;
@@ -2013,5 +2013,31 @@ export class TeamRegistrationService {
       `NGHIEM_THU_CONFIRMED regId=${regId} by=${adminEmail} mode=${event.feature_mode}`,
     );
     return { id: regId, status: 'completed', completed_at: now.toISOString() };
+  }
+
+  /**
+   * Batch confirm-completion. Best-effort — reports per-id success/fail in
+   * response. Used by admin "Xác nhận hoàn thành N người" bulk button.
+   */
+  async confirmNghiemThuBatch(
+    registrationIds: number[],
+    adminEmail: string,
+    note?: string,
+  ): Promise<{ succeeded: number[]; failed: Record<number, string> }> {
+    const succeeded: number[] = [];
+    const failed: Record<number, string> = {};
+    for (const id of registrationIds) {
+      try {
+        await this.confirmNghiemThu(id, adminEmail, note);
+        succeeded.push(id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        failed[id] = msg;
+      }
+    }
+    this.logger.log(
+      `NGHIEM_THU_BATCH by=${adminEmail} succeeded=${succeeded.length} failed=${Object.keys(failed).length}`,
+    );
+    return { succeeded, failed };
   }
 }

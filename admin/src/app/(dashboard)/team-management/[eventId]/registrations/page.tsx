@@ -14,6 +14,7 @@ import {
   cancelRegistration,
   confirmCompletion,
   confirmNghiemThu,
+  confirmNghiemThuBatch,
   getEventFeaturesConfig,
   sendContracts,
   sendContractForRegistration,
@@ -42,10 +43,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -125,6 +128,13 @@ export default function RegistrationsListPage(): React.ReactElement {
   // v1.9: feature_mode determines what action shows after contract_signed.
   // Lite mode skips QR/check-in → admin xác nhận hoàn thành trực tiếp.
   const [featureMode, setFeatureMode] = useState<"full" | "lite">("full");
+  // Confirm-completion dialog. `kind: 'single'` → 1 row, `kind: 'bulk'` → N ids.
+  type ConfirmTarget =
+    | { kind: "single"; id: number; fullName: string }
+    | { kind: "bulk"; ids: number[] };
+  const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
+  const [confirmNote, setConfirmNote] = useState("");
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   // Reject dialog — used both for single row and for bulk reject. The
   // `mode` discriminates between "reject this one id" and "reject all
@@ -283,17 +293,76 @@ export default function RegistrationsListPage(): React.ReactElement {
 
   function handleConfirmCompletion(row: RegistrationListRow): void {
     if (!token) return;
-    const note = window.prompt(
-      `Ghi chú xác nhận hoàn thành cho ${row.full_name}? (tuỳ chọn)`,
-    );
-    if (note === null) return;
-    // Lite mode skips QR/checkin → use the v1.9 nghiệm-thu endpoint which
-    // requires status='contract_signed'. Full mode keeps the legacy path
-    // which requires status='checked_in'.
-    const apiCall = featureMode === "lite"
-      ? () => confirmNghiemThu(token, row.id, note || undefined)
-      : () => confirmCompletion(token, row.id, note || undefined);
-    void runAction(row.id, apiCall, "Đã xác nhận hoàn thành");
+    setConfirmNote("");
+    setConfirmTarget({ kind: "single", id: row.id, fullName: row.full_name });
+  }
+
+  function handleBulkConfirm(): void {
+    if (!token || selection.size === 0) return;
+    setConfirmNote("");
+    setConfirmTarget({ kind: "bulk", ids: Array.from(selection) });
+  }
+
+  async function executeConfirm(): Promise<void> {
+    if (!token || !confirmTarget) return;
+    const note = confirmNote.trim() || undefined;
+    setConfirmBusy(true);
+    try {
+      if (confirmTarget.kind === "single") {
+        // Lite mode → nghiệm-thu endpoint (requires contract_signed)
+        // Full mode → legacy confirm-completion (requires checked_in)
+        const apiCall = featureMode === "lite"
+          ? () => confirmNghiemThu(token, confirmTarget.id, note)
+          : () => confirmCompletion(token, confirmTarget.id, note);
+        await apiCall();
+        toast.success(`Đã xác nhận hoàn thành ${confirmTarget.fullName}`);
+      } else {
+        // Bulk: in Lite mode use the batch endpoint. Full mode falls back to
+        // sequential confirmCompletion (legacy — không có batch endpoint).
+        if (featureMode === "lite") {
+          const result = await confirmNghiemThuBatch(token, confirmTarget.ids, note);
+          const okCount = result.succeeded.length;
+          const failCount = Object.keys(result.failed).length;
+          if (okCount > 0 && failCount === 0) {
+            toast.success(`Đã xác nhận hoàn thành ${okCount} người`);
+          } else if (okCount > 0 && failCount > 0) {
+            const sample = Object.entries(result.failed).slice(0, 2)
+              .map(([id, msg]) => `#${id}: ${msg}`)
+              .join("; ");
+            toast.warning(`Xác nhận ${okCount} thành công, ${failCount} lỗi. ${sample}`);
+          } else {
+            const sample = Object.entries(result.failed).slice(0, 2)
+              .map(([id, msg]) => `#${id}: ${msg}`)
+              .join("; ");
+            toast.error(`Tất cả ${failCount} đều lỗi: ${sample}`);
+          }
+        } else {
+          let ok = 0;
+          let fail = 0;
+          for (const id of confirmTarget.ids) {
+            try {
+              await confirmCompletion(token, id, note);
+              ok += 1;
+            } catch {
+              fail += 1;
+            }
+          }
+          if (fail === 0) {
+            toast.success(`Đã xác nhận hoàn thành ${ok} người`);
+          } else {
+            toast.warning(`Xác nhận ${ok} thành công, ${fail} lỗi`);
+          }
+        }
+        setSelection(new Set());
+      }
+      setConfirmTarget(null);
+      setConfirmNote("");
+      void load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setConfirmBusy(false);
+    }
   }
 
   function handleReopenRejected(row: RegistrationListRow): void {
@@ -372,6 +441,15 @@ export default function RegistrationsListPage(): React.ReactElement {
       }),
     [selectedRows],
   );
+  // Bulk confirm-completion eligible rows: depends on feature_mode.
+  // Lite: contract_signed; Full: checked_in. Same logic as RowActions.
+  const allSelectedConfirmable = useMemo(() => {
+    const required = featureMode === "lite" ? "contract_signed" : "checked_in";
+    return (
+      selectedRows.length > 0 &&
+      selectedRows.every((r) => deriveStatusKey(r) === required)
+    );
+  }, [selectedRows, featureMode]);
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
 
@@ -528,6 +606,20 @@ export default function RegistrationsListPage(): React.ReactElement {
           >
             <Check className="mr-1 size-4" />
             Duyệt tất cả ({selection.size})
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!allSelectedConfirmable}
+            title={
+              allSelectedConfirmable
+                ? `Xác nhận hoàn thành ${selection.size} người`
+                : `Tất cả phải ở status "${featureMode === "lite" ? "Đã ký HĐ" : "Đã check-in"}"`
+            }
+            onClick={handleBulkConfirm}
+          >
+            <CheckCircle2 className="mr-1 size-4" />
+            Xác nhận hoàn thành ({selection.size})
           </Button>
           <Button
             size="sm"
@@ -769,6 +861,65 @@ export default function RegistrationsListPage(): React.ReactElement {
         busy={rejectBusy}
         onConfirm={handleRejectConfirm}
       />
+
+      {/* v1.9 — Confirm-completion dialog (single + bulk). Replaces native
+          window.prompt with shadcn Dialog + Textarea so admin can write
+          longer notes and the UI stays on-brand. */}
+      <Dialog
+        open={confirmTarget != null}
+        onOpenChange={(v) => {
+          if (!v && !confirmBusy) {
+            setConfirmTarget(null);
+            setConfirmNote("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmTarget?.kind === "single"
+                ? `Xác nhận hoàn thành — ${confirmTarget.fullName}`
+                : `Xác nhận hoàn thành — ${confirmTarget?.ids.length ?? 0} người`}
+            </DialogTitle>
+            <DialogDescription>
+              Chuyển trạng thái sang &quot;Hoàn thành&quot;. Sau bước này admin có thể đánh dấu đã thanh toán.
+              Ghi chú là tuỳ chọn — sẽ lưu vào notes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Textarea
+              rows={4}
+              placeholder="Ghi chú (tuỳ chọn) — VD: hoàn thành đầy đủ ca trực, không có sự cố"
+              value={confirmNote}
+              onChange={(e) => setConfirmNote(e.target.value)}
+              maxLength={1000}
+              disabled={confirmBusy}
+            />
+            <div className="mt-1 text-right text-xs text-muted-foreground">
+              {confirmNote.length}/1000
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (confirmBusy) return;
+                setConfirmTarget(null);
+                setConfirmNote("");
+              }}
+              disabled={confirmBusy}
+            >
+              Huỷ
+            </Button>
+            <Button
+              onClick={() => void executeConfirm()}
+              disabled={confirmBusy}
+            >
+              {confirmBusy ? "Đang xử lý..." : "Xác nhận hoàn thành"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Sheet
         open={detailId != null}

@@ -2584,3 +2584,23 @@ export async function confirmNghiemThu(
   await assertOk(res);
   return res.json();
 }
+
+export async function confirmNghiemThuBatch(
+  token: string,
+  registrationIds: number[],
+  note?: string,
+): Promise<{ succeeded: number[]; failed: Record<number, string> }> {
+  const res = await fetch(
+    `/api/team-management/registrations/nghiem-thu/batch`,
+    {
+      method: "POST",
+      headers: authedHeaders(token),
+      body: JSON.stringify({
+        registration_ids: registrationIds,
+        ...(note ? { note } : {}),
+      }),
+    },
+  );
+  await assertOk(res);
+  return res.json();
+}

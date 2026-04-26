@@ -63,6 +63,8 @@ import { DashboardQueryDto, DashboardResponseDto } from './dto/dashboard.dto';
 import { ShirtAggregateDto, UpsertShirtStockDto } from './dto/shirt-stock.dto';
 import {
   ConfirmNghiemThuDto,
+  BatchConfirmNghiemThuDto,
+  BatchConfirmNghiemThuResponseDto,
   EventFeaturesConfigDto,
   NghiemThuResponseDto,
   UpdateEventFeaturesDto,
@@ -185,6 +187,21 @@ export class TeamManagementController {
     @Req() req: AuthenticatedRequest,
   ): Promise<NghiemThuResponseDto> {
     return this.registrations.confirmNghiemThu(id, identifyAdmin(req), dto.note);
+  }
+
+  @ApiOperation({ summary: 'Batch confirm-completion for many registrations (best-effort)' })
+  @ApiBody({ type: BatchConfirmNghiemThuDto })
+  @ApiResponse({ status: 200, type: BatchConfirmNghiemThuResponseDto })
+  @Post('registrations/nghiem-thu/batch')
+  confirmNghiemThuBatch(
+    @Body() dto: BatchConfirmNghiemThuDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<BatchConfirmNghiemThuResponseDto> {
+    return this.registrations.confirmNghiemThuBatch(
+      dto.registration_ids,
+      identifyAdmin(req),
+      dto.note,
+    );
   }
 
   // -------- Roles --------
