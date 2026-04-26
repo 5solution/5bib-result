@@ -16,6 +16,9 @@ COPY . .
 # Logto config is entirely runtime — no build-time ARGs required.
 
 ENV NEXT_TELEMETRY_DISABLED=1
+# Standalone output only emitted when BUILD_STANDALONE=1 (see admin/next.config.ts).
+# Dockerfile must set this so .next/standalone/ exists for the runner stage to copy.
+ENV BUILD_STANDALONE=1
 RUN pnpm build
 
 # --- Production ---
