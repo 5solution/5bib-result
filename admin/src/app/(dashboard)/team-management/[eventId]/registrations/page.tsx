@@ -13,6 +13,8 @@ import {
   rejectRegistration,
   cancelRegistration,
   confirmCompletion,
+  confirmNghiemThu,
+  getEventFeaturesConfig,
   sendContracts,
   sendContractForRegistration,
   type RegistrationListRow,
@@ -120,6 +122,9 @@ export default function RegistrationsListPage(): React.ReactElement {
   const [exporting, setExporting] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [rowBusy, setRowBusy] = useState<Set<number>>(new Set());
+  // v1.9: feature_mode determines what action shows after contract_signed.
+  // Lite mode skips QR/check-in → admin xác nhận hoàn thành trực tiếp.
+  const [featureMode, setFeatureMode] = useState<"full" | "lite">("full");
 
   // Reject dialog — used both for single row and for bulk reject. The
   // `mode` discriminates between "reject this one id" and "reject all
@@ -162,6 +167,19 @@ export default function RegistrationsListPage(): React.ReactElement {
   useEffect(() => {
     if (token) void load();
   }, [token, load]);
+
+  // v1.9 — Fetch event feature mode once. Determines whether the action
+  // after `contract_signed` is "Chờ gửi QR" (Full) or "Xác nhận hoàn thành"
+  // (Lite, skips check-in entirely).
+  useEffect(() => {
+    if (!token) return;
+    void getEventFeaturesConfig(token, eventId)
+      .then((cfg) => setFeatureMode(cfg.feature_mode))
+      .catch(() => {
+        // Falls back to 'full' (default state). Worst case admin sees the
+        // pre-v1.9 UI which is still functional.
+      });
+  }, [token, eventId]);
 
   function toggleSelect(id: number, checked: boolean): void {
     const next = new Set(selection);
@@ -269,11 +287,13 @@ export default function RegistrationsListPage(): React.ReactElement {
       `Ghi chú xác nhận hoàn thành cho ${row.full_name}? (tuỳ chọn)`,
     );
     if (note === null) return;
-    void runAction(
-      row.id,
-      () => confirmCompletion(token, row.id, note || undefined),
-      "Đã xác nhận hoàn thành",
-    );
+    // Lite mode skips QR/checkin → use the v1.9 nghiệm-thu endpoint which
+    // requires status='contract_signed'. Full mode keeps the legacy path
+    // which requires status='checked_in'.
+    const apiCall = featureMode === "lite"
+      ? () => confirmNghiemThu(token, row.id, note || undefined)
+      : () => confirmCompletion(token, row.id, note || undefined);
+    void runAction(row.id, apiCall, "Đã xác nhận hoàn thành");
   }
 
   function handleReopenRejected(row: RegistrationListRow): void {
@@ -674,6 +694,7 @@ export default function RegistrationsListPage(): React.ReactElement {
                           }
                           onReopen={() => handleReopenRejected(r)}
                           onOpenDetail={() => setDetailId(r.id)}
+                          featureMode={featureMode}
                         />
                       </div>
                     </TableCell>
@@ -794,6 +815,7 @@ function RowActions({
   onConfirmCompletion,
   onReopen,
   onOpenDetail,
+  featureMode,
 }: {
   row: RegistrationListRow;
   busy: boolean;
@@ -805,6 +827,7 @@ function RowActions({
   onConfirmCompletion: () => void;
   onReopen: () => void;
   onOpenDetail: () => void;
+  featureMode: "full" | "lite";
 }): React.ReactElement {
   const status = deriveStatusKey(row);
   const common = (
@@ -919,6 +942,37 @@ function RowActions({
         </>
       );
     case "contract_signed":
+      // v1.9 — Lite mode skips QR + check-in entirely. After ký HĐ, the
+      // admin clicks "Xác nhận hoàn thành" to transition contract_signed
+      // → completed via the nghiệm-thu endpoint. Full mode still waits
+      // for the QR send step (sendQrAndTransition) to flip status.
+      if (featureMode === "lite") {
+        return (
+          <>
+            <Button
+              size="sm"
+              className="h-8 px-2"
+              disabled={busy}
+              onClick={onConfirmCompletion}
+              aria-label="Xác nhận hoàn thành"
+              title="Xác nhận hoàn thành (Lite mode — bỏ qua QR/check-in)"
+            >
+              <CheckCircle2 className="size-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2"
+              onClick={onOpenDetail}
+              aria-label="Xem hợp đồng"
+              title="Xem hợp đồng"
+            >
+              <FileText className="size-4" />
+            </Button>
+            {common}
+          </>
+        );
+      }
       return (
         <>
           <InfoChip
