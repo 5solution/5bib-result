@@ -50,6 +50,22 @@ export class VolAcceptanceTemplate {
   @Column({ type: 'boolean', default: true })
   is_active!: boolean;
 
+  // ── Party A (legal entity signing the acceptance document) ──
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  party_a_company_name!: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  party_a_address!: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  party_a_tax_code!: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  party_a_representative!: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  party_a_position!: string | null;
+
   @Column({ type: 'varchar', length: 100, default: 'system' })
   created_by!: string;
 

@@ -92,6 +92,8 @@ export class TeamExportService {
       { header: 'Đơn giá (VNĐ)', key: 'daily_rate', width: 14 },
       { header: 'Thành tiền (VNĐ)', key: 'compensation', width: 16 },
       { header: 'Đã ký HĐ', key: 'contract', width: 10 },
+      { header: 'Link HĐ', key: 'contract_link', width: 36 },
+      { header: 'Link NT', key: 'acceptance_link', width: 36 },
       { header: 'Check-in', key: 'checkin', width: 18 },
       { header: 'Trạng thái TT', key: 'payment', width: 14 },
       // Payout info — appended at the end so kế toán can bank-transfer
@@ -107,6 +109,7 @@ export class TeamExportService {
     if (regs.length === 0) {
       sheet.addRow({ stt: 1, full_name: '— Chưa có dữ liệu —' });
     } else {
+      const crewBasePayment = env.teamManagement.crewBaseUrl.replace(/\/$/, '');
       regs.forEach((reg, idx) => {
         const form = (reg.form_data ?? {}) as Record<string, unknown>;
         const dailyRate = Number(reg.role?.daily_rate ?? 0);
@@ -115,7 +118,7 @@ export class TeamExportService {
         const compensation = reg.actual_compensation
           ? Number(reg.actual_compensation)
           : dailyRate * workingDays;
-        sheet.addRow({
+        const row = sheet.addRow({
           stt: idx + 1,
           full_name: reg.full_name,
           cccd: typeof form.cccd === 'string' ? form.cccd : '',
@@ -143,6 +146,22 @@ export class TeamExportService {
           bank_name:
             typeof form.bank_name === 'string' ? form.bank_name : '',
         });
+
+        if (reg.magic_token) {
+          const contractSent = [
+            'contract_sent', 'contract_signed', 'qr_sent', 'checked_in', 'completed',
+          ].includes(reg.status);
+          if (contractSent) {
+            const cCell = row.getCell('contract_link');
+            cCell.value = { text: 'Xem & ký HĐ', hyperlink: `${crewBasePayment}/contract/${reg.magic_token}` };
+            cCell.font = { color: { argb: 'FF1D49FF' }, underline: true };
+          }
+          if (reg.acceptance_status !== 'not_ready') {
+            const aCell = row.getCell('acceptance_link');
+            aCell.value = { text: 'Xem & ký NT', hyperlink: `${crewBasePayment}/acceptance/${reg.magic_token}` };
+            aCell.font = { color: { argb: 'FF1D49FF' }, underline: true };
+          }
+        }
       });
       // Currency formatting for VND columns
       sheet.getColumn('daily_rate').numFmt = '#,##0';
@@ -242,6 +261,8 @@ export class TeamExportService {
       { header: 'Waitlist pos', key: 'waitlist_position', width: 12 },
       { header: 'HĐ', key: 'contract_status', width: 12 },
       { header: 'Ngày ký HĐ', key: 'contract_signed_at', width: 18 },
+      { header: 'Link HĐ', key: 'contract_link', width: 36 },
+      { header: 'Link NT', key: 'acceptance_link', width: 36 },
       { header: 'Check-in', key: 'checked_in_at', width: 18 },
       { header: 'Phương thức CI', key: 'checkin_method', width: 14 },
       // v1.4: completion audit trail.
@@ -303,13 +324,14 @@ export class TeamExportService {
       paid: 'Đã TT',
     };
 
+    const crewBase = env.teamManagement.crewBaseUrl.replace(/\/$/, '');
     regs.forEach((reg, idx) => {
       const form = (reg.form_data ?? {}) as Record<string, unknown>;
       const dailyRate = Number(reg.role?.daily_rate ?? 0);
       const workingDays = reg.actual_working_days;
       const compensation =
         workingDays != null ? dailyRate * workingDays : '';
-      sheet.addRow({
+      const row = sheet.addRow({
         stt: idx + 1,
         full_name: reg.full_name,
         phone: reg.phone,
@@ -362,6 +384,30 @@ export class TeamExportService {
         notes: reg.notes ?? '',
         created_at: reg.created_at ? formatVnDateTime(reg.created_at) : '',
       });
+
+      // Apply hyperlinks for contract / acceptance links.
+      // ExcelJS requires setting .value as a hyperlink object on the cell
+      // directly — they cannot be passed through addRow().
+      if (reg.magic_token) {
+        const contractHasBeenSent = [
+          'contract_sent', 'contract_signed', 'qr_sent', 'checked_in', 'completed',
+        ].includes(reg.status);
+        const acceptanceHasBeenSent = reg.acceptance_status !== 'not_ready';
+
+        if (contractHasBeenSent) {
+          const contractUrl = `${crewBase}/contract/${reg.magic_token}`;
+          const cCell = row.getCell('contract_link');
+          cCell.value = { text: 'Xem & ký HĐ', hyperlink: contractUrl };
+          cCell.font = { color: { argb: 'FF1D49FF' }, underline: true };
+        }
+
+        if (acceptanceHasBeenSent) {
+          const acceptanceUrl = `${crewBase}/acceptance/${reg.magic_token}`;
+          const aCell = row.getCell('acceptance_link');
+          aCell.value = { text: 'Xem & ký NT', hyperlink: acceptanceUrl };
+          aCell.font = { color: { argb: 'FF1D49FF' }, underline: true };
+        }
+      }
     });
 
     if (regs.length === 0) {

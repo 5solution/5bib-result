@@ -14,6 +14,7 @@ import {
   cancelRegistration,
   confirmCompletion,
   sendContracts,
+  sendContractForRegistration,
   type RegistrationListRow,
   type TeamRole,
   type ManualRegisterInput,
@@ -242,14 +243,23 @@ export default function RegistrationsListPage(): React.ReactElement {
     );
   }
 
-  function handleResendContract(row: RegistrationListRow): void {
+  function handleSendContract(row: RegistrationListRow): void {
     if (!token) return;
-    // Role-level contract send — approve/unapprove isolated to this registration's role.
-    // Backend skips already-sent contracts unless they're expired.
     void runAction(
       row.id,
-      () => sendContracts(token, row.role_id, false),
-      "Đã gửi lại hợp đồng",
+      () => sendContractForRegistration(token, row.id),
+      "Đã gửi hợp đồng",
+    );
+  }
+
+  function handleResendContract(row: RegistrationListRow): void {
+    if (!token) return;
+    // Individual resend — gửi lại magic link cho đúng người này.
+    // Backend cho phép resend khi status = 'contract_sent'.
+    void runAction(
+      row.id,
+      () => sendContractForRegistration(token, row.id),
+      `Đã gửi lại hợp đồng cho ${row.full_name}`,
     );
   }
 
@@ -657,6 +667,7 @@ export default function RegistrationsListPage(): React.ReactElement {
                             })
                           }
                           onCancel={() => handleCancel(r)}
+                          onSendContract={() => handleSendContract(r)}
                           onResendContract={() => handleResendContract(r)}
                           onConfirmCompletion={() =>
                             handleConfirmCompletion(r)
@@ -778,6 +789,7 @@ function RowActions({
   onApprove,
   onReject,
   onCancel,
+  onSendContract,
   onResendContract,
   onConfirmCompletion,
   onReopen,
@@ -788,6 +800,7 @@ function RowActions({
   onApprove: () => void;
   onReject: () => void;
   onCancel: () => void;
+  onSendContract: () => void;
   onResendContract: () => void;
   onConfirmCompletion: () => void;
   onReopen: () => void;
@@ -853,10 +866,18 @@ function RowActions({
     case "approved":
       return (
         <>
-          <InfoChip
-            icon={<Clock className="size-3" />}
-            label="Chờ gửi HĐ"
-          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 px-2 text-xs"
+            disabled={busy}
+            onClick={onSendContract}
+            title="Gửi hợp đồng"
+            aria-label="Gửi hợp đồng"
+          >
+            <Send className="size-3.5" />
+            Gửi HĐ
+          </Button>
           <Button
             size="sm"
             variant="outline"

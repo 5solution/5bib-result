@@ -5,8 +5,8 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
-  Put,
   Query,
   Req,
   UseGuards,
@@ -88,7 +88,7 @@ export class TeamAcceptanceTemplateController {
     return this.templates.createTemplate(dto, createdBy);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @ApiOperation({
     summary:
       'Update acceptance template. Editing the default template is allowed but logged at WARN level — affects all events without a scoped template.',

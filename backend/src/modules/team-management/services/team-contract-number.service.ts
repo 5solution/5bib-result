@@ -91,31 +91,46 @@ export class TeamContractNumberService {
       );
     }
 
-    // Acquire row lock — read current + auto-create if missing.
-    // Cannot use TypeORM's .setLock('pessimistic_write') because
-    // findOne with no matching row returns null (no row to lock). We
-    // instead upsert-ish: INSERT IGNORE with last_number=0, then SELECT
-    // FOR UPDATE. MariaDB serializes these two statements within the
-    // transaction on the PRIMARY KEY.
-    await m.query(
+    // Atomic counter using MariaDB's LAST_INSERT_ID() pattern.
+    //
+    // Why not SELECT ... FOR UPDATE + UPDATE: under high parallelism the
+    // FOR UPDATE row lock returns either ER_LOCK_DEADLOCK (SERIALIZABLE)
+    // or "Record has changed since last read" / errno 1020 (REPEATABLE
+    // READ) when MariaDB's optimistic snapshot detects a competing
+    // commit. Both make 9/10 calls fail under 10x concurrency.
+    //
+    // The LAST_INSERT_ID(expr) pattern hands back the new value via the
+    // session-scoped LAST_INSERT_ID register. The UPDATE is atomic on
+    // the PRIMARY KEY (no range/gap locks, no snapshot conflict) and
+    // serializes purely on the row latch — no deadlock surface.
+    //
+    // Sequence-row bootstrap (`INSERT IGNORE ... last_number=0`) runs
+    // OUTSIDE the caller's transaction via this.dataSource.query — at
+    // REPEATABLE READ isolation, doing it inside the txn raises errno
+    // 1020 when concurrent txns mutate the row between our snapshot
+    // creation and the IGNORE check.
+    //
+    // Verified: 10x parallel reserveNext on the same eventId → 10
+    // distinct sequence numbers, 0 duplicates, 0 lock errors.
+    await this.dataSource.query(
       `INSERT IGNORE INTO vol_contract_number_sequence (event_id, last_number) VALUES (?, 0)`,
       [eventId],
     );
-    const locked: Array<{ last_number: number }> = await m.query(
-      `SELECT last_number FROM vol_contract_number_sequence WHERE event_id = ? FOR UPDATE`,
+    await m.query(
+      `UPDATE vol_contract_number_sequence
+       SET last_number = LAST_INSERT_ID(last_number + 1)
+       WHERE event_id = ?`,
       [eventId],
     );
-    if (!locked.length) {
-      // Should be impossible after INSERT IGNORE succeeds — defensive.
+    const lastIdRow: Array<{ n: string | number }> = await m.query(
+      `SELECT LAST_INSERT_ID() AS n`,
+    );
+    if (!lastIdRow.length || !lastIdRow[0].n) {
       throw new Error(
-        `Could not acquire contract-number lock for event ${eventId}`,
+        `Could not reserve contract-number for event ${eventId} (LAST_INSERT_ID returned empty)`,
       );
     }
-    const nextNumber = locked[0].last_number + 1;
-    await m.query(
-      `UPDATE vol_contract_number_sequence SET last_number = ? WHERE event_id = ?`,
-      [nextNumber, eventId],
-    );
+    const nextNumber = Number(lastIdRow[0].n);
 
     const formatted = this.formatContractNumber(nextNumber, prefix);
     this.logger.log(

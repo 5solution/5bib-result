@@ -124,56 +124,85 @@ export function renderTemplate(
 }
 
 /**
- * Strip scripts, styles, on* handlers, and dangerous URL schemes from
- * arbitrary HTML. Contracts come from admin input (paste or DOCX), which
- * must be treated as semi-trusted — a compromised admin can otherwise
- * plant XSS in the crew-facing contract preview.
+ * Strip scripts, on* handlers, and dangerous URL schemes from arbitrary HTML.
+ * Contracts come from admin input (paste or DOCX), treated as semi-trusted.
  *
  * Allowlist approach via `sanitize-html`:
  *   - tags: structural text + tables + imgs + basic formatting
- *   - attributes: no `on*`, no `style` keyword URLs, no `srcset`
+ *   - attributes: `class` + `style` on all elements; specific attrs per tag.
+ *     `style` is allowed but restricted via `allowedStyles` — only safe CSS
+ *     layout/typography properties pass through. `javascript:` / `expression()`
+ *     are blocked by the regex patterns.
  *   - URL schemes: http, https, mailto, tel, data: (images only)
  */
 export function sanitizeHtml(html: string): string {
+  // CSS value regexes — intentionally permissive for layout/typography while
+  // blocking javascript: / expression() injection vectors.
+  const safeValue = /^[^;]*$/; // any single CSS value without semicolon
+  const safeColor = /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|[a-zA-Z]+)$/;
+  const safeSize  = /^\d+(\.\d+)?(px|pt|em|rem|%|vh|vw|cm|mm)?$/;
+  const safeBorder = /^[^;]*$/;
+
   return sanitizeHtmlLib(html, {
     allowedTags: [
-      'h1',
-      'h2',
-      'h3',
-      'h4',
-      'h5',
-      'h6',
-      'p',
-      'span',
-      'div',
-      'br',
-      'hr',
-      'strong',
-      'em',
-      'b',
-      'i',
-      'u',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'p', 'span', 'div', 'br', 'hr',
+      'strong', 'em', 'b', 'i', 'u',
       'a',
-      'ul',
-      'ol',
-      'li',
-      'table',
-      'thead',
-      'tbody',
-      'tr',
-      'th',
-      'td',
+      'ul', 'ol', 'li',
+      'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'img',
-      'blockquote',
-      'pre',
-      'code',
-      'sub',
-      'sup',
+      'blockquote', 'pre', 'code', 'sub', 'sup',
     ],
     allowedAttributes: {
-      a: ['href', 'title', 'target'],
-      img: ['src', 'alt', 'width', 'height'],
-      '*': ['class'],
+      a:   ['href', 'title', 'target'],
+      img: ['src', 'alt', 'width', 'height', 'style'],
+      '*': ['class', 'style'],
+    },
+    // Restrict which CSS properties survive sanitization. Patterns are checked
+    // against property values — any property not listed here is stripped.
+    allowedStyles: {
+      '*': {
+        'text-align':        [/^(left|right|center|justify)$/],
+        'vertical-align':    [/^(top|middle|bottom|baseline)$/],
+        'font-size':         [safeSize],
+        'font-weight':       [/^(bold|normal|[1-9]00)$/],
+        'font-style':        [/^(normal|italic|oblique)$/],
+        'font-family':       [safeValue],
+        'color':             [safeColor],
+        'background-color':  [safeColor],
+        'text-decoration':   [/^(none|underline|line-through|overline)$/],
+        'width':             [safeSize],
+        'height':            [safeSize],
+        'max-width':         [safeSize],
+        'max-height':        [safeSize],
+        'min-width':         [safeSize],
+        'padding':           [safeValue],
+        'padding-top':       [safeSize],
+        'padding-right':     [safeSize],
+        'padding-bottom':    [safeSize],
+        'padding-left':      [safeSize],
+        'margin':            [safeValue],
+        'margin-top':        [safeValue],
+        'margin-right':      [safeValue],
+        'margin-bottom':     [safeValue],
+        'margin-left':       [safeValue],
+        'border':            [safeBorder],
+        'border-top':        [safeBorder],
+        'border-right':      [safeBorder],
+        'border-bottom':     [safeBorder],
+        'border-left':       [safeBorder],
+        'border-collapse':   [/^(collapse|separate)$/],
+        'border-color':      [safeColor],
+        'border-style':      [/^(none|solid|dashed|dotted|double)$/],
+        'border-width':      [safeSize],
+        'display':           [/^(block|inline|inline-block|flex|table|table-cell|none)$/],
+        'line-height':       [safeValue],
+        'letter-spacing':    [safeValue],
+        'word-spacing':      [safeValue],
+        'white-space':       [/^(normal|nowrap|pre|pre-wrap|pre-line)$/],
+        'overflow':          [/^(visible|hidden|scroll|auto)$/],
+      },
     },
     allowedSchemes: ['http', 'https', 'mailto', 'tel'],
     allowedSchemesByTag: {

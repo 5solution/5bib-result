@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VN_BANKS } from "@/lib/banks";
 import type { BackfillBenBInput } from "@/lib/team-api";
+import { isoToVNField, parseDateVN } from "@/lib/utils";
 
 /**
  * Admin-facing modal to backfill Bên B fields required for contract +
@@ -50,8 +51,9 @@ export function BackfillBenBDialog({
 
   useEffect(() => {
     if (!open) return;
-    setBirthDate(initial.birth_date ?? "");
-    setIssueDate(initial.cccd_issue_date ?? "");
+    // Convert ISO dates from DB to dd/mm/yyyy for the input fields.
+    setBirthDate(isoToVNField(initial.birth_date));
+    setIssueDate(isoToVNField(initial.cccd_issue_date));
     setIssuePlace(initial.cccd_issue_place ?? "");
     setBankAccount(initial.bank_account_number ?? "");
     setBankName(initial.bank_name ?? "");
@@ -59,12 +61,24 @@ export function BackfillBenBDialog({
   }, [open, initial]);
 
   function submit(): void {
+    // Parse VN-format dates back to ISO; reject if the input isn't blank
+    // but also isn't a valid date.
+    const birthDateIso = birthDate ? parseDateVN(birthDate) : null;
+    const issueDateIso = issueDate ? parseDateVN(issueDate) : null;
+    if (birthDate && birthDateIso === null) {
+      alert("Ngày sinh không hợp lệ — nhập dd/mm/yyyy");
+      return;
+    }
+    if (issueDate && issueDateIso === null) {
+      alert("Ngày cấp CCCD không hợp lệ — nhập dd/mm/yyyy");
+      return;
+    }
+
     // Only send fields that are non-empty — empty string means "leave
-    // existing value alone" from the admin's POV (they opened the modal
-    // only to fill in missing pieces).
+    // existing value alone" from the admin's POV.
     const body: BackfillBenBInput = {};
-    if (birthDate) body.birth_date = birthDate;
-    if (issueDate) body.cccd_issue_date = issueDate;
+    if (birthDateIso) body.birth_date = birthDateIso;
+    if (issueDateIso) body.cccd_issue_date = issueDateIso;
     if (issuePlace.trim()) body.cccd_issue_place = issuePlace.trim();
     if (bankAccount.trim()) body.bank_account_number = bankAccount.trim();
     if (bankName.trim()) body.bank_name = bankName.trim();
@@ -88,7 +102,9 @@ export function BackfillBenBDialog({
             <Label htmlFor="bb_birth_date">Ngày sinh</Label>
             <Input
               id="bb_birth_date"
-              type="date"
+              type="text"
+              inputMode="numeric"
+              placeholder="dd/mm/yyyy"
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value)}
             />
@@ -97,7 +113,9 @@ export function BackfillBenBDialog({
             <Label htmlFor="bb_issue_date">Ngày cấp CCCD</Label>
             <Input
               id="bb_issue_date"
-              type="date"
+              type="text"
+              inputMode="numeric"
+              placeholder="dd/mm/yyyy"
               value={issueDate}
               onChange={(e) => setIssueDate(e.target.value)}
             />

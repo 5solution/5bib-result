@@ -117,7 +117,11 @@ export default function AcceptancePage(): React.ReactElement {
       const acc: AcceptanceStatus | undefined = r.acceptance_status;
       if (acc === "signed") signed.push(r);
       else if (acc === "disputed") disputed.push(r);
-      else if (r.status === "completed") ready.push(r);
+      // "Sẵn sàng gửi" — eligible for acceptance biên bản:
+      // checked_in = đã thực sự có mặt tại sự kiện (đủ điều kiện nghiệm thu).
+      // completed = admin đã xác nhận hoàn thành.
+      // Không giới hạn chỉ completed vì checked_in là đủ điều kiện tối thiểu.
+      else if (r.status === "checked_in" || r.status === "completed") ready.push(r);
     }
     return { readyRows: ready, signedRows: signed, disputedRows: disputed };
   }, [rows]);

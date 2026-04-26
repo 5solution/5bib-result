@@ -37,10 +37,20 @@ export const VALID_ACCEPTANCE_VARIABLES = [
   'bank_name',
   'tax_code',
   'work_content',
+  'work_location',
+  'work_period',
+  'unit_price',
+  'unit_price_words',
   'acceptance_value',
   'acceptance_value_words',
   'event_name',
   'signature_image',
+  // Party A (legal entity signing the acceptance)
+  'party_a_company_name',
+  'party_a_address',
+  'party_a_tax_code',
+  'party_a_representative',
+  'party_a_position',
 ];
 
 @Injectable()
@@ -112,6 +122,11 @@ export class TeamAcceptanceTemplateService {
       variables: dto.variables,
       is_active: dto.is_active ?? true,
       is_default: false,
+      party_a_company_name: dto.party_a_company_name ?? null,
+      party_a_address: dto.party_a_address ?? null,
+      party_a_tax_code: dto.party_a_tax_code ?? null,
+      party_a_representative: dto.party_a_representative ?? null,
+      party_a_position: dto.party_a_position ?? null,
       created_by: createdBy,
     });
     const saved = await this.templateRepo.save(row);
@@ -138,6 +153,13 @@ export class TeamAcceptanceTemplateService {
     if (dto.content_html != null) existing.content_html = sanitizeHtml(dto.content_html);
     if (dto.variables != null) existing.variables = dto.variables;
     if (dto.is_active != null) existing.is_active = dto.is_active;
+    if (dto.is_default != null) existing.is_default = dto.is_default;
+    // Party A — use explicit undefined check so null clears the field
+    if (dto.party_a_company_name !== undefined) existing.party_a_company_name = dto.party_a_company_name ?? null;
+    if (dto.party_a_address !== undefined) existing.party_a_address = dto.party_a_address ?? null;
+    if (dto.party_a_tax_code !== undefined) existing.party_a_tax_code = dto.party_a_tax_code ?? null;
+    if (dto.party_a_representative !== undefined) existing.party_a_representative = dto.party_a_representative ?? null;
+    if (dto.party_a_position !== undefined) existing.party_a_position = dto.party_a_position ?? null;
     return this.templateRepo.save(existing);
   }
 

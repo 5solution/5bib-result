@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge, deriveStatusKey } from "@/lib/status-style";
+import { formatDateVN, isoToVNField, parseDateVN } from "@/lib/utils";
 import {
   AlertTriangle,
   Ban,
@@ -116,6 +117,24 @@ export function RegistrationDetailView({
   const [disputeBusy, setDisputeBusy] = useState(false);
   const [acceptanceBusy, setAcceptanceBusy] = useState(false);
   const [loadingAcceptancePdf, setLoadingAcceptancePdf] = useState(false);
+  // v2.1 — edit profile + Bên B inline form
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [editProfileBusy, setEditProfileBusy] = useState(false);
+  const [editProfile, setEditProfile] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    shirt_size: "",
+    birth_date: "",
+    cccd: "",
+    cccd_issue_date: "",
+    cccd_issue_place: "",
+    bank_account_number: "",
+    bank_holder_name: "",
+    bank_name: "",
+    bank_branch: "",
+    address: "",
+  });
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -126,6 +145,30 @@ export function RegistrationDetailView({
       if (d.actual_working_days != null) setEditingDays(d.actual_working_days);
       else if (d.role_working_days != null) setEditingDays(d.role_working_days);
       else setEditingDays("");
+      // Hydrate edit-profile form from current values. form_data fields
+      // may be missing for old registrations — fall back to "".
+      const fd = (d.form_data ?? {}) as Record<string, unknown>;
+      const pickStr = (v: unknown): string =>
+        typeof v === "string" ? v : v == null ? "" : String(v);
+      // Read from public-register keys: cccd / dob (legacy) — fall back
+      // to entity columns / new keys if old data ever wrote those.
+      // birth_date entity column wins over form_data.dob if both set.
+      setEditProfile({
+        full_name: d.full_name ?? "",
+        phone: d.phone ?? "",
+        email: d.email ?? "",
+        shirt_size: d.shirt_size ?? pickStr(fd.shirt_size),
+        // Store dates as dd/mm/yyyy in edit-form state; convert to ISO on save.
+        birth_date: isoToVNField(d.birth_date ?? pickStr(fd.dob)),
+        cccd: pickStr(fd.cccd) || pickStr(fd.cccd_number),
+        cccd_issue_date: isoToVNField(d.cccd_issue_date),
+        cccd_issue_place: d.cccd_issue_place ?? "",
+        bank_account_number: pickStr(fd.bank_account_number),
+        bank_holder_name: pickStr(fd.bank_holder_name),
+        bank_name: pickStr(fd.bank_name),
+        bank_branch: pickStr(fd.bank_branch),
+        address: pickStr(fd.address),
+      });
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -310,6 +353,86 @@ export function RegistrationDetailView({
       toast.error((err as Error).message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveEditProfile(): Promise<void> {
+    if (!token || !detail) return;
+    // Warn before overwriting a signed contract — backend will reset
+    // contract_status='not_sent' + roll back state to 'approved' so admin
+    // must re-send. Old PDF stays in S3 for audit (logged server-side).
+    const fd = (detail.form_data ?? {}) as Record<string, unknown>;
+    const fdStr = (k: string): string =>
+      typeof fd[k] === "string" ? (fd[k] as string) : "";
+    // birth_date / cccd_issue_date in editProfile are VN format (dd/mm/yyyy);
+    // convert the stored ISO values to VN format for comparison.
+    const contractAffectingChanged =
+      editProfile.full_name !== (detail.full_name ?? "") ||
+      editProfile.phone !== (detail.phone ?? "") ||
+      editProfile.email !== (detail.email ?? "") ||
+      editProfile.birth_date !== isoToVNField(detail.birth_date ?? fdStr("dob")) ||
+      editProfile.cccd_issue_date !== isoToVNField(detail.cccd_issue_date) ||
+      editProfile.cccd_issue_place !== (detail.cccd_issue_place ?? "") ||
+      editProfile.cccd !== (fdStr("cccd") || fdStr("cccd_number")) ||
+      editProfile.bank_account_number !== fdStr("bank_account_number") ||
+      editProfile.bank_holder_name !== fdStr("bank_holder_name") ||
+      editProfile.bank_name !== fdStr("bank_name") ||
+      editProfile.bank_branch !== fdStr("bank_branch") ||
+      editProfile.address !== fdStr("address");
+    if (
+      detail.contract_status === "signed" &&
+      contractAffectingChanged &&
+      !window.confirm(
+        "Hợp đồng đã ký sẽ bị huỷ và phải gửi lại để CTV ký mới. " +
+          "PDF cũ vẫn lưu trên S3 cho audit. Tiếp tục?",
+      )
+    ) {
+      return;
+    }
+    // Parse VN-format dates back to ISO before sending to API.
+    const birthDateIso = editProfile.birth_date
+      ? parseDateVN(editProfile.birth_date)
+      : null;
+    const issueDateIso = editProfile.cccd_issue_date
+      ? parseDateVN(editProfile.cccd_issue_date)
+      : null;
+    if (editProfile.birth_date && birthDateIso === null) {
+      toast.error("Ngày sinh không hợp lệ — nhập theo định dạng dd/mm/yyyy");
+      return;
+    }
+    if (editProfile.cccd_issue_date && issueDateIso === null) {
+      toast.error("Ngày cấp CCCD không hợp lệ — nhập theo định dạng dd/mm/yyyy");
+      return;
+    }
+    setEditProfileBusy(true);
+    try {
+      await patchRegistration(token, regId, {
+        full_name: editProfile.full_name,
+        phone: editProfile.phone,
+        email: editProfile.email,
+        shirt_size: editProfile.shirt_size || null,
+        birth_date: birthDateIso,
+        cccd: editProfile.cccd || null,
+        cccd_issue_date: issueDateIso,
+        cccd_issue_place: editProfile.cccd_issue_place || null,
+        bank_account_number: editProfile.bank_account_number || null,
+        bank_holder_name: editProfile.bank_holder_name || null,
+        bank_name: editProfile.bank_name || null,
+        bank_branch: editProfile.bank_branch || null,
+        address: editProfile.address || null,
+      });
+      toast.success(
+        contractAffectingChanged && detail.contract_status === "signed"
+          ? "Đã lưu — HĐ cũ bị huỷ, vào tab Hợp đồng để gửi lại"
+          : "Đã lưu thông tin",
+      );
+      setEditProfileOpen(false);
+      await load();
+      onChange?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setEditProfileBusy(false);
     }
   }
 
@@ -683,6 +806,272 @@ export function RegistrationDetailView({
             </div>
           ) : null}
 
+          {/* v2.1 — admin edit profile + Bên B */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Thông tin Bên B</h3>
+              {!editProfileOpen ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditProfileOpen(true)}
+                >
+                  <Pencil className="size-3.5 mr-1" /> Sửa
+                </Button>
+              ) : null}
+            </div>
+            {editProfileOpen ? (
+              <>
+                {detail.contract_status === "signed" ? (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 flex gap-2">
+                    <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                    <div>
+                      Hợp đồng đã ký. Sửa các trường tên / SĐT / email / CCCD /
+                      ngân hàng / địa chỉ → hệ thống sẽ huỷ HĐ cũ, bạn phải gửi
+                      lại để CTV ký mới. PDF cũ giữ trên S3 cho audit.
+                    </div>
+                  </div>
+                ) : null}
+                <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div>
+                    <Label>Họ tên</Label>
+                    <Input
+                      value={editProfile.full_name}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          full_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>SĐT</Label>
+                    <Input
+                      value={editProfile.phone}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({ ...p, phone: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      value={editProfile.email}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({ ...p, email: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Size áo</Label>
+                    <select
+                      className="w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                      value={editProfile.shirt_size}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          shirt_size: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">— chưa chọn —</option>
+                      {(
+                        ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const
+                      ).map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Ngày sinh</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="dd/mm/yyyy"
+                      value={editProfile.birth_date}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          birth_date: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Số CCCD</Label>
+                    <Input
+                      value={editProfile.cccd}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          cccd: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Ngày cấp CCCD</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="dd/mm/yyyy"
+                      value={editProfile.cccd_issue_date}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          cccd_issue_date: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Nơi cấp CCCD</Label>
+                    <Input
+                      value={editProfile.cccd_issue_place}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          cccd_issue_place: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Địa chỉ</Label>
+                    <Input
+                      value={editProfile.address}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          address: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Số tài khoản</Label>
+                    <Input
+                      value={editProfile.bank_account_number}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          bank_account_number: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Chủ tài khoản</Label>
+                    <Input
+                      value={editProfile.bank_holder_name}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          bank_holder_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Ngân hàng</Label>
+                    <Input
+                      value={editProfile.bank_name}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          bank_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Chi nhánh</Label>
+                    <Input
+                      value={editProfile.bank_branch}
+                      onChange={(e) =>
+                        setEditProfile((p) => ({
+                          ...p,
+                          bank_branch: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      void saveEditProfile();
+                    }}
+                    disabled={editProfileBusy}
+                  >
+                    {editProfileBusy ? "Đang lưu..." : "Lưu"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditProfileOpen(false);
+                      void load();
+                    }}
+                    disabled={editProfileBusy}
+                  >
+                    Huỷ
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Họ tên
+                  </dt>
+                  <dd>{detail.full_name}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    SĐT
+                  </dt>
+                  <dd>{detail.phone}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Email
+                  </dt>
+                  <dd className="break-all">{detail.email}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Size áo
+                  </dt>
+                  <dd>{detail.shirt_size ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Ngày sinh
+                  </dt>
+                  <dd>{formatDateVN(detail.birth_date ?? (detail.form_data?.dob as string | undefined))}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Ngày cấp CCCD
+                  </dt>
+                  <dd>{formatDateVN(detail.cccd_issue_date)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">
+                    Nơi cấp CCCD
+                  </dt>
+                  <dd>{detail.cccd_issue_place ?? "—"}</dd>
+                </div>
+              </dl>
+            )}
+          </div>
+
           <div className="rounded-lg border p-4 space-y-3">
             <div>
               <h3 className="font-semibold mb-2">Dữ liệu form</h3>
@@ -690,6 +1079,8 @@ export function RegistrationDetailView({
                 const entries = Object.entries(detail.form_data);
                 const nonBank = entries.filter(([k]) => !BANK_KEYS.has(k));
                 const bank = entries.filter(([k]) => BANK_KEYS.has(k));
+                // Keys whose values are date strings (YYYY-MM-DD) — display as dd/mm/yyyy.
+                const DATE_KEYS = new Set(["dob", "birth_date"]);
                 const renderEntry = ([key, value]: [string, unknown]) => {
                   const isPhoto =
                     key === "cccd_photo" || key === "avatar_photo";
@@ -725,6 +1116,8 @@ export function RegistrationDetailView({
                               (chưa có ảnh)
                             </span>
                           )
+                        ) : DATE_KEYS.has(key) && typeof value === "string" ? (
+                          formatDateVN(value)
                         ) : typeof value === "string" ||
                           typeof value === "number" ? (
                           String(value)

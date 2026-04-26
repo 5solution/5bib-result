@@ -15,13 +15,28 @@ async function proxyRequest(req: NextRequest) {
 
   const headers = new Headers();
 
-  // Inject Logto access token server-side.
-  try {
-    const accessToken = await getAccessToken(logtoConfig, LOGTO_API_RESOURCE);
-    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-  } catch {
-    // Unauthenticated or token refresh failed — forward anyway; backend
-    // endpoints gated by LogtoAdminGuard will return 401/403.
+  // Token resolution:
+  //   1. Real Bearer token in incoming header → forward verbatim (used
+  //      by automation/QC agents that mint a Logto access token via M2M
+  //      and call this proxy directly).
+  //   2. Sentinel "Bearer logto-session" from the in-app SDK → fetch the
+  //      real token from the Logto session cookie. This sentinel exists
+  //      because TanStack Query / generated SDK requires SOME auth
+  //      header to trigger its fetch path; the proxy substitutes the
+  //      real token here so clients never touch tokens.
+  //   3. No header → also fall back to session cookie.
+  const incomingAuth = req.headers.get("authorization");
+  const isSentinel = incomingAuth === "Bearer logto-session";
+  if (incomingAuth && !isSentinel) {
+    headers.set("Authorization", incomingAuth);
+  } else {
+    try {
+      const accessToken = await getAccessToken(logtoConfig, LOGTO_API_RESOURCE);
+      if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+    } catch {
+      // Unauthenticated or token refresh failed — forward anyway; backend
+      // endpoints gated by LogtoAdminGuard will return 401/403.
+    }
   }
 
   const contentType = req.headers.get("content-type");

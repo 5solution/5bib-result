@@ -21,6 +21,7 @@ import { VolStation } from '../entities/vol-station.entity';
 import { VN_BANKS } from '../constants/banks';
 import {
   canonEmail,
+  parseDateInput,
   resolveRoleRef,
   validateBankAccount,
   validateBankHolderName,
@@ -192,7 +193,7 @@ export class TeamRegistrationImportService {
       { header: 'role_id *', key: 'role_id', width: 10, required: true },
       { header: 'role_name (tham khảo)', key: 'role_name', width: 28, required: false },
       { header: 'cccd *', key: 'cccd', width: 16, required: true },
-      { header: 'dob (YYYY-MM-DD)', key: 'dob', width: 14, required: false },
+      { header: 'dob (DD/MM/YYYY)', key: 'dob', width: 14, required: false },
       { header: 'address', key: 'address', width: 36, required: false },
       { header: 'shirt_size', key: 'shirt_size', width: 10, required: false },
       { header: 'bank_account_number', key: 'bank_account_number', width: 22, required: false },
@@ -245,7 +246,7 @@ export class TeamRegistrationImportService {
       role_id: exampleRole?.id ?? 1,
       role_name: exampleRole?.role_name ?? '(xem sheet Roles)',
       cccd: '012345678901',
-      dob: '1995-06-15',
+      dob: '15/06/1995',
       shirt_size: 'M',
       bank_account_number: '9704123456789',
       bank_holder_name: 'NGUYEN VAN A',
@@ -450,7 +451,10 @@ export class TeamRegistrationImportService {
       const email = canonEmail(raw.email);
       const phone = String(raw.phone ?? '').replace(/[\s.-]/g, '');
       const cccd = String(raw.cccd ?? '').trim();
-      const dob = String(raw.dob ?? '').trim();
+      // dob: accept dd/mm/yyyy (Vietnamese) or yyyy-mm-dd (ISO).
+      // Normalize to YYYY-MM-DD for DB storage regardless of input format.
+      const dobRaw = String(raw.dob ?? '').trim();
+      const dob = parseDateInput(dobRaw) ?? dobRaw;
       const shirt_size = String(raw.shirt_size ?? '').trim().toUpperCase();
       const bank_account_number = String(raw.bank_account_number ?? '').trim();
       const bank_holder_name = String(raw.bank_holder_name ?? '').trim();

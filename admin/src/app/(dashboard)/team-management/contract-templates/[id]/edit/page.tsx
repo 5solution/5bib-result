@@ -19,6 +19,7 @@ import {
   updateContractTemplate,
   validateContractTemplate,
   type ContractTemplate,
+  type PartyAConfig,
 } from "@/lib/team-api";
 import ContractPreview from "@/components/ContractPreview";
 
@@ -51,6 +52,13 @@ export default function EditContractTemplatePage({
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [unknownVars, setUnknownVars] = useState<string[]>([]);
+  const [partyA, setPartyA] = useState<PartyAConfig>({
+    party_a_company_name: null,
+    party_a_address: null,
+    party_a_tax_code: null,
+    party_a_representative: null,
+    party_a_position: null,
+  });
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.replace("/sign-in");
@@ -65,6 +73,13 @@ export default function EditContractTemplatePage({
         setName(t.template_name);
         setHtml(t.content_html);
         setIsActive(t.is_active);
+        setPartyA({
+          party_a_company_name: t.party_a_company_name ?? null,
+          party_a_address: t.party_a_address ?? null,
+          party_a_tax_code: t.party_a_tax_code ?? null,
+          party_a_representative: t.party_a_representative ?? null,
+          party_a_position: t.party_a_position ?? null,
+        });
       } catch (err) {
         setLoadFailed(true);
         toast.error((err as Error).message);
@@ -137,6 +152,7 @@ export default function EditContractTemplatePage({
         content_html: html,
         variables: extractVariables(html),
         is_active: isActive,
+        ...partyA,
       });
       toast.success("Đã cập nhật");
     } catch (err) {
@@ -212,6 +228,66 @@ export default function EditContractTemplatePage({
         </div>
       </div>
 
+      {/* Party A — configurable legal entity */}
+      <div className="rounded-lg border bg-card p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold">Thông tin Bên A (Pháp nhân ký)</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Điền để dùng biến{" "}
+            <code className="text-blue-700">{"{{party_a_company_name}}"}</code>,{" "}
+            <code className="text-blue-700">{"{{party_a_representative}}"}</code>
+            … trong nội dung hợp đồng. Mỗi template có thể dùng pháp nhân khác nhau.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label htmlFor="pa_company">Tên công ty</Label>
+            <Input
+              id="pa_company"
+              placeholder="VD: CÔNG TY CỔ PHẦN 5BIB"
+              value={partyA.party_a_company_name ?? ""}
+              onChange={(e) => setPartyA({ ...partyA, party_a_company_name: e.target.value || null })}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="pa_address">Địa chỉ</Label>
+            <Input
+              id="pa_address"
+              placeholder="VD: Tầng 9, Tòa nhà Hồ Gươm Plaza..."
+              value={partyA.party_a_address ?? ""}
+              onChange={(e) => setPartyA({ ...partyA, party_a_address: e.target.value || null })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="pa_tax">Mã số thuế</Label>
+            <Input
+              id="pa_tax"
+              placeholder="VD: 0110398986"
+              value={partyA.party_a_tax_code ?? ""}
+              onChange={(e) => setPartyA({ ...partyA, party_a_tax_code: e.target.value || null })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="pa_rep">Người đại diện</Label>
+            <Input
+              id="pa_rep"
+              placeholder="VD: Nguyễn Bình Minh"
+              value={partyA.party_a_representative ?? ""}
+              onChange={(e) => setPartyA({ ...partyA, party_a_representative: e.target.value || null })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="pa_pos">Chức vụ</Label>
+            <Input
+              id="pa_pos"
+              placeholder="VD: Giám đốc"
+              value={partyA.party_a_position ?? ""}
+              onChange={(e) => setPartyA({ ...partyA, party_a_position: e.target.value || null })}
+            />
+          </div>
+        </div>
+      </div>
+
       {unknownVars.length > 0 ? (
         <div className="rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-900">
           <strong>Biến không hợp lệ:</strong>{" "}
@@ -244,7 +320,11 @@ export default function EditContractTemplatePage({
               <span>Xem với dữ liệu mẫu</span>
             </label>
           </div>
-          <ContractPreview contentHtml={html} withSampleData={withSample} />
+          <ContractPreview
+            contentHtml={html}
+            withSampleData={withSample}
+            sampleOverrides={partyAToOverrides(partyA)}
+          />
         </div>
       </div>
     </div>
@@ -257,4 +337,13 @@ function extractVariables(html: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) set.add(m[1].trim());
   return Array.from(set);
+}
+
+/** Convert nullable PartyAConfig into a string-only override map for the preview. */
+function partyAToOverrides(cfg: PartyAConfig): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(cfg)) {
+    if (v != null && v !== "") out[k] = v;
+  }
+  return out;
 }

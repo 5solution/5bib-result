@@ -39,6 +39,8 @@ import { VolSupplyItem } from './team-management/entities/vol-supply-item.entity
 import { VolSupplyPlan } from './team-management/entities/vol-supply-plan.entity';
 import { VolSupplyAllocation } from './team-management/entities/vol-supply-allocation.entity';
 import { VolSupplySupplement } from './team-management/entities/vol-supply-supplement.entity';
+import { VolAcceptanceTemplate } from './team-management/entities/vol-acceptance-template.entity';
+import { VolContractNumberSequence } from './team-management/entities/vol-contract-number-sequence.entity';
 
 // Conditional: chỉ khởi tạo Platform DB nếu PLATFORM_DB_HOST được cung cấp
 const platformDbModules = env.platformDb.host
@@ -90,6 +92,8 @@ const volunteerDbModules = env.volunteerDb.host
           VolSupplyPlan,
           VolSupplyAllocation,
           VolSupplySupplement,
+          VolAcceptanceTemplate,
+          VolContractNumberSequence,
         ],
         synchronize: false,
         logging: env.env === 'local' || env.env === 'development',
