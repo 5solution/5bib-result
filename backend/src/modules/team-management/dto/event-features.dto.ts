@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsEnum } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /** PATCH /team-management/events/:id/features */
 export class UpdateEventFeaturesDto {
@@ -32,6 +32,9 @@ export class EventFeaturesConfigDto {
 /** Body for PATCH /team-management/registrations/:id/nghiem-thu */
 export class ConfirmNghiemThuDto {
   @ApiProperty({ required: false, maxLength: 1000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
   note?: string;
 }
 
@@ -45,4 +48,33 @@ export class NghiemThuResponseDto {
 
   @ApiProperty()
   completed_at!: string;
+}
+
+/** Body for POST /team-management/registrations/nghiem-thu/batch */
+export class BatchConfirmNghiemThuDto {
+  @ApiProperty({ type: [Number], description: 'Registration IDs to mark completed' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsInt({ each: true })
+  registration_ids!: number[];
+
+  @ApiProperty({ required: false, maxLength: 1000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
+}
+
+/** Response for POST /team-management/registrations/nghiem-thu/batch */
+export class BatchConfirmNghiemThuResponseDto {
+  @ApiProperty({ description: 'IDs successfully transitioned to completed' })
+  succeeded!: number[];
+
+  @ApiProperty({
+    description: 'Per-id failure reasons (id → vietnamese error message)',
+    type: 'object',
+    additionalProperties: { type: 'string' },
+  })
+  failed!: Record<number, string>;
 }
