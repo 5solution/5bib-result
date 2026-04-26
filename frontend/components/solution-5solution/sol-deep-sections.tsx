@@ -289,14 +289,7 @@ export function SolModule5Ticket() {
       style={{ background: 'var(--sol-surface-2)' }}
     >
       <div className="sol-container">
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(280px, 1fr) minmax(300px, 1.2fr)',
-            gap: 'clamp(36px, 5vw, 72px)',
-            alignItems: 'center',
-          }}
-        >
+        <div className="sol-grid-split">
           <Reveal>
             <div>
               <span className="sol-kicker">03 · 5Ticket</span>
@@ -805,13 +798,9 @@ export function SolModule5Pix() {
             }}
           >
             <div
+              className="sol-pipeline"
               style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: 12,
                 marginBottom: 24,
-                fontSize: 13,
                 fontWeight: 700,
                 color: 'var(--sol-blue-700)',
               }}
@@ -825,18 +814,13 @@ export function SolModule5Pix() {
                 'VĐV xem & share',
               ].map((step, i, arr) => (
                 <React.Fragment key={step}>
-                  <span
-                    style={{
-                      padding: '8px 14px',
-                      background: '#fff',
-                      borderRadius: 9999,
-                      border: '1px solid var(--sol-blue-100)',
-                    }}
-                  >
-                    {step}
-                  </span>
+                  <span className="sol-pipeline-pill">{step}</span>
                   {i < arr.length - 1 ? (
-                    <IArr s={14} style={{ color: 'var(--sol-blue)' }} />
+                    <IArr
+                      s={14}
+                      className="sol-pipeline-arrow"
+                      style={{ color: 'var(--sol-blue)' }}
+                    />
                   ) : null}
                 </React.Fragment>
               ))}

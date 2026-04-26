@@ -432,11 +432,131 @@ select.sol-input { appearance: none; background-image: url("data:image/svg+xml;u
 /* ── Utility ─────────────────────────────────────────────────────────────── */
 .sol-scroll-mt { scroll-margin-top: 90px; }
 
+/* ── Responsive split grid (2-col desktop → 1-col mobile) ──────────────── */
+.sol-grid-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.2fr);
+  gap: clamp(36px, 5vw, 72px);
+  align-items: center;
+}
+.sol-grid-split.sol-grid-split-form {
+  grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.2fr);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .sol-grid-split,
+  .sol-grid-split.sol-grid-split-form {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+}
+
+/* ── Pipeline pills — hide arrows on mobile ────────────────────────────── */
+.sol-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.sol-pipeline-pill {
+  padding: 8px 14px;
+  background: #fff;
+  border-radius: 9999px;
+  border: 1px solid var(--sol-blue-100);
+  white-space: nowrap;
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .sol-pipeline-arrow { display: none; }
+  .sol-pipeline-pill { font-size: 12px; padding: 6px 12px; }
+}
+
 /* ── Mobile tweaks ───────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sol-header-nav { display: none; }
   .sol-header-cta-secondary { display: none; }
+
+  /* Header CTA — compact on mobile */
+  .sol-header .sol-btn { padding: 8px 14px !important; font-size: 12px !important; }
+
+  /* Section vertical padding tighter */
+  .sol-section {
+    padding-top: clamp(48px, 8vw, 80px);
+    padding-bottom: clamp(48px, 8vw, 80px);
+  }
+
+  /* Hero — looser min-height + smaller padding */
+  #top {
+    min-height: auto !important;
+    padding-top: clamp(96px, 14vh, 140px) !important;
+    padding-bottom: clamp(56px, 8vh, 80px) !important;
+  }
+
+  /* Hero h1 — smaller base on narrow phones */
+  #top .sol-h1 {
+    font-size: clamp(32px, 9vw, 56px) !important;
+    line-height: 1.04 !important;
+  }
+
+  /* Pricing card "Từ 5.5%" — smaller */
+  #5ticket [class*='sol-card'] [style*='font-size: clamp(40px, 6vw, 72px)'] {
+    font-size: clamp(32px, 11vw, 52px) !important;
+  }
+
+  /* Result tech specs box — smaller stat numbers */
+  #result [style*='font-size: clamp(24px, 3vw, 36px)'] {
+    font-size: clamp(22px, 7vw, 32px) !important;
+  }
+
+  /* Brand stripe — thinner on mobile */
+  .sol-brand-stripe { height: 4px; }
+
+  /* Container padding tighter */
+  .sol-container {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  /* Card padding tighter */
+  .sol-card,
+  .sol-card-dark {
+    padding: 20px;
+  }
+
+  /* Trust bar — let the meta text wrap nicely */
+  .sol-card[style*='padding: 20px 28px'] { padding: 16px !important; }
+
+  /* About FIND/FINE/FIVE big tags — smaller */
+  #about [style*='font-size: clamp(40px, 5vw, 64px)'] {
+    font-size: 40px !important;
+  }
 }
+
+/* ── Very small phones (<400px) ────────────────────────────────────────── */
+@media (max-width: 400px) {
+  .sol-h1 { font-size: 30px !important; }
+  .sol-h2 { font-size: 26px !important; }
+  .sol-h3 { font-size: 19px !important; }
+  .sol-lead { font-size: 15px !important; }
+  .sol-stat-num { font-size: 32px !important; }
+
+  /* Hero stats — force 2 cols even on very small to avoid 1-col tower */
+  #top [style*='grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))'] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 18px !important;
+  }
+}
+
+/* ── Tablet (640-1024) — keep ecosystem 2-col, ensure breathing ─────── */
+@media (min-width: 640px) and (max-width: 1024px) {
+  /* 5BIB modules — 2 cols on tablet */
+  #5bib > .sol-container > div[style*='auto-fit, minmax(320px, 1fr)'] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ── Hide horizontal overflow safety net ──────────────────────────────── */
+.sol-root, .sol-root main { overflow-x: hidden; }
 
 /* ── Reduce motion ───────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

@@ -12,14 +12,7 @@ export function SolContact() {
       }}
     >
       <div className="sol-container">
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(280px, 1fr) minmax(360px, 1.2fr)',
-            gap: 'clamp(32px, 5vw, 72px)',
-            alignItems: 'start',
-          }}
-        >
+        <div className="sol-grid-split sol-grid-split-form">
           <Reveal>
             <div>
               <span className="sol-kicker">05 · Liên hệ</span>
