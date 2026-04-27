@@ -159,6 +159,8 @@ export interface TeamRole {
   is_leader_role?: boolean;
   managed_role_ids?: number[];
   managed_roles?: Array<{ id: number; role_name: string }>;
+  // Whether newly-approved registrations for this role skip manual approval.
+  auto_approve?: boolean;
 }
 
 export type ChatPlatform = "zalo" | "telegram" | "whatsapp" | "other";

@@ -11,6 +11,16 @@ import {
 } from "@/lib/team-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import ScheduleEmailConfigSheet from "./_config-sheet";
 
 export default function ScheduleEmailsPage(): React.ReactElement {
@@ -215,34 +225,34 @@ function BulkConfirmDialog({
   // — skipped members are surfaced in the success toast so the admin can
   // decide whether to chase contract signatures.
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-    >
-      <div className="w-full max-w-md rounded-lg bg-background p-5 shadow-xl">
-        <h2 className="text-lg font-semibold">
-          Gửi email lịch trình cho {role.role_name}?
-        </h2>
-        <ul className="mt-3 space-y-1.5 text-sm">
-          <li>
-            → <strong>{role.member_count_eligible}</strong> thành viên đủ điều
-            kiện nhận email
-          </li>
-          <li className="text-muted-foreground">
-            Thành viên chưa ký hợp đồng (status &lt; <code>contract_signed</code>)
-            sẽ tự động bị bỏ qua.
-          </li>
-        </ul>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={sending}>
+    <AlertDialog open onOpenChange={(v) => { if (!v && !sending) onCancel(); }}>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Gửi email lịch trình cho {role.role_name}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            <span className="block space-y-1.5 text-sm">
+              <span className="block">
+                → <strong>{role.member_count_eligible}</strong> thành viên đủ điều
+                kiện nhận email
+              </span>
+              <span className="block text-muted-foreground">
+                Thành viên chưa ký hợp đồng (status &lt; <code>contract_signed</code>)
+                sẽ tự động bị bỏ qua.
+              </span>
+            </span>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={sending} onClick={onCancel}>
             Hủy
-          </Button>
-          <Button onClick={onConfirm} disabled={sending}>
+          </AlertDialogCancel>
+          <AlertDialogAction disabled={sending} onClick={onConfirm}>
             {sending ? "Đang gửi..." : "Xác nhận gửi"}
-          </Button>
-        </div>
-      </div>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

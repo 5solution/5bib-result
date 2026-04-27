@@ -419,7 +419,9 @@ function EditRoleDialog({
       daily_rate: Number(role.daily_rate),
       working_days: role.working_days,
       waitlist_enabled: role.waitlist_enabled,
-      auto_approve: false,
+      // BUG FIX: was hardcoded `false` — always reset auto_approve on every edit.
+      // Now reads the saved value from the role object.
+      auto_approve: role.auto_approve ?? false,
       sort_order: role.sort_order,
       contract_template_id: role.contract_template_id,
       chat_platform: r.chat_platform ?? null,

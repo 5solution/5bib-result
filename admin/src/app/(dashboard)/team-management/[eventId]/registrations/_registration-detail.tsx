@@ -32,6 +32,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { StatusBadge, deriveStatusKey } from "@/lib/status-style";
 import { formatDateVN, isoToVNField, parseDateVN } from "@/lib/utils";
 import {
@@ -1896,22 +1903,15 @@ function RejectChangesDialog({
   onReasonChange: (s: string) => void;
   busy: boolean;
   onConfirm: () => Promise<void>;
-}): React.ReactElement | null {
-  if (!open) return null;
+}): React.ReactElement {
   const tooShort = reason.trim().length < 3;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={() => {
-        if (!busy) onOpenChange(false);
-      }}
-    >
-      <div
-        className="w-full max-w-md rounded-lg border bg-white p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="font-semibold text-lg mb-1">Từ chối thay đổi</h3>
-        <p className="text-sm text-muted-foreground mb-3">
+    <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Từ chối thay đổi</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
           Lý do sẽ được gửi email tới TNV và lưu vào audit log.
         </p>
         <Textarea
@@ -1921,25 +1921,16 @@ function RejectChangesDialog({
           placeholder="VD: Ảnh CCCD mờ, vui lòng chụp lại..."
           maxLength={1000}
         />
-        <div className="flex justify-end gap-2 mt-3">
-          <Button
-            variant="ghost"
-            disabled={busy}
-            onClick={() => onOpenChange(false)}
-          >
+        <DialogFooter>
+          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button
-            disabled={busy || tooShort}
-            onClick={() => {
-              void onConfirm();
-            }}
-          >
+          <Button disabled={busy || tooShort} onClick={() => { void onConfirm(); }}>
             {busy ? "Đang xử lý..." : "Từ chối thay đổi"}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2071,22 +2062,15 @@ function ClearSuspiciousDialog({
   onNoteChange: (s: string) => void;
   busy: boolean;
   onConfirm: () => Promise<void>;
-}): React.ReactElement | null {
-  if (!open) return null;
+}): React.ReactElement {
   const tooShort = note.trim().length < 5;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={() => {
-        if (!busy) onOpenChange(false);
-      }}
-    >
-      <div
-        className="w-full max-w-md rounded-lg border bg-white p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="font-semibold text-lg mb-1">Xác nhận OK (clear flag)</h3>
-        <p className="text-sm text-muted-foreground mb-3">
+    <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Xác nhận OK (clear flag)</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
           Ghi chú sẽ được lưu vào audit log. Bắt buộc.
         </p>
         <Textarea
@@ -2096,25 +2080,16 @@ function ClearSuspiciousDialog({
           placeholder="VD: Đã trao đổi với leader, check-in sớm vì..."
           maxLength={500}
         />
-        <div className="flex justify-end gap-2 mt-3">
-          <Button
-            variant="ghost"
-            disabled={busy}
-            onClick={() => onOpenChange(false)}
-          >
+        <DialogFooter>
+          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button
-            disabled={busy || tooShort}
-            onClick={() => {
-              void onConfirm();
-            }}
-          >
+          <Button disabled={busy || tooShort} onClick={() => { void onConfirm(); }}>
             {busy ? "Đang xử lý..." : "Xác nhận OK"}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
