@@ -355,11 +355,20 @@ export default function ContractEditor({
    * - WYSIWYG mode: use Tiptap's Image extension command (setImage).
    *   Image is rendered in-editor with CSS max-width.
    * - Source mode: splice <img> HTML at textarea cursor.
+   *
+   * Security: src and alt are HTML-attribute-encoded to prevent injection
+   * (e.g. src containing `" onerror="...` would break out of the attribute).
    */
   function handleInsertImage(src: string, alt: string): void {
     if (!editor || editor.isDestroyed) return;
 
-    const imgHtml = `<img src="${src}"${alt ? ` alt="${alt}"` : ""} style="max-width:100%;height:auto;" />`;
+    // HTML-encode for safe insertion into attribute context.
+    const escapeSrc = (s: string): string =>
+      s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeSrc = escapeSrc(src);
+    const safeAlt = escapeSrc(alt);
+
+    const imgHtml = `<img src="${safeSrc}"${safeAlt ? ` alt="${safeAlt}"` : ""} style="max-width:100%;height:auto;" />`;
 
     if (sourceMode) {
       // Source mode: splice at textarea cursor position.
@@ -873,9 +882,15 @@ function ImageMenu({
   function handleInsertUrl(): void {
     const trimmed = src.trim();
     if (!trimmed) return;
+    // Block non-http(s) schemes (javascript:, data:, vbscript:, etc.)
+    if (!/^https?:\/\//i.test(trimmed)) {
+      setUploadError("URL phải bắt đầu bằng https:// hoặc http://");
+      return;
+    }
     onInsertImage(trimmed, alt.trim());
     setSrc("");
     setAlt("");
+    setUploadError("");
     setOpen(false);
   }
 
@@ -927,7 +942,7 @@ function ImageMenu({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  accept="image/jpeg,image/png,image/webp"
                   className="hidden"
                   onChange={(e) => void handleFileChange(e)}
                 />
@@ -942,7 +957,7 @@ function ImageMenu({
                     {uploading ? "Đang upload..." : "Chọn ảnh từ thiết bị"}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
-                    JPG · PNG · WebP · GIF · tối đa 10MB
+                    JPG · PNG · WebP · tối đa 5MB
                   </span>
                 </button>
                 {uploadError ? (

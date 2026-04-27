@@ -120,7 +120,8 @@ export class TeamManagementController {
    * Uses 'benefits' processing: resizes longest side to 1600px, keeps aspect ratio.
    */
   @Post('upload-editor-image')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  // 5 MB — aligned with TeamPhotoService.MAX_BYTES to avoid silent 413 in service layer
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
   @ApiOperation({ summary: 'Upload image for email/contract editor (admin only)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

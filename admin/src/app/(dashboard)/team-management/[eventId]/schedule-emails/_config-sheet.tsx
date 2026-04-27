@@ -320,6 +320,10 @@ export default function ScheduleEmailConfigSheet({
                     team_contact_phone: contactPhone,
                     special_note: specialNote,
                   })}
+                  // sandbox prevents script execution even if email body contains
+                  // <script> tags or inline event handlers pasted from external sources.
+                  // allow-same-origin lets CSS/fonts load; no allow-scripts.
+                  sandbox="allow-same-origin"
                   className="h-96 w-full rounded border bg-white"
                 />
               </section>
