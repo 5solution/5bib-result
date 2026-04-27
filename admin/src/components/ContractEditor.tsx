@@ -7,6 +7,20 @@ import { TextStyle, FontFamily, FontSize } from "@tiptap/extension-text-style";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
 import Image from "@tiptap/extension-image";
+// Duck-type guard for ProseMirror NodeSelection (avoids importing prosemirror-state directly).
+// NodeSelection is the only Selection subclass that carries a `.node` property.
+function isNodeSelection(
+  sel: unknown,
+): sel is { node: { type: { name: string }; attrs: Record<string, unknown> } } {
+  return (
+    sel !== null &&
+    typeof sel === "object" &&
+    "node" in sel &&
+    sel.node !== null &&
+    typeof sel.node === "object" &&
+    "type" in sel.node
+  );
+}
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { uploadEditorImage } from "@/lib/team-api";
@@ -14,6 +28,7 @@ import {
   Bold,
   Italic,
   Underline as UnderlineIcon,
+  Move,
   Heading1,
   Heading2,
   List,
@@ -33,6 +48,27 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+/**
+ * Extends the base Image extension to preserve the `style` attribute so that
+ * width/height overrides set via ImageSizeBar survive serialise → parse round-trips.
+ * Without this, ProseMirror strips unknown attributes during content parsing.
+ */
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("style"),
+        renderHTML: (attrs: Record<string, unknown>) => {
+          if (!attrs.style) return {};
+          return { style: attrs.style as string };
+        },
+      },
+    };
+  },
+});
 
 export interface VariableGroup {
   label: string;
@@ -181,6 +217,10 @@ export default function ContractEditor({
   const [sourceHtml, setSourceHtml] = useState(initialContent);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Track whether an image node is currently selected — used to show the
+  // contextual ImageSizeBar between the toolbar and editor content.
+  const [selectedImgStyle, setSelectedImgStyle] = useState<string | null>(null);
+
   const editor = useEditor({
     // StarterKit already supplies bold/italic/bullet/ordered/heading/etc.
     // Underline is NOT in StarterKit by default — but user only asked for
@@ -201,11 +241,12 @@ export default function ContractEditor({
         placeholder: placeholder ?? "Nhập nội dung hợp đồng...",
       }),
       CharacterCount.configure({ limit: 100000 }),
-      // Image extension — required for <img> tags to render in WYSIWYG mode.
+      // ResizableImage extends the base Image extension with a `style` attribute
+      // so that width overrides from ImageSizeBar survive parse/serialise cycles.
       // inline: true lets images sit inside paragraphs (not just between blocks),
       // which is required for insertContent() to succeed at any cursor position.
       // allowBase64: true — needed for {{signature_image}} data URLs.
-      Image.configure({ inline: true, allowBase64: true }),
+      ResizableImage.configure({ inline: true, allowBase64: true }),
     ],
     content: initialContent,
     // SSR guard — editor must only mount on the client. Parent route
@@ -213,6 +254,16 @@ export default function ContractEditor({
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
+    },
+    // Track image node selection — fires on every transaction (selection,
+    // keypress, focus change). Cheap: just reads selection state.
+    onTransaction: ({ editor: ed }) => {
+      const sel = ed.state.selection;
+      if (isNodeSelection(sel) && sel.node.type.name === "image") {
+        setSelectedImgStyle((sel.node.attrs.style as string | undefined) ?? "");
+      } else {
+        setSelectedImgStyle(null);
+      }
     },
     editorProps: {
       attributes: {
@@ -343,6 +394,15 @@ export default function ContractEditor({
         onInsertTable={handleInsertTable}
         onInsertImage={handleInsertImage}
       />
+      {/* Contextual image size bar — appears only when an image node is selected */}
+      {selectedImgStyle !== null && !sourceMode && (
+        <ImageSizeBar
+          currentStyle={selectedImgStyle}
+          onResize={(style) => {
+            editor.chain().focus().updateAttributes("image", { style }).run();
+          }}
+        />
+      )}
       <style jsx global>{`
         .ProseMirror h1 { font-size: 1.5rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.5rem; }
         .ProseMirror h2 { font-size: 1.25rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.5rem; }
@@ -936,6 +996,83 @@ function ImageMenu({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Contextual toolbar that appears below the main toolbar when an image node
+ * is selected. Provides quick-access width presets + a custom px input.
+ * Calls onResize with a CSS style string like "width:400px;height:auto;".
+ */
+const IMAGE_SIZE_PRESETS = [
+  { label: "200px", style: "width:200px;height:auto;" },
+  { label: "400px", style: "width:400px;height:auto;" },
+  { label: "600px", style: "width:600px;height:auto;" },
+  { label: "100%",  style: "width:100%;height:auto;"  },
+];
+
+function ImageSizeBar({
+  currentStyle,
+  onResize,
+}: {
+  currentStyle: string;
+  onResize: (style: string) => void;
+}): React.ReactElement {
+  const [customPx, setCustomPx] = useState("");
+
+  function applyCustom(): void {
+    const px = parseInt(customPx);
+    if (px > 0) {
+      onResize(`width:${px}px;height:auto;`);
+      setCustomPx("");
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-b bg-blue-50/60 px-3 py-1.5 text-xs dark:bg-blue-950/30">
+      <Move className="size-3.5 shrink-0 text-blue-600" />
+      <span className="mr-0.5 font-medium text-blue-700 dark:text-blue-400">Kích thước ảnh:</span>
+      {IMAGE_SIZE_PRESETS.map((p) => (
+        <button
+          key={p.label}
+          type="button"
+          onClick={() => onResize(p.style)}
+          className={cn(
+            "rounded border px-2 py-0.5 transition-colors",
+            currentStyle === p.style
+              ? "border-blue-500 bg-blue-100 font-semibold text-blue-700 dark:bg-blue-800 dark:text-blue-200"
+              : "border-border text-muted-foreground hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40",
+          )}
+        >
+          {p.label}
+        </button>
+      ))}
+      <span className="mx-1 inline-block h-4 w-px bg-border" />
+      {/* Custom pixel input */}
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          min={50}
+          max={2000}
+          value={customPx}
+          onChange={(e) => setCustomPx(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") applyCustom(); }}
+          placeholder="px"
+          className="h-6 w-16 rounded border border-input bg-background px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+        <button
+          type="button"
+          onClick={applyCustom}
+          disabled={!customPx || parseInt(customPx) <= 0}
+          className="rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:border-blue-400 hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-900/40"
+        >
+          Áp dụng
+        </button>
+      </div>
+      <span className="ml-auto text-[10px] text-muted-foreground">
+        Click ảnh → chọn kích thước
+      </span>
     </div>
   );
 }
