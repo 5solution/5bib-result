@@ -14,11 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { usePrompt } from "@/components/prompt-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { VariableGroup } from "@/components/ContractEditor";
@@ -104,6 +105,7 @@ export default function ScheduleEmailConfigSheet({
   onClose,
 }: Props): React.ReactElement {
   const { token } = useAuth();
+  const openPrompt = usePrompt();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
@@ -185,10 +187,13 @@ export default function ScheduleEmailConfigSheet({
     // previously-saved body, which is confusing when the admin is iterating.
     const saved = await handleSave();
     if (!saved) return;
-    const input = window.prompt(
-      "Nhập email nhận bản test (bỏ trống để gửi đến email của bạn)",
-      "",
-    );
+    const input = await openPrompt({
+      title: "Gửi email test",
+      description: "Nhập địa chỉ nhận (bỏ trống để gửi đến email của bạn)",
+      placeholder: "example@email.com",
+      inputType: "email",
+      confirmText: "Gửi",
+    });
     if (input === null) return; // Cancel
     const trimmed = input.trim();
     try {
@@ -214,19 +219,16 @@ export default function ScheduleEmailConfigSheet({
   }
 
   return (
-    <Sheet open onOpenChange={(v) => (!v ? onClose() : undefined)}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-3xl overflow-y-auto"
-      >
-        <SheetHeader>
-          <SheetTitle>
+    <Dialog open onOpenChange={(v) => (!v ? onClose() : undefined)}>
+      <DialogContent className="w-full max-w-3xl xl:max-w-4xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
             Email lịch trình · {roleName}
             <span className="ml-2 text-xs font-normal text-muted-foreground">
               ({eligibleCount} thành viên đủ điều kiện)
             </span>
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+        </DialogHeader>
 
         {loading ? (
           <div className="space-y-3 p-4">
@@ -318,6 +320,10 @@ export default function ScheduleEmailConfigSheet({
                     team_contact_phone: contactPhone,
                     special_note: specialNote,
                   })}
+                  // sandbox prevents script execution even if email body contains
+                  // <script> tags or inline event handlers pasted from external sources.
+                  // allow-same-origin lets CSS/fonts load; no allow-scripts.
+                  sandbox="allow-same-origin"
                   className="h-96 w-full rounded border bg-white"
                 />
               </section>
@@ -368,8 +374,8 @@ export default function ScheduleEmailConfigSheet({
             ) : null}
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 

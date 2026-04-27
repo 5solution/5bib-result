@@ -174,7 +174,7 @@ export class TeamScheduleEmailService {
     testEmail: string | undefined,
     adminEmail: string,
   ): Promise<{ sent: boolean; delivered_to: string }> {
-    await this.assertRole(eventId, roleId);
+    const role = await this.assertRole(eventId, roleId);
     const cfg = await this.repo.findOne({
       where: { event_id: eventId, role_id: roleId },
     });
@@ -189,7 +189,24 @@ export class TeamScheduleEmailService {
         'Không có địa chỉ nhận — truyền test_email hoặc đăng nhập với admin có email',
       );
     }
-    const vars = { ...SAMPLE_DATA, ...this.roleCustoms(cfg) };
+    // Fetch real event so test preview shows actual event_name / dates /
+    // location instead of the hardcoded SAMPLE_DATA values.
+    const event = await this.eventRepo.findOne({ where: { id: eventId } });
+    const realOverrides: Partial<typeof SAMPLE_DATA> = event
+      ? {
+          event_name: event.event_name,
+          event_start_date: formatDate(event.event_start_date),
+          event_end_date: formatDate(event.event_end_date),
+          event_location: event.location ?? '',
+          role_name: role.role_name,
+          daily_rate: formatVnd(Number(role.daily_rate)),
+          working_days: String(role.working_days),
+          total_compensation: formatVnd(
+            Number(role.daily_rate) * role.working_days,
+          ),
+        }
+      : {};
+    const vars = { ...SAMPLE_DATA, ...realOverrides, ...this.roleCustoms(cfg) };
     const rendered = this.render(cfg.body_html, vars);
     const subject = this.render(cfg.subject, vars);
     const sent = await this.mail.sendCustomHtml(to, subject, rendered);

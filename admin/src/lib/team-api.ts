@@ -159,6 +159,8 @@ export interface TeamRole {
   is_leader_role?: boolean;
   managed_role_ids?: number[];
   managed_roles?: Array<{ id: number; role_name: string }>;
+  // Whether newly-approved registrations for this role skip manual approval.
+  auto_approve?: boolean;
 }
 
 export type ChatPlatform = "zalo" | "telegram" | "whatsapp" | "other";
@@ -2715,6 +2717,21 @@ export async function confirmAllInEvent(
       body: JSON.stringify({ status, ...(note ? { note } : {}) }),
     },
   );
+  await assertOk(res);
+  return res.json();
+}
+
+export async function uploadEditorImage(
+  token: string,
+  file: File,
+): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/team-management/upload-editor-image", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
   await assertOk(res);
   return res.json();
 }

@@ -6,11 +6,29 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle, FontFamily, FontSize } from "@tiptap/extension-text-style";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
-import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "@tiptap/extension-image";
+// Duck-type guard for ProseMirror NodeSelection (avoids importing prosemirror-state directly).
+// NodeSelection is the only Selection subclass that carries a `.node` property.
+function isNodeSelection(
+  sel: unknown,
+): sel is { node: { type: { name: string }; attrs: Record<string, unknown> } } {
+  return (
+    sel !== null &&
+    typeof sel === "object" &&
+    "node" in sel &&
+    sel.node !== null &&
+    typeof sel.node === "object" &&
+    "type" in sel.node
+  );
+}
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { uploadEditorImage } from "@/lib/team-api";
 import {
   Bold,
   Italic,
   Underline as UnderlineIcon,
+  Move,
   Heading1,
   Heading2,
   List,
@@ -25,10 +43,32 @@ import {
   Table2,
   PenLine,
   LayoutGrid,
+  ImagePlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+/**
+ * Extends the base Image extension to preserve the `style` attribute so that
+ * width/height overrides set via ImageSizeBar survive serialise → parse round-trips.
+ * Without this, ProseMirror strips unknown attributes during content parsing.
+ */
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("style"),
+        renderHTML: (attrs: Record<string, unknown>) => {
+          if (!attrs.style) return {};
+          return { style: attrs.style as string };
+        },
+      },
+    };
+  },
+});
 
 export interface VariableGroup {
   label: string;
@@ -177,6 +217,10 @@ export default function ContractEditor({
   const [sourceHtml, setSourceHtml] = useState(initialContent);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Track whether an image node is currently selected — used to show the
+  // contextual ImageSizeBar between the toolbar and editor content.
+  const [selectedImgStyle, setSelectedImgStyle] = useState<string | null>(null);
+
   const editor = useEditor({
     // StarterKit already supplies bold/italic/bullet/ordered/heading/etc.
     // Underline is NOT in StarterKit by default — but user only asked for
@@ -197,6 +241,12 @@ export default function ContractEditor({
         placeholder: placeholder ?? "Nhập nội dung hợp đồng...",
       }),
       CharacterCount.configure({ limit: 100000 }),
+      // ResizableImage extends the base Image extension with a `style` attribute
+      // so that width overrides from ImageSizeBar survive parse/serialise cycles.
+      // inline: true lets images sit inside paragraphs (not just between blocks),
+      // which is required for insertContent() to succeed at any cursor position.
+      // allowBase64: true — needed for {{signature_image}} data URLs.
+      ResizableImage.configure({ inline: true, allowBase64: true }),
     ],
     content: initialContent,
     // SSR guard — editor must only mount on the client. Parent route
@@ -204,6 +254,16 @@ export default function ContractEditor({
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
+    },
+    // Track image node selection — fires on every transaction (selection,
+    // keypress, focus change). Cheap: just reads selection state.
+    onTransaction: ({ editor: ed }) => {
+      const sel = ed.state.selection;
+      if (isNodeSelection(sel) && sel.node.type.name === "image") {
+        setSelectedImgStyle((sel.node.attrs.style as string | undefined) ?? "");
+      } else {
+        setSelectedImgStyle(null);
+      }
     },
     editorProps: {
       attributes: {
@@ -290,6 +350,49 @@ export default function ContractEditor({
     }
   }
 
+  /**
+   * Insert an <img> tag into the document.
+   * - WYSIWYG mode: use Tiptap's Image extension command (setImage).
+   *   Image is rendered in-editor with CSS max-width.
+   * - Source mode: splice <img> HTML at textarea cursor.
+   *
+   * Security: src and alt are HTML-attribute-encoded to prevent injection
+   * (e.g. src containing `" onerror="...` would break out of the attribute).
+   */
+  function handleInsertImage(src: string, alt: string): void {
+    if (!editor || editor.isDestroyed) return;
+
+    // HTML-encode for safe insertion into attribute context.
+    const escapeSrc = (s: string): string =>
+      s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeSrc = escapeSrc(src);
+    const safeAlt = escapeSrc(alt);
+
+    const imgHtml = `<img src="${safeSrc}"${safeAlt ? ` alt="${safeAlt}"` : ""} style="max-width:100%;height:auto;" />`;
+
+    if (sourceMode) {
+      // Source mode: splice at textarea cursor position.
+      const ta = textareaRef.current;
+      const pos = ta?.selectionStart ?? sourceHtml.length;
+      const newHtml =
+        sourceHtml.slice(0, pos) + "\n" + imgHtml + "\n" + sourceHtml.slice(pos);
+      setSourceHtml(newHtml);
+      onChange(newHtml);
+      setTimeout(() => {
+        if (!ta) return;
+        ta.focus();
+        const end = pos + imgHtml.length + 2;
+        ta.setSelectionRange(end, end);
+      }, 0);
+    } else {
+      // WYSIWYG mode: insertContent with raw HTML string.
+      // We use insertContent (not setImage) so the style attribute is preserved.
+      // inline: true on the Image extension lets this succeed at any cursor position.
+      // focus() restores the editor's last known selection before inserting.
+      editor.chain().focus().insertContent(imgHtml).run();
+    }
+  }
+
   return (
     <div className="rounded-md border bg-background">
       <Toolbar
@@ -298,7 +401,17 @@ export default function ContractEditor({
         sourceMode={sourceMode}
         onToggleSource={toggleSourceMode}
         onInsertTable={handleInsertTable}
+        onInsertImage={handleInsertImage}
       />
+      {/* Contextual image size bar — appears only when an image node is selected */}
+      {selectedImgStyle !== null && !sourceMode && (
+        <ImageSizeBar
+          currentStyle={selectedImgStyle}
+          onResize={(style) => {
+            editor.chain().focus().updateAttributes("image", { style }).run();
+          }}
+        />
+      )}
       <style jsx global>{`
         .ProseMirror h1 { font-size: 1.5rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.5rem; }
         .ProseMirror h2 { font-size: 1.25rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.5rem; }
@@ -320,6 +433,9 @@ export default function ContractEditor({
            so cells are non-editable but at least visible for reference) */
         .ProseMirror table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }
         .ProseMirror td, .ProseMirror th { border: 1px solid #e5e7eb; padding: 6px 10px; vertical-align: top; }
+        /* Image styles — max-width prevents overflow; selected state shows outline */
+        .ProseMirror img { max-width: 100%; height: auto; display: block; margin: 0.5rem 0; }
+        .ProseMirror img.ProseMirror-selectednode { outline: 2px solid #3b82f6; outline-offset: 2px; }
       `}</style>
       {sourceMode ? (
         <textarea
@@ -382,12 +498,14 @@ function Toolbar({
   sourceMode,
   onToggleSource,
   onInsertTable,
+  onInsertImage,
 }: {
   editor: Editor;
   groups: VariableGroup[];
   sourceMode: boolean;
   onToggleSource: () => void;
   onInsertTable: (html: string) => void;
+  onInsertImage: (src: string, alt: string) => void;
 }): React.ReactElement {
   const dis = sourceMode;
 
@@ -499,6 +617,10 @@ function Toolbar({
       <Separator />
 
       <TableMenu onInsertTable={onInsertTable} />
+
+      <Separator />
+
+      <ImageMenu onInsertImage={onInsertImage} />
 
       <Separator />
 
@@ -692,6 +814,280 @@ function TableMenu({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * ImageMenu — toolbar button + popover with two tabs:
+ *   - "Từ thiết bị": file picker → upload to S3 → auto-insert
+ *   - "Từ URL": paste URL → insert
+ */
+function ImageMenu({
+  onInsertImage,
+  disabled,
+}: {
+  onInsertImage: (src: string, alt: string) => void;
+  disabled?: boolean;
+}): React.ReactElement {
+  const { token } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"upload" | "url">("upload");
+  const [src, setSrc] = useState("");
+  const [alt, setAlt] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !token) return;
+      setUploadError("");
+      setUploading(true);
+      try {
+        const { url } = await uploadEditorImage(token, file);
+        onInsertImage(url, file.name.replace(/\.[^.]+$/, ""));
+        setOpen(false);
+      } catch (err) {
+        setUploadError((err as Error).message ?? "Upload thất bại");
+      } finally {
+        setUploading(false);
+        // Reset so the same file can be re-selected
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [token, onInsertImage],
+  );
+
+  function handleInsertUrl(): void {
+    const trimmed = src.trim();
+    if (!trimmed) return;
+    // Block non-http(s) schemes (javascript:, data:, vbscript:, etc.)
+    if (!/^https?:\/\//i.test(trimmed)) {
+      setUploadError("URL phải bắt đầu bằng https:// hoặc http://");
+      return;
+    }
+    onInsertImage(trimmed, alt.trim());
+    setSrc("");
+    setAlt("");
+    setUploadError("");
+    setOpen(false);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => !disabled && setOpen((v) => !v)}
+        disabled={disabled}
+        className="h-8 gap-1"
+        title="Chèn ảnh"
+      >
+        <ImagePlus className="size-4" />
+        <span className="hidden sm:inline">Ảnh</span>
+      </Button>
+
+      {open && (
+        <div className="absolute left-0 top-9 z-50 w-72 rounded-md border bg-popover shadow-lg">
+          {/* Tabs */}
+          <div className="flex border-b text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => setTab("upload")}
+              className={cn(
+                "flex-1 py-2 hover:bg-accent",
+                tab === "upload" && "border-b-2 border-primary text-primary",
+              )}
+            >
+              Từ thiết bị
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("url")}
+              className={cn(
+                "flex-1 py-2 hover:bg-accent",
+                tab === "url" && "border-b-2 border-primary text-primary",
+              )}
+            >
+              Từ URL
+            </button>
+          </div>
+
+          <div className="p-3">
+            {tab === "upload" ? (
+              <>
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => void handleFileChange(e)}
+                />
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex w-full flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-muted-foreground/30 py-6 text-sm hover:border-primary/50 hover:bg-accent disabled:opacity-50"
+                >
+                  <ImagePlus className="size-6 text-muted-foreground" />
+                  <span className="font-medium">
+                    {uploading ? "Đang upload..." : "Chọn ảnh từ thiết bị"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    JPG · PNG · WebP · tối đa 5MB
+                  </span>
+                </button>
+                {uploadError ? (
+                  <p className="mt-2 text-xs text-red-500">{uploadError}</p>
+                ) : null}
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Ảnh upload lên S3 — link public, hiển thị được trong email.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">
+                      URL ảnh <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      autoFocus
+                      type="url"
+                      value={src}
+                      onChange={(e) => setSrc(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleInsertUrl(); }}
+                      placeholder="https://..."
+                      className="h-8 w-full rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">
+                      Alt text
+                    </label>
+                    <input
+                      type="text"
+                      value={alt}
+                      onChange={(e) => setAlt(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleInsertUrl(); }}
+                      placeholder="Mô tả ngắn..."
+                      className="h-8 w-full rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleInsertUrl}
+                  disabled={!src.trim()}
+                  className="mt-3 w-full rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Chèn ảnh
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Contextual toolbar that appears below the main toolbar when an image node
+ * is selected. Provides quick-access width presets + a custom px input.
+ * Calls onResize with a CSS style string like "width:400px;height:auto;".
+ */
+const IMAGE_SIZE_PRESETS = [
+  { label: "200px", style: "width:200px;height:auto;" },
+  { label: "400px", style: "width:400px;height:auto;" },
+  { label: "600px", style: "width:600px;height:auto;" },
+  { label: "100%",  style: "width:100%;height:auto;"  },
+];
+
+function ImageSizeBar({
+  currentStyle,
+  onResize,
+}: {
+  currentStyle: string;
+  onResize: (style: string) => void;
+}): React.ReactElement {
+  const [customPx, setCustomPx] = useState("");
+
+  function applyCustom(): void {
+    const px = parseInt(customPx);
+    if (px > 0) {
+      onResize(`width:${px}px;height:auto;`);
+      setCustomPx("");
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-b bg-blue-50/60 px-3 py-1.5 text-xs dark:bg-blue-950/30">
+      <Move className="size-3.5 shrink-0 text-blue-600" />
+      <span className="mr-0.5 font-medium text-blue-700 dark:text-blue-400">Kích thước ảnh:</span>
+      {IMAGE_SIZE_PRESETS.map((p) => (
+        <button
+          key={p.label}
+          type="button"
+          onClick={() => onResize(p.style)}
+          className={cn(
+            "rounded border px-2 py-0.5 transition-colors",
+            currentStyle === p.style
+              ? "border-blue-500 bg-blue-100 font-semibold text-blue-700 dark:bg-blue-800 dark:text-blue-200"
+              : "border-border text-muted-foreground hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40",
+          )}
+        >
+          {p.label}
+        </button>
+      ))}
+      <span className="mx-1 inline-block h-4 w-px bg-border" />
+      {/* Custom pixel input */}
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          min={50}
+          max={2000}
+          value={customPx}
+          onChange={(e) => setCustomPx(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") applyCustom(); }}
+          placeholder="px"
+          className="h-6 w-16 rounded border border-input bg-background px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+        <button
+          type="button"
+          onClick={applyCustom}
+          disabled={!customPx || parseInt(customPx) <= 0}
+          className="rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:border-blue-400 hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-900/40"
+        >
+          Áp dụng
+        </button>
+      </div>
+      <span className="ml-auto text-[10px] text-muted-foreground">
+        Click ảnh → chọn kích thước
+      </span>
     </div>
   );
 }
