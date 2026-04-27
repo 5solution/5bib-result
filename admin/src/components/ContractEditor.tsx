@@ -6,7 +6,10 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle, FontFamily, FontSize } from "@tiptap/extension-text-style";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
-import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "@tiptap/extension-image";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { uploadEditorImage } from "@/lib/team-api";
 import {
   Bold,
   Italic,
@@ -25,6 +28,7 @@ import {
   Table2,
   PenLine,
   LayoutGrid,
+  ImagePlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -197,6 +201,11 @@ export default function ContractEditor({
         placeholder: placeholder ?? "Nhập nội dung hợp đồng...",
       }),
       CharacterCount.configure({ limit: 100000 }),
+      // Image extension — required for <img> tags to render in WYSIWYG mode.
+      // inline: true lets images sit inside paragraphs (not just between blocks),
+      // which is required for insertContent() to succeed at any cursor position.
+      // allowBase64: true — needed for {{signature_image}} data URLs.
+      Image.configure({ inline: true, allowBase64: true }),
     ],
     content: initialContent,
     // SSR guard — editor must only mount on the client. Parent route
@@ -290,6 +299,40 @@ export default function ContractEditor({
     }
   }
 
+  /**
+   * Insert an <img> tag into the document.
+   * - WYSIWYG mode: use Tiptap's Image extension command (setImage).
+   *   Image is rendered in-editor with CSS max-width.
+   * - Source mode: splice <img> HTML at textarea cursor.
+   */
+  function handleInsertImage(src: string, alt: string): void {
+    if (!editor || editor.isDestroyed) return;
+
+    const imgHtml = `<img src="${src}"${alt ? ` alt="${alt}"` : ""} style="max-width:100%;height:auto;" />`;
+
+    if (sourceMode) {
+      // Source mode: splice at textarea cursor position.
+      const ta = textareaRef.current;
+      const pos = ta?.selectionStart ?? sourceHtml.length;
+      const newHtml =
+        sourceHtml.slice(0, pos) + "\n" + imgHtml + "\n" + sourceHtml.slice(pos);
+      setSourceHtml(newHtml);
+      onChange(newHtml);
+      setTimeout(() => {
+        if (!ta) return;
+        ta.focus();
+        const end = pos + imgHtml.length + 2;
+        ta.setSelectionRange(end, end);
+      }, 0);
+    } else {
+      // WYSIWYG mode: insertContent with raw HTML string.
+      // We use insertContent (not setImage) so the style attribute is preserved.
+      // inline: true on the Image extension lets this succeed at any cursor position.
+      // focus() restores the editor's last known selection before inserting.
+      editor.chain().focus().insertContent(imgHtml).run();
+    }
+  }
+
   return (
     <div className="rounded-md border bg-background">
       <Toolbar
@@ -298,6 +341,7 @@ export default function ContractEditor({
         sourceMode={sourceMode}
         onToggleSource={toggleSourceMode}
         onInsertTable={handleInsertTable}
+        onInsertImage={handleInsertImage}
       />
       <style jsx global>{`
         .ProseMirror h1 { font-size: 1.5rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.5rem; }
@@ -320,6 +364,9 @@ export default function ContractEditor({
            so cells are non-editable but at least visible for reference) */
         .ProseMirror table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }
         .ProseMirror td, .ProseMirror th { border: 1px solid #e5e7eb; padding: 6px 10px; vertical-align: top; }
+        /* Image styles — max-width prevents overflow; selected state shows outline */
+        .ProseMirror img { max-width: 100%; height: auto; display: block; margin: 0.5rem 0; }
+        .ProseMirror img.ProseMirror-selectednode { outline: 2px solid #3b82f6; outline-offset: 2px; }
       `}</style>
       {sourceMode ? (
         <textarea
@@ -382,12 +429,14 @@ function Toolbar({
   sourceMode,
   onToggleSource,
   onInsertTable,
+  onInsertImage,
 }: {
   editor: Editor;
   groups: VariableGroup[];
   sourceMode: boolean;
   onToggleSource: () => void;
   onInsertTable: (html: string) => void;
+  onInsertImage: (src: string, alt: string) => void;
 }): React.ReactElement {
   const dis = sourceMode;
 
@@ -499,6 +548,10 @@ function Toolbar({
       <Separator />
 
       <TableMenu onInsertTable={onInsertTable} />
+
+      <Separator />
+
+      <ImageMenu onInsertImage={onInsertImage} />
 
       <Separator />
 
@@ -689,6 +742,197 @@ function TableMenu({
             <p className="text-[10px] text-muted-foreground">
               Bảng sẽ mở chế độ HTML thô để giữ nguyên cấu trúc
             </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ImageMenu — toolbar button + popover with two tabs:
+ *   - "Từ thiết bị": file picker → upload to S3 → auto-insert
+ *   - "Từ URL": paste URL → insert
+ */
+function ImageMenu({
+  onInsertImage,
+  disabled,
+}: {
+  onInsertImage: (src: string, alt: string) => void;
+  disabled?: boolean;
+}): React.ReactElement {
+  const { token } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"upload" | "url">("upload");
+  const [src, setSrc] = useState("");
+  const [alt, setAlt] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !token) return;
+      setUploadError("");
+      setUploading(true);
+      try {
+        const { url } = await uploadEditorImage(token, file);
+        onInsertImage(url, file.name.replace(/\.[^.]+$/, ""));
+        setOpen(false);
+      } catch (err) {
+        setUploadError((err as Error).message ?? "Upload thất bại");
+      } finally {
+        setUploading(false);
+        // Reset so the same file can be re-selected
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [token, onInsertImage],
+  );
+
+  function handleInsertUrl(): void {
+    const trimmed = src.trim();
+    if (!trimmed) return;
+    onInsertImage(trimmed, alt.trim());
+    setSrc("");
+    setAlt("");
+    setOpen(false);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => !disabled && setOpen((v) => !v)}
+        disabled={disabled}
+        className="h-8 gap-1"
+        title="Chèn ảnh"
+      >
+        <ImagePlus className="size-4" />
+        <span className="hidden sm:inline">Ảnh</span>
+      </Button>
+
+      {open && (
+        <div className="absolute left-0 top-9 z-50 w-72 rounded-md border bg-popover shadow-lg">
+          {/* Tabs */}
+          <div className="flex border-b text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => setTab("upload")}
+              className={cn(
+                "flex-1 py-2 hover:bg-accent",
+                tab === "upload" && "border-b-2 border-primary text-primary",
+              )}
+            >
+              Từ thiết bị
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("url")}
+              className={cn(
+                "flex-1 py-2 hover:bg-accent",
+                tab === "url" && "border-b-2 border-primary text-primary",
+              )}
+            >
+              Từ URL
+            </button>
+          </div>
+
+          <div className="p-3">
+            {tab === "upload" ? (
+              <>
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => void handleFileChange(e)}
+                />
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex w-full flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-muted-foreground/30 py-6 text-sm hover:border-primary/50 hover:bg-accent disabled:opacity-50"
+                >
+                  <ImagePlus className="size-6 text-muted-foreground" />
+                  <span className="font-medium">
+                    {uploading ? "Đang upload..." : "Chọn ảnh từ thiết bị"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    JPG · PNG · WebP · GIF · tối đa 10MB
+                  </span>
+                </button>
+                {uploadError ? (
+                  <p className="mt-2 text-xs text-red-500">{uploadError}</p>
+                ) : null}
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Ảnh upload lên S3 — link public, hiển thị được trong email.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">
+                      URL ảnh <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      autoFocus
+                      type="url"
+                      value={src}
+                      onChange={(e) => setSrc(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleInsertUrl(); }}
+                      placeholder="https://..."
+                      className="h-8 w-full rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">
+                      Alt text
+                    </label>
+                    <input
+                      type="text"
+                      value={alt}
+                      onChange={(e) => setAlt(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleInsertUrl(); }}
+                      placeholder="Mô tả ngắn..."
+                      className="h-8 w-full rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleInsertUrl}
+                  disabled={!src.trim()}
+                  className="mt-3 w-full rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Chèn ảnh
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
+import { usePrompt } from "@/components/prompt-dialog";
 import { RejectDialog } from "./_reject-dialog";
 import { ForcePaidDialog } from "./_force-paid-dialog";
 import { BackfillBenBDialog } from "./_backfill-ben-b-dialog";
@@ -99,6 +100,7 @@ export function RegistrationDetailView({
 }): React.ReactElement {
   const { token } = useAuth();
   const confirm = useConfirm();
+  const openPrompt = usePrompt();
 
   const [detail, setDetail] = useState<RegistrationDetail | null>(null);
   const [editingNotes, setEditingNotes] = useState("");
@@ -262,9 +264,12 @@ export function RegistrationDetailView({
 
   async function handleCancel(): Promise<void> {
     if (!token || !detail) return;
-    const reason = window.prompt(
-      `Lý do huỷ đăng ký của ${detail.full_name}? (tuỳ chọn)`,
-    );
+    const reason = await openPrompt({
+      title: "Huỷ đăng ký",
+      description: `Lý do huỷ đăng ký của ${detail.full_name}? (tuỳ chọn)`,
+      placeholder: "Không phù hợp, trùng lịch...",
+      confirmText: "Huỷ đăng ký",
+    });
     if (reason === null) return;
     setSaving(true);
     try {
@@ -281,9 +286,12 @@ export function RegistrationDetailView({
 
   async function handleConfirmCompletion(): Promise<void> {
     if (!token || !detail) return;
-    const note = window.prompt(
-      `Ghi chú cho xác nhận hoàn thành của ${detail.full_name}? (tuỳ chọn)`,
-    );
+    const note = await openPrompt({
+      title: "Xác nhận hoàn thành",
+      description: `Ghi chú cho ${detail.full_name}? (tuỳ chọn)`,
+      placeholder: "Hoàn thành tốt, đúng giờ...",
+      confirmText: "Xác nhận",
+    });
     if (note === null) return;
     setSaving(true);
     try {

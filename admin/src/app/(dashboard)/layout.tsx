@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
 import { ConfirmProvider } from "@/components/confirm-dialog";
+import { PromptProvider } from "@/components/prompt-dialog";
 
 const navItems = [
   { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
@@ -245,7 +246,7 @@ export default function DashboardLayout({
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          <ConfirmProvider>{children}</ConfirmProvider>
+          <ConfirmProvider><PromptProvider>{children}</PromptProvider></ConfirmProvider>
         </main>
       </div>
     </div>

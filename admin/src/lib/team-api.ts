@@ -2718,3 +2718,18 @@ export async function confirmAllInEvent(
   await assertOk(res);
   return res.json();
 }
+
+export async function uploadEditorImage(
+  token: string,
+  file: File,
+): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/team-management/upload-editor-image", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  await assertOk(res);
+  return res.json();
+}

@@ -84,6 +84,7 @@ import { RegistrationDetailView } from "./_registration-detail";
 import { RejectDialog } from "./_reject-dialog";
 import { RegistrationImportDialog } from "./_import-dialog";
 import { useConfirm } from "@/components/confirm-dialog";
+import { usePrompt } from "@/components/prompt-dialog";
 
 // Status badges + row styles come from @/lib/status-style.
 
@@ -267,16 +268,20 @@ export default function RegistrationsListPage(): React.ReactElement {
 
   function handleCancel(row: RegistrationListRow): void {
     if (!token) return;
-    const reason = window.prompt(
-      `Lý do huỷ đăng ký của ${row.full_name}? (tuỳ chọn)`,
-    );
-    // `null` = user hit Cancel on the prompt → abort. Empty string = proceed without reason.
-    if (reason === null) return;
-    void runAction(
-      row.id,
-      () => cancelRegistration(token, row.id, reason || undefined),
-      "Đã huỷ",
-    );
+    void openPrompt({
+      title: "Huỷ đăng ký",
+      description: `Lý do huỷ của ${row.full_name}? (tuỳ chọn)`,
+      placeholder: "Không phù hợp, trùng lịch...",
+      confirmText: "Huỷ đăng ký",
+    }).then((reason) => {
+      // null = user pressed Hủy → abort
+      if (reason === null) return;
+      void runAction(
+        row.id,
+        () => cancelRegistration(token, row.id, reason || undefined),
+        "Đã huỷ",
+      );
+    });
   }
 
   function handleSendContract(row: RegistrationListRow): void {
@@ -532,6 +537,7 @@ export default function RegistrationsListPage(): React.ReactElement {
   }, [selectedRows]);
   const [bulkResendBusy, setBulkResendBusy] = useState(false);
   const confirm = useConfirm();
+  const openPrompt = usePrompt();
 
   async function handleBulkResendContract(): Promise<void> {
     if (!token || selection.size === 0) return;
@@ -1092,7 +1098,7 @@ export default function RegistrationsListPage(): React.ReactElement {
       >
         <SheetContent
           side="right"
-          className="w-full sm:max-w-3xl lg:max-w-4xl overflow-y-auto"
+          className="w-full sm:max-w-4xl lg:max-w-5xl xl:max-w-6xl overflow-y-auto"
         >
           <SheetHeader>
             <SheetTitle>Chi tiết đăng ký</SheetTitle>

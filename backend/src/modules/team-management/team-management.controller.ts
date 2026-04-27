@@ -84,6 +84,7 @@ import { TeamDashboardService } from './services/team-dashboard.service';
 import { TeamShirtService } from './services/team-shirt.service';
 import { TeamExportService } from './services/team-export.service';
 import { TeamRoleImportService } from './services/team-role-import.service';
+import { TeamPhotoService } from './services/team-photo.service';
 import {
   ConfirmRoleImportDto,
   ConfirmRoleImportResponseDto,
@@ -108,7 +109,37 @@ export class TeamManagementController {
     private readonly shirts: TeamShirtService,
     private readonly exports: TeamExportService,
     private readonly roleImport: TeamRoleImportService,
+    private readonly photos: TeamPhotoService,
   ) {}
+
+  // -------- Utilities --------
+
+  /**
+   * Upload an image for use in email / contract templates.
+   * Stored at team-photos/avatar/ (public bucket policy) and returns the CDN URL.
+   * Uses 'benefits' processing: resizes longest side to 1600px, keeps aspect ratio.
+   */
+  @Post('upload-editor-image')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiOperation({ summary: 'Upload image for email/contract editor (admin only)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiResponse({ status: 201, schema: { properties: { url: { type: 'string' } } } })
+  async uploadEditorImage(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<{ url: string }> {
+    // 'benefits' pipeline: cap at 1600px, keep ratio, good quality — right for
+    // banners / logos inside email templates. Stored at team-photos/avatar/ so
+    // the existing bucket policy already grants public GET.
+    const result = await this.photos.upload(file, 'benefits');
+    return { url: result.url };
+  }
 
   // -------- Events --------
 
