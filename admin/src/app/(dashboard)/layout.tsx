@@ -70,7 +70,7 @@ const navGroups: NavGroup[] = [
     label: "Nội dung",
     items: [
       { href: "/articles", label: "Bài viết", icon: FileText, badge: "NEW" },
-      { href: "/article-categories", label: "Danh mục bài viết", icon: Tags, badge: "NEW" },
+      { href: "/article-categories", label: "Danh mục", icon: Tags, badge: "NEW" },
       { href: "/sponsors", label: "Nhà tài trợ", icon: Handshake },
       { href: "/sponsored", label: "Banner Zone", icon: Megaphone },
       { href: "/certificates", label: "Certificates", icon: Award },
