@@ -160,7 +160,7 @@ export default function BugReportDetailPage() {
       title: "Xóa báo cáo lỗi?",
       description: `Báo cáo ${bug.publicId} sẽ bị soft-delete và ẩn khỏi danh sách.`,
       confirmText: "Xóa",
-      destructive: true,
+      variant: "destructive",
     });
     if (!ok) return;
     try {
@@ -299,7 +299,7 @@ export default function BugReportDetailPage() {
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-bold">Severity</label>
-                <Select value={bug.severity} onValueChange={(v) => updateTriage("severity", v)} disabled={pending}>
+                <Select value={bug.severity} onValueChange={(v) => v && updateTriage("severity", v)} disabled={pending}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {SEVERITY_OPTIONS.map((o) => (
@@ -310,7 +310,7 @@ export default function BugReportDetailPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold">Category</label>
-                <Select value={bug.category} onValueChange={(v) => updateTriage("category", v)} disabled={pending}>
+                <Select value={bug.category} onValueChange={(v) => v && updateTriage("category", v)} disabled={pending}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORY_OPTIONS.map((o) => (
