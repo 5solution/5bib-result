@@ -20,14 +20,47 @@ const setMiddleware = (app: NestExpressApplication) => {
 
   app.use(helmet());
 
+  // CORS whitelist — Option D defense-in-depth. Server-side fetches (no Origin
+  // header) and curl always pass; only browser-side requests from random
+  // domains are blocked. Server-side scrape still requires X-API-Key (separate
+  // guard on widget endpoints).
+  const ALLOWED_ORIGINS = new Set<string>([
+    'https://5bib.com',
+    'https://www.5bib.com',
+    'https://hotro.5bib.com',
+    'https://news.5bib.com',
+    'https://5sport.vn',
+    'https://www.5sport.vn',
+    'https://admin.5bib.com',
+    'https://result.5bib.com',
+    'https://result-admin-dev.5bib.com',
+    'https://result-fe-dev.5bib.com',
+    'https://hotro-dev.5bib.com',
+  ]);
+  // Permit all localhost dev ports
+  const isLocalDev = (o: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
+
   app.enableCors({
     credentials: true,
-    origin: (_, callback) => callback(null, true),
+    origin: (origin, callback) => {
+      // No Origin = server-to-server / curl / mobile / RSS reader → allow.
+      // X-API-Key guard still applies for widget endpoints.
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.has(origin) || isLocalDev(origin)) {
+        return callback(null, true);
+      }
+      // Reject without throwing — sends response with no
+      // Access-Control-Allow-Origin header so browser blocks the request,
+      // but the server returns a normal 2xx/4xx (not 500). Throwing inside
+      // the cors middleware bubbles up as an unhandled exception → 500.
+      callback(null, false);
+    },
     allowedHeaders: [
       '*',
       'Authorization',
       'Content-Type',
       'X-Requested-With',
+      'X-API-Key',
       'Wallet-Address',
       'wallet-address',
     ],

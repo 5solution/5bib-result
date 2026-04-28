@@ -20,6 +20,9 @@ import { AthleteStarsModule } from './athlete-stars/athlete-stars.module';
 import { TimingModule } from './timing/timing.module';
 import { EventTrackingModule } from './event-tracking/event-tracking.module';
 import { SponsoredModule } from './sponsored/sponsored.module';
+import { ArticlesModule } from './articles/articles.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { BugReportsModule } from './bug-reports/bug-reports.module';
 import { MerchantModule } from './merchant/merchant.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -132,6 +135,9 @@ const volunteerDbModules = env.volunteerDb.host
     TimingModule,
     EventTrackingModule,
     SponsoredModule,
+    ApiKeysModule,
+    ArticlesModule,
+    BugReportsModule,
   ],
 })
 export class AppModule {}
