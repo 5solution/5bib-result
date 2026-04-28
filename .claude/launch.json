@@ -28,6 +28,13 @@
       "runtimeArgs": ["--dir", "crew", "dev"],
       "port": 3003,
       "autoPort": false
+    },
+    {
+      "name": "content-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "content-web", "dev", "--port", "3015"],
+      "port": 3015,
+      "autoPort": false
     }
   ]
 }

@@ -147,6 +147,14 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `share-count:<raceId>` | INCR-based race-level share counter | ∞ |
 | `bib-count:<raceId>:<bib>` | INCR-based athlete-level share counter | ∞ |
 | `homepage:sponsored` | SponsoredModule public API cache | 300s |
+| `articles:latest:<type>:<product>:<limit>` | ArticlesModule widget cache (homepage 5bib.com / 5sport.vn) | 300s |
+| `articles:list:<type>:<product>:<category>:<page>:<limit>` | Paginated public list (news.5bib.com / hotro.5bib.com) | 120s |
+| `articles:detail:<slug>` | Article detail page cache | 600s |
+| `articles:categories:<type>` | ArticleCategoriesService public list cache | 300s |
+| `ratelimit:article-view:<slug>:<ip>` | View dedup per IP per article | 5m |
+| `ratelimit:article-helpful:<slug>:<ip>` | Helpful vote dedup per IP per article (value = 'y'\|'n') | 24h |
+
+Cache invalidation: any admin write (create/update/publish/unpublish/delete/restore on articles OR categories) flushes ALL `articles:*` keys via `scanStream` + pipeline. Rate-limit keys use a different `ratelimit:*` prefix so they survive cache flushes — view/vote dedup state is preserved across admin edits.
 
 Flush pattern (careful — global):
 ```bash

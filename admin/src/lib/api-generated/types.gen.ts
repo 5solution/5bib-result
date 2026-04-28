@@ -151,9 +151,9 @@ export type CreateReconciliationDto = {
      */
     generate_docx?: boolean;
     /**
-     * Admin user id (set from JWT in controller)
+     * Admin user id — Mongo ObjectId string (set from JWT in controller)
      */
-    created_by?: number;
+    created_by?: string | null;
 };
 
 export type ExportZipByIdsDto = {
@@ -188,13 +188,13 @@ export type UpdateReconciliationStatusDto = {
      */
     status: 'draft' | 'flagged' | 'ready' | 'approved' | 'sent' | 'reviewed' | 'signed' | 'completed';
     /**
-     * Admin user id (for reviewed status)
+     * Admin user id — Mongo ObjectId string (for reviewed status)
      */
-    reviewed_by?: number;
+    reviewed_by?: string;
     /**
-     * Admin user id (for approved status)
+     * Admin user id — Mongo ObjectId string (for approved status)
      */
-    approved_by?: number;
+    approved_by?: string;
     /**
      * Signed date ISO string (for signed status)
      */
@@ -203,1503 +203,6 @@ export type UpdateReconciliationStatusDto = {
      * Optional note
      */
     note?: string;
-};
-
-export type CreateEventDto = {
-    event_name: string;
-    description?: string | null;
-    race_id?: string | null;
-    location: string;
-    location_lat?: number | null;
-    location_lng?: number | null;
-    checkin_radius_m: number;
-    event_start_date: string;
-    event_end_date: string;
-    registration_open: string;
-    registration_close: string;
-    contact_email?: string | null;
-    contact_phone?: string | null;
-    /**
-     * Public S3 URL of the benefits banner. Upload separately via /team-upload-photo, then pass the URL here. Send null to clear.
-     */
-    benefits_image_url?: string | null;
-    /**
-     * Plain-text terms & conditions shown on the crew register page. TNV must agree before submitting. Send null to clear.
-     */
-    terms_conditions?: string | null;
-};
-
-export type VolEvent = {
-    [key: string]: unknown;
-};
-
-export type UpdateEventDto = {
-    event_name?: string;
-    description?: string | null;
-    race_id?: string | null;
-    location?: string;
-    location_lat?: number | null;
-    location_lng?: number | null;
-    checkin_radius_m?: number;
-    event_start_date?: string;
-    event_end_date?: string;
-    registration_open?: string;
-    registration_close?: string;
-    contact_email?: string | null;
-    contact_phone?: string | null;
-    /**
-     * Public S3 URL of the benefits banner. Upload separately via /team-upload-photo, then pass the URL here. Send null to clear.
-     */
-    benefits_image_url?: string | null;
-    /**
-     * Plain-text terms & conditions shown on the crew register page. TNV must agree before submitting. Send null to clear.
-     */
-    terms_conditions?: string | null;
-    status?: 'draft' | 'open' | 'closed' | 'completed';
-};
-
-export type EventFeaturesConfigDto = {
-    event_id: number;
-    feature_mode: 'full' | 'lite';
-    feature_nghiem_thu: boolean;
-};
-
-export type UpdateEventFeaturesDto = {
-    /**
-     * full = all features; lite = personnel + contract only (no QR, station, supply)
-     */
-    feature_mode: 'full' | 'lite';
-    /**
-     * true = admin must confirm nghiem thu before marking completed; false = skip
-     */
-    feature_nghiem_thu: boolean;
-};
-
-export type ConfirmNghiemThuDto = {
-    note?: string;
-};
-
-export type NghiemThuResponseDto = {
-    id: number;
-    status: string;
-    completed_at: string;
-};
-
-export type ParsedRoleRowDto = {
-    /**
-     * 1-based row index in the file
-     */
-    _row: number;
-    role_name: string;
-    description?: string | null;
-    /**
-     * Nullable → unlimited slots
-     */
-    max_slots?: number | null;
-    /**
-     * VND per day
-     */
-    daily_rate: number;
-    working_days: number;
-    waitlist_enabled: boolean;
-    sort_order: number;
-};
-
-export type ParsedRoleRowErrorDto = {
-    _row: number;
-    /**
-     * Raw role_name value (may be empty)
-     */
-    role_name: string;
-    errors: Array<string>;
-};
-
-export type PreviewRoleImportResponseDto = {
-    total_rows: number;
-    valid_rows: Array<ParsedRoleRowDto>;
-    invalid_rows: Array<ParsedRoleRowErrorDto>;
-};
-
-export type ConfirmRoleImportDto = {
-    rows: Array<ParsedRoleRowDto>;
-};
-
-export type ConfirmRoleImportResponseDto = {
-    created: number;
-    /**
-     * Rows skipped because a race condition created the role with the same name between preview and confirm
-     */
-    skipped: number;
-    /**
-     * Full roles list for the event after import
-     */
-    roles: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-export type FormFieldConfigDto = {
-    key: string;
-    label: string;
-    type: 'text' | 'tel' | 'email' | 'select' | 'textarea' | 'date' | 'photo' | 'shirt_size';
-    required: boolean;
-    options?: Array<string>;
-    hint?: string;
-    note?: string;
-};
-
-export type CreateRoleDto = {
-    role_name: string;
-    /**
-     * v1.8 Team/Category ID. NULL = floater (không thuộc team nào). Để phân nhóm Leader/Crew/TNV thành 1 team shared stations + supply.
-     */
-    category_id?: number | null;
-    description?: string;
-    max_slots: number;
-    waitlist_enabled: boolean;
-    /**
-     * FALSE (default): public register = status=pending, admin must approve. TRUE: status=approved immediately + claims slot + emails QR.
-     */
-    auto_approve: boolean;
-    /**
-     * VND per day
-     */
-    daily_rate: number;
-    working_days: number;
-    form_fields: Array<FormFieldConfigDto>;
-    contract_template_id?: number;
-    sort_order: number;
-    /**
-     * Group chat platform (zalo/telegram/whatsapp/other).
-     */
-    chat_platform?: 'zalo' | 'telegram' | 'whatsapp' | 'other';
-    /**
-     * Group chat URL (raw or protocol-less — service normalizes).
-     */
-    chat_group_url?: string | null;
-    /**
-     * v1.6 Option B2: nested. Leader role quản lý nhiều role (multi-select). BFS resolver tự động include descendants.
-     */
-    manages_role_ids?: Array<number>;
-    /**
-     * True = leader role (portal access + station gating). Companion field for manages_role_ids.
-     */
-    is_leader_role?: boolean;
-};
-
-export type VolRole = {
-    [key: string]: unknown;
-};
-
-export type UpdateRoleDto = {
-    role_name?: string;
-    /**
-     * v1.8 Team/Category ID. NULL = floater (không thuộc team nào). Để phân nhóm Leader/Crew/TNV thành 1 team shared stations + supply.
-     */
-    category_id?: number | null;
-    description?: string;
-    max_slots?: number;
-    waitlist_enabled?: boolean;
-    /**
-     * FALSE (default): public register = status=pending, admin must approve. TRUE: status=approved immediately + claims slot + emails QR.
-     */
-    auto_approve?: boolean;
-    /**
-     * VND per day
-     */
-    daily_rate?: number;
-    working_days?: number;
-    form_fields?: Array<FormFieldConfigDto>;
-    contract_template_id?: number;
-    sort_order?: number;
-    /**
-     * Group chat platform (zalo/telegram/whatsapp/other).
-     */
-    chat_platform?: 'zalo' | 'telegram' | 'whatsapp' | 'other';
-    /**
-     * Group chat URL (raw or protocol-less — service normalizes).
-     */
-    chat_group_url?: string | null;
-    /**
-     * v1.6 Option B2: nested. Leader role quản lý nhiều role (multi-select). BFS resolver tự động include descendants.
-     */
-    manages_role_ids?: Array<number>;
-    /**
-     * True = leader role (portal access + station gating). Companion field for manages_role_ids.
-     */
-    is_leader_role?: boolean;
-};
-
-export type SendContractsDto = {
-    dry_run?: boolean;
-};
-
-export type SendContractsResponseDto = {
-    queued: number;
-    already_sent: number;
-    skipped: number;
-};
-
-export type RegistrationListRowDto = {
-    id: number;
-    role_id: number;
-    role_name?: string | null;
-    event_id: number;
-    full_name: string;
-    email: string;
-    phone: string;
-    shirt_size?: string | null;
-    avatar_photo_url?: string | null;
-    status: string;
-    waitlist_position?: number | null;
-    contract_status: string;
-    checked_in_at?: string | null;
-    payment_status: string;
-    actual_working_days?: number | null;
-    actual_compensation?: string | null;
-    /**
-     * Form answers. CCCD is masked to ***<last4>.
-     */
-    form_data: {
-        [key: string]: unknown;
-    };
-    notes?: string | null;
-    created_at: string;
-    /**
-     * True when TNV has an unapproved profile edit.
-     */
-    has_pending_changes: boolean;
-};
-
-export type ListRegistrationsResponseDto = {
-    data: Array<RegistrationListRowDto>;
-    total: number;
-    /**
-     * Count per status across the full result set (ignores pagination). Used for filter tabs.
-     */
-    by_status: {
-        [key: string]: number;
-    };
-};
-
-export type UpdateRegistrationDto = {
-    notes?: string;
-    payment_status?: 'pending' | 'paid';
-    actual_working_days?: number;
-};
-
-export type VolRegistration = {
-    [key: string]: unknown;
-};
-
-export type RejectRegistrationDto = {
-    /**
-     * Reason shown to the applicant in the rejection email
-     */
-    rejection_reason: string;
-};
-
-export type CancelRegistrationDto = {
-    reason?: string;
-};
-
-export type ConfirmCompletionDto = {
-    /**
-     * Optional admin note appended to registration.notes
-     */
-    note?: string;
-};
-
-export type ClearSuspiciousDto = {
-    /**
-     * Admin rationale for clearing the suspicious flag. Appended to registration.notes for audit trail.
-     */
-    admin_note: string;
-};
-
-export type RejectChangesDto = {
-    reason: string;
-};
-
-export type RegistrationDetailDto = {
-    id: number;
-    role_id: number;
-    role_name: string;
-    event_id: number;
-    event_name: string;
-    full_name: string;
-    email: string;
-    phone: string;
-    shirt_size?: string | null;
-    avatar_photo_url?: string | null;
-    /**
-     * S3 presigned URL for CCCD photo, expires in 1 hour
-     */
-    cccd_photo_url?: string | null;
-    /**
-     * Form answers. CCCD number NOT masked for admin detail view.
-     */
-    form_data: {
-        [key: string]: unknown;
-    };
-    status: string;
-    waitlist_position?: number | null;
-    checked_in_at?: string | null;
-    checkin_method?: string | null;
-    contract_status: string;
-    contract_signed_at?: string | null;
-    contract_pdf_url?: string | null;
-    /**
-     * True when a handwritten signature PNG is stored. Fetch the actual image via GET /registrations/:id/signature-url.
-     */
-    has_signature?: boolean | null;
-    actual_working_days?: number | null;
-    actual_compensation?: string | null;
-    payment_status: string;
-    notes?: string | null;
-    created_at: string;
-    /**
-     * Role daily_rate (VND, stored as string). For admin payment tab default.
-     */
-    role_daily_rate?: string;
-    /**
-     * Role working_days. For admin payment tab default when actual_working_days is null.
-     */
-    role_working_days?: number;
-    /**
-     * True when TNV has submitted edits awaiting admin review.
-     */
-    has_pending_changes: boolean;
-    pending_changes_submitted_at?: string | null;
-    /**
-     * Raw patch submitted by TNV. Null when has_pending_changes=false.
-     */
-    pending_changes?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Full crew-portal magic link (e.g. https://crew.5bib.com/status/<token>). Admin-only.
-     */
-    magic_link: string;
-    /**
-     * Raw 64-char magic token (admin-only).
-     */
-    magic_token: string;
-    /**
-     * ISO timestamp when the magic token expires. After this, TNV must request a new link.
-     */
-    magic_token_expires: string;
-};
-
-export type AdminManualRegisterDto = {
-    role_id: number;
-    full_name: string;
-    email: string;
-    phone: string;
-    /**
-     * Dynamic fields matching role.form_fields
-     */
-    form_data: {
-        [key: string]: unknown;
-    };
-    /**
-     * TRUE (default): admin is entering someone they have already vetted → status=approved + QR emailed. FALSE: register as pending so admin reviews later like a regular registration.
-     */
-    auto_approve: boolean;
-    notes?: string;
-};
-
-export type RegisterResponseDto = {
-    id: number;
-    status: 'pending_approval' | 'approved' | 'waitlisted';
-    waitlist_position?: number | null;
-    message: string;
-    magic_link: string;
-};
-
-export type BulkUpdateRegistrationsDto = {
-    ids: Array<number>;
-    action: 'approve' | 'reject' | 'cancel';
-    /**
-     * Required when action=reject (shown to applicants). Optional for cancel (stored in notes).
-     */
-    reason?: string;
-};
-
-export type BulkUpdateResponseDto = {
-    updated: number;
-    skipped: number;
-    failed_ids: Array<number>;
-};
-
-export type DashboardRoleBreakdownDto = {
-    role_id: number;
-    role_name: string;
-    headcount: number;
-    checked_in: number;
-    contract_signed: number;
-    paid: number;
-};
-
-export type DashboardShirtSizeDto = {
-    size: string | null;
-    count: number;
-};
-
-export type DashboardShirtStockDto = {
-    size: string;
-    registered: number;
-    planned: number;
-    ordered: number;
-    received: number;
-};
-
-export type DashboardPersonDto = {
-    id: number;
-    full_name: string;
-    role_id: number;
-    role_name: string;
-    shirt_size?: string | null;
-    contract_status: string;
-    checked_in_at?: string | null;
-    payment_status: string;
-    avatar_photo_url?: string | null;
-};
-
-export type DashboardResponseDto = {
-    event_id: number;
-    event_name: string;
-    last_updated: string;
-    total_roles: number;
-    total: number;
-    pending_approval: number;
-    approved: number;
-    contract_sent: number;
-    contract_signed: number;
-    qr_sent: number;
-    checked_in: number;
-    completed: number;
-    waitlisted: number;
-    rejected: number;
-    cancelled: number;
-    /**
-     * Legacy: count of rows in any post-approval status (approved..completed). Retained for dashboard backward-compat.
-     */
-    total_approved: number;
-    total_checked_in: number;
-    checkin_rate: number;
-    total_contract_signed: number;
-    total_contract_unsigned: number;
-    total_paid: number;
-    total_suspicious: number;
-    by_role: Array<DashboardRoleBreakdownDto>;
-    shirt_sizes: Array<DashboardShirtSizeDto>;
-    total_shirt_registered: number;
-    shirt_stock: Array<DashboardShirtStockDto>;
-    people: Array<DashboardPersonDto>;
-    people_total: number;
-};
-
-export type VolShirtStock = {
-    [key: string]: unknown;
-};
-
-export type ShirtStockRowInputDto = {
-    size: 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL';
-    quantity_planned: number;
-    quantity_ordered: number;
-    quantity_received: number;
-    notes?: string;
-};
-
-export type UpsertShirtStockDto = {
-    sizes: Array<ShirtStockRowInputDto>;
-};
-
-export type ShirtAggregateRowDto = {
-    size: 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL';
-    registered: number;
-    planned: number;
-    ordered: number;
-    received: number;
-    surplus: number;
-    notes?: string | null;
-};
-
-export type ShirtAggregateDto = {
-    by_size: Array<ShirtAggregateRowDto>;
-    total_registered: number;
-    total_planned: number;
-    total_ordered: number;
-    total_received: number;
-    last_updated: string;
-};
-
-export type ExportResponseDto = {
-    /**
-     * S3 presigned URL (10 minutes TTL)
-     */
-    download_url: string;
-    row_count: number;
-};
-
-export type PersonnelExportResponseDto = {
-    /**
-     * S3 presigned URL (10 minutes TTL)
-     */
-    url: string;
-    /**
-     * Download filename suggested for clients
-     */
-    filename: string;
-    /**
-     * URL expiry in seconds
-     */
-    expires_in: number;
-    /**
-     * Number of rows written (after filters)
-     */
-    row_count: number;
-};
-
-export type PublicRoleSummaryDto = {
-    id: number;
-    role_name: string;
-    description?: string;
-    max_slots: number;
-    filled_slots: number;
-    is_full: boolean;
-    waitlist_enabled: boolean;
-    daily_rate: number;
-    working_days: number;
-    form_fields: Array<{
-        [key: string]: unknown;
-    }>;
-};
-
-export type PublicEventSummaryDto = {
-    id: number;
-    event_name: string;
-    description?: string;
-    location?: string;
-    event_start_date: string;
-    event_end_date: string;
-    registration_open: string;
-    registration_close: string;
-    benefits_image_url?: string | null;
-    terms_conditions?: string | null;
-    roles: Array<PublicRoleSummaryDto>;
-};
-
-export type RegisterDto = {
-    role_id: number;
-    full_name: string;
-    email: string;
-    phone: string;
-    /**
-     * Dynamic fields matching role.form_fields
-     */
-    form_data: {
-        [key: string]: unknown;
-    };
-};
-
-export type StatusResponseDto = {
-    full_name: string;
-    role_name: string;
-    event_name: string;
-    status: 'pending_approval' | 'approved' | 'contract_sent' | 'contract_signed' | 'qr_sent' | 'checked_in' | 'completed' | 'waitlisted' | 'rejected' | 'cancelled';
-    waitlist_position?: number | null;
-    contract_status: 'not_sent' | 'sent' | 'signed' | 'expired';
-    checked_in_at?: string | null;
-    /**
-     * Base64 PNG
-     */
-    qr_code?: string | null;
-    email: string;
-    phone: string;
-    avatar_photo_url?: string | null;
-    /**
-     * Submitted form answers. CCCD number is masked to `***<last4>` on the public endpoint.
-     */
-    form_data: {
-        [key: string]: unknown;
-    };
-    /**
-     * Role form-field schema so the UI can render the edit form.
-     */
-    form_fields: Array<{
-        [key: string]: unknown;
-    }>;
-    /**
-     * True if the TNV has submitted changes awaiting admin approval.
-     */
-    has_pending_changes: boolean;
-    pending_changes_submitted_at?: string | null;
-    /**
-     * The proposed field patch the TNV submitted. Null when nothing is pending.
-     */
-    pending_changes?: {
-        [key: string]: unknown;
-    } | null;
-    chat_platform?: 'zalo' | 'telegram' | 'whatsapp' | 'other';
-    chat_group_url?: string | null;
-};
-
-export type UpdateProfileDto = {
-    full_name?: string;
-    phone?: string;
-    /**
-     * Dynamic fields matching role.form_fields. Photos must be uploaded first via /team-upload-photo and passed as S3 keys.
-     */
-    form_data?: {
-        [key: string]: unknown;
-    };
-};
-
-export type UpdateProfileResponseDto = {
-    /**
-     * applied = changes landed directly (still pending_approval). pending_admin_approval = stored, awaiting admin.
-     */
-    outcome: 'applied' | 'pending_admin_approval';
-    message: string;
-    pending_changes_submitted_at?: string | null;
-};
-
-export type ContractViewDto = {
-    /**
-     * Rendered HTML with placeholders filled in
-     */
-    html_content: string;
-    already_signed: boolean;
-    signed_at?: string | null;
-    pdf_url?: string | null;
-    /**
-     * Full name on the registration. Returned so the crew sign form can do a client-side match check before submit.
-     */
-    full_name: string;
-};
-
-export type SignContractDto = {
-    /**
-     * Must match registration.full_name (case/space-insensitive)
-     */
-    confirmed_name: string;
-    /**
-     * Handwritten signature as PNG data URL (base64). Max 500KB decoded.
-     */
-    signature_image: string;
-    /**
-     * Client IP, logged for audit
-     */
-    ip?: string;
-};
-
-export type SignContractResponseDto = {
-    success: boolean;
-    pdf_url: string;
-    signed_at: string;
-};
-
-export type SelfCheckinDto = {
-    lat: number;
-    lng: number;
-};
-
-export type CheckinResponseDto = {
-    success: boolean;
-    full_name: string;
-    role_name: string;
-    checked_in_at: string;
-    method: 'qr_scan' | 'gps_verify' | 'leader_checkin';
-};
-
-export type MyStationDetailDto = {
-    id: number;
-    station_name: string;
-    category_id: number;
-    category_name?: string | null;
-    category_color?: string | null;
-    location_description?: string | null;
-    gps_lat?: string | null;
-    gps_lng?: string | null;
-    google_maps_url?: string | null;
-    status: 'setup' | 'active' | 'closed';
-};
-
-export type AssignmentMemberBriefDto = {
-    assignment_id: number;
-    registration_id: number;
-    full_name: string;
-    phone: string;
-    status: string;
-    /**
-     * Derived: TRUE nếu registration thuộc role có is_leader_role=TRUE
-     */
-    is_supervisor: boolean;
-    role_id?: number | null;
-    role_name?: string | null;
-    duty?: string | null;
-    note?: string | null;
-};
-
-export type MyStationViewDto = {
-    station?: MyStationDetailDto | null;
-    my_is_supervisor?: boolean | null;
-    supervisor_list: Array<AssignmentMemberBriefDto>;
-    teammate_list: Array<AssignmentMemberBriefDto>;
-};
-
-export type UploadPhotoResponseDto = {
-    url: string;
-};
-
-export type ImportRegistrationsPreviewRow = {
-    /**
-     * 1-based data row index (header excluded)
-     */
-    row_num: number;
-    /**
-     * Parsed row data keyed by column header (trimmed lowercase)
-     */
-    data: {
-        [key: string]: unknown;
-    };
-    errors: Array<string>;
-    warnings: Array<string>;
-    valid: boolean;
-    duplicate_kind: 'none' | 'in_file' | 'in_db';
-    resolved_role_id?: number | null;
-};
-
-export type ImportRegistrationsPreviewResponseDto = {
-    total_rows: number;
-    valid_count: number;
-    invalid_count: number;
-    duplicate_in_file: number;
-    duplicate_in_db: number;
-    rows: Array<ImportRegistrationsPreviewRow>;
-    /**
-     * Opaque token — pass back to /confirm within 10 minutes
-     */
-    import_token: string;
-};
-
-export type ConfirmImportRegistrationsDto = {
-    /**
-     * Token from /preview response
-     */
-    import_token: string;
-    /**
-     * When true, inserted rows land in approved and the contract-send chain fires async.
-     */
-    auto_approve?: boolean;
-    /**
-     * When true, skip rows with errors/duplicates and insert only the valid ones. Otherwise fail if any invalid.
-     */
-    skip_invalid?: boolean;
-};
-
-export type ConfirmImportRegistrationsResponseDto = {
-    inserted: number;
-    skipped: number;
-    /**
-     * IDs of inserted registrations
-     */
-    inserted_ids: Array<number>;
-    /**
-     * Per-row errors encountered during insert
-     */
-    errors: Array<string>;
-    /**
-     * v1.6: how many inserted registrations were also assigned to a station via the station_id column.
-     */
-    assigned: number;
-};
-
-export type VolContractTemplate = {
-    [key: string]: unknown;
-};
-
-export type CreateContractTemplateDto = {
-    template_name: string;
-    /**
-     * HTML with {{placeholders}}
-     */
-    content_html: string;
-    /**
-     * List of placeholder keys that must be resolved when rendering
-     */
-    variables: Array<string>;
-    is_active: boolean;
-};
-
-export type UpdateContractTemplateDto = {
-    template_name?: string;
-    content_html?: string;
-    variables?: Array<string>;
-    is_active?: boolean;
-};
-
-export type ValidateTemplateDto = {
-    /**
-     * HTML body with {{placeholders}} to validate
-     */
-    content_html: string;
-};
-
-export type ValidateTemplateResponseDto = {
-    /**
-     * True when all {{vars}} are in the canonical list
-     */
-    valid: boolean;
-    /**
-     * Variables found in the template that are not in VALID_VARIABLES
-     */
-    unknownVars: Array<string>;
-};
-
-export type ImportDocxResponseDto = {
-    /**
-     * HTML converted from uploaded DOCX
-     */
-    content_html: string;
-    /**
-     * Warnings raised during conversion
-     */
-    warnings: Array<string>;
-};
-
-export type CheckinScanDto = {
-    /**
-     * QR payload — same value as magic_token
-     */
-    qr_code: string;
-    event_id?: number;
-};
-
-export type CheckinLookupRowDto = {
-    id: number;
-    full_name: string;
-    role_name: string;
-    /**
-     * Last 4 digits of CCCD; empty string if missing
-     */
-    cccd_last4: string;
-    /**
-     * Phone masked as 0901***567 when length matches; otherwise raw phone
-     */
-    phone_masked: string;
-    avatar_photo_url?: string | null;
-    status: string;
-    checked_in_at?: string | null;
-    /**
-     * Pass to /checkin/scan to commit check-in
-     */
-    qr_code: string;
-};
-
-export type CheckinLookupResponseDto = {
-    data: Array<CheckinLookupRowDto>;
-};
-
-export type CheckinStatsDto = {
-    total_approved: number;
-    total_checked_in: number;
-    percentage: number;
-    by_role: Array<{
-        role_name?: string;
-        approved?: number;
-        checked_in?: number;
-    }>;
-};
-
-export type ScheduleEmailResponseDto = {
-    id: number;
-    event_id: number;
-    role_id: number;
-    role_name: string;
-    /**
-     * Registrations eligible to receive this schedule email — status in (contract_signed, qr_sent, checked_in, completed).
-     */
-    member_count_eligible: number;
-    subject: string;
-    body_html: string;
-    reporting_time: string | null;
-    gathering_point: string | null;
-    team_contact_phone: string | null;
-    special_note: string | null;
-    last_sent_at: string | null;
-    last_sent_count: number;
-    total_sent_count: number;
-    created_at: string;
-    updated_at: string;
-};
-
-export type ScheduleEmailRoleSummaryDto = {
-    role_id: number;
-    role_name: string;
-    /**
-     * Registrations eligible to receive — status in BR-SCH-02 eligible set.
-     */
-    member_count_eligible: number;
-    /**
-     * Null when no config row exists yet for this role.
-     */
-    config: ScheduleEmailResponseDto | null;
-};
-
-export type UpsertScheduleEmailDto = {
-    subject: string;
-    /**
-     * HTML body with {{placeholders}}
-     */
-    body_html: string;
-    reporting_time?: string | null;
-    gathering_point?: string | null;
-    team_contact_phone?: string | null;
-    special_note?: string | null;
-};
-
-export type SendTestScheduleEmailDto = {
-    /**
-     * Destination for the test email. Defaults to the caller admin email when omitted.
-     */
-    test_email?: string;
-};
-
-export type SendTestResponseDto = {
-    sent: boolean;
-    /**
-     * Destination of the test email
-     */
-    delivered_to: string;
-};
-
-export type SendBulkScheduleEmailResponseDto = {
-    /**
-     * Number of members queued for delivery
-     */
-    queued: number;
-    /**
-     * Members in this role that are NOT in the eligible status set
-     */
-    skipped: number;
-};
-
-export type LeaderCheckinDto = {
-    member_registration_id: number;
-    method: 'qr_scan' | 'manual';
-    qr_code?: string;
-};
-
-export type LeaderConfirmCompletionDto = {
-    member_registration_id: number;
-    note?: string;
-};
-
-export type LeaderConfirmCompletionBulkDto = {
-    member_registration_ids: Array<number>;
-    note?: string;
-};
-
-export type EventContactDto = {
-    id: number;
-    event_id: number;
-    contact_type: 'btc' | 'medical' | 'rescue' | 'police' | 'other';
-    contact_name: string;
-    phone: string;
-    phone2?: string | null;
-    note?: string | null;
-    sort_order: number;
-    is_active: boolean;
-    created_at: string;
-    updated_at: string;
-};
-
-export type CreateEventContactDto = {
-    contact_type: 'btc' | 'medical' | 'rescue' | 'police' | 'other';
-    contact_name: string;
-    phone: string;
-    phone2?: string | null;
-    note?: string | null;
-    sort_order?: number;
-    is_active?: boolean;
-};
-
-export type UpdateEventContactDto = {
-    contact_type?: 'btc' | 'medical' | 'rescue' | 'police' | 'other';
-    contact_name?: string;
-    phone?: string;
-    phone2?: string | null;
-    note?: string | null;
-    sort_order?: number;
-    is_active?: boolean;
-};
-
-export type EventContactsGroupDto = {
-    medical: Array<EventContactDto>;
-    rescue: Array<EventContactDto>;
-    police: Array<EventContactDto>;
-    btc: Array<EventContactDto>;
-    other: Array<EventContactDto>;
-};
-
-export type PublicEventContactsResponseDto = {
-    contacts: EventContactsGroupDto;
-};
-
-export type DirectoryMemberDto = {
-    id: number;
-    full_name: string;
-    phone: string;
-    role_name: string;
-    is_leader: boolean;
-    status: 'pending_approval' | 'approved' | 'contract_sent' | 'contract_signed' | 'qr_sent' | 'checked_in' | 'completed' | 'waitlisted' | 'rejected' | 'cancelled';
-    avatar_url?: string | null;
-};
-
-export type MyTeamDto = {
-    role_name: string;
-    members: Array<DirectoryMemberDto>;
-};
-
-export type LeaderContactDto = {
-    id: number;
-    full_name: string;
-    phone: string;
-    role_name: string;
-    status: 'pending_approval' | 'approved' | 'contract_sent' | 'contract_signed' | 'qr_sent' | 'checked_in' | 'completed' | 'waitlisted' | 'rejected' | 'cancelled';
-    is_leader: boolean;
-};
-
-export type TeamDirectoryResponseDto = {
-    my_team: MyTeamDto;
-    team_leaders: Array<LeaderContactDto>;
-};
-
-export type StationWithAssignmentSummaryDto = {
-    id: number;
-    event_id: number;
-    station_name: string;
-    location_description?: string | null;
-    gps_lat?: string | null;
-    gps_lng?: string | null;
-    status: 'setup' | 'active' | 'closed';
-    sort_order: number;
-    is_active: boolean;
-    category_id: number;
-    category_name?: string | null;
-    category_color?: string | null;
-    supervisors: Array<AssignmentMemberBriefDto>;
-    workers: Array<AssignmentMemberBriefDto>;
-    supervisor_count: number;
-    worker_count: number;
-    has_supervisor: boolean;
-};
-
-export type CreateStationDto = {
-    station_name: string;
-    location_description?: string | null;
-    gps_lat?: number | null;
-    gps_lng?: number | null;
-    sort_order?: number;
-};
-
-export type UpdateStationDto = {
-    station_name?: string;
-    location_description?: string | null;
-    gps_lat?: number | null;
-    gps_lng?: number | null;
-    sort_order?: number;
-};
-
-export type UpdateStationStatusDto = {
-    status: 'setup' | 'active' | 'closed';
-};
-
-export type AssignableMemberDto = {
-    registration_id: number;
-    full_name: string;
-    phone: string;
-    email: string;
-    status: string;
-    role_id: number;
-    role_name: string;
-    is_leader_role: boolean;
-    avatar_url?: string | null;
-};
-
-export type CreateAssignmentDto = {
-    registration_id: number;
-    /**
-     * Chuyên môn / nhiệm vụ cụ thể tại trạm (VD: phát nước, sơ cứu, timing)
-     */
-    duty?: string | null;
-    note?: string | null;
-};
-
-export type SupplyItemDto = {
-    id: number;
-    event_id: number;
-    item_name: string;
-    unit: string;
-    created_by_role_id?: number | null;
-    sort_order: number;
-    created_at: string;
-    updated_at: string;
-};
-
-export type CreateSupplyItemDto = {
-    /**
-     * Tên item — unique per event
-     */
-    item_name: string;
-    /**
-     * Đơn vị tính
-     */
-    unit: string;
-    /**
-     * Thứ tự hiển thị
-     */
-    sort_order?: number;
-    /**
-     * NULL = admin tạo; set = leader tạo (Q7: phân quyền edit). Chỉ admin được gửi field này.
-     */
-    created_by_role_id?: number | null;
-};
-
-export type UpdateSupplyItemDto = {
-    /**
-     * Tên item — unique per event
-     */
-    item_name?: string;
-    /**
-     * Đơn vị tính
-     */
-    unit?: string;
-    /**
-     * Thứ tự hiển thị
-     */
-    sort_order?: number;
-    /**
-     * NULL = admin tạo; set = leader tạo (Q7: phân quyền edit). Chỉ admin được gửi field này.
-     */
-    created_by_role_id?: number | null;
-};
-
-export type SupplyPlanRowDto = {
-    plan_id?: number | null;
-    item_id: number;
-    item_name: string;
-    unit: string;
-    requested_qty: number;
-    request_note?: string | null;
-    fulfilled_qty?: number | null;
-    fulfill_note?: string | null;
-    gap_qty?: number | null;
-    updated_at?: string | null;
-};
-
-export type UpsertSupplyPlanRequestItemDto = {
-    /**
-     * ID của vật tư
-     */
-    item_id: number;
-    /**
-     * Số lượng leader đặt hàng
-     */
-    requested_qty: number;
-    request_note?: string | null;
-};
-
-export type UpsertSupplyPlanRequestDto = {
-    items: Array<UpsertSupplyPlanRequestItemDto>;
-};
-
-export type UpsertSupplyPlanFulfillItemDto = {
-    item_id: number;
-    /**
-     * Số lượng admin đáp ứng
-     */
-    fulfilled_qty: number;
-    fulfill_note?: string | null;
-};
-
-export type UpsertSupplyPlanFulfillDto = {
-    items: Array<UpsertSupplyPlanFulfillItemDto>;
-};
-
-export type SupplyOverviewRoleColumnDto = {
-    role_id: number;
-    role_name: string;
-};
-
-export type SupplyOverviewCellDto = {
-    role_id: number;
-    requested_qty: number;
-    fulfilled_qty?: number | null;
-    gap_qty?: number | null;
-    /**
-     * SUM(allocated_qty) của tất cả stations trong role
-     */
-    allocated_qty: number;
-    /**
-     * SUM(confirmed_qty) của tất cả stations trong role
-     */
-    confirmed_qty: number;
-};
-
-export type SupplyOverviewItemRowDto = {
-    item_id: number;
-    item_name: string;
-    unit: string;
-    cells: Array<SupplyOverviewCellDto>;
-};
-
-export type EventSupplyOverviewDto = {
-    roles: Array<SupplyOverviewRoleColumnDto>;
-    items: Array<SupplyOverviewItemRowDto>;
-};
-
-export type ConfirmedByDto = {
-    name?: string | null;
-    phone?: string | null;
-};
-
-export type AllocationRowDto = {
-    id: number;
-    station_id: number;
-    item_id: number;
-    item_name: string;
-    unit: string;
-    allocated_qty: number;
-    confirmed_qty?: number | null;
-    shortage_qty?: number | null;
-    is_locked: boolean;
-    confirmed_at?: string | null;
-    confirmation_note?: string | null;
-    confirmed_by?: ConfirmedByDto | null;
-    updated_at: string;
-};
-
-export type UpsertAllocationItemDto = {
-    item_id: number;
-    /**
-     * Số lượng phân bổ xuống trạm
-     */
-    allocated_qty: number;
-};
-
-export type UpsertAllocationDto = {
-    allocations: Array<UpsertAllocationItemDto>;
-    /**
-     * Optimistic concurrency check — latest allocation.updated_at seen by client. If server sees newer, returns 409.
-     */
-    optimistic_updated_at?: string;
-};
-
-export type UnlockAllocationDto = {
-    /**
-     * Lý do unlock — required cho audit trail (BR-SUP-ADM)
-     */
-    admin_note: string;
-};
-
-export type SupplementRowDto = {
-    id: number;
-    allocation_id: number;
-    round_number: number;
-    qty: number;
-    note?: string | null;
-    confirmed_qty?: number | null;
-    shortage_qty?: number | null;
-    confirmed_at?: string | null;
-    confirmed_by_name?: string | null;
-    confirmed_by_phone?: string | null;
-    confirmation_note?: string | null;
-    created_at: string;
-};
-
-export type CreateSupplementDto = {
-    /**
-     * Số lượng bổ sung (> 0)
-     */
-    qty: number;
-    note?: string | null;
-};
-
-export type ConfirmSupplyReceiptDto = {
-    item_id: number;
-    confirmed_qty: number;
-};
-
-export type ConfirmSupplyDto = {
-    receipts: Array<ConfirmSupplyReceiptDto>;
-    note?: string | null;
-};
-
-export type ConfirmSupplementDto = {
-    supplement_id: number;
-    confirmed_qty: number;
-    note?: string | null;
-};
-
-export type LeaderStationAllocationDto = {
-    allocation_id: number;
-    station_id: number;
-    station_name: string;
-    allocated_qty: number;
-    confirmed_qty?: number | null;
-    shortage_qty?: number | null;
-    is_locked: boolean;
-    confirmed_at?: string | null;
-    confirmation_note?: string | null;
-    confirmed_by?: ConfirmedByDto | null;
-    supplements: Array<SupplementRowDto>;
-};
-
-export type LeaderSupplyItemViewDto = {
-    item_id: number;
-    item_name: string;
-    unit: string;
-    requested_qty: number;
-    fulfilled_qty?: number | null;
-    gap_qty?: number | null;
-    request_note?: string | null;
-    fulfill_note?: string | null;
-    stations: Array<LeaderStationAllocationDto>;
-};
-
-export type LeaderStationBriefDto = {
-    id: number;
-    station_name: string;
-    category_id: number;
-    category_name?: string | null;
-    category_color?: string | null;
-    location_description?: string | null;
-    gps_lat?: string | null;
-    gps_lng?: string | null;
-    google_maps_url?: string | null;
-    status: 'setup' | 'active' | 'closed';
-    sort_order: number;
-    /**
-     * Số assignment hiện có tại station — để leader biết trạm đã có người chưa mà không cần gọi endpoint riêng.
-     */
-    assignment_count: number;
-};
-
-export type LeaderSupplyViewDto = {
-    event_id: number;
-    /**
-     * v1.6 Option B2: FIRST managed role id (for backward compat with clients that rendered a single-role header). Prefer `managed_role_ids` for multi.
-     */
-    role_id: number;
-    /**
-     * Display name of the FIRST managed role. For backward compat mirrors first element of managed_role_names.
-     */
-    role_name: string;
-    /**
-     * v1.6 Option B2: ALL managed role ids (BFS result, nested descendants included).
-     */
-    managed_role_ids: Array<number>;
-    /**
-     * v1.6 Option B2: display names of ALL managed roles (same order as managed_role_ids). Crew UI renders as chips / joined header.
-     */
-    managed_role_names: Array<string>;
-    /**
-     * v1.8: ALL category (team) ids the leader manages (derived from managed roles → distinct non-null category_id).
-     */
-    managed_category_ids: Array<number>;
-    /**
-     * v1.8: display names of ALL managed categories (same order as managed_category_ids).
-     */
-    managed_category_names: Array<string>;
-    items: Array<LeaderSupplyItemViewDto>;
-    /**
-     * v1.8+: tất cả trạm thuộc managed categories của leader. Độc lập với items[].stations[] — hiển thị dù chưa có allocation nào.
-     */
-    stations: Array<LeaderStationBriefDto>;
-};
-
-export type TeamCategoryDto = {
-    id: number;
-    event_id: number;
-    name: string;
-    slug: string;
-    color: string;
-    sort_order: number;
-    description: string | null;
-    role_count: number;
-    station_count: number;
-    supply_plan_count: number;
-    created_at: string;
-    updated_at: string;
-};
-
-export type CreateTeamCategoryDto = {
-    name: string;
-    /**
-     * URL-safe slug, unique per event. Nếu bỏ trống server sẽ auto-gen từ name.
-     */
-    slug?: string;
-    /**
-     * Hex color #RRGGBB cho UI color-dot
-     */
-    color?: string;
-    sort_order?: number;
-    description?: string | null;
-};
-
-export type UpdateTeamCategoryDto = {
-    name?: string;
-    slug?: string;
-    color?: string;
-    sort_order?: number;
-    description?: string | null;
-};
-
-export type RequestRecoverOtpDto = {
-    email: string;
-    /**
-     * Cloudflare Turnstile response token from the <cf-turnstile> widget. Required in production.
-     */
-    turnstile_token: string;
-};
-
-export type RequestRecoverOtpResponseDto = {
-    /**
-     * Always true. Does NOT confirm email exists.
-     */
-    ok: boolean;
-    /**
-     * Email with middle part masked (e.g. "ab***@example.com"). Echo-back of user input, safe to display.
-     */
-    sent_to: string;
-};
-
-export type VerifyRecoverOtpDto = {
-    email: string;
-    /**
-     * 6-digit numeric OTP
-     */
-    otp: string;
-};
-
-export type RecoveredRegistrationDto = {
-    event_id: number;
-    event_name: string;
-    role_name: string;
-    full_name: string;
-    status: string;
-    /**
-     * Full crew-portal URL. Opens /status/<token>.
-     */
-    magic_link: string;
-};
-
-export type VerifyRecoverOtpResponseDto = {
-    registrations: Array<RecoveredRegistrationDto>;
 };
 
 export type CreateRaceDto = {
@@ -2718,6 +1221,9 @@ export type CreateLeadDto = {
      * Honeypot — leave empty
      */
     website?: string;
+    event_type?: 'race' | 'concert' | 'tournament' | 'other';
+    event_scale?: 'lt500' | '500-2000' | '2000-10000' | 'gt10000';
+    modules?: Array<'5bib' | '5ticket' | '5pix' | '5sport' | '5tech'>;
 };
 
 export type TimingLeadCreateResponseDto = {
@@ -2885,6 +1391,477 @@ export type UpdateSponsoredItemDto = {
      * Auto-set to max(item_order) + 1 if omitted
      */
     item_order?: number;
+};
+
+export type ApiKeyResponseDto = {
+    id: string;
+    name: string;
+    /**
+     * Public prefix; full key never returned after creation.
+     */
+    keyPrefix: string;
+    allowedOrigins: Array<string>;
+    rateLimitPerMinute: number;
+    isActive: boolean;
+    lastUsedAt: string | null;
+    usageCount: number;
+    notes: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type CreateApiKeyDto = {
+    name: string;
+    /**
+     * CORS-style origin allowlist. Empty = allow any origin.
+     */
+    allowedOrigins?: Array<string>;
+    /**
+     * Per-minute cap; 0 = unlimited
+     */
+    rateLimitPerMinute?: number;
+    isActive?: boolean;
+    notes?: string;
+};
+
+export type CreatedApiKeyDto = {
+    id: string;
+    name: string;
+    /**
+     * Public prefix; full key never returned after creation.
+     */
+    keyPrefix: string;
+    allowedOrigins: Array<string>;
+    rateLimitPerMinute: number;
+    isActive: boolean;
+    lastUsedAt: string | null;
+    usageCount: number;
+    notes: string;
+    createdAt: string;
+    updatedAt: string;
+    /**
+     * Full key in cleartext — stored client-side, NEVER displayed again after page leave.
+     */
+    fullKey: string;
+};
+
+export type UpdateApiKeyDto = {
+    name?: string;
+    /**
+     * CORS-style origin allowlist. Empty = allow any origin.
+     */
+    allowedOrigins?: Array<string>;
+    /**
+     * Per-minute cap; 0 = unlimited
+     */
+    rateLimitPerMinute?: number;
+    isActive?: boolean;
+    notes?: string;
+};
+
+export type ArticleCardDto = {
+    id: string;
+    slug: string;
+    title: string;
+    excerpt: string;
+    coverImageUrl: string;
+    type: 'news' | 'help';
+    products: Array<string>;
+    category: string;
+    authorName: string;
+    authorAvatar: string;
+    publishedAt: string | null;
+    readTimeMinutes: number;
+    featured: boolean;
+};
+
+export type PaginatedArticlesDto = {
+    items: Array<ArticleCardDto>;
+    total: number;
+    page: number;
+    totalPages: number;
+};
+
+export type TableOfContentsItemDto = {
+    id: string;
+    text: string;
+    level: 2 | 3;
+};
+
+export type ArticleDetailDto = {
+    id: string;
+    slug: string;
+    title: string;
+    excerpt: string;
+    coverImageUrl: string;
+    type: 'news' | 'help';
+    products: Array<string>;
+    category: string;
+    authorName: string;
+    authorAvatar: string;
+    publishedAt: string | null;
+    readTimeMinutes: number;
+    featured: boolean;
+    /**
+     * Sanitized HTML
+     */
+    content: string;
+    seoTitle: string;
+    seoDescription: string;
+    /**
+     * Auto-derived from <h2>/<h3>
+     */
+    tableOfContents: Array<TableOfContentsItemDto>;
+    related: Array<ArticleCardDto>;
+    helpfulYes: number;
+    helpfulNo: number;
+    viewCount: number;
+};
+
+export type ViewCountResponseDto = {
+    viewCount: number;
+    /**
+     * true nếu IP này đã view trong 5 phút qua, không tính tăng
+     */
+    alreadyCounted: boolean;
+};
+
+export type HelpfulVoteDto = {
+    /**
+     * true = useful, false = not useful
+     */
+    helpful: boolean;
+};
+
+export type HelpfulVoteResponseDto = {
+    helpfulYes: number;
+    helpfulNo: number;
+    /**
+     * true nếu IP này đã vote trong 24h qua, vote không được tính
+     */
+    alreadyVoted: boolean;
+};
+
+export type ArticleAdminDto = {
+    id: string;
+    slug: string;
+    title: string;
+    excerpt: string;
+    coverImageUrl: string;
+    type: 'news' | 'help';
+    products: Array<string>;
+    category: string;
+    authorName: string;
+    authorAvatar: string;
+    publishedAt: string | null;
+    readTimeMinutes: number;
+    featured: boolean;
+    content: string;
+    seoTitle: string;
+    seoDescription: string;
+    status: 'draft' | 'published';
+    isDeleted: boolean;
+    createdAt: string;
+    updatedAt: string;
+    authorId?: string;
+    viewCount: number;
+    helpfulYes: number;
+    helpfulNo: number;
+};
+
+export type PaginatedAdminArticlesDto = {
+    items: Array<ArticleAdminDto>;
+    total: number;
+    page: number;
+    totalPages: number;
+};
+
+export type ArticleStatsDto = {
+    total: number;
+    published: number;
+    draft: number;
+    deleted: number;
+};
+
+export type CreateArticleDto = {
+    /**
+     * Article title
+     */
+    title: string;
+    /**
+     * URL-safe slug. Auto-generated from title if omitted. Pattern: ^[a-z0-9-]+$
+     */
+    slug?: string;
+    /**
+     * Article type
+     */
+    type: 'news' | 'help';
+    /**
+     * Product tags (one article can target multiple)
+     */
+    products: Array<'5bib' | '5sport' | '5ticket' | '5pix' | 'all'>;
+    /**
+     * Free-text category
+     */
+    category?: string;
+    /**
+     * HTML content (sanitized server-side)
+     */
+    content?: string;
+    /**
+     * Short excerpt for listings + social
+     */
+    excerpt?: string;
+    /**
+     * Cover image URL (1200×630 OG image)
+     */
+    coverImageUrl?: string;
+    /**
+     * SEO title (max 60 chars)
+     */
+    seoTitle?: string;
+    /**
+     * SEO description (max 160 chars)
+     */
+    seoDescription?: string;
+    /**
+     * Featured flag — show in hero section
+     */
+    featured?: boolean;
+};
+
+export type UpdateArticleDto = {
+    /**
+     * Article title
+     */
+    title?: string;
+    /**
+     * URL-safe slug. Auto-generated from title if omitted. Pattern: ^[a-z0-9-]+$
+     */
+    slug?: string;
+    /**
+     * Article type
+     */
+    type?: 'news' | 'help';
+    /**
+     * Product tags (one article can target multiple)
+     */
+    products?: Array<'5bib' | '5sport' | '5ticket' | '5pix' | 'all'>;
+    /**
+     * Free-text category
+     */
+    category?: string;
+    /**
+     * HTML content (sanitized server-side)
+     */
+    content?: string;
+    /**
+     * Short excerpt for listings + social
+     */
+    excerpt?: string;
+    /**
+     * Cover image URL (1200×630 OG image)
+     */
+    coverImageUrl?: string;
+    /**
+     * SEO title (max 60 chars)
+     */
+    seoTitle?: string;
+    /**
+     * SEO description (max 160 chars)
+     */
+    seoDescription?: string;
+    /**
+     * Featured flag — show in hero section
+     */
+    featured?: boolean;
+};
+
+export type RestoreArticleDto = {
+    /**
+     * Override slug khi restore. Mặc định: lấy slug gốc trước khi soft-delete.
+     */
+    slug?: string;
+};
+
+export type ArticleCategoryResponseDto = {
+    id: string;
+    slug: string;
+    name: string;
+    type: 'help' | 'news' | 'both';
+    icon: string;
+    tint: string;
+    description: string;
+    order: number;
+    isActive: boolean;
+    articleCount: number;
+};
+
+export type CreateArticleCategoryDto = {
+    /**
+     * Display name (Vietnamese)
+     */
+    name: string;
+    /**
+     * URL-safe slug. Auto-generated from name if omitted.
+     */
+    slug?: string;
+    type?: 'help' | 'news' | 'both';
+    /**
+     * Emoji or icon name
+     */
+    icon?: string;
+    /**
+     * Hex tint for public hero grid card
+     */
+    tint?: string;
+    /**
+     * Sub-text under the name
+     */
+    description?: string;
+    /**
+     * Sort order (ascending)
+     */
+    order?: number;
+    isActive?: boolean;
+};
+
+export type ReorderItemDto = {
+    id: string;
+    order: number;
+};
+
+export type ReorderArticleCategoriesDto = {
+    items: Array<ReorderItemDto>;
+};
+
+export type UpdateArticleCategoryDto = {
+    /**
+     * Display name (Vietnamese)
+     */
+    name?: string;
+    /**
+     * URL-safe slug. Auto-generated from name if omitted.
+     */
+    slug?: string;
+    type?: 'help' | 'news' | 'both';
+    /**
+     * Emoji or icon name
+     */
+    icon?: string;
+    /**
+     * Hex tint for public hero grid card
+     */
+    tint?: string;
+    /**
+     * Sub-text under the name
+     */
+    description?: string;
+    /**
+     * Sort order (ascending)
+     */
+    order?: number;
+    isActive?: boolean;
+};
+
+export type CreateBugReportDto = {
+    title: string;
+    category: 'payment' | 'race_result' | 'bib_avatar' | 'account_login' | 'ui_display' | 'mobile_app' | 'other';
+    severity?: 'critical' | 'high' | 'medium' | 'low' | 'unknown';
+    description: string;
+    stepsToReproduce?: string;
+    urlAffected?: string;
+    email: string;
+    phoneNumber?: string;
+    wantsUpdates: boolean;
+    /**
+     * User must explicitly consent to data storage
+     */
+    consent: boolean;
+    /**
+     * Honeypot — leave empty
+     */
+    website?: string;
+    userAgent?: string;
+    viewport?: string;
+    referrer?: string;
+};
+
+export type CreateBugReportResponseDto = {
+    publicId: string;
+    status: string;
+    /**
+     * Estimated response time based on submitted severity
+     */
+    estimatedResponseTime: string;
+};
+
+export type BugStatusHistoryDto = {
+    fromStatus: 'new' | 'triaged' | 'in_progress' | 'resolved' | 'wont_fix' | 'duplicate' | 'reopened';
+    toStatus: 'new' | 'triaged' | 'in_progress' | 'resolved' | 'wont_fix' | 'duplicate' | 'reopened';
+    changedBy: string | null;
+    changedByName: string | null;
+    changedAt: string;
+    reason: string | null;
+};
+
+export type BugReportAdminDto = {
+    id: string;
+    publicId: string;
+    title: string;
+    description: string;
+    stepsToReproduce: string;
+    category: 'payment' | 'race_result' | 'bib_avatar' | 'account_login' | 'ui_display' | 'mobile_app' | 'other';
+    severity: 'critical' | 'high' | 'medium' | 'low' | 'unknown';
+    status: 'new' | 'triaged' | 'in_progress' | 'resolved' | 'wont_fix' | 'duplicate' | 'reopened';
+    email: string;
+    phoneNumber: string;
+    wantsUpdates: boolean;
+    urlAffected: string;
+    userAgent: string;
+    viewport: string;
+    referrer: string;
+    ipAddress: string;
+    assigneeId: string | null;
+    assigneeName: string | null;
+    duplicateOfPublicId: string | null;
+    statusHistory: Array<BugStatusHistoryDto>;
+    createdAt: string;
+    updatedAt: string;
+    isDeleted: boolean;
+};
+
+export type PaginatedBugReportsAdminDto = {
+    items: Array<BugReportAdminDto>;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+};
+
+export type BugReportStatsDto = {
+    new: number;
+    triaged: number;
+    inProgress: number;
+    resolved: number;
+    critical: number;
+    total: number;
+};
+
+export type UpdateBugStatusDto = {
+    toStatus: 'new' | 'triaged' | 'in_progress' | 'resolved' | 'wont_fix' | 'duplicate' | 'reopened';
+    reason?: string;
+    duplicateOfPublicId?: string;
+};
+
+export type UpdateBugAssigneeDto = {
+    assigneeId?: string | null;
+    assigneeName?: string | null;
+};
+
+export type UpdateBugTriageDto = {
+    severity?: 'critical' | 'high' | 'medium' | 'low' | 'unknown';
+    category?: 'payment' | 'race_result' | 'bib_avatar' | 'account_login' | 'ui_display' | 'mobile_app' | 'other';
 };
 
 export type MerchantControllerFindAllData = {
@@ -3882,1717 +2859,6 @@ export type AnalyticsControllerGetFunnelResponses = {
      */
     200: unknown;
 };
-
-export type TeamManagementControllerListEventsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        page?: number;
-        limit?: number;
-        status?: string;
-    };
-    url: '/api/team-management/events';
-};
-
-export type TeamManagementControllerListEventsResponses = {
-    200: unknown;
-};
-
-export type TeamManagementControllerCreateEventData = {
-    body: CreateEventDto;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/events';
-};
-
-export type TeamManagementControllerCreateEventResponses = {
-    201: VolEvent;
-};
-
-export type TeamManagementControllerCreateEventResponse = TeamManagementControllerCreateEventResponses[keyof TeamManagementControllerCreateEventResponses];
-
-export type TeamManagementControllerDeleteEventData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}';
-};
-
-export type TeamManagementControllerDeleteEventResponses = {
-    200: unknown;
-};
-
-export type TeamManagementControllerGetEventData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}';
-};
-
-export type TeamManagementControllerGetEventResponses = {
-    200: unknown;
-};
-
-export type TeamManagementControllerUpdateEventData = {
-    body: UpdateEventDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}';
-};
-
-export type TeamManagementControllerUpdateEventResponses = {
-    200: VolEvent;
-};
-
-export type TeamManagementControllerUpdateEventResponse = TeamManagementControllerUpdateEventResponses[keyof TeamManagementControllerUpdateEventResponses];
-
-export type TeamManagementControllerGetEventConfigData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/config';
-};
-
-export type TeamManagementControllerGetEventConfigResponses = {
-    200: EventFeaturesConfigDto;
-};
-
-export type TeamManagementControllerGetEventConfigResponse = TeamManagementControllerGetEventConfigResponses[keyof TeamManagementControllerGetEventConfigResponses];
-
-export type TeamManagementControllerUpdateEventFeaturesData = {
-    body: UpdateEventFeaturesDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/features';
-};
-
-export type TeamManagementControllerUpdateEventFeaturesErrors = {
-    /**
-     * Cannot switch to Lite — conflicting registrations
-     */
-    409: unknown;
-};
-
-export type TeamManagementControllerUpdateEventFeaturesResponses = {
-    200: EventFeaturesConfigDto;
-};
-
-export type TeamManagementControllerUpdateEventFeaturesResponse = TeamManagementControllerUpdateEventFeaturesResponses[keyof TeamManagementControllerUpdateEventFeaturesResponses];
-
-export type TeamManagementControllerConfirmNghiemThuData = {
-    body: ConfirmNghiemThuDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/nghiem-thu';
-};
-
-export type TeamManagementControllerConfirmNghiemThuResponses = {
-    200: NghiemThuResponseDto;
-};
-
-export type TeamManagementControllerConfirmNghiemThuResponse = TeamManagementControllerConfirmNghiemThuResponses[keyof TeamManagementControllerConfirmNghiemThuResponses];
-
-export type TeamManagementControllerGetImportTemplateData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/roles/import-template';
-};
-
-export type TeamManagementControllerGetImportTemplateResponses = {
-    200: unknown;
-};
-
-export type TeamManagementControllerPreviewRoleImportData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/roles/import/preview';
-};
-
-export type TeamManagementControllerPreviewRoleImportResponses = {
-    200: PreviewRoleImportResponseDto;
-};
-
-export type TeamManagementControllerPreviewRoleImportResponse = TeamManagementControllerPreviewRoleImportResponses[keyof TeamManagementControllerPreviewRoleImportResponses];
-
-export type TeamManagementControllerConfirmRoleImportData = {
-    body: ConfirmRoleImportDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/roles/import/confirm';
-};
-
-export type TeamManagementControllerConfirmRoleImportResponses = {
-    201: ConfirmRoleImportResponseDto;
-};
-
-export type TeamManagementControllerConfirmRoleImportResponse = TeamManagementControllerConfirmRoleImportResponses[keyof TeamManagementControllerConfirmRoleImportResponses];
-
-export type TeamManagementControllerListRolesData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/roles';
-};
-
-export type TeamManagementControllerListRolesResponses = {
-    200: unknown;
-};
-
-export type TeamManagementControllerCreateRoleData = {
-    body: CreateRoleDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/roles';
-};
-
-export type TeamManagementControllerCreateRoleResponses = {
-    201: VolRole;
-};
-
-export type TeamManagementControllerCreateRoleResponse = TeamManagementControllerCreateRoleResponses[keyof TeamManagementControllerCreateRoleResponses];
-
-export type TeamManagementControllerDeleteRoleData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/roles/{id}';
-};
-
-export type TeamManagementControllerDeleteRoleResponses = {
-    200: unknown;
-};
-
-export type TeamManagementControllerUpdateRoleData = {
-    body: UpdateRoleDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/roles/{id}';
-};
-
-export type TeamManagementControllerUpdateRoleResponses = {
-    200: VolRole;
-};
-
-export type TeamManagementControllerUpdateRoleResponse = TeamManagementControllerUpdateRoleResponses[keyof TeamManagementControllerUpdateRoleResponses];
-
-export type TeamManagementControllerSendContractsData = {
-    body: SendContractsDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/roles/{id}/send-contracts';
-};
-
-export type TeamManagementControllerSendContractsResponses = {
-    201: SendContractsResponseDto;
-};
-
-export type TeamManagementControllerSendContractsResponse = TeamManagementControllerSendContractsResponses[keyof TeamManagementControllerSendContractsResponses];
-
-export type TeamManagementControllerListRegistrationsData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: {
-        page?: number;
-        limit?: number;
-        status?: string;
-        role_id?: number;
-        search?: string;
-    };
-    url: '/api/team-management/events/{id}/registrations';
-};
-
-export type TeamManagementControllerListRegistrationsResponses = {
-    200: ListRegistrationsResponseDto;
-};
-
-export type TeamManagementControllerListRegistrationsResponse = TeamManagementControllerListRegistrationsResponses[keyof TeamManagementControllerListRegistrationsResponses];
-
-export type TeamManagementControllerUpdateRegistrationData = {
-    body: UpdateRegistrationDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}';
-};
-
-export type TeamManagementControllerUpdateRegistrationResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerUpdateRegistrationResponse = TeamManagementControllerUpdateRegistrationResponses[keyof TeamManagementControllerUpdateRegistrationResponses];
-
-export type TeamManagementControllerApproveRegistrationData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/approve';
-};
-
-export type TeamManagementControllerApproveRegistrationResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerApproveRegistrationResponse = TeamManagementControllerApproveRegistrationResponses[keyof TeamManagementControllerApproveRegistrationResponses];
-
-export type TeamManagementControllerRejectRegistrationData = {
-    body: RejectRegistrationDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/reject';
-};
-
-export type TeamManagementControllerRejectRegistrationResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerRejectRegistrationResponse = TeamManagementControllerRejectRegistrationResponses[keyof TeamManagementControllerRejectRegistrationResponses];
-
-export type TeamManagementControllerCancelRegistrationData = {
-    body: CancelRegistrationDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/cancel';
-};
-
-export type TeamManagementControllerCancelRegistrationResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerCancelRegistrationResponse = TeamManagementControllerCancelRegistrationResponses[keyof TeamManagementControllerCancelRegistrationResponses];
-
-export type TeamManagementControllerConfirmCompletionData = {
-    body: ConfirmCompletionDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/confirm-completion';
-};
-
-export type TeamManagementControllerConfirmCompletionResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerConfirmCompletionResponse = TeamManagementControllerConfirmCompletionResponses[keyof TeamManagementControllerConfirmCompletionResponses];
-
-export type TeamManagementControllerClearSuspiciousData = {
-    body: ClearSuspiciousDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/clear-suspicious';
-};
-
-export type TeamManagementControllerClearSuspiciousResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerClearSuspiciousResponse = TeamManagementControllerClearSuspiciousResponses[keyof TeamManagementControllerClearSuspiciousResponses];
-
-export type TeamManagementControllerApproveProfileChangesData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/approve-changes';
-};
-
-export type TeamManagementControllerApproveProfileChangesResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerApproveProfileChangesResponse = TeamManagementControllerApproveProfileChangesResponses[keyof TeamManagementControllerApproveProfileChangesResponses];
-
-export type TeamManagementControllerRejectProfileChangesData = {
-    body: RejectChangesDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/reject-changes';
-};
-
-export type TeamManagementControllerRejectProfileChangesResponses = {
-    200: VolRegistration;
-};
-
-export type TeamManagementControllerRejectProfileChangesResponse = TeamManagementControllerRejectProfileChangesResponses[keyof TeamManagementControllerRejectProfileChangesResponses];
-
-export type TeamManagementControllerGetDetailData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/detail';
-};
-
-export type TeamManagementControllerGetDetailResponses = {
-    200: RegistrationDetailDto;
-};
-
-export type TeamManagementControllerGetDetailResponse = TeamManagementControllerGetDetailResponses[keyof TeamManagementControllerGetDetailResponses];
-
-export type TeamManagementControllerGetSignatureUrlData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/signature-url';
-};
-
-export type TeamManagementControllerGetSignatureUrlResponses = {
-    200: {
-        url?: string;
-        expires_in?: number;
-    };
-};
-
-export type TeamManagementControllerGetSignatureUrlResponse = TeamManagementControllerGetSignatureUrlResponses[keyof TeamManagementControllerGetSignatureUrlResponses];
-
-export type TeamManagementControllerGetContractPdfUrlData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/registrations/{id}/contract-pdf-url';
-};
-
-export type TeamManagementControllerGetContractPdfUrlResponses = {
-    200: {
-        url?: string;
-        expires_in?: number;
-    };
-};
-
-export type TeamManagementControllerGetContractPdfUrlResponse = TeamManagementControllerGetContractPdfUrlResponses[keyof TeamManagementControllerGetContractPdfUrlResponses];
-
-export type TeamManagementControllerManualRegisterData = {
-    body: AdminManualRegisterDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/registrations/manual';
-};
-
-export type TeamManagementControllerManualRegisterResponses = {
-    201: RegisterResponseDto;
-};
-
-export type TeamManagementControllerManualRegisterResponse = TeamManagementControllerManualRegisterResponses[keyof TeamManagementControllerManualRegisterResponses];
-
-export type TeamManagementControllerBulkUpdateData = {
-    body: BulkUpdateRegistrationsDto;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/registrations/bulk-update';
-};
-
-export type TeamManagementControllerBulkUpdateResponses = {
-    201: BulkUpdateResponseDto;
-};
-
-export type TeamManagementControllerBulkUpdateResponse = TeamManagementControllerBulkUpdateResponses[keyof TeamManagementControllerBulkUpdateResponses];
-
-export type TeamManagementControllerGetDashboardData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: {
-        page?: number;
-        limit?: number;
-    };
-    url: '/api/team-management/events/{id}/dashboard';
-};
-
-export type TeamManagementControllerGetDashboardResponses = {
-    200: DashboardResponseDto;
-};
-
-export type TeamManagementControllerGetDashboardResponse = TeamManagementControllerGetDashboardResponses[keyof TeamManagementControllerGetDashboardResponses];
-
-export type TeamManagementControllerListShirtStockData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/shirt-stock';
-};
-
-export type TeamManagementControllerListShirtStockResponses = {
-    200: Array<VolShirtStock>;
-};
-
-export type TeamManagementControllerListShirtStockResponse = TeamManagementControllerListShirtStockResponses[keyof TeamManagementControllerListShirtStockResponses];
-
-export type TeamManagementControllerUpsertShirtStockData = {
-    body: UpsertShirtStockDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/shirt-stock';
-};
-
-export type TeamManagementControllerUpsertShirtStockResponses = {
-    200: unknown;
-};
-
-export type TeamManagementControllerShirtAggregateData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/shirt-aggregate';
-};
-
-export type TeamManagementControllerShirtAggregateResponses = {
-    200: ShirtAggregateDto;
-};
-
-export type TeamManagementControllerShirtAggregateResponse = TeamManagementControllerShirtAggregateResponses[keyof TeamManagementControllerShirtAggregateResponses];
-
-export type TeamManagementControllerExportReportData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{id}/export';
-};
-
-export type TeamManagementControllerExportReportResponses = {
-    200: ExportResponseDto;
-};
-
-export type TeamManagementControllerExportReportResponse = TeamManagementControllerExportReportResponses[keyof TeamManagementControllerExportReportResponses];
-
-export type TeamManagementControllerExportPersonnelData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: {
-        page?: number;
-        limit?: number;
-        status?: string;
-        role_id?: number;
-        search?: string;
-    };
-    url: '/api/team-management/events/{id}/export-personnel';
-};
-
-export type TeamManagementControllerExportPersonnelResponses = {
-    200: PersonnelExportResponseDto;
-};
-
-export type TeamManagementControllerExportPersonnelResponse = TeamManagementControllerExportPersonnelResponses[keyof TeamManagementControllerExportPersonnelResponses];
-
-export type TeamRegistrationControllerListPublicEventsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/public/team-events';
-};
-
-export type TeamRegistrationControllerListPublicEventsResponses = {
-    200: Array<PublicEventSummaryDto>;
-};
-
-export type TeamRegistrationControllerListPublicEventsResponse = TeamRegistrationControllerListPublicEventsResponses[keyof TeamRegistrationControllerListPublicEventsResponses];
-
-export type TeamRegistrationControllerGetPublicEventData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/public/team-events/{id}';
-};
-
-export type TeamRegistrationControllerGetPublicEventResponses = {
-    200: PublicEventSummaryDto;
-};
-
-export type TeamRegistrationControllerGetPublicEventResponse = TeamRegistrationControllerGetPublicEventResponses[keyof TeamRegistrationControllerGetPublicEventResponses];
-
-export type TeamRegistrationControllerRegisterData = {
-    body: RegisterDto;
-    path?: never;
-    query?: never;
-    url: '/api/public/team-register';
-};
-
-export type TeamRegistrationControllerRegisterResponses = {
-    201: RegisterResponseDto;
-};
-
-export type TeamRegistrationControllerRegisterResponse = TeamRegistrationControllerRegisterResponses[keyof TeamRegistrationControllerRegisterResponses];
-
-export type TeamRegistrationControllerStatusData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-status/{token}';
-};
-
-export type TeamRegistrationControllerStatusResponses = {
-    200: StatusResponseDto;
-};
-
-export type TeamRegistrationControllerStatusResponse = TeamRegistrationControllerStatusResponses[keyof TeamRegistrationControllerStatusResponses];
-
-export type TeamRegistrationControllerUpdateProfileData = {
-    body: UpdateProfileDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/profile';
-};
-
-export type TeamRegistrationControllerUpdateProfileResponses = {
-    200: UpdateProfileResponseDto;
-};
-
-export type TeamRegistrationControllerUpdateProfileResponse = TeamRegistrationControllerUpdateProfileResponses[keyof TeamRegistrationControllerUpdateProfileResponses];
-
-export type TeamRegistrationControllerViewContractData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-contract/{token}';
-};
-
-export type TeamRegistrationControllerViewContractResponses = {
-    200: ContractViewDto;
-};
-
-export type TeamRegistrationControllerViewContractResponse = TeamRegistrationControllerViewContractResponses[keyof TeamRegistrationControllerViewContractResponses];
-
-export type TeamRegistrationControllerGetSignedContractPdfData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-contract-pdf/{token}';
-};
-
-export type TeamRegistrationControllerGetSignedContractPdfResponses = {
-    200: {
-        url?: string;
-        expires_in?: number;
-    };
-};
-
-export type TeamRegistrationControllerGetSignedContractPdfResponse = TeamRegistrationControllerGetSignedContractPdfResponses[keyof TeamRegistrationControllerGetSignedContractPdfResponses];
-
-export type TeamRegistrationControllerSignContractData = {
-    body: SignContractDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-contract/{token}/sign';
-};
-
-export type TeamRegistrationControllerSignContractResponses = {
-    201: SignContractResponseDto;
-};
-
-export type TeamRegistrationControllerSignContractResponse = TeamRegistrationControllerSignContractResponses[keyof TeamRegistrationControllerSignContractResponses];
-
-export type TeamRegistrationControllerSelfCheckinData = {
-    body: SelfCheckinDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-checkin/{token}';
-};
-
-export type TeamRegistrationControllerSelfCheckinResponses = {
-    201: CheckinResponseDto;
-};
-
-export type TeamRegistrationControllerSelfCheckinResponse = TeamRegistrationControllerSelfCheckinResponses[keyof TeamRegistrationControllerSelfCheckinResponses];
-
-export type TeamRegistrationControllerGetMyStationData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/station';
-};
-
-export type TeamRegistrationControllerGetMyStationResponses = {
-    200: MyStationViewDto;
-};
-
-export type TeamRegistrationControllerGetMyStationResponse = TeamRegistrationControllerGetMyStationResponses[keyof TeamRegistrationControllerGetMyStationResponses];
-
-export type TeamRegistrationControllerGetEventConfigForPortalData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/event-config';
-};
-
-export type TeamRegistrationControllerGetEventConfigForPortalResponses = {
-    200: EventFeaturesConfigDto;
-};
-
-export type TeamRegistrationControllerGetEventConfigForPortalResponse = TeamRegistrationControllerGetEventConfigForPortalResponses[keyof TeamRegistrationControllerGetEventConfigForPortalResponses];
-
-export type TeamRegistrationControllerUploadPhotoData = {
-    body: {
-        file: Blob | File;
-        photo_type: 'avatar' | 'cccd' | 'benefits';
-    };
-    path?: never;
-    query?: never;
-    url: '/api/public/team-upload-photo';
-};
-
-export type TeamRegistrationControllerUploadPhotoResponses = {
-    201: UploadPhotoResponseDto;
-};
-
-export type TeamRegistrationControllerUploadPhotoResponse = TeamRegistrationControllerUploadPhotoResponses[keyof TeamRegistrationControllerUploadPhotoResponses];
-
-export type TeamRegistrationImportControllerDownloadTemplateData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/registrations/import/template';
-};
-
-export type TeamRegistrationImportControllerDownloadTemplateResponses = {
-    /**
-     * Binary XLSX file (application/vnd.openxmlformats-...).
-     */
-    200: unknown;
-};
-
-export type TeamRegistrationImportControllerPreviewData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/registrations/import/preview';
-};
-
-export type TeamRegistrationImportControllerPreviewResponses = {
-    200: ImportRegistrationsPreviewResponseDto;
-};
-
-export type TeamRegistrationImportControllerPreviewResponse = TeamRegistrationImportControllerPreviewResponses[keyof TeamRegistrationImportControllerPreviewResponses];
-
-export type TeamRegistrationImportControllerConfirmData = {
-    body: ConfirmImportRegistrationsDto;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/registrations/import/confirm';
-};
-
-export type TeamRegistrationImportControllerConfirmResponses = {
-    201: ConfirmImportRegistrationsResponseDto;
-};
-
-export type TeamRegistrationImportControllerConfirmResponse = TeamRegistrationImportControllerConfirmResponses[keyof TeamRegistrationImportControllerConfirmResponses];
-
-export type TeamContractTemplateControllerListData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/contract-templates';
-};
-
-export type TeamContractTemplateControllerListResponses = {
-    200: Array<VolContractTemplate>;
-};
-
-export type TeamContractTemplateControllerListResponse = TeamContractTemplateControllerListResponses[keyof TeamContractTemplateControllerListResponses];
-
-export type TeamContractTemplateControllerCreateData = {
-    body: CreateContractTemplateDto;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/contract-templates';
-};
-
-export type TeamContractTemplateControllerCreateResponses = {
-    201: VolContractTemplate;
-};
-
-export type TeamContractTemplateControllerCreateResponse = TeamContractTemplateControllerCreateResponses[keyof TeamContractTemplateControllerCreateResponses];
-
-export type TeamContractTemplateControllerRemoveData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/contract-templates/{id}';
-};
-
-export type TeamContractTemplateControllerRemoveResponses = {
-    200: unknown;
-};
-
-export type TeamContractTemplateControllerGetData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/contract-templates/{id}';
-};
-
-export type TeamContractTemplateControllerGetResponses = {
-    200: VolContractTemplate;
-};
-
-export type TeamContractTemplateControllerGetResponse = TeamContractTemplateControllerGetResponses[keyof TeamContractTemplateControllerGetResponses];
-
-export type TeamContractTemplateControllerUpdateData = {
-    body: UpdateContractTemplateDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/contract-templates/{id}';
-};
-
-export type TeamContractTemplateControllerUpdateResponses = {
-    200: VolContractTemplate;
-};
-
-export type TeamContractTemplateControllerUpdateResponse = TeamContractTemplateControllerUpdateResponses[keyof TeamContractTemplateControllerUpdateResponses];
-
-export type TeamContractTemplateControllerDuplicateData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/contract-templates/{id}/duplicate';
-};
-
-export type TeamContractTemplateControllerDuplicateResponses = {
-    201: VolContractTemplate;
-};
-
-export type TeamContractTemplateControllerDuplicateResponse = TeamContractTemplateControllerDuplicateResponses[keyof TeamContractTemplateControllerDuplicateResponses];
-
-export type TeamContractTemplateControllerValidateData = {
-    body: ValidateTemplateDto;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/contract-templates/validate';
-};
-
-export type TeamContractTemplateControllerValidateResponses = {
-    201: ValidateTemplateResponseDto;
-};
-
-export type TeamContractTemplateControllerValidateResponse = TeamContractTemplateControllerValidateResponses[keyof TeamContractTemplateControllerValidateResponses];
-
-export type TeamContractTemplateControllerImportDocxData = {
-    body: {
-        file: Blob | File;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/team-management/contract-templates/import-docx';
-};
-
-export type TeamContractTemplateControllerImportDocxResponses = {
-    201: ImportDocxResponseDto;
-};
-
-export type TeamContractTemplateControllerImportDocxResponse = TeamContractTemplateControllerImportDocxResponses[keyof TeamContractTemplateControllerImportDocxResponses];
-
-export type TeamCheckinControllerScanData = {
-    body: CheckinScanDto;
-    path?: never;
-    query?: never;
-    url: '/api/team-management/checkin/scan';
-};
-
-export type TeamCheckinControllerScanResponses = {
-    201: CheckinResponseDto;
-};
-
-export type TeamCheckinControllerScanResponse = TeamCheckinControllerScanResponses[keyof TeamCheckinControllerScanResponses];
-
-export type TeamCheckinControllerLookupData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Min 2 chars
-         */
-        q: string;
-        event_id: number;
-    };
-    url: '/api/team-management/checkin/lookup';
-};
-
-export type TeamCheckinControllerLookupResponses = {
-    200: CheckinLookupResponseDto;
-};
-
-export type TeamCheckinControllerLookupResponse = TeamCheckinControllerLookupResponses[keyof TeamCheckinControllerLookupResponses];
-
-export type TeamCheckinControllerStatsData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/checkin/stats/{eventId}';
-};
-
-export type TeamCheckinControllerStatsResponses = {
-    200: CheckinStatsDto;
-};
-
-export type TeamCheckinControllerStatsResponse = TeamCheckinControllerStatsResponses[keyof TeamCheckinControllerStatsResponses];
-
-export type TeamScheduleEmailControllerListData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/schedule-emails';
-};
-
-export type TeamScheduleEmailControllerListResponses = {
-    200: Array<ScheduleEmailRoleSummaryDto>;
-};
-
-export type TeamScheduleEmailControllerListResponse = TeamScheduleEmailControllerListResponses[keyof TeamScheduleEmailControllerListResponses];
-
-export type TeamScheduleEmailControllerGetData = {
-    body?: never;
-    path: {
-        eventId: number;
-        roleId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/schedule-emails/{roleId}';
-};
-
-export type TeamScheduleEmailControllerGetErrors = {
-    /**
-     * No config for this role yet
-     */
-    404: unknown;
-};
-
-export type TeamScheduleEmailControllerGetResponses = {
-    200: ScheduleEmailResponseDto;
-};
-
-export type TeamScheduleEmailControllerGetResponse = TeamScheduleEmailControllerGetResponses[keyof TeamScheduleEmailControllerGetResponses];
-
-export type TeamScheduleEmailControllerUpsertData = {
-    body: UpsertScheduleEmailDto;
-    path: {
-        eventId: number;
-        roleId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/schedule-emails/{roleId}';
-};
-
-export type TeamScheduleEmailControllerUpsertResponses = {
-    200: ScheduleEmailResponseDto;
-};
-
-export type TeamScheduleEmailControllerUpsertResponse = TeamScheduleEmailControllerUpsertResponses[keyof TeamScheduleEmailControllerUpsertResponses];
-
-export type TeamScheduleEmailControllerSendTestData = {
-    body: SendTestScheduleEmailDto;
-    path: {
-        eventId: number;
-        roleId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/schedule-emails/{roleId}/send-test';
-};
-
-export type TeamScheduleEmailControllerSendTestResponses = {
-    201: SendTestResponseDto;
-};
-
-export type TeamScheduleEmailControllerSendTestResponse = TeamScheduleEmailControllerSendTestResponses[keyof TeamScheduleEmailControllerSendTestResponses];
-
-export type TeamScheduleEmailControllerSendBulkData = {
-    body?: never;
-    path: {
-        eventId: number;
-        roleId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/schedule-emails/{roleId}/send-bulk';
-};
-
-export type TeamScheduleEmailControllerSendBulkResponses = {
-    201: SendBulkScheduleEmailResponseDto;
-};
-
-export type TeamScheduleEmailControllerSendBulkResponse = TeamScheduleEmailControllerSendBulkResponses[keyof TeamScheduleEmailControllerSendBulkResponses];
-
-export type TeamLeaderControllerGetTeamData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/team';
-};
-
-export type TeamLeaderControllerGetTeamResponses = {
-    200: {
-        leader?: {
-            [key: string]: unknown;
-        };
-        members?: Array<{
-            [key: string]: unknown;
-        }>;
-    };
-};
-
-export type TeamLeaderControllerGetTeamResponse = TeamLeaderControllerGetTeamResponses[keyof TeamLeaderControllerGetTeamResponses];
-
-export type TeamLeaderControllerCheckinData = {
-    body: LeaderCheckinDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/checkin';
-};
-
-export type TeamLeaderControllerCheckinResponses = {
-    201: unknown;
-};
-
-export type TeamLeaderControllerConfirmData = {
-    body: LeaderConfirmCompletionDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/confirm-completion';
-};
-
-export type TeamLeaderControllerConfirmResponses = {
-    201: unknown;
-};
-
-export type TeamLeaderControllerConfirmBulkData = {
-    body: LeaderConfirmCompletionBulkDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-leader/{token}/confirm-completion-bulk';
-};
-
-export type TeamLeaderControllerConfirmBulkResponses = {
-    201: unknown;
-};
-
-export type TeamContactControllerListAdminData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/contacts';
-};
-
-export type TeamContactControllerListAdminResponses = {
-    200: Array<EventContactDto>;
-};
-
-export type TeamContactControllerListAdminResponse = TeamContactControllerListAdminResponses[keyof TeamContactControllerListAdminResponses];
-
-export type TeamContactControllerCreateData = {
-    body: CreateEventContactDto;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/contacts';
-};
-
-export type TeamContactControllerCreateResponses = {
-    201: EventContactDto;
-};
-
-export type TeamContactControllerCreateResponse = TeamContactControllerCreateResponses[keyof TeamContactControllerCreateResponses];
-
-export type TeamContactControllerRemoveData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/contacts/{id}';
-};
-
-export type TeamContactControllerRemoveResponses = {
-    200: unknown;
-};
-
-export type TeamContactControllerUpdateData = {
-    body: UpdateEventContactDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/contacts/{id}';
-};
-
-export type TeamContactControllerUpdateResponses = {
-    200: EventContactDto;
-};
-
-export type TeamContactControllerUpdateResponse = TeamContactControllerUpdateResponses[keyof TeamContactControllerUpdateResponses];
-
-export type TeamContactControllerToggleActiveData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/contacts/{id}/toggle-active';
-};
-
-export type TeamContactControllerToggleActiveResponses = {
-    200: EventContactDto;
-};
-
-export type TeamContactControllerToggleActiveResponse = TeamContactControllerToggleActiveResponses[keyof TeamContactControllerToggleActiveResponses];
-
-export type TeamContactControllerPublicContactsData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/contacts';
-};
-
-export type TeamContactControllerPublicContactsResponses = {
-    200: PublicEventContactsResponseDto;
-};
-
-export type TeamContactControllerPublicContactsResponse = TeamContactControllerPublicContactsResponses[keyof TeamContactControllerPublicContactsResponses];
-
-export type TeamDirectoryControllerGetDirectoryData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/directory';
-};
-
-export type TeamDirectoryControllerGetDirectoryResponses = {
-    200: TeamDirectoryResponseDto;
-};
-
-export type TeamDirectoryControllerGetDirectoryResponse = TeamDirectoryControllerGetDirectoryResponses[keyof TeamDirectoryControllerGetDirectoryResponses];
-
-export type TeamStationControllerListAllStationsInEventData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/stations';
-};
-
-export type TeamStationControllerListAllStationsInEventResponses = {
-    200: Array<StationWithAssignmentSummaryDto>;
-};
-
-export type TeamStationControllerListAllStationsInEventResponse = TeamStationControllerListAllStationsInEventResponses[keyof TeamStationControllerListAllStationsInEventResponses];
-
-export type TeamStationControllerListStationsData = {
-    body?: never;
-    path: {
-        categoryId: number;
-    };
-    query?: never;
-    url: '/api/team-management/team-categories/{categoryId}/stations';
-};
-
-export type TeamStationControllerListStationsResponses = {
-    200: Array<StationWithAssignmentSummaryDto>;
-};
-
-export type TeamStationControllerListStationsResponse = TeamStationControllerListStationsResponses[keyof TeamStationControllerListStationsResponses];
-
-export type TeamStationControllerCreateStationData = {
-    body: CreateStationDto;
-    path: {
-        categoryId: number;
-    };
-    query?: never;
-    url: '/api/team-management/team-categories/{categoryId}/stations';
-};
-
-export type TeamStationControllerCreateStationResponses = {
-    201: StationWithAssignmentSummaryDto;
-};
-
-export type TeamStationControllerCreateStationResponse = TeamStationControllerCreateStationResponses[keyof TeamStationControllerCreateStationResponses];
-
-export type TeamStationControllerDeleteStationData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/stations/{id}';
-};
-
-export type TeamStationControllerDeleteStationResponses = {
-    204: void;
-};
-
-export type TeamStationControllerDeleteStationResponse = TeamStationControllerDeleteStationResponses[keyof TeamStationControllerDeleteStationResponses];
-
-export type TeamStationControllerUpdateStationData = {
-    body: UpdateStationDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/stations/{id}';
-};
-
-export type TeamStationControllerUpdateStationResponses = {
-    200: StationWithAssignmentSummaryDto;
-};
-
-export type TeamStationControllerUpdateStationResponse = TeamStationControllerUpdateStationResponses[keyof TeamStationControllerUpdateStationResponses];
-
-export type TeamStationControllerUpdateStatusData = {
-    body: UpdateStationStatusDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/stations/{id}/status';
-};
-
-export type TeamStationControllerUpdateStatusResponses = {
-    200: StationWithAssignmentSummaryDto;
-};
-
-export type TeamStationControllerUpdateStatusResponse = TeamStationControllerUpdateStatusResponses[keyof TeamStationControllerUpdateStatusResponses];
-
-export type TeamStationControllerListAssignableMembersData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/stations/{id}/assignable-members';
-};
-
-export type TeamStationControllerListAssignableMembersResponses = {
-    200: Array<AssignableMemberDto>;
-};
-
-export type TeamStationControllerListAssignableMembersResponse = TeamStationControllerListAssignableMembersResponses[keyof TeamStationControllerListAssignableMembersResponses];
-
-export type TeamStationControllerCreateAssignmentData = {
-    body: CreateAssignmentDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/stations/{id}/assignments';
-};
-
-export type TeamStationControllerCreateAssignmentResponses = {
-    201: AssignmentMemberBriefDto;
-};
-
-export type TeamStationControllerCreateAssignmentResponse = TeamStationControllerCreateAssignmentResponses[keyof TeamStationControllerCreateAssignmentResponses];
-
-export type TeamStationControllerRemoveAssignmentData = {
-    body?: never;
-    path: {
-        assignmentId: number;
-    };
-    query?: never;
-    url: '/api/team-management/station-assignments/{assignmentId}';
-};
-
-export type TeamStationControllerRemoveAssignmentResponses = {
-    204: void;
-};
-
-export type TeamStationControllerRemoveAssignmentResponse = TeamStationControllerRemoveAssignmentResponses[keyof TeamStationControllerRemoveAssignmentResponses];
-
-export type TeamSupplyControllerListItemsData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/supply-items';
-};
-
-export type TeamSupplyControllerListItemsResponses = {
-    200: Array<SupplyItemDto>;
-};
-
-export type TeamSupplyControllerListItemsResponse = TeamSupplyControllerListItemsResponses[keyof TeamSupplyControllerListItemsResponses];
-
-export type TeamSupplyControllerCreateItemData = {
-    body: CreateSupplyItemDto;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/supply-items';
-};
-
-export type TeamSupplyControllerCreateItemResponses = {
-    201: SupplyItemDto;
-};
-
-export type TeamSupplyControllerCreateItemResponse = TeamSupplyControllerCreateItemResponses[keyof TeamSupplyControllerCreateItemResponses];
-
-export type TeamSupplyControllerDeleteItemData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/supply-items/{id}';
-};
-
-export type TeamSupplyControllerDeleteItemResponses = {
-    204: void;
-};
-
-export type TeamSupplyControllerDeleteItemResponse = TeamSupplyControllerDeleteItemResponses[keyof TeamSupplyControllerDeleteItemResponses];
-
-export type TeamSupplyControllerUpdateItemData = {
-    body: UpdateSupplyItemDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/supply-items/{id}';
-};
-
-export type TeamSupplyControllerUpdateItemResponses = {
-    200: SupplyItemDto;
-};
-
-export type TeamSupplyControllerUpdateItemResponse = TeamSupplyControllerUpdateItemResponses[keyof TeamSupplyControllerUpdateItemResponses];
-
-export type TeamSupplyControllerGetPlanData = {
-    body?: never;
-    path: {
-        eventId: number;
-        categoryId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/team-categories/{categoryId}/supply-plan';
-};
-
-export type TeamSupplyControllerGetPlanResponses = {
-    200: Array<SupplyPlanRowDto>;
-};
-
-export type TeamSupplyControllerGetPlanResponse = TeamSupplyControllerGetPlanResponses[keyof TeamSupplyControllerGetPlanResponses];
-
-export type TeamSupplyControllerUpsertRequestData = {
-    body: UpsertSupplyPlanRequestDto;
-    path: {
-        eventId: number;
-        categoryId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/team-categories/{categoryId}/supply-plan/request';
-};
-
-export type TeamSupplyControllerUpsertRequestResponses = {
-    200: Array<SupplyPlanRowDto>;
-};
-
-export type TeamSupplyControllerUpsertRequestResponse = TeamSupplyControllerUpsertRequestResponses[keyof TeamSupplyControllerUpsertRequestResponses];
-
-export type TeamSupplyControllerUpsertFulfillData = {
-    body: UpsertSupplyPlanFulfillDto;
-    path: {
-        eventId: number;
-        categoryId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/team-categories/{categoryId}/supply-plan/fulfill';
-};
-
-export type TeamSupplyControllerUpsertFulfillResponses = {
-    200: Array<SupplyPlanRowDto>;
-};
-
-export type TeamSupplyControllerUpsertFulfillResponse = TeamSupplyControllerUpsertFulfillResponses[keyof TeamSupplyControllerUpsertFulfillResponses];
-
-export type TeamSupplyControllerGetOverviewData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/supply-overview';
-};
-
-export type TeamSupplyControllerGetOverviewResponses = {
-    200: EventSupplyOverviewDto;
-};
-
-export type TeamSupplyControllerGetOverviewResponse = TeamSupplyControllerGetOverviewResponses[keyof TeamSupplyControllerGetOverviewResponses];
-
-export type TeamSupplyControllerGetAllocationsData = {
-    body?: never;
-    path: {
-        stationId: number;
-    };
-    query?: never;
-    url: '/api/team-management/stations/{stationId}/allocations';
-};
-
-export type TeamSupplyControllerGetAllocationsResponses = {
-    200: Array<AllocationRowDto>;
-};
-
-export type TeamSupplyControllerGetAllocationsResponse = TeamSupplyControllerGetAllocationsResponses[keyof TeamSupplyControllerGetAllocationsResponses];
-
-export type TeamSupplyControllerUpsertAllocationsData = {
-    body: UpsertAllocationDto;
-    path: {
-        stationId: number;
-    };
-    query?: never;
-    url: '/api/team-management/stations/{stationId}/allocations';
-};
-
-export type TeamSupplyControllerUpsertAllocationsResponses = {
-    200: Array<AllocationRowDto>;
-};
-
-export type TeamSupplyControllerUpsertAllocationsResponse = TeamSupplyControllerUpsertAllocationsResponses[keyof TeamSupplyControllerUpsertAllocationsResponses];
-
-export type TeamSupplyControllerUnlockAllocationData = {
-    body: UnlockAllocationDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/supply-allocations/{id}/unlock';
-};
-
-export type TeamSupplyControllerUnlockAllocationResponses = {
-    200: AllocationRowDto;
-};
-
-export type TeamSupplyControllerUnlockAllocationResponse = TeamSupplyControllerUnlockAllocationResponses[keyof TeamSupplyControllerUnlockAllocationResponses];
-
-export type TeamSupplyControllerListSupplementsData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/supply-allocations/{id}/supplements';
-};
-
-export type TeamSupplyControllerListSupplementsResponses = {
-    200: Array<SupplementRowDto>;
-};
-
-export type TeamSupplyControllerListSupplementsResponse = TeamSupplyControllerListSupplementsResponses[keyof TeamSupplyControllerListSupplementsResponses];
-
-export type TeamSupplyControllerCreateSupplementData = {
-    body: CreateSupplementDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/supply-allocations/{id}/supplements';
-};
-
-export type TeamSupplyControllerCreateSupplementResponses = {
-    201: SupplementRowDto;
-};
-
-export type TeamSupplyControllerCreateSupplementResponse = TeamSupplyControllerCreateSupplementResponses[keyof TeamSupplyControllerCreateSupplementResponses];
-
-export type TeamSupplyPublicControllerConfirmSupplyData = {
-    body: ConfirmSupplyDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/station/confirm-supply';
-};
-
-export type TeamSupplyPublicControllerConfirmSupplyResponses = {
-    201: Array<AllocationRowDto>;
-};
-
-export type TeamSupplyPublicControllerConfirmSupplyResponse = TeamSupplyPublicControllerConfirmSupplyResponses[keyof TeamSupplyPublicControllerConfirmSupplyResponses];
-
-export type TeamSupplyPublicControllerConfirmSupplementData = {
-    body: ConfirmSupplementDto;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/station/confirm-supplement';
-};
-
-export type TeamSupplyPublicControllerConfirmSupplementResponses = {
-    201: SupplementRowDto;
-};
-
-export type TeamSupplyPublicControllerConfirmSupplementResponse = TeamSupplyPublicControllerConfirmSupplementResponses[keyof TeamSupplyPublicControllerConfirmSupplementResponses];
-
-export type TeamSupplyPublicControllerGetLeaderSupplyViewData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/supply-plan';
-};
-
-export type TeamSupplyPublicControllerGetLeaderSupplyViewResponses = {
-    200: LeaderSupplyViewDto;
-};
-
-export type TeamSupplyPublicControllerGetLeaderSupplyViewResponse = TeamSupplyPublicControllerGetLeaderSupplyViewResponses[keyof TeamSupplyPublicControllerGetLeaderSupplyViewResponses];
-
-export type TeamSupplyPublicControllerUpsertRequestData = {
-    body?: never;
-    path: {
-        token: string;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/supply-plan/request';
-};
-
-export type TeamSupplyPublicControllerUpsertRequestResponses = {
-    200: Array<SupplyPlanRowDto>;
-};
-
-export type TeamSupplyPublicControllerUpsertRequestResponse = TeamSupplyPublicControllerUpsertRequestResponses[keyof TeamSupplyPublicControllerUpsertRequestResponses];
-
-export type TeamSupplyPublicControllerUpsertAllocationsData = {
-    body: UpsertAllocationDto;
-    path: {
-        token: string;
-        stationId: number;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/stations/{stationId}/allocations';
-};
-
-export type TeamSupplyPublicControllerUpsertAllocationsResponses = {
-    200: Array<AllocationRowDto>;
-};
-
-export type TeamSupplyPublicControllerUpsertAllocationsResponse = TeamSupplyPublicControllerUpsertAllocationsResponses[keyof TeamSupplyPublicControllerUpsertAllocationsResponses];
-
-export type TeamSupplyPublicControllerCreateSupplementData = {
-    body: CreateSupplementDto;
-    path: {
-        token: string;
-        allocationId: number;
-    };
-    query?: never;
-    url: '/api/public/team-registration/{token}/supply-allocations/{allocationId}/supplements';
-};
-
-export type TeamSupplyPublicControllerCreateSupplementResponses = {
-    201: SupplementRowDto;
-};
-
-export type TeamSupplyPublicControllerCreateSupplementResponse = TeamSupplyPublicControllerCreateSupplementResponses[keyof TeamSupplyPublicControllerCreateSupplementResponses];
-
-export type TeamCategoryControllerListData = {
-    body?: never;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/team-categories';
-};
-
-export type TeamCategoryControllerListResponses = {
-    200: Array<TeamCategoryDto>;
-};
-
-export type TeamCategoryControllerListResponse = TeamCategoryControllerListResponses[keyof TeamCategoryControllerListResponses];
-
-export type TeamCategoryControllerCreateData = {
-    body: CreateTeamCategoryDto;
-    path: {
-        eventId: number;
-    };
-    query?: never;
-    url: '/api/team-management/events/{eventId}/team-categories';
-};
-
-export type TeamCategoryControllerCreateResponses = {
-    201: TeamCategoryDto;
-};
-
-export type TeamCategoryControllerCreateResponse = TeamCategoryControllerCreateResponses[keyof TeamCategoryControllerCreateResponses];
-
-export type TeamCategoryControllerRemoveData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/team-categories/{id}';
-};
-
-export type TeamCategoryControllerRemoveResponses = {
-    204: void;
-};
-
-export type TeamCategoryControllerRemoveResponse = TeamCategoryControllerRemoveResponses[keyof TeamCategoryControllerRemoveResponses];
-
-export type TeamCategoryControllerGetByIdData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/team-categories/{id}';
-};
-
-export type TeamCategoryControllerGetByIdResponses = {
-    200: TeamCategoryDto;
-};
-
-export type TeamCategoryControllerGetByIdResponse = TeamCategoryControllerGetByIdResponses[keyof TeamCategoryControllerGetByIdResponses];
-
-export type TeamCategoryControllerUpdateData = {
-    body: UpdateTeamCategoryDto;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/api/team-management/team-categories/{id}';
-};
-
-export type TeamCategoryControllerUpdateResponses = {
-    200: TeamCategoryDto;
-};
-
-export type TeamCategoryControllerUpdateResponse = TeamCategoryControllerUpdateResponses[keyof TeamCategoryControllerUpdateResponses];
-
-export type TeamRecoverControllerRequestData = {
-    body: RequestRecoverOtpDto;
-    path?: never;
-    query?: never;
-    url: '/api/public/recover/request';
-};
-
-export type TeamRecoverControllerRequestResponses = {
-    200: RequestRecoverOtpResponseDto;
-};
-
-export type TeamRecoverControllerRequestResponse = TeamRecoverControllerRequestResponses[keyof TeamRecoverControllerRequestResponses];
-
-export type TeamRecoverControllerVerifyData = {
-    body: VerifyRecoverOtpDto;
-    path?: never;
-    query?: never;
-    url: '/api/public/recover/verify';
-};
-
-export type TeamRecoverControllerVerifyResponses = {
-    200: VerifyRecoverOtpResponseDto;
-};
-
-export type TeamRecoverControllerVerifyResponse = TeamRecoverControllerVerifyResponses[keyof TeamRecoverControllerVerifyResponses];
 
 export type RacesControllerSearchRacesData = {
     body?: never;
@@ -7383,6 +4649,33 @@ export type Sport5PublicControllerCreateLeadResponses = {
 
 export type Sport5PublicControllerCreateLeadResponse = Sport5PublicControllerCreateLeadResponses[keyof Sport5PublicControllerCreateLeadResponses];
 
+export type Solution5PublicControllerCreateLeadData = {
+    body: CreateLeadDto;
+    headers: {
+        'user-agent': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/leads/5solution';
+};
+
+export type Solution5PublicControllerCreateLeadErrors = {
+    /**
+     * Validation failed
+     */
+    400: unknown;
+    /**
+     * Quá nhiều yêu cầu
+     */
+    429: unknown;
+};
+
+export type Solution5PublicControllerCreateLeadResponses = {
+    200: TimingLeadCreateResponseDto;
+};
+
+export type Solution5PublicControllerCreateLeadResponse = Solution5PublicControllerCreateLeadResponses[keyof Solution5PublicControllerCreateLeadResponses];
+
 export type TimingAdminControllerListData = {
     body?: never;
     path?: never;
@@ -7455,7 +4748,7 @@ export type EventTrackingControllerTrackEventData = {
     body: CreateTrackingEventDto;
     path?: never;
     query?: never;
-    url: '/api/event-tracking/events';
+    url: '/api/log';
 };
 
 export type EventTrackingControllerTrackEventErrors = {
@@ -7674,3 +4967,626 @@ export type PublicSponsoredControllerGetHomepageResponses = {
      */
     200: unknown;
 };
+
+export type ApiKeysAdminControllerListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/api-keys';
+};
+
+export type ApiKeysAdminControllerListResponses = {
+    200: Array<ApiKeyResponseDto>;
+};
+
+export type ApiKeysAdminControllerListResponse = ApiKeysAdminControllerListResponses[keyof ApiKeysAdminControllerListResponses];
+
+export type ApiKeysAdminControllerCreateData = {
+    body: CreateApiKeyDto;
+    path?: never;
+    query?: never;
+    url: '/api/admin/api-keys';
+};
+
+export type ApiKeysAdminControllerCreateResponses = {
+    201: CreatedApiKeyDto;
+};
+
+export type ApiKeysAdminControllerCreateResponse = ApiKeysAdminControllerCreateResponses[keyof ApiKeysAdminControllerCreateResponses];
+
+export type ApiKeysAdminControllerRemoveData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/api-keys/{id}';
+};
+
+export type ApiKeysAdminControllerRemoveResponses = {
+    200: {
+        ok?: boolean;
+    };
+};
+
+export type ApiKeysAdminControllerRemoveResponse = ApiKeysAdminControllerRemoveResponses[keyof ApiKeysAdminControllerRemoveResponses];
+
+export type ApiKeysAdminControllerFindOneData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/api-keys/{id}';
+};
+
+export type ApiKeysAdminControllerFindOneResponses = {
+    200: ApiKeyResponseDto;
+};
+
+export type ApiKeysAdminControllerFindOneResponse = ApiKeysAdminControllerFindOneResponses[keyof ApiKeysAdminControllerFindOneResponses];
+
+export type ApiKeysAdminControllerUpdateData = {
+    body: UpdateApiKeyDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/api-keys/{id}';
+};
+
+export type ApiKeysAdminControllerUpdateResponses = {
+    200: ApiKeyResponseDto;
+};
+
+export type ApiKeysAdminControllerUpdateResponse = ApiKeysAdminControllerUpdateResponses[keyof ApiKeysAdminControllerUpdateResponses];
+
+export type ArticlesControllerLatestData = {
+    body?: never;
+    headers: {
+        /**
+         * Required — issued via /admin/api-keys
+         */
+        'X-API-Key': string;
+    };
+    path?: never;
+    query?: {
+        type?: 'news' | 'help';
+        product?: '5bib' | '5sport' | '5ticket' | '5pix' | 'all';
+        /**
+         * Limit (max 20)
+         */
+        limit?: number;
+    };
+    url: '/api/articles/latest';
+};
+
+export type ArticlesControllerLatestErrors = {
+    /**
+     * Missing/invalid X-API-Key
+     */
+    401: unknown;
+    /**
+     * Rate limit exceeded for this key
+     */
+    429: unknown;
+};
+
+export type ArticlesControllerLatestResponses = {
+    200: Array<ArticleCardDto>;
+};
+
+export type ArticlesControllerLatestResponse = ArticlesControllerLatestResponses[keyof ArticlesControllerLatestResponses];
+
+export type ArticlesControllerCategoriesData = {
+    body?: never;
+    headers: {
+        'X-API-Key': string;
+    };
+    path?: never;
+    query: {
+        type: string;
+    };
+    url: '/api/articles/categories';
+};
+
+export type ArticlesControllerCategoriesResponses = {
+    200: Array<{
+        category?: string;
+        count?: number;
+    }>;
+};
+
+export type ArticlesControllerCategoriesResponse = ArticlesControllerCategoriesResponses[keyof ArticlesControllerCategoriesResponses];
+
+export type ArticlesControllerListData = {
+    body?: never;
+    headers: {
+        'X-API-Key': string;
+    };
+    path?: never;
+    query?: {
+        type?: 'news' | 'help';
+        product?: '5bib' | '5sport' | '5ticket' | '5pix' | 'all';
+        /**
+         * Free-text category filter
+         */
+        category?: string;
+        /**
+         * Page number (1-indexed)
+         */
+        page?: number;
+        /**
+         * Page size (max 50)
+         */
+        limit?: number;
+    };
+    url: '/api/articles';
+};
+
+export type ArticlesControllerListResponses = {
+    200: PaginatedArticlesDto;
+};
+
+export type ArticlesControllerListResponse = ArticlesControllerListResponses[keyof ArticlesControllerListResponses];
+
+export type ArticlesControllerDetailData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/articles/{slug}';
+};
+
+export type ArticlesControllerDetailErrors = {
+    /**
+     * Not found or not published
+     */
+    404: unknown;
+};
+
+export type ArticlesControllerDetailResponses = {
+    200: ArticleDetailDto;
+};
+
+export type ArticlesControllerDetailResponse = ArticlesControllerDetailResponses[keyof ArticlesControllerDetailResponses];
+
+export type ArticlesControllerViewData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/articles/{slug}/view';
+};
+
+export type ArticlesControllerViewResponses = {
+    200: ViewCountResponseDto;
+};
+
+export type ArticlesControllerViewResponse = ArticlesControllerViewResponses[keyof ArticlesControllerViewResponses];
+
+export type ArticlesControllerHelpfulData = {
+    body: HelpfulVoteDto;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/articles/{slug}/helpful';
+};
+
+export type ArticlesControllerHelpfulResponses = {
+    200: HelpfulVoteResponseDto;
+};
+
+export type ArticlesControllerHelpfulResponse = ArticlesControllerHelpfulResponses[keyof ArticlesControllerHelpfulResponses];
+
+export type ArticlesAdminControllerListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        type?: 'news' | 'help';
+        product?: '5bib' | '5sport' | '5ticket' | '5pix' | 'all';
+        /**
+         * Free-text category filter
+         */
+        category?: string;
+        /**
+         * Page number (1-indexed)
+         */
+        page?: number;
+        /**
+         * Page size (max 50)
+         */
+        limit?: number;
+        status?: 'draft' | 'published' | 'all';
+        /**
+         * Search by title (case-insensitive)
+         */
+        q?: string;
+        /**
+         * Include soft-deleted articles
+         */
+        includeDeleted?: boolean;
+    };
+    url: '/api/admin/articles';
+};
+
+export type ArticlesAdminControllerListResponses = {
+    200: PaginatedAdminArticlesDto;
+};
+
+export type ArticlesAdminControllerListResponse = ArticlesAdminControllerListResponses[keyof ArticlesAdminControllerListResponses];
+
+export type ArticlesAdminControllerCreateData = {
+    body: CreateArticleDto;
+    path?: never;
+    query?: never;
+    url: '/api/admin/articles';
+};
+
+export type ArticlesAdminControllerCreateResponses = {
+    201: ArticleAdminDto;
+};
+
+export type ArticlesAdminControllerCreateResponse = ArticlesAdminControllerCreateResponses[keyof ArticlesAdminControllerCreateResponses];
+
+export type ArticlesAdminControllerStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/articles/stats';
+};
+
+export type ArticlesAdminControllerStatsResponses = {
+    200: ArticleStatsDto;
+};
+
+export type ArticlesAdminControllerStatsResponse = ArticlesAdminControllerStatsResponses[keyof ArticlesAdminControllerStatsResponses];
+
+export type ArticlesAdminControllerRemoveData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/articles/{id}';
+};
+
+export type ArticlesAdminControllerRemoveResponses = {
+    200: {
+        ok?: boolean;
+    };
+};
+
+export type ArticlesAdminControllerRemoveResponse = ArticlesAdminControllerRemoveResponses[keyof ArticlesAdminControllerRemoveResponses];
+
+export type ArticlesAdminControllerFindOneData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/articles/{id}';
+};
+
+export type ArticlesAdminControllerFindOneResponses = {
+    200: ArticleAdminDto;
+};
+
+export type ArticlesAdminControllerFindOneResponse = ArticlesAdminControllerFindOneResponses[keyof ArticlesAdminControllerFindOneResponses];
+
+export type ArticlesAdminControllerUpdateData = {
+    body: UpdateArticleDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/articles/{id}';
+};
+
+export type ArticlesAdminControllerUpdateResponses = {
+    200: ArticleAdminDto;
+};
+
+export type ArticlesAdminControllerUpdateResponse = ArticlesAdminControllerUpdateResponses[keyof ArticlesAdminControllerUpdateResponses];
+
+export type ArticlesAdminControllerPublishData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/articles/{id}/publish';
+};
+
+export type ArticlesAdminControllerPublishErrors = {
+    /**
+     * Missing required fields when publishing
+     */
+    422: unknown;
+};
+
+export type ArticlesAdminControllerPublishResponses = {
+    200: ArticleAdminDto;
+};
+
+export type ArticlesAdminControllerPublishResponse = ArticlesAdminControllerPublishResponses[keyof ArticlesAdminControllerPublishResponses];
+
+export type ArticlesAdminControllerUnpublishData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/articles/{id}/unpublish';
+};
+
+export type ArticlesAdminControllerUnpublishResponses = {
+    200: ArticleAdminDto;
+};
+
+export type ArticlesAdminControllerUnpublishResponse = ArticlesAdminControllerUnpublishResponses[keyof ArticlesAdminControllerUnpublishResponses];
+
+export type ArticlesAdminControllerRestoreData = {
+    body: RestoreArticleDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/articles/{id}/restore';
+};
+
+export type ArticlesAdminControllerRestoreResponses = {
+    200: ArticleAdminDto;
+};
+
+export type ArticlesAdminControllerRestoreResponse = ArticlesAdminControllerRestoreResponses[keyof ArticlesAdminControllerRestoreResponses];
+
+export type ArticleCategoriesControllerListData = {
+    body?: never;
+    headers: {
+        'X-API-Key': string;
+    };
+    path?: never;
+    query: {
+        type: string;
+    };
+    url: '/api/article-categories';
+};
+
+export type ArticleCategoriesControllerListErrors = {
+    /**
+     * Missing/invalid X-API-Key
+     */
+    401: unknown;
+};
+
+export type ArticleCategoriesControllerListResponses = {
+    200: Array<ArticleCategoryResponseDto>;
+};
+
+export type ArticleCategoriesControllerListResponse = ArticleCategoriesControllerListResponses[keyof ArticleCategoriesControllerListResponses];
+
+export type ArticleCategoriesAdminControllerListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/article-categories';
+};
+
+export type ArticleCategoriesAdminControllerListResponses = {
+    200: Array<ArticleCategoryResponseDto>;
+};
+
+export type ArticleCategoriesAdminControllerListResponse = ArticleCategoriesAdminControllerListResponses[keyof ArticleCategoriesAdminControllerListResponses];
+
+export type ArticleCategoriesAdminControllerCreateData = {
+    body: CreateArticleCategoryDto;
+    path?: never;
+    query?: never;
+    url: '/api/admin/article-categories';
+};
+
+export type ArticleCategoriesAdminControllerCreateResponses = {
+    201: ArticleCategoryResponseDto;
+};
+
+export type ArticleCategoriesAdminControllerCreateResponse = ArticleCategoriesAdminControllerCreateResponses[keyof ArticleCategoriesAdminControllerCreateResponses];
+
+export type ArticleCategoriesAdminControllerRemoveData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/article-categories/{id}';
+};
+
+export type ArticleCategoriesAdminControllerRemoveErrors = {
+    /**
+     * Category in use by articles
+     */
+    409: unknown;
+};
+
+export type ArticleCategoriesAdminControllerRemoveResponses = {
+    200: {
+        ok?: boolean;
+    };
+};
+
+export type ArticleCategoriesAdminControllerRemoveResponse = ArticleCategoriesAdminControllerRemoveResponses[keyof ArticleCategoriesAdminControllerRemoveResponses];
+
+export type ArticleCategoriesAdminControllerFindOneData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/article-categories/{id}';
+};
+
+export type ArticleCategoriesAdminControllerFindOneResponses = {
+    200: ArticleCategoryResponseDto;
+};
+
+export type ArticleCategoriesAdminControllerFindOneResponse = ArticleCategoriesAdminControllerFindOneResponses[keyof ArticleCategoriesAdminControllerFindOneResponses];
+
+export type ArticleCategoriesAdminControllerUpdateData = {
+    body: UpdateArticleCategoryDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/article-categories/{id}';
+};
+
+export type ArticleCategoriesAdminControllerUpdateResponses = {
+    200: ArticleCategoryResponseDto;
+};
+
+export type ArticleCategoriesAdminControllerUpdateResponse = ArticleCategoriesAdminControllerUpdateResponses[keyof ArticleCategoriesAdminControllerUpdateResponses];
+
+export type ArticleCategoriesAdminControllerReorderData = {
+    body: ReorderArticleCategoriesDto;
+    path?: never;
+    query?: never;
+    url: '/api/admin/article-categories/reorder';
+};
+
+export type ArticleCategoriesAdminControllerReorderResponses = {
+    200: {
+        ok?: boolean;
+    };
+};
+
+export type ArticleCategoriesAdminControllerReorderResponse = ArticleCategoriesAdminControllerReorderResponses[keyof ArticleCategoriesAdminControllerReorderResponses];
+
+export type BugReportsControllerSubmitData = {
+    body: CreateBugReportDto;
+    path?: never;
+    query?: never;
+    url: '/api/bug-reports';
+};
+
+export type BugReportsControllerSubmitErrors = {
+    /**
+     * Rate limit exceeded
+     */
+    429: unknown;
+};
+
+export type BugReportsControllerSubmitResponses = {
+    201: CreateBugReportResponseDto;
+};
+
+export type BugReportsControllerSubmitResponse = BugReportsControllerSubmitResponses[keyof BugReportsControllerSubmitResponses];
+
+export type BugReportsAdminControllerListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'new' | 'triaged' | 'in_progress' | 'resolved' | 'wont_fix' | 'duplicate' | 'reopened';
+        severity?: 'critical' | 'high' | 'medium' | 'low' | 'unknown';
+        category?: 'payment' | 'race_result' | 'bib_avatar' | 'account_login' | 'ui_display' | 'mobile_app' | 'other';
+        q?: string;
+        page?: number;
+        limit?: number;
+        includeDeleted?: boolean;
+    };
+    url: '/api/admin/bug-reports';
+};
+
+export type BugReportsAdminControllerListResponses = {
+    200: PaginatedBugReportsAdminDto;
+};
+
+export type BugReportsAdminControllerListResponse = BugReportsAdminControllerListResponses[keyof BugReportsAdminControllerListResponses];
+
+export type BugReportsAdminControllerStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/bug-reports/stats';
+};
+
+export type BugReportsAdminControllerStatsResponses = {
+    200: BugReportStatsDto;
+};
+
+export type BugReportsAdminControllerStatsResponse = BugReportsAdminControllerStatsResponses[keyof BugReportsAdminControllerStatsResponses];
+
+export type BugReportsAdminControllerSoftDeleteData = {
+    body?: never;
+    path: {
+        publicId: string;
+    };
+    query?: never;
+    url: '/api/admin/bug-reports/{publicId}';
+};
+
+export type BugReportsAdminControllerSoftDeleteResponses = {
+    200: unknown;
+};
+
+export type BugReportsAdminControllerDetailData = {
+    body?: never;
+    path: {
+        publicId: string;
+    };
+    query?: never;
+    url: '/api/admin/bug-reports/{publicId}';
+};
+
+export type BugReportsAdminControllerDetailResponses = {
+    200: BugReportAdminDto;
+};
+
+export type BugReportsAdminControllerDetailResponse = BugReportsAdminControllerDetailResponses[keyof BugReportsAdminControllerDetailResponses];
+
+export type BugReportsAdminControllerUpdateStatusData = {
+    body: UpdateBugStatusDto;
+    path: {
+        publicId: string;
+    };
+    query?: never;
+    url: '/api/admin/bug-reports/{publicId}/status';
+};
+
+export type BugReportsAdminControllerUpdateStatusResponses = {
+    200: BugReportAdminDto;
+};
+
+export type BugReportsAdminControllerUpdateStatusResponse = BugReportsAdminControllerUpdateStatusResponses[keyof BugReportsAdminControllerUpdateStatusResponses];
+
+export type BugReportsAdminControllerUpdateAssigneeData = {
+    body: UpdateBugAssigneeDto;
+    path: {
+        publicId: string;
+    };
+    query?: never;
+    url: '/api/admin/bug-reports/{publicId}/assignee';
+};
+
+export type BugReportsAdminControllerUpdateAssigneeResponses = {
+    200: BugReportAdminDto;
+};
+
+export type BugReportsAdminControllerUpdateAssigneeResponse = BugReportsAdminControllerUpdateAssigneeResponses[keyof BugReportsAdminControllerUpdateAssigneeResponses];
+
+export type BugReportsAdminControllerUpdateTriageData = {
+    body: UpdateBugTriageDto;
+    path: {
+        publicId: string;
+    };
+    query?: never;
+    url: '/api/admin/bug-reports/{publicId}/triage';
+};
+
+export type BugReportsAdminControllerUpdateTriageResponses = {
+    200: BugReportAdminDto;
+};
+
+export type BugReportsAdminControllerUpdateTriageResponse = BugReportsAdminControllerUpdateTriageResponses[keyof BugReportsAdminControllerUpdateTriageResponses];

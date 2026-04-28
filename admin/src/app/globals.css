@@ -70,8 +70,10 @@
   --5bib-bg: #faf8f5;
   --5bib-surface: #f3f0eb;
   --5bib-surface-2: #e8e4dd;
-  --5bib-accent: #0066FF;
-  --5bib-accent-dim: #0055DD;
+  --5bib-accent: #1D49FF;
+  --5bib-accent-dim: #0B36E6;
+  --5bib-magenta: #FF0E65;
+  --5bib-magenta-dim: #E60057;
   --5bib-accent-warm: #d97706;
   --5bib-accent-glow: rgba(0, 102, 255, 0.25);
   --5bib-text: #1c1917;
@@ -92,7 +94,7 @@
   --card-foreground: #1c1917;
   --popover: #ffffff;
   --popover-foreground: #1c1917;
-  --primary: #0066FF;
+  --primary: #1D49FF;
   --primary-foreground: #ffffff;
   --secondary: #f3f0eb;
   --secondary-foreground: #1c1917;
@@ -103,21 +105,21 @@
   --destructive: #dc2626;
   --border: #e7e5e4;
   --input: #e7e5e4;
-  --ring: #0066FF;
+  --ring: #1D49FF;
   --radius: 0.625rem;
 
-  /* Sidebar — slightly cooler than page bg */
-  --sidebar: #f3f0eb;
-  --sidebar-foreground: #1c1917;
-  --sidebar-primary: #0066FF;
+  /* Sidebar — DARK theme per 5Solution design (slate-900 surface, white text) */
+  --sidebar: #0F172A;
+  --sidebar-foreground: rgba(255, 255, 255, 0.78);
+  --sidebar-primary: #1D49FF;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8e4dd;
-  --sidebar-accent-foreground: #1c1917;
-  --sidebar-border: #d6d3d1;
-  --sidebar-ring: #0066FF;
+  --sidebar-accent: rgba(29, 73, 255, 0.18);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #1D49FF;
 
   /* Charts */
-  --chart-1: #0066FF;
+  --chart-1: #1D49FF;
   --chart-2: #c2410c;
   --chart-3: #166534;
   --chart-4: #d97706;
@@ -129,7 +131,8 @@
   --shadow-md: 0 4px 6px -1px rgba(28, 25, 23, 0.07), 0 2px 4px -2px rgba(28, 25, 23, 0.05);
   --shadow-lg: 0 10px 15px -3px rgba(28, 25, 23, 0.08), 0 4px 6px -4px rgba(28, 25, 23, 0.04);
   --shadow-xl: 0 20px 25px -5px rgba(28, 25, 23, 0.08), 0 8px 10px -6px rgba(28, 25, 23, 0.04);
-  --shadow-glow: 0 0 0 1px rgba(0, 102, 255, 0.08), 0 8px 32px rgba(0, 102, 255, 0.1);
+  --shadow-glow: 0 0 0 1px rgba(29, 73, 255, 0.08), 0 8px 32px rgba(29, 73, 255, 0.22);
+  --shadow-glow-magenta: 0 0 0 1px rgba(255, 14, 101, 0.12), 0 10px 30px rgba(255, 14, 101, 0.25);
 
   /* Motion tokens */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
