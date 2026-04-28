@@ -27,7 +27,12 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, Eye } from "lucide-react";
 
 type LeadStatus = "new" | "contacted" | "quoted" | "closed_won" | "closed_lost";
-type LeadSource = "timing" | "solution" | "5sport-btc" | "5sport-athlete";
+type LeadSource =
+  | "timing"
+  | "solution"
+  | "5solution-umbrella"
+  | "5sport-btc"
+  | "5sport-athlete";
 
 interface TimingLead {
   _id: string;
@@ -76,8 +81,15 @@ const PACKAGE_LABEL: Record<TimingLead["package_interest"], string> = {
 const SOURCE_BADGE: Record<LeadSource, { label: string; className: string }> = {
   timing: { label: "Timing", className: "bg-sky-100 text-sky-700 border-sky-200" },
   solution: { label: "Solution", className: "bg-pink-100 text-pink-700 border-pink-200" },
+  "5solution-umbrella": { label: "5Solution", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
   "5sport-btc": { label: "5Sport BTC", className: "bg-lime-100 text-lime-700 border-lime-200" },
   "5sport-athlete": { label: "5Sport VĐV", className: "bg-violet-100 text-violet-700 border-violet-200" },
+};
+
+// Defensive fallback so any future source value the backend introduces
+// doesn't crash the page — render the raw string in a neutral badge.
+const SOURCE_FALLBACK = {
+  className: "bg-stone-100 text-stone-700 border-stone-200",
 };
 
 export default function TimingLeadsPage() {
@@ -226,6 +238,7 @@ export default function TimingLeadsPage() {
               <SelectItem value="all">Tất cả nguồn</SelectItem>
               <SelectItem value="timing">Timing</SelectItem>
               <SelectItem value="solution">Solution</SelectItem>
+              <SelectItem value="5solution-umbrella">5Solution</SelectItem>
               <SelectItem value="5sport-btc">5Sport BTC</SelectItem>
               <SelectItem value="5sport-athlete">5Sport VĐV</SelectItem>
             </SelectContent>
@@ -288,7 +301,11 @@ export default function TimingLeadsPage() {
                     <TableCell className="text-xs">{PACKAGE_LABEL[it.package_interest]}</TableCell>
                     <TableCell>
                       {(() => {
-                        const src = SOURCE_BADGE[it.source ?? "timing"];
+                        const key = (it.source ?? "timing") as LeadSource;
+                        const src = SOURCE_BADGE[key] ?? {
+                          label: it.source ?? "—",
+                          className: SOURCE_FALLBACK.className,
+                        };
                         return (
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${src.className}`}>
                             {src.label}
