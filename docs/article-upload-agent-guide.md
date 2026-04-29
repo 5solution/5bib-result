@@ -29,13 +29,33 @@
 
 ## 1. Authentication
 
-Tất cả endpoint admin yêu cầu **Logto admin JWT** trong `Authorization: Bearer <token>` header.
+Hai cách auth được hỗ trợ — **dùng Option A cho AI agent** (không cần copy token, không expire):
 
-### Cách lấy token (cho agent)
-1. Danny login `https://admin.5bib.com` qua Logto
+### Option A — Scoped API key (KHUYẾN NGHỊ cho bot)
+Header: `X-API-Key: ak_xxxxxxxxxxxxx`
+
+Key cần có **scope** `articles:write` (cho POST/PATCH /api/admin/articles + /publish/unpublish/delete) và `upload:write` (cho POST /api/upload).
+
+Cách cấp key:
+1. Login `admin.5bib.com` → API Keys → Generate (UI sẽ hiển thị key full **chỉ 1 lần**)
+2. Hỏi Danny add scope qua mongo:
+   ```js
+   db.api_keys.updateOne(
+     { keyPrefix: "ak_xxxxxxxxx" },
+     { $set: { scopes: ["articles:write", "upload:write"] } }
+   )
+   ```
+3. Key không expire (cho đến khi `isActive` flip false)
+
+> Key tránh để leak ra repo / log. Rate limit mặc định 60 req/phút (chỉnh được).
+
+### Option B — Logto admin JWT (cho người, hoặc tool internal)
+Header: `Authorization: Bearer <jwt>`
+
+1. Danny login `https://admin.5bib.com`
 2. F12 → Application → Cookies → tìm cookie `logto:session` hoặc Local Storage `logto:access_token`
 3. Copy token, paste vào agent env var: `BIB_ADMIN_TOKEN`
-4. Token expire ~1 giờ — **agent phải handle 401 → notify Danny refresh token**
+4. Token expire ~1 giờ — agent phải handle 401 → notify Danny refresh token
 
 ### Base URL
 | Environment | Base URL |
