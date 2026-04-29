@@ -27,10 +27,19 @@ import {
 } from './dto/article-response.dto';
 import { CurrentUser, LogtoAdminGuard } from '../logto-auth';
 import type { LogtoUser } from '../logto-auth/types';
+import {
+  LogtoOrApiKeyWriteGuard,
+  RequireScope,
+} from '../api-keys/logto-or-api-key-write.guard';
 
 @ApiTags('Articles · Admin')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(LogtoAdminGuard)
+// Class-level guard accepts EITHER Logto admin JWT, OR X-API-Key carrying
+// the `articles:write` scope (issued via admin /api-keys with the scopes
+// field set in DB). The scope grants both read + write on this controller —
+// AI agents need read access to dedupe before creating new articles.
+@UseGuards(LogtoOrApiKeyWriteGuard)
+@RequireScope('articles:write')
 @Controller('admin/articles')
 export class ArticlesAdminController {
   constructor(private readonly service: ArticlesService) {}

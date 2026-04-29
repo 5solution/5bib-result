@@ -6,18 +6,22 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { LogtoAdminGuard } from '../logto-auth';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { UploadService } from './upload.service';
 import { ApiBearerAuth, ApiBody, ApiConsumes } from '@nestjs/swagger';
+import {
+  LogtoOrApiKeyWriteGuard,
+  RequireScope,
+} from '../api-keys/logto-or-api-key-write.guard';
 
 @Controller('upload')
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post('')
-  @UseGuards(LogtoAdminGuard)
+  @UseGuards(LogtoOrApiKeyWriteGuard)
+  @RequireScope('upload:write')
   @ApiBearerAuth('JWT-auth')
   @ApiConsumes('multipart/form-data')
   @ApiBody({

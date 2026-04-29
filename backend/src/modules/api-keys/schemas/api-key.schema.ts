@@ -37,6 +37,18 @@ export class ApiKey {
   /** Free-text note (which environment, who issued, expiration plan). */
   @Prop({ default: '' }) notes: string;
 
+  /**
+   * Permissions this key holds. Default empty = read-only widget access
+   * (article-categories list/detail, articles list/detail). For write
+   * operations grant scopes like `['articles:write']`. Checked by
+   * LogtoOrApiKeyWriteGuard on admin endpoints that opt in to API-key auth.
+   *
+   * Known scopes (extend list as new write endpoints opt in):
+   *   - articles:write  → create / update / publish / unpublish / delete articles
+   *   - upload:write    → POST /api/upload (image upload)
+   */
+  @Prop({ type: [String], default: [] }) scopes: string[];
+
   createdAt: Date;
   updatedAt: Date;
 }
