@@ -6,15 +6,25 @@ import { ApiKeysAdminController } from './api-keys-admin.controller';
 import { ApiKeyGuard } from './api-key.guard';
 import { LogtoOrApiKeyWriteGuard } from './logto-or-api-key-write.guard';
 import { LogtoAuthModule } from '../logto-auth/logto-auth.module';
-import { LogtoAdminGuard } from '../logto-auth/logto-admin.guard';
 
 @Module({
+  // LogtoAuthModule re-exports LogtoAdminGuard which the OR guard depends on;
+  // any consuming module just needs to import ApiKeysModule (which transitively
+  // makes LogtoAdminGuard available via re-export below).
   imports: [
     MongooseModule.forFeature([{ name: ApiKey.name, schema: ApiKeySchema }]),
     LogtoAuthModule,
   ],
   controllers: [ApiKeysAdminController],
-  providers: [ApiKeysService, ApiKeyGuard, LogtoAdminGuard, LogtoOrApiKeyWriteGuard],
-  exports: [ApiKeysService, ApiKeyGuard, LogtoOrApiKeyWriteGuard],
+  providers: [ApiKeysService, ApiKeyGuard, LogtoOrApiKeyWriteGuard],
+  exports: [
+    ApiKeysService,
+    ApiKeyGuard,
+    LogtoOrApiKeyWriteGuard,
+    // Re-export so consumer modules using @UseGuards(LogtoOrApiKeyWriteGuard)
+    // can resolve its LogtoAdminGuard dependency without importing
+    // LogtoAuthModule themselves.
+    LogtoAuthModule,
+  ],
 })
 export class ApiKeysModule {}
