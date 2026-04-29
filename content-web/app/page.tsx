@@ -128,7 +128,11 @@ export default async function HomePage() {
                   style={{ backgroundImage: `url(${featured.coverImageUrl})` }}
                 />
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/10" />
+              {/* Stronger gradient — covers cases where the cover image
+                  itself contains light text/typography that competes with
+                  the overlaid title. Bottom half is near-solid black so
+                  white text reads regardless of underlying image. */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/75 to-black/20" />
               <div className="absolute left-5 top-5 flex gap-2">
                 <span className="rounded-full bg-[var(--5s-magenta)] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider">
                   ★ Featured
@@ -146,12 +150,19 @@ export default async function HomePage() {
                     fontSize: "clamp(26px, 2.6vw, 36px)",
                     lineHeight: 1.05,
                     letterSpacing: "-0.025em",
-                    textShadow: "0 2px 14px rgba(0,0,0,0.4)",
+                    // Layered shadow: tight + spread + diffuse — guarantees
+                    // contrast even when bg image directly behind title is
+                    // similar luminance to the text.
+                    textShadow:
+                      "0 1px 2px rgba(0,0,0,0.85), 0 2px 14px rgba(0,0,0,0.7), 0 0 28px rgba(0,0,0,0.5)",
                   }}
                 >
                   {featured.title}
                 </h3>
-                <p className="mb-5 max-w-[540px] text-[15px] leading-snug opacity-90">
+                <p
+                  className="mb-5 max-w-[540px] text-[15px] leading-snug opacity-95"
+                  style={{ textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}
+                >
                   {featured.excerpt}
                 </p>
                 <div className="flex items-center gap-3 text-xs font-semibold opacity-90">
