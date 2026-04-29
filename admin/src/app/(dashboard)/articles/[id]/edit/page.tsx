@@ -363,11 +363,28 @@ export default function EditArticlePage() {
         {/* ── Editor column ── */}
         <section className="bg-card">
           <div className="mx-auto w-full max-w-[860px] px-6 py-10 md:px-14">
-            <input
+            <textarea
               value={article.title}
               onChange={(e) => updateField("title", e.target.value)}
               placeholder="Nhập tiêu đề bài viết…"
-              className="w-full border-none bg-transparent p-0 font-[var(--font-heading)] text-4xl font-black leading-tight tracking-tight outline-none placeholder:text-muted-foreground/40 md:text-5xl"
+              rows={1}
+              // Auto-grow on input — keeps long titles readable on multiple
+              // lines instead of horizontally scrolling out of view in a
+              // text-5xl single-line input. `field-sizing: content` covers
+              // modern browsers; the onInput resize handles legacy fallback.
+              onInput={(e) => {
+                const ta = e.currentTarget;
+                ta.style.height = 'auto';
+                ta.style.height = `${ta.scrollHeight}px`;
+              }}
+              ref={(ta) => {
+                // Resize on initial mount + when value changes externally.
+                if (ta) {
+                  ta.style.height = 'auto';
+                  ta.style.height = `${ta.scrollHeight}px`;
+                }
+              }}
+              className="w-full resize-none overflow-hidden border-none bg-transparent p-0 font-[var(--font-heading)] text-4xl font-black leading-tight tracking-tight outline-none [field-sizing:content] placeholder:text-muted-foreground/40 md:text-5xl"
             />
 
             <div className="mt-3 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
