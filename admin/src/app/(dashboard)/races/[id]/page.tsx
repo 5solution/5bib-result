@@ -75,6 +75,7 @@ import {
   RotateCcw,
   Save,
   Mountain,
+  RadioTower,
   Clock,
   MapPin,
   Image as ImageIcon,
@@ -694,6 +695,12 @@ export default function RaceDetailPage() {
           <p className="text-sm text-muted-foreground">{race.slug}</p>
         </div>
         <StatusBadge status={race.status} />
+        <Link href={`/races/${raceId}/chip-mappings`}>
+          <Button variant="outline" size="sm">
+            <RadioTower className="size-4 mr-1.5" />
+            Chip Verify
+          </Button>
+        </Link>
         <Link href={`/races/${raceId}/results`}>
           <Button variant="outline" size="sm">
             <Pencil className="size-4 mr-1.5" />
