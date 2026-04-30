@@ -116,3 +116,7 @@ RaceResultSchema.index({ overallRankNumeric: 1 });
 // Supports: filter by courseId + timingPoint + overallRankNumeric range, group by nationality
 RaceResultSchema.index({ courseId: 1, timingPoint: 1, overallRankNumeric: 1 });
 RaceResultSchema.index({ courseId: 1, nationality: 1, overallRankNumeric: 1 });
+// Compound index for BadgeService.detectPersonalBest cross-race query
+// `bib` index alone hits hundreds of records per popular bib value, then secondary
+// filters scan in memory. This index lets MongoDB satisfy the query directly.
+RaceResultSchema.index({ bib: 1, distance: 1, raceId: 1 });
