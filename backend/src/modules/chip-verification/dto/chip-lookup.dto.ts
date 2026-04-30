@@ -45,9 +45,24 @@ export class ChipLookupResponseDto {
 
   @ApiProperty({
     nullable: true,
-    description: 'Display name: name_on_bib || athletes.name',
+    description:
+      'DEPRECATED — alias = bib_name fallback full_name. Giữ cho backward compat. Dùng bib_name / full_name riêng cho UI mới.',
   })
   name: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Tên trên BIB (in trên áo VĐV) — từ subinfo.name_on_bib. Có thể là nickname.',
+  })
+  bib_name: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Họ tên đầy đủ — từ athletes.name. Dùng để verify CCCD/giấy tờ. Có thể null.',
+  })
+  full_name: string | null;
 
   @ApiProperty({ nullable: true, example: '21KM' })
   course_name: string | null;

@@ -4,6 +4,33 @@ import type { ChipLookupResponse, ChipResult } from '@/lib/chip-verify-api';
 
 interface Props {
   data: ChipLookupResponse;
+  /**
+   * Tên đã resolve qua fallback chain ở upstream (ChipVerifyKioskClient).
+   * AthleteCard chỉ render — KHÔNG resolve mode logic ở đây để giữ pure.
+   */
+  displayName: string;
+  /** Label cho field tên — "Tên" (mode bib) hoặc "Họ và tên" (mode full). */
+  nameLabel: string;
+}
+
+/**
+ * BR-08: long name auto-shrink. Threshold theo Vietnamese chars (multibyte
+ * không tính bằng code units — dùng .length sẽ count chính xác char với
+ * diacritics đơn lẻ, vì JS string là UTF-16 code units, mỗi diacritic
+ * Vietnamese chiếm 1 unit khi đã NFC-composed).
+ *
+ * - <= 24 chars: text-6xl / sm:text-7xl (default — tier với BIB)
+ * - 25-40 chars: text-4xl / sm:text-5xl (giảm 2 bậc)
+ * - 41-60 chars: text-2xl / sm:text-3xl + line-clamp-2
+ * - > 60: text-xl / sm:text-2xl + line-clamp-2 (KHÔNG truncate '…' để giữ
+ *   verify CCCD chính xác)
+ */
+function nameSizeClass(name: string): string {
+  const len = name.length;
+  if (len <= 24) return 'text-6xl sm:text-7xl';
+  if (len <= 40) return 'text-4xl sm:text-5xl';
+  if (len <= 60) return 'text-2xl sm:text-3xl line-clamp-2';
+  return 'text-xl sm:text-2xl line-clamp-2';
 }
 
 const RESULT_STYLE: Record<
@@ -47,8 +74,9 @@ const RESULT_STYLE: Record<
   },
 };
 
-export function AthleteCard({ data }: Props) {
+export function AthleteCard({ data, displayName, nameLabel }: Props) {
   const style = RESULT_STYLE[data.result];
+  const nameSize = nameSizeClass(displayName);
 
   return (
     <section
@@ -88,11 +116,13 @@ export function AthleteCard({ data }: Props) {
           </p>
         </div>
         <div>
-          <p className="text-sm uppercase tracking-wide text-stone-600">Tên</p>
+          <p className="text-sm uppercase tracking-wide text-stone-600">
+            {nameLabel}
+          </p>
           <p
-            className={`break-words text-6xl font-black leading-tight tracking-tight ${style.text} sm:text-7xl`}
+            className={`break-words font-black leading-tight tracking-tight ${style.text} ${nameSize}`}
           >
-            {data.name ?? '—'}
+            {displayName}
           </p>
         </div>
       </div>

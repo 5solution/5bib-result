@@ -199,10 +199,15 @@ export class ChipLookupService {
       course_name_snapshot: input.courseSnapshot,
     });
 
+    // Cache backward compat: nếu cache cũ chưa có bib_name/full_name (preload trước
+    // khi deploy v1.2-name-toggle), 2 field này = undefined trong snapshot →
+    // fallback `?? null` đảm bảo response shape ổn định cho FE.
     return {
       result: input.result,
       bib_number: input.bibNumber,
       name: input.athleteSnapshot?.name ?? null,
+      bib_name: input.athleteSnapshot?.bib_name ?? null,
+      full_name: input.athleteSnapshot?.full_name ?? null,
       course_name: input.courseSnapshot,
       gender: input.athleteSnapshot?.gender ?? null,
       team: input.athleteSnapshot?.team ?? null,
