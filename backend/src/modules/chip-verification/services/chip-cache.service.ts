@@ -21,7 +21,15 @@ import { ChipConfigService } from './chip-config.service';
 export interface CachedAthletePayload {
   athletes_id: number;
   bib_number: string;
+  /**
+   * DEPRECATED — alias = bib_name fallback full_name. Giữ cho backward compat
+   * với cache cũ + audit log. UI mới dùng bib_name / full_name riêng để toggle.
+   */
   name: string | null;
+  /** Tên trên BIB từ subinfo.name_on_bib — có thể là nickname (default display). */
+  bib_name: string | null;
+  /** Họ tên đầy đủ từ athletes.name — dùng verify CCCD. */
+  full_name: string | null;
   course_name: string | null;
   /** Giới tính từ subinfo.gender (varchar 16): 'MALE' | 'FEMALE' | 'OTHER' | null */
   gender: string | null;
@@ -258,8 +266,16 @@ export class ChipCacheService {
   // ─────────── HELPERS ───────────
 
   private buildPayload(a: AthleteReadonly): CachedAthletePayload {
-    const nameOnBib = a.subinfo?.name_on_bib ?? null;
-    const displayName = (nameOnBib && nameOnBib.trim()) || a.name || null;
+    // Tách 2 nguồn tên rõ ràng:
+    //   - bib_name = subinfo.name_on_bib (tên trên BIB, có thể là nickname VĐV chọn)
+    //   - full_name = athletes.name (họ tên đầy đủ — dùng verify CCCD)
+    // Trim + null-safe. Empty string sau trim được coi là null để FE fallback chain hoạt động.
+    const bibName = a.subinfo?.name_on_bib?.trim() || null;
+    const fullName = a.name?.trim() || null;
+    // Legacy alias: ưu tiên bib_name (giữ behavior cũ — UI mặc định hiển thị bib name)
+    // fallback full_name nếu không có. Backward compat cho cache cũ + audit log
+    // ChipVerification.athlete_name_snapshot.
+    const displayName = bibName ?? fullName;
     // Course name resolution với 2 path:
     //   1. PRIMARY: athlete → subinfo → order_line_item → ticket_type → race_course
     //      (athletes mua vé qua order)
@@ -275,6 +291,8 @@ export class ChipCacheService {
       athletes_id: Number(a.athletes_id),
       bib_number: a.bib_number ?? '',
       name: displayName,
+      bib_name: bibName,
+      full_name: fullName,
       course_name: courseName,
       gender,
       team,

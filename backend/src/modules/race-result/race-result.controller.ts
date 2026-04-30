@@ -68,7 +68,7 @@ export class RaceResultController {
     private readonly shareEventService: ShareEventService,
     private readonly racesService: RacesService,
     private readonly uploadService: UploadService,
-  ) {}
+  ) { }
 
   @Get('distances')
   @ApiOperation({ summary: 'Get available race distances/types' })
@@ -509,7 +509,7 @@ export class RaceResultController {
 
   @Post('result-image/:raceId/:bib')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @ApiOperation({
     summary: 'Generate full-res result image for an athlete (S3-cached)',
   })
@@ -607,11 +607,23 @@ export class RaceResultController {
     const customPhotoFile =
       files?.customPhoto?.[0] ?? files?.customBg?.[0] ?? undefined;
 
-    const athleteInput = await this.loadAthleteInput(raceId, bib);
-    const { raceName, raceSlug, courseName, hideRanks } = await this.loadRaceMeta(raceId);
+    // Kick off badge detection BEFORE DB load — only needs raceId + bib, can run
+    // in parallel with athlete/race-meta queries. By the time renderImage awaits
+    // this, badges may already be done (saves ~300ms when DB load < badges time).
+    const badgesPromise = this.badgeService
+      .detectBadges(raceId, bib)
+      .catch(() => [] as Awaited<ReturnType<BadgeService['detectBadges']>>);
 
+    const tDb = Date.now();
+    const [athleteInput, raceMeta] = await Promise.all([
+      this.loadAthleteInput(raceId, bib),
+      this.loadRaceMeta(raceId),
+    ]);
+    const { raceName, raceSlug, courseName, hideRanks } = raceMeta;
+    console.log('Time to load athlete + race meta (parallel):', Date.now() - tDb, 'ms');
     const config = normalizeImageConfig({ ...body, preview: false });
 
+    const tGen = Date.now();
     const result = await this.resultImageService.generate({
       raceId,
       bib,
@@ -622,7 +634,9 @@ export class RaceResultController {
       config,
       customPhotoBuffer: customPhotoFile?.buffer,
       hideRanks,
+      prefetchedBadges: badgesPromise,
     });
+    console.log('Time to generate image:', Date.now() - tGen, 'ms');
 
     const headers: Record<string, string> = {
       'Content-Type': 'image/png',

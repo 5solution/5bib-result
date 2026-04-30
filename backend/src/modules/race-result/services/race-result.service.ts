@@ -65,7 +65,7 @@ export class RaceResultService {
     private readonly mailService: MailService,
     private readonly uploadService: UploadService,
     @InjectRedis() private readonly redis: Redis,
-  ) {}
+  ) { }
 
   // ─── Cache helpers ────────────────────────────────────────────
 
@@ -308,10 +308,10 @@ export class RaceResultService {
       const bibValue = (result.Bib !== 0 && result.Bib != null)
         ? String(result.Bib)
         : (() => {
-            const certUrl = result.Certificate || result.Certi || '';
-            const match = certUrl.match(/\/certificates\/(\d+)\//);
-            return match ? match[1] : String(idx + 1);
-          })();
+          const certUrl = result.Certificate || result.Certi || '';
+          const match = certUrl.match(/\/certificates\/(\d+)\//);
+          return match ? match[1] : String(idx + 1);
+        })();
 
       const doc = {
         raceId,
@@ -1454,7 +1454,7 @@ export class RaceResultService {
       description: dto.description,
       raceId: dto.raceId,
       courseId: dto.courseId,
-    }).catch(() => {}); // fire and forget
+    }).catch(() => { }); // fire and forget
 
     return { data: claim.toObject(), success: true };
   }

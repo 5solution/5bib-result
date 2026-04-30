@@ -81,6 +81,10 @@ function isAllowedImageMagicBytes(buf: Buffer): boolean {
 const S3_CACHE_PREFIX = 'result-images';
 const RENDER_LOCK_TTL_SECONDS = 30;
 const S3_PRESIGN_EXPIRES_SECONDS = 3600;
+// TTL matches S3 lifecycle (24h). Flag presence ⇒ S3 has the object; absence ⇒
+// either never rendered or expired. False positives (flag without S3) are handled
+// gracefully — tryFetchFromS3 returns null and we re-render.
+const S3_INDEX_TTL_SECONDS = 86400;
 
 /**
  * Minimal input shape from `RaceResultService.getAthleteDetail()`.
@@ -126,6 +130,13 @@ export interface GenerateImageInput {
    * chip time only without ranks).
    */
   hideRanks?: boolean;
+  /**
+   * Pre-fetched badges promise. Caller can kick off `BadgeService.detectBadges`
+   * in parallel with their own DB loads (athlete, race meta) so by the time
+   * `renderImage` needs badges they're already computed. Saves ~300ms on
+   * cold render path. If undefined, service falls back to fetching itself.
+   */
+  prefetchedBadges?: Promise<Badge[]>;
 }
 
 export interface GenerateImageResult {
@@ -189,13 +200,17 @@ export class ResultImageService implements OnModuleInit {
    */
   async generate(input: GenerateImageInput): Promise<GenerateImageResult> {
     const { config } = input;
+    const tGen = Date.now();
+    const mark: Record<string, number> = {};
 
     // Validate custom photo if provided
     if (input.customPhotoBuffer) {
       await this.validatePhotoBuffer(input.customPhotoBuffer);
     }
+    mark.validate = Date.now() - tGen;
 
     const cacheKey = await this.computeCacheKey(input);
+    mark.cacheKey = Date.now() - tGen;
 
     // ── Preview fast path: Redis cache (TTL 3 min) ──────────────────────────
     // Preview renders are cheap/low-res and only live in the modal — no need
@@ -219,12 +234,26 @@ export class ResultImageService implements OnModuleInit {
       }
     }
 
-    // Full-res: S3 cache (cheap, low-res, short-lived)
+    // Full-res: S3 cache lookup gated by a Redis index flag.
+    //
+    // Why: S3 GET on cache miss costs ~600ms (full round-trip to AWS) and
+    // returns 404 — pure waste. We set a Redis flag `s3idx:<key>=1` after
+    // successful upload, so we can know in ~5ms whether S3 has the object
+    // before paying for the GET. Cold renders skip the S3 GET entirely.
     if (!config.preview) {
-      const cached = await this.tryFetchFromS3(cacheKey);
+      let s3HasIt = false;
+      try {
+        s3HasIt = (await this.redis.get(`s3idx:${cacheKey}`)) === '1';
+      } catch {
+        // Redis down — fall back to S3 GET (slow but correct)
+        s3HasIt = true;
+      }
+      const cached = s3HasIt ? await this.tryFetchFromS3(cacheKey) : null;
+      mark.s3Check = Date.now() - tGen;
       if (cached) {
-        // Cached result: template resolution was already baked into the
-        // cacheKey, so if we hit, the request matches the cached output.
+        this.logger.log(
+          `[generate] cache=hit validate=${mark.validate}ms key=${mark.cacheKey - mark.validate}ms s3Check=${mark.s3Check - mark.cacheKey}ms total=${Date.now() - tGen}ms`,
+        );
         return {
           buffer: cached.buffer,
           fromCache: true,
@@ -303,28 +332,58 @@ export class ResultImageService implements OnModuleInit {
     }
 
     try {
+      mark.lock = Date.now() - tGen;
       // Run render under semaphore (caps concurrent canvas renders)
       const rendered = await this.semaphore.run(() => this.renderImage(input));
+      mark.render = Date.now() - tGen;
 
-      // Upload to S3 (unless preview); cache preview in Redis
-      let s3Url: string | undefined;
+      // Upload to S3 (unless preview); cache preview in Redis.
+      // S3 upload is fire-and-forget — the response already contains the buffer,
+      // so blocking on upload only delays the user. By the time a second identical
+      // request arrives, the upload should have completed and the cache hit path
+      // works. If upload fails, next request just re-renders (still correct).
+      // Lock release is also moved into the upload chain so it stays held until
+      // the file is actually in S3 (otherwise stampede protection breaks).
       if (!config.preview) {
-        s3Url = await this.uploadToS3(cacheKey, rendered.buffer).catch((err) => {
-          this.logger.warn(`S3 upload failed for ${cacheKey}: ${err.message}`);
-          return undefined;
-        });
+        const lockKeyOuter = lockKey;
+        const haveLockOuter = haveLock;
+        haveLock = false; // prevent finally{} from releasing prematurely
+        this.uploadToS3(cacheKey, rendered.buffer)
+          .then(() =>
+            // Mark S3 as having this object so future requests skip the cache-miss
+            // S3 GET round-trip. TTL matches S3 lifecycle (24h).
+            this.redis
+              .set(`s3idx:${cacheKey}`, '1', 'EX', S3_INDEX_TTL_SECONDS)
+              .catch(() => {/* ignore — flag is best-effort */}),
+          )
+          .catch((err) => {
+            this.logger.warn(`S3 upload failed for ${cacheKey}: ${err.message}`);
+          })
+          .finally(() => {
+            if (haveLockOuter) {
+              this.redis.del(lockKeyOuter).catch(() => {/* ignore */});
+            }
+          });
       } else {
         // Store preview in Redis (TTL 3 min, fire-and-forget)
         this.redis
           .set(`preview-img:${cacheKey}`, rendered.buffer, 'EX', 180)
           .catch(() => {/* Redis down — ignore */});
       }
+      mark.upload = Date.now() - tGen;
+
+      this.logger.log(
+        `[generate] cache=miss validate=${mark.validate}ms key=${mark.cacheKey - mark.validate}ms ` +
+          `s3Check=${(mark.s3Check ?? mark.cacheKey) - mark.cacheKey}ms lock=${mark.lock - (mark.s3Check ?? mark.cacheKey)}ms ` +
+          `render=${mark.render - mark.lock}ms uploadKickoff=${mark.upload - mark.render}ms total=${Date.now() - tGen}ms ` +
+          `bufKB=${Math.round(rendered.buffer.length / 1024)}`,
+      );
 
       return {
         buffer: rendered.buffer,
         fromCache: false,
         cacheKey,
-        s3Url,
+        // s3Url omitted — upload happens in background; first response returns buffer only
         templateRequested: config.template,
         templateActual: rendered.templateActual,
         fallback: rendered.fallback,
@@ -487,20 +546,49 @@ export class ResultImageService implements OnModuleInit {
       );
     }
 
-    // Load assets in parallel
+    // Profiling: time each asset load individually (still parallel) + render + encode.
+    // Logs printed at end of renderImage so each request shows where time went.
+    const tStart = Date.now();
+    const timings: { badges?: number; photo?: number; qr?: number } = {};
+
+    // Use prefetched badges promise if caller kicked it off earlier (controller-side
+     // parallelization). Falls back to a fresh detect call otherwise.
+    const badgesP = config.showBadges
+      ? (input.prefetchedBadges ??
+          this.badgeService.detectBadges(input.raceId, input.bib)
+        ).then((r) => {
+          timings.badges = Date.now() - tStart;
+          return r;
+        })
+      : Promise.resolve([] as Badge[]);
+
+    const photoP = input.customPhotoBuffer
+      ? loadImage(input.customPhotoBuffer)
+          .then((r) => {
+            timings.photo = Date.now() - tStart;
+            return r;
+          })
+          .catch(() => {
+            timings.photo = Date.now() - tStart;
+            return null;
+          })
+      : Promise.resolve(null);
+
+    const qrP = canRenderQr
+      ? this.generateQrImage(
+          `${this.resultBaseUrl}/races/${input.raceSlug}/${input.bib}`,
+        ).then((r) => {
+          timings.qr = Date.now() - tStart;
+          return r;
+        })
+      : Promise.resolve(null);
+
     const [badges, customPhoto, qrImage] = await Promise.all([
-      config.showBadges
-        ? this.badgeService.detectBadges(input.raceId, input.bib)
-        : Promise.resolve([] as Badge[]),
-      input.customPhotoBuffer
-        ? loadImage(input.customPhotoBuffer).catch(() => null)
-        : Promise.resolve(null),
-      canRenderQr
-        ? this.generateQrImage(
-            `${this.resultBaseUrl}/races/${input.raceSlug}/${input.bib}`,
-          )
-        : Promise.resolve(null),
+      badgesP,
+      photoP,
+      qrP,
     ]);
+    const tAssets = Date.now();
 
     const renderData: RenderData = {
       athleteName: input.athlete.Name,
@@ -566,9 +654,23 @@ export class ResultImageService implements OnModuleInit {
 
     const resolved = resolveTemplateResult(config.template, renderData);
     await resolved.template.render(ctx, renderData);
+    const tRender = Date.now();
+
+    const buffer = Buffer.from(canvas.toBuffer('image/png'));
+    const tEncode = Date.now();
+
+    const photoKB = input.customPhotoBuffer
+      ? Math.round(input.customPhotoBuffer.length / 1024)
+      : 0;
+    this.logger.log(
+      `[render] badges=${timings.badges ?? 0}ms photo=${timings.photo ?? 0}ms qr=${timings.qr ?? 0}ms ` +
+        `assets=${tAssets - tStart}ms render=${tRender - tAssets}ms encode=${tEncode - tRender}ms ` +
+        `total=${tEncode - tStart}ms tpl=${resolved.template.name} dims=${dims.width}x${dims.height} ` +
+        `photoKB=${photoKB} bib=${input.bib}`,
+    );
 
     return {
-      buffer: Buffer.from(canvas.toBuffer('image/png')),
+      buffer,
       templateActual: resolved.template.name,
       fallback: resolved.fallback,
       fallbackReason: resolved.reason,

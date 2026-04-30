@@ -21,7 +21,12 @@ export type ChipResult =
 export interface ChipLookupResponse {
   result: ChipResult;
   bib_number: string | null;
+  /** DEPRECATED — alias = bib_name fallback full_name. Giữ cho cache cũ. */
   name: string | null;
+  /** Tên trên BIB (subinfo.name_on_bib) — nickname VĐV. Có thể null nếu cache cũ. */
+  bib_name: string | null;
+  /** Họ tên đầy đủ (athletes.name) — verify CCCD. Có thể null nếu cache cũ. */
+  full_name: string | null;
   course_name: string | null;
   gender: string | null;
   team: string | null;
