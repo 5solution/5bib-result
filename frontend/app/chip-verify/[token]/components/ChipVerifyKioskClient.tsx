@@ -13,6 +13,11 @@ import { HistoryList } from './HistoryList';
 import { StatsCounter } from './StatsCounter';
 import { useSoundFeedback, type SoundType } from './useSoundFeedback';
 import { useTTS } from './useTTS';
+import {
+  resolveDisplayName,
+  useNameDisplayMode,
+} from './useNameDisplayMode';
+import { NameDisplayToggle } from './NameDisplayToggle';
 
 interface Props {
   token: string;
@@ -37,6 +42,7 @@ export function ChipVerifyKioskClient({ token, defaultDevice }: Props) {
   const queryClient = useQueryClient();
   const { play, unlock } = useSoundFeedback();
   const tts = useTTS();
+  const nameMode = useNameDisplayMode();
   const [audioReady, setAudioReady] = useState(false);
   // BUG #FE-1 fix — initialize state with prop only (deterministic on both
   // server SSR pass and client first render). Populate from localStorage in
@@ -67,9 +73,13 @@ export function ChipVerifyKioskClient({ token, defaultDevice }: Props) {
       play(RESULT_TO_SOUND[data.result]);
       // BR-01: TTS chỉ đọc tên khi FOUND. Các trạng thái khác giữ nguyên
       // beep/buzz, không đọc tên.
+      // BR-03: TTS đọc theo display mode đang active — đồng bộ với UI hiển thị.
+      //   Mode 'bib'  → đọc bib_name (fallback chain).
+      //   Mode 'full' → đọc full_name (fallback chain).
       // BR-07: speakAthlete chạy SAU play() (queue thứ tự beep → speak).
       if (data.result === 'FOUND') {
-        tts.speakAthlete(data.bib_number, data.name);
+        const spokenName = resolveDisplayName(data, nameMode.mode);
+        tts.speakAthlete(data.bib_number, spokenName === '—' ? null : spokenName);
       }
       // Refresh history + stats after each successful lookup
       queryClient.invalidateQueries({ queryKey: ['chip-recent', token] });
@@ -112,7 +122,13 @@ export function ChipVerifyKioskClient({ token, defaultDevice }: Props) {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {audioReady && (
+            <NameDisplayToggle
+              mode={nameMode.mode}
+              onChange={nameMode.setMode}
+            />
+          )}
           {audioReady && tts.supported && (
             <button
               type="button"
@@ -171,7 +187,11 @@ export function ChipVerifyKioskClient({ token, defaultDevice }: Props) {
       )}
 
       {audioReady && !lookup.isPending && lastResult && (
-        <AthleteCard data={lastResult} />
+        <AthleteCard
+          data={lastResult}
+          displayName={resolveDisplayName(lastResult, nameMode.mode)}
+          nameLabel={nameMode.mode === 'full' ? 'Họ và tên' : 'Tên'}
+        />
       )}
 
       {/* Manual input + initial empty state. RFID reader (USB HID) gửi
