@@ -76,17 +76,30 @@ export function AthleteCard({ data }: Props) {
         </p>
       </div>
 
-      <div className="mt-4">
-        <p className="text-sm uppercase tracking-wide text-stone-600">BIB</p>
-        <p className={`text-7xl font-black tracking-tight ${style.text} sm:text-8xl`}>
-          {data.bib_number ?? '—'}
-        </p>
+      {/* BIB + Tên cùng tier visual — same font weight + size để VĐV verify
+          nhanh cả 2 thông tin. Name có thể wrap nếu dài (font-black + leading-tight). */}
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
+        <div>
+          <p className="text-sm uppercase tracking-wide text-stone-600">BIB</p>
+          <p
+            className={`text-6xl font-black leading-none tracking-tight ${style.text} sm:text-7xl`}
+          >
+            {data.bib_number ?? '—'}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm uppercase tracking-wide text-stone-600">Tên</p>
+          <p
+            className={`break-words text-6xl font-black leading-tight tracking-tight ${style.text} sm:text-7xl`}
+          >
+            {data.name ?? '—'}
+          </p>
+        </div>
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <Field label="Tên" value={data.name} />
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <Field label="Cự ly" value={data.course_name} />
-        <Field label="Team" value={data.team} />
+        <Field label="Giới tính" value={data.gender} />
         <Field
           label="Racekit"
           value={data.racekit_received ? 'Đã nhận' : 'Chưa nhận'}

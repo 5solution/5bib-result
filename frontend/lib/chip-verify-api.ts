@@ -23,6 +23,7 @@ export interface ChipLookupResponse {
   bib_number: string | null;
   name: string | null;
   course_name: string | null;
+  gender: string | null;
   team: string | null;
   last_status: string | null;
   racekit_received: boolean;

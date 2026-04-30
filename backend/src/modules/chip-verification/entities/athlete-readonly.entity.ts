@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { bitTransformer } from './bit-transformer';
 import { AthleteSubinfoReadonly } from './athlete-subinfo-readonly.entity';
+import { CodeReadonly } from './code-readonly.entity';
 
 /**
  * READ-ONLY entity. KHÔNG ghi vào DB này.
@@ -40,6 +41,14 @@ export class AthleteReadonly {
   @Column({ type: 'bigint', nullable: true })
   subinfo_id: number | null;
 
+  /**
+   * VĐV import qua code (không qua order) — `code_id` link tới `code` table
+   * có `race_course_id`. Dùng làm fallback path cho course_name khi
+   * subinfo.order_line_item_id null (xảy ra với 63% athletes race 192).
+   */
+  @Column({ type: 'bigint', nullable: true })
+  code_id: number | null;
+
   /** Dùng cho delta sync window (modified_on > NOW() - 90s). */
   @Column({ type: 'datetime', nullable: true })
   modified_on: Date | null;
@@ -56,4 +65,8 @@ export class AthleteReadonly {
   @ManyToOne(() => AthleteSubinfoReadonly, { nullable: true })
   @JoinColumn({ name: 'subinfo_id' })
   subinfo: AthleteSubinfoReadonly | null;
+
+  @ManyToOne(() => CodeReadonly, { nullable: true })
+  @JoinColumn({ name: 'code_id' })
+  code: CodeReadonly | null;
 }

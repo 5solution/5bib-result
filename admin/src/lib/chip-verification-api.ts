@@ -192,6 +192,20 @@ export interface ChipConfigResponseDto {
   total_chip_mappings: number;
   preload_completed_at: string | null;
   cache_ready: boolean;
+  delta_sync_enabled: boolean;
+}
+
+export async function setDeltaSyncEnabled(
+  raceId: number,
+  enabled: boolean,
+): Promise<ChipConfigResponseDto> {
+  const res = await client.post<ChipConfigResponseDto>({
+    url: `/api/admin/races/${raceId}/chip-verify/delta-sync`,
+    body: { enabled },
+  });
+  if (res.error) throw new Error(extractError(res.error));
+  if (!res.data) throw new Error('Empty response');
+  return res.data;
 }
 
 export async function getChipConfig(
