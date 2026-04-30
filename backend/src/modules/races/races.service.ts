@@ -375,10 +375,19 @@ export class RacesService {
       filter.raceType = race_type;
     }
 
+    // Sort split admin vs public:
+    //   - Admin (isPrivileged): created_at desc — race mới tạo lên đầu (UX
+    //     editing flow: BTC vừa tạo cần tìm ngay).
+    //   - Public: startDate desc — race sắp/gần diễn ra lên đầu (athlete
+    //     discovery flow: tìm giải mới nhất sắp khởi động).
+    const sortOrder: Record<string, 1 | -1> = isPrivileged
+      ? { created_at: -1, startDate: -1 }
+      : { startDate: -1, created_at: -1 };
+
     const [list, totalItems] = await Promise.all([
       this.raceModel
         .find(filter)
-        .sort({ startDate: -1, created_at: -1 })
+        .sort(sortOrder)
         .skip(page * pageSize)
         .limit(pageSize)
         .lean()
