@@ -27,6 +27,13 @@ import { MerchantModule } from './merchant/merchant.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { Tenant } from './merchant/entities/tenant.entity';
+import { ChipVerificationModule } from './chip-verification/chip-verification.module';
+import { AthleteReadonly } from './chip-verification/entities/athlete-readonly.entity';
+import { AthleteSubinfoReadonly } from './chip-verification/entities/athlete-subinfo-readonly.entity';
+import { OrderLineItemReadonly } from './chip-verification/entities/order-line-item-readonly.entity';
+import { TicketTypeReadonly } from './chip-verification/entities/ticket-type-readonly.entity';
+import { RaceCourseReadonly } from './chip-verification/entities/race-course-readonly.entity';
+import { CodeReadonly } from './chip-verification/entities/code-readonly.entity';
 import { TeamManagementModule } from './team-management/team-management.module';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
@@ -56,16 +63,30 @@ const platformDbModules = env.platformDb.host
         username: env.platformDb.user,
         password: env.platformDb.pass,
         database: env.platformDb.name,
-        entities: [Tenant],
+        entities: [
+          Tenant,
+          // Chip Verification read-only entities (added per Eng+QC review
+          // MUST-DO #2 — TypeOrmModule.forFeature() in chip-verification.module
+          // requires entities listed here at forRoot.)
+          AthleteReadonly,
+          AthleteSubinfoReadonly,
+          OrderLineItemReadonly,
+          TicketTypeReadonly,
+          RaceCourseReadonly,
+          CodeReadonly,
+        ],
         synchronize: false, // KHÔNG auto-sync — DB là readonly
         logging: env.env === 'local' || env.env === 'development',
         extra: {
-          connectionLimit: 5,
+          // Bumped 5 → 10 per Danny sign-off 2026-04-29 to support cron delta
+          // sync running concurrently with Reconciliation queries on race day.
+          connectionLimit: 10,
         },
       }),
       MerchantModule,
       ReconciliationModule,
       AnalyticsModule,
+      ChipVerificationModule,
     ]
   : [];
 

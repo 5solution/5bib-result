@@ -116,7 +116,10 @@ function NavLink({
       {active && (
         <span
           aria-hidden
-          className="absolute -left-3 top-1.5 bottom-1.5 w-[3px] rounded-r bg-[var(--sidebar-primary)]"
+          // Indicator căn theo nav padding (px-2.5 = 10px) để không đâm ra
+          // ngoài sidebar khi scrollbar xuất hiện. Trước đây dùng -left-3 (12px)
+          // gây clip 2px bên trái.
+          className="absolute -left-2.5 top-1.5 bottom-1.5 w-[3px] rounded-r bg-[var(--sidebar-primary)]"
         />
       )}
       <Icon className="size-4 shrink-0" />
@@ -251,7 +254,7 @@ export default function DashboardLayout({
             </span>
           </Link>
         </div>
-        <nav className="flex-1 overflow-y-auto px-2.5 py-3.5">
+        <nav className="flex-1 overflow-y-auto px-2.5 py-3.5 scrollbar-thin [scrollbar-gutter:stable]">
           <SidebarContent />
         </nav>
         <div className="border-t border-white/8">
@@ -281,7 +284,7 @@ export default function DashboardLayout({
                   </span>
                 </SheetTitle>
               </SheetHeader>
-              <nav className="flex-1 overflow-y-auto px-2.5 py-3.5">
+              <nav className="flex-1 overflow-y-auto px-2.5 py-3.5 scrollbar-thin [scrollbar-gutter:stable]">
                 <SidebarContent onNavigate={() => setMobileOpen(false)} />
               </nav>
               <div className="border-t border-white/8">
