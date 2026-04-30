@@ -251,10 +251,20 @@ function buildKioskUrl(token: string): string {
   if (typeof window === 'undefined') return `/chip-verify/${token}`;
 
   const origin = window.location.origin;
-  // Explicit subdomain mapping — avoids the "result-admin → result-result"
-  // bug from naïve substring replace.
+  // Map admin host → public frontend host (kiosk runs on frontend).
+  // Cover các pattern actual deploy đã thấy:
+  //   result-admin-dev.5bib.com  → result-fe-dev.5bib.com  (CLAUDE.md spec)
+  //   admin-dev.5bib.com         → result-fe-dev.5bib.com  (actual VPS DEV)
+  //   result-admin.5bib.com      → result.5bib.com         (production)
+  //   admin.5bib.com             → result.5bib.com         (production alias)
   const mapped = origin
     .replace(/result-admin-dev\.5bib\.com/, 'result-fe-dev.5bib.com')
-    .replace(/result-admin\.5bib\.com/, 'result.5bib.com');
+    .replace(/^https?:\/\/admin-dev\.5bib\.com/, (m) =>
+      m.replace(/admin-dev\.5bib\.com/, 'result-fe-dev.5bib.com'),
+    )
+    .replace(/result-admin\.5bib\.com/, 'result.5bib.com')
+    .replace(/^https?:\/\/admin\.5bib\.com/, (m) =>
+      m.replace(/admin\.5bib\.com/, 'result.5bib.com'),
+    );
   return `${mapped}/chip-verify/${token}`;
 }
