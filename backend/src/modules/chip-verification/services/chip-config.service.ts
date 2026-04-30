@@ -251,15 +251,43 @@ export class ChipConfigService {
     return cfg;
   }
 
-  /** Used by ChipDeltaSyncCron — only enabled races. */
+  /**
+   * Used by ChipDeltaSyncCron — chỉ trả race vừa enable verify VÀ delta sync.
+   * `delta_sync_enabled: { $ne: false }` để legacy doc không có field vẫn
+   * được treated as enabled (default true).
+   */
   async listEnabled(): Promise<
     Pick<ChipRaceConfig, 'mysql_race_id' | 'tenant_id'>[]
   > {
     return this.configModel
-      .find({ chip_verify_enabled: true })
+      .find({
+        chip_verify_enabled: true,
+        delta_sync_enabled: { $ne: false },
+      })
       .select({ mysql_race_id: 1, tenant_id: 1, _id: 0 })
       .lean<{ mysql_race_id: number; tenant_id: number }[]>()
       .exec();
+  }
+
+  /**
+   * Toggle per-race auto cron delta sync. Khi false: cron skip race này,
+   * cache chỉ patch qua on-demand fallback (lookup miss).
+   */
+  async setDeltaSyncEnabled(
+    raceId: number,
+    enabled: boolean,
+    byUserId: string,
+  ): Promise<ChipRaceConfigDocument> {
+    const cfg = await this.configModel.findOne({ mysql_race_id: raceId }).exec();
+    if (!cfg) {
+      throw new BadRequestException('Race chưa link tới chip-verify config');
+    }
+    cfg.delta_sync_enabled = enabled;
+    await cfg.save();
+    this.logger.log(
+      `[delta-sync-toggle] race=${raceId} enabled=${enabled} by=${byUserId}`,
+    );
+    return cfg;
   }
 
   async setPreloadCompleted(

@@ -204,6 +204,7 @@ export class ChipLookupService {
       bib_number: input.bibNumber,
       name: input.athleteSnapshot?.name ?? null,
       course_name: input.courseSnapshot,
+      gender: input.athleteSnapshot?.gender ?? null,
       team: input.athleteSnapshot?.team ?? null,
       last_status: input.athleteSnapshot?.last_status ?? null,
       racekit_received: input.athleteSnapshot?.racekit_received ?? false,

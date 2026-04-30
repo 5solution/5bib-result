@@ -33,6 +33,7 @@ import { AthleteSubinfoReadonly } from './chip-verification/entities/athlete-sub
 import { OrderLineItemReadonly } from './chip-verification/entities/order-line-item-readonly.entity';
 import { TicketTypeReadonly } from './chip-verification/entities/ticket-type-readonly.entity';
 import { RaceCourseReadonly } from './chip-verification/entities/race-course-readonly.entity';
+import { CodeReadonly } from './chip-verification/entities/code-readonly.entity';
 import { TeamManagementModule } from './team-management/team-management.module';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
@@ -72,6 +73,7 @@ const platformDbModules = env.platformDb.host
           OrderLineItemReadonly,
           TicketTypeReadonly,
           RaceCourseReadonly,
+          CodeReadonly,
         ],
         synchronize: false, // KHÔNG auto-sync — DB là readonly
         logging: env.env === 'local' || env.env === 'development',

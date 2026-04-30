@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsInt, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export type TokenAction = 'GENERATE' | 'ROTATE' | 'DISABLE';
@@ -47,6 +47,12 @@ export class ChipConfigResponseDto {
 
   @ApiProperty({ description: 'Whether cache:ready sentinel exists in Redis.' })
   cache_ready: boolean;
+
+  @ApiProperty({
+    description:
+      'Per-race toggle cho cron delta sync auto-update cache mỗi 30s.',
+  })
+  delta_sync_enabled: boolean;
 }
 
 export class LinkMongoRaceRequestDto {
@@ -74,6 +80,15 @@ export class ChipConfigLinkResponseDto {
 
   @ApiProperty()
   total_chip_mappings: number;
+}
+
+export class DeltaSyncToggleRequestDto {
+  @ApiProperty({
+    description:
+      'Bật/tắt auto cron delta sync mỗi 30s. Tắt khi muốn freeze cache hoặc giảm load MySQL.',
+  })
+  @IsBoolean()
+  enabled: boolean;
 }
 
 export class CacheActionRequestDto {

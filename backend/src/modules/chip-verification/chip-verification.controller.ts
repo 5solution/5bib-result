@@ -50,6 +50,7 @@ import {
   CacheActionResponseDto,
   ChipConfigLinkResponseDto,
   ChipConfigResponseDto,
+  DeltaSyncToggleRequestDto,
   LinkMongoRaceRequestDto,
   TokenActionRequestDto,
   TokenActionResponseDto,
@@ -307,7 +308,27 @@ export class ChipVerificationController {
       total_chip_mappings: actualMappingCount,
       preload_completed_at: cfg?.preload_completed_at ?? null,
       cache_ready: cacheReadyRaw === '1',
+      // Default true cho legacy doc không có field này.
+      delta_sync_enabled: cfg?.delta_sync_enabled ?? true,
     };
+  }
+
+  @Post('races/:raceId/chip-verify/delta-sync')
+  @UseGuards(RaceScopeGuard)
+  @ApiOperation({
+    summary: 'Toggle per-race auto cron delta sync (mỗi 30s)',
+    description:
+      'Tắt khi muốn freeze cache hoặc giảm load MySQL race day. On-demand fallback vẫn hoạt động khi tắt — kiosk không bị ảnh hưởng UX.',
+  })
+  @ApiResponse({ status: 200, type: ChipConfigResponseDto })
+  async toggleDeltaSync(
+    @Param('raceId', ParseIntPipe) raceId: number,
+    @Body() body: DeltaSyncToggleRequestDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<ChipConfigResponseDto> {
+    const userId = req.user?.userId ?? 'unknown';
+    await this.configService.setDeltaSyncEnabled(raceId, body.enabled, userId);
+    return this.getConfig(raceId);
   }
 
   @Get('races/:raceId/chip-verify/stats')

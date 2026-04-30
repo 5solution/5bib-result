@@ -19,6 +19,7 @@ import { AthleteSubinfoReadonly } from './entities/athlete-subinfo-readonly.enti
 import { OrderLineItemReadonly } from './entities/order-line-item-readonly.entity';
 import { TicketTypeReadonly } from './entities/ticket-type-readonly.entity';
 import { RaceCourseReadonly } from './entities/race-course-readonly.entity';
+import { CodeReadonly } from './entities/code-readonly.entity';
 import { ChipMappingService } from './services/chip-mapping.service';
 import { ChipConfigService } from './services/chip-config.service';
 import { ChipCacheService } from './services/chip-cache.service';
@@ -52,6 +53,7 @@ import { LogtoAuthModule } from '../logto-auth';
         OrderLineItemReadonly,
         TicketTypeReadonly,
         RaceCourseReadonly,
+        CodeReadonly,
       ],
       'platform',
     ),

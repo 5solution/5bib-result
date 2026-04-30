@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +17,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { chipCacheAction, getChipConfig } from '@/lib/chip-verification-api';
+import {
+  chipCacheAction,
+  getChipConfig,
+  setDeltaSyncEnabled,
+} from '@/lib/chip-verification-api';
 
 interface Props {
   raceId: number;
@@ -42,10 +48,18 @@ export function CacheStatusPanel({ raceId }: Props) {
     },
   });
 
+  const deltaSync = useMutation({
+    mutationFn: (enabled: boolean) => setDeltaSyncEnabled(raceId, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chip-config', raceId] });
+    },
+  });
+
   const cacheReady = config.data?.cache_ready ?? false;
   const preloadAt = config.data?.preload_completed_at ?? null;
   const totalMappings = config.data?.total_chip_mappings ?? 0;
   const enabled = config.data?.chip_verify_enabled ?? false;
+  const deltaSyncEnabled = config.data?.delta_sync_enabled ?? true;
 
   return (
     <>
@@ -108,6 +122,42 @@ export function CacheStatusPanel({ raceId }: Props) {
             Refresh = full preload từ MySQL. Clear = xóa cache (kiosk sẽ chậm 1-2s
             cho lần lookup đầu của mỗi chip cho đến khi cache rebuild).
           </p>
+
+          {/* Auto cron delta sync toggle */}
+          <div className="rounded-md border bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <Label
+                  htmlFor={`delta-sync-${raceId}`}
+                  className="text-sm font-semibold"
+                >
+                  Auto sync mỗi 30s
+                </Label>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Tự pull data athletes mới từ MySQL → cache mỗi 30 giây.
+                  Tắt khi muốn freeze cache hoặc giảm load MySQL race day.
+                </p>
+              </div>
+              <Switch
+                id={`delta-sync-${raceId}`}
+                checked={deltaSyncEnabled}
+                onCheckedChange={(v) => deltaSync.mutate(v)}
+                disabled={deltaSync.isPending || !enabled}
+              />
+            </div>
+            {!deltaSyncEnabled && enabled && (
+              <p className="mt-2 text-xs text-amber-700">
+                ⚠️ Cron đang TẮT — cache không tự update khi BTC gán BIB mới.
+                Athletes mới chỉ thấy qua on-demand fallback (chậm hơn 100-300ms
+                lần đầu).
+              </p>
+            )}
+            {deltaSync.isError && (
+              <p className="mt-2 text-xs text-red-600">
+                {(deltaSync.error as Error).message}
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
 

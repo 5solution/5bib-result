@@ -52,6 +52,12 @@ export class ChipLookupResponseDto {
   @ApiProperty({ nullable: true, example: '21KM' })
   course_name: string | null;
 
+  @ApiProperty({
+    nullable: true,
+    description: 'Giới tính: Nam / Nữ / Khác (normalized từ subinfo.gender)',
+  })
+  gender: string | null;
+
   @ApiProperty({ nullable: true })
   team: string | null;
 

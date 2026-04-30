@@ -23,6 +23,8 @@ export interface CachedAthletePayload {
   bib_number: string;
   name: string | null;
   course_name: string | null;
+  /** Giới tính từ subinfo.gender (varchar 16): 'MALE' | 'FEMALE' | 'OTHER' | null */
+  gender: string | null;
   team: string | null;
   last_status: string | null;
   racekit_received: boolean;
@@ -77,6 +79,7 @@ export class ChipCacheService {
       },
       relations: {
         subinfo: { orderLineItem: { ticketType: { raceCourse: true } } },
+        code: { raceCourse: true },
       },
       take: 10000, // safety cap (race max 7K)
     });
@@ -151,6 +154,7 @@ export class ChipCacheService {
       },
       relations: {
         subinfo: { orderLineItem: { ticketType: { raceCourse: true } } },
+        code: { raceCourse: true },
       },
       take: 500,
     });
@@ -196,6 +200,7 @@ export class ChipCacheService {
       where: { race_id: raceId, bib_number: bibNumber, deleted: false },
       relations: {
         subinfo: { orderLineItem: { ticketType: { raceCourse: true } } },
+        code: { raceCourse: true },
       },
     });
     if (!a) return null;
@@ -255,18 +260,40 @@ export class ChipCacheService {
   private buildPayload(a: AthleteReadonly): CachedAthletePayload {
     const nameOnBib = a.subinfo?.name_on_bib ?? null;
     const displayName = (nameOnBib && nameOnBib.trim()) || a.name || null;
+    // Course name resolution với 2 path:
+    //   1. PRIMARY: athlete → subinfo → order_line_item → ticket_type → race_course
+    //      (athletes mua vé qua order)
+    //   2. FALLBACK: athlete → code → race_course
+    //      (athletes import qua code, không có order — race 192 có 63% nhóm này)
     const courseName =
-      a.subinfo?.orderLineItem?.ticketType?.raceCourse?.name ?? null;
+      a.subinfo?.orderLineItem?.ticketType?.raceCourse?.name ??
+      a.code?.raceCourse?.name ??
+      null;
+    const gender = normalizeGender(a.subinfo?.gender ?? null);
     const team = a.subinfo?.club ?? null;
     return {
       athletes_id: Number(a.athletes_id),
       bib_number: a.bib_number ?? '',
       name: displayName,
       course_name: courseName,
+      gender,
       team,
       last_status: a.last_status,
       racekit_received: Number(a.racekit_recieved ?? 0) === 1,
       cached_at: Date.now(),
     };
   }
+}
+
+/**
+ * Normalize gender value từ MySQL (varchar 16) sang label tiếng Việt.
+ * MySQL có thể chứa: 'MALE' | 'FEMALE' | 'OTHER' | 'M' | 'F' | null.
+ */
+function normalizeGender(raw: string | null): string | null {
+  if (!raw) return null;
+  const v = raw.trim().toUpperCase();
+  if (v === 'MALE' || v === 'M' || v === 'NAM') return 'Nam';
+  if (v === 'FEMALE' || v === 'F' || v === 'NỮ' || v === 'NU') return 'Nữ';
+  if (v === 'OTHER' || v === 'O') return 'Khác';
+  return raw;
 }

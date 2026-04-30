@@ -12,6 +12,7 @@ import { AthleteCard } from './AthleteCard';
 import { HistoryList } from './HistoryList';
 import { StatsCounter } from './StatsCounter';
 import { useSoundFeedback, type SoundType } from './useSoundFeedback';
+import { useTTS } from './useTTS';
 
 interface Props {
   token: string;
@@ -35,6 +36,7 @@ const deviceStorageKey = (token: string) => `chip-verify:device:${token}`;
 export function ChipVerifyKioskClient({ token, defaultDevice }: Props) {
   const queryClient = useQueryClient();
   const { play, unlock } = useSoundFeedback();
+  const tts = useTTS();
   const [audioReady, setAudioReady] = useState(false);
   // BUG #FE-1 fix — initialize state with prop only (deterministic on both
   // server SSR pass and client first render). Populate from localStorage in
@@ -63,6 +65,12 @@ export function ChipVerifyKioskClient({ token, defaultDevice }: Props) {
       setLastResult(data);
       setLookupError(null);
       play(RESULT_TO_SOUND[data.result]);
+      // BR-01: TTS chỉ đọc tên khi FOUND. Các trạng thái khác giữ nguyên
+      // beep/buzz, không đọc tên.
+      // BR-07: speakAthlete chạy SAU play() (queue thứ tự beep → speak).
+      if (data.result === 'FOUND') {
+        tts.speakAthlete(data.bib_number, data.name);
+      }
       // Refresh history + stats after each successful lookup
       queryClient.invalidateQueries({ queryKey: ['chip-recent', token] });
       queryClient.invalidateQueries({ queryKey: ['chip-stats-public', token] });
@@ -104,11 +112,32 @@ export function ChipVerifyKioskClient({ token, defaultDevice }: Props) {
             )}
           </p>
         </div>
-        {audioReady && (
-          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
-            🔊 Sẵn sàng
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {audioReady && tts.supported && (
+            <button
+              type="button"
+              onClick={tts.toggle}
+              aria-label={tts.enabled ? 'Tắt đọc tên' : 'Bật đọc tên'}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                tts.enabled
+                  ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                  : 'bg-stone-200 text-stone-600 hover:bg-stone-300'
+              }`}
+              title={
+                tts.enabled
+                  ? 'TTS bật — đọc BIB + tên khi quẹt thành công'
+                  : 'TTS tắt — chỉ beep, không đọc tên'
+              }
+            >
+              {tts.enabled ? '🔊 Đọc tên' : '🔇 Tắt đọc'}
+            </button>
+          )}
+          {audioReady && (
+            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+              🔊 Sẵn sàng
+            </span>
+          )}
+        </div>
       </header>
 
       {/* RFID listener — disabled until audio unlocked + on error display */}

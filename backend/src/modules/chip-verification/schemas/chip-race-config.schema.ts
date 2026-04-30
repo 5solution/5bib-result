@@ -31,6 +31,15 @@ export class ChipRaceConfig {
   @Prop({ required: true, default: false })
   chip_verify_enabled: boolean;
 
+  /**
+   * Per-race toggle cho auto cron delta sync (mỗi 30s pull MySQL → Redis).
+   * Default true. BTC tắt khi muốn freeze cache (giảm MySQL load race day,
+   * hoặc data athletes đang được edit lớn không muốn sync ngầm).
+   * Khi tắt: chỉ on-demand fallback hoạt động (lookup miss → SELECT MySQL).
+   */
+  @Prop({ default: true })
+  delta_sync_enabled: boolean;
+
   /** 32-char base64url, sparse unique (null khi disable). */
   @Prop({ index: true, sparse: true, unique: true })
   chip_verify_token?: string | null;

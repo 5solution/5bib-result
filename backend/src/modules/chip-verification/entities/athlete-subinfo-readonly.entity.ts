@@ -22,6 +22,10 @@ export class AthleteSubinfoReadonly {
   @Column({ nullable: true, type: 'varchar', length: 255 })
   club: string | null;
 
+  /** Giới tính: 'MALE' | 'FEMALE' | 'OTHER' (varchar 16). */
+  @Column({ nullable: true, type: 'varchar', length: 16 })
+  gender: string | null;
+
   @Column({ type: 'bigint', nullable: true })
   order_line_item_id: number | null;
 
