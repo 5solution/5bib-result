@@ -82,14 +82,20 @@ export class RaceAthleteLookupService {
   }
 
   /**
-   * Bulk lookup. Consumer pattern: leaderboard, OCR match. Stays Redis-fast.
-   * Mongo fallback only for misses; KHÔNG chạy MySQL fallback bulk
-   * (avoid hammering replica). Caller phải triggerSync trước nếu cần data
-   * complete.
+   * Bulk lookup. Consumer pattern: leaderboard, OCR match. Default Redis →
+   * Mongo only — bulk MySQL fallback hammering replica = bad idea cho 1000 bibs.
+   *
+   * B-2 fix: opt-in `fallbackToMysql=true` → for each missing bib sau Mongo,
+   * gọi `onDemandByBib` (single-row + write-through). Dùng cho OCR/checkpoint
+   * pattern khi athlete có thể vừa được register late, chưa kịp DELTA sync.
+   * Trade-off: latency = O(n_missing) MySQL queries — caller chấp nhận.
+   *
+   * KHÔNG fallback default vì leaderboard query 2K+ bibs sẽ kill MySQL replica.
    */
   async lookupBibs(
     raceId: number,
     bibs: string[],
+    options: { fallbackToMysql?: boolean } = {},
   ): Promise<Map<string, RaceAthletePublicDto>> {
     // QC Security #6 — cap input. Prevents memory blow + Redis HMGET storm.
     const MAX_BULK_BIBS = 1000;
@@ -119,6 +125,34 @@ export class RaceAthleteLookupService {
       // Best-effort write-through; fire-and-forget to avoid blocking caller.
       this.cache.setByBib(raceId, d.bib_number, view).catch(() => undefined);
     }
+
+    // B-2 opt-in MySQL fallback for stragglers (OCR/checkpoint use case).
+    if (options.fallbackToMysql) {
+      const stillMissing = cleanBibs.filter((b) => !result.has(b));
+      if (stillMissing.length > 0) {
+        // Cap at 50 — ngăn DoS qua bulk fallback. OCR thường < 10 bibs/call.
+        const FALLBACK_CAP = 50;
+        if (stillMissing.length > FALLBACK_CAP) {
+          this.logger.warn(
+            `[lookupBibs] fallbackToMysql skipped for ${stillMissing.length} bibs ` +
+              `(>${FALLBACK_CAP}). Consumer should triggerSync trước.`,
+          );
+        } else {
+          // Sequential — Promise.all sẽ stampede MySQL connection pool.
+          for (const bib of stillMissing) {
+            try {
+              const view = await this.fallbackByBib(raceId, bib);
+              if (view) result.set(bib, view);
+            } catch (err) {
+              this.logger.warn(
+                `[lookupBibs] fallback bib=${bib} race=${raceId} error: ${(err as Error).message}`,
+              );
+            }
+          }
+        }
+      }
+    }
+
     return result;
   }
 
@@ -320,26 +354,48 @@ export class RaceAthleteLookupService {
 
   // ─────────── HELPERS ───────────
 
+  /**
+   * On-demand MySQL fallback với anti-stampede.
+   *
+   * B-3 fix: token-based lock (Lua CAS) tránh "thread A timeout → expire →
+   * thread B acquire → A's finally{} delete B's lock" antipattern.
+   *
+   * W-3 fix: retry-loop 3×100ms khi lock không acquire — chờ thread khác
+   * complete. Mỗi retry recheck Redis + Mongo. Sau 3 retry vẫn miss → re-acquire
+   * lock + tự fallback (defense in depth, không dropthrough vô lock-less).
+   */
   private async fallbackByBib(
     raceId: number,
     bib: string,
   ): Promise<RaceAthletePublicDto | null> {
-    const acquired = await this.cache.tryAcquireLookupLock(raceId, bib);
-    if (!acquired) {
-      // Another caller resolving — wait then re-check Mongo.
-      await new Promise((r) => setTimeout(r, 100));
-      const cachedAfter = await this.cache.getByBib(raceId, bib);
-      if (cachedAfter) return cachedAfter;
-      const docAfter = await this.raceAthleteModel
-        .findOne({ mysql_race_id: raceId, bib_number: bib })
-        .lean<RaceAthlete>()
-        .exec();
-      if (docAfter) {
-        const v = toPublicView(docAfter);
-        await this.cache.setByBib(raceId, bib, v);
-        return v;
+    let token = await this.cache.tryAcquireLookupLock(raceId, bib);
+
+    if (!token) {
+      // Another caller is resolving — retry-loop 3×100ms before giving up.
+      // Total max wait: 300ms. MySQL on-demand p95 ~80ms → 3 retries enough.
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await new Promise((r) => setTimeout(r, 100));
+        const cachedAfter = await this.cache.getByBib(raceId, bib);
+        if (cachedAfter) return cachedAfter;
+        const docAfter = await this.raceAthleteModel
+          .findOne({ mysql_race_id: raceId, bib_number: bib })
+          .lean<RaceAthlete>()
+          .exec();
+        if (docAfter) {
+          const v = toPublicView(docAfter);
+          await this.cache.setByBib(raceId, bib, v);
+          return v;
+        }
       }
-      // Last resort — fall through and run ourselves.
+      // 3 retries failed → re-acquire lock with fresh token before fallback.
+      // Defense in depth: KHÔNG dropthrough lock-less như cũ (W-3 anti-pattern).
+      token = await this.cache.tryAcquireLookupLock(raceId, bib);
+      if (!token) {
+        this.logger.warn(
+          `[fallbackByBib] race=${raceId} bib=${bib} unable to acquire lock after 3 retries — skip MySQL fallback`,
+        );
+        return null;
+      }
     }
 
     try {
@@ -348,7 +404,8 @@ export class RaceAthleteLookupService {
       await this.cache.setByBib(raceId, bib, result.view);
       return result.view;
     } finally {
-      if (acquired) await this.cache.releaseLookupLock(raceId, bib);
+      // B-3: Lua CAS — chỉ DEL nếu token còn match (chưa expire/giành mất).
+      await this.cache.releaseLookupLock(raceId, bib, token);
     }
   }
 }

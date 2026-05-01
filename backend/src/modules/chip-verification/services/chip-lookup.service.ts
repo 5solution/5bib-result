@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Model } from 'mongoose';
@@ -25,18 +30,45 @@ import { RaceAthletePublicDto } from '../../race-master-data/dto/race-athlete-pu
  *   2. bib_number → athlete   (master data — Redis → Mongo → MySQL fallback)
  *   3. is_first_verify SETNX  (Redis atomic, MUST-DO #3)
  *   4. classify result + insert audit log
+ *
+ * W-5 fix: `@Optional()` inject `RaceAthleteLookupService`. Khi
+ * `PLATFORM_DB_HOST` missing → `RaceMasterDataModule` không load → service
+ * undefined. Throw 503 thay vì TypeError crash.
+ *
+ * W-4 fix: TTL 30 ngày trên `chip:first-verify:{race}:{athleteId}` keys —
+ * tránh leak vĩnh viễn (94K athletes × 195 races = ~18M keys nếu không
+ * expire).
  */
 @Injectable()
 export class ChipLookupService {
   private readonly logger = new Logger(ChipLookupService.name);
+  /** W-4: 30 days TTL cho first-verify SETNX. Race ended → keys age out. */
+  private static readonly FIRST_VERIFY_TTL_SECONDS = 30 * 24 * 60 * 60;
 
   constructor(
     @InjectModel(ChipVerification.name)
     private readonly verificationModel: Model<ChipVerificationDocument>,
     @InjectRedis() private readonly redis: Redis,
     private readonly mappingService: ChipMappingService,
-    private readonly raceAthleteLookup: RaceAthleteLookupService,
-  ) {}
+    @Optional()
+    private readonly raceAthleteLookup: RaceAthleteLookupService | null,
+  ) {
+    if (!this.raceAthleteLookup) {
+      this.logger.warn(
+        'RaceAthleteLookupService not available (PLATFORM_DB_HOST missing?). ' +
+          'Chip-verify lookup sẽ trả 503 cho tới khi master-data module load.',
+      );
+    }
+  }
+
+  private requireRaceAthleteLookup(): RaceAthleteLookupService {
+    if (!this.raceAthleteLookup) {
+      throw new InternalServerErrorException(
+        'Race master data service unavailable — kiểm tra PLATFORM_DB_HOST env.',
+      );
+    }
+    return this.raceAthleteLookup;
+  }
 
   async lookup(
     raceId: number,
@@ -78,10 +110,10 @@ export class ChipLookupService {
     }
 
     // 2. Resolve BIB → athlete via master data (3-tier cache internal).
-    const athlete = await this.raceAthleteLookup.lookupByBib(
-      raceId,
-      mapping.bib_number,
-    );
+    // W-5: requireRaceAthleteLookup() throw 503 nếu module không load
+    // (graceful degrade, không TypeError crash).
+    const lookupSvc = this.requireRaceAthleteLookup();
+    const athlete = await lookupSvc.lookupByBib(raceId, mapping.bib_number);
 
     if (!athlete) {
       // Mapping exists but no athlete with this BIB yet → BIB_UNASSIGNED
@@ -101,8 +133,16 @@ export class ChipLookupService {
     // 3. is_first_verify atomic SETNX — independent dimension
     //    from racekit_received. Tracks "first time chip verify system saw
     //    this athlete" for stats/audit only.
+    // W-4 fix: 30 days TTL — race ended → keys auto-expire. Tránh leak
+    //          ~18M permanent keys (94K athletes × 195 races scale).
     const firstKey = ChipRedisKeys.firstVerify(raceId, athlete.athletes_id);
-    const firstResult = await this.redis.set(firstKey, '1', 'NX');
+    const firstResult = await this.redis.set(
+      firstKey,
+      '1',
+      'EX',
+      ChipLookupService.FIRST_VERIFY_TTL_SECONDS,
+      'NX',
+    );
     const isFirst = firstResult === 'OK';
 
     // 4. Result classification — racekit_received from master data is the

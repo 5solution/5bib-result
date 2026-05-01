@@ -65,3 +65,16 @@ export const RaceMasterSyncLogSchema =
 
 RaceMasterSyncLogSchema.index({ mysql_race_id: 1, started_at: -1 });
 RaceMasterSyncLogSchema.index({ status: 1, started_at: -1 });
+
+/**
+ * S-10 fix — TTL index 90 days. Sync logs là audit data ngắn hạn — sau 90
+ * ngày không còn hữu dụng debug (race đã end, athletes đã sync). Không
+ * có TTL → table grow vô hạn → admin sync-logs page slow + Mongo storage.
+ *
+ * MongoDB tự DELETE doc khi `started_at + 90d < now`. Background scan ~1min
+ * → eventual consistency, không impact write path.
+ */
+RaceMasterSyncLogSchema.index(
+  { started_at: 1 },
+  { expireAfterSeconds: 90 * 24 * 60 * 60 },
+);

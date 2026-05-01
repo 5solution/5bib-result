@@ -27,7 +27,19 @@ export const RACE_MASTER_CACHE_TTL_SECONDS = 24 * 60 * 60; // 24h
 export const RACE_MASTER_STATS_TTL_SECONDS = 60;
 export const RACE_MASTER_SYNC_LOCK_TTL_SECONDS = 60;
 export const RACE_MASTER_CRON_LOCK_TTL_SECONDS = 50;
-export const RACE_MASTER_LOOKUP_LOCK_TTL_SECONDS = 5;
+/**
+ * B-3 fix: bumped 5s → 15s. MySQL p99 cold-cache fallback có thể tới 8-10s
+ * (DNS hiccup, JOIN nặng). 15s đủ cover mà không stuck queue lâu khi MySQL down.
+ * Kèm Lua CAS-with-token release pattern (xem `releaseLookupLock` dùng token).
+ */
+export const RACE_MASTER_LOOKUP_LOCK_TTL_SECONDS = 15;
 
 /** Default cron delta sync interval. Configurable env var nếu cần. */
 export const RACE_MASTER_DELTA_OVERLAP_SECONDS = 60;
+
+/**
+ * Janitor sweep stale RUNNING sync logs. Process kill (-9) / OOM crash
+ * không chạy được catch{} → log mắc kẹt status=RUNNING vĩnh viễn → poison
+ * "is sync running" check ở triggerSync.
+ */
+export const RACE_MASTER_STALE_RUNNING_LOG_THRESHOLD_MS = 10 * 60 * 1000; // 10min

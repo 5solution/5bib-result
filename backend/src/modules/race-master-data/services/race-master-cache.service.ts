@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { randomUUID } from 'crypto';
 import {
   RACE_MASTER_CACHE_TTL_SECONDS,
   RACE_MASTER_CRON_LOCK_TTL_SECONDS,
@@ -9,6 +10,22 @@ import {
   RaceMasterRedisKeys,
 } from '../utils/redis-keys';
 import { RaceAthletePublicDto } from '../dto/race-athlete-public.dto';
+
+/**
+ * Lua CAS (compare-and-swap) release script — chỉ DEL key nếu value khớp
+ * token caller đang giữ. Tránh anti-pattern "Caller A timeout → lock expire
+ * → Caller B acquire → Caller A's finally{} release(). Caller B's lock bị
+ * caller A xóa nhầm → Caller C vào → stampede".
+ *
+ * KEYS[1] = lock key, ARGV[1] = caller's token
+ */
+const LUA_RELEASE_IF_TOKEN_MATCHES = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+else
+  return 0
+end
+`;
 
 /**
  * Tier 1 cache (Redis) — hot path athlete lookup. Driven by sync service
@@ -206,25 +223,40 @@ export class RaceMasterCacheService {
     await this.redis.del(RaceMasterRedisKeys.cronLock(raceId));
   }
 
+  /**
+   * B-3 fix: Lock acquire với unique token. Caller pass token vào release để
+   * Lua CAS-DEL — chỉ DEL nếu value còn match token (chưa expire + chưa bị
+   * thread khác giành). Returns token nếu acquired, null nếu fail.
+   *
+   * Trade-off: token = UUID 36 bytes vs '1' = 1 byte → +35 bytes/lock.
+   * Acceptable cho lookup-lock (race + bib pair, max ~10K concurrent locks).
+   */
   async tryAcquireLookupLock(
     raceId: number,
     bibNumber: string,
-  ): Promise<boolean> {
+  ): Promise<string | null> {
+    const token = randomUUID();
     const r = await this.redis.set(
       RaceMasterRedisKeys.lookupLock(raceId, bibNumber),
-      '1',
+      token,
       'EX',
       RACE_MASTER_LOOKUP_LOCK_TTL_SECONDS,
       'NX',
     );
-    return r === 'OK';
+    return r === 'OK' ? token : null;
   }
 
   async releaseLookupLock(
     raceId: number,
     bibNumber: string,
+    token: string,
   ): Promise<void> {
-    await this.redis.del(RaceMasterRedisKeys.lookupLock(raceId, bibNumber));
+    await this.redis.eval(
+      LUA_RELEASE_IF_TOKEN_MATCHES,
+      1,
+      RaceMasterRedisKeys.lookupLock(raceId, bibNumber),
+      token,
+    );
   }
 
   // ─────────── STATS ───────────
