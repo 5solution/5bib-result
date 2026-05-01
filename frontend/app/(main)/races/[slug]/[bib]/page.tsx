@@ -210,6 +210,17 @@ function parseSplitsFromData(data: Record<string, unknown>, checkpoints?: Checkp
         };
       });
 
+    // BR-01: rankDelta = previous rank − current rank (positive = moved up).
+    // Only meaningful when both ranks parse as positive integers (skip
+    // sentinels like "-1", "DNF", "DNS").
+    for (let i = 1; i < splits.length; i++) {
+      const curr = parseInt(splits[i].overallRank ?? '', 10);
+      const prev = parseInt(splits[i - 1].overallRank ?? '', 10);
+      if (curr > 0 && prev > 0) {
+        splits[i].rankDelta = prev - curr;
+      }
+    }
+
     return splits.length > 0 ? splits : null;
   } catch {
     return null;
@@ -1143,7 +1154,7 @@ export default function AthleteDetailPage() {
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                      <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{split.overallRank || (i + 1)}</span>
                       <span className="font-semibold text-gray-900 text-sm">{split.name}</span>
                       {/* Rank delta badge (BR-01) */}
                       {i > 0 && delta !== 0 && (
@@ -1225,21 +1236,24 @@ export default function AthleteDetailPage() {
                                 : 'hover:bg-gray-50/40'
                       }`}
                     >
-                      {/* Rank delta cell (BR-01) */}
+                      {/* Rank delta cell (BR-01) — show actual rank at checkpoint, not array index */}
                       <td className="px-6 py-3.5">
-                        {i === 0 || delta === 0 ? (
-                          <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                        ) : delta > 0 ? (
-                          <div className="flex items-center gap-1">
-                            <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                            <span className="text-[10px] font-bold text-green-600">↑{delta}</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                            <span className="text-[10px] font-bold text-red-500">↓{Math.abs(delta)}</span>
-                          </div>
-                        )}
+                        {(() => {
+                          const rankLabel = split.overallRank || String(i + 1);
+                          if (i === 0 || delta === 0) {
+                            return (
+                              <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{rankLabel}</span>
+                            );
+                          }
+                          return (
+                            <div className="flex items-center gap-1">
+                              <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{rankLabel}</span>
+                              <span className={`text-[10px] font-bold ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {delta > 0 ? `↑${delta}` : `↓${Math.abs(delta)}`}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-3.5 font-semibold text-gray-900">
                         <div className="flex items-center gap-2 flex-wrap">
