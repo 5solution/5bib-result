@@ -127,7 +127,7 @@ export function AthleteCard({ data, displayName, nameLabel }: Props) {
         </div>
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <Field label="Cự ly" value={data.course_name} />
         <Field label="Giới tính" value={data.gender} />
         <Field
@@ -135,6 +135,9 @@ export function AthleteCard({ data, displayName, nameLabel }: Props) {
           value={data.racekit_received ? 'Đã nhận' : 'Chưa nhận'}
           highlight={data.racekit_received ? 'amber' : undefined}
         />
+        {/* Vật phẩm BTC giao kèm racekit (áo, mũ, túi, ...). Free-form string
+            từ subinfo.achivements — render raw, break-words cho nhiều items. */}
+        <Field label="Vật phẩm" value={data.items} />
       </dl>
     </section>
   );
@@ -153,7 +156,7 @@ function Field({
     <div>
       <dt className="text-xs uppercase tracking-wide text-stone-600">{label}</dt>
       <dd
-        className={`mt-0.5 font-semibold ${
+        className={`mt-0.5 break-words font-semibold ${
           highlight === 'amber' ? 'text-amber-800' : 'text-stone-900'
         }`}
       >

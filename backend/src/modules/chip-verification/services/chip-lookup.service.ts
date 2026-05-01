@@ -211,6 +211,7 @@ export class ChipLookupService {
       course_name: input.courseSnapshot,
       gender: input.athleteSnapshot?.gender ?? null,
       team: input.athleteSnapshot?.team ?? null,
+      items: input.athleteSnapshot?.items ?? null,
       last_status: input.athleteSnapshot?.last_status ?? null,
       racekit_received: input.athleteSnapshot?.racekit_received ?? false,
       is_first_verify: isFirst && input.result === 'FOUND',
