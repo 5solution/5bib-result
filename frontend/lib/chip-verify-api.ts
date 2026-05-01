@@ -30,6 +30,8 @@ export interface ChipLookupResponse {
   course_name: string | null;
   gender: string | null;
   team: string | null;
+  /** Vật phẩm racekit (áo, mũ, ...) từ subinfo.achivements. Có thể null nếu cache cũ. */
+  items: string | null;
   last_status: string | null;
   racekit_received: boolean;
   is_first_verify: boolean;
