@@ -16,6 +16,7 @@ import { RacesService } from '../../races/races.service';
 import { TelegramService } from '../../notification/telegram.service';
 import { MailService } from '../../notification/mail.service';
 import { UploadService } from '../../upload/upload.service';
+import { parseDistanceKm } from './badge.service';
 import * as crypto from 'crypto';
 
 interface RaceResultApiItem {
@@ -499,6 +500,31 @@ export class RaceResultService {
     return rank;
   }
 
+  /**
+   * Vendor's root `Pace` field has been observed pushing wrong values for some
+   * finishers (e.g. bib 85596 21KM ChipTime 1:12:09 → vendor pushed "7:12"
+   * instead of the correct 3:26 = 4329s/21km). Source-of-truth = chipTime ÷
+   * course distance. Override only for finishers where the math is meaningful
+   * (mid-race chipTime is partial split, not full distance).
+   */
+  private computeFinisherPace(
+    chipTime: string | undefined | null,
+    distance: string | undefined | null,
+    timingPoint: string | undefined | null,
+    fallback: string | undefined | null,
+  ): string | undefined | null {
+    if (String(timingPoint ?? '').toLowerCase() !== 'finish') return fallback;
+    const seconds = this.chipTimeToSeconds(chipTime);
+    const km = distance ? parseDistanceKm(distance) : 0;
+    if (!seconds || seconds <= 0 || !km || km <= 0) return fallback;
+    const pps = seconds / km;
+    const m = Math.floor(pps / 60);
+    const s = Math.round(pps - m * 60);
+    const mm = s === 60 ? m + 1 : m;
+    const ss = s === 60 ? 0 : s;
+    return `${mm}:${String(ss).padStart(2, '0')}`;
+  }
+
   private mapDocToResponse(doc: any) {
     return {
       Bib: doc.bib,
@@ -511,7 +537,12 @@ export class RaceResultService {
       ChipTime: doc.chipTime,
       GunTime: doc.gunTime,
       TimingPoint: doc.timingPoint,
-      Pace: doc.pace,
+      Pace: this.computeFinisherPace(
+        doc.chipTime,
+        doc.distance,
+        doc.timingPoint,
+        doc.pace,
+      ),
       Certi: doc.certi,
       Certificate: doc.certificate,
       OverallRanks: doc.overallRanks,
