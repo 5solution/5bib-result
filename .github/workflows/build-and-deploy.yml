@@ -207,48 +207,44 @@ jobs:
             echo "$TOKEN" | docker login ghcr.io -u 0xaldric --password-stdin
             cd /opt/5bib-result
 
-            # Only bump image tag for services that were actually built.
-            # Services skipped by paths-filter keep their previous SHA so
-            # `docker compose pull` doesn't hit a non-existent tag.
-            RESTART_SVCS=""
+            # Bump image tag + pull + restart INLINE per service. Lý do:
+            # appleboy/ssh-action @ v1 bóp méo multi-line `for ... do ... done`
+            # heredoc → loop chạy 1 lần với value joined → "no such service:
+            # 5bib-result-backend 5bib-result-admin" (đã fail bd10c2c, c5265dd).
+            # Inline atomic per-if là pattern duy nhất ổn định qua appleboy
+            # ssh-action: chỉ literal docker compose calls trong từng block.
+            DEPLOYED_ANY=0
             if [ "$BUILT_BACKEND" = "success" ]; then
               sed -i "s|ghcr.io/5solution/5bib-result/backend:.*|ghcr.io/5solution/5bib-result/backend:${TAG}|" docker-compose.yml
-              RESTART_SVCS="$RESTART_SVCS 5bib-result-backend"
+              docker compose pull 5bib-result-backend
+              docker compose up -d --force-recreate 5bib-result-backend
+              DEPLOYED_ANY=1
             fi
             if [ "$BUILT_FRONTEND" = "success" ]; then
               sed -i "s|ghcr.io/5solution/5bib-result/frontend:.*|ghcr.io/5solution/5bib-result/frontend:${TAG}|" docker-compose.yml
-              RESTART_SVCS="$RESTART_SVCS 5bib-result-frontend"
+              docker compose pull 5bib-result-frontend
+              docker compose up -d --force-recreate 5bib-result-frontend
+              DEPLOYED_ANY=1
             fi
             if [ "$BUILT_ADMIN" = "success" ]; then
               sed -i "s|ghcr.io/5solution/5bib-result/admin:.*|ghcr.io/5solution/5bib-result/admin:${TAG}|" docker-compose.yml
-              RESTART_SVCS="$RESTART_SVCS 5bib-result-admin"
+              docker compose pull 5bib-result-admin
+              docker compose up -d --force-recreate 5bib-result-admin
+              DEPLOYED_ANY=1
             fi
             if [ "$BUILT_CREW" = "success" ]; then
               sed -i "s|ghcr.io/5solution/5bib-result/crew:.*|ghcr.io/5solution/5bib-result/crew:${TAG}|" docker-compose.yml
-              RESTART_SVCS="$RESTART_SVCS 5bib-result-crew"
+              docker compose pull 5bib-result-crew
+              docker compose up -d --force-recreate 5bib-result-crew
+              DEPLOYED_ANY=1
             fi
             if [ "$BUILT_CONTENT_WEB" = "success" ]; then
               sed -i "s|ghcr.io/5solution/5bib-result/content-web:.*|ghcr.io/5solution/5bib-result/content-web:${TAG}|" docker-compose.yml
-              RESTART_SVCS="$RESTART_SVCS 5bib-result-content-web"
+              docker compose pull 5bib-result-content-web
+              docker compose up -d --force-recreate 5bib-result-content-web
+              DEPLOYED_ANY=1
             fi
-
-            # Trim + collapse whitespace.
-            RESTART_SVCS=$(echo "$RESTART_SVCS" | xargs)
-
-            if [ -z "$RESTART_SVCS" ]; then
+            if [ "$DEPLOYED_ANY" = "0" ]; then
               echo "No services built — nothing to deploy"
-              exit 0
             fi
-
-            echo "Deploying services: $RESTART_SVCS"
-            # ⚠️ KHÔNG revert sang `docker compose pull $RESTART_SVCS` unquoted!
-            # appleboy/ssh-action chạy script qua `sh -c "..."` — unquoted
-            # variable KHÔNG word-split như bash. docker compose nhận toàn
-            # chuỗi như 1 arg → "no such service: 5bib-result-backend
-            # 5bib-result-frontend". Đã fail commits 980cc00 + 8f36b44 sau
-            # khi bd10c2c xóa for-loop. Loop từng service ổn định 5+ tuần.
-            for svc in $RESTART_SVCS; do
-              docker compose pull "$svc"
-              docker compose up -d --force-recreate "$svc"
-            done
             docker image prune -f
