@@ -19,6 +19,7 @@ import {
 } from '../utils/redis-keys';
 import { sha256Hex } from '../utils/normalize';
 import { TokenAction } from '../dto/chip-verify-token.dto';
+import { RaceAthleteLookupService } from '../../race-master-data/services/race-athlete-lookup.service';
 
 /**
  * Quản lý token + enable/disable + preload trigger cho race verify.
@@ -34,6 +35,7 @@ export class ChipConfigService {
     @InjectModel(ChipRaceConfig.name)
     private readonly configModel: Model<ChipRaceConfigDocument>,
     @InjectRedis() private readonly redis: Redis,
+    private readonly raceAthleteLookup: RaceAthleteLookupService,
   ) {}
 
   /** Lấy hoặc tạo doc config cho race. tenant_id phải truyền vào lần đầu. */
@@ -100,6 +102,24 @@ export class ChipConfigService {
         this.logger.log(
           `[GENERATE] race=${raceId} by=${byUserId} token=${this.maskToken(newToken)}`,
         );
+
+        // v1.3 — lazy init master data. Trigger FULL sync khi BTC enable
+        // chip-verify lần đầu. Idempotent (sync-lock anti-stampede). KHÔNG
+        // await để response nhanh — sync chạy nền, lookup fallback bao
+        // 100% case nếu cron chưa pickup.
+        this.raceAthleteLookup
+          .triggerSync(raceId, {
+            syncType: 'ATHLETE_FULL',
+            triggeredBy: `chip-verify-enable:${byUserId}`,
+          })
+          .catch((err: Error) => {
+            // Lock contention (409) là expected khi 2 admin click cùng lúc;
+            // log warn không break enable flow.
+            this.logger.warn(
+              `[GENERATE] master-data triggerSync race=${raceId}: ${err.message}`,
+            );
+          });
+
         return cfg;
       }
       case 'ROTATE': {

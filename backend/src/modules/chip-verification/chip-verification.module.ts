@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import {
   ChipRaceConfig,
@@ -14,30 +13,32 @@ import {
   ChipVerification,
   ChipVerificationSchema,
 } from './schemas/chip-verification.schema';
-import { AthleteReadonly } from './entities/athlete-readonly.entity';
-import { AthleteSubinfoReadonly } from './entities/athlete-subinfo-readonly.entity';
-import { OrderLineItemReadonly } from './entities/order-line-item-readonly.entity';
-import { TicketTypeReadonly } from './entities/ticket-type-readonly.entity';
-import { RaceCourseReadonly } from './entities/race-course-readonly.entity';
-import { CodeReadonly } from './entities/code-readonly.entity';
 import { ChipMappingService } from './services/chip-mapping.service';
 import { ChipConfigService } from './services/chip-config.service';
-import { ChipCacheService } from './services/chip-cache.service';
 import { ChipLookupService } from './services/chip-lookup.service';
 import { ChipStatsService } from './services/chip-stats.service';
-import { ChipDeltaSyncCron } from './jobs/chip-delta-sync.cron';
 import { ChipVerificationController } from './chip-verification.controller';
 import { ChipVerificationPublicController } from './chip-verification-public.controller';
 import { LogtoAuthModule } from '../logto-auth';
+import { RaceMasterDataModule } from '../race-master-data/race-master-data.module';
 
 /**
- * Chip Verification module — only loads when env.platformDb.host is set
- * (conditional in app.module.ts, same pattern as Reconciliation/Merchant).
+ * Chip Verification v1.3 — consume Race Master Data.
+ *
+ * Architectural change từ v1.2:
+ *   - DROP TypeOrmModule.forFeature (5 read-only entity) → moved to race-master-data
+ *   - DROP ChipCacheService (preload + delta + on-demand fallback) → master-data 3-tier
+ *   - DROP ChipDeltaSyncCron → master-data có cron @Cron mỗi 5 phút
+ *   - ADD RaceMasterDataModule import → inject RaceAthleteLookupService
+ *
+ * Module này CHỈ còn business logic riêng:
+ *   - chip_mappings CRUD + CSV import (verify BIB exists qua master data)
+ *   - chip_verifications log
+ *   - Token lifecycle (GENERATE/ROTATE/DISABLE) — auto trigger master sync
+ *   - Stats
  *
  * Locks:
- *   - lookup-lock (anti-stampede on cache miss)
- *   - cron-lock   (per-race tick exclusivity)
- *   - is-first-verify (atomic SETNX guarantee)
+ *   - is-first-verify (atomic SETNX) — vẫn giữ
  */
 @Module({
   imports: [
@@ -46,17 +47,7 @@ import { LogtoAuthModule } from '../logto-auth';
       { name: ChipMapping.name, schema: ChipMappingSchema },
       { name: ChipVerification.name, schema: ChipVerificationSchema },
     ]),
-    TypeOrmModule.forFeature(
-      [
-        AthleteReadonly,
-        AthleteSubinfoReadonly,
-        OrderLineItemReadonly,
-        TicketTypeReadonly,
-        RaceCourseReadonly,
-        CodeReadonly,
-      ],
-      'platform',
-    ),
+    RaceMasterDataModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     LogtoAuthModule,
   ],
@@ -64,10 +55,8 @@ import { LogtoAuthModule } from '../logto-auth';
   providers: [
     ChipConfigService,
     ChipMappingService,
-    ChipCacheService,
     ChipLookupService,
     ChipStatsService,
-    ChipDeltaSyncCron,
   ],
   exports: [ChipConfigService, ChipMappingService],
 })

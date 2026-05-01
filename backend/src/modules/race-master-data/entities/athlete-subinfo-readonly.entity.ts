@@ -28,13 +28,10 @@ export class AthleteSubinfoReadonly {
 
   /**
    * Vật phẩm BTC giao kèm racekit (VD: "Mũ", "Áo", "Túi nylon"). Cột DB
-   * 'achievements' (đúng chính tả). Free-form text, có thể là single item
-   * ("Mũ") hoặc list comma-separated. FE render raw — không parse.
-   *
-   * Race 192 (pilot 2026-05-02): 930/3267 dòng = "Mũ" (BTC giao mũ),
-   * còn lại NULL. KHÔNG fallback giá trị khác — empty/null thì FE hiện '—'.
+   * 'achievements' (đúng chính tả). Free-form text. Race 192 pilot
+   * 2026-05-02: 930/3267 dòng = "Mũ" cho athletes nhận mũ.
    */
-  @Column({ nullable: true, type: 'text', name: 'achievements' })
+  @Column({ nullable: true, type: 'text' })
   achievements: string | null;
 
   @Column({ type: 'bigint', nullable: true })

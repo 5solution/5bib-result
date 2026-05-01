@@ -9,25 +9,22 @@ import {
   ChipVerificationResult,
 } from '../schemas/chip-verification.schema';
 import { ChipMappingService } from './chip-mapping.service';
-import {
-  CachedAthletePayload,
-  ChipCacheService,
-} from './chip-cache.service';
-import {
-  CHIP_LOOKUP_LOCK_TTL_SECONDS,
-  ChipRedisKeys,
-} from '../utils/redis-keys';
+import { ChipRedisKeys } from '../utils/redis-keys';
 import { ChipLookupResponseDto } from '../dto/chip-lookup.dto';
 import { normalizeChipId } from '../utils/normalize';
+import { RaceAthleteLookupService } from '../../race-master-data/services/race-athlete-lookup.service';
+import { RaceAthletePublicDto } from '../../race-master-data/dto/race-athlete-public.dto';
 
 /**
- * Core lookup service. Orchestrates:
- *   1. Redis HGET cache (fast path)
- *   2. SETNX lookup-lock anti-stampede (MUST-DO #3) → on-demand MySQL fallback
- *   3. SETNX is_first_verify atomic (MUST-DO #3)
- *   4. Insert ChipVerification audit log with denormalized snapshots
+ * v1.3 — Core lookup orchestration. Delegates ALL athlete data resolution
+ * to `RaceAthleteLookupService` (master data DI). KHÔNG còn TypeORM,
+ * KHÔNG còn cache service riêng.
  *
- * BR-08: query MUST always use (mysql_race_id, chip_id) — never just chip_id.
+ * Flow:
+ *   1. chip_id → bib_number   (Mongoose chip_mappings — race-scoped, BR-08)
+ *   2. bib_number → athlete   (master data — Redis → Mongo → MySQL fallback)
+ *   3. is_first_verify SETNX  (Redis atomic, MUST-DO #3)
+ *   4. classify result + insert audit log
  */
 @Injectable()
 export class ChipLookupService {
@@ -38,7 +35,7 @@ export class ChipLookupService {
     private readonly verificationModel: Model<ChipVerificationDocument>,
     @InjectRedis() private readonly redis: Redis,
     private readonly mappingService: ChipMappingService,
-    private readonly cacheService: ChipCacheService,
+    private readonly raceAthleteLookup: RaceAthleteLookupService,
   ) {}
 
   async lookup(
@@ -80,15 +77,11 @@ export class ChipLookupService {
       });
     }
 
-    // 2. Resolve BIB → athlete: cache-first, then on-demand MySQL fallback.
-    let athlete = await this.cacheService.getAthleteFromCache(
+    // 2. Resolve BIB → athlete via master data (3-tier cache internal).
+    const athlete = await this.raceAthleteLookup.lookupByBib(
       raceId,
       mapping.bib_number,
     );
-
-    if (!athlete) {
-      athlete = await this.resolveWithLock(raceId, mapping.bib_number);
-    }
 
     if (!athlete) {
       // Mapping exists but no athlete with this BIB yet → BIB_UNASSIGNED
@@ -105,18 +98,17 @@ export class ChipLookupService {
       });
     }
 
-    // 3. is_first_verify atomic SETNX (MUST-DO #3) — independent dimension
-    //    from racekit_received. Tracks "first time chip verify system saw this
-    //    athlete" for stats/audit only.
+    // 3. is_first_verify atomic SETNX — independent dimension
+    //    from racekit_received. Tracks "first time chip verify system saw
+    //    this athlete" for stats/audit only.
     const firstKey = ChipRedisKeys.firstVerify(raceId, athlete.athletes_id);
     const firstResult = await this.redis.set(firstKey, '1', 'NX');
     const isFirst = firstResult === 'OK';
 
-    // 4. Result classification — racekit_received from MySQL is the SOURCE
-    //    OF TRUTH (BUG #1 fix). If athlete already picked up at Bàn 1 legacy,
-    //    Bàn 2 must show ALREADY_PICKED_UP regardless of whether this is the
-    //    first chip verify or a duplicate. Otherwise BTC would hand a second
-    //    racekit on first chip scan.
+    // 4. Result classification — racekit_received from master data is the
+    //    SOURCE OF TRUTH. If athlete already picked up at Bàn 1 legacy,
+    //    Bàn 2 must show ALREADY_PICKED_UP regardless of whether this is
+    //    the first chip verify or a duplicate.
     let result: ChipVerificationResult = 'FOUND';
     if (athlete.racekit_received) {
       result = 'ALREADY_PICKED_UP';
@@ -136,39 +128,6 @@ export class ChipLookupService {
     });
   }
 
-  /**
-   * SETNX lookup-lock + on-demand MySQL fallback (write-through).
-   * If lock not acquired, wait briefly and retry cache (another thread filled).
-   */
-  private async resolveWithLock(
-    raceId: number,
-    bibNumber: string,
-  ): Promise<CachedAthletePayload | null> {
-    const lockKey = ChipRedisKeys.lookupLock(raceId, bibNumber);
-    const acquired = await this.redis.set(
-      lockKey,
-      '1',
-      'EX',
-      CHIP_LOOKUP_LOCK_TTL_SECONDS,
-      'NX',
-    );
-
-    if (acquired === 'OK') {
-      try {
-        return await this.cacheService.resolveAthleteOnDemand(raceId, bibNumber);
-      } finally {
-        await this.redis.del(lockKey);
-      }
-    }
-
-    // Another thread is resolving — wait 100ms then re-check cache
-    await new Promise((r) => setTimeout(r, 100));
-    const cached = await this.cacheService.getAthleteFromCache(raceId, bibNumber);
-    if (cached) return cached;
-    // Last resort — fallback ourselves (lock holder may have failed)
-    return this.cacheService.resolveAthleteOnDemand(raceId, bibNumber);
-  }
-
   /** Insert audit doc + return DTO. */
   private async recordAndReturn(input: {
     raceId: number;
@@ -179,11 +138,12 @@ export class ChipLookupService {
     isFirst?: boolean;
     deviceLabel?: string;
     ipAddress?: string;
-    athleteSnapshot: CachedAthletePayload | null;
+    athleteSnapshot: RaceAthletePublicDto | null;
     courseSnapshot: string | null;
   }): Promise<ChipLookupResponseDto> {
     const verifiedAt = new Date();
     const isFirst = input.isFirst ?? false;
+    const snapshot = input.athleteSnapshot;
 
     await this.verificationModel.create({
       mysql_race_id: input.raceId,
@@ -194,26 +154,25 @@ export class ChipLookupService {
       is_first_verify: isFirst && input.result === 'FOUND',
       device_label: input.deviceLabel,
       ip_address: input.ipAddress,
-      athlete_name_snapshot: input.athleteSnapshot?.name ?? null,
+      athlete_name_snapshot: snapshot?.display_name ?? null,
       bib_number_snapshot: input.bibNumber,
       course_name_snapshot: input.courseSnapshot,
     });
 
-    // Cache backward compat: nếu cache cũ chưa có bib_name/full_name (preload trước
-    // khi deploy v1.2-name-toggle), 2 field này = undefined trong snapshot →
-    // fallback `?? null` đảm bảo response shape ổn định cho FE.
     return {
       result: input.result,
       bib_number: input.bibNumber,
-      name: input.athleteSnapshot?.name ?? null,
-      bib_name: input.athleteSnapshot?.bib_name ?? null,
-      full_name: input.athleteSnapshot?.full_name ?? null,
+      name: snapshot?.display_name ?? null,
+      bib_name: snapshot?.bib_name ?? null,
+      full_name: snapshot?.full_name ?? null,
       course_name: input.courseSnapshot,
-      gender: input.athleteSnapshot?.gender ?? null,
-      team: input.athleteSnapshot?.team ?? null,
-      items: input.athleteSnapshot?.items ?? null,
-      last_status: input.athleteSnapshot?.last_status ?? null,
-      racekit_received: input.athleteSnapshot?.racekit_received ?? false,
+      gender: snapshot?.gender ?? null,
+      team: snapshot?.club ?? null,
+      // Vật phẩm racekit từ RaceAthletePublicDto.items (mapped từ
+      // athlete_subinfo.achievements bởi RaceMasterDataModule).
+      items: snapshot?.items ?? null,
+      last_status: snapshot?.last_status ?? null,
+      racekit_received: snapshot?.racekit_received ?? false,
       is_first_verify: isFirst && input.result === 'FOUND',
       verified_at: verifiedAt,
     };

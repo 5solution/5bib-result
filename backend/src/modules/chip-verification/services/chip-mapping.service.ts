@@ -7,17 +7,15 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { InjectRepository } from '@nestjs/typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Model, Types } from 'mongoose';
-import { Repository } from 'typeorm';
 import Redis from 'ioredis';
 import { randomBytes } from 'crypto';
 import {
   ChipMapping,
   ChipMappingDocument,
 } from '../schemas/chip-mapping.schema';
-import { AthleteReadonly } from '../entities/athlete-readonly.entity';
+import { RaceAthleteLookupService } from '../../race-master-data/services/race-athlete-lookup.service';
 import { parseCsv, ParsedCsvRow } from '../utils/csv-parser';
 import {
   hasFormulaInjection,
@@ -64,8 +62,7 @@ export class ChipMappingService {
   constructor(
     @InjectModel(ChipMapping.name)
     private readonly chipMappingModel: Model<ChipMappingDocument>,
-    @InjectRepository(AthleteReadonly, 'platform')
-    private readonly athleteRepo: Repository<AthleteReadonly>,
+    private readonly raceAthleteLookup: RaceAthleteLookupService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -184,16 +181,17 @@ export class ChipMappingService {
       };
     }
 
-    // 5. Verify BIB exists in race (single bulk SELECT — replica)
-    const bibSet = new Set(valid.map((v) => v.bib_number));
-    const existingBibsRaw = await this.athleteRepo
-      .createQueryBuilder('a')
-      .select(['a.bib_number'])
-      .where('a.race_id = :raceId', { raceId })
-      .andWhere('a.deleted = 0')
-      .andWhere('a.bib_number IN (:...bibs)', { bibs: Array.from(bibSet) })
-      .getRawMany<{ a_bib_number: string }>();
-    const existingBibs = new Set(existingBibsRaw.map((r) => r.a_bib_number));
+    // 5. Verify BIB exists in race via master data (cache-fast lookup,
+    //    no direct MySQL query). Master data fetches Redis → Mongo →
+    //    MySQL fallback. CSV import có cap 5K rows so well within
+    //    lookupBibs limit (1000 per call) — chunk if needed.
+    const bibSet = Array.from(new Set(valid.map((v) => v.bib_number)));
+    const existingBibs = new Set<string>();
+    for (let i = 0; i < bibSet.length; i += 1000) {
+      const chunk = bibSet.slice(i, i + 1000);
+      const found = await this.raceAthleteLookup.lookupBibs(raceId, chunk);
+      for (const bib of found.keys()) existingBibs.add(bib);
+    }
 
     const validFiltered: { chip_id: string; bib_number: string; lineNo: number }[] =
       [];

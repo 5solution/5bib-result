@@ -28,12 +28,13 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { Tenant } from './merchant/entities/tenant.entity';
 import { ChipVerificationModule } from './chip-verification/chip-verification.module';
-import { AthleteReadonly } from './chip-verification/entities/athlete-readonly.entity';
-import { AthleteSubinfoReadonly } from './chip-verification/entities/athlete-subinfo-readonly.entity';
-import { OrderLineItemReadonly } from './chip-verification/entities/order-line-item-readonly.entity';
-import { TicketTypeReadonly } from './chip-verification/entities/ticket-type-readonly.entity';
-import { RaceCourseReadonly } from './chip-verification/entities/race-course-readonly.entity';
-import { CodeReadonly } from './chip-verification/entities/code-readonly.entity';
+import { RaceMasterDataModule } from './race-master-data/race-master-data.module';
+import { AthleteReadonly } from './race-master-data/entities/athlete-readonly.entity';
+import { AthleteSubinfoReadonly } from './race-master-data/entities/athlete-subinfo-readonly.entity';
+import { OrderLineItemReadonly } from './race-master-data/entities/order-line-item-readonly.entity';
+import { TicketTypeReadonly } from './race-master-data/entities/ticket-type-readonly.entity';
+import { RaceCourseReadonly } from './race-master-data/entities/race-course-readonly.entity';
+import { CodeReadonly } from './race-master-data/entities/code-readonly.entity';
 import { TeamManagementModule } from './team-management/team-management.module';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
@@ -65,9 +66,11 @@ const platformDbModules = env.platformDb.host
         database: env.platformDb.name,
         entities: [
           Tenant,
-          // Chip Verification read-only entities (added per Eng+QC review
-          // MUST-DO #2 — TypeOrmModule.forFeature() in chip-verification.module
-          // requires entities listed here at forRoot.)
+          // Race Master Data read-only entities — single source of truth cho
+          // athlete pre-race data. Centralized ở race-master-data module
+          // (v1.3 — moved từ chip-verification per spec). Consumer modules
+          // (chip-verify, future checkpoint-capture) KHÔNG có entity riêng,
+          // chỉ inject RaceAthleteLookupService qua DI.
           AthleteReadonly,
           AthleteSubinfoReadonly,
           OrderLineItemReadonly,
@@ -84,6 +87,10 @@ const platformDbModules = env.platformDb.host
         },
       }),
       MerchantModule,
+      // RaceMasterDataModule MUST be loaded BEFORE ChipVerificationModule —
+      // ChipVerification v1.3 imports RaceMasterDataModule and injects
+      // RaceAthleteLookupService. NestJS resolves DI in module order.
+      RaceMasterDataModule,
       ReconciliationModule,
       AnalyticsModule,
       ChipVerificationModule,
