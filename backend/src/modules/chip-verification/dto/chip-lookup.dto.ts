@@ -76,6 +76,13 @@ export class ChipLookupResponseDto {
   @ApiProperty({ nullable: true })
   team: string | null;
 
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Vật phẩm racekit (áo, mũ, túi, ...) từ subinfo.achivements. Free-form string.',
+  })
+  items: string | null;
+
   @ApiProperty({ nullable: true })
   last_status: string | null;
 

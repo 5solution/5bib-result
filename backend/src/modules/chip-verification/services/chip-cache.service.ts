@@ -34,6 +34,8 @@ export interface CachedAthletePayload {
   /** Giới tính từ subinfo.gender (varchar 16): 'MALE' | 'FEMALE' | 'OTHER' | null */
   gender: string | null;
   team: string | null;
+  /** Vật phẩm racekit từ subinfo.achivements (typo gốc DB). Free-form string. */
+  items: string | null;
   last_status: string | null;
   racekit_received: boolean;
   cached_at: number; // ms epoch
@@ -287,6 +289,9 @@ export class ChipCacheService {
       null;
     const gender = normalizeGender(a.subinfo?.gender ?? null);
     const team = a.subinfo?.club ?? null;
+    // Vật phẩm BTC giao kèm racekit (VD race 192: "Mũ" cho 930/3267 athletes).
+    // Trim + null-safe để empty string sau trim được coi là null (FE hiện '—').
+    const items = a.subinfo?.achievements?.trim() || null;
     return {
       athletes_id: Number(a.athletes_id),
       bib_number: a.bib_number ?? '',
@@ -296,6 +301,7 @@ export class ChipCacheService {
       course_name: courseName,
       gender,
       team,
+      items,
       last_status: a.last_status,
       racekit_received: Number(a.racekit_recieved ?? 0) === 1,
       cached_at: Date.now(),
