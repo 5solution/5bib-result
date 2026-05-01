@@ -32,7 +32,7 @@ import { RaceScopeGuard } from './guards/race-scope.guard';
 import { MulterErrorFilter } from './utils/multer-error.filter';
 import { ChipMappingService } from './services/chip-mapping.service';
 import { ChipConfigService } from './services/chip-config.service';
-import { ChipCacheService } from './services/chip-cache.service';
+import { RaceAthleteLookupService } from '../race-master-data/services/race-athlete-lookup.service';
 import { ChipStatsService } from './services/chip-stats.service';
 import {
   ConfirmImportRequestDto,
@@ -72,7 +72,7 @@ export class ChipVerificationController {
   constructor(
     private readonly mappingService: ChipMappingService,
     private readonly configService: ChipConfigService,
-    private readonly cacheService: ChipCacheService,
+    private readonly raceAthleteLookup: RaceAthleteLookupService,
     private readonly statsService: ChipStatsService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
@@ -183,13 +183,20 @@ export class ChipVerificationController {
       raceId,
       userId,
     );
-    // If verify already enabled, patch cache for newly-imported mappings.
+    // v1.3 — master data delta sync handles cache refresh. Trigger delta
+    // for this race so newly-imported BIBs are warmed.
     const cfg = await this.configService.findByRace(raceId);
     if (cfg?.chip_verify_enabled && mappings.length > 0) {
-      // Best-effort delta patch — don't block on errors
-      this.cacheService
-        .patchDelta(raceId)
-        .catch(() => undefined);
+      this.raceAthleteLookup
+        .triggerSync(raceId, {
+          syncType: 'ATHLETE_DELTA',
+          triggeredBy: `chip-verify-import:${userId}`,
+        })
+        .catch((err: Error) => {
+          this.logger.warn(
+            `[confirmImport] master delta race=${raceId}: ${err.message}`,
+          );
+        });
     }
     return { imported };
   }
@@ -261,18 +268,9 @@ export class ChipVerificationController {
       userId,
     );
 
-    // GENERATE → preload best-effort (don't block — admin sees progress on stats)
-    if (body.action === 'GENERATE' && cfg.chip_verify_enabled) {
-      this.cacheService.preload(raceId).catch((err: unknown) => {
-        const e = err as Error;
-        // BUG #5 fix — use Nest Logger instead of console.error so logs get
-        // [Nest] prefix + structured by environment.
-        this.logger.error(
-          `[preload-async] race=${raceId} failed: ${e.message}`,
-          e.stack,
-        );
-      });
-    }
+    // v1.3 — GENERATE auto-triggers master data full sync inside
+    // ChipConfigService.tokenAction. Controller no longer needs to preload
+    // cache explicitly — master data Redis warmup handles it.
 
     return {
       token: cfg.chip_verify_token ?? null,
@@ -296,9 +294,13 @@ export class ChipVerificationController {
     // Count active mappings từ collection thay vì stale `cfg.total_chip_mappings`
     // (chỉ update khi preload chạy — sau import CSV chưa update). Logic này
     // đảm bảo `canEnable` ở admin UI phản ánh đúng số mapping hiện tại.
-    const [cfg, cacheReadyRaw, actualMappingCount] = await Promise.all([
+    //
+    // QC FIX Phase 1 #1 — `cache_ready` v1.3 = "master data có dữ liệu cho race này".
+    // v1.2 cũ set chip:cache:ready key, nay master-data quản lý lifecycle riêng.
+    // Cheap proxy: master-data stats.total > 0.
+    const [cfg, masterStats, actualMappingCount] = await Promise.all([
       this.configService.findByRace(raceId),
-      this.redis.get(ChipRedisKeys.cacheReady(raceId)),
+      this.raceAthleteLookup.getStats(raceId).catch(() => null),
       this.statsService.forRace(raceId).then((s) => s.total_mappings),
     ]);
 
@@ -306,8 +308,9 @@ export class ChipVerificationController {
       chip_verify_enabled: cfg?.chip_verify_enabled ?? false,
       chip_verify_token: null, // security: never return plaintext on GET
       total_chip_mappings: actualMappingCount,
-      preload_completed_at: cfg?.preload_completed_at ?? null,
-      cache_ready: cacheReadyRaw === '1',
+      preload_completed_at:
+        cfg?.preload_completed_at ?? masterStats?.lastSyncedAt ?? null,
+      cache_ready: (masterStats?.total ?? 0) > 0,
       // Default true cho legacy doc không có field này.
       delta_sync_enabled: cfg?.delta_sync_enabled ?? true,
     };
@@ -343,25 +346,44 @@ export class ChipVerificationController {
 
   @Post('races/:raceId/chip-verify/cache')
   @UseGuards(RaceScopeGuard)
-  @ApiOperation({ summary: 'REFRESH (full preload) | CLEAR cache' })
+  @ApiOperation({
+    summary: 'REFRESH | CLEAR cache (delegated to master data sync)',
+    description:
+      'v1.3 — REFRESH triggers master data ATHLETE_FULL sync (rebuilds Redis warmup). CLEAR is a no-op (master data sync owns lifecycle); kept for backward compat.',
+  })
   @ApiResponse({ status: 200, type: CacheActionResponseDto })
   async cacheAction(
     @Param('raceId', ParseIntPipe) raceId: number,
     @Body() body: CacheActionRequestDto,
+    @Req() req: AuthenticatedRequest,
   ): Promise<CacheActionResponseDto> {
+    const userId = req.user?.userId ?? 'unknown';
     if (body.action === 'CLEAR') {
-      await this.cacheService.clearCache(raceId);
+      // No-op for backward compat. Master data manages cache lifecycle —
+      // there is no race-scoped clear that doesn't also drop sync state.
       return {
         success: true,
         cached_count: 0,
         preload_completed_at: null,
       };
     }
-    const result = await this.cacheService.preload(raceId);
+    // REFRESH = trigger master data FULL sync (idempotent via sync-lock).
+    // QC FIX Phase 1 #2 — fire-and-forget. Race 7K athletes có thể mất 5-8s,
+    // HTTP request timeout. UI poll sync-logs endpoint để xem status.
+    this.raceAthleteLookup
+      .triggerSync(raceId, {
+        syncType: 'ATHLETE_FULL',
+        triggeredBy: `chip-verify-cache-refresh:${userId}`,
+      })
+      .catch((err: Error) => {
+        this.logger.warn(
+          `[cacheAction REFRESH] race=${raceId}: ${err.message}`,
+        );
+      });
     const cfg = await this.configService.findByRace(raceId);
     return {
       success: true,
-      cached_count: result.cached_count,
+      cached_count: cfg?.total_chip_mappings ?? 0,
       preload_completed_at: cfg?.preload_completed_at ?? null,
     };
   }

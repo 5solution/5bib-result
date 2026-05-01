@@ -695,6 +695,12 @@ export default function RaceDetailPage() {
           <p className="text-sm text-muted-foreground">{race.slug}</p>
         </div>
         <StatusBadge status={race.status} />
+        <Link href={`/races/${raceId}/master-data`}>
+          <Button variant="outline" size="sm">
+            <Pencil className="size-4 mr-1.5" />
+            Master Data
+          </Button>
+        </Link>
         <Link href={`/races/${raceId}/chip-mappings`}>
           <Button variant="outline" size="sm">
             <RadioTower className="size-4 mr-1.5" />

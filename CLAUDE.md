@@ -147,6 +147,12 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `share-count:<raceId>` | INCR-based race-level share counter | ∞ |
 | `bib-count:<raceId>:<bib>` | INCR-based athlete-level share counter | ∞ |
 | `homepage:sponsored` | SponsoredModule public API cache | 300s |
+| `master:athlete:bib:<raceId>` | RaceMasterData athlete cache (HSET bib→json public-view, no PII) | 24h |
+| `master:athlete:byid:<raceId>` | RaceMasterData reverse index (HSET athletes_id→bib) | 24h |
+| `master:stats:<raceId>` | RaceMasterData athlete stats per race | 60s |
+| `master:sync-lock:<raceId>` | SETNX lock during FULL sync (anti-stampede) | 60s |
+| `master:cron-lock:<raceId>` | SETNX lock per-race cron tick | 50s |
+| `master:lookup-lock:<raceId>:<bib>` | SETNX lock during MySQL on-demand fallback | 5s |
 | `articles:latest:<type>:<product>:<limit>` | ArticlesModule widget cache (homepage 5bib.com / 5sport.vn) | 300s |
 | `articles:list:<type>:<product>:<category>:<page>:<limit>` | Paginated public list (news.5bib.com / hotro.5bib.com) | 120s |
 | `articles:detail:<slug>` | Article detail page cache | 600s |
