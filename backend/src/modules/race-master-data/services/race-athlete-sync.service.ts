@@ -15,7 +15,10 @@ import {
 } from '../schemas/race-master-sync-log.schema';
 import { mapMysqlAthleteToSchema, toPublicView } from '../utils/athlete-mapper';
 import { RaceMasterCacheService } from './race-master-cache.service';
-import { RACE_MASTER_DELTA_OVERLAP_SECONDS } from '../utils/redis-keys';
+import {
+  RACE_MASTER_DELTA_OVERLAP_SECONDS,
+  RACE_MASTER_STALE_RUNNING_LOG_THRESHOLD_MS,
+} from '../utils/redis-keys';
 
 /**
  * Tier 2 (Mongo) + Tier 3 (MySQL) sync orchestration.
@@ -486,6 +489,47 @@ export class RaceAthleteSyncService {
    *   - Sau 7 ngày không sync (admin disable hoặc race ended) → fall out
    *     khỏi cron. Vẫn có thể manual trigger.
    */
+  /**
+   * W-2 fix — Janitor: sweep RUNNING sync logs older than threshold (10 min).
+   *
+   * Process kill -9 / OOM crash KHÔNG chạy được markFailed → log mắc kẹt
+   * status=RUNNING vĩnh viễn → poison "is sync running?" check trong
+   * triggerSync (admin nhìn thấy fake "sync đang chạy bởi xxx" vô hạn).
+   *
+   * Pattern:
+   *   - Run trong cron tick (mỗi 30s) — overhead < 5ms (chỉ 1 updateMany).
+   *   - threshold 10 min: sync FULL race 7K athletes max ~8s + safety 60s
+   *     lock TTL → 10 min đủ rộng để KHÔNG kill log đang chạy hợp pháp.
+   *   - error_message rõ ràng để post-mortem dễ debug.
+   *
+   * Returns count of swept logs.
+   */
+  async sweepStaleRunningLogs(): Promise<{ swept: number }> {
+    const cutoff = new Date(
+      Date.now() - RACE_MASTER_STALE_RUNNING_LOG_THRESHOLD_MS,
+    );
+    const result = await this.syncLogModel.updateMany(
+      {
+        status: 'RUNNING',
+        started_at: { $lt: cutoff },
+      },
+      {
+        $set: {
+          status: 'FAILED',
+          completed_at: new Date(),
+          error_message:
+            'Janitor: sync stuck RUNNING > 10min (process kill / OOM / network). Marked FAILED to unblock future syncs.',
+        },
+      },
+    );
+    if (result.modifiedCount > 0) {
+      this.logger.warn(
+        `[janitor] swept ${result.modifiedCount} stale RUNNING logs`,
+      );
+    }
+    return { swept: result.modifiedCount };
+  }
+
   async listActiveRaces(): Promise<number[]> {
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const result = await this.raceAthleteModel
