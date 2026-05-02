@@ -699,7 +699,8 @@ export default function CourseRankingPage() {
                             {t('ranking.rank')}
                           </th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t('ranking.athlete')}</th>
-                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-36">{t('ranking.time')}</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">{t('ranking.gunTime')}</th>
+                          <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">{t('ranking.chipTime')}</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-24">Pace</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Tốc độ</th>
                           <th className="px-4 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider w-32">Cách 1st</th>
@@ -999,6 +1000,7 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
         </Link>
       </td>
 
+      {/* Gun Time = official race time, primary display */}
       <td className="px-4 py-3.5">
         {isUpcoming ? (
           <p className="text-xs text-slate-400 italic">{t('status.notStarted')}</p>
@@ -1007,8 +1009,17 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
             {result.TimingPoint && !result.TimingPoint.toUpperCase().startsWith('FINISH') && (
               <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
             )}
-            <p className="text-sm font-bold text-slate-900 font-mono tracking-tight">{result.ChipTime}</p>
+            <p className="text-sm font-bold text-slate-900 font-mono tracking-tight">{result.GunTime || '—'}</p>
           </>
+        )}
+      </td>
+
+      {/* Chip Time = secondary reference, lighter weight */}
+      <td className="px-4 py-3.5">
+        {isUpcoming ? (
+          <p className="text-xs text-slate-400 italic">-</p>
+        ) : (
+          <p className="text-sm text-slate-500 font-mono tracking-tight">{result.ChipTime || '—'}</p>
         )}
       </td>
 
@@ -1137,7 +1148,10 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
               {result.TimingPoint && !result.TimingPoint.toUpperCase().startsWith('FINISH') && (
                 <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
               )}
-              <p className="text-sm font-bold text-slate-900 font-mono">{result.ChipTime}</p>
+              <p className="text-sm font-bold text-slate-900 font-mono">{result.GunTime || '—'}</p>
+              {result.ChipTime && (
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">Chip {result.ChipTime}</p>
+              )}
               <p className="text-xs text-slate-400 font-mono mt-0.5">{result.Pace}</p>
             </>
           )}

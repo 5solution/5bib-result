@@ -906,9 +906,10 @@ export default function AthleteDetailPage() {
                 </div>
               </div>
 
-              {/* Big time display */}
+              {/* Big time display — Gun Time is the headline (official race time);
+                  Chip Time shown in the secondary row alongside pace/gap. */}
               <div className="text-center py-8 md:py-10 px-6 bg-gradient-to-b from-blue-50/80 to-white">
-                <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">{t('athlete.chipTime')}</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">{t('athlete.gunTime')}</div>
                 <div
                   className="ap-time-shimmer text-5xl md:text-7xl font-black tracking-tight mb-3"
                   style={{
@@ -916,12 +917,12 @@ export default function AthleteDetailPage() {
                     color: 'var(--race-accent, #1d4ed8)',
                   }}
                 >
-                  {athlete.ChipTime}
+                  {athlete.GunTime}
                 </div>
                 <div className="flex items-center justify-center gap-4 md:gap-8 text-sm text-gray-500">
                   <span className="flex items-center gap-1.5">
                     <Clock className="w-4 h-4 text-gray-400" />
-                    Gun: <span className="font-mono font-bold text-gray-700">{athlete.GunTime}</span>
+                    Chip: <span className="font-mono font-bold text-gray-700">{athlete.ChipTime}</span>
                   </span>
                   <span className="w-px h-4 bg-gray-200" />
                   <span className="flex items-center gap-1.5">

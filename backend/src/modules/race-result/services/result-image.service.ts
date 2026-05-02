@@ -131,13 +131,6 @@ export interface GenerateImageInput {
   config: NormalizedImageConfig;
   customPhotoBuffer?: Buffer;
   /**
-   * E-3 privacy gate — when true, service strips rank fields from render
-   * data (podium+celebration still render because they gate on `top-3` in
-   * templates themselves, but classic/endurance/story/sticker will show
-   * chip time only without ranks).
-   */
-  hideRanks?: boolean;
-  /**
    * Pre-fetched badges promise. Caller can kick off `BadgeService.detectBadges`
    * in parallel with their own DB loads (athlete, race meta) so by the time
    * `renderImage` needs badges they're already computed. Saves ~300ms on
@@ -741,18 +734,6 @@ export class ResultImageService implements OnModuleInit {
       showBadges: config.showBadges,
       textColorMode: config.textColor,
     };
-
-    // E-3: Strip rank fields from renderData when privacy gate active. Templates
-    // that key on rank (podium) already refuse via eligibility; the remaining
-    // ones (classic/endurance/story/sticker/celebration) degrade gracefully
-    // when the value is an empty string.
-    if (input.hideRanks) {
-      renderData.overallRank = '';
-      renderData.genderRank = '';
-      renderData.categoryRank = '';
-      renderData.totalFinishers = 0;
-      renderData.gap = '';
-    }
 
     const resolved = resolveTemplateResult(config.template, renderData);
     await resolved.template.render(ctx, renderData);

@@ -534,7 +534,7 @@ export class RaceResultController {
       this.loadAthleteInput(raceId, bib),
       this.loadRaceMeta(raceId),
     ]);
-    const { raceName, raceSlug, courseName, hideRanks } = raceMeta;
+    const { raceName, raceSlug, courseName } = raceMeta;
 
     const config = normalizeImageConfig({ ...query, preview: true });
 
@@ -546,7 +546,6 @@ export class RaceResultController {
       raceSlug,
       courseName,
       config,
-      hideRanks,
       photoId: query.photoId,
       prefetchedBadges: badgesPromise,
     });
@@ -691,7 +690,7 @@ export class RaceResultController {
       this.loadAthleteInput(raceId, bib),
       this.loadRaceMeta(raceId),
     ]);
-    const { raceName, raceSlug, courseName, hideRanks } = raceMeta;
+    const { raceName, raceSlug, courseName } = raceMeta;
     console.log('Time to load athlete + race meta (parallel):', Date.now() - tDb, 'ms');
     const config = normalizeImageConfig({ ...body, preview: false });
 
@@ -708,7 +707,6 @@ export class RaceResultController {
       // the same buffer on every template switch).
       photoId: body.photoId,
       customPhotoBuffer: body.photoId ? undefined : customPhotoFile?.buffer,
-      hideRanks,
       prefetchedBadges: badgesPromise,
     });
     console.log('Time to generate image:', Date.now() - tGen, 'ms');
@@ -903,26 +901,17 @@ export class RaceResultController {
     raceName: string;
     raceSlug: string;
     courseName: string;
-    hideRanks: boolean;
   }> {
     try {
       const race = await this.racesService.getRaceById(raceId);
-      const data = (race?.data ?? {}) as {
-        title?: string;
-        slug?: string;
-        enablePrivateList?: boolean;
-        enableHideStats?: boolean;
-      };
+      const data = (race?.data ?? {}) as { title?: string; slug?: string };
       return {
         raceName: data.title ?? '',
         raceSlug: data.slug ?? '',
         courseName: '',
-        // E-3: either privacy toggle → strip rank fields from render data
-        hideRanks:
-          data.enablePrivateList === true || data.enableHideStats === true,
       };
     } catch {
-      return { raceName: '', raceSlug: '', courseName: '', hideRanks: false };
+      return { raceName: '', raceSlug: '', courseName: '' };
     }
   }
 
