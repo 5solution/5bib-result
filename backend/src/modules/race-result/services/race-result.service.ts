@@ -848,14 +848,25 @@ export class RaceResultService {
 
     // Course-level counters stored on every doc from API (may be null if
     // vendor didn't push them; in that case we use the derived buckets).
+    // Same per-field policy: prefer vendor count BUT take max with bucket
+    // count to avoid stale vendor snapshots (vendor's `finished` observed
+    // 4-17 below actual DB count of timingPoint=Finish docs at 10/21KM).
     const firstDoc = await this.resultModel.findOne({ courseId }).lean().exec();
-    const apiFinished = firstDoc?.finished ?? buckets.finished;
-    const apiDnf = firstDoc?.dnf ?? buckets.dnf;
+    const apiFinished = Math.max(
+      firstDoc?.finished ?? 0,
+      buckets.finished,
+    );
+    const apiDnf = Math.max(firstDoc?.dnf ?? 0, buckets.dnf);
     const dnsCount = buckets.dns;
     const dsqCount = buckets.dsq;
-    // Started = everyone who showed up at the start line (excludes DNS).
-    const apiStarted =
-      firstDoc?.started ?? apiFinished + apiDnf + dsqCount;
+    // Started = everyone who crossed start line (excludes DNS).
+    // Vendor's `started` field is a stale snapshot in mid-race (observed
+    // 5KM: 542 vs 560 finishers; 10KM: 572 vs 797 actual). Take max with
+    // computed sum so completion-rate never exceeds 100%.
+    const apiStarted = Math.max(
+      firstDoc?.started ?? 0,
+      apiFinished + apiDnf + dsqCount,
+    );
 
     if (!agg) {
       const empty = {
