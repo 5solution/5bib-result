@@ -29,12 +29,14 @@ import { UploadModule } from '../upload/upload.module';
     // Module-scoped throttler so @Throttle decorators on result-image /
     // share-count endpoints apply without colliding with other modules.
     // Default cap is an umbrella; per-endpoint @Throttle() decorators override.
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60_000,
-        limit: 60*20,
-      },
-    ]),
+
+    // temporatyly disable throttler to unblock sync while we investigate performance issues
+    // ThrottlerModule.forRoot([
+    //   {
+    //     ttl: 60_000,
+    //     limit: 60*20,
+    //   },
+    // ]),
     RacesModule,
     UploadModule,
   ],
@@ -50,4 +52,4 @@ import { UploadModule } from '../upload/upload.module';
   ],
   exports: [RaceResultService, BadgeService, ShareEventService],
 })
-export class RaceResultModule {}
+export class RaceResultModule { }
