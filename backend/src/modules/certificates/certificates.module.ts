@@ -31,12 +31,12 @@ import { LogtoAuthModule } from '../logto-auth';
     ]),
     // Module-scoped throttler (mirrors TeamManagement pattern) so @Throttle()
     // decorators apply without interfering with the app-wide setup.
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60_000,
-        limit: 60*5,
-      },
-    ]),
+    // ThrottlerModule.forRoot([
+    //   {
+    //     ttl: 60_000,
+    //     limit: 60*5,
+    //   },
+    // ]),
     RaceResultModule,
     RacesModule,
     LogtoAuthModule,
