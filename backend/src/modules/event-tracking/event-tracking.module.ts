@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { TrackingEvent, TrackingEventSchema } from './schemas/tracking-event.schema';
 import { EventTrackingController } from './event-tracking.controller';
 import { EventTrackingService } from './event-tracking.service';
@@ -16,7 +15,10 @@ import { EventTrackingService } from './event-tracking.service';
   controllers: [EventTrackingController],
   providers: [
     EventTrackingService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // DISABLED — APP_GUARD makes ThrottlerGuard global (app-wide), causing
+    // unrelated endpoints to hit 429. Re-enable per-controller via
+    // @UseGuards(ThrottlerGuard) only on event-tracking routes if needed.
+    // { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class EventTrackingModule {}
