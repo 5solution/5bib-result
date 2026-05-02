@@ -10,7 +10,6 @@ import { RaceResultController } from './race-result.controller';
 import { RaceResultService } from './services/race-result.service';
 import { ResultImageService } from './services/result-image.service';
 import { BadgeService } from './services/badge.service';
-import { RenderSemaphore } from './services/render-semaphore';
 import { RaceSyncCron } from './services/race-sync.cron';
 import { ShareEventService } from './services/share-event.service';
 import { ShareNurtureCron } from './services/share-nurture.cron';
@@ -45,7 +44,6 @@ import { UploadModule } from '../upload/upload.module';
     RaceResultService,
     ResultImageService,
     BadgeService,
-    RenderSemaphore,
     RaceSyncCron,
     ShareEventService,
     ShareNurtureCron,

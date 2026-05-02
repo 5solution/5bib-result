@@ -130,6 +130,19 @@ export class ResultImageQueryDto {
   @IsString()
   @MaxLength(32)
   t?: string;
+
+  /**
+   * Reference to a previously-uploaded background photo via
+   * POST /result-image/upload-bg. Avoids re-uploading the same photo (5–10MB)
+   * on every template/gradient change. Mutually exclusive with `customPhoto`
+   * file in multipart body — if both present, photoId wins.
+   * Format: UUID v4.
+   */
+  @ApiProperty({ required: false, description: 'Background photo ID from /upload-bg' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  photoId?: string;
 }
 
 /**

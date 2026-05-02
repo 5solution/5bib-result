@@ -445,13 +445,62 @@ export class RaceResultController {
 
   // ─── Result Image Creator v1.0 ────────────────────────────────
   //
-  // Three public endpoints:
-  //   GET  /race-results/result-image/:raceId/:bib  → lowres preview (no cache)
-  //   POST /race-results/result-image/:raceId/:bib  → full-res PNG (S3-cached)
-  //   GET  /race-results/badges/:raceId/:bib        → badge list (cached 1h)
+  // Public endpoints:
+  //   POST /race-results/result-image/upload-bg      → upload custom bg, returns photoId
+  //   GET  /race-results/result-image/:raceId/:bib   → lowres preview (no cache)
+  //   POST /race-results/result-image/:raceId/:bib   → full-res PNG (S3-cached)
+  //   GET  /race-results/badges/:raceId/:bib         → badge list (cached 1h)
   //
   // All are PUBLIC per PRD BR-01 (no login required).
   // Rate-limited per IP to protect against scraping + brute-force cache busting.
+
+  @Post('result-image/upload-bg')
+  @UseGuards(ThrottlerGuard)
+  @ApiOperation({
+    summary: 'Upload a custom background photo, get back a photoId for reuse',
+    description:
+      'Avoids re-uploading the same 5–10MB photo on every template/gradient change. ' +
+      'Returned photoId is valid for 24h (S3 lifecycle auto-deletes). Pass it as ' +
+      '`photoId` query param to GET /result-image preview, or in the POST body for ' +
+      'the full-res endpoint.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Background image (JPG/PNG/WebP, ≤10MB)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Photo uploaded',
+    schema: {
+      type: 'object',
+      properties: {
+        photoId: { type: 'string', example: '550e8400-e29b-41d4-a716-446655440000' },
+        expiresAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid file (not JPG/PNG/WebP or >10MB)' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  async uploadResultImageBg(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<{ photoId: string; expiresAt: string }> {
+    if (!file) throw new BadRequestException('No file uploaded');
+    return this.resultImageService.uploadBackgroundPhoto(file.buffer);
+  }
 
   @Get('result-image/:raceId/:bib')
   @UseGuards(ThrottlerGuard)
@@ -475,8 +524,17 @@ export class RaceResultController {
     this.assertSafePathParam(raceId, 'raceId');
     this.assertSafePathParam(bib, 'bib');
 
-    const athleteInput = await this.loadAthleteInput(raceId, bib);
-    const { raceName, raceSlug, courseName, hideRanks } = await this.loadRaceMeta(raceId);
+    // Same parallel-prefetch pattern as the POST endpoint — kick off badges +
+    // DB queries concurrently so renderImage doesn't sit waiting for any of them.
+    const badgesPromise = this.badgeService
+      .detectBadges(raceId, bib)
+      .catch(() => [] as Awaited<ReturnType<BadgeService['detectBadges']>>);
+
+    const [athleteInput, raceMeta] = await Promise.all([
+      this.loadAthleteInput(raceId, bib),
+      this.loadRaceMeta(raceId),
+    ]);
+    const { raceName, raceSlug, courseName, hideRanks } = raceMeta;
 
     const config = normalizeImageConfig({ ...query, preview: true });
 
@@ -489,15 +547,18 @@ export class RaceResultController {
       courseName,
       config,
       hideRanks,
+      photoId: query.photoId,
+      prefetchedBadges: badgesPromise,
     });
 
     const headers: Record<string, string> = {
-      'Content-Type': 'image/png',
+      // Preview endpoint returns JPEG (faster encode + smaller payload).
+      'Content-Type': 'image/jpeg',
       'Content-Length': result.buffer.length.toString(),
       // 60s browser cache — t= token in the URL acts as cache-buster when
       // settings change, so stale responses are never served.
       'Cache-Control': 'public, max-age=60',
-      'Content-Disposition': `inline; filename="preview-${bib}.png"`,
+      'Content-Disposition': `inline; filename="preview-${bib}.jpg"`,
       'X-Template-Actual': result.templateActual,
     };
     if (result.fallback) {
@@ -568,7 +629,15 @@ export class RaceResultController {
         customPhoto: {
           type: 'string',
           format: 'binary',
-          description: 'Custom background photo (JPG/PNG/WebP, ≤10MB)',
+          description:
+            'Custom background photo (JPG/PNG/WebP, ≤10MB). Prefer uploading once via ' +
+            '/result-image/upload-bg + reusing photoId for template switches.',
+        },
+        photoId: {
+          type: 'string',
+          description:
+            'Reference to a previously-uploaded photo via /upload-bg. ' +
+            'Wins over customPhoto if both present.',
         },
       },
     },
@@ -635,7 +704,10 @@ export class RaceResultController {
       raceSlug,
       courseName,
       config,
-      customPhotoBuffer: customPhotoFile?.buffer,
+      // photoId wins over customPhotoFile if both present (avoids re-uploading
+      // the same buffer on every template switch).
+      photoId: body.photoId,
+      customPhotoBuffer: body.photoId ? undefined : customPhotoFile?.buffer,
       hideRanks,
       prefetchedBadges: badgesPromise,
     });

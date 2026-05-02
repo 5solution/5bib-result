@@ -43,10 +43,51 @@ export interface ResultImageRequestBody {
   showQrCode?: boolean;
   showBadges?: boolean;
   customMessage?: string;
+  /**
+   * Reference to a previously-uploaded background photo (via /upload-bg).
+   * Strongly preferred over `customPhoto` — avoids re-uploading 5–10MB on every
+   * template switch. If both are set, photoId wins on the server.
+   */
+  photoId?: string;
   /** Custom photo/background. Must pass magic-byte validation on the server. */
   customPhoto?: File | Blob | null; // File = raw upload, Blob = after client-side crop
   /** Deprecated alias — keep for back-compat with old callers. */
   customBg?: File | null;
+}
+
+export interface UploadBackgroundResponse {
+  photoId: string;
+  expiresAt: string; // ISO timestamp
+}
+
+/**
+ * Upload a custom background photo ONCE, get back a photoId for reuse across
+ * subsequent template/gradient changes. The photo lives in S3 for 24h and is
+ * cached in Redis for 10 min for fast template switching.
+ *
+ * Designed to replace inline `customPhoto` upload on every template change —
+ * cuts modal interaction bandwidth from N×5MB to 1×5MB + N×tiny GETs.
+ */
+export function useUploadBackgroundPhoto() {
+  return useMutation({
+    mutationFn: async (file: File | Blob): Promise<UploadBackgroundResponse> => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/race-results/result-image/upload-bg', {
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const payload = await safeJson(res);
+        throw new ResultImageError(
+          payload?.message ?? `Lỗi tải ảnh nền (${res.status})`,
+          res.status,
+        );
+      }
+      return (await res.json()) as UploadBackgroundResponse;
+    },
+  });
 }
 
 /**
@@ -64,6 +105,12 @@ export function buildPreviewUrl(
     showQrCode?: boolean;
     showSplits?: boolean;
     customMessage?: string;
+    /**
+     * Reference to a previously-uploaded background photo. When set, the
+     * preview renders with that photo as background — same as a POST with
+     * customPhoto file but with no upload cost. Get from useUploadBackgroundPhoto.
+     */
+    photoId?: string;
     /** Cache-bust token — bump to force a re-render. */
     token?: string | number;
   } = {},
@@ -77,6 +124,7 @@ export function buildPreviewUrl(
   if (opts.showQrCode !== undefined) params.set('showQrCode', String(opts.showQrCode));
   if (opts.showSplits !== undefined) params.set('showSplits', String(opts.showSplits));
   if (opts.customMessage) params.set('customMessage', opts.customMessage);
+  if (opts.photoId) params.set('photoId', opts.photoId);
   if (opts.token !== undefined) params.set('t', String(opts.token));
   return `/api/race-results/result-image/${encodeURIComponent(raceId)}/${encodeURIComponent(bib)}?${params.toString()}`;
 }
@@ -107,8 +155,15 @@ export function useGenerateResultImage(raceId: string, bib: string) {
       if (body.showQrCode !== undefined) form.append('showQrCode', String(body.showQrCode));
       if (body.showBadges !== undefined) form.append('showBadges', String(body.showBadges));
       if (body.customMessage) form.append('customMessage', body.customMessage);
-      if (body.customPhoto) form.append('customPhoto', body.customPhoto);
-      if (body.customBg && !body.customPhoto) form.append('customBg', body.customBg);
+      // photoId is preferred — server uses it directly without parsing buffer.
+      // If it's set, we skip sending the file blob entirely (saves bandwidth).
+      if (body.photoId) {
+        form.append('photoId', body.photoId);
+      } else if (body.customPhoto) {
+        form.append('customPhoto', body.customPhoto);
+      } else if (body.customBg) {
+        form.append('customBg', body.customBg);
+      }
 
       const res = await fetch(
         `/api/race-results/result-image/${encodeURIComponent(raceId)}/${encodeURIComponent(bib)}`,

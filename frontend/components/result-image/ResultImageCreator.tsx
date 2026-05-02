@@ -11,6 +11,7 @@ import {
   SizeKey,
   buildPreviewUrl,
   useGenerateResultImage,
+  useUploadBackgroundPhoto,
   useIncrementShareCount,
   useLogShareEvent,
   ResultImageError,
@@ -88,6 +89,11 @@ export default function ResultImageCreator({
   const [customPhotoPreview, setCustomPhotoPreview] = useState<string | null>(null);
   // Blob output from the crop editor (null = not cropped yet)
   const [croppedBlob, setCroppedBlob] = useState<Blob | null>(null);
+  // Server-side reference to the uploaded background photo. Set after the user
+  // confirms a crop and the upload succeeds. Used in place of `customPhoto` /
+  // `croppedBlob` for all subsequent API calls — saves re-uploading 5–10MB on
+  // every template / gradient / setting change.
+  const [photoId, setPhotoId] = useState<string | null>(null);
   const [previewToken, setPreviewToken] = useState(0);
   // Mobile UX: template section collapsed by default (user swipes the preview to switch)
   const [templateSectionOpen, setTemplateSectionOpen] = useState(false);
@@ -116,6 +122,9 @@ export default function ResultImageCreator({
   // ─── Generation mutation ──────────────────────────────────
   // Declared early so swipe callbacks can read isPending without TDZ issues.
   const generateMutation = useGenerateResultImage(raceId, String(athlete.Bib));
+  // One-shot upload of the (cropped) photo → photoId. Subsequent renders pass
+  // the photoId tag instead of re-uploading the whole buffer.
+  const uploadMutation = useUploadBackgroundPhoto();
   const incrementShare = useIncrementShareCount(raceId, String(athlete.Bib));
   const logShareEvent = useLogShareEvent();
 
@@ -160,6 +169,10 @@ export default function ResultImageCreator({
   // (handleFile, handleCropConfirm, removeCustomPhoto) — never via useEffect,
   // which would leave a 1-frame async gap where the ref is stale.
   const effectivePhotoRef = useRef<File | Blob | null>(null);
+  // Mirror photoId state in a ref so effects can prefer it over the raw blob
+  // without needing to depend on photoId (which would re-fire them on upload).
+  const photoIdRef = useRef<string | null>(null);
+  useEffect(() => { photoIdRef.current = photoId; }, [photoId]);
   // Keep appliedMessageRef in sync so effects can read it without stale closures
   useEffect(() => { appliedMessageRef.current = appliedMessage; }, [appliedMessage]);
   // Keep blob URL refs in sync so unmount cleanup always has current values.
@@ -197,9 +210,13 @@ export default function ResultImageCreator({
         showQrCode,
         showSplits,
         customMessage: appliedMessage,
+        // photoId makes the GET preview render WITH the user's custom photo —
+        // previously this required a POST. Now template/gradient changes only
+        // need a tiny GET request; backend reads photo from S3/Redis cache.
+        photoId: photoId ?? undefined,
         token: previewToken,
       }),
-    [raceId, athlete.Bib, template, size, gradient, showBadges, showQrCode, showSplits, appliedMessage, previewToken],
+    [raceId, athlete.Bib, template, size, gradient, showBadges, showQrCode, showSplits, appliedMessage, photoId, previewToken],
   );
 
   // Debounce the main preview img — 350ms after last settings change.
@@ -213,106 +230,31 @@ export default function ResultImageCreator({
   }, [previewUrl]);
 
   // When template / gradient / toggles change:
-  //  - Always bump previewToken  → GET preview refetches (no-photo path)
-  //  - If custom photo active    → debounce 500ms then POST with current settings.
-  //    Generation ID ensures out-of-order / stale responses are discarded so
-  //    rapid template clicks never produce broken or wrong previews.
-  //
-  // NOTE: neither customMessage nor appliedMessage is in the deps array.
-  //   - GET preview (no photo): previewUrl useMemo uses appliedMessage — only
-  //     updates when user clicks ✓, never on keystroke.
-  //   - Photo POST: appliedMessageRef.current is read at fire time.
-  //     Applying a message is handled exclusively by handleApplyMessage.
+  // Just bump previewToken → GET preview refetches with current photoId. Backend
+  // renders the photo preview directly via GET (Redis caches the photo buffer
+  // for fast subsequent renders). The auto-POST that used to fire here is gone:
+  // POST is now reserved for Download/Share where a full-res blob is needed.
+  // Saves 6 redundant POSTs per modal session (one per template thumbnail).
   useEffect(() => {
     setPreviewToken((t) => t + 1);
-
-    const file = effectivePhotoRef.current;
-    if (!file) {
-      setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-      return;
-    }
-
-    // Crop editor is open → user hasn't confirmed a crop yet. Skip auto-gen:
-    // posting the raw uncropped file here would produce a wrong/confusing result.
-    // handleCropConfirm will trigger the first POST once the user confirms.
-    if (cropPendingRef.current) return;
-
-    // Claim this generation slot — any in-flight request from a prior settings
-    // change will see a stale ID on resolve and self-discard its blob URL.
-    const myId = ++generationIdRef.current;
-    // Clear the old result so the GET preview (correct template, no photo) shows
-    // immediately while the new photo-POST is in flight. This gives instant visual
-    // feedback that the template changed. The photo result replaces it when ready.
-    // (Keeping the old blob here made it look like template switching was broken.)
+    // Drop any prior POST blob — it's stale now (different template/gradient).
+    // Preview img with new previewToken will show fresh GET render with photo.
     setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-
-    // Debounce: rapid template / gradient clicks only fire ONE POST, 500ms
-    // after the user settles on a choice.
-    const tid = setTimeout(() => {
-      if (generationIdRef.current !== myId) return; // superseded by newer change
-      void generateMutation.mutateAsync({
-        template,
-        size,
-        gradient,
-        showBadges,
-        showQrCode,
-        showSplits,
-        customMessage: appliedMessageRef.current || undefined, // ref read — only applied messages
-        customPhoto: file,
-      }).then((result) => {
-        if (generationIdRef.current !== myId) {
-          URL.revokeObjectURL(result.objectUrl); // discard stale result
-          return;
-        }
-        // Atomically swap: revoke old blob + set new one in a single setState call
-        setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return result.objectUrl; });
-        setLastFallback(result.templateFallback);
-      }).catch(() => {});
-    }, 500);
-
-    return () => clearTimeout(tid);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template, gradient, showBadges, showQrCode, showSplits]);
 
   // ─── Apply message (explicit submit — no auto-fire per keystroke) ────
-  // GET preview (no photo): previewUrl already includes customMessage via useMemo → bumping
-  // previewToken refreshes it immediately without a POST.
-  // Photo POST: user explicitly applies the message, fires a single POST with current settings.
+  // Commit the message → updates appliedMessage state → previewUrl recomputes
+  // (it depends on appliedMessage) → preview img refetches with the new message
+  // and the active photoId. No POST needed: the GET preview path handles photos
+  // via photoId now.
   const handleApplyMessage = useCallback(() => {
     const msg = customMessage.slice(0, 50);
-
-    // Commit the message — this updates appliedMessage state which:
-    //   (a) recomputes previewUrl → fires GET preview for no-photo path
-    //   (b) updates appliedMessageRef so future auto-gen POSTs use it
     appliedMessageRef.current = msg;
     setAppliedMessage(msg);
-
-    // If photo active → POST with the new applied message immediately.
-    // NOTE: do NOT clear generatedUrl before the POST — keep the current photo
-    // preview visible while the server regenerates. Atomically swap old→new when
-    // the result arrives (same pattern as the settings-change effect).
-    const file = effectivePhotoRef.current;
-    if (!file) return;
-    const myId = ++generationIdRef.current;
-    void generateMutation.mutateAsync({
-      template,
-      size,
-      gradient,
-      showBadges,
-      showQrCode,
-      showSplits,
-      customMessage: msg || undefined,
-      customPhoto: file,
-    }).then((result) => {
-      if (generationIdRef.current !== myId) {
-        URL.revokeObjectURL(result.objectUrl);
-        return;
-      }
-      setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return result.objectUrl; });
-      setLastFallback(result.templateFallback);
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, customMessage]);
+    // Drop any stale POST blob so the preview img (which has the new message)
+    // takes over the display.
+    setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+  }, [customMessage]);
 
   // ─── File upload handler ──────────────────────────────────
   /**
@@ -338,44 +280,41 @@ export default function ResultImageCreator({
     setCustomPhoto(file);
     setCustomPhotoPreview(thumbUrl);
     setCroppedBlob(null); // reset any previous crop so editor opens
+    // New file → invalidate any previous upload's photoId
+    setPhotoId(null);
     // Reset input so the same file can be re-selected after remove
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [customPhotoPreview]);
 
   /**
-   * Crop confirmed → receive JPEG blob, fire POST generate immediately.
+   * Crop confirmed → upload to S3 ONCE, get photoId, store it. The previewUrl
+   * useMemo includes photoId so the preview img re-fetches with the photo
+   * automatically. No POST generate needed — that only happens on Download.
    */
   const handleCropConfirm = useCallback(async (blob: Blob) => {
-    // Sync refs first — settings-change effect reads both immediately.
+    // Sync refs first — legacy effects still read these.
     effectivePhotoRef.current = blob;
-    cropPendingRef.current = false; // crop confirmed — auto-gen is allowed now
+    cropPendingRef.current = false;
     setCroppedBlob(blob);
-    // Claim generation ID so any in-flight crop POST doesn't overwrite a later
-    // template-switch result if the user switches templates before this resolves.
-    const myId = ++generationIdRef.current;
+    // Drop any prior photoId so the preview img doesn't show the old photo
+    // while the new upload is in flight.
+    setPhotoId(null);
+    // Bump preview token so the placeholder/no-photo preview shows briefly,
+    // giving the user immediate visual feedback.
+    setPreviewToken((t) => t + 1);
+    // Clear any old POST result blob.
     setGeneratedUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+
     try {
-      const result = await generateMutation.mutateAsync({
-        template,
-        size,
-        gradient,
-        showBadges,
-        showQrCode,
-        showSplits,
-        customMessage: appliedMessageRef.current || undefined,
-        customPhoto: blob,
-      });
-      // Discard if a newer generation (e.g. template switch) beat us.
-      if (generationIdRef.current !== myId) {
-        URL.revokeObjectURL(result.objectUrl);
-        return;
-      }
-      setGeneratedUrl(result.objectUrl);
-      setLastFallback(result.templateFallback);
-    } catch {
-      // error toast already handled by generate()
+      const { photoId: newId } = await uploadMutation.mutateAsync(blob);
+      setPhotoId(newId);
+      // Bump again so previewUrl recomputes with photoId immediately.
+      setPreviewToken((t) => t + 1);
+    } catch (err) {
+      const msg = err instanceof ResultImageError ? err.message : 'Lỗi tải ảnh nền';
+      toast.error(msg);
     }
-  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits]);
+  }, [uploadMutation]);
 
   const removeCustomPhoto = useCallback(() => {
     effectivePhotoRef.current = null; // sync — must clear before next settings-change effect
@@ -387,6 +326,7 @@ export default function ResultImageCreator({
     setCustomPhoto(null);
     setCustomPhotoPreview(null);
     setCroppedBlob(null);
+    setPhotoId(null);
     // Bump token so the GET preview img refetches without the custom photo
     setPreviewToken((t) => t + 1);
   }, [customPhotoPreview]);
@@ -407,7 +347,8 @@ export default function ResultImageCreator({
         showQrCode,
         showSplits,
         customMessage: appliedMessageRef.current || undefined,
-        customPhoto: croppedBlob ?? customPhoto,
+        photoId: photoId ?? undefined,
+        customPhoto: photoId ? undefined : (croppedBlob ?? customPhoto),
       });
       // Guard: if a rapid auto-gen triggered by a settings change between the
       // time the user clicked Download and now has incremented the counter,
@@ -436,7 +377,7 @@ export default function ResultImageCreator({
       }
       throw err;
     }
-  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, croppedBlob, customPhoto]);
+  }, [generateMutation, template, size, gradient, showBadges, showQrCode, showSplits, croppedBlob, customPhoto, photoId]);
 
   const handleDownload = useCallback(async () => {
     try {
@@ -750,6 +691,9 @@ export default function ResultImageCreator({
                         effectivePhotoRef.current = customPhoto;
                         cropPendingRef.current = true;
                         setCroppedBlob(null);
+                        // Old photoId is for the previous crop — invalidate so the
+                        // preview falls back to no-photo until the new crop is confirmed.
+                        setPhotoId(null);
                       }}
                       className="text-xs text-blue-600 hover:underline whitespace-nowrap shrink-0"
                     >

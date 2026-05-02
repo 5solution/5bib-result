@@ -37,7 +37,6 @@ import type {
 } from '../templates/types';
 import { SIZE_DIMENSIONS, PREVIEW_DIMENSIONS } from '../templates/types';
 import { BadgeService } from './badge.service';
-import { RenderSemaphore } from './render-semaphore';
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -79,12 +78,20 @@ function isAllowedImageMagicBytes(buf: Buffer): boolean {
 }
 
 const S3_CACHE_PREFIX = 'result-images';
+const BG_UPLOADS_PREFIX = 'result-images/bg-uploads';
 const RENDER_LOCK_TTL_SECONDS = 30;
 const S3_PRESIGN_EXPIRES_SECONDS = 3600;
 // TTL matches S3 lifecycle (24h). Flag presence ⇒ S3 has the object; absence ⇒
 // either never rendered or expired. False positives (flag without S3) are handled
 // gracefully — tryFetchFromS3 returns null and we re-render.
 const S3_INDEX_TTL_SECONDS = 86400;
+// Background photo uploaded via /upload-bg lives in S3 for 24h. Frontend uses
+// the returned photoId for subsequent template/gradient changes instead of
+// re-uploading the buffer each time.
+const BG_UPLOAD_TTL_SECONDS = 86400;
+// Cache the downloaded photo buffer in Redis so rapid template switching
+// (user trying classic → celebration → endurance...) doesn't pay an S3 GET each time.
+const BG_BUFFER_CACHE_TTL_SECONDS = 600;
 
 /**
  * Minimal input shape from `RaceResultService.getAthleteDetail()`.
@@ -137,6 +144,20 @@ export interface GenerateImageInput {
    * cold render path. If undefined, service falls back to fetching itself.
    */
   prefetchedBadges?: Promise<Badge[]>;
+  /**
+   * Reference to a previously-uploaded background photo via uploadBackgroundPhoto().
+   * Mutually exclusive with customPhotoBuffer — if both set, photoId wins
+   * (service fetches buffer from S3 instead of using the inline buffer).
+   * Designed to avoid re-uploading 5–10MB photos on every template switch.
+   */
+  photoId?: string;
+}
+
+export interface UploadBackgroundResult {
+  /** Opaque ID — pass back as `photoId` on subsequent /result-image calls. */
+  photoId: string;
+  /** ISO timestamp when the photo will be auto-deleted by S3 lifecycle. */
+  expiresAt: string;
 }
 
 export interface GenerateImageResult {
@@ -171,7 +192,6 @@ export class ResultImageService implements OnModuleInit {
   constructor(
     @InjectRedis() private readonly redis: Redis,
     private readonly badgeService: BadgeService,
-    private readonly semaphore: RenderSemaphore,
   ) {
     this.bucket = env.s3.bucket;
     this.region = env.s3.region;
@@ -203,7 +223,26 @@ export class ResultImageService implements OnModuleInit {
     const tGen = Date.now();
     const mark: Record<string, number> = {};
 
-    // Validate custom photo if provided
+    // Resolve photoId → buffer (cached in Redis 10min, S3 fallback). Letting the
+    // caller pass a photoId instead of a 5–10MB buffer on every template change
+    // saves significant upload bandwidth on the wire.
+    // photoId wins over customPhotoBuffer if both are set.
+    if (input.photoId) {
+      const loaded = await this.loadBackgroundPhoto(input.photoId);
+      if (loaded) {
+        // Build a NEW input object so we don't mutate the caller's object and
+        // so downstream renderImage/computeCacheKey see the resolved buffer.
+        input = { ...input, customPhotoBuffer: loaded };
+      } else {
+        // photoId expired or unknown — log and fall through (will render with
+        // gradient instead of failing the whole request).
+        this.logger.warn(
+          `photoId ${input.photoId} not found in S3/Redis — falling back to no-photo render`,
+        );
+      }
+    }
+
+    // Validate custom photo if provided (after photoId resolution)
     if (input.customPhotoBuffer) {
       await this.validatePhotoBuffer(input.customPhotoBuffer);
     }
@@ -266,51 +305,29 @@ export class ResultImageService implements OnModuleInit {
       }
     }
 
-    // Stampede protection — check if another worker is rendering the same config.
-    //
-    // Full-res: use render-lock + poll S3 (10s × 1s) — result is persisted to S3.
-    // Preview:  use preview-lock + poll Redis (5s × 500ms) — result lives in Redis.
-    //   Without a lock, 1000 concurrent preview requests for the same key would all
-    //   enter the semaphore queue and render sequentially instead of sharing a single
-    //   result. The lock ensures only one render runs; others poll until it's cached.
-    const lockKey = config.preview
-      ? `preview-lock:${cacheKey}`
-      : `render-lock:${cacheKey}`;
+    // Stampede protection — full-res only. Preview path skips the lock because:
+    //   - Each render is fast (~300-500ms with cache)
+    //   - Redis SETNX adds 50-150ms overhead per request — too much for the
+    //     interactive template-switching UX
+    //   - At our traffic level, occasional duplicate render is cheaper than
+    //     the lock overhead on every request
     let haveLock = false;
-    try {
-      const acquired = await this.redis.set(
-        lockKey,
-        '1',
-        'EX',
-        config.preview ? 10 : RENDER_LOCK_TTL_SECONDS, // preview renders fast (< 500ms)
-        'NX',
-      );
-      haveLock = acquired === 'OK';
-    } catch {
-      // Redis down — proceed anyway (no stampede protection, but still correct)
-    }
+    const lockKey = `render-lock:${cacheKey}`;
+    if (!config.preview) {
+      try {
+        const acquired = await this.redis.set(
+          lockKey,
+          '1',
+          'EX',
+          RENDER_LOCK_TTL_SECONDS,
+          'NX',
+        );
+        haveLock = acquired === 'OK';
+      } catch {
+        // Redis down — proceed anyway (no stampede protection, but still correct)
+      }
 
-    if (!haveLock) {
-      if (config.preview) {
-        // Another worker rendering the preview — poll Redis for up to 5s
-        for (let i = 0; i < 10; i++) {
-          await sleep(500);
-          try {
-            const cached = await this.redis.getBuffer(`preview-img:${cacheKey}`);
-            if (cached) {
-              return {
-                buffer: cached,
-                fromCache: true,
-                cacheKey,
-                templateRequested: config.template,
-                templateActual: config.template,
-                fallback: false,
-              };
-            }
-          } catch { /* Redis down — keep polling */ }
-        }
-        // Poll timed out — render ourselves (lock expired or render was very slow)
-      } else {
+      if (!haveLock) {
         // Another worker rendering the full-res — poll S3 for up to 10s
         for (let i = 0; i < 10; i++) {
           await sleep(1000);
@@ -333,8 +350,9 @@ export class ResultImageService implements OnModuleInit {
 
     try {
       mark.lock = Date.now() - tGen;
-      // Run render under semaphore (caps concurrent canvas renders)
-      const rendered = await this.semaphore.run(() => this.renderImage(input));
+      // Render directly — no semaphore cap. Traffic volume is low and the
+      // queueing overhead added latency without protecting against real OOM.
+      const rendered = await this.renderImage(input);
       mark.render = Date.now() - tGen;
 
       // Upload to S3 (unless preview); cache preview in Redis.
@@ -428,6 +446,86 @@ export class ResultImageService implements OnModuleInit {
     }
   }
 
+  /**
+   * Upload a background photo to S3, return a photoId the caller can reuse
+   * across subsequent /result-image calls. Avoids re-uploading the same buffer
+   * on every template/gradient/setting change.
+   *
+   * S3 lifecycle rule on `result-images/bg-uploads/` deletes after 24h.
+   */
+  async uploadBackgroundPhoto(buffer: Buffer): Promise<UploadBackgroundResult> {
+    await this.validatePhotoBuffer(buffer);
+    const photoId = crypto.randomUUID();
+    const key = `${BG_UPLOADS_PREFIX}/${photoId}`;
+    await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        // Sniffed content type isn't critical here — we treat the bytes as opaque
+        // image data and re-decode via @napi-rs/canvas, which auto-detects format.
+        ContentType: 'application/octet-stream',
+      }),
+    );
+    // Pre-warm Redis cache so the very first render with this photoId skips the
+    // S3 round-trip — user almost always calls /result-image right after upload.
+    this.redis
+      .set(`bg-buf:${photoId}`, buffer, 'EX', BG_BUFFER_CACHE_TTL_SECONDS)
+      .catch(() => {/* ignore */});
+
+    const expiresAt = new Date(
+      Date.now() + BG_UPLOAD_TTL_SECONDS * 1000,
+    ).toISOString();
+    return { photoId, expiresAt };
+  }
+
+  /**
+   * Load a previously-uploaded background photo by photoId. Checks Redis cache
+   * first (10min TTL), falls back to S3 GET. Returns null if photo expired or
+   * never existed — caller should treat as "no custom photo".
+   */
+  private async loadBackgroundPhoto(photoId: string): Promise<Buffer | null> {
+    if (!photoId || !/^[A-Za-z0-9-]{1,64}$/.test(photoId)) return null;
+
+    try {
+      const cached = await this.redis.getBuffer(`bg-buf:${photoId}`);
+      if (cached) return cached;
+    } catch {
+      // Redis down — fall through to S3
+    }
+
+    try {
+      const obj = await this.s3Client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: `${BG_UPLOADS_PREFIX}/${photoId}`,
+        }),
+      );
+      const body = obj.Body as NodeJS.ReadableStream | undefined;
+      if (!body) return null;
+      const chunks: Buffer[] = [];
+      for await (const chunk of body) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      const buffer = Buffer.concat(chunks);
+
+      this.redis
+        .set(`bg-buf:${photoId}`, buffer, 'EX', BG_BUFFER_CACHE_TTL_SECONDS)
+        .catch(() => {/* ignore */});
+
+      return buffer;
+    } catch (err) {
+      const code = (err as { $metadata?: { httpStatusCode?: number } })
+        ?.$metadata?.httpStatusCode;
+      if (code !== 404 && code !== 403) {
+        this.logger.warn(
+          `S3 GET bg-uploads/${photoId} failed: ${(err as Error).message}`,
+        );
+      }
+      return null;
+    }
+  }
+
   // ─── Internals ──────────────────────────────────────────────
 
   private async registerFonts(): Promise<void> {
@@ -472,13 +570,17 @@ export class ResultImageService implements OnModuleInit {
    */
   private async computeCacheKey(input: GenerateImageInput): Promise<string> {
     const { config } = input;
-    const photoHash = input.customPhotoBuffer
-      ? crypto
-          .createHash('md5')
-          .update(input.customPhotoBuffer)
-          .digest('hex')
-          .slice(0, 12)
-      : 'none';
+    // Prefer photoId over hashing the buffer — photoId is already a unique ID
+    // and avoids ~5–10ms md5 cost on every cacheKey computation.
+    const photoHash = input.photoId
+      ? input.photoId.slice(0, 16)
+      : input.customPhotoBuffer
+        ? crypto
+            .createHash('md5')
+            .update(input.customPhotoBuffer)
+            .digest('hex')
+            .slice(0, 12)
+        : 'none';
 
     // Include ALL athlete fields the image depends on so cache invalidates
     // automatically when admin edits the result. `updatedAt` is the canonical
@@ -656,7 +758,13 @@ export class ResultImageService implements OnModuleInit {
     await resolved.template.render(ctx, renderData);
     const tRender = Date.now();
 
-    const buffer = Buffer.from(canvas.toBuffer('image/png'));
+    // Preview → JPEG quality 85 (encodes 3-5× faster than PNG, ~50% smaller).
+    // Full-res → PNG (preserves crispness for download/share).
+    // Quality 85 is visually indistinguishable from PNG for screen previews
+    // and the smaller payload also speeds up wire transfer.
+    const buffer = config.preview
+      ? Buffer.from(canvas.toBuffer('image/jpeg', 85))
+      : Buffer.from(canvas.toBuffer('image/png'));
     const tEncode = Date.now();
 
     const photoKB = input.customPhotoBuffer
@@ -666,6 +774,7 @@ export class ResultImageService implements OnModuleInit {
       `[render] badges=${timings.badges ?? 0}ms photo=${timings.photo ?? 0}ms qr=${timings.qr ?? 0}ms ` +
         `assets=${tAssets - tStart}ms render=${tRender - tAssets}ms encode=${tEncode - tRender}ms ` +
         `total=${tEncode - tStart}ms tpl=${resolved.template.name} dims=${dims.width}x${dims.height} ` +
+        `format=${config.preview ? 'jpeg' : 'png'} bufKB=${Math.round(buffer.length / 1024)} ` +
         `photoKB=${photoKB} bib=${input.bib}`,
     );
 
