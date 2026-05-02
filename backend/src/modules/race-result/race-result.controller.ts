@@ -170,10 +170,13 @@ export class RaceResultController {
       throw new NotFoundException('Certificate not available');
     }
 
-    const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
+    // pdfToPng expects `string | ArrayBufferLike`. fetch's Response.arrayBuffer()
+    // returns ArrayBuffer directly — passing a Node Buffer fails because Buffer
+    // extends Uint8Array, not ArrayBuffer. Skip the Buffer.from() step entirely.
+    const pdfArrayBuffer = await pdfRes.arrayBuffer();
 
     const { pdfToPng } = await import('pdf-to-png-converter');
-    const pages = await pdfToPng(pdfBuffer, {
+    const pages = await pdfToPng(pdfArrayBuffer, {
       viewportScale: 3,
       pagesToProcess: [1],
     });
@@ -455,7 +458,7 @@ export class RaceResultController {
   // Generous limit — a single modal open = 7 preview requests (6 thumbs + 1
   // main), and toggling gradient/template bumps the token → fresh requests.
   // 120/min allows ~15 modal interactions per minute per IP before throttling.
-  @Throttle({ default: { ttl: 60_000, limit: 120 } })
+  // @Throttle({ default: { ttl: 60_000, limit: 120 } })
   @ApiOperation({
     summary: 'Preview result image (lowres, ~480px, no cache) — for template picker',
   })
@@ -509,7 +512,7 @@ export class RaceResultController {
 
   @Post('result-image/:raceId/:bib')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  // @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @ApiOperation({
     summary: 'Generate full-res result image for an athlete (S3-cached)',
   })
@@ -659,7 +662,7 @@ export class RaceResultController {
 
   @Get('badges/:raceId/:bib')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  // @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({
     summary: 'Get badges (PB / Podium / Sub-X / Ultra / Streak) for an athlete',
   })
@@ -694,7 +697,7 @@ export class RaceResultController {
 
   @Post('share-count/:raceId')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  // @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @ApiOperation({
     summary:
       'Increment share counter for a race (called after user shares an image)',
@@ -711,7 +714,7 @@ export class RaceResultController {
 
   @Post('result-image-share')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  // @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @ApiOperation({
     summary:
       'Log a result-image share event (fire-and-forget analytics endpoint)',
