@@ -136,7 +136,10 @@ export default function RaceDetailPage() {
 
   const race = useMemo<RaceInfo | null>(() => {
     const r = (raceRaw as any)?.data ?? raceRaw;
-    if (!r) return loadingRace ? null : DEMO_RACE;
+    // Trước đây fallback DEMO_RACE (Dalat Ultra) khi fetch fail → user thấy
+    // nhầm race trong vài giây deploy/restart. Trả null để Next.js render
+    // notFound state thay vì hiển thị data sai.
+    if (!r) return null;
     return {
       id: r._id || r.id,
       name: r.title || r.name,
