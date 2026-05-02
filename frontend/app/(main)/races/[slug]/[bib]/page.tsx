@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Clock, Check, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag } from 'lucide-react';
+import { ChevronLeft, Clock, Check, Calendar, Timer, TrendingUp, Award, Users, Tag, Trophy, Download, Loader2, AlertTriangle, Upload, X, Phone, Mail, User, FileText, XOctagon, Flag, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { useTranslation } from 'react-i18next';
@@ -44,9 +44,29 @@ function isValidNationality(n: unknown): n is string {
 // ── Final race status derived from overall rank + chip time ──────────────
 // Kept as module-level helpers so they're easy to move to a shared util
 // later if another surface needs the same classification.
-type FinalStatus = 'finisher' | 'dnf' | 'dsq' | 'dns';
+type FinalStatus = 'finisher' | 'dnf' | 'dsq' | 'dns' | 'in-progress';
 
-function deriveFinalStatus(overallRank: string, chipTime: string): FinalStatus {
+/**
+ * Vendor pushes live OverallRank tại các checkpoint (vd TM3) cho athletes
+ * đang chạy giữa course. Chỉ dùng overallRank+chipTime sẽ mark họ là finisher.
+ * Source-of-truth = TimingPoint: 'Finish' (any case) → finisher,
+ * 'DNS'/'DSQ'/'DNF' → tương ứng, các giá trị khác (TM*, '', etc) → in-progress.
+ */
+function deriveFinalStatus(
+  overallRank: string,
+  chipTime: string,
+  timingPoint?: string,
+): FinalStatus {
+  const tp = (timingPoint || '').trim().toUpperCase();
+  if (tp === 'DNS') return 'dns';
+  if (tp.startsWith('DSQ')) return 'dsq';
+  if (tp === 'DNF') return 'dnf';
+  if (!tp.startsWith('FINISH')) {
+    // Athlete chưa qua Finish line — đang ở checkpoint giữa hoặc data thiếu.
+    // Honest answer: in-progress (race còn chạy hoặc athlete bỏ cuộc).
+    return 'in-progress';
+  }
+  // timingPoint='Finish' — verify rank/time, defend against vendor sentinels
   const r = (overallRank || '').trim().toUpperCase();
   if (r === 'DNS') return 'dns';
   if (r.startsWith('DSQ')) return 'dsq';
@@ -89,6 +109,13 @@ const STATUS_CHIP: Record<
     Icon: Flag,
     labelKey: 'athlete.statusBadge.status.dns',
   },
+  'in-progress': {
+    bg: 'bg-blue-50',
+    text: 'text-blue-700',
+    ring: 'ring-blue-200',
+    Icon: Activity,
+    labelKey: 'athlete.statusBadge.status.inProgress',
+  },
 };
 
 interface AthleteResult {
@@ -106,6 +133,7 @@ interface AthleteResult {
   Nationality: string;
   Nation: string;
   Certificate: string;
+  TimingPoint?: string;
   race_id: number;
   course_id: string;
   distance: string;
@@ -671,7 +699,7 @@ export default function AthleteDetailPage() {
   const minPace = paces.length > 0 ? Math.min(...paces) : 0;
 
   // Final status — drives the status chip + whether to show the cert CTA.
-  const finalStatus = deriveFinalStatus(athlete.OverallRank, athlete.ChipTime);
+  const finalStatus = deriveFinalStatus(athlete.OverallRank, athlete.ChipTime, athlete.TimingPoint);
   const statusChip = STATUS_CHIP[finalStatus];
   const StatusIcon = statusChip.Icon;
   const certCtaVisible =

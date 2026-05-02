@@ -260,7 +260,8 @@
         "finisher": "FINISHER",
         "dnf": "DNF",
         "dsq": "DISQUALIFIED",
-        "dns": "DID NOT START"
+        "dns": "DID NOT START",
+        "inProgress": "ON COURSE"
       },
       "getCertificate": "GET MY CERTIFICATE"
     }
