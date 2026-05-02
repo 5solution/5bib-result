@@ -51,6 +51,82 @@ export type ApproveMerchantDto = {
     rejection_note?: string;
 };
 
+export type RaceAthleteAdminDto = {
+    mysql_race_id: number;
+    athletes_id: number;
+    bib_number: string | null;
+    display_name: string | null;
+    bib_name: string | null;
+    full_name: string | null;
+    gender: string | null;
+    course_id: number | null;
+    course_name: string | null;
+    course_distance: string | null;
+    club: string | null;
+    /**
+     * Vật phẩm BTC giao kèm racekit (VD: "Mũ"). Free-form, display-only.
+     */
+    items: string | null;
+    last_status: string | null;
+    racekit_received: boolean;
+    racekit_received_at: string | null;
+    email: string | null;
+    contact_phone: string | null;
+    id_number: string | null;
+    source: string;
+    legacy_modified_on: string | null;
+    synced_at: string;
+    sync_version: number;
+};
+
+export type ListAthletesResponseDto = {
+    items: Array<RaceAthleteAdminDto>;
+    total: number;
+    page: number;
+    pageSize: number;
+};
+
+export type RaceAthleteStatsDto = {
+    total: number;
+    withBib: number;
+    byCourse: {
+        [key: string]: number;
+    };
+    byStatus: {
+        [key: string]: number;
+    };
+    lastSyncedAt: string | null;
+};
+
+export type TriggerSyncRequestDto = {
+    syncType: 'ATHLETE_FULL' | 'ATHLETE_DELTA';
+};
+
+export type SyncLogDto = {
+    id: string;
+    mysql_race_id: number;
+    sync_type: 'ATHLETE_FULL' | 'ATHLETE_DELTA' | 'MANUAL';
+    status: 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED';
+    started_at: string;
+    completed_at: string | null;
+    rows_fetched: number;
+    rows_inserted: number;
+    rows_updated: number;
+    rows_skipped: number;
+    duration_ms: number;
+    error_message: string | null;
+    triggered_by: string;
+};
+
+export type TriggerSyncResponseDto = {
+    log: SyncLogDto;
+};
+
+export type SyncLogListDto = {
+    items: Array<SyncLogDto>;
+    total: number;
+};
+
 export type BatchCreateReconciliationDto = {
     period: string;
     /**
@@ -203,6 +279,216 @@ export type UpdateReconciliationStatusDto = {
      * Optional note
      */
     note?: string;
+};
+
+export type ChipConfigLinkResponseDto = {
+    mongo_race_id: string;
+    mysql_race_id: number;
+    chip_verify_enabled: boolean;
+    total_chip_mappings: number;
+};
+
+export type LinkMongoRaceRequestDto = {
+    /**
+     * MySQL platform race_id (numeric, từ 5bib_platform_live.races.race_id). BTC nhập tay khi link race admin sang race platform.
+     */
+    mysql_race_id: number;
+};
+
+export type ImportPreviewRowErrorDto = {
+    /**
+     * 1-based line number in CSV. 0 means file-level (no specific row).
+     */
+    row: number;
+    reason: string;
+};
+
+export type ImportPreviewRowWarningDto = {
+    row: number;
+    reason: string;
+};
+
+export type ImportPreviewResponseDto = {
+    totalRows: number;
+    valid: number;
+    toCreate: number;
+    toUpdate: number;
+    toSkip: number;
+    /**
+     * Number of soft-deleted mappings to make room for bib reassignment.
+     */
+    swapDeletes: number;
+    /**
+     * Errors that BLOCKED the row from being imported.
+     */
+    errors: Array<ImportPreviewRowErrorDto>;
+    /**
+     * Warnings — row WAS still imported but flagged for review.
+     */
+    warnings: Array<ImportPreviewRowWarningDto>;
+    /**
+     * 32-char base64url. TTL 10m.
+     */
+    previewToken: string;
+};
+
+export type ConfirmImportRequestDto = {
+    /**
+     * Token returned from preview endpoint.
+     */
+    previewToken: string;
+};
+
+export type ConfirmImportResponseDto = {
+    imported: number;
+};
+
+export type ChipMappingItemDto = {
+    id: string;
+    mysql_race_id: number;
+    chip_id: string;
+    bib_number: string;
+    status: 'ACTIVE' | 'DISABLED';
+    created_at: string;
+    updated_at: string;
+};
+
+export type ListChipMappingsResponseDto = {
+    items: Array<ChipMappingItemDto>;
+    total: number;
+    page: number;
+    pageSize: number;
+};
+
+export type UpdateChipMappingDto = {
+    chip_id?: string;
+    bib_number?: string;
+    status?: 'ACTIVE' | 'DISABLED';
+};
+
+export type TokenActionRequestDto = {
+    action: 'GENERATE' | 'ROTATE' | 'DISABLE';
+};
+
+export type TokenActionResponseDto = {
+    /**
+     * New token (32-char base64url) — null if action=DISABLE. Token TTL ∞, rotate manually.
+     */
+    token: string | null;
+    chip_verify_enabled: boolean;
+    /**
+     * Total active mappings (for preload progress).
+     */
+    total_chip_mappings: number;
+    preload_completed_at: string | null;
+};
+
+export type ChipConfigResponseDto = {
+    chip_verify_enabled: boolean;
+    /**
+     * Token chỉ trả về cho admin sau GENERATE/ROTATE — endpoint GET /config sẽ trả null vì admin đã copy URL.
+     */
+    chip_verify_token: string | null;
+    total_chip_mappings: number;
+    preload_completed_at: string | null;
+    /**
+     * Whether cache:ready sentinel exists in Redis.
+     */
+    cache_ready: boolean;
+    /**
+     * Per-race toggle cho cron delta sync auto-update cache mỗi 30s.
+     */
+    delta_sync_enabled: boolean;
+};
+
+export type DeltaSyncToggleRequestDto = {
+    /**
+     * Bật/tắt auto cron delta sync mỗi 30s. Tắt khi muốn freeze cache hoặc giảm load MySQL.
+     */
+    enabled: boolean;
+};
+
+export type ChipStatsResponseDto = {
+    /**
+     * Total active mappings imported.
+     */
+    total_mappings: number;
+    /**
+     * Distinct athletes verified at least once (FOUND).
+     */
+    total_verified: number;
+    /**
+     * Total verify attempts (incl. duplicates).
+     */
+    total_attempts: number;
+    /**
+     * Verifications in last 5 minutes.
+     */
+    recent_5m: number;
+};
+
+export type CacheActionRequestDto = {
+    action: 'REFRESH' | 'CLEAR';
+};
+
+export type CacheActionResponseDto = {
+    success: boolean;
+    /**
+     * Number of athlete-bib pairs cached.
+     */
+    cached_count: number;
+    preload_completed_at: string | null;
+};
+
+export type ChipLookupResponseDto = {
+    result: 'FOUND' | 'CHIP_NOT_FOUND' | 'BIB_UNASSIGNED' | 'DISABLED' | 'ALREADY_PICKED_UP';
+    bib_number: string | null;
+    /**
+     * DEPRECATED — alias = bib_name fallback full_name. Giữ cho backward compat. Dùng bib_name / full_name riêng cho UI mới.
+     */
+    name: string | null;
+    /**
+     * Tên trên BIB (in trên áo VĐV) — từ subinfo.name_on_bib. Có thể là nickname.
+     */
+    bib_name: string | null;
+    /**
+     * Họ tên đầy đủ — từ athletes.name. Dùng để verify CCCD/giấy tờ. Có thể null.
+     */
+    full_name: string | null;
+    course_name: string | null;
+    /**
+     * Giới tính: Nam / Nữ / Khác (normalized từ subinfo.gender)
+     */
+    gender: string | null;
+    team: string | null;
+    /**
+     * Vật phẩm racekit (áo, mũ, túi, ...) từ subinfo.achivements. Free-form string.
+     */
+    items: string | null;
+    last_status: string | null;
+    /**
+     * Whether athlete already picked up racekit.
+     */
+    racekit_received: boolean;
+    /**
+     * Atomic SETNX guarantee — exactly ONE thread sees true per (race, athlete).
+     */
+    is_first_verify: boolean;
+    verified_at: string;
+};
+
+export type ChipRecentItemDto = {
+    bib_number: string | null;
+    name: string | null;
+    course_name: string | null;
+    result: string;
+    verified_at: string;
+    device_label: string | null;
+    is_first_verify: boolean;
+};
+
+export type ChipRecentResponseDto = {
+    items: Array<ChipRecentItemDto>;
 };
 
 export type CreateRaceDto = {
@@ -1986,6 +2272,108 @@ export type MerchantControllerApproveResponses = {
     200: unknown;
 };
 
+export type RaceMasterDataAdminControllerListAthletesData = {
+    body?: never;
+    path: {
+        raceId: number;
+    };
+    query?: {
+        /**
+         * Search by bib or display_name
+         */
+        search?: string;
+        course_id?: number;
+        gender?: string;
+        last_status?: string;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/admin/races/{raceId}/master-data/athletes';
+};
+
+export type RaceMasterDataAdminControllerListAthletesResponses = {
+    200: ListAthletesResponseDto;
+};
+
+export type RaceMasterDataAdminControllerListAthletesResponse = RaceMasterDataAdminControllerListAthletesResponses[keyof RaceMasterDataAdminControllerListAthletesResponses];
+
+export type RaceMasterDataAdminControllerGetAthleteData = {
+    body?: never;
+    path: {
+        raceId: number;
+        bibNumber: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/master-data/athletes/{bibNumber}';
+};
+
+export type RaceMasterDataAdminControllerGetAthleteErrors = {
+    /**
+     * Athlete not found
+     */
+    404: unknown;
+};
+
+export type RaceMasterDataAdminControllerGetAthleteResponses = {
+    200: RaceAthleteAdminDto;
+};
+
+export type RaceMasterDataAdminControllerGetAthleteResponse = RaceMasterDataAdminControllerGetAthleteResponses[keyof RaceMasterDataAdminControllerGetAthleteResponses];
+
+export type RaceMasterDataAdminControllerStatsData = {
+    body?: never;
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/master-data/stats';
+};
+
+export type RaceMasterDataAdminControllerStatsResponses = {
+    200: RaceAthleteStatsDto;
+};
+
+export type RaceMasterDataAdminControllerStatsResponse = RaceMasterDataAdminControllerStatsResponses[keyof RaceMasterDataAdminControllerStatsResponses];
+
+export type RaceMasterDataAdminControllerTriggerSyncData = {
+    body: TriggerSyncRequestDto;
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/master-data/sync';
+};
+
+export type RaceMasterDataAdminControllerTriggerSyncErrors = {
+    /**
+     * Sync đang chạy cho race này — wait & retry
+     */
+    409: unknown;
+};
+
+export type RaceMasterDataAdminControllerTriggerSyncResponses = {
+    200: TriggerSyncResponseDto;
+};
+
+export type RaceMasterDataAdminControllerTriggerSyncResponse = RaceMasterDataAdminControllerTriggerSyncResponses[keyof RaceMasterDataAdminControllerTriggerSyncResponses];
+
+export type RaceMasterDataAdminControllerSyncLogsData = {
+    body?: never;
+    path: {
+        raceId: number;
+    };
+    query: {
+        limit: string;
+    };
+    url: '/api/admin/races/{raceId}/master-data/sync-logs';
+};
+
+export type RaceMasterDataAdminControllerSyncLogsResponses = {
+    200: SyncLogListDto;
+};
+
+export type RaceMasterDataAdminControllerSyncLogsResponse = RaceMasterDataAdminControllerSyncLogsResponses[keyof RaceMasterDataAdminControllerSyncLogsResponses];
+
 export type ReconciliationControllerPreflightData = {
     body?: never;
     path?: never;
@@ -2859,6 +3247,267 @@ export type AnalyticsControllerGetFunnelResponses = {
      */
     200: unknown;
 };
+
+export type ChipVerificationControllerGetConfigByMongoIdData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/by-mongo/{mongoRaceId}/chip-verify/config';
+};
+
+export type ChipVerificationControllerGetConfigByMongoIdErrors = {
+    /**
+     * Race chưa được link
+     */
+    404: unknown;
+};
+
+export type ChipVerificationControllerGetConfigByMongoIdResponses = {
+    200: ChipConfigLinkResponseDto;
+};
+
+export type ChipVerificationControllerGetConfigByMongoIdResponse = ChipVerificationControllerGetConfigByMongoIdResponses[keyof ChipVerificationControllerGetConfigByMongoIdResponses];
+
+export type ChipVerificationControllerLinkMongoToMysqlData = {
+    body: LinkMongoRaceRequestDto;
+    path: {
+        mongoRaceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/by-mongo/{mongoRaceId}/chip-verify/link';
+};
+
+export type ChipVerificationControllerLinkMongoToMysqlErrors = {
+    /**
+     * Re-link bị block vì đã có mapping
+     */
+    400: unknown;
+};
+
+export type ChipVerificationControllerLinkMongoToMysqlResponses = {
+    201: ChipConfigLinkResponseDto;
+};
+
+export type ChipVerificationControllerLinkMongoToMysqlResponse = ChipVerificationControllerLinkMongoToMysqlResponses[keyof ChipVerificationControllerLinkMongoToMysqlResponses];
+
+export type ChipVerificationControllerPreviewImportData = {
+    body: {
+        file: Blob | File;
+    };
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-mappings/import';
+};
+
+export type ChipVerificationControllerPreviewImportResponses = {
+    200: ImportPreviewResponseDto;
+};
+
+export type ChipVerificationControllerPreviewImportResponse = ChipVerificationControllerPreviewImportResponses[keyof ChipVerificationControllerPreviewImportResponses];
+
+export type ChipVerificationControllerConfirmImportData = {
+    body: ConfirmImportRequestDto;
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-mappings/import/confirm';
+};
+
+export type ChipVerificationControllerConfirmImportResponses = {
+    200: ConfirmImportResponseDto;
+};
+
+export type ChipVerificationControllerConfirmImportResponse = ChipVerificationControllerConfirmImportResponses[keyof ChipVerificationControllerConfirmImportResponses];
+
+export type ChipVerificationControllerListData = {
+    body?: never;
+    path: {
+        raceId: number;
+    };
+    query?: {
+        page?: number;
+        pageSize?: number;
+        /**
+         * Search chip_id or bib_number (prefix)
+         */
+        search?: string;
+    };
+    url: '/api/admin/races/{raceId}/chip-mappings';
+};
+
+export type ChipVerificationControllerListResponses = {
+    200: ListChipMappingsResponseDto;
+};
+
+export type ChipVerificationControllerListResponse = ChipVerificationControllerListResponses[keyof ChipVerificationControllerListResponses];
+
+export type ChipVerificationControllerRemoveData = {
+    body?: never;
+    path: {
+        raceId: number;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-mappings/{id}';
+};
+
+export type ChipVerificationControllerRemoveResponses = {
+    204: void;
+};
+
+export type ChipVerificationControllerRemoveResponse = ChipVerificationControllerRemoveResponses[keyof ChipVerificationControllerRemoveResponses];
+
+export type ChipVerificationControllerUpdateData = {
+    body: UpdateChipMappingDto;
+    path: {
+        raceId: number;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-mappings/{id}';
+};
+
+export type ChipVerificationControllerUpdateResponses = {
+    200: ChipMappingItemDto;
+};
+
+export type ChipVerificationControllerUpdateResponse = ChipVerificationControllerUpdateResponses[keyof ChipVerificationControllerUpdateResponses];
+
+export type ChipVerificationControllerTokenActionData = {
+    body: TokenActionRequestDto;
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-verify/token';
+};
+
+export type ChipVerificationControllerTokenActionResponses = {
+    200: TokenActionResponseDto;
+};
+
+export type ChipVerificationControllerTokenActionResponse = ChipVerificationControllerTokenActionResponses[keyof ChipVerificationControllerTokenActionResponses];
+
+export type ChipVerificationControllerGetConfigData = {
+    body?: never;
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-verify/config';
+};
+
+export type ChipVerificationControllerGetConfigResponses = {
+    200: ChipConfigResponseDto;
+};
+
+export type ChipVerificationControllerGetConfigResponse = ChipVerificationControllerGetConfigResponses[keyof ChipVerificationControllerGetConfigResponses];
+
+export type ChipVerificationControllerToggleDeltaSyncData = {
+    body: DeltaSyncToggleRequestDto;
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-verify/delta-sync';
+};
+
+export type ChipVerificationControllerToggleDeltaSyncResponses = {
+    200: ChipConfigResponseDto;
+};
+
+export type ChipVerificationControllerToggleDeltaSyncResponse = ChipVerificationControllerToggleDeltaSyncResponses[keyof ChipVerificationControllerToggleDeltaSyncResponses];
+
+export type ChipVerificationControllerStatsData = {
+    body?: never;
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-verify/stats';
+};
+
+export type ChipVerificationControllerStatsResponses = {
+    200: ChipStatsResponseDto;
+};
+
+export type ChipVerificationControllerStatsResponse = ChipVerificationControllerStatsResponses[keyof ChipVerificationControllerStatsResponses];
+
+export type ChipVerificationControllerCacheActionData = {
+    body: CacheActionRequestDto;
+    path: {
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/chip-verify/cache';
+};
+
+export type ChipVerificationControllerCacheActionResponses = {
+    200: CacheActionResponseDto;
+};
+
+export type ChipVerificationControllerCacheActionResponse = ChipVerificationControllerCacheActionResponses[keyof ChipVerificationControllerCacheActionResponses];
+
+export type ChipVerificationPublicControllerLookupData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query: {
+        /**
+         * 4-32 chars alphanumeric + hyphen + underscore, normalized UPPER+TRIM server-side.
+         */
+        chip_id: string;
+        /**
+         * Bàn 2 station label, max 64 chars.
+         */
+        device?: string;
+    };
+    url: '/api/chip-verify/{token}/lookup';
+};
+
+export type ChipVerificationPublicControllerLookupResponses = {
+    200: ChipLookupResponseDto;
+};
+
+export type ChipVerificationPublicControllerLookupResponse = ChipVerificationPublicControllerLookupResponses[keyof ChipVerificationPublicControllerLookupResponses];
+
+export type ChipVerificationPublicControllerRecentData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query: {
+        limit: string;
+    };
+    url: '/api/chip-verify/{token}/recent';
+};
+
+export type ChipVerificationPublicControllerRecentResponses = {
+    200: ChipRecentResponseDto;
+};
+
+export type ChipVerificationPublicControllerRecentResponse = ChipVerificationPublicControllerRecentResponses[keyof ChipVerificationPublicControllerRecentResponses];
+
+export type ChipVerificationPublicControllerStatsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/api/chip-verify/{token}/stats';
+};
+
+export type ChipVerificationPublicControllerStatsResponses = {
+    200: ChipStatsResponseDto;
+};
+
+export type ChipVerificationPublicControllerStatsResponse = ChipVerificationPublicControllerStatsResponses[keyof ChipVerificationPublicControllerStatsResponses];
 
 export type RacesControllerSearchRacesData = {
     body?: never;
