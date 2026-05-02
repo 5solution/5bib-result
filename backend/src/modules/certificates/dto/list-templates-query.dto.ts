@@ -43,11 +43,11 @@ export class ListTemplatesQueryDto {
   @Min(1)
   page?: number;
 
-  @ApiPropertyOptional({ example: 20, default: 20, maximum: 100 })
+  @ApiPropertyOptional({ example: 20, default: 20, maximum: 200 })
   @IsOptional()
   @Transform(({ value }) => parseInt(value, 10))
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(200)
   pageSize?: number;
 }
