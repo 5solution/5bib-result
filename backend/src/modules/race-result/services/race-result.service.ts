@@ -787,7 +787,16 @@ export class RaceResultService {
             $switch: {
               branches: [
                 {
-                  case: { $eq: ['$timingPoint', 'Finish'] },
+                  // Vendor đẩy 'Finish' (5KM) hoặc 'FINISH' (10/21/42KM) — phải
+                  // case-insensitive. Pre-fix exact match Pascal case → finishers
+                  // ở 10/21/42KM rơi vào default 'dnf' bucket → DNF count inflated
+                  // bởi >800 finishers misclassified.
+                  case: {
+                    $regexMatch: {
+                      input: { $ifNull: ['$timingPoint', ''] },
+                      regex: /^finish/i,
+                    },
+                  },
                   then: 'finished',
                 },
                 {
