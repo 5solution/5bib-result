@@ -260,7 +260,8 @@
         "finisher": "HOÀN THÀNH",
         "dnf": "DNF",
         "dsq": "BỊ LOẠI",
-        "dns": "KHÔNG XUẤT PHÁT"
+        "dns": "KHÔNG XUẤT PHÁT",
+        "inProgress": "ĐANG TRÊN ĐƯỜNG"
       },
       "getCertificate": "TẢI CHỨNG NHẬN"
     }

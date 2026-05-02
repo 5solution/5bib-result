@@ -1004,7 +1004,7 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
           <p className="text-xs text-slate-400 italic">{t('status.notStarted')}</p>
         ) : (
           <>
-            {result.TimingPoint && result.TimingPoint !== 'Finish' && (
+            {result.TimingPoint && !result.TimingPoint.toUpperCase().startsWith('FINISH') && (
               <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
             )}
             <p className="text-sm font-bold text-slate-900 font-mono tracking-tight">{result.ChipTime}</p>
@@ -1134,7 +1134,7 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
             <p className="text-xs text-slate-400 italic">{t('status.notStarted')}</p>
           ) : (
             <>
-              {result.TimingPoint && result.TimingPoint !== 'Finish' && (
+              {result.TimingPoint && !result.TimingPoint.toUpperCase().startsWith('FINISH') && (
                 <p className="text-[10px] font-semibold text-amber-600 mb-0.5">{result.TimingPoint}</p>
               )}
               <p className="text-sm font-bold text-slate-900 font-mono">{result.ChipTime}</p>
