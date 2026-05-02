@@ -34,7 +34,7 @@ import { LogtoAuthModule } from '../logto-auth';
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
-        limit: 100,
+        limit: 60*5,
       },
     ]),
     RaceResultModule,

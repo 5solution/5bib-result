@@ -48,7 +48,7 @@ import { RaceMasterDataModule } from '../race-master-data/race-master-data.modul
       { name: ChipVerification.name, schema: ChipVerificationSchema },
     ]),
     RaceMasterDataModule,
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 * 5 }]),
     LogtoAuthModule,
   ],
   controllers: [ChipVerificationController, ChipVerificationPublicController],
@@ -60,4 +60,4 @@ import { RaceMasterDataModule } from '../race-master-data/race-master-data.modul
   ],
   exports: [ChipConfigService, ChipMappingService],
 })
-export class ChipVerificationModule {}
+export class ChipVerificationModule { }

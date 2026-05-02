@@ -32,7 +32,7 @@ import { UploadModule } from '../upload/upload.module';
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
-        limit: 120,
+        limit: 60*5,
       },
     ]),
     RacesModule,

@@ -296,12 +296,14 @@ export default function AthleteDetailPage() {
 
   const { athlete, courseType } = useMemo(() => {
     const data = (athleteRaw as any)?.data ?? athleteRaw;
+
     if (!data) return { athlete: null as AthleteResult | null, courseType: 'split' };
     const courses = raceData?.courses || [];
     const matchedCourse = courses.find((c: any) => c.courseId === data.course_id);
     const checkpoints = matchedCourse?.checkpoints as CheckpointConfig[] | undefined;
     const detectedCourseType = (matchedCourse?.courseType as string) || 'split';
     const splits = parseSplitsFromData(data, checkpoints) || undefined;
+
     return {
       athlete: {
         ...data,
@@ -312,6 +314,8 @@ export default function AthleteDetailPage() {
       courseType: detectedCourseType,
     };
   }, [athleteRaw, raceData, slug]);
+
+  console.log('Parsed athlete data:', athlete);
 
   const raceStatus = raceData?.status;
   const isUpcoming = raceStatus === 'upcoming' || raceStatus === 'pre_race';
@@ -358,6 +362,7 @@ export default function AthleteDetailPage() {
   };
 
   const getInitials = (name: string) => {
+    console.log('Generating initials for name:', name);
     const words = name.trim().split(/\s+/);
     if (words.length >= 2) {
       return (words[0][0] + words[words.length - 1][0]).toUpperCase();
@@ -416,7 +421,7 @@ export default function AthleteDetailPage() {
       markCelebrationSeen(raceId, String(athlete.Bib));
     }, 500);
     return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raceId, athlete?.Bib, hasCelebWorthyBadge]);
 
   // Claim form state
@@ -979,9 +984,9 @@ export default function AthleteDetailPage() {
                     label: t('athlete.paceStrip.raceDate'),
                     value: raceData?.startDate
                       ? new Date(raceData.startDate).toLocaleDateString(
-                          i18n.language?.startsWith('vi') ? 'vi-VN' : 'en-US',
-                          { day: '2-digit', month: '2-digit', year: 'numeric' },
-                        )
+                        i18n.language?.startsWith('vi') ? 'vi-VN' : 'en-US',
+                        { day: '2-digit', month: '2-digit', year: 'numeric' },
+                      )
                       : '—',
                     suffix: '',
                     mono: true,
@@ -1039,11 +1044,10 @@ export default function AthleteDetailPage() {
                   <button
                     type="button"
                     onClick={() => setShowImageEditor(true)}
-                    className={`w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${
-                      hasCelebWorthyBadge
-                        ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-200'
-                        : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 shadow-sm'
-                    }`}
+                    className={`w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${hasCelebWorthyBadge
+                      ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-200'
+                      : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 shadow-sm'
+                      }`}
                   >
                     <span aria-hidden>🎨</span>
                     <span>{hasCelebWorthyBadge ? 'Tạo ảnh ăn mừng' : 'Tạo ảnh kết quả'}</span>
@@ -1168,17 +1172,16 @@ export default function AthleteDetailPage() {
               return (
                 <div
                   key={i}
-                  className={`px-5 py-4 border-b border-gray-50 ${
-                    isPaceAlert
-                      ? 'bg-red-50/80 border-l-4 border-l-red-400'
-                      : isFastest
-                        ? 'bg-emerald-50/50 border-l-4 border-l-emerald-500'
-                        : isSlowest
-                          ? 'bg-orange-50/50 border-l-4 border-l-orange-400'
-                          : i % 2 === 1
-                            ? 'bg-gray-50/50'
-                            : ''
-                  }`}
+                  className={`px-5 py-4 border-b border-gray-50 ${isPaceAlert
+                    ? 'bg-red-50/80 border-l-4 border-l-red-400'
+                    : isFastest
+                      ? 'bg-emerald-50/50 border-l-4 border-l-emerald-500'
+                      : isSlowest
+                        ? 'bg-orange-50/50 border-l-4 border-l-orange-400'
+                        : i % 2 === 1
+                          ? 'bg-gray-50/50'
+                          : ''
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
@@ -1252,17 +1255,16 @@ export default function AthleteDetailPage() {
                   return (
                     <tr
                       key={i}
-                      className={`border-b border-gray-50 transition-colors ${
-                        isPaceAlert
-                          ? 'bg-red-50/80 hover:bg-red-50'
-                          : isFastest
-                            ? 'bg-emerald-50/60 hover:bg-emerald-50'
-                            : isSlowest
-                              ? 'bg-orange-50/60 hover:bg-orange-50'
-                              : i % 2 === 1
-                                ? 'bg-gray-50/30 hover:bg-gray-50/60'
-                                : 'hover:bg-gray-50/40'
-                      }`}
+                      className={`border-b border-gray-50 transition-colors ${isPaceAlert
+                        ? 'bg-red-50/80 hover:bg-red-50'
+                        : isFastest
+                          ? 'bg-emerald-50/60 hover:bg-emerald-50'
+                          : isSlowest
+                            ? 'bg-orange-50/60 hover:bg-orange-50'
+                            : i % 2 === 1
+                              ? 'bg-gray-50/30 hover:bg-gray-50/60'
+                              : 'hover:bg-gray-50/40'
+                        }`}
                     >
                       {/* Rank delta cell (BR-01) — show actual rank at checkpoint, not array index */}
                       <td className="px-6 py-3.5">
