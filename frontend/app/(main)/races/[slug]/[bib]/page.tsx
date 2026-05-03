@@ -398,6 +398,41 @@ export default function AthleteDetailPage() {
   const [showImageEditor, setShowImageEditor] = useState(false);
   const celebrationAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Cert v1.1 (template-driven) availability probe — lifted to page level
+  // so the section wrapper can decide whether to render even when v1
+  // (legacy `enableEcert` flag) is OFF. Components inside still probe
+  // independently; the duplicate /check call is cheap and cached by the CDN.
+  const [v2CertAvail, setV2CertAvail] = useState<{
+    hasCertificate: boolean;
+    hasShareCard: boolean;
+    certificateHasPhotoArea: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (!raceId) return;
+    let cancelled = false;
+    const courseId = athlete?.course_id;
+    const url = courseId
+      ? `/api/certificates/check/${raceId}?courseId=${encodeURIComponent(courseId)}`
+      : `/api/certificates/check/${raceId}`;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) {
+          setV2CertAvail({
+            hasCertificate: !!data.hasCertificate,
+            hasShareCard: !!data.hasShareCard,
+            certificateHasPhotoArea: !!data.certificateHasPhotoArea,
+          });
+        }
+      })
+      .catch(() => {
+        /* silently ignore — section will fall back to v1 gate only */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [raceId, athlete?.course_id]);
+
   // Result Image Creator v1.0 — badges + first-open celebration
   const { data: athleteBadges = [] } = useAthleteBadges(
     raceId,
@@ -707,8 +742,18 @@ export default function AthleteDetailPage() {
   const finalStatus = deriveFinalStatus(athlete.OverallRank, athlete.ChipTime, athlete.TimingPoint);
   const statusChip = STATUS_CHIP[finalStatus];
   const StatusIcon = statusChip.Icon;
-  const certCtaVisible =
+  // Cert visibility — split into v1 (legacy PNG) and v1.1 (template-driven)
+  // gates so admin can toggle each independently:
+  //   · v1 hides/shows via the race `enableEcert` flag
+  //   · v1.1 auto-hides when no cert template exists for the race/course
+  //   · The section wrapper renders if EITHER is available (so toggling off
+  //     `enableEcert` doesn't hide the v1.1 photo CTA)
+  const certV1Visible =
     finalStatus === 'finisher' && raceData?.enableEcert !== false;
+  const certV2HasPhoto =
+    !!v2CertAvail?.hasCertificate && !!v2CertAvail?.certificateHasPhotoArea;
+  const certV2Visible = finalStatus === 'finisher' && certV2HasPhoto;
+  const certSectionVisible = certV1Visible || certV2Visible;
 
   const genderLabel = athlete.Gender === 'Male' || athlete.Gender === 'M' ? t('common.male') : t('common.female');
   const genderIcon = athlete.Gender === 'Male' || athlete.Gender === 'M' ? '♂' : '♀';
@@ -1056,7 +1101,7 @@ export default function AthleteDetailPage() {
                 </div>
               )}
 
-              {certCtaVisible && (
+              {certV1Visible && (
                 <div className="border-t border-gray-100 bg-gradient-to-br from-amber-50/70 via-white to-emerald-50/40 px-5 py-4 md:px-6 md:py-5">
                   {/* Inline cert CTA intentionally NOT using ap-cert-frame:
                       the time card has overflow-hidden (needed for rounded
@@ -1400,8 +1445,13 @@ export default function AthleteDetailPage() {
           </div>
         </div>}
 
-        {/* === CERTIFICATE === (finishers only — DNF/DSQ/DNS see nothing) */}
-        {raceData?.enableEcert !== false && finalStatus === 'finisher' && (<div
+        {/* === CERTIFICATE === (finishers only — DNF/DSQ/DNS see nothing)
+            Section wrapper renders if EITHER cert version is available:
+              · v1 (legacy PNG)  ← gated by `enableEcert` race flag
+              · v1.1 (kèm ảnh)   ← gated by template existence + photo_area
+            Each version's UI is wrapped independently below so admin can
+            toggle them separately. */}
+        {certSectionVisible && (<div
           data-reveal
           id="athlete-certificate-cta"
           className="ap-cert-frame bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden scroll-mt-24"
@@ -1416,40 +1466,49 @@ export default function AthleteDetailPage() {
             </div>
           </div>
           <div className="p-6 md:p-8">
-            <div className="relative bg-gradient-to-br from-amber-50 via-white to-emerald-50/60 border-2 border-amber-200/70 rounded-2xl p-8 md:p-10 text-center overflow-hidden">
-              {/* Decorative corners — gold accents per spec */}
-              <div className="absolute top-3 left-3 w-8 h-8 border-t-2 border-l-2 border-amber-400 rounded-tl-lg" />
-              <div className="absolute top-3 right-3 w-8 h-8 border-t-2 border-r-2 border-amber-400 rounded-tr-lg" />
-              <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-amber-400 rounded-bl-lg" />
-              <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-amber-400 rounded-br-lg" />
+            {/* v1 visual preview — Award frame + canvas-style summary.
+                Only renders when the legacy `enableEcert` flag is on. */}
+            {certV1Visible && (
+              <div className="relative bg-gradient-to-br from-amber-50 via-white to-emerald-50/60 border-2 border-amber-200/70 rounded-2xl p-8 md:p-10 text-center overflow-hidden">
+                {/* Decorative corners — gold accents per spec */}
+                <div className="absolute top-3 left-3 w-8 h-8 border-t-2 border-l-2 border-amber-400 rounded-tl-lg" />
+                <div className="absolute top-3 right-3 w-8 h-8 border-t-2 border-r-2 border-amber-400 rounded-tr-lg" />
+                <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-amber-400 rounded-bl-lg" />
+                <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-amber-400 rounded-br-lg" />
 
-              <div className="relative">
-                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-lg shadow-amber-200">
-                  <Award className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-bold mb-3">{t('athlete.certificateTitle')}</div>
-                <div className="text-2xl md:text-3xl font-black text-gray-900 mb-1">{formatName(athlete.Name)}</div>
-                <div className="text-sm text-gray-400 mb-5">BIB: {athlete.Bib}</div>
-                <div className="text-4xl md:text-5xl font-black text-blue-600 mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{athlete.ChipTime}</div>
-                <div className="text-sm text-gray-500 font-medium">
-                  {athlete.distance} &middot; {athlete.race_name || slug.replace(/-/g, ' ')}
+                <div className="relative">
+                  <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-lg shadow-amber-200">
+                    <Award className="w-8 h-8 text-white" />
+                  </div>
+                  <div className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-bold mb-3">{t('athlete.certificateTitle')}</div>
+                  <div className="text-2xl md:text-3xl font-black text-gray-900 mb-1">{formatName(athlete.Name)}</div>
+                  <div className="text-sm text-gray-400 mb-5">BIB: {athlete.Bib}</div>
+                  <div className="text-4xl md:text-5xl font-black text-blue-600 mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{athlete.ChipTime}</div>
+                  <div className="text-sm text-gray-500 font-medium">
+                    {athlete.distance} &middot; {athlete.race_name || slug.replace(/-/g, ' ')}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="text-center mt-6 flex flex-wrap items-center justify-center gap-3">
-              <button
-                onClick={downloadCertificateAsPng}
-                disabled={downloading}
-                className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-full transition-all duration-300 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-              >
-                {downloading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
-                {downloading ? t('common.processing') : t('athlete.downloadCertificate')}
-              </button>
+            <div className={`text-center flex flex-wrap items-center justify-center gap-3 ${certV1Visible ? 'mt-6' : ''}`}>
+              {/* v1 — legacy "Tải chứng nhận PNG" */}
+              {certV1Visible && (
+                <button
+                  onClick={downloadCertificateAsPng}
+                  disabled={downloading}
+                  className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-full transition-all duration-300 shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                >
+                  {downloading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  {downloading ? t('common.processing') : t('athlete.downloadCertificate')}
+                </button>
+              )}
+              {/* v1.1 — "Tải chứng nhận kèm ảnh" (component self-gates on
+                  template existence; renders nothing when not available) */}
               <CertificateWithPhotoCta
                 raceId={raceId}
                 bib={String(athlete.Bib)}
@@ -1784,7 +1843,7 @@ export default function AthleteDetailPage() {
           rankingHref={`/races/${slug}/ranking/${athlete.course_id}`}
           onResultImage={() => setShowImageEditor(true)}
           onShare={handleShareFacebook}
-          hasCertificate={certCtaVisible}
+          hasCertificate={certSectionVisible}
           onCertificate={() => {
             const el = document.getElementById('athlete-certificate-cta');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
