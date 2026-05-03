@@ -73,10 +73,31 @@ export default function TimingAlertsPage() {
     refetchInterval: 30_000,
   });
 
+  const [forcePollMessage, setForcePollMessage] = useState<string | null>(null);
+
   const forcePoll = useMutation({
     mutationFn: () => forcePollTimingAlert(raceId),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+      // UX feedback — hiển thị result poll cho admin biết
+      const courses = data.courses ?? [];
+      const created = courses.reduce((s, c) => s + c.alerts_created, 0);
+      const resolved = courses.reduce((s, c) => s + c.alerts_resolved, 0);
+      const skipped = courses.filter((c) => c.error === 'lock-held').length;
+      const failed = courses.filter((c) => c.status === 'FAILED').length;
+      const parts: string[] = [];
+      if (created > 0) parts.push(`+${created} alerts mới`);
+      if (resolved > 0) parts.push(`-${resolved} resolved`);
+      if (skipped > 0) parts.push(`${skipped} course skip (cron đang chạy)`);
+      if (failed > 0) parts.push(`${failed} FAILED`);
+      setForcePollMessage(
+        parts.length > 0 ? parts.join(', ') : 'Poll OK, không có thay đổi',
+      );
+      setTimeout(() => setForcePollMessage(null), 5000);
+    },
+    onError: (err: Error) => {
+      setForcePollMessage(`❌ ${err.message}`);
+      setTimeout(() => setForcePollMessage(null), 5000);
     },
   });
 
@@ -186,8 +207,54 @@ export default function TimingAlertsPage() {
     );
   }
 
+  const totalOpen = alerts.data?.stats.open_count ?? 0;
+  const criticalOpen = alertsByGroup.CRITICAL.filter((a) => a.status === 'OPEN').length;
+
   return (
     <div className="space-y-4">
+      {/* ─── Page header ─── */}
+      <div>
+        <h1 className="text-2xl font-bold">⚠ Timing Miss Alert</h1>
+        <p className="text-sm text-stone-600">
+          Phát hiện VĐV miss timing point realtime. Poll RaceResult API mỗi {config.data.poll_interval_seconds}s.
+        </p>
+      </div>
+
+      {/* ─── Help banner (collapsible UX intro) ─── */}
+      {totalOpen > 0 && criticalOpen > 0 && (
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="p-4 text-sm">
+            <p className="font-semibold text-red-900">
+              🔴 Cần xử lý ngay — {criticalOpen} CRITICAL alerts đang OPEN
+            </p>
+            <p className="mt-1 text-stone-700">
+              <strong>Quy trình:</strong>
+              <span className="ml-2">
+                (1) Verify với BTC qua radio/Zalo (chip miss thật hay vendor lag?)
+                <span className="mx-1">→</span>
+                (2) Click <strong>Resolve</strong> nếu xác nhận đã finish (manual add Finish vào RR), hoặc
+                <strong> False alarm</strong> nếu DNF confirmed
+                <span className="mx-1">→</span>
+                (3) Note PHẢI ghi rõ lý do (audit trail)
+              </span>
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {totalOpen === 0 && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-4 text-sm">
+            <p>
+              <strong>📖 Hướng dẫn nhanh:</strong> Trang này hiển thị VĐV bị miss
+              timing point thời gian thực. Hệ thống auto-detect, anh chỉ cần verify
+              + resolve. Khi có alert mới CRITICAL, chuông sẽ kêu (cần click 🔊 Sound
+              ON 1 lần để cấp permission browser).
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ─── Status header ─── */}
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -215,6 +282,7 @@ export default function TimingAlertsPage() {
               variant="outline"
               size="sm"
               onClick={() => setSoundEnabled((s) => !s)}
+              title="Bật/tắt chuông 880Hz khi có CRITICAL alert mới"
             >
               {soundEnabled ? '🔊 Sound ON' : '🔇 Sound OFF'}
             </Button>
@@ -223,21 +291,35 @@ export default function TimingAlertsPage() {
               size="sm"
               onClick={() => forcePoll.mutate()}
               disabled={forcePoll.isPending}
+              title="Trigger 1 poll cycle ngay (bypass cron 30s) — debug + race day emergency"
             >
-              {forcePoll.isPending ? 'Polling...' : '🔄 Force poll'}
+              {forcePoll.isPending ? 'Polling...' : '🔄 Force poll ngay'}
             </Button>
             <Link href={`/races/${raceId}/timing-alerts/config`}>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                title="Xem/sửa RR API keys, checkpoints, cutoff, polling interval"
+              >
                 ⚙ Config
               </Button>
             </Link>
             <Link href={`/races/${raceId}/timing-alerts/poll-logs`}>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                title="Audit log mỗi poll cycle (debug + post-race retrospective)"
+              >
                 📋 Poll logs
               </Button>
             </Link>
           </div>
         </CardContent>
+        {forcePollMessage && (
+          <CardContent className="border-t border-stone-200 bg-blue-50 px-4 py-2 text-sm text-blue-900">
+            {forcePollMessage}
+          </CardContent>
+        )}
       </Card>
 
       {/* ─── Stats by severity ─── */}

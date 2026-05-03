@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Observable, Subject, filter, map } from 'rxjs';
+import { Observable, Subject, filter, interval, map, merge } from 'rxjs';
 
 export type SseEventName =
   | 'alert.created'
   | 'alert.updated'
   | 'alert.resolved'
   | 'poll.completed'
-  | 'poll.failed';
+  | 'poll.failed'
+  | 'heartbeat';
 
 export interface SseEvent {
   event: SseEventName;
@@ -59,7 +60,18 @@ export class TimingAlertSseService {
     data: string;
     id: string;
   }> {
-    return this.events$.asObservable().pipe(
+    // Heartbeat mỗi 25s — chống proxy/load balancer drop idle connection.
+    // Next.js dev server + nginx default idle timeout ~60s. Heartbeat <
+    // timeout đảm bảo SSE stream stay alive khi không có alert events.
+    const heartbeat$ = interval(25_000).pipe(
+      map((tick) => ({
+        type: 'heartbeat' as SseEventName,
+        data: JSON.stringify({ tick, ts: Date.now() }),
+        id: `hb-${Date.now()}-${tick}`,
+      })),
+    );
+
+    const events$ = this.events$.asObservable().pipe(
       filter((e) => e.raceId === raceId),
       map((e, idx) => ({
         type: e.event,
@@ -67,5 +79,7 @@ export class TimingAlertSseService {
         id: `${Date.now()}-${idx}`,
       })),
     );
+
+    return merge(events$, heartbeat$);
   }
 }
