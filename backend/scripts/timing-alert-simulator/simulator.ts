@@ -267,19 +267,31 @@ function startServer(state: SimState, port: number): void {
       return;
     }
 
-    // RR Simple API pattern: /{eventId}/{apiKey}
-    // We accept anything — sim doesn't validate keys.
-    // Course name lấy từ ?course= query OR last path segment.
-    const courseName =
-      url.searchParams.get('course') ??
-      pathParts[pathParts.length - 1] ??
-      '';
+    // RR Simple API pattern: /{eventId}/{apiKey}[?course=X]
+    // Course resolution priority:
+    //   1. ?course=X query param (explicit)
+    //   2. Last path segment matching course name
+    //   3. Single course scenario → auto-pick that one (convenience cho test)
+    const courseFromQuery = url.searchParams.get('course');
+    const courseFromPath = pathParts[pathParts.length - 1] ?? '';
+    const availableCourses = Object.keys(state.scenario.courses);
 
-    if (!courseName || !state.scenario.courses[courseName]) {
+    let courseName = '';
+    if (courseFromQuery && state.scenario.courses[courseFromQuery]) {
+      courseName = courseFromQuery;
+    } else if (state.scenario.courses[courseFromPath]) {
+      courseName = courseFromPath;
+    } else if (availableCourses.length === 1) {
+      // Convenience: BE poll service builds URL như `/eventId/apiKey` —
+      // KHÔNG có ?course query. Nếu scenario có 1 course duy nhất, auto pick.
+      courseName = availableCourses[0];
+    }
+
+    if (!courseName) {
       res.writeHead(404);
       res.end(
         JSON.stringify({
-          error: `Course "${courseName}" not in scenario. Available: ${Object.keys(state.scenario.courses).join(', ')}`,
+          error: `No course resolved. Path=${url.pathname}, query.course=${courseFromQuery}. Available: ${availableCourses.join(', ')}`,
         }),
       );
       return;

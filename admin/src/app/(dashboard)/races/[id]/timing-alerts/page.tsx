@@ -138,6 +138,23 @@ export default function TimingAlertsPage() {
     }
   }, [soundEnabled]);
 
+  // CRITICAL: useMemo PHẢI gọi UNCONDITIONALLY trước mọi early return
+  // (Rules of Hooks). Bug đã từng: gọi sau `if (!config.data) return ...`
+  // → "Rendered more hooks than during the previous render" khi config
+  // chuyển từ pending → loaded.
+  const alertsByGroup = useMemo(() => {
+    const grouped: Record<TimingAlertSeverity, TimingAlert[]> = {
+      CRITICAL: [],
+      HIGH: [],
+      WARNING: [],
+      INFO: [],
+    };
+    for (const a of alerts.data?.items ?? []) {
+      grouped[a.severity].push(a);
+    }
+    return grouped;
+  }, [alerts.data]);
+
   // ─────────── UI ───────────
   if (authLoading) return <Skeleton className="h-64 w-full" />;
   if (!isAuthenticated) {
@@ -168,19 +185,6 @@ export default function TimingAlertsPage() {
       </div>
     );
   }
-
-  const alertsByGroup = useMemo(() => {
-    const grouped: Record<TimingAlertSeverity, TimingAlert[]> = {
-      CRITICAL: [],
-      HIGH: [],
-      WARNING: [],
-      INFO: [],
-    };
-    for (const a of alerts.data?.items ?? []) {
-      grouped[a.severity].push(a);
-    }
-    return grouped;
-  }, [alerts.data]);
 
   return (
     <div className="space-y-4">

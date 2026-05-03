@@ -478,12 +478,17 @@ export class TimingAlertPollService {
 
   /**
    * Manual resolve hoặc mark FALSE_ALARM. Idempotent — chỉ transitions từ OPEN.
+   *
+   * **IDOR fix:** filter compound `(_id, race_id)` ngăn admin Race A patch
+   * alert của Race B (URL alertId guess + Mongo ObjectId 24-hex enumerable
+   * trên race day với 10K alerts).
    */
   async resolveAlert(
     alertId: string,
     action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN',
     note: string,
     userId: string,
+    raceId: string,
   ): Promise<TimingAlertDocument> {
     let update: Record<string, unknown>;
     let auditAction: string;
@@ -510,8 +515,9 @@ export class TimingAlertPollService {
       };
     }
 
-    const updated = await this.alertModel.findByIdAndUpdate(
-      alertId,
+    // Compound filter `(_id, race_id)` chống IDOR cross-race.
+    const updated = await this.alertModel.findOneAndUpdate(
+      { _id: alertId, race_id: raceId },
       {
         ...update,
         $push: {
@@ -527,7 +533,9 @@ export class TimingAlertPollService {
     ).exec();
 
     if (!updated) {
-      throw new Error(`Alert ${alertId} not found`);
+      throw new Error(
+        `Alert ${alertId} not found in race ${raceId} (or wrong race scope)`,
+      );
     }
     this.sse.emit(
       action === 'REOPEN' ? 'alert.updated' : 'alert.resolved',
@@ -577,9 +585,13 @@ export class TimingAlertPollService {
         .lean<TimingAlertDocument[]>()
         .exec(),
       this.alertModel.countDocuments(filter).exec(),
+      // QC fix: stats by_severity PHẢI align với current filter (đặc biệt
+      // status). Trước đây aggregate `{race_id}` only → UI hiển thị tổng
+      // CRITICAL gồm cả RESOLVED/FALSE_ALARM → sai khi admin filter "OPEN"
+      // chỉ cần CRITICAL OPEN count.
       this.alertModel
         .aggregate<{ _id: TimingAlertSeverity; count: number }>([
-          { $match: { race_id: raceId } },
+          { $match: filter },
           { $group: { _id: '$severity', count: { $sum: 1 } } },
         ])
         .exec(),

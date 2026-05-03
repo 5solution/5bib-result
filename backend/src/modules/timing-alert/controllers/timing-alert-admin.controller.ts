@@ -136,15 +136,24 @@ export class TimingAlertAdminController {
   @Patch('alerts/:alertId')
   @ApiOperation({
     summary: 'Resolve / mark false alarm / reopen alert',
-    description: 'Idempotent state transitions. Audit log auto-append với userId.',
+    description:
+      'Idempotent state transitions. Audit log auto-append với userId. ' +
+      'IDOR fix: filter compound (_id, race_id) — admin Race A KHÔNG patch được alert Race B.',
   })
   async patchAlert(
+    @Param('raceId') raceId: string,
     @Param('alertId') alertId: string,
     @Body() body: AlertActionDto,
     @Req() req: AuthenticatedRequest,
   ) {
     const userId = req.user?.sub ?? 'unknown';
-    return this.pollService.resolveAlert(alertId, body.action, body.note, userId);
+    return this.pollService.resolveAlert(
+      alertId,
+      body.action,
+      body.note,
+      userId,
+      raceId,
+    );
   }
 
   @Get('poll-logs')
