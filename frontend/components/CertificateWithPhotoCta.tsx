@@ -19,6 +19,14 @@ interface Props {
   /** Runner's current avatar URL — used as initial photo in the modal. */
   initialPhotoUrl?: string | null;
   className?: string;
+  /**
+   * Visual variant.
+   * - `default`: large pill CTA (rounded-full, px-8 py-3.5) — used in the
+   *   standalone certificate section.
+   * - `compact`: small button matching the "Tạo ảnh ăn mừng" CTA — used
+   *   inline next to the achievement banner row.
+   */
+  variant?: 'default' | 'compact';
 }
 
 export default function CertificateWithPhotoCta({
@@ -28,6 +36,7 @@ export default function CertificateWithPhotoCta({
   runnerName,
   initialPhotoUrl,
   className = '',
+  variant = 'default',
 }: Props) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
@@ -57,11 +66,16 @@ export default function CertificateWithPhotoCta({
 
   if (!available) return null;
 
+  const baseStyle =
+    variant === 'compact'
+      ? 'w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 shadow-md shadow-orange-200 transition-all active:scale-95'
+      : 'inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-full transition-all duration-300 shadow-lg shadow-orange-200 hover:shadow-xl hover:shadow-orange-300 transform hover:-translate-y-0.5';
+
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-full transition-all duration-300 shadow-lg shadow-orange-200 hover:shadow-xl hover:shadow-orange-300 transform hover:-translate-y-0.5 ${className}`}
+        className={`${baseStyle} ${className}`}
       >
         <ImageIcon className="w-4 h-4" />
         Tải chứng nhận kèm ảnh
