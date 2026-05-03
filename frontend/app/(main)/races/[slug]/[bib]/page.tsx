@@ -1086,18 +1086,31 @@ export default function AthleteDetailPage() {
                       ))}
                     </div>
                   </div>
-                  {/* CTA — full-width trên mobile, auto-width trên sm+ */}
-                  <button
-                    type="button"
-                    onClick={() => setShowImageEditor(true)}
-                    className={`w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${hasCelebWorthyBadge
-                      ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-200'
-                      : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 shadow-sm'
-                      }`}
-                  >
-                    <span aria-hidden>🎨</span>
-                    <span>{hasCelebWorthyBadge ? 'Tạo ảnh ăn mừng' : 'Tạo ảnh kết quả'}</span>
-                  </button>
+                  {/* CTA group — "Tạo ảnh ăn mừng" + (optional) "Tải cert kèm ảnh".
+                      Stacked full-width trên mobile, side-by-side trên sm+.
+                      Cert v1.1 button tự ẩn khi race không có template +
+                      photo_area, nên không cần extra gate ở đây. */}
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 sm:shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowImageEditor(true)}
+                      className={`w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all active:scale-95 ${hasCelebWorthyBadge
+                        ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-200'
+                        : 'bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 shadow-sm'
+                        }`}
+                    >
+                      <span aria-hidden>🎨</span>
+                      <span>{hasCelebWorthyBadge ? 'Tạo ảnh ăn mừng' : 'Tạo ảnh kết quả'}</span>
+                    </button>
+                    <CertificateWithPhotoCta
+                      raceId={raceId}
+                      bib={String(athlete.Bib)}
+                      courseId={athlete.course_id}
+                      runnerName={athlete.Name}
+                      initialPhotoUrl={currentAvatarUrl || athlete.avatarUrl}
+                      variant="compact"
+                    />
+                  </div>
                 </div>
               )}
 
