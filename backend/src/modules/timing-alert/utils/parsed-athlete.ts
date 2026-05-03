@@ -1,5 +1,16 @@
 import { RaceResultApiItem } from '../../race-result/types/race-result-api.types';
-import { CourseCheckpoint } from '../schemas/timing-alert-config.schema';
+
+/**
+ * Internal checkpoint type cho miss detection logic.
+ *
+ * Race-domain config sống ở `race.courses[].checkpoints[]` Mongo schema
+ * (`{key, name, distanceKm}`). Poll service load Race document → map sang
+ * shape này trước khi pass vào MissDetector.
+ */
+export interface CourseCheckpoint {
+  key: string;
+  distance_km: number;
+}
 
 /**
  * Internal shape sau khi parse RR API response. Tách logic parse

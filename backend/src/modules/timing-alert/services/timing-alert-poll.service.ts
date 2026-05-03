@@ -17,6 +17,7 @@ import {
   TimingAlertConfig,
   TimingAlertConfigDocument,
 } from '../schemas/timing-alert-config.schema';
+import { Race, RaceDocument } from '../../races/schemas/race.schema';
 import { TimingAlertConfigService } from './timing-alert-config.service';
 import { RaceResultApiService } from '../../race-result/services/race-result-api.service';
 import { MissDetectorService, DetectionResult } from './miss-detector.service';
@@ -25,8 +26,19 @@ import {
   parseRaceResultAthlete,
   ParsedAthlete,
 } from '../utils/parsed-athlete';
+import { CourseCheckpoint } from '../utils/parsed-athlete';
 import { TimingAlertSseService } from './timing-alert-sse.service';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
+
+/**
+ * Parse "5K", "5KM", "42.195KM", "10km", "42 KM" → number km.
+ * Fallback null nếu không parse được.
+ */
+function parseDistanceStr(s: string | undefined | null): number | null {
+  if (!s) return null;
+  const m = s.match(/(\d+\.?\d*)/);
+  return m ? parseFloat(m[1]) : null;
+}
 
 /**
  * Phase 1B — orchestrate 1 poll cycle cho 1 race × 1 course.
@@ -60,6 +72,8 @@ export class TimingAlertPollService {
     private readonly pollModel: Model<TimingAlertPollDocument>,
     @InjectModel(TimingAlertConfig.name)
     private readonly configModel: Model<TimingAlertConfigDocument>,
+    @InjectModel(Race.name)
+    private readonly raceModel: Model<RaceDocument>,
     @InjectRedis() private readonly redis: Redis,
     private readonly configService: TimingAlertConfigService,
     private readonly apiService: RaceResultApiService,
@@ -86,7 +100,24 @@ export class TimingAlertPollService {
       return { courses: [] };
     }
 
-    const courses = Object.keys(config.rr_api_keys ?? {});
+    // Load Race document — single source of truth cho course config (apiUrl,
+    // checkpoints, cutoff). Manager review 03/05/2026 confirmed drop dup
+    // schema fields (rr_event_id, rr_api_keys, course_checkpoints, cutoff_times).
+    const race = await this.raceModel.findById(raceId).lean<RaceDocument>().exec();
+    if (!race) {
+      throw new Error(`Race document not found for race=${raceId}`);
+    }
+
+    // Filter courses có apiUrl (race-result module pattern — chỉ poll course
+    // được wire RR API key)
+    const eligibleCourses = (race.courses ?? []).filter((c) => c.apiUrl?.trim());
+    if (eligibleCourses.length === 0) {
+      this.logger.warn(
+        `[pollRace] race=${raceId} không có course nào có apiUrl — skip`,
+      );
+      return { courses: [] };
+    }
+
     const results: Array<{
       course: string;
       status: TimingAlertPollStatus;
@@ -95,9 +126,9 @@ export class TimingAlertPollService {
       error?: string;
     }> = [];
 
-    for (const courseName of courses) {
-      const result = await this.pollCourse(raceId, courseName, config, triggeredBy);
-      results.push({ course: courseName, ...result });
+    for (const course of eligibleCourses) {
+      const result = await this.pollCourse(raceId, course, config, triggeredBy);
+      results.push({ course: course.name, ...result });
     }
 
     await this.configService.updateLastPolled(raceId);
@@ -106,19 +137,30 @@ export class TimingAlertPollService {
 
   /**
    * Poll 1 race × 1 course. Lock-protected.
+   *
+   * Manager refactor 03/05/2026: course param giờ là `RaceCourse` document
+   * subobject từ Race document (KHÔNG phải course.name string). Service đọc
+   * `apiUrl, checkpoints, cutOffTime, courseId` thẳng từ subobject.
    */
   async pollCourse(
     raceId: string,
-    courseName: string,
+    course: {
+      courseId: string;
+      name: string;
+      apiUrl?: string;
+      cutOffTime?: string;
+      checkpoints?: Array<{ key: string; name: string; distance?: string; distanceKm?: number }>;
+    },
     config: TimingAlertConfigDocument,
     triggeredBy: string,
   ): Promise<{ status: TimingAlertPollStatus; alerts_created: number; alerts_resolved: number; error?: string }> {
-    const lockKey = `timing-alert:polling:${raceId}:${courseName}`;
+    const courseId = course.courseId;
+    const lockKey = `timing-alert:polling:${raceId}:${courseId}`;
     const ttl = Math.min(config.poll_interval_seconds ?? 90, 300);
     const acquired = await this.redis.set(lockKey, '1', 'EX', ttl, 'NX');
     if (acquired !== 'OK') {
       this.logger.warn(
-        `[pollCourse] race=${raceId} course=${courseName} lock held — skip`,
+        `[pollCourse] race=${raceId} course=${courseId} lock held — skip`,
       );
       return { status: 'PARTIAL', alerts_created: 0, alerts_resolved: 0, error: 'lock-held' };
     }
@@ -126,7 +168,7 @@ export class TimingAlertPollService {
     const t0 = Date.now();
     const pollLog = await this.pollModel.create({
       race_id: raceId,
-      course_name: courseName,
+      course_name: course.name,
       status: 'SUCCESS' as TimingAlertPollStatus, // optimistic, finalize cuối
       athletes_fetched: 0,
       alerts_created: 0,
@@ -136,18 +178,36 @@ export class TimingAlertPollService {
     });
 
     try {
-      // 1. Decrypt API key + build URL
-      const apiKey = await this.configService.decryptKeyForPoll(raceId, courseName);
-      const apiUrl = this.buildRaceResultUrl(config.rr_event_id, apiKey);
+      // 1. Validate apiUrl from race document (single source of truth)
+      const apiUrl = course.apiUrl?.trim();
+      if (!apiUrl) {
+        throw new Error(
+          `Course "${course.name}" thiếu apiUrl trong race document — sửa qua /admin/races/${raceId}/edit`,
+        );
+      }
 
       // 2. Fetch RR API (Phase 0 shared service)
       const rawAthletes = await this.apiService.fetchRaceResults(apiUrl);
 
-      // 3. Parse each athlete
-      const checkpoints = config.course_checkpoints?.[courseName] ?? [];
-      if (checkpoints.length === 0) {
-        throw new Error(`No checkpoints configured for course "${courseName}"`);
+      // 3. Map race.courses[].checkpoints → internal CourseCheckpoint shape
+      // Fallback: parse `distance` string ("5K") nếu `distanceKm` missing
+      // (legacy data — admin hasn't migrated yet).
+      const rawCheckpoints = course.checkpoints ?? [];
+      if (rawCheckpoints.length === 0) {
+        throw new Error(
+          `Course "${course.name}" thiếu checkpoints trong race document — sửa qua /admin/races/${raceId}/edit`,
+        );
       }
+      const checkpoints: CourseCheckpoint[] = rawCheckpoints
+        .map((cp) => ({
+          key: cp.key,
+          distance_km:
+            typeof cp.distanceKm === 'number'
+              ? cp.distanceKm
+              : (parseDistanceStr(cp.distance) ?? 0),
+        }))
+        .filter((cp) => cp.distance_km >= 0);
+
       const parsed: ParsedAthlete[] = rawAthletes
         .map((a) => parseRaceResultAthlete(a, checkpoints))
         .filter((a) => a.bib && a.bib !== '0');
@@ -157,8 +217,8 @@ export class TimingAlertPollService {
       let alertsUnchanged = 0;
       const detectedBibs = new Set<string>();
 
-      // TA-11: pre-load cutoff cho course
-      const cutoffTime = config.cutoff_times?.[courseName] ?? null;
+      // TA-11: cutoff time từ race document
+      const cutoffTime = course.cutOffTime?.trim() || null;
 
       for (const athlete of parsed) {
         const detection = this.missDetector.detect(
@@ -178,11 +238,11 @@ export class TimingAlertPollService {
 
         detectedBibs.add(athlete.bib);
 
-        // Compute projected rank — race_id giờ là Mongo string native, dùng
-        // trực tiếp cho race_results query. Không còn dual-ID complexity.
+        // Compute projected rank — race_id Mongo string + courseId từ race
+        // document (Manager refactor 03/05: drop dual-ID + course_name → courseId)
         const projectedRank = await this.projectedRankService.calculate(
-          config.race_id,
-          courseName, // TODO Phase 2: map course_name → mongo courseId qua races collection
+          raceId,
+          courseId,
           athlete.ageGroup,
           detection.projectedFinishSeconds,
         );
@@ -239,7 +299,7 @@ export class TimingAlertPollService {
       );
 
       this.sse.emit('poll.completed', raceId, {
-        course: courseName,
+        course: course.name,
         athletes_fetched: parsed.length,
         alerts_created: alertsCreated,
         alerts_resolved: alertsResolved,
@@ -247,7 +307,7 @@ export class TimingAlertPollService {
       });
 
       this.logger.log(
-        `[pollCourse] race=${raceId} course=${courseName} fetched=${parsed.length} created=${alertsCreated} resolved=${alertsResolved} ms=${duration}`,
+        `[pollCourse] race=${raceId} course=${course.name} fetched=${parsed.length} created=${alertsCreated} resolved=${alertsResolved} ms=${duration}`,
       );
 
       return {
@@ -269,9 +329,9 @@ export class TimingAlertPollService {
           },
         },
       );
-      this.sse.emit('poll.failed', raceId, { course: courseName, error: message });
+      this.sse.emit('poll.failed', raceId, { course: course.name, error: message });
       this.logger.error(
-        `[pollCourse] race=${raceId} course=${courseName} FAILED: ${message}`,
+        `[pollCourse] race=${raceId} course=${course.name} FAILED: ${message}`,
       );
       return { status: 'FAILED', alerts_created: 0, alerts_resolved: 0, error: message };
     } finally {
@@ -436,16 +496,6 @@ export class TimingAlertPollService {
       }
     }
     return resolved;
-  }
-
-  /**
-   * Build RR Simple API URL. Pattern: `https://api.raceresult.com/{eventId}/{apiKey}/...`
-   * Phase 1B v1: dùng default endpoint `?...` (RR Simple API trả full athletes).
-   * Future: caller có thể customize per-course endpoint nếu RR config khác nhau.
-   */
-  private buildRaceResultUrl(eventId: string, apiKey: string): string {
-    const base = process.env.RACERESULT_API_BASE_URL || 'https://api.raceresult.com';
-    return `${base}/${eventId}/${apiKey}`;
   }
 
   /**

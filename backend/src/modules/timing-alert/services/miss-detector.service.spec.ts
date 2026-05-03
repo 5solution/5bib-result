@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MissDetectorService } from './miss-detector.service';
-import { CourseCheckpoint } from '../schemas/timing-alert-config.schema';
+import { CourseCheckpoint } from '../utils/parsed-athlete';
 import { ParsedAthlete } from '../utils/parsed-athlete';
 
 const CP_42KM: CourseCheckpoint[] = [

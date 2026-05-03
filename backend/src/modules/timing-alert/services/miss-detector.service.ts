@@ -5,7 +5,7 @@ import {
   parseTimeToSeconds,
   secondsToHms,
 } from '../utils/parsed-athlete';
-import { CourseCheckpoint } from '../schemas/timing-alert-config.schema';
+import { CourseCheckpoint } from '../utils/parsed-athlete';
 import { TimingAlertSeverity } from '../schemas/timing-alert.schema';
 import { ProjectedRankResult } from './projected-rank.service';
 

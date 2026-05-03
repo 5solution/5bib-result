@@ -1,26 +1,28 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
   TimingAlertConfig,
   TimingAlertConfigDocument,
 } from '../schemas/timing-alert-config.schema';
-import { ApiKeyCrypto } from '../crypto/api-key.crypto';
+import { Race, RaceDocument } from '../../races/schemas/race.schema';
 import {
   CreateTimingAlertConfigDto,
   TimingAlertConfigResponseDto,
 } from '../dto/create-config.dto';
 
 /**
- * Config CRUD service. Single responsibility: persist + encrypt RR API keys
- * + return masked view cho admin UI.
+ * Config CRUD service — **CHỈ behavior knobs**.
  *
- * KHÔNG biết: poll engine, miss detector, MySQL legacy, master data.
+ * Manager refactor 03/05/2026:
+ * - DROP encrypt + decrypt + masking (race document `apiUrl` plaintext OK)
+ * - DROP rr_event_id, rr_api_keys, course_checkpoints, cutoff_times,
+ *   event_start_iso/end_iso fields (đọc từ race document)
+ * - GIỮ behavior: enabled, poll_interval_seconds, overdue_threshold_minutes,
+ *   top_n_alert + audit metadata
+ *
+ * Race-domain config (apiUrl, checkpoints, cutoff, window) sửa qua
+ * `/admin/races/[id]/edit`.
  */
 @Injectable()
 export class TimingAlertConfigService {
@@ -29,57 +31,34 @@ export class TimingAlertConfigService {
   constructor(
     @InjectModel(TimingAlertConfig.name)
     private readonly configModel: Model<TimingAlertConfigDocument>,
-    private readonly crypto: ApiKeyCrypto,
+    @InjectModel(Race.name)
+    private readonly raceModel: Model<RaceDocument>,
   ) {}
 
   /**
-   * Upsert config theo (race_id). Encrypt mọi API key trước khi save.
-   * Idempotent: gọi lại với keys mới → re-encrypt + replace map.
+   * Upsert config. Idempotent.
    *
-   * @param raceId MySQL race ID (numeric)
-   * @param dto plaintext API keys (sẽ được encrypt)
-   * @param userId từ Logto JWT (audit `enabled_by_user_id`)
+   * @param raceId Mongo race document `_id` (string). Race PHẢI tồn tại.
+   * @param dto behavior knobs only — race-domain fields sửa ở /races/[id]/edit
+   * @param userId từ Logto JWT (audit)
    */
   async upsert(
     raceId: string,
     dto: CreateTimingAlertConfigDto,
     userId: string,
   ): Promise<TimingAlertConfigResponseDto> {
-    if (!dto.rr_api_keys || Object.keys(dto.rr_api_keys).length === 0) {
-      throw new BadRequestException(
-        'rr_api_keys must contain at least 1 course key',
-      );
-    }
-
-    // Encrypt từng API key. Validate không rỗng + không trùng tên course
-    // checkpoints (consistency check — Mongo upsert sẽ overwrite nên cần
-    // validate input trước khi destroy data cũ).
-    const encryptedKeys: Record<string, string> = {};
-    for (const [courseName, plaintext] of Object.entries(dto.rr_api_keys)) {
-      if (typeof plaintext !== 'string' || plaintext.trim().length === 0) {
-        throw new BadRequestException(
-          `rr_api_keys["${courseName}"] phải là string không rỗng`,
-        );
-      }
-      // Match course tên trong rr_api_keys với course_checkpoints — silent
-      // mismatch sẽ làm poll skip course đó. Validate cho admin biết ngay.
-      if (!dto.course_checkpoints[courseName]) {
-        throw new BadRequestException(
-          `Course "${courseName}" có trong rr_api_keys nhưng KHÔNG có trong course_checkpoints. ` +
-            `Mọi course có API key phải có checkpoints definition.`,
-        );
-      }
-      encryptedKeys[courseName] = this.crypto.encrypt(plaintext.trim());
+    // Validate race exists
+    const race = await this.raceModel
+      .findById(raceId)
+      .select({ _id: 1 })
+      .lean()
+      .exec();
+    if (!race) {
+      throw new NotFoundException(`Race ${raceId} not found`);
     }
 
     const update = {
       race_id: raceId,
-      rr_event_id: dto.rr_event_id,
-      rr_api_keys: encryptedKeys,
-      course_checkpoints: dto.course_checkpoints,
-      cutoff_times: dto.cutoff_times ?? {},
-      event_start_iso: dto.event_start_iso ? new Date(dto.event_start_iso) : null,
-      event_end_iso: dto.event_end_iso ? new Date(dto.event_end_iso) : null,
       poll_interval_seconds: dto.poll_interval_seconds ?? 90,
       overdue_threshold_minutes: dto.overdue_threshold_minutes ?? 30,
       top_n_alert: dto.top_n_alert ?? 3,
@@ -97,119 +76,69 @@ export class TimingAlertConfigService {
       .exec();
 
     this.logger.log(
-      `[upsert] race=${raceId} courses=[${Object.keys(encryptedKeys).join(',')}] enabled=${doc.enabled} by=${userId}`,
+      `[upsert] race=${raceId} enabled=${doc.enabled} interval=${doc.poll_interval_seconds}s threshold=${doc.overdue_threshold_minutes}min by=${userId}`,
     );
 
-    // Return masked view — KHÔNG decrypt API keys ở đây.
-    return this.toMaskedResponse(doc, dto.rr_api_keys);
+    return this.toResponse(doc);
   }
 
-  /**
-   * Read config. Trả masked API key preview — caller (admin UI) thấy
-   * "LE2K...7VWA (32 chars)" thay vì plaintext.
-   *
-   * **Security:** decrypt KHÔNG xảy ra ở đây. Service poll engine sẽ tự
-   * decrypt khi cần gọi RR API qua `decryptForPoll()` method dưới.
-   */
   async getByRaceId(
     raceId: string,
   ): Promise<TimingAlertConfigResponseDto | null> {
     const doc = await this.configModel
       .findOne({ race_id: raceId })
-      .lean<TimingAlertConfig & { _id: unknown; encryptedKeys?: never }>()
+      .lean<TimingAlertConfig & { _id: unknown }>()
       .exec();
-
     if (!doc) return null;
-
-    // Mask qua decrypt → mask. Cost: O(n) decrypt per read. Phase 1A có thể
-    // accept (admin GET config rare). Phase 2 cache nếu cần.
-    const plaintextMap: Record<string, string> = {};
-    for (const [courseName, ct] of Object.entries(doc.rr_api_keys ?? {})) {
-      try {
-        plaintextMap[courseName] = this.crypto.decrypt(ct);
-      } catch (err) {
-        this.logger.warn(
-          `[getByRaceId] race=${raceId} course=${courseName} decrypt failed: ${(err as Error).message}`,
-        );
-        plaintextMap[courseName] = '';
-      }
-    }
-
-    return this.toMaskedResponse(doc, plaintextMap);
+    return this.toResponse(doc);
   }
 
   /**
-   * Decrypt API key cho 1 course — chỉ poll engine gọi (race day cron).
-   * KHÔNG bao giờ expose trên controller endpoint.
-   */
-  async decryptKeyForPoll(
-    raceId: string,
-    courseName: string,
-  ): Promise<string> {
-    const doc = await this.configModel
-      .findOne({ race_id: raceId })
-      .select({ rr_api_keys: 1 })
-      .lean()
-      .exec();
-    if (!doc) {
-      throw new NotFoundException(
-        `Timing alert config not found for race=${raceId}`,
-      );
-    }
-    const ct = doc.rr_api_keys?.[courseName];
-    if (!ct) {
-      throw new NotFoundException(
-        `No API key configured for race=${raceId} course="${courseName}"`,
-      );
-    }
-    return this.crypto.decrypt(ct);
-  }
-
-  /**
-   * Phase 1B + TA-14 — list active configs cho cron tick.
+   * List active configs cho cron tick.
    *
-   * "Active" =
-   *   - `enabled: true`, AND
-   *   - Race window: `event_start_iso - 1h` ≤ now ≤ `event_end_iso + 2h`,
-   *     hoặc cả 2 fields null/missing (legacy — admin chưa set window).
+   * "Active" = enabled=true AND race window khả dụng:
+   *   - Race document tồn tại
+   *   - `now` trong [race.startDate - 1h, race.endDate + 2h] (TA-14)
+   *   - Hoặc race.startDate/endDate null/undefined → luôn poll khi enabled
    *
-   * Tiết kiệm RR API call cho race draft / future / đã end. Race chưa
-   * config window → luôn poll khi enabled.
+   * Returns ARRAY of { config, race } pairs để caller có sẵn race document.
    */
   async listActiveConfigs(): Promise<TimingAlertConfigDocument[]> {
     const now = new Date();
     const oneHourMs = 60 * 60 * 1000;
     const twoHoursMs = 2 * 60 * 60 * 1000;
 
-    return this.configModel
-      .find({
-        enabled: true,
-        $and: [
-          {
-            $or: [
-              { event_start_iso: null },
-              {
-                event_start_iso: { $lte: new Date(now.getTime() + oneHourMs) },
-              },
-            ],
-          },
-          {
-            $or: [
-              { event_end_iso: null },
-              {
-                event_end_iso: { $gte: new Date(now.getTime() - twoHoursMs) },
-              },
-            ],
-          },
-        ],
-      })
+    const enabledConfigs = await this.configModel
+      .find({ enabled: true })
       .lean<TimingAlertConfigDocument[]>()
       .exec();
+
+    if (enabledConfigs.length === 0) return [];
+
+    // Lookup race documents để filter window
+    const raceIds = enabledConfigs.map((c) => c.race_id);
+    const races = await this.raceModel
+      .find({ _id: { $in: raceIds } })
+      .select({ _id: 1, startDate: 1, endDate: 1 })
+      .lean<Array<{ _id: unknown; startDate?: Date; endDate?: Date }>>()
+      .exec();
+    const raceById = new Map(races.map((r) => [String(r._id), r]));
+
+    return enabledConfigs.filter((cfg) => {
+      const race = raceById.get(cfg.race_id);
+      if (!race) {
+        // Race document deleted — config orphan. Skip safely.
+        return false;
+      }
+      // Window OK nếu cả 2 missing (legacy / chưa set) hoặc trong khoảng
+      const startOk =
+        !race.startDate || race.startDate.getTime() <= now.getTime() + oneHourMs;
+      const endOk =
+        !race.endDate || race.endDate.getTime() >= now.getTime() - twoHoursMs;
+      return startOk && endOk;
+    });
   }
 
-  /**
-   * Update last_polled_at — gọi sau mỗi poll cycle hoàn thành.
-   */
   async updateLastPolled(raceId: string): Promise<void> {
     await this.configModel
       .updateOne(
@@ -219,26 +148,12 @@ export class TimingAlertConfigService {
       .exec();
   }
 
-  /**
-   * Convert internal doc → response DTO với masked API keys. Helper private
-   * để đảm bảo 100% endpoint return masked, không leak plaintext qua bug.
-   */
-  private toMaskedResponse(
+  private toResponse(
     doc: TimingAlertConfig & { _id?: unknown },
-    plaintextMap: Record<string, string>,
   ): TimingAlertConfigResponseDto {
-    const masked: Record<string, string> = {};
-    for (const [courseName, plaintext] of Object.entries(plaintextMap)) {
-      masked[courseName] = ApiKeyCrypto.mask(plaintext);
-    }
-
     return {
       config_id: String(doc._id ?? ''),
       race_id: doc.race_id,
-      rr_event_id: doc.rr_event_id,
-      rr_api_keys_masked: masked,
-      course_checkpoints: doc.course_checkpoints,
-      cutoff_times: doc.cutoff_times ?? {},
       poll_interval_seconds: doc.poll_interval_seconds,
       overdue_threshold_minutes: doc.overdue_threshold_minutes,
       top_n_alert: doc.top_n_alert,

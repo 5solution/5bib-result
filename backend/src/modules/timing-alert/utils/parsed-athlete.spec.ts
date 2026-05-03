@@ -5,7 +5,7 @@ import {
   secondsToHms,
 } from './parsed-athlete';
 import { RaceResultApiItem } from '../../race-result/types/race-result-api.types';
-import { CourseCheckpoint } from '../schemas/timing-alert-config.schema';
+import { CourseCheckpoint } from '../utils/parsed-athlete';
 
 const CHECKPOINTS_42KM: CourseCheckpoint[] = [
   { key: 'Start', distance_km: 0 },

@@ -16,7 +16,7 @@ import {
   RaceResult,
   RaceResultSchema,
 } from '../race-result/schemas/race-result.schema';
-import { ApiKeyCrypto } from './crypto/api-key.crypto';
+import { Race, RaceSchema } from '../races/schemas/race.schema';
 import { TimingAlertConfigService } from './services/timing-alert-config.service';
 import { TimingAlertPollService } from './services/timing-alert-poll.service';
 import { MissDetectorService } from './services/miss-detector.service';
@@ -30,22 +30,15 @@ import { LogtoAuthModule } from '../logto-auth';
 import { RaceResultModule } from '../race-result/race-result.module';
 
 /**
- * Timing Miss Alert v1.0 — module độc lập 100% với MySQL legacy.
+ * Timing Miss Alert v1.0 — Mongo-native, dependency on Race document.
  *
- * **Architecture (Phase 1A skeleton):**
+ * **Architecture (Manager refactor 03/05/2026):**
  * - Mongo: 3 collection (`timing_alert_configs`, `timing_alerts`, `timing_alert_polls`)
- * - Crypto: AES-256-GCM cho RR API keys at rest
+ * - Read race document Mongo cho `apiUrl`, checkpoints, cutoff, window
+ * - DROP crypto (race document đã có apiUrl plaintext, race-result module
+ *   đã dùng OK 2 năm)
  * - DI: import `RaceResultModule` để reuse `RaceResultApiService` shared HTTP
- *   client (Phase 1B sẽ inject vào poll engine).
  * - Auth: `LogtoAdminGuard` cho mọi admin endpoint
- *
- * **Phase 1A scope:** config CRUD + crypto. KHÔNG cron, KHÔNG SSE, KHÔNG
- * miss detector — Phase 1B/1C/2.
- *
- * **Conditional load:** module được wire vào `app.module.ts` chỉ khi
- * `env.timingAlert.encryptionKey` non-empty (giống pattern Reconciliation
- * theo `env.platformDb.host`). Nếu env unset → module skip → admin endpoint
- * 404 gracefully, KHÔNG crash app.
  */
 @Module({
   imports: [
@@ -53,19 +46,17 @@ import { RaceResultModule } from '../race-result/race-result.module';
       { name: TimingAlertConfig.name, schema: TimingAlertConfigSchema },
       { name: TimingAlert.name, schema: TimingAlertSchema },
       { name: TimingAlertPoll.name, schema: TimingAlertPollSchema },
-      // Phase 1B — read-only access cho ProjectedRankService.
-      // Mongoose forFeature multi-register OK (cùng schema đăng ký lại
-      // ở RaceResultModule cho writes).
+      // Read-only access — Mongoose forFeature multi-register OK.
       { name: RaceResult.name, schema: RaceResultSchema },
+      // Race document — single source of truth cho apiUrl + checkpoints +
+      // cutoff + start/endDate. Cùng schema đăng ký ở RacesModule (write).
+      { name: Race.name, schema: RaceSchema },
     ]),
     LogtoAuthModule,
-    // Phase 0 refactor: reuse `RaceResultApiService` (HTTP client) cho
-    // poll engine race day. Phase 1B inject vào TimingAlertPollService.
     RaceResultModule,
   ],
   controllers: [TimingAlertAdminController, TimingAlertSseController],
   providers: [
-    ApiKeyCrypto,
     TimingAlertConfigService,
     TimingAlertPollService,
     MissDetectorService,

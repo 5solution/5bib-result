@@ -8,18 +8,12 @@ import { client } from './api-generated/client.gen';
 
 // ─────────── Types ───────────
 
-export interface CourseCheckpoint {
-  key: string;
-  distance_km: number;
-}
-
+/**
+ * Manager refactor 03/05/2026: config CHỈ behavior knobs.
+ * Race-domain config (apiUrl, checkpoints, cutoff, window) sửa qua
+ * `/admin/races/[id]/edit` — Timing Alert đọc race document.
+ */
 export interface TimingAlertConfigPayload {
-  rr_event_id: string;
-  rr_api_keys: Record<string, string>;
-  course_checkpoints: Record<string, CourseCheckpoint[]>;
-  cutoff_times?: Record<string, string>;
-  event_start_iso?: string;
-  event_end_iso?: string;
   poll_interval_seconds?: number;
   overdue_threshold_minutes?: number;
   top_n_alert?: number;
@@ -29,10 +23,6 @@ export interface TimingAlertConfigPayload {
 export interface TimingAlertConfigResponse {
   config_id: string;
   race_id: string;
-  rr_event_id: string;
-  rr_api_keys_masked: Record<string, string>;
-  course_checkpoints: Record<string, CourseCheckpoint[]>;
-  cutoff_times: Record<string, string>;
   poll_interval_seconds: number;
   overdue_threshold_minutes: number;
   top_n_alert: number;

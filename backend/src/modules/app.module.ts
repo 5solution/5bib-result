@@ -98,13 +98,10 @@ const platformDbModules = env.platformDb.host
     ]
   : [];
 
-// Conditional: Timing Miss Alert module — load chỉ khi env có
-// `TIMING_ALERT_ENCRYPTION_KEY` (32 bytes hex/base64). KHÔNG phụ thuộc
-// MySQL — chỉ Mongo + RR API. Module độc lập hoàn toàn với
-// `platformDbModules`. Skip nếu env unset → admin endpoint 404 gracefully.
-const timingAlertModules = env.timingAlert.encryptionKey
-  ? [TimingAlertModule]
-  : [];
+// Timing Miss Alert v1.0 — Mongo-native, no MySQL dependency.
+// Manager refactor 03/05: drop encryption key (race document apiUrl plaintext).
+// Module always loaded — feature flag qua per-race `enabled` field trong config.
+const timingAlertModules = [TimingAlertModule];
 
 // Conditional: chỉ khởi tạo Volunteer DB + Team Management module nếu VOLUNTEER_DB_HOST được cung cấp
 const volunteerDbModules = env.volunteerDb.host

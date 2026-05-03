@@ -1,16 +1,13 @@
 'use client';
 
 /**
- * Timing Miss Alert — Config page
+ * Timing Miss Alert — Config page (Manager refactor 03/05/2026)
  *
  * URL: `/races/{raceId}/timing-alerts/config`
  *
- * Phase 2 minimal config UI:
- * - Display current config (masked API keys)
- * - Inline edit RaceResult event ID + API keys per course
- * - Course checkpoints JSON editor (Phase 2 raw textarea, Phase 3 visual builder)
- * - Cutoff times + poll interval + thresholds
- * - Enable/disable toggle
+ * **Architecture:** chỉ behavior knobs (4 fields). Race-domain config
+ * (apiUrl, checkpoints, cutoff, window) sửa ở `/admin/races/[id]/edit`.
+ * Timing Alert đọc thẳng race document.
  */
 
 import { useState, useEffect } from 'react';
@@ -20,11 +17,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import {
   getTimingAlertConfig,
   upsertTimingAlertConfig,
-  type CourseCheckpoint,
 } from '@/lib/timing-alert-api';
 
 export default function TimingAlertConfigPage() {
@@ -41,28 +36,14 @@ export default function TimingAlertConfigPage() {
     enabled: !!raceId,
   });
 
-  const [rrEventId, setRrEventId] = useState('');
-  const [apiKeysJson, setApiKeysJson] = useState('');
-  const [checkpointsJson, setCheckpointsJson] = useState('');
-  const [cutoffJson, setCutoffJson] = useState('');
   const [pollInterval, setPollInterval] = useState(90);
   const [overdueMinutes, setOverdueMinutes] = useState(30);
   const [topNAlert, setTopNAlert] = useState(3);
   const [enabled, setEnabled] = useState(false);
-  const [eventStartIso, setEventStartIso] = useState('');
-  const [eventEndIso, setEventEndIso] = useState('');
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // Hydrate form khi load existing config
   useEffect(() => {
     if (!config.data) return;
-    setRrEventId(config.data.rr_event_id);
-    setApiKeysJson(JSON.stringify(config.data.rr_api_keys_masked, null, 2));
-    setCheckpointsJson(
-      JSON.stringify(config.data.course_checkpoints, null, 2),
-    );
-    setCutoffJson(JSON.stringify(config.data.cutoff_times ?? {}, null, 2));
     setPollInterval(config.data.poll_interval_seconds);
     setOverdueMinutes(config.data.overdue_threshold_minutes);
     setTopNAlert(config.data.top_n_alert);
@@ -70,63 +51,20 @@ export default function TimingAlertConfigPage() {
   }, [config.data]);
 
   const save = useMutation({
-    mutationFn: async () => {
-      setSaveError(null);
-      setSaveOk(false);
-
-      let apiKeys: Record<string, string>;
-      let checkpoints: Record<string, CourseCheckpoint[]>;
-      let cutoffs: Record<string, string>;
-
-      try {
-        apiKeys = JSON.parse(apiKeysJson);
-      } catch (e) {
-        throw new Error(`API keys JSON sai format: ${(e as Error).message}`);
-      }
-      try {
-        checkpoints = JSON.parse(checkpointsJson);
-      } catch (e) {
-        throw new Error(
-          `Course checkpoints JSON sai format: ${(e as Error).message}`,
-        );
-      }
-      try {
-        cutoffs = cutoffJson.trim() ? JSON.parse(cutoffJson) : {};
-      } catch (e) {
-        throw new Error(`Cutoff JSON sai format: ${(e as Error).message}`);
-      }
-
-      // Validation: API keys không phải plaintext re-input nếu là masked
-      // (LE2K...7VWA format) → admin phải nhập keys mới hoàn toàn nếu muốn
-      // edit. Server sẽ encrypt tất cả values sau.
-      const hasMaskedValues = Object.values(apiKeys).some((v) =>
-        v.includes('...') && v.includes('chars)'),
-      );
-      if (hasMaskedValues) {
-        throw new Error(
-          'API keys hiện đang masked preview — phải re-input plaintext keys mới (32-char) cho mọi course muốn edit',
-        );
-      }
-
-      return upsertTimingAlertConfig(raceId, {
-        rr_event_id: rrEventId.trim(),
-        rr_api_keys: apiKeys,
-        course_checkpoints: checkpoints,
-        cutoff_times: cutoffs,
-        event_start_iso: eventStartIso || undefined,
-        event_end_iso: eventEndIso || undefined,
+    mutationFn: () =>
+      upsertTimingAlertConfig(raceId, {
         poll_interval_seconds: pollInterval,
         overdue_threshold_minutes: overdueMinutes,
         top_n_alert: topNAlert,
         enabled,
-      });
-    },
+      }),
     onSuccess: () => {
-      setSaveOk(true);
+      setSaveMsg({ type: 'ok', text: '✅ Đã lưu config' });
       qc.invalidateQueries({ queryKey: ['timing-alert-config', raceId] });
+      setTimeout(() => setSaveMsg(null), 4000);
     },
     onError: (err: Error) => {
-      setSaveError(err.message);
+      setSaveMsg({ type: 'err', text: `❌ ${err.message}` });
     },
   });
 
@@ -137,53 +75,42 @@ export default function TimingAlertConfigPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Link
-            href={`/races/${raceId}/timing-alerts`}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            ← Quay lại Alerts dashboard
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold">
-            ⚙ Cấu hình Timing Miss Alert
-          </h1>
-          <p className="text-sm text-stone-600">
-            {isNew
-              ? 'Tạo cấu hình mới cho race này'
-              : `Race ID: ${config.data?.race_id} · Last polled: ${config.data?.last_polled_at ? new Date(config.data.last_polled_at).toLocaleString() : 'never'}`}
-          </p>
-        </div>
+      <div>
+        <Link
+          href={`/races/${raceId}/timing-alerts`}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          ← Quay lại Alerts dashboard
+        </Link>
+        <h1 className="mt-2 text-2xl font-bold">⚙ Cấu hình Timing Miss Alert</h1>
+        <p className="text-sm text-stone-600">
+          {isNew
+            ? 'Cấu hình mới cho race này'
+            : `Last polled: ${config.data?.last_polled_at ? new Date(config.data.last_polled_at).toLocaleString() : 'chưa poll lần nào'}`}
+        </p>
       </div>
 
-      {/* Help block */}
+      {/* Architecture explainer */}
       <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="p-4 space-y-2 text-sm">
-          <p className="font-semibold">📖 Hướng dẫn nhanh</p>
-          <ol className="ml-4 list-decimal space-y-1 text-stone-700">
-            <li>
-              <strong>RR Event ID:</strong> ID event trên RaceResult (VD
-              "396207"). BTC cấp.
-            </li>
-            <li>
-              <strong>API keys per course:</strong> Mỗi course (5KM/21KM/42KM)
-              có 1 API key 32-char riêng. Server tự encrypt AES-256-GCM.
-            </li>
-            <li>
-              <strong>Course checkpoints:</strong> Mỗi course list checkpoints
-              theo thứ tự, mỗi cái có <code>key</code> (match RR Chiptimes
-              JSON) + <code>distance_km</code>. <strong>BẮT BUỘC</strong> có
-              key "Finish" cuối cùng.
-            </li>
-            <li>
-              <strong>Cutoff times:</strong> Optional — VĐV slow vượt cutoff
-              KHÔNG flag (gate-closed, không phải miss thật).
-            </li>
-            <li>
-              <strong>Enable monitoring</strong>: bật khi đã sẵn sàng race day.
-              Cron tick mỗi 30s sẽ poll RR API.
-            </li>
-          </ol>
+        <CardContent className="space-y-2 p-4 text-sm">
+          <p className="font-semibold">📖 Trang này quản lý gì?</p>
+          <p className="text-stone-700">
+            Chỉ <strong>behavior knobs</strong> cho alert engine (interval poll,
+            ngưỡng phát hiện, severity). Toàn bộ <strong>data race</strong> (RR
+            API URL, course checkpoints, cutoff time, race start/end) được đọc
+            tự động từ race document.
+          </p>
+          <p className="text-stone-700">
+            <strong>Để config RR API + checkpoints:</strong>{' '}
+            <Link
+              href={`/races/${raceId}/edit`}
+              className="text-blue-700 underline hover:text-blue-900"
+            >
+              vào Race edit page
+            </Link>{' '}
+            → mỗi course có field <code>apiUrl</code> + array{' '}
+            <code>checkpoints</code> (key, distanceKm).
+          </p>
         </CardContent>
       </Card>
 
@@ -193,93 +120,10 @@ export default function TimingAlertConfigPage() {
           <CardTitle>{isNew ? 'Tạo config' : 'Chỉnh sửa config'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-semibold">RaceResult Event ID</label>
-            <input
-              type="text"
-              value={rrEventId}
-              onChange={(e) => setRrEventId(e.target.value)}
-              placeholder="396207"
-              className="w-full rounded border border-stone-300 px-3 py-2 font-mono text-sm"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-semibold">
-              RR API keys (JSON: course → key)
-            </label>
-            <textarea
-              value={apiKeysJson}
-              onChange={(e) => setApiKeysJson(e.target.value)}
-              rows={6}
-              placeholder='{ "42KM": "NFSJ1OMPKSSU35EWUD8XR8NJQBOFAS1Q" }'
-              className="w-full rounded border border-stone-300 px-3 py-2 font-mono text-xs"
-            />
-            <p className="text-xs text-stone-500">
-              Khi load config existing, keys hiển thị masked preview. Phải nhập
-              lại plaintext mới nếu muốn rotate.
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-semibold">
-              Course checkpoints (JSON: course → array)
-            </label>
-            <textarea
-              value={checkpointsJson}
-              onChange={(e) => setCheckpointsJson(e.target.value)}
-              rows={10}
-              placeholder='{"42KM": [{"key":"Start","distance_km":0},{"key":"TM1","distance_km":10},{"key":"Finish","distance_km":42.195}]}'
-              className="w-full rounded border border-stone-300 px-3 py-2 font-mono text-xs"
-            />
-            <p className="text-xs text-stone-500">
-              <strong>BẮT BUỘC</strong> có entry "Finish" cuối + distance_km
-              strictly increasing.
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-semibold">
-              Cutoff times (optional, JSON: course → "HH:MM:SS")
-            </label>
-            <textarea
-              value={cutoffJson}
-              onChange={(e) => setCutoffJson(e.target.value)}
-              rows={3}
-              placeholder='{ "42KM": "08:00:00" }'
-              className="w-full rounded border border-stone-300 px-3 py-2 font-mono text-xs"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-1">
               <label className="text-sm font-semibold">
-                Event start (optional)
-              </label>
-              <input
-                type="datetime-local"
-                value={eventStartIso}
-                onChange={(e) => setEventStartIso(e.target.value)}
-                className="w-full rounded border border-stone-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-semibold">
-                Event end (optional)
-              </label>
-              <input
-                type="datetime-local"
-                value={eventEndIso}
-                onChange={(e) => setEventEndIso(e.target.value)}
-                className="w-full rounded border border-stone-300 px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-semibold">
-                Poll interval (giây, 60-300)
+                Poll interval (giây)
               </label>
               <input
                 type="number"
@@ -289,7 +133,12 @@ export default function TimingAlertConfigPage() {
                 onChange={(e) => setPollInterval(Number(e.target.value))}
                 className="w-full rounded border border-stone-300 px-3 py-2 text-sm"
               />
+              <p className="text-xs text-stone-500">
+                60-300s. Default 90s. Cron tick mỗi 30s, internal lock cho per-
+                course rate.
+              </p>
             </div>
+
             <div className="space-y-1">
               <label className="text-sm font-semibold">
                 Overdue threshold (phút)
@@ -302,10 +151,14 @@ export default function TimingAlertConfigPage() {
                 onChange={(e) => setOverdueMinutes(Number(e.target.value))}
                 className="w-full rounded border border-stone-300 px-3 py-2 text-sm"
               />
+              <p className="text-xs text-stone-500">
+                VĐV trễ &gt; ngưỡng này so với projected → flag. Default 30.
+              </p>
             </div>
+
             <div className="space-y-1">
               <label className="text-sm font-semibold">
-                Top N alert CRITICAL
+                Top N → CRITICAL
               </label>
               <input
                 type="number"
@@ -315,31 +168,41 @@ export default function TimingAlertConfigPage() {
                 onChange={(e) => setTopNAlert(Number(e.target.value))}
                 className="w-full rounded border border-stone-300 px-3 py-2 text-sm"
               />
+              <p className="text-xs text-stone-500">
+                VĐV projected Top N (overall hoặc age group) → severity =
+                CRITICAL. Default 3.
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 rounded border border-stone-200 bg-stone-50 p-3">
-            <input
-              type="checkbox"
-              id="enabled"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4"
-            />
-            <label htmlFor="enabled" className="text-sm">
-              <strong>Enable monitoring</strong> — cron tick mỗi 30s sẽ poll
-              RR API + flag alerts
+          <div className="rounded border border-stone-200 bg-stone-50 p-3">
+            <label className="flex cursor-pointer items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                className="h-5 w-5"
+              />
+              <div>
+                <span className="font-semibold">Enable monitoring</span>
+                <p className="mt-0.5 text-xs text-stone-600">
+                  Khi bật, cron tick mỗi 30s sẽ poll <code>race.courses[].apiUrl</code>{' '}
+                  + flag alerts. Tắt giữa giờ race day chỉ trong emergency
+                  (BTC sẽ không nhận được CRITICAL push).
+                </p>
+              </div>
             </label>
           </div>
 
-          {saveError && (
-            <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-              ❌ {saveError}
-            </div>
-          )}
-          {saveOk && (
-            <div className="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-800">
-              ✅ Đã lưu config thành công
+          {saveMsg && (
+            <div
+              className={`rounded border p-3 text-sm ${
+                saveMsg.type === 'ok'
+                  ? 'border-green-300 bg-green-50 text-green-800'
+                  : 'border-red-300 bg-red-50 text-red-800'
+              }`}
+            >
+              {saveMsg.text}
             </div>
           )}
 
