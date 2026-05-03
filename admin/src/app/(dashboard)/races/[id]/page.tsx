@@ -707,6 +707,12 @@ export default function RaceDetailPage() {
             Chip Verify
           </Button>
         </Link>
+        <Link href={`/races/${raceId}/timing-alerts`}>
+          <Button variant="outline" size="sm">
+            <ShieldAlert className="size-4 mr-1.5" />
+            Timing Alerts
+          </Button>
+        </Link>
         <Link href={`/races/${raceId}/results`}>
           <Button variant="outline" size="sm">
             <Pencil className="size-4 mr-1.5" />
