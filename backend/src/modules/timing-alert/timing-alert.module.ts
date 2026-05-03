@@ -12,9 +12,20 @@ import {
   TimingAlertPoll,
   TimingAlertPollSchema,
 } from './schemas/timing-alert-poll.schema';
+import {
+  RaceResult,
+  RaceResultSchema,
+} from '../race-result/schemas/race-result.schema';
 import { ApiKeyCrypto } from './crypto/api-key.crypto';
 import { TimingAlertConfigService } from './services/timing-alert-config.service';
+import { TimingAlertPollService } from './services/timing-alert-poll.service';
+import { MissDetectorService } from './services/miss-detector.service';
+import { ProjectedRankService } from './services/projected-rank.service';
+import { TimingAlertSseService } from './services/timing-alert-sse.service';
+import { NotificationDispatcherService } from './services/notification-dispatcher.service';
+import { TimingAlertPollCron } from './jobs/timing-alert-poll.cron';
 import { TimingAlertAdminController } from './controllers/timing-alert-admin.controller';
+import { TimingAlertSseController } from './controllers/timing-alert-sse.controller';
 import { LogtoAuthModule } from '../logto-auth';
 import { RaceResultModule } from '../race-result/race-result.module';
 
@@ -42,15 +53,27 @@ import { RaceResultModule } from '../race-result/race-result.module';
       { name: TimingAlertConfig.name, schema: TimingAlertConfigSchema },
       { name: TimingAlert.name, schema: TimingAlertSchema },
       { name: TimingAlertPoll.name, schema: TimingAlertPollSchema },
+      // Phase 1B — read-only access cho ProjectedRankService.
+      // Mongoose forFeature multi-register OK (cùng schema đăng ký lại
+      // ở RaceResultModule cho writes).
+      { name: RaceResult.name, schema: RaceResultSchema },
     ]),
     LogtoAuthModule,
     // Phase 0 refactor: reuse `RaceResultApiService` (HTTP client) cho
-    // poll engine race day. Phase 1A chưa dùng — import sẵn để Phase 1B
-    // chỉ cần inject service vào poll service.
+    // poll engine race day. Phase 1B inject vào TimingAlertPollService.
     RaceResultModule,
   ],
-  controllers: [TimingAlertAdminController],
-  providers: [ApiKeyCrypto, TimingAlertConfigService],
+  controllers: [TimingAlertAdminController, TimingAlertSseController],
+  providers: [
+    ApiKeyCrypto,
+    TimingAlertConfigService,
+    TimingAlertPollService,
+    MissDetectorService,
+    ProjectedRankService,
+    TimingAlertSseService,
+    NotificationDispatcherService,
+    TimingAlertPollCron,
+  ],
   exports: [TimingAlertConfigService],
 })
 export class TimingAlertModule {}

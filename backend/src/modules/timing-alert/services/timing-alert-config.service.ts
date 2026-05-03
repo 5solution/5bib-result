@@ -74,6 +74,7 @@ export class TimingAlertConfigService {
 
     const update = {
       mysql_race_id: raceId,
+      mongo_race_id: dto.mongo_race_id ?? null,
       rr_event_id: dto.rr_event_id,
       rr_api_keys: encryptedKeys,
       course_checkpoints: dto.course_checkpoints,
@@ -164,6 +165,32 @@ export class TimingAlertConfigService {
   }
 
   /**
+   * Phase 1B — list active configs cho cron tick.
+   * "Active" = `enabled: true`. Phase 1B accept đơn giản, Phase 1C có thể
+   * thêm filter race window (event_start - 1h → event_end + 2h).
+   *
+   * Returns array config docs raw (KHÔNG decrypt — caller decrypt per course).
+   */
+  async listActiveConfigs(): Promise<TimingAlertConfigDocument[]> {
+    return this.configModel
+      .find({ enabled: true })
+      .lean<TimingAlertConfigDocument[]>()
+      .exec();
+  }
+
+  /**
+   * Update last_polled_at — gọi sau mỗi poll cycle hoàn thành.
+   */
+  async updateLastPolled(raceId: number): Promise<void> {
+    await this.configModel
+      .updateOne(
+        { mysql_race_id: raceId },
+        { $set: { last_polled_at: new Date() } },
+      )
+      .exec();
+  }
+
+  /**
    * Convert internal doc → response DTO với masked API keys. Helper private
    * để đảm bảo 100% endpoint return masked, không leak plaintext qua bug.
    */
@@ -179,6 +206,7 @@ export class TimingAlertConfigService {
     return {
       config_id: String(doc._id ?? ''),
       mysql_race_id: doc.mysql_race_id,
+      mongo_race_id: doc.mongo_race_id ?? null,
       rr_event_id: doc.rr_event_id,
       rr_api_keys_masked: masked,
       course_checkpoints: doc.course_checkpoints,

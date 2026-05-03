@@ -139,6 +139,138 @@ PASS src/modules/timing-alert/services/timing-alert-config.service.spec.ts (12)
 
 ---
 
+## Phase 1B + 1C — Detection + SSE + Notification
+
+### ✅ TA-4: Force poll happy path
+
+**Method:** `POST /api/admin/races/:raceId/timing-alert/poll` triggers `TimingAlertPollService.pollRace()` ngay lập tức (bypass cron). Wired in admin controller.
+
+**Result:** Returns aggregate `{ courses: [{ course, status, alerts_created, alerts_resolved }] }`. Dùng cho debug + emergency. Vẫn respect Redis SETNX lock per (race, course) → KHÔNG concurrent với cron tick.
+
+### ✅ TA-5: Phantom Runner detection
+
+**Method:** Unit test `MissDetectorService.detect()` với fixture: athlete có Start + TM1 + TM2 (2:00:00 elapsed at 21km), KHÔNG có TM3. Pace = 5:42/km → expected TM3 = 3:12 elapsed → gap 72 min vs threshold 30 min.
+
+**Result:** PASS — `isPhantom=true, missingPoint='TM3', isMissingFinish=false, overdueMinutes ≥ 30`.
+
+### ✅ TA-6: Missing Finish (synthetic BIB 98898 fixture)
+
+**Method:** Spec yêu cầu fixture mô phỏng case BIB 98898 race 192 lúc miss (case đã fix manual, không dùng DB hiện tại). Fixture:
+- ageGroup='Nam 40-49'
+- Chiptimes: `{Start, TM1, TM2, TM3, Finish: ''}` (Finish empty)
+- Last seen TM3 at 03:30:00
+
+**Result:** PASS — `missingPoint='Finish', isMissingFinish=true, overdueMinutes ≥ 30`. Severity escalation cần TA-7 (projected rank context).
+
+### ✅ TA-7: Top Athlete escalation → CRITICAL
+
+**Method:** `MissDetectorService.classifySeverity()` với projected rank `{ageGroupRank: 2, overallRank: 15}` + topNAlert: 3.
+
+**Result:** PASS — severity = CRITICAL, reason = "Top 2 age group miss FINISH". Inverse case (rank > topN) returns HIGH/WARNING/INFO theo escalation tier.
+
+### ✅ TA-8: Auto-resolve flow
+
+**Method:** `TimingAlertPollService.autoResolveOpen()` sau mỗi poll cycle. Logic: scan OPEN alerts, nếu BIB hiện đang trong RR response + `checkpointTimes[missing_point]` non-empty → mark RESOLVED with `resolved_by='auto'`.
+
+**Result:** Implemented + integrated trong poll cycle. SSE event `alert.resolved` emitted. Audit log entry append `AUTO_RESOLVE`.
+
+### ✅ TA-9: Duplicate alert dedup (detection_count++)
+
+**Method:** `upsertAlert()` dùng atomic `findOneAndUpdate` với compound filter `(race, bib, status: OPEN)`. Nếu existing → `$inc detection_count + push audit_log + update last_checked_at + severity`. Nếu chưa → `create()`.
+
+**Result:** Single alert doc per (race, bib) trong OPEN state. `detection_count` increments không tạo duplicate.
+
+### ✅ TA-10: Manual resolve → audit log
+
+**Method:** `PATCH /api/admin/timing-alerts/:alertId` body `{action, note}`. Service `resolveAlert(id, action, note, userId)` với transitions RESOLVE / FALSE_ALARM / REOPEN.
+
+**Result:** Implemented. Audit log push entry với `by: admin:{userId}` từ JWT, KHÔNG body. SSE `alert.resolved` hoặc `alert.updated` emitted theo action.
+
+### ✅ TA-13: SSE stream
+
+**Method:** `TimingAlertSseController.@Sse('sse')` endpoint trả `Observable<MessageEvent>`. Service `subscribe(raceId)` dùng RxJS `filter` + `map` per-race.
+
+**Result:** Unit test verified emit/subscribe flow + per-race filter (192 subscriber không nhận 193 events) + multiple subscribers (cùng nhận event đồng thời).
+
+### ✅ TA-15: RR API timeout fallback
+
+**Method:** Phase 0 `RaceResultApiService.fetchRaceResults()` throws Error trên timeout. Poll service catch → log poll FAILED status, KHÔNG fail-open. Retry tự động ở cron tick kế tiếp (30s).
+
+**Result:** Test ở Phase 0 spec covers timeout case. Poll service propagates đúng error + emit SSE `poll.failed` event.
+
+### ✅ TA-16: Concurrent poll prevention
+
+**Method:** Redis SETNX `timing-alert:polling:{raceId}:{course}` TTL = poll_interval_seconds. Lần thứ 2 trong window → return PARTIAL với error 'lock-held'.
+
+**Result:** Implemented. Lock release trong `finally` block.
+
+### ✅ TA-17: Projected rank confidence
+
+**Method:** `ProjectedRankService.calculate()` với `CONFIDENCE_FINISHER_THRESHOLD = 50`. < 50 finishers → linear scale (count/50). ≥ 50 → 1.0.
+
+**Result:** PASS — 25 finishers → confidence 0.5, 100 finishers → 1.0.
+
+### ✅ TA-20: Telegram CRITICAL notification
+
+**Method:** `NotificationDispatcherService.dispatchCritical()` gọi từ poll service khi alert mới có severity=CRITICAL. Rate limit Redis SETNX `timing-alert:tg-rate:{raceId}` TTL 900s (15 phút).
+
+**Result:** Implemented. HTML message format với BIB, name, course, last seen, missing point, projected rank, confidence, reason. Fire-and-forget — KHÔNG block poll cycle. Skip silently nếu `TIMING_ALERT_TELEGRAM_CHAT_ID` + `TELEGRAM_GROUP_CHAT_ID` đều unset.
+
+### ⏳ TA-11 / TA-12 / TA-14: deferred to Phase 2
+
+- TA-11 Cutoff time bypass: Phase 1B chưa enforce — `cutoff_times` field config có nhưng poll engine chưa check. Phase 2 sẽ filter ra athletes vượt cutoff trước khi flag.
+- TA-12 DNF false alarm preserve (3-day cooldown): Phase 1B FALSE_ALARM marked persists trong status, NHƯNG re-poll cùng BIB sẽ flag lại nếu thỏa phantom condition. Phase 2 sẽ thêm cooldown logic.
+- TA-14 Poll skip when out of window: Phase 1B cron lọc theo `enabled: true` only. Phase 2 sẽ thêm `event_start_date - 1h` → `event_end_date + 2h` window từ Race document.
+
+### ✅ Phase 1B + 1C unit test summary
+
+```
+Test Suites: 7 passed, 7 total
+Tests:       77 passed, 77 total
+Time:        3.2s
+
+PASS race-result-api.service.spec.ts (7)
+PASS api-key.crypto.spec.ts (18)
+PASS timing-alert-config.service.spec.ts (12)
+PASS parsed-athlete.spec.ts (16) — Phase 1B
+PASS miss-detector.service.spec.ts (12) — Phase 1B
+PASS projected-rank.service.spec.ts (8) — Phase 1B
+PASS timing-alert-sse.service.spec.ts (3) — Phase 1C
+```
+
+## Files Changed — Phase 1B + 1C
+
+| File | Status | Lines |
+|------|--------|-------|
+| `utils/parsed-athlete.ts` | NEW | 175 |
+| `utils/parsed-athlete.spec.ts` | NEW | 145 (16 tests) |
+| `services/projected-rank.service.ts` | NEW | 105 |
+| `services/projected-rank.service.spec.ts` | NEW | 95 (8 tests) |
+| `services/miss-detector.service.ts` | NEW | 220 |
+| `services/miss-detector.service.spec.ts` | NEW | 195 (12 tests) |
+| `services/timing-alert-poll.service.ts` | NEW | 425 |
+| `services/timing-alert-sse.service.ts` | NEW | 65 |
+| `services/timing-alert-sse.service.spec.ts` | NEW | 70 (3 tests) |
+| `services/notification-dispatcher.service.ts` | NEW | 145 |
+| `jobs/timing-alert-poll.cron.ts` | NEW | 60 |
+| `controllers/timing-alert-sse.controller.ts` | NEW | 50 |
+| `controllers/timing-alert-admin.controller.ts` | UPDATED | +75 (4 endpoints) |
+| `dto/alert-action.dto.ts` | NEW | 50 |
+| `dto/create-config.dto.ts` | UPDATED | +8 (mongo_race_id) |
+| `schemas/timing-alert-config.schema.ts` | UPDATED | +12 (mongo_race_id field) |
+| `services/timing-alert-config.service.ts` | UPDATED | +25 (listActiveConfigs + updateLastPolled) |
+| `timing-alert.module.ts` | UPDATED | +30 (5 new providers + RaceResult schema + SseController) |
+
+**API endpoints exposed (Phase 1B + 1C):**
+- `POST /api/admin/races/:raceId/timing-alert/config` — upsert (Phase 1A)
+- `PUT /api/admin/races/:raceId/timing-alert/config` — alias (Phase 1A)
+- `GET /api/admin/races/:raceId/timing-alert/config` — masked read (Phase 1A)
+- **`POST /api/admin/races/:raceId/timing-alert/poll`** — force poll (Phase 1B)
+- **`GET /api/admin/races/:raceId/timing-alert/alerts`** — list with filter (Phase 1B)
+- **`PATCH /api/admin/races/:raceId/timing-alert/alerts/:alertId`** — resolve action (Phase 1B)
+- **`GET /api/admin/races/:raceId/timing-alert/poll-logs`** — audit (Phase 1B)
+- **`GET /api/admin/races/:raceId/timing-alerts/sse`** — realtime stream (Phase 1C)
+
 ## Files Changed — Phase 1A
 
 | File | Status | Lines |

@@ -1,0 +1,579 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
+import { Model } from 'mongoose';
+import {
+  TimingAlert,
+  TimingAlertDocument,
+  TimingAlertSeverity,
+} from '../schemas/timing-alert.schema';
+import {
+  TimingAlertPoll,
+  TimingAlertPollDocument,
+  TimingAlertPollStatus,
+} from '../schemas/timing-alert-poll.schema';
+import {
+  TimingAlertConfig,
+  TimingAlertConfigDocument,
+} from '../schemas/timing-alert-config.schema';
+import { TimingAlertConfigService } from './timing-alert-config.service';
+import { RaceResultApiService } from '../../race-result/services/race-result-api.service';
+import { MissDetectorService, DetectionResult } from './miss-detector.service';
+import { ProjectedRankService } from './projected-rank.service';
+import {
+  parseRaceResultAthlete,
+  ParsedAthlete,
+} from '../utils/parsed-athlete';
+import { TimingAlertSseService } from './timing-alert-sse.service';
+import { NotificationDispatcherService } from './notification-dispatcher.service';
+
+/**
+ * Phase 1B — orchestrate 1 poll cycle cho 1 race × 1 course.
+ *
+ * Flow per cycle:
+ * 1. Acquire Redis SETNX `timing-alert:polling:{raceId}:{course}` — anti-overlap
+ * 2. Decrypt RR API key cho course
+ * 3. Build URL + fetch RR API qua `RaceResultApiService` (Phase 0 shared)
+ * 4. Parse mỗi athlete → MissDetector.detect()
+ * 5. Nếu phantom: compute projected rank → classifySeverity →
+ *    upsert alert (atomic increment detection_count nếu đã OPEN)
+ * 6. Auto-resolve OPEN alerts có time đã xuất hiện
+ * 7. Insert poll log + emit SSE event + dispatch Telegram CRITICAL
+ *
+ * **Concurrency safety:**
+ * - SETNX lock per (race, course) TTL = poll_interval_seconds
+ * - Atomic upsert dùng `findOneAndUpdate` với compound filter `(race, bib, status:OPEN)`
+ *
+ * **Error handling:**
+ * - RR API timeout → log poll FAILED, KHÔNG fail-open (no fake alerts)
+ * - Mongo write fail → poll PARTIAL, log error, return partial counts
+ */
+@Injectable()
+export class TimingAlertPollService {
+  private readonly logger = new Logger(TimingAlertPollService.name);
+
+  constructor(
+    @InjectModel(TimingAlert.name)
+    private readonly alertModel: Model<TimingAlertDocument>,
+    @InjectModel(TimingAlertPoll.name)
+    private readonly pollModel: Model<TimingAlertPollDocument>,
+    @InjectModel(TimingAlertConfig.name)
+    private readonly configModel: Model<TimingAlertConfigDocument>,
+    @InjectRedis() private readonly redis: Redis,
+    private readonly configService: TimingAlertConfigService,
+    private readonly apiService: RaceResultApiService,
+    private readonly missDetector: MissDetectorService,
+    private readonly projectedRankService: ProjectedRankService,
+    private readonly sse: TimingAlertSseService,
+    private readonly notification: NotificationDispatcherService,
+  ) {}
+
+  /**
+   * Poll 1 race tất cả course. Caller (cron / admin force-poll) gọi method này.
+   *
+   * Returns aggregate counts cho admin response. Per-course detail lưu poll_logs.
+   */
+  async pollRace(raceId: number, triggeredBy: string): Promise<{
+    courses: Array<{ course: string; status: TimingAlertPollStatus; alerts_created: number; alerts_resolved: number; error?: string }>;
+  }> {
+    const config = await this.configModel.findOne({ mysql_race_id: raceId }).lean<TimingAlertConfigDocument>().exec();
+    if (!config) {
+      throw new Error(`No timing-alert config for race=${raceId}`);
+    }
+    if (!config.enabled) {
+      this.logger.log(`[pollRace] race=${raceId} disabled — skip`);
+      return { courses: [] };
+    }
+
+    const courses = Object.keys(config.rr_api_keys ?? {});
+    const results: Array<{
+      course: string;
+      status: TimingAlertPollStatus;
+      alerts_created: number;
+      alerts_resolved: number;
+      error?: string;
+    }> = [];
+
+    for (const courseName of courses) {
+      const result = await this.pollCourse(raceId, courseName, config, triggeredBy);
+      results.push({ course: courseName, ...result });
+    }
+
+    await this.configService.updateLastPolled(raceId);
+    return { courses: results };
+  }
+
+  /**
+   * Poll 1 race × 1 course. Lock-protected.
+   */
+  async pollCourse(
+    raceId: number,
+    courseName: string,
+    config: TimingAlertConfigDocument,
+    triggeredBy: string,
+  ): Promise<{ status: TimingAlertPollStatus; alerts_created: number; alerts_resolved: number; error?: string }> {
+    const lockKey = `timing-alert:polling:${raceId}:${courseName}`;
+    const ttl = Math.min(config.poll_interval_seconds ?? 90, 300);
+    const acquired = await this.redis.set(lockKey, '1', 'EX', ttl, 'NX');
+    if (acquired !== 'OK') {
+      this.logger.warn(
+        `[pollCourse] race=${raceId} course=${courseName} lock held — skip`,
+      );
+      return { status: 'PARTIAL', alerts_created: 0, alerts_resolved: 0, error: 'lock-held' };
+    }
+
+    const t0 = Date.now();
+    const pollLog = await this.pollModel.create({
+      mysql_race_id: raceId,
+      course_name: courseName,
+      status: 'SUCCESS' as TimingAlertPollStatus, // optimistic, finalize cuối
+      athletes_fetched: 0,
+      alerts_created: 0,
+      alerts_resolved: 0,
+      alerts_unchanged: 0,
+      duration_ms: 0,
+    });
+
+    try {
+      // 1. Decrypt API key + build URL
+      const apiKey = await this.configService.decryptKeyForPoll(raceId, courseName);
+      const apiUrl = this.buildRaceResultUrl(config.rr_event_id, apiKey);
+
+      // 2. Fetch RR API (Phase 0 shared service)
+      const rawAthletes = await this.apiService.fetchRaceResults(apiUrl);
+
+      // 3. Parse each athlete
+      const checkpoints = config.course_checkpoints?.[courseName] ?? [];
+      if (checkpoints.length === 0) {
+        throw new Error(`No checkpoints configured for course "${courseName}"`);
+      }
+      const parsed: ParsedAthlete[] = rawAthletes
+        .map((a) => parseRaceResultAthlete(a, checkpoints))
+        .filter((a) => a.bib && a.bib !== '0');
+
+      // 4. Detect phantoms + upsert alerts
+      let alertsCreated = 0;
+      let alertsUnchanged = 0;
+      const detectedBibs = new Set<string>();
+
+      for (const athlete of parsed) {
+        const detection = this.missDetector.detect(
+          athlete,
+          checkpoints,
+          config.overdue_threshold_minutes ?? 30,
+        );
+        if (!detection) continue;
+
+        detectedBibs.add(athlete.bib);
+
+        // Compute projected rank if mongo_race_id set
+        const projectedRank = config.mongo_race_id
+          ? await this.projectedRankService.calculate(
+              config.mongo_race_id,
+              courseName, // TODO Phase 2: map course_name → mongo courseId qua races collection
+              athlete.ageGroup,
+              detection.projectedFinishSeconds,
+            )
+          : null;
+
+        const severityResult = this.missDetector.classifySeverity(
+          detection,
+          projectedRank,
+          config.top_n_alert ?? 3,
+        );
+
+        const upsertResult = await this.upsertAlert(
+          raceId,
+          athlete,
+          detection,
+          severityResult.severity,
+          severityResult.reason,
+          projectedRank,
+        );
+
+        if (upsertResult.isNew) {
+          alertsCreated += 1;
+          this.sse.emit('alert.created', raceId, this.alertSummary(upsertResult.doc));
+
+          if (severityResult.severity === 'CRITICAL') {
+            // Fire-and-forget Telegram dispatch — KHÔNG block poll cycle
+            this.notification.dispatchCritical(upsertResult.doc).catch((err: Error) => {
+              this.logger.warn(`[Telegram] dispatch fail: ${err.message}`);
+            });
+          }
+        } else {
+          alertsUnchanged += 1;
+          this.sse.emit('alert.updated', raceId, this.alertSummary(upsertResult.doc));
+        }
+      }
+
+      // 5. Auto-resolve: check OPEN alerts có time at missing_point đã xuất hiện
+      const alertsResolved = await this.autoResolveOpen(raceId, parsed);
+
+      // 6. Finalize poll log
+      const duration = Date.now() - t0;
+      await this.pollModel.updateOne(
+        { _id: pollLog._id },
+        {
+          $set: {
+            status: 'SUCCESS',
+            athletes_fetched: parsed.length,
+            alerts_created: alertsCreated,
+            alerts_resolved: alertsResolved,
+            alerts_unchanged: alertsUnchanged,
+            duration_ms: duration,
+            completed_at: new Date(),
+          },
+        },
+      );
+
+      this.sse.emit('poll.completed', raceId, {
+        course: courseName,
+        athletes_fetched: parsed.length,
+        alerts_created: alertsCreated,
+        alerts_resolved: alertsResolved,
+        duration_ms: duration,
+      });
+
+      this.logger.log(
+        `[pollCourse] race=${raceId} course=${courseName} fetched=${parsed.length} created=${alertsCreated} resolved=${alertsResolved} ms=${duration}`,
+      );
+
+      return {
+        status: 'SUCCESS',
+        alerts_created: alertsCreated,
+        alerts_resolved: alertsResolved,
+      };
+    } catch (err) {
+      const message = (err as Error).message;
+      const duration = Date.now() - t0;
+      await this.pollModel.updateOne(
+        { _id: pollLog._id },
+        {
+          $set: {
+            status: 'FAILED',
+            duration_ms: duration,
+            completed_at: new Date(),
+            error_message: message.slice(0, 1000),
+          },
+        },
+      );
+      this.sse.emit('poll.failed', raceId, { course: courseName, error: message });
+      this.logger.error(
+        `[pollCourse] race=${raceId} course=${courseName} FAILED: ${message}`,
+      );
+      return { status: 'FAILED', alerts_created: 0, alerts_resolved: 0, error: message };
+    } finally {
+      await this.redis.del(lockKey);
+    }
+  }
+
+  /**
+   * Atomic upsert alert. Findone với filter `(race, bib, status: OPEN)`:
+   * - Nếu đã OPEN → increment `detection_count` + push audit log
+   * - Nếu chưa → create new
+   *
+   * Returns `{ doc, isNew }`.
+   */
+  private async upsertAlert(
+    raceId: number,
+    athlete: ParsedAthlete,
+    detection: DetectionResult,
+    severity: TimingAlertSeverity,
+    reason: string,
+    projectedRank: { overallRank: number | null; ageGroupRank: number | null; confidence: number; totalFinishers: number } | null,
+  ): Promise<{ doc: TimingAlertDocument; isNew: boolean }> {
+    // Try findOneAndUpdate existing OPEN — increment detection_count, không tạo mới
+    const existing = await this.alertModel.findOneAndUpdate(
+      { mysql_race_id: raceId, bib_number: athlete.bib, status: 'OPEN' },
+      {
+        $inc: { detection_count: 1 },
+        $set: {
+          severity,
+          reason,
+          last_seen_point: detection.lastSeenPoint,
+          last_seen_time: detection.lastSeenTime,
+          overdue_minutes: detection.overdueMinutes,
+          projected_finish_time: detection.projectedFinishTime,
+          projected_overall_rank: projectedRank?.overallRank ?? null,
+          projected_age_group_rank: projectedRank?.ageGroupRank ?? null,
+          projected_confidence: projectedRank?.confidence ?? null,
+        },
+        $push: {
+          audit_log: {
+            action: 'RE_DETECT',
+            by: 'system',
+            at: new Date(),
+            note: `detection_count increment, severity=${severity}`,
+          },
+        },
+      },
+      { new: true },
+    ).exec();
+
+    if (existing) {
+      return { doc: existing, isNew: false };
+    }
+
+    // Create new
+    const created = await this.alertModel.create({
+      mysql_race_id: raceId,
+      bib_number: athlete.bib,
+      athlete_name: athlete.fullName,
+      contest: athlete.contest,
+      age_group: athlete.ageGroup,
+      gender: athlete.gender,
+      last_seen_point: detection.lastSeenPoint,
+      last_seen_time: detection.lastSeenTime,
+      missing_point: detection.missingPoint,
+      projected_finish_time: detection.projectedFinishTime,
+      projected_overall_rank: projectedRank?.overallRank ?? null,
+      projected_age_group_rank: projectedRank?.ageGroupRank ?? null,
+      projected_confidence: projectedRank?.confidence ?? null,
+      overdue_minutes: detection.overdueMinutes,
+      severity,
+      reason,
+      status: 'OPEN',
+      detection_count: 1,
+      audit_log: [
+        { action: 'CREATE', by: 'system', at: new Date(), note: `Initial detect — ${reason}` },
+      ],
+      rr_api_snapshot: { Bib: athlete.raw.Bib, Chiptimes: athlete.raw.Chiptimes, TimingPoint: athlete.raw.TimingPoint, Category: athlete.raw.Category },
+    });
+
+    return { doc: created, isNew: true };
+  }
+
+  /**
+   * Auto-resolve OPEN alerts: nếu athlete đã có time tại `missing_point` →
+   * mark RESOLVED.
+   *
+   * Match poll cycle scope — chỉ resolve alerts mà BIB xuất hiện trong RR
+   * response lần này. KHÔNG resolve alerts của BIB không có trong response
+   * (RR API chưa update — giữ status OPEN).
+   */
+  private async autoResolveOpen(
+    raceId: number,
+    parsedAthletes: ParsedAthlete[],
+  ): Promise<number> {
+    const byBib = new Map(parsedAthletes.map((a) => [a.bib, a]));
+    const openAlerts = await this.alertModel
+      .find({ mysql_race_id: raceId, status: 'OPEN' })
+      .lean<TimingAlertDocument[]>()
+      .exec();
+
+    let resolved = 0;
+    for (const alert of openAlerts) {
+      const athlete = byBib.get(alert.bib_number);
+      if (!athlete) continue;
+      const time = athlete.checkpointTimes[alert.missing_point];
+      if (!time || time.trim().length === 0) continue;
+
+      // Mark RESOLVED
+      const updated = await this.alertModel.findOneAndUpdate(
+        { _id: alert._id, status: 'OPEN' },
+        {
+          $set: {
+            status: 'RESOLVED',
+            resolved_by: 'auto',
+            resolved_at: new Date(),
+            resolution_note: `Auto-resolved: ${alert.missing_point} time appeared = ${time}`,
+          },
+          $push: {
+            audit_log: {
+              action: 'AUTO_RESOLVE',
+              by: 'system',
+              at: new Date(),
+              note: `Time appeared at ${alert.missing_point}: ${time}`,
+            },
+          },
+        },
+        { new: true },
+      ).exec();
+      if (updated) {
+        resolved += 1;
+        this.sse.emit('alert.resolved', raceId, this.alertSummary(updated));
+      }
+    }
+    return resolved;
+  }
+
+  /**
+   * Build RR Simple API URL. Pattern: `https://api.raceresult.com/{eventId}/{apiKey}/...`
+   * Phase 1B v1: dùng default endpoint `?...` (RR Simple API trả full athletes).
+   * Future: caller có thể customize per-course endpoint nếu RR config khác nhau.
+   */
+  private buildRaceResultUrl(eventId: string, apiKey: string): string {
+    const base = process.env.RACERESULT_API_BASE_URL || 'https://api.raceresult.com';
+    return `${base}/${eventId}/${apiKey}`;
+  }
+
+  /**
+   * Subset cho SSE event payload — KHÔNG gửi full audit_log + rr_api_snapshot
+   * (admin tab không cần realtime, fetch full khi click row).
+   */
+  private alertSummary(alert: TimingAlertDocument): Record<string, unknown> {
+    return {
+      id: String(alert._id),
+      bib_number: alert.bib_number,
+      athlete_name: alert.athlete_name,
+      contest: alert.contest,
+      age_group: alert.age_group,
+      severity: alert.severity,
+      status: alert.status,
+      last_seen_point: alert.last_seen_point,
+      last_seen_time: alert.last_seen_time,
+      missing_point: alert.missing_point,
+      projected_finish_time: alert.projected_finish_time,
+      projected_age_group_rank: alert.projected_age_group_rank,
+      projected_overall_rank: alert.projected_overall_rank,
+      projected_confidence: alert.projected_confidence,
+      overdue_minutes: alert.overdue_minutes,
+      first_detected_at: alert.first_detected_at,
+      detection_count: alert.detection_count,
+    };
+  }
+
+  // ─────────── Admin actions ───────────
+
+  /**
+   * Manual resolve hoặc mark FALSE_ALARM. Idempotent — chỉ transitions từ OPEN.
+   */
+  async resolveAlert(
+    alertId: string,
+    action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN',
+    note: string,
+    userId: string,
+  ): Promise<TimingAlertDocument> {
+    let update: Record<string, unknown>;
+    let auditAction: string;
+
+    if (action === 'REOPEN') {
+      auditAction = 'REOPEN';
+      update = {
+        $set: {
+          status: 'OPEN',
+          resolved_by: null,
+          resolved_at: null,
+          resolution_note: null,
+        },
+      };
+    } else {
+      auditAction = action;
+      update = {
+        $set: {
+          status: action === 'RESOLVE' ? 'RESOLVED' : 'FALSE_ALARM',
+          resolved_by: `admin:${userId}`,
+          resolved_at: new Date(),
+          resolution_note: note,
+        },
+      };
+    }
+
+    const updated = await this.alertModel.findByIdAndUpdate(
+      alertId,
+      {
+        ...update,
+        $push: {
+          audit_log: {
+            action: auditAction,
+            by: `admin:${userId}`,
+            at: new Date(),
+            note,
+          },
+        },
+      },
+      { new: true },
+    ).exec();
+
+    if (!updated) {
+      throw new Error(`Alert ${alertId} not found`);
+    }
+    this.sse.emit(
+      action === 'REOPEN' ? 'alert.updated' : 'alert.resolved',
+      updated.mysql_race_id,
+      this.alertSummary(updated),
+    );
+    return updated;
+  }
+
+  /**
+   * Admin list alerts với filter. Pagination + stats.
+   */
+  async listAlerts(
+    raceId: number,
+    filters: {
+      severity?: TimingAlertSeverity;
+      status?: 'OPEN' | 'RESOLVED' | 'FALSE_ALARM';
+      course?: string;
+      page?: number;
+      pageSize?: number;
+    },
+  ): Promise<{
+    items: TimingAlertDocument[];
+    total: number;
+    page: number;
+    pageSize: number;
+    stats: {
+      by_severity: Record<TimingAlertSeverity, number>;
+      open_count: number;
+      total_count: number;
+    };
+  }> {
+    const filter: Record<string, unknown> = { mysql_race_id: raceId };
+    if (filters.severity) filter.severity = filters.severity;
+    if (filters.status) filter.status = filters.status;
+    if (filters.course) filter.contest = filters.course;
+
+    const page = Math.max(1, filters.page ?? 1);
+    const pageSize = Math.min(100, filters.pageSize ?? 50);
+
+    const [items, total, statsAgg, openCount] = await Promise.all([
+      this.alertModel
+        .find(filter)
+        .sort({ first_detected_at: -1 })
+        .skip((page - 1) * pageSize)
+        .limit(pageSize)
+        .lean<TimingAlertDocument[]>()
+        .exec(),
+      this.alertModel.countDocuments(filter).exec(),
+      this.alertModel
+        .aggregate<{ _id: TimingAlertSeverity; count: number }>([
+          { $match: { mysql_race_id: raceId } },
+          { $group: { _id: '$severity', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.alertModel.countDocuments({ mysql_race_id: raceId, status: 'OPEN' }).exec(),
+    ]);
+
+    const by_severity: Record<TimingAlertSeverity, number> = {
+      CRITICAL: 0,
+      HIGH: 0,
+      WARNING: 0,
+      INFO: 0,
+    };
+    for (const s of statsAgg) by_severity[s._id] = s.count;
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      stats: {
+        by_severity,
+        open_count: openCount,
+        total_count: total,
+      },
+    };
+  }
+
+  async listPollLogs(raceId: number, limit = 50): Promise<TimingAlertPollDocument[]> {
+    return this.pollModel
+      .find({ mysql_race_id: raceId })
+      .sort({ started_at: -1 })
+      .limit(Math.min(200, Math.max(1, limit)))
+      .lean<TimingAlertPollDocument[]>()
+      .exec();
+  }
+}
