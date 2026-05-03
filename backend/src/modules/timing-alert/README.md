@@ -1,8 +1,23 @@
 # Timing Miss Alert Module — v1.0
 
-> **Status:** Phase 0 + Phase 1A shipped (skeleton + crypto + config CRUD)
-> **Spec ref:** `5BIB_PRD_TimingMissAlert_v1.0.md` (final v1.0.2)
+> **Status:** Phase 0 + 1A + 1B + 1C shipped + ID refactor
+> **Spec ref:** `5BIB_PRD_TimingMissAlert_v1.0.md` (final v1.0.3 — Mongo native ID)
 > **Branch:** `5bib_racemonitor_v1`
+
+## ⚠ Identifier convention (v1.0.3 update)
+
+**`race_id: string`** = Mongo race document `_id` (ObjectId string).
+
+**KHÔNG dùng** `mysql_race_id` (numeric) như chip-verify pattern — Timing Alert
+là **Mongo-native module**, không đụng MySQL legacy. Field name + URL param
++ schema field đều là `race_id` string.
+
+ID system mapping cho 5BIB modules (cho future ref):
+
+| Module | ID system | Reason |
+|--------|-----------|--------|
+| chip-verify, master-data, reconciliation | MySQL primary (numeric) | JOIN MySQL athletes table |
+| race-result, sponsors, claims, **timing-alert** | **Mongo primary (string)** | Mongo-only |
 
 ## Mục đích
 

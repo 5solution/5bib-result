@@ -74,10 +74,10 @@ export class TimingAlertPollService {
    *
    * Returns aggregate counts cho admin response. Per-course detail lưu poll_logs.
    */
-  async pollRace(raceId: number, triggeredBy: string): Promise<{
+  async pollRace(raceId: string, triggeredBy: string): Promise<{
     courses: Array<{ course: string; status: TimingAlertPollStatus; alerts_created: number; alerts_resolved: number; error?: string }>;
   }> {
-    const config = await this.configModel.findOne({ mysql_race_id: raceId }).lean<TimingAlertConfigDocument>().exec();
+    const config = await this.configModel.findOne({ race_id: raceId }).lean<TimingAlertConfigDocument>().exec();
     if (!config) {
       throw new Error(`No timing-alert config for race=${raceId}`);
     }
@@ -108,7 +108,7 @@ export class TimingAlertPollService {
    * Poll 1 race × 1 course. Lock-protected.
    */
   async pollCourse(
-    raceId: number,
+    raceId: string,
     courseName: string,
     config: TimingAlertConfigDocument,
     triggeredBy: string,
@@ -125,7 +125,7 @@ export class TimingAlertPollService {
 
     const t0 = Date.now();
     const pollLog = await this.pollModel.create({
-      mysql_race_id: raceId,
+      race_id: raceId,
       course_name: courseName,
       status: 'SUCCESS' as TimingAlertPollStatus, // optimistic, finalize cuối
       athletes_fetched: 0,
@@ -167,15 +167,14 @@ export class TimingAlertPollService {
 
         detectedBibs.add(athlete.bib);
 
-        // Compute projected rank if mongo_race_id set
-        const projectedRank = config.mongo_race_id
-          ? await this.projectedRankService.calculate(
-              config.mongo_race_id,
-              courseName, // TODO Phase 2: map course_name → mongo courseId qua races collection
-              athlete.ageGroup,
-              detection.projectedFinishSeconds,
-            )
-          : null;
+        // Compute projected rank — race_id giờ là Mongo string native, dùng
+        // trực tiếp cho race_results query. Không còn dual-ID complexity.
+        const projectedRank = await this.projectedRankService.calculate(
+          config.race_id,
+          courseName, // TODO Phase 2: map course_name → mongo courseId qua races collection
+          athlete.ageGroup,
+          detection.projectedFinishSeconds,
+        );
 
         const severityResult = this.missDetector.classifySeverity(
           detection,
@@ -277,7 +276,7 @@ export class TimingAlertPollService {
    * Returns `{ doc, isNew }`.
    */
   private async upsertAlert(
-    raceId: number,
+    raceId: string,
     athlete: ParsedAthlete,
     detection: DetectionResult,
     severity: TimingAlertSeverity,
@@ -286,7 +285,7 @@ export class TimingAlertPollService {
   ): Promise<{ doc: TimingAlertDocument; isNew: boolean }> {
     // Try findOneAndUpdate existing OPEN — increment detection_count, không tạo mới
     const existing = await this.alertModel.findOneAndUpdate(
-      { mysql_race_id: raceId, bib_number: athlete.bib, status: 'OPEN' },
+      { race_id: raceId, bib_number: athlete.bib, status: 'OPEN' },
       {
         $inc: { detection_count: 1 },
         $set: {
@@ -318,7 +317,7 @@ export class TimingAlertPollService {
 
     // Create new
     const created = await this.alertModel.create({
-      mysql_race_id: raceId,
+      race_id: raceId,
       bib_number: athlete.bib,
       athlete_name: athlete.fullName,
       contest: athlete.contest,
@@ -354,12 +353,12 @@ export class TimingAlertPollService {
    * (RR API chưa update — giữ status OPEN).
    */
   private async autoResolveOpen(
-    raceId: number,
+    raceId: string,
     parsedAthletes: ParsedAthlete[],
   ): Promise<number> {
     const byBib = new Map(parsedAthletes.map((a) => [a.bib, a]));
     const openAlerts = await this.alertModel
-      .find({ mysql_race_id: raceId, status: 'OPEN' })
+      .find({ race_id: raceId, status: 'OPEN' })
       .lean<TimingAlertDocument[]>()
       .exec();
 
@@ -492,7 +491,7 @@ export class TimingAlertPollService {
     }
     this.sse.emit(
       action === 'REOPEN' ? 'alert.updated' : 'alert.resolved',
-      updated.mysql_race_id,
+      updated.race_id,
       this.alertSummary(updated),
     );
     return updated;
@@ -502,7 +501,7 @@ export class TimingAlertPollService {
    * Admin list alerts với filter. Pagination + stats.
    */
   async listAlerts(
-    raceId: number,
+    raceId: string,
     filters: {
       severity?: TimingAlertSeverity;
       status?: 'OPEN' | 'RESOLVED' | 'FALSE_ALARM';
@@ -521,7 +520,7 @@ export class TimingAlertPollService {
       total_count: number;
     };
   }> {
-    const filter: Record<string, unknown> = { mysql_race_id: raceId };
+    const filter: Record<string, unknown> = { race_id: raceId };
     if (filters.severity) filter.severity = filters.severity;
     if (filters.status) filter.status = filters.status;
     if (filters.course) filter.contest = filters.course;
@@ -540,11 +539,11 @@ export class TimingAlertPollService {
       this.alertModel.countDocuments(filter).exec(),
       this.alertModel
         .aggregate<{ _id: TimingAlertSeverity; count: number }>([
-          { $match: { mysql_race_id: raceId } },
+          { $match: { race_id: raceId } },
           { $group: { _id: '$severity', count: { $sum: 1 } } },
         ])
         .exec(),
-      this.alertModel.countDocuments({ mysql_race_id: raceId, status: 'OPEN' }).exec(),
+      this.alertModel.countDocuments({ race_id: raceId, status: 'OPEN' }).exec(),
     ]);
 
     const by_severity: Record<TimingAlertSeverity, number> = {
@@ -568,9 +567,9 @@ export class TimingAlertPollService {
     };
   }
 
-  async listPollLogs(raceId: number, limit = 50): Promise<TimingAlertPollDocument[]> {
+  async listPollLogs(raceId: string, limit = 50): Promise<TimingAlertPollDocument[]> {
     return this.pollModel
-      .find({ mysql_race_id: raceId })
+      .find({ race_id: raceId })
       .sort({ started_at: -1 })
       .limit(Math.min(200, Math.max(1, limit)))
       .lean<TimingAlertPollDocument[]>()

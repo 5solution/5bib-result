@@ -60,10 +60,10 @@ export class NotificationDispatcherService {
   async dispatchCritical(alert: TimingAlertDocument): Promise<boolean> {
     if (!this.telegram || !this.chatId) return false;
 
-    const acquired = await this.tryAcquireRateLimit(alert.mysql_race_id);
+    const acquired = await this.tryAcquireRateLimit(alert.race_id);
     if (!acquired) {
       this.logger.debug(
-        `[dispatchCritical] race=${alert.mysql_race_id} rate-limited — skip Telegram`,
+        `[dispatchCritical] race=${alert.race_id} rate-limited — skip Telegram`,
       );
       return false;
     }
@@ -117,7 +117,7 @@ export class NotificationDispatcherService {
     lines.push(`<i>Reason:</i> ${this.escape(alert.reason ?? '')}`);
     lines.push(``);
     lines.push(
-      `Race ID: ${alert.mysql_race_id} · Detected: ${alert.first_detected_at?.toISOString() ?? '?'}`,
+      `Race ID: ${alert.race_id} · Detected: ${alert.first_detected_at?.toISOString() ?? '?'}`,
     );
 
     return lines.join('\n');
@@ -130,7 +130,7 @@ export class NotificationDispatcherService {
    * cần escalate khi có alert MỚI cao hơn (HIGH → CRITICAL same race) thì
    * bypass rate limit.
    */
-  private async tryAcquireRateLimit(raceId: number): Promise<boolean> {
+  private async tryAcquireRateLimit(raceId: string): Promise<boolean> {
     const key = `timing-alert:tg-rate:${raceId}`;
     const result = await this.redis.set(
       key,

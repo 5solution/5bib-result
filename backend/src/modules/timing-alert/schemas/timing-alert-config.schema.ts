@@ -27,20 +27,16 @@ export interface CourseCheckpoint {
  */
 @Schema({ collection: 'timing_alert_configs', timestamps: true })
 export class TimingAlertConfig {
-  @Prop({ required: true, index: true, unique: true })
-  mysql_race_id: number;
-
   /**
-   * Optional Mongo race document `_id` (string) — link để query
-   * `race_results` collection cho projected rank calculation.
+   * Mongo race document `_id` (string ObjectId) — primary identifier.
+   * Match pattern existing race-result module + admin URL `/admin/races/[id]/...`.
    *
-   * KHÔNG required vì module independent với MySQL — admin có thể chạy
-   * Timing Alert thuần phantom detection (severity max=WARNING) nếu không
-   * có race_results data. Set giá trị này → projected rank kích hoạt
-   * → CRITICAL severity khả dụng cho Top N age group.
+   * Module này KHÔNG đụng MySQL legacy → KHÔNG dùng `mysql_race_id` numeric.
+   * Mọi query downstream (race_results cho projected rank, races cho course
+   * config) đều dùng Mongo ID native.
    */
-  @Prop({ type: String, default: null })
-  mongo_race_id: string | null;
+  @Prop({ required: true, index: true, unique: true })
+  race_id: string;
 
   /** RaceResult event ID, VD "396207" — public, KHÔNG sensitive. */
   @Prop({ required: true })

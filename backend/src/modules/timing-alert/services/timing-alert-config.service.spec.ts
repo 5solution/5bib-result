@@ -65,7 +65,7 @@ describe('TimingAlertConfigService', () => {
     it('encrypts each API key before save (TA-2)', async () => {
       const savedDoc: any = {
         _id: 'config-1',
-        mysql_race_id: 192,
+        race_id: '69f2ca611e1147680ebea4c6',
         rr_event_id: '396207',
         rr_api_keys: {}, // captured below
         course_checkpoints: validDto.course_checkpoints,
@@ -83,7 +83,7 @@ describe('TimingAlertConfigService', () => {
         return { exec: () => Promise.resolve(savedDoc) };
       });
 
-      await service.upsert(192, validDto, 'admin@5bib.com');
+      await service.upsert('69f2ca611e1147680ebea4c6', validDto, 'admin@5bib.com');
 
       // Each saved value MUST be ciphertext format `iv:tag:ct`, NOT plaintext
       for (const [course, ct] of Object.entries(savedDoc.rr_api_keys)) {
@@ -98,7 +98,7 @@ describe('TimingAlertConfigService', () => {
         exec: () =>
           Promise.resolve({
             _id: 'c1',
-            mysql_race_id: 192,
+            race_id: '69f2ca611e1147680ebea4c6',
             rr_event_id: '396207',
             rr_api_keys: {},
             course_checkpoints: validDto.course_checkpoints,
@@ -110,7 +110,7 @@ describe('TimingAlertConfigService', () => {
           }),
       }));
 
-      const result = await service.upsert(192, validDto, 'admin');
+      const result = await service.upsert('69f2ca611e1147680ebea4c6', validDto, 'admin');
 
       expect(result.rr_api_keys_masked['5KM']).toBe('LE2K...7VWA (32 chars)');
       expect(result.rr_api_keys_masked['42KM']).toBe('NFSJ...AS1Q (32 chars)');
@@ -122,14 +122,14 @@ describe('TimingAlertConfigService', () => {
 
     it('rejects empty rr_api_keys (BadRequest)', async () => {
       const dto = { ...validDto, rr_api_keys: {} };
-      await expect(service.upsert(192, dto, 'admin')).rejects.toThrow(
+      await expect(service.upsert('69f2ca611e1147680ebea4c6', dto, 'admin')).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it('rejects empty string API key', async () => {
       const dto = { ...validDto, rr_api_keys: { '5KM': '   ' } };
-      await expect(service.upsert(192, dto, 'admin')).rejects.toThrow(
+      await expect(service.upsert('69f2ca611e1147680ebea4c6', dto, 'admin')).rejects.toThrow(
         /không rỗng/,
       );
     });
@@ -140,7 +140,7 @@ describe('TimingAlertConfigService', () => {
         rr_api_keys: { '99KM': 'KEY' },
         course_checkpoints: { '5KM': validDto.course_checkpoints['5KM'] },
       };
-      await expect(service.upsert(192, dto, 'admin')).rejects.toThrow(
+      await expect(service.upsert('69f2ca611e1147680ebea4c6', dto, 'admin')).rejects.toThrow(
         /KHÔNG có trong course_checkpoints/,
       );
     });
@@ -156,20 +156,20 @@ describe('TimingAlertConfigService', () => {
         rr_api_keys: { '42KM': ct },
       });
 
-      const result = await service.decryptKeyForPoll(192, '42KM');
+      const result = await service.decryptKeyForPoll('69f2ca611e1147680ebea4c6', '42KM');
       expect(result).toBe(plaintext);
     });
 
     it('throws NotFound when config missing', async () => {
       mockModel.exec.mockResolvedValue(null);
-      await expect(service.decryptKeyForPoll(999, '42KM')).rejects.toThrow(
+      await expect(service.decryptKeyForPoll('69f2ca611e1147680ebea4c6_NOT_FOUND', '42KM')).rejects.toThrow(
         NotFoundException,
       );
     });
 
     it('throws NotFound when course key missing', async () => {
       mockModel.exec.mockResolvedValue({ rr_api_keys: { '5KM': 'someCt' } });
-      await expect(service.decryptKeyForPoll(192, '99KM')).rejects.toThrow(
+      await expect(service.decryptKeyForPoll('69f2ca611e1147680ebea4c6', '99KM')).rejects.toThrow(
         /No API key configured/,
       );
     });
@@ -178,7 +178,7 @@ describe('TimingAlertConfigService', () => {
   describe('getByRaceId()', () => {
     it('returns null when not found', async () => {
       mockModel.exec.mockResolvedValue(null);
-      const result = await service.getByRaceId(192);
+      const result = await service.getByRaceId('69f2ca611e1147680ebea4c6');
       expect(result).toBeNull();
     });
 
@@ -188,7 +188,7 @@ describe('TimingAlertConfigService', () => {
 
       mockModel.exec.mockResolvedValue({
         _id: 'c1',
-        mysql_race_id: 192,
+        race_id: '69f2ca611e1147680ebea4c6',
         rr_event_id: '396207',
         rr_api_keys: { '5KM': ct },
         course_checkpoints: { '5KM': [] },
@@ -199,7 +199,7 @@ describe('TimingAlertConfigService', () => {
         enabled: true,
       });
 
-      const result = await service.getByRaceId(192);
+      const result = await service.getByRaceId('69f2ca611e1147680ebea4c6');
       expect(result).not.toBeNull();
       expect(result!.rr_api_keys_masked['5KM']).toBe('LE2K...7VWA (32 chars)');
     });

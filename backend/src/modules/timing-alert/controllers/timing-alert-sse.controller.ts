@@ -38,7 +38,7 @@ export class TimingAlertSseController {
       'Browser EventSource kết nối → nhận events: alert.created, alert.updated, alert.resolved, poll.completed, poll.failed.',
   })
   stream(
-    @Param('raceId', ParseIntPipe) raceId: number,
+    @Param('raceId') raceId: string,
   ): Observable<{ type: string; data: string; id: string }> {
     return this.sseService.subscribe(raceId);
   }

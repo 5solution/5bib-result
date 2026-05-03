@@ -18,7 +18,7 @@ export type TimingAlertPollStatus = 'SUCCESS' | 'PARTIAL' | 'FAILED';
 })
 export class TimingAlertPoll {
   @Prop({ required: true, index: true })
-  mysql_race_id: number;
+  race_id: string;
 
   @Prop({ required: true })
   course_name: string;
@@ -55,7 +55,7 @@ export const TimingAlertPollSchema =
   SchemaFactory.createForClass(TimingAlertPoll);
 
 /** Sort recent + filter per race. */
-TimingAlertPollSchema.index({ mysql_race_id: 1, started_at: -1 });
+TimingAlertPollSchema.index({ race_id: 1, started_at: -1 });
 
 /**
  * TTL 90 days — Mongo background scan ~1min, auto DELETE entries quá hạn.

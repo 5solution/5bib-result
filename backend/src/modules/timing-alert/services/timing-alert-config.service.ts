@@ -33,7 +33,7 @@ export class TimingAlertConfigService {
   ) {}
 
   /**
-   * Upsert config theo (mysql_race_id). Encrypt mọi API key trước khi save.
+   * Upsert config theo (race_id). Encrypt mọi API key trước khi save.
    * Idempotent: gọi lại với keys mới → re-encrypt + replace map.
    *
    * @param raceId MySQL race ID (numeric)
@@ -41,7 +41,7 @@ export class TimingAlertConfigService {
    * @param userId từ Logto JWT (audit `enabled_by_user_id`)
    */
   async upsert(
-    raceId: number,
+    raceId: string,
     dto: CreateTimingAlertConfigDto,
     userId: string,
   ): Promise<TimingAlertConfigResponseDto> {
@@ -73,8 +73,7 @@ export class TimingAlertConfigService {
     }
 
     const update = {
-      mysql_race_id: raceId,
-      mongo_race_id: dto.mongo_race_id ?? null,
+      race_id: raceId,
       rr_event_id: dto.rr_event_id,
       rr_api_keys: encryptedKeys,
       course_checkpoints: dto.course_checkpoints,
@@ -89,7 +88,7 @@ export class TimingAlertConfigService {
 
     const doc = await this.configModel
       .findOneAndUpdate(
-        { mysql_race_id: raceId },
+        { race_id: raceId },
         { $set: update },
         { upsert: true, new: true, setDefaultsOnInsert: true },
       )
@@ -111,10 +110,10 @@ export class TimingAlertConfigService {
    * decrypt khi cần gọi RR API qua `decryptForPoll()` method dưới.
    */
   async getByRaceId(
-    raceId: number,
+    raceId: string,
   ): Promise<TimingAlertConfigResponseDto | null> {
     const doc = await this.configModel
-      .findOne({ mysql_race_id: raceId })
+      .findOne({ race_id: raceId })
       .lean<TimingAlertConfig & { _id: unknown; encryptedKeys?: never }>()
       .exec();
 
@@ -142,11 +141,11 @@ export class TimingAlertConfigService {
    * KHÔNG bao giờ expose trên controller endpoint.
    */
   async decryptKeyForPoll(
-    raceId: number,
+    raceId: string,
     courseName: string,
   ): Promise<string> {
     const doc = await this.configModel
-      .findOne({ mysql_race_id: raceId })
+      .findOne({ race_id: raceId })
       .select({ rr_api_keys: 1 })
       .lean()
       .exec();
@@ -181,10 +180,10 @@ export class TimingAlertConfigService {
   /**
    * Update last_polled_at — gọi sau mỗi poll cycle hoàn thành.
    */
-  async updateLastPolled(raceId: number): Promise<void> {
+  async updateLastPolled(raceId: string): Promise<void> {
     await this.configModel
       .updateOne(
-        { mysql_race_id: raceId },
+        { race_id: raceId },
         { $set: { last_polled_at: new Date() } },
       )
       .exec();
@@ -205,8 +204,7 @@ export class TimingAlertConfigService {
 
     return {
       config_id: String(doc._id ?? ''),
-      mysql_race_id: doc.mysql_race_id,
-      mongo_race_id: doc.mongo_race_id ?? null,
+      race_id: doc.race_id,
       rr_event_id: doc.rr_event_id,
       rr_api_keys_masked: masked,
       course_checkpoints: doc.course_checkpoints,

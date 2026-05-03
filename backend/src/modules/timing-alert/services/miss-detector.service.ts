@@ -176,7 +176,7 @@ export class MissDetectorService {
    * - isMissingFinish → WARNING (degraded)
    * - else → INFO
    *
-   * Nếu projectedRank null (config thiếu mongo_race_id) → max severity = WARNING.
+   * Nếu projectedRank null (race_results collection chưa có data) → max severity = WARNING.
    */
   classifySeverity(
     detection: DetectionResult,
@@ -188,7 +188,7 @@ export class MissDetectorService {
       if (detection.isMissingFinish) {
         return {
           severity: 'WARNING',
-          reason: `Miss Finish (projected rank unavailable — set mongo_race_id để bật)`,
+          reason: `Miss Finish (projected rank unavailable — chưa có finishers trong race_results)`,
         };
       }
       return {

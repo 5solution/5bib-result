@@ -46,7 +46,7 @@ export class TimingAlertPollCron {
 
       const results = await Promise.allSettled(
         enabledConfigs.map((cfg) =>
-          this.pollService.pollRace(cfg.mysql_race_id, 'cron'),
+          this.pollService.pollRace(cfg.race_id, 'cron'),
         ),
       );
 

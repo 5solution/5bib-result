@@ -62,7 +62,7 @@ export class TimingAlertAdminController {
   @ApiResponse({ status: 400, description: 'Validation failed' })
   @ApiResponse({ status: 401, description: 'Logto JWT invalid' })
   async upsertConfig(
-    @Param('raceId', ParseIntPipe) raceId: number,
+    @Param('raceId') raceId: string,
     @Body() dto: CreateTimingAlertConfigDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<TimingAlertConfigResponseDto> {
@@ -75,7 +75,7 @@ export class TimingAlertAdminController {
   @ApiOperation({ summary: 'Alias of POST config — same upsert semantics' })
   @ApiResponse({ status: 200, type: TimingAlertConfigResponseDto })
   async updateConfig(
-    @Param('raceId', ParseIntPipe) raceId: number,
+    @Param('raceId') raceId: string,
     @Body() dto: CreateTimingAlertConfigDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<TimingAlertConfigResponseDto> {
@@ -91,7 +91,7 @@ export class TimingAlertAdminController {
   @ApiResponse({ status: 200, type: TimingAlertConfigResponseDto })
   @ApiResponse({ status: 404, description: 'Config not found for this race' })
   async getConfig(
-    @Param('raceId', ParseIntPipe) raceId: number,
+    @Param('raceId') raceId: string,
   ): Promise<TimingAlertConfigResponseDto> {
     const config = await this.configService.getByRaceId(raceId);
     if (!config) {
@@ -111,7 +111,7 @@ export class TimingAlertAdminController {
     description: 'Bypass cron timer. Vẫn respect lock per (race, course) → KHÔNG concurrent với cron tick.',
   })
   async forcePoll(
-    @Param('raceId', ParseIntPipe) raceId: number,
+    @Param('raceId') raceId: string,
     @Req() req: AuthenticatedRequest,
   ) {
     const userId = req.user?.sub ?? 'unknown';
@@ -121,7 +121,7 @@ export class TimingAlertAdminController {
   @Get('alerts')
   @ApiOperation({ summary: 'List alerts với filter + stats' })
   async listAlerts(
-    @Param('raceId', ParseIntPipe) raceId: number,
+    @Param('raceId') raceId: string,
     @Query() query: ListAlertsQueryDto,
   ) {
     return this.pollService.listAlerts(raceId, {
@@ -150,7 +150,7 @@ export class TimingAlertAdminController {
   @Get('poll-logs')
   @ApiOperation({ summary: 'Recent poll log entries (90d TTL)' })
   async pollLogs(
-    @Param('raceId', ParseIntPipe) raceId: number,
+    @Param('raceId') raceId: string,
     @Query('limit') limit?: string,
   ) {
     return this.pollService.listPollLogs(

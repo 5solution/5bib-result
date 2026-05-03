@@ -10,8 +10,8 @@ export type SseEventName =
 
 export interface SseEvent {
   event: SseEventName;
-  /** mysql_race_id để filter per-race subscribers */
-  raceId: number;
+  /** race_id để filter per-race subscribers */
+  raceId: string;
   data: Record<string, unknown>;
   timestamp: string;
 }
@@ -34,7 +34,7 @@ export class TimingAlertSseService {
   /**
    * Emit event tới tất cả subscriber. Per-race filter chạy ở pipeline reader.
    */
-  emit(event: SseEventName, raceId: number, data: Record<string, unknown>): void {
+  emit(event: SseEventName, raceId: string, data: Record<string, unknown>): void {
     const payload: SseEvent = {
       event,
       raceId,
@@ -54,7 +54,7 @@ export class TimingAlertSseService {
    *
    * Returns cold Observable — re-subscribed mỗi SSE connection (safe).
    */
-  subscribe(raceId: number): Observable<{
+  subscribe(raceId: string): Observable<{
     type: SseEventName;
     data: string;
     id: string;

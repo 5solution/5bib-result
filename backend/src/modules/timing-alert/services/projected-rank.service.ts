@@ -32,7 +32,7 @@ export interface ProjectedRankResult {
  * `RaceSyncCron` (race-result module). Timing Alert KHÔNG sync, chỉ READ.
  *
  * **Edge cases:**
- * - mongo_race_id null trong config → caller skip projected rank entirely
+ * - race chưa có finishers → confidence=0, ranks=1 (athlete dự đoán đầu tiên)
  * - Course chưa có finisher (race vừa start) → confidence = 0, ranks = 1
  * - Athlete không có age group (gender-only race) → ageGroupRank = null
  */
@@ -54,14 +54,14 @@ export class ProjectedRankService {
   /**
    * Compute projected rank cho 1 athlete đang miss.
    *
-   * @param mongoRaceId Mongo race document `_id` (string) — required cho query
-   *        race_results. Caller PHẢI check non-null trước khi gọi.
+   * @param raceId Mongo race document `_id` (string). Match RaceResult schema
+   *        `raceId` field native — KHÔNG cần dual ID lookup.
    * @param courseId Mongo course ID
    * @param ageGroup Athlete category (RR Category field) — null nếu không có
    * @param projectedFinishSeconds Seconds total dự đoán finish
    */
   async calculate(
-    mongoRaceId: string,
+    raceId: string,
     courseId: string,
     ageGroup: string | null,
     projectedFinishSeconds: number,
@@ -74,7 +74,7 @@ export class ProjectedRankService {
     // Filter timingPoint case-insensitive (vendor: "Finish" / "FINISH").
     const finishers = await this.raceResultModel
       .find({
-        raceId: mongoRaceId,
+        raceId,
         courseId,
         timingPoint: { $regex: /^finish$/i },
         chipTime: { $nin: ['', null] },

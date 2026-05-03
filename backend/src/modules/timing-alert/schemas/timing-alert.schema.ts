@@ -31,7 +31,7 @@ export interface TimingAlertAuditEntry {
 })
 export class TimingAlert {
   @Prop({ required: true, index: true })
-  mysql_race_id: number;
+  race_id: string;
 
   @Prop({ required: true, index: true })
   bib_number: string;
@@ -141,7 +141,7 @@ export const TimingAlertSchema = SchemaFactory.createForClass(TimingAlert);
  * (history archive).
  */
 TimingAlertSchema.index(
-  { mysql_race_id: 1, bib_number: 1 },
+  { race_id: 1, bib_number: 1 },
   {
     unique: true,
     partialFilterExpression: { status: 'OPEN' },
@@ -149,7 +149,7 @@ TimingAlertSchema.index(
 );
 
 /** Admin filter — list alerts theo severity + status nhanh. */
-TimingAlertSchema.index({ mysql_race_id: 1, severity: 1, status: 1 });
+TimingAlertSchema.index({ race_id: 1, severity: 1, status: 1 });
 
 /** Sort recent — admin dashboard "alerts gần nhất". */
 TimingAlertSchema.index({ first_detected_at: -1 });

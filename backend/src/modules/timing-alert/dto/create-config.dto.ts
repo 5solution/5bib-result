@@ -25,15 +25,6 @@ export class CreateTimingAlertConfigDto {
   @IsNotEmpty()
   rr_event_id: string;
 
-  @ApiPropertyOptional({
-    description:
-      'Mongo race document `_id` (string) — optional link để bật projected rank calculation từ `race_results` collection. KHÔNG set → severity cap = WARNING (chỉ phantom detection).',
-    example: '69f2ca611e1147680ebea4c6',
-  })
-  @IsOptional()
-  @IsString()
-  mongo_race_id?: string;
-
   @ApiProperty({
     description:
       'Map course_name → RaceResult API key plaintext (sẽ được AES-256-GCM encrypt server-side trước khi save Mongo).',
@@ -106,13 +97,10 @@ export class TimingAlertConfigResponseDto {
   config_id: string;
 
   @ApiProperty()
-  mysql_race_id: number;
+  race_id: string;
 
   @ApiProperty()
   rr_event_id: string;
-
-  @ApiProperty({ type: String, nullable: true })
-  mongo_race_id: string | null;
 
   @ApiProperty({
     description: 'Map course_name → masked API key preview (KHÔNG plaintext)',

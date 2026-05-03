@@ -13,13 +13,13 @@ describe('TimingAlertSseService', () => {
   });
 
   it('TA-13 emit + subscribe per race', async () => {
-    const stream = service.subscribe(192).pipe(take(2), toArray());
+    const stream = service.subscribe('race-A').pipe(take(2), toArray());
     const promise = firstValueFrom(stream);
 
     // Defer emit to next tick so subscribe is set up
     setTimeout(() => {
-      service.emit('alert.created', 192, { bib: '98898' });
-      service.emit('alert.updated', 192, { bib: '98898', status: 'OPEN' });
+      service.emit('alert.created', 'race-A', { bib: '98898' });
+      service.emit('alert.updated', 'race-A', { bib: '98898', status: 'OPEN' });
     }, 10);
 
     const events = await promise;
@@ -29,12 +29,12 @@ describe('TimingAlertSseService', () => {
     expect(events[1].type).toBe('alert.updated');
   });
 
-  it('filters events by raceId — race=192 subscriber không nhận race=193 event', async () => {
+  it('filters events by raceId — race=race-A subscriber không nhận race=race-B event', async () => {
     const received: any[] = [];
-    const sub = service.subscribe(192).subscribe((e) => received.push(e));
+    const sub = service.subscribe('race-A').subscribe((e) => received.push(e));
 
-    service.emit('alert.created', 193, { bib: '111' }); // wrong race
-    service.emit('alert.created', 192, { bib: '222' }); // correct
+    service.emit('alert.created', 'race-B', { bib: '111' }); // wrong race
+    service.emit('alert.created', 'race-A', { bib: '222' }); // correct
     await new Promise((r) => setTimeout(r, 20));
 
     expect(received).toHaveLength(1);
@@ -45,10 +45,10 @@ describe('TimingAlertSseService', () => {
   it('multiple subscribers receive same event', async () => {
     const sub1: any[] = [];
     const sub2: any[] = [];
-    const a = service.subscribe(192).subscribe((e) => sub1.push(e));
-    const b = service.subscribe(192).subscribe((e) => sub2.push(e));
+    const a = service.subscribe('race-A').subscribe((e) => sub1.push(e));
+    const b = service.subscribe('race-A').subscribe((e) => sub2.push(e));
 
-    service.emit('alert.created', 192, { bib: 'x' });
+    service.emit('alert.created', 'race-A', { bib: 'x' });
     await new Promise((r) => setTimeout(r, 20));
 
     expect(sub1).toHaveLength(1);
