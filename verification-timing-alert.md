@@ -76,21 +76,95 @@ Tests: 7 passed, 7 total
 
 ## Phase 1A — Module skeleton + crypto + config CRUD
 
-### TA-1: Module conditional load
-*(Pending Phase 1A code — em update sau khi implement)*
+### ✅ TA-1: Module conditional load
 
-### TA-2: API key encrypted at rest (AES-256-GCM)
-*(Pending)*
+**Method:** `app.module.ts` — `timingAlertModules = env.timingAlert.encryptionKey ? [TimingAlertModule] : []`. Pattern giống `platformDbModules` + `volunteerDbModules` đã có production.
 
-### TA-3: Config validate missing Finish in checkpoints
-*(Pending)*
+**Verification:**
+- BE build clean (no compile error) when env unset
+- Module class instantiation guarded by env check at app.module level
+- Boot localhost without env → admin endpoint `/api/admin/races/:id/timing-alert/*` returns 404 (route không exist), KHÔNG crash app
 
-### TA-19: KHÔNG ĐỤNG MySQL legacy
-**Method:** `grep -rn "InjectRepository.*'platform'\|TypeOrmModule.forRoot.*platform" backend/src/modules/timing-alert/`
-**Expected:** 0 matches. Module 100% MongoDB + RR API HTTP.
-*(Pending Phase 1A — em verify sau khi implement)*
+### ✅ TA-2: API key encrypted at rest (AES-256-GCM)
+
+**Method:** Service spec test "encrypts each API key before save (TA-2)":
+- POST config với plaintext key `LE2KXEYOAR6H4YLKGMSXPDT989IQ7VWA`
+- Capture `update.$set.rr_api_keys` truyền vào Mongoose `findOneAndUpdate`
+- Assert format = `<base64>:<base64>:<base64>` (iv:tag:ct)
+- Assert KHÔNG bằng plaintext gốc
+
+**Result:** PASS — saved value khớp regex `/^[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$/`, 3 parts confirmed.
+
+**Crypto integrity tests (12 cases pass):**
+- Roundtrip preserve plaintext
+- Random IV per encrypt → ciphertext khác nhau cho cùng input
+- Tampered ciphertext → authTag mismatch → throws
+- Wrong format / 2-part / no-colons → throws clear error
+- UTF-8 (Vietnamese + emoji) preserve
+- Long API key (256 chars) preserve
+- Cross-instance same key OK, wrong key → throws
+
+### ✅ TA-3: Config validate missing Finish in checkpoints
+
+**Method:** `HasFinishCheckpoint` custom class-validator on `CreateTimingAlertConfigDto.course_checkpoints`:
+- Mỗi course PHẢI có entry với `key` = "finish" (case-insensitive)
+- `distance_km` strictly increasing (0 → max)
+- Empty array reject
+- Wrong shape (non-object) reject
+
+**Service spec test "rejects course in rr_api_keys but not in course_checkpoints":** PASS — `BadRequestException` thrown với message rõ.
+
+### ✅ TA-19: KHÔNG ĐỤNG MySQL legacy
+
+**Method:** `grep -rn "InjectRepository.*'platform'\|TypeOrmModule.*platform" backend/src/modules/timing-alert/`
+
+**Result:** 0 matches. Module 100% Mongoose + (Phase 1B sẽ thêm) HTTP RR API. Zero TypeORM connection.
+
+**Verified imports:**
+- `MongooseModule.forFeature` cho 3 schema mới
+- `LogtoAuthModule` cho admin guard
+- `RaceResultModule` cho `RaceResultApiService` (Phase 0 shared HTTP — KHÔNG đụng MySQL)
+- KHÔNG: `TypeOrmModule`, `RaceMasterDataModule`, `@InjectRepository(_, 'platform')`
+
+### ✅ Phase 1A unit test summary
+
+```
+Test Suites: 3 passed, 3 total
+Tests:       37 passed, 37 total
+
+PASS src/modules/race-result/services/race-result-api.service.spec.ts (7)
+PASS src/modules/timing-alert/crypto/api-key.crypto.spec.ts (18)
+PASS src/modules/timing-alert/services/timing-alert-config.service.spec.ts (12)
+```
 
 ---
+
+## Files Changed — Phase 1A
+
+| File | Status | Lines |
+|------|--------|-------|
+| `backend/src/config/index.ts` | MODIFIED | +12 (3 env vars Joi + accessor) |
+| `backend/src/modules/timing-alert/crypto/api-key.crypto.ts` | NEW | 117 |
+| `backend/src/modules/timing-alert/crypto/api-key.crypto.spec.ts` | NEW | 167 (18 tests) |
+| `backend/src/modules/timing-alert/schemas/timing-alert-config.schema.ts` | NEW | 76 |
+| `backend/src/modules/timing-alert/schemas/timing-alert.schema.ts` | NEW | 130 |
+| `backend/src/modules/timing-alert/schemas/timing-alert-poll.schema.ts` | NEW | 60 |
+| `backend/src/modules/timing-alert/dto/create-config.dto.ts` | NEW | 137 |
+| `backend/src/modules/timing-alert/dto/has-finish-checkpoint.validator.ts` | NEW | 70 |
+| `backend/src/modules/timing-alert/services/timing-alert-config.service.ts` | NEW | 178 |
+| `backend/src/modules/timing-alert/services/timing-alert-config.service.spec.ts` | NEW | 184 (12 tests) |
+| `backend/src/modules/timing-alert/controllers/timing-alert-admin.controller.ts` | NEW | 88 |
+| `backend/src/modules/timing-alert/timing-alert.module.ts` | NEW | 56 |
+| `backend/src/modules/app.module.ts` | MODIFIED | +9 (conditional load + import) |
+
+**Total Phase 1A:** ~1,275 lines code + tests + docs.
+
+**API endpoints exposed (Phase 1A):**
+- `POST /api/admin/races/:raceId/timing-alert/config` — upsert (encrypts API keys)
+- `PUT /api/admin/races/:raceId/timing-alert/config` — alias
+- `GET /api/admin/races/:raceId/timing-alert/config` — masked read
+
+**Generated SDK (admin):** Sau merge anh chạy `pnpm --filter admin generate:api` để có `timingAlertController*` functions trong SDK.
 
 ## Files Changed — Phase 0
 

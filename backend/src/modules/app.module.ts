@@ -18,6 +18,7 @@ import { CertificatesModule } from './certificates/certificates.module';
 import { UsersModule } from './users/users.module';
 import { AthleteStarsModule } from './athlete-stars/athlete-stars.module';
 import { TimingModule } from './timing/timing.module';
+import { TimingAlertModule } from './timing-alert/timing-alert.module';
 import { EventTrackingModule } from './event-tracking/event-tracking.module';
 import { SponsoredModule } from './sponsored/sponsored.module';
 import { ArticlesModule } from './articles/articles.module';
@@ -97,6 +98,14 @@ const platformDbModules = env.platformDb.host
     ]
   : [];
 
+// Conditional: Timing Miss Alert module — load chỉ khi env có
+// `TIMING_ALERT_ENCRYPTION_KEY` (32 bytes hex/base64). KHÔNG phụ thuộc
+// MySQL — chỉ Mongo + RR API. Module độc lập hoàn toàn với
+// `platformDbModules`. Skip nếu env unset → admin endpoint 404 gracefully.
+const timingAlertModules = env.timingAlert.encryptionKey
+  ? [TimingAlertModule]
+  : [];
+
 // Conditional: chỉ khởi tạo Volunteer DB + Team Management module nếu VOLUNTEER_DB_HOST được cung cấp
 const volunteerDbModules = env.volunteerDb.host
   ? [
@@ -148,6 +157,7 @@ const volunteerDbModules = env.volunteerDb.host
     }),
     ...platformDbModules,
     ...volunteerDbModules,
+    ...timingAlertModules,
     RacesModule,
     RaceResultModule,
     AdminModule,
