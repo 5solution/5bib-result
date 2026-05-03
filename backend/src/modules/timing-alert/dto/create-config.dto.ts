@@ -61,6 +61,23 @@ export class CreateTimingAlertConfigDto {
   @IsObject()
   cutoff_times?: Record<string, string>;
 
+  @ApiPropertyOptional({
+    description:
+      'Race start ISO datetime — cron poll chỉ active trong window [event_start - 1h, event_end + 2h]. KHÔNG set → luôn poll khi enabled=true.',
+    example: '2026-05-15T05:00:00+07:00',
+  })
+  @IsOptional()
+  @IsString()
+  event_start_iso?: string;
+
+  @ApiPropertyOptional({
+    description: 'Race end ISO — pair với event_start_iso',
+    example: '2026-05-15T11:00:00+07:00',
+  })
+  @IsOptional()
+  @IsString()
+  event_end_iso?: string;
+
   @ApiPropertyOptional({ default: 90, minimum: 60, maximum: 300 })
   @IsOptional()
   @IsInt()

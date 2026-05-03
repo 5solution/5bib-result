@@ -78,6 +78,8 @@ export class TimingAlertConfigService {
       rr_api_keys: encryptedKeys,
       course_checkpoints: dto.course_checkpoints,
       cutoff_times: dto.cutoff_times ?? {},
+      event_start_iso: dto.event_start_iso ? new Date(dto.event_start_iso) : null,
+      event_end_iso: dto.event_end_iso ? new Date(dto.event_end_iso) : null,
       poll_interval_seconds: dto.poll_interval_seconds ?? 90,
       overdue_threshold_minutes: dto.overdue_threshold_minutes ?? 30,
       top_n_alert: dto.top_n_alert ?? 3,
@@ -164,15 +166,43 @@ export class TimingAlertConfigService {
   }
 
   /**
-   * Phase 1B — list active configs cho cron tick.
-   * "Active" = `enabled: true`. Phase 1B accept đơn giản, Phase 1C có thể
-   * thêm filter race window (event_start - 1h → event_end + 2h).
+   * Phase 1B + TA-14 — list active configs cho cron tick.
    *
-   * Returns array config docs raw (KHÔNG decrypt — caller decrypt per course).
+   * "Active" =
+   *   - `enabled: true`, AND
+   *   - Race window: `event_start_iso - 1h` ≤ now ≤ `event_end_iso + 2h`,
+   *     hoặc cả 2 fields null/missing (legacy — admin chưa set window).
+   *
+   * Tiết kiệm RR API call cho race draft / future / đã end. Race chưa
+   * config window → luôn poll khi enabled.
    */
   async listActiveConfigs(): Promise<TimingAlertConfigDocument[]> {
+    const now = new Date();
+    const oneHourMs = 60 * 60 * 1000;
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+
     return this.configModel
-      .find({ enabled: true })
+      .find({
+        enabled: true,
+        $and: [
+          {
+            $or: [
+              { event_start_iso: null },
+              {
+                event_start_iso: { $lte: new Date(now.getTime() + oneHourMs) },
+              },
+            ],
+          },
+          {
+            $or: [
+              { event_end_iso: null },
+              {
+                event_end_iso: { $gte: new Date(now.getTime() - twoHoursMs) },
+              },
+            ],
+          },
+        ],
+      })
       .lean<TimingAlertConfigDocument[]>()
       .exec();
   }

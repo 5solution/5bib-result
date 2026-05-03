@@ -68,6 +68,17 @@ export class MissDetectorService {
     athlete: ParsedAthlete,
     courseCheckpoints: CourseCheckpoint[],
     overdueThresholdMinutes: number,
+    options: {
+      /**
+       * TA-11: Cutoff time string "HH:MM:SS" của course này. Nếu projected
+       * finish vượt cutoff → KHÔNG flag (VĐV sẽ bị gate-closed, không phải
+       * miss timing thật sự — flag sẽ là false-positive).
+       *
+       * Caller (poll service) lấy từ config.cutoff_times[courseName].
+       * Null/undefined = không enforce.
+       */
+      cutoffTime?: string | null;
+    } = {},
     now: Date = new Date(),
   ): DetectionResult | null {
     if (!athlete.lastSeenPoint || !athlete.lastSeenTime) {
@@ -151,6 +162,18 @@ export class MissDetectorService {
     const projectedFinishSeconds = Math.round(
       paceSecPerKm * finishCp.distance_km * MissDetectorService.PACE_BUFFER,
     );
+
+    // TA-11: Skip flag nếu projected finish vượt cutoff time. VĐV slow này
+    // sẽ bị gate-closed, KHÔNG phải miss timing thật. Cap noise alerts.
+    if (options.cutoffTime) {
+      const cutoffSeconds = parseTimeToSeconds(options.cutoffTime);
+      if (cutoffSeconds !== null && projectedFinishSeconds > cutoffSeconds) {
+        this.logger.debug(
+          `[detect] bib=${athlete.bib} skip — projected finish ${secondsToHms(projectedFinishSeconds)} > cutoff ${options.cutoffTime}`,
+        );
+        return null;
+      }
+    }
 
     const isMissingFinish =
       typeof nextCp.key === 'string' && nextCp.key.toLowerCase() === 'finish';

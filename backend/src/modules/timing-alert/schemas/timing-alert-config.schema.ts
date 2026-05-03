@@ -58,6 +58,20 @@ export class TimingAlertConfig {
   @Prop({ type: Object, default: {} })
   cutoff_times: Record<string, string>;
 
+  /**
+   * TA-14: Active race window — cron skip race khi `now` ngoài
+   * `[event_start_iso - 1h, event_end_iso + 2h]`. Tiết kiệm RR API call
+   * cho race draft / future / đã end.
+   *
+   * Cả 2 null/undefined → cron luôn poll (legacy behavior). Set giá trị →
+   * filter active.
+   */
+  @Prop({ type: Date, default: null })
+  event_start_iso: Date | null;
+
+  @Prop({ type: Date, default: null })
+  event_end_iso: Date | null;
+
   @Prop({ default: 90, min: 60, max: 300 })
   poll_interval_seconds: number;
 

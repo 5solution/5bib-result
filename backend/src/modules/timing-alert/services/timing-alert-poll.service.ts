@@ -157,13 +157,24 @@ export class TimingAlertPollService {
       let alertsUnchanged = 0;
       const detectedBibs = new Set<string>();
 
+      // TA-11: pre-load cutoff cho course
+      const cutoffTime = config.cutoff_times?.[courseName] ?? null;
+
       for (const athlete of parsed) {
         const detection = this.missDetector.detect(
           athlete,
           checkpoints,
           config.overdue_threshold_minutes ?? 30,
+          { cutoffTime },
         );
         if (!detection) continue;
+
+        // TA-12: FALSE_ALARM 3-day cooldown — skip flag nếu BIB đã được
+        // mark FALSE_ALARM trong 3 ngày qua (DNF confirmed). Tránh re-detect
+        // gây noise sau khi BTC đã verify.
+        if (await this.isInFalseAlarmCooldown(raceId, athlete.bib)) {
+          continue;
+        }
 
         detectedBibs.add(athlete.bib);
 
@@ -342,6 +353,35 @@ export class TimingAlertPollService {
     });
 
     return { doc: created, isNew: true };
+  }
+
+  /**
+   * TA-12: Check FALSE_ALARM cooldown 3 ngày. Tránh re-flag athlete đã
+   * được BTC confirm DNF.
+   *
+   * Logic: tìm alert gần nhất (race, bib) status=FALSE_ALARM, resolved_at
+   * trong 3 ngày qua → skip flag.
+   *
+   * Per-call query — Phase 2 có thể cache Redis SET `false-alarm:{race}` nếu
+   * scale yêu cầu.
+   */
+  private async isInFalseAlarmCooldown(
+    raceId: string,
+    bib: string,
+  ): Promise<boolean> {
+    const cooldownMs = 3 * 24 * 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() - cooldownMs);
+    const recent = await this.alertModel
+      .findOne({
+        race_id: raceId,
+        bib_number: bib,
+        status: 'FALSE_ALARM',
+        resolved_at: { $gte: cutoff },
+      })
+      .select({ _id: 1 })
+      .lean()
+      .exec();
+    return recent !== null;
   }
 
   /**
