@@ -388,7 +388,17 @@ export class SimulatorService {
     )?.earliestSeconds;
     const baseline = typeof baselineSeconds === 'number' ? baselineSeconds : 0;
 
-    const cutoff = baseline + currentSimSeconds;
+    // Fresh reset state — race CHƯA bắt đầu: cutoff = -1 để mọi checkpoint
+    // (kể cả chip Start="00:00" → seconds=0) bị filter ra. Match semantic
+    // "race hasn't started yet, no chip reads".
+    //
+    // Status running/paused với accumulatedSeconds>0: dùng baseline shift
+    // bình thường (skip dead time đầu race cho UX demo speedFactor).
+    const isFreshReset =
+      sim.status === 'created' &&
+      (sim.accumulatedSeconds ?? 0) === 0 &&
+      currentSimSeconds <= 0;
+    const cutoff = isFreshReset ? -1 : baseline + currentSimSeconds;
 
     const filtered: RaceResultApiItem[] = [];
     for (const item of snapshot.data) {
@@ -399,11 +409,18 @@ export class SimulatorService {
     // Apply scenarios on top of time-filtered data. Engine deterministic
     // theo hash(simCourseId+bib), KHÔNG mutate snapshot DB.
     const scenarios = sim.scenarios ?? [];
+    let postScenario = filtered;
     if (scenarios.length > 0) {
       const result = applyScenarios(filtered, scenarios, simCourseId);
-      return result.items;
+      postScenario = result.items;
     }
-    return filtered;
+
+    // Re-derive scalar finals (Finished/ChipTime/OverallRank/...) từ
+    // Chiptimes/Guntimes SAU scenarios. Lý do: scenarios drop chip keys
+    // (vd MISS_FINISH drop Finish key) → nếu giữ scalar từ pre-scenario
+    // sẽ inconsistent với chip data. Vendor real RR cũng không bao giờ
+    // có OverallRank khi chip Finish empty (without backup logic).
+    return postScenario.map((item) => deriveScalarsFromTimes(item));
   }
 
   // ─────────── Scenarios CRUD ───────────
@@ -519,12 +536,165 @@ function filterAthlete(
   // tế. Nếu Chiptimes chưa có nhưng Guntimes có → fallback Guntimes.
   const lastKey = chip.lastVisibleKey ?? gun.lastVisibleKey ?? '';
 
+  // Set "checkpoint đã passed" — union(Chiptimes_visible, Guntimes_visible).
+  // Các field map khác (Paces, TODs, Sectors, OverallRanks, GenderRanks) chỉ
+  // được giữ value tại key thuộc set này; key chưa qua → value="".
+  const visibleKeys = new Set<string>([
+    ...chip.visibleKeys,
+    ...gun.visibleKeys,
+  ]);
+
+  // Final scalar results (ChipTime, GunTime, OverallRank, ...) CHỈ valid khi
+  // athlete đã cross Finish. Nếu Finish chưa visible → clear toàn bộ scalar
+  // final + reset Finished flag → match real RR vendor (athlete chưa finish
+  // không có final rank/time).
+  const finishKey = ['Finish', 'FINISH'].find((k) => visibleKeys.has(k));
+  const finished = finishKey !== undefined;
+
   return {
     ...item,
     Chiptimes: chip.json ?? item.Chiptimes,
     Guntimes: gun.json ?? item.Guntimes,
-    TimingPoint: lastKey || item.TimingPoint || '',
+    Paces: filterMapField(item.Paces, visibleKeys) ?? item.Paces,
+    TODs: filterMapField(item.TODs, visibleKeys) ?? item.TODs,
+    Sectors: filterMapField(item.Sectors, visibleKeys) ?? item.Sectors,
+    OverallRanks: filterMapField(item.OverallRanks, visibleKeys) ?? item.OverallRanks,
+    GenderRanks: filterMapField(item.GenderRanks, visibleKeys) ?? item.GenderRanks,
+    TimingPoint: lastKey || (finished ? item.TimingPoint : '') || '',
+    // Scalar final results: clear khi chưa Finish. Athletes giữa course không
+    // có "final time" — vendor chỉ điền các field này khi cross Finish line.
+    ChipTime: finished ? item.ChipTime : '',
+    GunTime: finished ? item.GunTime : '',
+    Pace: finished ? item.Pace : '',
+    OverallRank: finished ? item.OverallRank : 0,
+    GenderRank: finished ? item.GenderRank : 0,
+    CatRank: finished ? item.CatRank : 0,
+    OverrankLive: finished ? item.OverrankLive : 0,
+    Gap: finished ? item.Gap : '',
+    Certi: finished ? item.Certi : '',
+    Certificate: finished ? item.Certificate : '',
+    Finished: finished ? 1 : 0,
+    Started: visibleKeys.size > 0 ? 1 : 0,
   };
+}
+
+/**
+ * Re-derive scalar final result fields (Finished, ChipTime, GunTime, Pace,
+ * OverallRank, ...) từ chip times hiện tại (post-scenario).
+ *
+ * Tại sao cần helper này:
+ * - filterAthlete chạy TRƯỚC scenarios → scalars dựa theo chip times raw
+ * - applyScenarios mutate Chiptimes/Guntimes (vd MISS_FINISH drop Finish)
+ *   nhưng KHÔNG đụng scalars → scalars stale, không khớp chip
+ * - Helper này re-walk chip Finish trong post-scenario item, clear scalars
+ *   nếu Finish chip empty
+ *
+ * Cũng update Paces/TODs/Sectors/Ranks map fields theo visibleKeys
+ * post-scenario (case scenario drop CP giữa course → các map field
+ * tương ứng phải cleared theo).
+ */
+function deriveScalarsFromTimes(item: RaceResultApiItem): RaceResultApiItem {
+  // Extract visible keys post-scenario from Chiptimes + Guntimes
+  const chipKeys = extractVisibleKeysFromJson(item.Chiptimes);
+  const gunKeys = extractVisibleKeysFromJson(item.Guntimes);
+  const visibleKeys = new Set<string>([...chipKeys, ...gunKeys]);
+
+  const finishKey = ['Finish', 'FINISH'].find((k) => visibleKeys.has(k));
+  const finished = finishKey !== undefined;
+
+  // Last visible CP for TimingPoint (use Chiptimes order preference)
+  let lastVisibleKey = '';
+  let lastSec = -1;
+  const chipParsed = safeParseMap(item.Chiptimes);
+  if (chipParsed) {
+    for (const [k, v] of Object.entries(chipParsed)) {
+      if (!v || typeof v !== 'string' || v.trim().length === 0) continue;
+      const s = parseTimeToSeconds(v.trim());
+      if (s !== null && s > lastSec) {
+        lastSec = s;
+        lastVisibleKey = k;
+      }
+    }
+  }
+
+  return {
+    ...item,
+    Paces: filterMapField(item.Paces, visibleKeys) ?? item.Paces,
+    TODs: filterMapField(item.TODs, visibleKeys) ?? item.TODs,
+    Sectors: filterMapField(item.Sectors, visibleKeys) ?? item.Sectors,
+    OverallRanks: filterMapField(item.OverallRanks, visibleKeys) ?? item.OverallRanks,
+    GenderRanks: filterMapField(item.GenderRanks, visibleKeys) ?? item.GenderRanks,
+    TimingPoint: lastVisibleKey || (finished ? item.TimingPoint : '') || '',
+    ChipTime: finished ? item.ChipTime : '',
+    GunTime: finished ? item.GunTime : '',
+    Pace: finished ? item.Pace : '',
+    OverallRank: finished ? item.OverallRank : 0,
+    GenderRank: finished ? item.GenderRank : 0,
+    CatRank: finished ? item.CatRank : 0,
+    OverrankLive: finished ? item.OverrankLive : 0,
+    Gap: finished ? item.Gap : '',
+    Certi: finished ? item.Certi : '',
+    Certificate: finished ? item.Certificate : '',
+    Finished: finished ? 1 : 0,
+    Started: visibleKeys.size > 0 ? 1 : 0,
+  };
+}
+
+/** Helper: parse Chiptimes/Guntimes → set keys with non-empty value. */
+function extractVisibleKeysFromJson(raw: string | undefined | null): Set<string> {
+  const result = new Set<string>();
+  const parsed = safeParseMap(raw);
+  if (!parsed) return result;
+  for (const [key, val] of Object.entries(parsed)) {
+    if (val && typeof val === 'string' && val.trim().length > 0) {
+      result.add(key);
+    }
+  }
+  return result;
+}
+
+/** Helper: parse JSON map field, return null on error. */
+function safeParseMap(raw: string | undefined | null): Record<string, string> | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed as Record<string, string>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Filter checkpoint-keyed JSON map (Paces / TODs / Sectors / OverallRanks /
+ * GenderRanks). Keep ALL keys (match vendor schema), set value="" cho key
+ * KHÔNG thuộc visibleKeys (athlete chưa qua checkpoint đó).
+ *
+ * Returns null nếu raw không parse được — caller giữ nguyên field gốc.
+ */
+function filterMapField(
+  raw: string | undefined | null,
+  visibleKeys: Set<string>,
+): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  let parsed: Record<string, string>;
+  try {
+    parsed = JSON.parse(trimmed) as Record<string, string>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  const filtered: Record<string, string> = {};
+  for (const key of Object.keys(parsed)) {
+    filtered[key] = visibleKeys.has(key) ? parsed[key] : '';
+  }
+  return JSON.stringify(filtered);
 }
 
 /**
@@ -533,31 +703,33 @@ function filterAthlete(
  * Returns:
  * - `json`: stringified JSON với keys giữ nguyên, value="" cho time > cutoff
  * - `lastVisibleKey`: key cuối cùng có value non-empty (theo time order)
- * - Nếu raw không parse được → trả null fallback caller giữ nguyên
+ * - `visibleKeys`: set keys có value non-empty (dùng để filter các field map khác)
+ * - Nếu raw không parse được → trả null + empty set fallback caller giữ nguyên
  */
 function filterTimesField(
   raw: string | undefined | null,
   cutoffSeconds: number,
-): { json: string | null; lastVisibleKey: string | null } {
+): { json: string | null; lastVisibleKey: string | null; visibleKeys: Set<string> } {
   if (!raw || typeof raw !== 'string') {
-    return { json: null, lastVisibleKey: null };
+    return { json: null, lastVisibleKey: null, visibleKeys: new Set() };
   }
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
-    return { json: null, lastVisibleKey: null };
+    return { json: null, lastVisibleKey: null, visibleKeys: new Set() };
   }
 
   let parsed: Record<string, string>;
   try {
     parsed = JSON.parse(trimmed) as Record<string, string>;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { json: null, lastVisibleKey: null };
+      return { json: null, lastVisibleKey: null, visibleKeys: new Set() };
     }
   } catch {
-    return { json: null, lastVisibleKey: null };
+    return { json: null, lastVisibleKey: null, visibleKeys: new Set() };
   }
 
   const filtered: Record<string, string> = {};
+  const visibleKeys = new Set<string>();
   let lastVisibleKey: string | null = null;
   let lastVisibleSeconds = -1;
 
@@ -579,6 +751,7 @@ function filterTimesField(
     }
     if (seconds <= cutoffSeconds) {
       filtered[key] = timeStr;
+      visibleKeys.add(key);
       // Track key có time muộn nhất → TimingPoint
       if (seconds > lastVisibleSeconds) {
         lastVisibleSeconds = seconds;
@@ -589,7 +762,7 @@ function filterTimesField(
     }
   }
 
-  return { json: JSON.stringify(filtered), lastVisibleKey };
+  return { json: JSON.stringify(filtered), lastVisibleKey, visibleKeys };
 }
 
 /**

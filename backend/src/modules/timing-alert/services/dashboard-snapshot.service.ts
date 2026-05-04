@@ -126,6 +126,8 @@ export class DashboardSnapshotService {
         status: race.status,
         startDate: race.startDate ? race.startDate.toISOString() : null,
         endDate: race.endDate ? race.endDate.toISOString() : null,
+        startedAt: null,
+        startedAtSource: null,
       },
       raceStats,
       courses: courseStats,

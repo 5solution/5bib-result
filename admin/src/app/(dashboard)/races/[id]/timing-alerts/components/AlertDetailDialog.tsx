@@ -65,7 +65,7 @@ export function AlertDetailDialog({ raceId, alertId, open, onOpenChange }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-6xl flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[92vh] w-[95vw] flex-col overflow-hidden sm:!max-w-[760px]">
         <DialogHeader className="border-b border-stone-200 pb-3">
           <DialogTitle>Chi tiết alert</DialogTitle>
           <DialogDescription>

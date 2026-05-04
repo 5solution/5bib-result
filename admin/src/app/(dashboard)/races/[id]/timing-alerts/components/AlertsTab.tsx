@@ -8,7 +8,12 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,19 +58,95 @@ const SEVERITY_ORDER: TimingAlertSeverity[] = [
   'INFO',
 ];
 
+const PAGE_SIZE = 20;
+
 export function AlertsTab({ raceId }: { raceId: string }) {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<TimingAlertStatus>('OPEN');
   const [detailAlertId, setDetailAlertId] = useState<string | null>(null);
   const [bibSearch, setBibSearch] = useState('');
 
-  const alerts = useQuery({
-    queryKey: ['timing-alerts', raceId, statusFilter],
+  // 1 stats query — pageSize=1 chỉ lấy by_severity + open_count.
+  // Tách khỏi 4 severity queries vì stats cần FULL count, không filter severity.
+  const statsQuery = useQuery({
+    queryKey: ['timing-alerts-stats', raceId, statusFilter],
     queryFn: () =>
-      listTimingAlerts(raceId, { status: statusFilter, pageSize: 100 }),
+      listTimingAlerts(raceId, { status: statusFilter, page: 1, pageSize: 1 }),
     enabled: !!raceId,
-    refetchInterval: 30_000,
+    staleTime: 15_000,
   });
+  const stats = statsQuery.data?.stats;
+
+  // 4 separate infinite queries — 1 per severity. BTC chỉ load thêm severity
+  // họ care, không phải kéo qua 299 CRITICAL mới đụng WARNING. KHÔNG có
+  // refetchInterval — rely on SSE invalidation (page.tsx wired) + manual reload.
+  // Hooks calls fixed at 4 → tuân Rules of Hooks.
+  const criticalQ = useInfiniteQuery({
+    queryKey: ['timing-alerts', raceId, statusFilter, 'CRITICAL'],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      listTimingAlerts(raceId, {
+        status: statusFilter,
+        severity: 'CRITICAL',
+        page: pageParam as number,
+        pageSize: PAGE_SIZE,
+      }),
+    getNextPageParam: (last) =>
+      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    enabled: !!raceId,
+    staleTime: 15_000,
+  });
+  const highQ = useInfiniteQuery({
+    queryKey: ['timing-alerts', raceId, statusFilter, 'HIGH'],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      listTimingAlerts(raceId, {
+        status: statusFilter,
+        severity: 'HIGH',
+        page: pageParam as number,
+        pageSize: PAGE_SIZE,
+      }),
+    getNextPageParam: (last) =>
+      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    enabled: !!raceId,
+    staleTime: 15_000,
+  });
+  const warningQ = useInfiniteQuery({
+    queryKey: ['timing-alerts', raceId, statusFilter, 'WARNING'],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      listTimingAlerts(raceId, {
+        status: statusFilter,
+        severity: 'WARNING',
+        page: pageParam as number,
+        pageSize: PAGE_SIZE,
+      }),
+    getNextPageParam: (last) =>
+      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    enabled: !!raceId,
+    staleTime: 15_000,
+  });
+  const infoQ = useInfiniteQuery({
+    queryKey: ['timing-alerts', raceId, statusFilter, 'INFO'],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      listTimingAlerts(raceId, {
+        status: statusFilter,
+        severity: 'INFO',
+        page: pageParam as number,
+        pageSize: PAGE_SIZE,
+      }),
+    getNextPageParam: (last) =>
+      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    enabled: !!raceId,
+    staleTime: 15_000,
+  });
+  const queryBySev: Record<TimingAlertSeverity, typeof criticalQ> = {
+    CRITICAL: criticalQ,
+    HIGH: highQ,
+    WARNING: warningQ,
+    INFO: infoQ,
+  };
 
   const resolveAction = useMutation({
     mutationFn: (input: {
@@ -75,37 +156,48 @@ export function AlertsTab({ raceId }: { raceId: string }) {
     }) => patchTimingAlert(raceId, input.alertId, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+      qc.invalidateQueries({ queryKey: ['timing-alerts-stats', raceId] });
       qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
     },
   });
 
-  const alertsByGroup = useMemo(() => {
-    const grouped: Record<TimingAlertSeverity, TimingAlert[]> = {
+  // Apply BIB/name search filter PER severity (in-memory on loaded items).
+  const filteredBySev = useMemo(() => {
+    const search = bibSearch.trim().toLowerCase();
+    const result: Record<TimingAlertSeverity, TimingAlert[]> = {
       CRITICAL: [],
       HIGH: [],
       WARNING: [],
       INFO: [],
     };
-    const search = bibSearch.trim().toLowerCase();
-    for (const a of alerts.data?.items ?? []) {
-      // C6 — Search by BIB or athlete name
-      if (search) {
-        const bibMatch = a.bib_number.toLowerCase().includes(search);
-        const nameMatch = (a.athlete_name ?? '').toLowerCase().includes(search);
-        if (!bibMatch && !nameMatch) continue;
-      }
-      grouped[a.severity].push(a);
+    for (const sev of SEVERITY_ORDER) {
+      const items = queryBySev[sev].data?.pages.flatMap((p) => p.items) ?? [];
+      result[sev] = !search
+        ? items
+        : items.filter((a) => {
+            const bibMatch = a.bib_number.toLowerCase().includes(search);
+            const nameMatch = (a.athlete_name ?? '')
+              .toLowerCase()
+              .includes(search);
+            return bibMatch || nameMatch;
+          });
     }
-    return grouped;
-  }, [alerts.data, bibSearch]);
+    return result;
+  }, [criticalQ.data, highQ.data, warningQ.data, infoQ.data, bibSearch]);
+
+  const isInitialLoading =
+    criticalQ.isLoading ||
+    highQ.isLoading ||
+    warningQ.isLoading ||
+    infoQ.isLoading;
 
   return (
     <div className="space-y-4">
       {/* Stats by severity — C4 fix: parse class string properly */}
-      {alerts.data?.stats && (
+      {stats && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {SEVERITY_ORDER.map((sev) => {
-            const count = alerts.data.stats.by_severity[sev];
+            const count = stats.by_severity[sev];
             return (
               <Card key={sev} className={SEVERITY_BG[sev]}>
                 <CardContent className="p-4">
@@ -126,7 +218,7 @@ export function AlertsTab({ raceId }: { raceId: string }) {
       <div className="flex flex-wrap items-center gap-2">
         {(['OPEN', 'RESOLVED', 'FALSE_ALARM'] as TimingAlertStatus[]).map((s) => {
           const count =
-            s === 'OPEN' ? alerts.data?.stats.open_count ?? 0 : null;
+            s === 'OPEN' ? stats?.open_count ?? 0 : null;
           return (
             <Button
               key={s}
@@ -166,37 +258,75 @@ export function AlertsTab({ raceId }: { raceId: string }) {
         </div>
       </div>
 
-      {/* Alert list grouped */}
-      {alerts.isLoading ? (
+      {/* Alert list grouped — 4 cards độc lập, mỗi card có Load more riêng */}
+      {isInitialLoading ? (
         <Skeleton className="h-64 w-full" />
       ) : (
         SEVERITY_ORDER.map((sev) => {
-          const list = alertsByGroup[sev];
-          if (list.length === 0) return null;
+          const q = queryBySev[sev];
+          const list = filteredBySev[sev];
+          const totalForSev = stats?.by_severity[sev] ?? 0;
+          // Hiển thị card kể cả 0 alert nếu stats > 0 (BTC biết có sev này).
+          // Nếu stats=0 và search filter đã loại hết → ẩn card.
+          if (totalForSev === 0 && list.length === 0) return null;
+          const totalLoadedSev = q.data?.pages.flatMap((p) => p.items).length ?? 0;
+          const truncated = list.length < totalLoadedSev; // search hidden some
           return (
             <Card key={sev}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Badge className={SEVERITY_COLORS[sev]}>{sev}</Badge>
-                  <span className="text-base">{list.length} alerts</span>
+                  <span className="text-base">
+                    {bibSearch && truncated
+                      ? `${list.length} match (${totalLoadedSev} loaded / ${totalForSev} total)`
+                      : `${totalLoadedSev} loaded / ${totalForSev} total`}
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {list.map((alert) => (
-                  <AlertRow
-                    key={alert._id}
-                    alert={alert}
-                    onAction={(action, note) =>
-                      resolveAction.mutate({
-                        alertId: alert._id,
-                        action,
-                        note,
-                      })
-                    }
-                    onClickDetail={() => setDetailAlertId(alert._id)}
-                    busy={resolveAction.isPending}
-                  />
-                ))}
+                {list.length === 0 ? (
+                  <div className="py-2 text-sm text-stone-500">
+                    {bibSearch
+                      ? 'Không có alert match BIB/tên đã loaded.'
+                      : 'Chưa load alert nào trong nhóm này.'}
+                  </div>
+                ) : (
+                  list.map((alert) => (
+                    <AlertRow
+                      key={alert._id}
+                      alert={alert}
+                      onAction={(action, note) =>
+                        resolveAction.mutate({
+                          alertId: alert._id,
+                          action,
+                          note,
+                        })
+                      }
+                      onClickDetail={() => setDetailAlertId(alert._id)}
+                      busy={resolveAction.isPending}
+                    />
+                  ))
+                )}
+                {/* Per-severity Load more — chỉ load thêm sev này, không touch các sev khác */}
+                {q.hasNextPage && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={q.isFetchingNextPage}
+                      onClick={() => q.fetchNextPage()}
+                    >
+                      {q.isFetchingNextPage
+                        ? 'Đang tải…'
+                        : `Load thêm ${sev} (${totalLoadedSev}/${totalForSev})`}
+                    </Button>
+                  </div>
+                )}
+                {!q.hasNextPage && totalForSev > 0 && (
+                  <div className="pt-1 text-center text-xs text-stone-400">
+                    Đã load đủ {totalLoadedSev}/{totalForSev} {sev}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );

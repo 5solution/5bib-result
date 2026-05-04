@@ -113,9 +113,17 @@ export default function TimingAlertsPage() {
     const url = timingAlertSseUrl(raceId);
     const es = new EventSource(url, { withCredentials: true });
 
+    // Debounce invalidation — race day 1000+ alerts firing trong vài giây
+    // sẽ trigger N invalidate spam → N×4 severity refetches. Coalesce 1500ms.
+    let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
     const invalidateAll = () => {
-      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
-      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+      if (invalidateTimer) return; // already scheduled
+      invalidateTimer = setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+        qc.invalidateQueries({ queryKey: ['timing-alerts-stats', raceId] });
+        qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+        invalidateTimer = null;
+      }, 1500);
     };
 
     es.addEventListener('alert.created', (evt: MessageEvent) => {
@@ -149,7 +157,10 @@ export default function TimingAlertsPage() {
       // EventSource auto-reconnects unless es.close()
     };
 
-    return () => es.close();
+    return () => {
+      es.close();
+      if (invalidateTimer) clearTimeout(invalidateTimer);
+    };
   }, [raceId, isAuthenticated, soundEnabled, qc]);
 
   // Browser notification permission prompt

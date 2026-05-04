@@ -1,4 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
@@ -245,7 +251,12 @@ export class TimingAlertPollService {
 
       const parsed: ParsedAthlete[] = rawAthletes
         .map((a) => parseRaceResultAthlete(a, checkpoints))
-        .filter((a) => a.bib && a.bib !== '0');
+        .filter((a) => a.bib && a.bib !== '0')
+        // Vendor RR API có thể không emit Contest field (RR template variant
+        // hoặc simulator data). Fallback: gán course.name vì poll service ĐÃ
+        // BIẾT bib này thuộc course nào (đang poll URL của course đó).
+        // Đảm bảo trajectory lookup ở getAlertDetail() match được course.
+        .map((a) => (a.contest ? a : { ...a, contest: course.name }));
 
       // 4. Cache live athletes snapshot vào Redis cho dashboard.
       // RaceSyncCron chỉ chạy 10 phút/lần → race_results stale.
@@ -861,7 +872,20 @@ export class TimingAlertPollService {
     }
 
     // Find course matching alert.contest. Match by course name field.
-    const course = (race.courses ?? []).find((c) => c.name === alert.contest);
+    let course = (race.courses ?? []).find((c) => c.name === alert.contest);
+
+    // Fallback cho LEGACY alerts (alert.contest=null vì vendor không emit
+    // Contest field): tìm course mà checkpoints chứa CẢ last_seen_point +
+    // missing_point. Đảm bảo trajectory render vẫn work cho data cũ.
+    if (!course && (alert.last_seen_point || alert.missing_point)) {
+      course = (race.courses ?? []).find((c) => {
+        const keys = new Set((c.checkpoints ?? []).map((cp) => cp.key));
+        return (
+          keys.has(alert.last_seen_point) && keys.has(alert.missing_point)
+        );
+      });
+    }
+
     const checkpoints = course?.checkpoints ?? [];
 
     const courseCheckpoints = checkpoints.map((cp, idx) => ({
@@ -960,10 +984,10 @@ export class TimingAlertPollService {
     // hoặc `ended` (results đã chốt, audit history quan trọng).
     const race = await this.raceModel.findById(raceId).lean<RaceDocument>().exec();
     if (!race) {
-      throw new Error(`Race ${raceId} not found`);
+      throw new NotFoundException(`Race ${raceId} not found`);
     }
     if (race.status === 'live' || race.status === 'ended') {
-      throw new Error(
+      throw new ConflictException(
         `Race ${race.title} đang ở status '${race.status}' — KHÔNG cho phép reset (chỉ reset khi draft/pre_race). Bypass: đổi status race trước.`,
       );
     }
@@ -972,7 +996,7 @@ export class TimingAlertPollService {
     // chống accident click. UI tự gửi tự động (admin nhập slug để confirm).
     const expectedToken = race.slug || race.title;
     if (options.confirmToken !== expectedToken) {
-      throw new Error(
+      throw new BadRequestException(
         `confirmToken sai — phải gửi exact "${expectedToken}" (race slug/title) để confirm reset`,
       );
     }
@@ -982,7 +1006,9 @@ export class TimingAlertPollService {
     const resetLockKey = `timing-alert:reset-lock:${raceId}`;
     const acquired = await this.redis.set(resetLockKey, '1', 'EX', 60, 'NX');
     if (acquired !== 'OK') {
-      throw new Error('Reset đang chạy bởi admin khác — đợi 60s rồi thử lại');
+      throw new ConflictException(
+        'Reset đang chạy bởi admin khác — đợi 60s rồi thử lại',
+      );
     }
 
     try {

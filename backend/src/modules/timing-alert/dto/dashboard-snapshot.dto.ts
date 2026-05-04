@@ -19,6 +19,20 @@ export class RaceMetaDto {
   startDate!: string | null;
   @ApiProperty({ nullable: true, type: String })
   endDate!: string | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      'ISO timestamp khi race CHÍNH THỨC start (status → live). Null nếu chưa start (draft/pre_race). Frontend dùng để hiển thị elapsed clock trên Cockpit.',
+  })
+  startedAt!: string | null;
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      'Source của startedAt: status_history (admin manual transition) | course_start_time (fallback từ startDate + course.startTime sớm nhất). Null khi startedAt null.',
+  })
+  startedAtSource!: 'status_history' | 'course_start_time' | null;
 }
 
 export class RaceStatsDto {
