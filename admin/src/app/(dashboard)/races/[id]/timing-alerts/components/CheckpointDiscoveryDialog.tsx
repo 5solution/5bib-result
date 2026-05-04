@@ -178,10 +178,8 @@ export function CheckpointDiscoveryDialog({
                     <col className="w-12" />
                     <col className="w-28" />
                     <col className="w-24" />
-                    <col className="w-[260px]" />
+                    <col className="w-[320px]" />
                     <col className="w-32" />
-                    <col className="w-24" />
-                    <col className="w-28" />
                   </colgroup>
                   <thead className="bg-stone-100">
                     <tr>
@@ -190,8 +188,6 @@ export function CheckpointDiscoveryDialog({
                       <th className="px-3 py-2 text-left">Key (RR)</th>
                       <th className="px-3 py-2 text-left">Tên hiển thị</th>
                       <th className="px-3 py-2 text-left">Distance (km)</th>
-                      <th className="px-3 py-2 text-left">Coverage</th>
-                      <th className="px-3 py-2 text-left">Median time</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -267,27 +263,13 @@ export function CheckpointDiscoveryDialog({
                             className="h-8 w-full text-sm"
                           />
                         </td>
-                        <td className="px-3 py-2">
-                          <Badge
-                            variant="outline"
-                            className={
-                              r.coverage >= 0.95
-                                ? 'border-green-300 bg-green-50 text-green-800'
-                                : r.coverage >= 0.85
-                                  ? 'border-yellow-300 bg-yellow-50 text-yellow-800'
-                                  : 'border-stone-300 bg-stone-50 text-stone-700'
-                            }
-                          >
-                            {Math.round(r.coverage * 100)}%
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2 font-mono text-xs text-stone-600">
-                          {formatSeconds(r.medianTimeSeconds)}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                <p className="border-t border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-600">
+                  💡 Order theo TimingPoint athletes đã pass. Race chưa start → order theo JSON insertion từ vendor.
+                </p>
               </div>
             )}
           </div>
@@ -329,6 +311,8 @@ function StatBox({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Kept for potential reuse, not currently rendered (Phase C drop median time column)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatSeconds(s: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);

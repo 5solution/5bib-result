@@ -310,6 +310,16 @@ export class RacesService {
     return { data: race, success: true };
   }
 
+  // Phase B FEATURE-001 NOTE: Event hook auto-trigger discover preview defer
+  // — dùng frontend-driven discover thay vì backend event hook để tránh
+  // circular DI giữa RacesModule ↔ TimingAlertModule. Frontend
+  // `DiscoverPreviewPanel` debounce 800ms apiUrl change → call existing
+  // POST /discover-checkpoints/:courseId endpoint trực tiếp.
+  //
+  // discoverAndCachePreview/getCachedPreview methods trong CheckpointDiscoveryService
+  // giữ lại như utility — có thể dùng nếu sau này cần backend cron pre-warm
+  // discover cho races sắp live.
+
   async removeCourse(raceId: string, courseId: string) {
     const race = await this.raceModel
       .findByIdAndUpdate(

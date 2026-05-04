@@ -1,5 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import { Model } from 'mongoose';
 import { Race, RaceDocument } from '../../races/schemas/race.schema';
 import { RaceResultApiService } from '../../race-result/services/race-result-api.service';
@@ -95,12 +97,118 @@ const SENTINEL_KEYS = new Set([
 export class CheckpointDiscoveryService {
   private readonly logger = new Logger(CheckpointDiscoveryService.name);
 
+  /** Phase B: Redis cache TTL cho discover preview (1h). */
+  private static readonly PREVIEW_CACHE_TTL_SECONDS = 3600;
+  /** Phase B: SETNX lock TTL chống concurrent discover same (race, course). */
+  private static readonly LOCK_TTL_SECONDS = 30;
+
   constructor(
     @InjectModel(Race.name)
     private readonly raceModel: Model<RaceDocument>,
+    @InjectRedis()
+    private readonly redis: Redis,
     private readonly apiService: RaceResultApiService,
     private readonly simulatorService: SimulatorService,
   ) {}
+
+  /**
+   * Phase B (BR-04, BR-05, BR-06): Auto-trigger discover preview khi BTC
+   * paste apiUrl. Cache result Redis 1h, BTC fetch qua endpoint
+   * `GET /discover-preview/:courseId`.
+   *
+   * Concurrent guard via Redis SETNX `master:discover-lock:{race}:{course}`.
+   *
+   * **Fire-and-forget:** caller (RacesService.update event hook) gọi async
+   * với `.catch(err => log)`. Lỗi network/timeout KHÔNG block save race.
+   */
+  async discoverAndCachePreview(
+    raceId: string,
+    courseId: string,
+  ): Promise<void> {
+    const lockKey = `master:discover-lock:${raceId}:${courseId}`;
+    const acquired = await this.redis.set(
+      lockKey,
+      '1',
+      'EX',
+      CheckpointDiscoveryService.LOCK_TTL_SECONDS,
+      'NX',
+    );
+    if (acquired !== 'OK') {
+      this.logger.warn(
+        `[discover-preview] race=${raceId} course=${courseId} lock-held — skip`,
+      );
+      return;
+    }
+
+    try {
+      const result = await this.discover(raceId, courseId);
+      const cacheKey = `discover-preview:${raceId}:${courseId}`;
+      await this.redis.set(
+        cacheKey,
+        JSON.stringify({
+          ...result,
+          generatedAt: new Date().toISOString(),
+        }),
+        'EX',
+        CheckpointDiscoveryService.PREVIEW_CACHE_TTL_SECONDS,
+      );
+      this.logger.log(
+        `[discover-preview] race=${raceId} course=${courseId} cached ${result.detectedCheckpoints.length} keys`,
+      );
+    } catch (err) {
+      const message = (err as Error).message;
+      // Cache error result để frontend hiển thị banner thay vì retry vô hạn
+      const errorCacheKey = `discover-preview:${raceId}:${courseId}`;
+      await this.redis
+        .set(
+          errorCacheKey,
+          JSON.stringify({
+            error: message,
+            generatedAt: new Date().toISOString(),
+          }),
+          'EX',
+          60, // shorter TTL cho error → BTC re-paste apiUrl mới retry
+        )
+        .catch(() => undefined);
+      this.logger.warn(
+        `[discover-preview] race=${raceId} course=${courseId} fail: ${message}`,
+      );
+    } finally {
+      await this.redis.del(lockKey);
+    }
+  }
+
+  /**
+   * Phase B: Read cached preview từ Redis. Trả null nếu cache miss.
+   * Frontend gọi qua endpoint `GET /discover-preview/:courseId`.
+   */
+  async getCachedPreview(
+    raceId: string,
+    courseId: string,
+  ): Promise<{
+    cached: CheckpointDiscoveryResult | null;
+    error: string | null;
+    generatedAt: string | null;
+  }> {
+    const cacheKey = `discover-preview:${raceId}:${courseId}`;
+    const raw = await this.redis.get(cacheKey);
+    if (!raw) return { cached: null, error: null, generatedAt: null };
+    try {
+      const parsed = JSON.parse(raw) as
+        | (CheckpointDiscoveryResult & { generatedAt: string })
+        | { error: string; generatedAt: string };
+      if ('error' in parsed) {
+        return { cached: null, error: parsed.error, generatedAt: parsed.generatedAt };
+      }
+      return {
+        cached: parsed,
+        error: null,
+        generatedAt: parsed.generatedAt,
+      };
+    } catch {
+      return { cached: null, error: null, generatedAt: null };
+    }
+  }
 
   /**
    * Detect xem URL có phải simulator URL không. Nếu phải → return simCourseId
@@ -172,14 +280,36 @@ export class CheckpointDiscoveryService {
       };
     }
 
-    // Per-key aggregation: collect time samples.
-    // Note: Start time = "00:00" → 0 seconds VALID (race start moment), KHÔNG reject.
-    // Chỉ reject nếu time format malformed (null) hoặc negative (vendor sentinel).
+    // **Phase C — Schema-from-1 với fallback aggregate (BR-08):**
+    // Real RR vendor verified luôn return full schema (7 keys cho 42K race
+    // verified curl). Sample 10 athletes đầu, nếu Object.keys identical ≥
+    // 80% → trust schema-from-1 (1 athlete đủ get full keys).
     //
-    // **Merge Chiptimes + Guntimes:** vendor 42Km có Finish chỉ trong Guntimes
-    // (gun-timed elapsed) NHƯNG không có trong Chiptimes (chip không bắt được
-    // tại Finish line). Merge để discover thấy đầy đủ keys.
-    const keyTimes = new Map<string, number[]>(); // key → seconds[]
+    // Else fallback current aggregate algorithm (defensive cho vendor edge
+    // cases hoặc data corrupt).
+    //
+    // **Phase 3:** Distance/median time chỉ tính từ athletes có time non-empty
+    // (athletes đã pass checkpoint thực sự). Sentinel filter giữ nguyên.
+
+    const useSchemaFromOne = isVendorSchemaConsistent(rawAthletes);
+    const candidateKeys = useSchemaFromOne
+      ? extractKeysFromFirstAthlete(rawAthletes)
+      : null; // null → fallback aggregate
+
+    if (useSchemaFromOne) {
+      this.logger.log(
+        `[discover] race=${raceId} course=${courseId} schema-from-1 mode (vendor returns ${candidateKeys?.length} keys)`,
+      );
+    } else {
+      this.logger.warn(
+        `[discover] race=${raceId} course=${courseId} schema inconsistent → fallback aggregate algorithm`,
+      );
+    }
+
+    // Aggregate time samples — dùng cho cả 2 mode.
+    // Schema-from-1: dùng để compute median time / order
+    // Fallback aggregate: dùng cả để filter coverage
+    const keyTimes = new Map<string, number[]>();
     let athletesWithAnyTime = 0;
 
     for (const item of rawAthletes) {
@@ -201,7 +331,6 @@ export class CheckpointDiscoveryService {
       if (hasAnyTime) athletesWithAnyTime += 1;
     }
 
-    // Filter keys với coverage thấp (noise fields hoặc legacy fields RR vendor đẩy lung tung)
     const denominator = athletesWithAnyTime || totalAthletes;
     const surviving: Array<{
       key: string;
@@ -209,21 +338,44 @@ export class CheckpointDiscoveryService {
       passedCount: number;
       medianTimeSeconds: number;
     }> = [];
-    for (const [key, samples] of keyTimes.entries()) {
-      // Filter sentinel keys (DNS/DNF/DSQ/...) — vendor có thể emit như status flag
-      if (SENTINEL_KEYS.has(key.toLowerCase())) continue;
-      const coverage = samples.length / denominator;
-      if (coverage < MIN_COVERAGE) continue;
-      surviving.push({
-        key,
-        coverage,
-        passedCount: samples.length,
-        medianTimeSeconds: median(samples),
-      });
+
+    if (candidateKeys !== null) {
+      // Schema-from-1: lấy keys từ vendor schema, KHÔNG filter coverage
+      // (vendor đảm bảo full schema, missing samples = athletes chưa pass)
+      for (const key of candidateKeys) {
+        if (SENTINEL_KEYS.has(key.toLowerCase())) continue;
+        const samples = keyTimes.get(key) ?? [];
+        const coverage = samples.length / denominator;
+        surviving.push({
+          key,
+          coverage,
+          passedCount: samples.length,
+          medianTimeSeconds: samples.length > 0 ? median(samples) : 0,
+        });
+      }
+    } else {
+      // Fallback aggregate: filter coverage threshold cho vendor lạ
+      for (const [key, samples] of keyTimes.entries()) {
+        if (SENTINEL_KEYS.has(key.toLowerCase())) continue;
+        const coverage = samples.length / denominator;
+        if (coverage < MIN_COVERAGE) continue;
+        surviving.push({
+          key,
+          coverage,
+          passedCount: samples.length,
+          medianTimeSeconds: median(samples),
+        });
+      }
     }
 
-    // Sort chronologically theo median time
-    surviving.sort((a, b) => a.medianTimeSeconds - b.medianTimeSeconds);
+    // Sort chronologically theo median time. Nếu nhiều keys có median=0
+    // (race chưa start, schema-from-1 mode), preserve insertion order
+    // (vendor RR thường insert theo course order trong JSON).
+    const allMediansZero = surviving.every((s) => s.medianTimeSeconds === 0);
+    if (!allMediansZero) {
+      surviving.sort((a, b) => a.medianTimeSeconds - b.medianTimeSeconds);
+    }
+    // else: giữ insertion order từ vendor JSON
 
     // Last surviving = Finish (cup level)
     const finishKey = surviving.length > 0 ? surviving[surviving.length - 1] : null;
@@ -384,6 +536,74 @@ export class CheckpointDiscoveryService {
 }
 
 // ─────────── helpers ───────────
+
+/**
+ * Extract ALL keys (including empty value) from Chiptimes + Guntimes.
+ * Khác với `mergeTimes` (chỉ keep keys có value non-empty), function này
+ * lấy schema raw — works cho race chưa start (toàn empty value).
+ */
+function extractRawKeys(item: {
+  Chiptimes?: string;
+  Guntimes?: string;
+}): Set<string> {
+  const keys = new Set<string>();
+  for (const raw of [item.Chiptimes, item.Guntimes]) {
+    if (!raw || typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, string>;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (const k of Object.keys(parsed)) keys.add(k);
+      }
+    } catch {
+      // skip malformed
+    }
+  }
+  return keys;
+}
+
+/**
+ * BR-08: Schema consistency check.
+ * Sample first 10 athletes, check if Object.keys(Chiptimes ∪ Guntimes)
+ * identical ≥ 80%. Real RR vendor returns full schema 100% verified curl —
+ * works cho cả race chưa start (vendor return keys với value="").
+ */
+function isVendorSchemaConsistent(
+  athletes: Array<{ Chiptimes?: string; Guntimes?: string }>,
+): boolean {
+  if (athletes.length === 0) return false;
+  const sample = athletes.slice(0, Math.min(10, athletes.length));
+  const sets = sample.map((a) => extractRawKeys(a));
+  const reference = sets.find((s) => s.size > 0);
+  if (!reference) return false;
+  let consistent = 0;
+  for (const s of sets) {
+    if (s.size === 0) continue;
+    if (
+      s.size === reference.size &&
+      [...reference].every((k) => s.has(k))
+    ) {
+      consistent += 1;
+    }
+  }
+  const nonEmpty = sets.filter((s) => s.size > 0).length;
+  return nonEmpty > 0 && consistent / nonEmpty >= 0.8;
+}
+
+/**
+ * Extract checkpoint keys (raw) — trust vendor schema, lấy keys kể cả khi
+ * value="" (race chưa start).
+ */
+function extractKeysFromFirstAthlete(
+  athletes: Array<{ Chiptimes?: string; Guntimes?: string }>,
+): string[] {
+  for (const a of athletes) {
+    const keys = extractRawKeys(a);
+    if (keys.size > 0) return [...keys];
+  }
+  return [];
+}
 
 function parseChiptimesSafe(raw: unknown): Record<string, string> {
   if (!raw || typeof raw !== 'string') return {};

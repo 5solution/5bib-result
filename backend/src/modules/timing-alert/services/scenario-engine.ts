@@ -377,7 +377,7 @@ function isMatchCi(a: string, b: string): boolean {
 }
 
 /**
- * Drop key khỏi CẢ Chiptimes + Guntimes — symmetric strip.
+ * Drop key khỏi CẢ Chiptimes + Guntimes — symmetric strip với value="".
  *
  * **Why both:** scenarios test miss-detection cho timing-alert poll.
  * `parseRaceResultAthlete` (utils/parsed-athlete.ts) merge Chiptimes +
@@ -385,7 +385,10 @@ function isMatchCi(a: string, b: string): boolean {
  * Chiptimes, Guntimes "rescue" key → poll service vẫn thấy time → scenario
  * NO-OP.
  *
- * Drop both → merged result thực sự thiếu key → scenario có effect đúng.
+ * **BR-02 (Phase A):** SET value="" thay vì delete key. Match real RR
+ * vendor schema: vendor luôn return full 7 keys, athlete chưa qua → value="".
+ * `mergeTimes` trong utils đã filter `v.trim().length > 0` → empty string
+ * được treat như missing key cho miss detector. Output schema match vendor.
  */
 function dropKeyFromItem(
   item: RaceResultApiItem,
@@ -395,9 +398,9 @@ function dropKeyFromItem(
   const gun = parseChiptimes(item.Guntimes);
 
   const chipKey = findKeyCi(chip, matchKey);
-  if (chipKey) delete chip[chipKey];
+  if (chipKey) chip[chipKey] = ''; // BR-02: empty value, KHÔNG delete
   const gunKey = findKeyCi(gun, matchKey);
-  if (gunKey) delete gun[gunKey];
+  if (gunKey) gun[gunKey] = '';
 
   if (!chipKey && !gunKey) return item; // key not present in either
 

@@ -493,56 +493,103 @@ function maskUrl(url: string): string {
 }
 
 /**
- * Filter athlete's Chiptimes — chỉ giữ checkpoint có time ≤ cutoffSeconds.
+ * Filter athlete's Chiptimes + Guntimes — KEEP all keys, set value="" cho
+ * điểm chưa qua. Match real RR vendor behavior:
+ * - Athlete chưa start: 7 keys với value=""
+ * - Athlete giữa course: keys đủ, value điền dần
+ * - Athlete đã finish: full value
  *
- * RR Chiptimes là JSON string `{"Start":"06:00","TM1":"06:24:30",...}`.
- * Time format "HH:MM:SS" hoặc "MM:SS". Convert → seconds, so sánh với
- * cutoff. Drop key nếu time > cutoff.
+ * **Phase A fix (BR-01):** trước đây drop keys khỏi JSON khi time > cutoff
+ * → schema KHÔNG match real RR vendor. Sau fix: keep keys, value="" cho
+ * điểm chưa qua. Output JSON shape giống vendor 100%.
+ *
+ * Áp dụng symmetric cho cả Chiptimes + Guntimes (BR-01 mandate cả 2 fields).
  *
  * Athletes có 0 checkpoint visible vẫn return — Bib + metadata giữ.
- * (Match RR behavior: pre-race athletes có Bib nhưng Chiptimes={}).
  */
 function filterAthlete(
   item: RaceResultApiItem,
   cutoffSeconds: number,
 ): RaceResultApiItem {
-  const chiptimesRaw = item.Chiptimes;
-  if (!chiptimesRaw || typeof chiptimesRaw !== 'string') {
-    return item;
+  const chip = filterTimesField(item.Chiptimes, cutoffSeconds);
+  const gun = filterTimesField(item.Guntimes, cutoffSeconds);
+
+  // TimingPoint = key cuối cùng có value (theo vendor pattern: checkpoint
+  // mới nhất athlete vừa qua). Lấy từ Chiptimes vì đây là chip-timed thực
+  // tế. Nếu Chiptimes chưa có nhưng Guntimes có → fallback Guntimes.
+  const lastKey = chip.lastVisibleKey ?? gun.lastVisibleKey ?? '';
+
+  return {
+    ...item,
+    Chiptimes: chip.json ?? item.Chiptimes,
+    Guntimes: gun.json ?? item.Guntimes,
+    TimingPoint: lastKey || item.TimingPoint || '',
+  };
+}
+
+/**
+ * Apply filter to 1 times field (Chiptimes hoặc Guntimes).
+ *
+ * Returns:
+ * - `json`: stringified JSON với keys giữ nguyên, value="" cho time > cutoff
+ * - `lastVisibleKey`: key cuối cùng có value non-empty (theo time order)
+ * - Nếu raw không parse được → trả null fallback caller giữ nguyên
+ */
+function filterTimesField(
+  raw: string | undefined | null,
+  cutoffSeconds: number,
+): { json: string | null; lastVisibleKey: string | null } {
+  if (!raw || typeof raw !== 'string') {
+    return { json: null, lastVisibleKey: null };
   }
-  const trimmed = chiptimesRaw.trim();
-  if (trimmed.length === 0) return item;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { json: null, lastVisibleKey: null };
+  }
 
   let parsed: Record<string, string>;
   try {
     parsed = JSON.parse(trimmed) as Record<string, string>;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return item;
+      return { json: null, lastVisibleKey: null };
     }
   } catch {
-    return item;
+    return { json: null, lastVisibleKey: null };
   }
 
   const filtered: Record<string, string> = {};
   let lastVisibleKey: string | null = null;
+  let lastVisibleSeconds = -1;
 
   for (const [key, timeStr] of Object.entries(parsed)) {
-    if (!timeStr || typeof timeStr !== 'string') continue;
-    const seconds = parseTimeToSeconds(timeStr.trim());
-    if (seconds === null) continue;
+    // BR-01: keep ALL keys. Set value="" nếu invalid hoặc > cutoff.
+    if (!timeStr || typeof timeStr !== 'string') {
+      filtered[key] = '';
+      continue;
+    }
+    const trimmedTime = timeStr.trim();
+    if (trimmedTime.length === 0) {
+      filtered[key] = '';
+      continue;
+    }
+    const seconds = parseTimeToSeconds(trimmedTime);
+    if (seconds === null) {
+      filtered[key] = '';
+      continue;
+    }
     if (seconds <= cutoffSeconds) {
       filtered[key] = timeStr;
-      lastVisibleKey = key;
+      // Track key có time muộn nhất → TimingPoint
+      if (seconds > lastVisibleSeconds) {
+        lastVisibleSeconds = seconds;
+        lastVisibleKey = key;
+      }
+    } else {
+      filtered[key] = ''; // KEY giữ nguyên, value="" — match real RR
     }
   }
 
-  // Override TimingPoint với key visible cuối — match RR vendor behavior
-  // khi athlete đang trên đường (TimingPoint = checkpoint mới nhất qua).
-  return {
-    ...item,
-    Chiptimes: JSON.stringify(filtered),
-    TimingPoint: lastVisibleKey ?? item.TimingPoint ?? '',
-  };
+  return { json: JSON.stringify(filtered), lastVisibleKey };
 }
 
 /**

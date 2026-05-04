@@ -213,6 +213,26 @@ export class TimingAlertAdminController {
     return this.discoveryService.discover(raceId, courseId);
   }
 
+  @Get('discover-preview/:courseId')
+  @ApiOperation({
+    summary: 'Read cached discover preview (Phase B FEATURE-001)',
+    description:
+      'Trả preview từ Redis cache do `RacesService.update` event hook tự động fire khi BTC paste apiUrl. Cache TTL 1h, error TTL 60s. Trả 404 nếu cache miss (BTC manual click discover dialog).',
+  })
+  @ApiResponse({ status: 200, description: 'Preview cached' })
+  @ApiResponse({ status: 404, description: 'Cache miss — fallback manual discover' })
+  async getDiscoverPreview(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+  ) {
+    const result = await this.discoveryService.getCachedPreview(raceId, courseId);
+    if (!result.cached && !result.error) {
+      // Cache miss — return 404-like body, frontend hiển thị "Click discover manual"
+      return { cached: null, error: null, generatedAt: null };
+    }
+    return result;
+  }
+
   @Post('apply-checkpoints/:courseId')
   @HttpCode(200)
   @ApiOperation({
