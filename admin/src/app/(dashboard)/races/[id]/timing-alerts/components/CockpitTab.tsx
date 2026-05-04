@@ -14,7 +14,7 @@
  * chung cho tab Cockpit + Alerts.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Card,
@@ -70,6 +70,13 @@ export function CockpitTab({ raceId }: { raceId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Race elapsed clock — ticks 1Hz client-side từ race.startedAt */}
+      <RaceElapsedClock
+        startedAt={snapshot.data.race.startedAt}
+        startedAtSource={snapshot.data.race.startedAtSource}
+        status={snapshot.data.race.status}
+      />
+
       {/* Data freshness indicator */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
         <span>
@@ -509,4 +516,152 @@ function formatRelative(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * Race elapsed clock — ticks 1Hz client-side từ `startedAt` ISO timestamp.
+ *
+ * 3 modes hiển thị:
+ * - **Race chưa start** (`startedAt=null`, status=draft/pre_race): hiển thị
+ *   "⏳ Race chưa bắt đầu" + scheduled startDate nếu có
+ * - **Race live** (status=live): big clock HH:MM:SS xanh + animated pulse
+ * - **Race ended** (status=ended): clock đứng tại giờ kết thúc + màu xám
+ *
+ * Source label hiển thị nhỏ bên cạnh để BTC biết startedAt từ đâu:
+ * - `status_history` → "✓ Admin transition" (most accurate)
+ * - `course_start_time` → "≈ Theo giờ start course" (fallback estimate)
+ */
+function RaceElapsedClock({
+  startedAt,
+  startedAtSource,
+  status,
+}: {
+  startedAt: string | null;
+  startedAtSource:
+    | 'status_history'
+    | 'course_start_time'
+    | 'recent_history'
+    | null;
+  status: string;
+}) {
+  // Tick state — increment counter mỗi 1s để force re-render. Dùng counter
+  // thay vì store elapsed string để tránh re-render lúc null/ended.
+  const [tickCount, setTickCount] = useState(0);
+  useEffect(() => {
+    if (!startedAt) return;
+    if (status === 'ended') return; // race over — no need ticking
+    const interval = setInterval(() => setTickCount((c) => c + 1), 1000);
+    return () => clearInterval(interval);
+  }, [startedAt, status]);
+  // Reference tickCount in JSX để TS không drop dependency
+  void tickCount;
+
+  // Race chưa start hoặc thiếu data config
+  if (!startedAt) {
+    const isLiveButMissing = status === 'live' || status === 'ended';
+    return (
+      <div
+        className={`rounded-lg border p-4 text-center ${
+          isLiveButMissing
+            ? 'border-amber-300 bg-amber-50'
+            : 'border-stone-200 bg-stone-50'
+        }`}
+      >
+        <div
+          className={`text-xs uppercase tracking-wide ${
+            isLiveButMissing ? 'text-amber-700' : 'text-stone-500'
+          }`}
+        >
+          {isLiveButMissing
+            ? '⚠️ Race đang live nhưng chưa config startTime'
+            : '⏳ Race chưa bắt đầu'}
+        </div>
+        <div className="mt-1 text-sm text-stone-700">
+          {isLiveButMissing ? (
+            <>
+              BTC vào <strong>/admin/races/[id]/edit</strong> và set{' '}
+              <code className="rounded bg-stone-200 px-1">race.startDate</code> +{' '}
+              <code className="rounded bg-stone-200 px-1">course.startTime</code>{' '}
+              để clock chạy đúng. (Status: <strong>{status}</strong>)
+            </>
+          ) : (
+            <>
+              Status hiện tại: <strong>{status}</strong>. Đổi sang{' '}
+              <code className="rounded bg-stone-200 px-1">live</code> để bắt đầu
+              tracking.
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const elapsedMs = Date.now() - new Date(startedAt).getTime();
+  const elapsedSec = Math.max(0, Math.floor(elapsedMs / 1000));
+  const hh = Math.floor(elapsedSec / 3600);
+  const mm = Math.floor((elapsedSec % 3600) / 60);
+  const ss = elapsedSec % 60;
+  const formatted = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+
+  const isLive = status === 'live';
+  const isEnded = status === 'ended';
+  const startedAtLocal = new Date(startedAt).toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  });
+
+  return (
+    <div
+      className={`rounded-lg border p-4 ${
+        isLive
+          ? 'border-emerald-300 bg-emerald-50'
+          : isEnded
+            ? 'border-stone-300 bg-stone-100'
+            : 'border-blue-300 bg-blue-50'
+      }`}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <div
+            className={`text-xs font-semibold uppercase tracking-wide ${
+              isLive ? 'text-emerald-700' : 'text-stone-600'
+            }`}
+          >
+            {isLive ? '🟢 Race đang diễn ra' : isEnded ? '⏹ Race đã kết thúc' : '⏱ Elapsed'}
+            {isLive && (
+              <span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+            )}
+          </div>
+          <div
+            className={`mt-1 font-mono text-3xl font-bold tracking-tight md:text-4xl ${
+              isLive
+                ? 'text-emerald-900'
+                : isEnded
+                  ? 'text-stone-700'
+                  : 'text-blue-900'
+            }`}
+          >
+            {formatted}
+          </div>
+        </div>
+        <div className="text-right text-xs text-stone-600">
+          <div>
+            Started: <strong>{startedAtLocal}</strong>
+          </div>
+          <div className="mt-0.5 text-stone-500">
+            {startedAtSource === 'status_history'
+              ? '✓ Theo lịch sử admin transition'
+              : startedAtSource === 'course_start_time'
+                ? '≈ Theo giờ start course (BTC chưa transition status)'
+                : startedAtSource === 'recent_history'
+                  ? '⚠️ Ước tính từ entry history gần nhất — BTC nên config startDate'
+                  : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

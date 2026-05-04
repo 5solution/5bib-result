@@ -119,6 +119,7 @@ export class DashboardSnapshotService {
       this.logger.warn(`[mat-failure-detect] err=${err.message}`);
     });
 
+    const startedAtInfo = computeRaceStartedAt(race);
     const snapshot: DashboardSnapshotResponseDto = {
       race: {
         id: String(race._id),
@@ -126,8 +127,8 @@ export class DashboardSnapshotService {
         status: race.status,
         startDate: race.startDate ? race.startDate.toISOString() : null,
         endDate: race.endDate ? race.endDate.toISOString() : null,
-        startedAt: null,
-        startedAtSource: null,
+        startedAt: startedAtInfo.startedAt,
+        startedAtSource: startedAtInfo.source,
       },
       raceStats,
       courses: courseStats,
@@ -651,5 +652,86 @@ function parseTimeToSecondsLocal(time: string): number | null {
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   if (parts.length === 2) return parts[0] * 60 + parts[1];
   return null;
+}
+
+/**
+ * Compute race official start timestamp + source. Frontend dùng để hiển thị
+ * elapsed clock trên Cockpit (ticker client-side).
+ *
+ * Source priority (most accurate first):
+ * 1. **statusHistory** — last entry where `to === 'live'` → admin manual transition
+ *    là ground truth nhất (race actually went live at that moment).
+ * 2. **course startTime + race.startDate** — combine ngày race + giờ start sớm
+ *    nhất trong các course (multi-course race start theo wave).
+ * 3. **null** — race chưa start (status = draft/pre_race)
+ *
+ * For status='ended' với statusHistory missing 'live' entry → vẫn fallback
+ * source 2 (BTC có thể đã skip status update giữa chừng).
+ */
+function computeRaceStartedAt(race: RaceDocument): {
+  startedAt: string | null;
+  source: 'status_history' | 'course_start_time' | 'recent_history' | null;
+} {
+  // Skip nếu race chưa start
+  if (race.status === 'draft' || race.status === 'pre_race') {
+    return { startedAt: null, source: null };
+  }
+
+  // Tier 1: statusHistory — find LAST entry transitioning TO 'live'
+  const liveEntry = (race.statusHistory ?? [])
+    .filter((e) => e.to === 'live' && e.changedAt)
+    .sort(
+      (a, b) =>
+        new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime(),
+    )[0];
+  if (liveEntry?.changedAt) {
+    return {
+      startedAt: new Date(liveEntry.changedAt).toISOString(),
+      source: 'status_history',
+    };
+  }
+
+  // Tier 2: combine race.startDate (date) + earliest course.startTime ("HH:MM")
+  if (race.startDate) {
+    const startTimes = (race.courses ?? [])
+      .map((c) => c.startTime?.trim())
+      .filter((t): t is string => !!t && /^\d{1,2}:\d{2}/.test(t))
+      .sort(); // ASC string sort works for "HH:MM" 0-padded
+    const earliest = startTimes[0];
+    if (earliest) {
+      const baseDate = new Date(race.startDate);
+      const [hh, mm, ss] = earliest.split(':').map((p) => Number(p));
+      baseDate.setHours(hh ?? 0, mm ?? 0, ss ?? 0, 0);
+      return {
+        startedAt: baseDate.toISOString(),
+        source: 'course_start_time',
+      };
+    }
+    // startDate có nhưng không có course startTime → vẫn dùng startDate at 00:00
+    return {
+      startedAt: new Date(race.startDate).toISOString(),
+      source: 'course_start_time',
+    };
+  }
+
+  // Tier 3 fallback: race=live nhưng không có data nào tốt hơn → dùng changedAt
+  // entry MỚI NHẤT trong statusHistory (whatever transition). Lý do: BTC có
+  // thể đã transition status nhiều lần, entry mới nhất xấp xỉ "khi đổi gần
+  // nhất". Better than nothing — frontend sẽ label rõ là estimate.
+  const recentEntry = (race.statusHistory ?? [])
+    .filter((e) => e.changedAt)
+    .sort(
+      (a, b) =>
+        new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime(),
+    )[0];
+  if (recentEntry?.changedAt) {
+    return {
+      startedAt: new Date(recentEntry.changedAt).toISOString(),
+      source: 'recent_history',
+    };
+  }
+
+  // Hoàn toàn không có data → null. Frontend hiển thị message hướng dẫn config.
+  return { startedAt: null, source: null };
 }
 

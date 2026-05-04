@@ -218,7 +218,11 @@ function DetailContent({ data }: { data: AlertDetailResponse }) {
         {trajectory.length === 0 ? (
           <Card>
             <CardContent className="p-3 text-sm text-stone-600">
-              Course chưa config checkpoints — không thể render trajectory.
+              Chưa có data trajectory — không tìm được course match cho alert này.
+              <span className="mt-1 block text-xs text-stone-400">
+                Có thể do: (1) alert legacy với contest=null chưa backfill, hoặc
+                (2) checkpoint set không match course nào trong race document.
+              </span>
             </CardContent>
           </Card>
         ) : (

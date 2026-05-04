@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   getTimingAlertConfig,
+  HttpError,
   resetRaceData,
   upsertTimingAlertConfig,
 } from '@/lib/timing-alert-api';
@@ -258,6 +259,52 @@ function DangerZone({ raceId }: { raceId: string }) {
       setTimeout(() => setMsg(null), 6000);
     },
     onError: (err: Error) => {
+      // Discriminate exception class theo HTTP status (PRD F-002 Screen 3 spec):
+      //   404 → race không tồn tại + close modal
+      //   409 → race live/ended HOẶC lock-held → giữ modal cho retry
+      //   400 → confirmToken sai → giữ modal + expose expected token
+      //   500/other → catch-all + close modal
+      if (err instanceof HttpError) {
+        if (err.status === 404) {
+          setMsg({ type: 'err', text: '❌ Race không tồn tại — kiểm tra lại URL.' });
+          setOpen(false);
+          return;
+        }
+        if (err.status === 409) {
+          // Discriminate 2 case 409: race status vs lock held
+          const isLockHeld = /reset đang chạy|lock|đợi/i.test(err.message);
+          if (isLockHeld) {
+            setMsg({
+              type: 'err',
+              text: `⏳ ${err.message}. Modal vẫn mở, click "Xóa" lại sau khi lock release.`,
+            });
+            // KHÔNG close modal — cho phép retry
+            return;
+          }
+          setMsg({
+            type: 'err',
+            text: `🛑 ${err.message}`,
+          });
+          // KHÔNG close modal — BTC đọc message để biết phải đổi status
+          return;
+        }
+        if (err.status === 400) {
+          setMsg({
+            type: 'err',
+            text: `⚠️ ${err.message} — kiểm tra slug race ở /admin/races/[id]/edit và nhập lại.`,
+          });
+          // KHÔNG close modal — confirmToken field vẫn có giá trị, BTC sửa
+          return;
+        }
+        // 500 or other unexpected
+        setMsg({
+          type: 'err',
+          text: `❌ Internal error: ${err.message}. Liên hệ dev nếu lặp lại.`,
+        });
+        setOpen(false);
+        return;
+      }
+      // Non-HttpError (network fail, etc.)
       setMsg({ type: 'err', text: `❌ ${err.message}` });
     },
   });

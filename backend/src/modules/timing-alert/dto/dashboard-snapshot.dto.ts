@@ -30,9 +30,13 @@ export class RaceMetaDto {
     nullable: true,
     type: String,
     description:
-      'Source của startedAt: status_history (admin manual transition) | course_start_time (fallback từ startDate + course.startTime sớm nhất). Null khi startedAt null.',
+      'Source của startedAt: status_history (admin manual transition, most accurate) | course_start_time (fallback từ startDate + course.startTime sớm nhất) | recent_history (fallback Tier 3 — dùng changedAt entry gần nhất nếu race=live mà không có data nào tốt hơn). Null khi startedAt null.',
   })
-  startedAtSource!: 'status_history' | 'course_start_time' | null;
+  startedAtSource!:
+    | 'status_history'
+    | 'course_start_time'
+    | 'recent_history'
+    | null;
 }
 
 export class RaceStatsDto {

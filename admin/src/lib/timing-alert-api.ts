@@ -94,23 +94,38 @@ export interface TimingAlertPollLog {
 
 // ─────────── API helpers ───────────
 
+/**
+ * Custom error class retaining HTTP status — frontend `err instanceof HttpError`
+ * + `err.status === 404` để discriminate UX cụ thể (vd reset endpoint
+ * 404/409/400). Plain `new Error(string)` mất status info.
+ */
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
 async function clientGet<T>(url: string): Promise<T> {
   const res = await client.get({ url });
-  if (res.error) throw new Error(extractError(res.error, res.response?.status));
+  if (res.error) throw new HttpError(res.response?.status ?? 0, extractError(res.error, res.response?.status));
   if (!res.data) throw new Error('Empty response');
   return res.data as T;
 }
 
 async function clientPost<T>(url: string, body?: unknown): Promise<T> {
   const res = await client.post({ url, body });
-  if (res.error) throw new Error(extractError(res.error, res.response?.status));
+  if (res.error) throw new HttpError(res.response?.status ?? 0, extractError(res.error, res.response?.status));
   if (!res.data) throw new Error('Empty response');
   return res.data as T;
 }
 
 async function clientPatch<T>(url: string, body?: unknown): Promise<T> {
   const res = await client.patch({ url, body });
-  if (res.error) throw new Error(extractError(res.error, res.response?.status));
+  if (res.error) throw new HttpError(res.response?.status ?? 0, extractError(res.error, res.response?.status));
   if (!res.data) throw new Error('Empty response');
   return res.data as T;
 }
@@ -301,6 +316,14 @@ export interface RaceMeta {
   status: string;
   startDate: string | null;
   endDate: string | null;
+  /** ISO timestamp khi race officially start. Null nếu chưa start. */
+  startedAt: string | null;
+  /** Source của startedAt: status_history (admin transition, most accurate) | course_start_time (fallback Tier 2) | recent_history (fallback Tier 3 — race=live nhưng không có data tốt) | null */
+  startedAtSource:
+    | 'status_history'
+    | 'course_start_time'
+    | 'recent_history'
+    | null;
 }
 
 export interface RaceStats {
