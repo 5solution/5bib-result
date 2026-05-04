@@ -355,144 +355,137 @@ function CreateScenarioDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add scenario</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
-          {/* LEFT: scenario type picker (2-column grid) */}
+
+        <div className="space-y-4">
+          {/* Type select dropdown */}
           <div>
             <label className="text-sm font-semibold">Loại scenario</label>
-            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-              {TYPE_OPTIONS.map((t) => {
-                const m = SCENARIO_LABELS[t];
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setType(t)}
-                    className={`rounded border p-3 text-left text-sm transition-all ${
-                      type === t
-                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                        : 'border-stone-200 hover:border-stone-400'
-                    }`}
-                  >
-                    <div className="font-semibold">{m.label}</div>
-                    <div className="mt-1 line-clamp-2 text-xs text-stone-600">
-                      {m.description}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as ScenarioType)}
+              className="mt-1 w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm"
+            >
+              {TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {SCENARIO_LABELS[t].label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-xs text-stone-600">{meta.description}</p>
           </div>
 
-          {/* RIGHT: params for selected type */}
-          <div className="space-y-3">
-            <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm">
-              <div className="font-semibold text-blue-900">{meta.label}</div>
-              <div className="mt-1 text-xs text-stone-700">{meta.description}</div>
-            </div>
-
-            <div className="space-y-3 rounded border border-stone-200 bg-stone-50 p-3">
-              {type === 'TOP_N_MISS_FINISH' ? (
-                <div>
-                  <label className="text-xs font-semibold uppercase text-stone-500">
-                    Top N athletes
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={topN}
-                    onChange={(e) => setTopN(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="text-xs font-semibold uppercase text-stone-500">
-                    Count (số athletes)
-                  </label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={count}
-                    onChange={(e) => setCount(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-              )}
-
-              {type === 'MAT_FAILURE' && (
-                <div>
-                  <label className="text-xs font-semibold uppercase text-stone-500">
-                    Checkpoint key (RR)
-                  </label>
-                  <Input
-                    value={checkpointKey}
-                    onChange={(e) => setCheckpointKey(e.target.value)}
-                    placeholder="TM2"
-                    className="mt-1"
-                  />
-                </div>
-              )}
-
-              {type === 'LATE_FINISHER' && (
-                <div>
-                  <label className="text-xs font-semibold uppercase text-stone-500">
-                    Shift (phút)
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="600"
-                    value={shiftMinutes}
-                    onChange={(e) => setShiftMinutes(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-              )}
-
+          {/* Type-specific params */}
+          <div className="grid grid-cols-2 gap-3">
+            {type === 'TOP_N_MISS_FINISH' ? (
               <div>
                 <label className="text-xs font-semibold uppercase text-stone-500">
-                  Scope course
+                  Top N
                 </label>
-                <select
-                  value={scopeSimCourseId}
-                  onChange={(e) => setScopeSimCourseId(e.target.value)}
-                  className="mt-1 w-full rounded border border-stone-300 px-2 py-2 text-sm"
-                >
-                  <option value="">Mọi course</option>
-                  {sim.courses.map((c) => (
-                    <option key={c.simCourseId} value={c.simCourseId}>
-                      {c.label} ({c.snapshotItems} VĐV)
-                    </option>
-                  ))}
-                </select>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={topN}
+                  onChange={(e) => setTopN(e.target.value)}
+                  className="mt-1"
+                />
               </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold uppercase text-stone-500">
-                Mô tả (optional)
-              </label>
-              <Textarea
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="VD: Test mat failure tại checkpoint cuối 21K"
-                className="mt-1"
-              />
-            </div>
-
-            {err && (
-              <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
-                ❌ {err}
+            ) : (
+              <div>
+                <label className="text-xs font-semibold uppercase text-stone-500">
+                  Count (số athletes)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={count}
+                  onChange={(e) => setCount(e.target.value)}
+                  className="mt-1"
+                />
               </div>
             )}
+
+            {type === 'MAT_FAILURE' && (
+              <div>
+                <label className="text-xs font-semibold uppercase text-stone-500">
+                  Checkpoint key
+                </label>
+                <Input
+                  value={checkpointKey}
+                  onChange={(e) => setCheckpointKey(e.target.value)}
+                  placeholder="TM2"
+                  className="mt-1"
+                />
+              </div>
+            )}
+
+            {type === 'LATE_FINISHER' && (
+              <div>
+                <label className="text-xs font-semibold uppercase text-stone-500">
+                  Shift (phút)
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="600"
+                  value={shiftMinutes}
+                  onChange={(e) => setShiftMinutes(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            )}
+
+            {/* Scope course full-width when only Count column above */}
+            <div
+              className={
+                type === 'MAT_FAILURE' || type === 'LATE_FINISHER'
+                  ? 'col-span-2'
+                  : 'col-span-1'
+              }
+            >
+              <label className="text-xs font-semibold uppercase text-stone-500">
+                Scope course
+              </label>
+              <select
+                value={scopeSimCourseId}
+                onChange={(e) => setScopeSimCourseId(e.target.value)}
+                className="mt-1 w-full rounded border border-stone-300 bg-white px-2 py-2 text-sm"
+              >
+                <option value="">Mọi course</option>
+                {sim.courses.map((c) => (
+                  <option key={c.simCourseId} value={c.simCourseId}>
+                    {c.label} ({c.snapshotItems} VĐV)
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {/* Description */}
+          <div>
+            <label className="text-xs font-semibold uppercase text-stone-500">
+              Mô tả (optional)
+            </label>
+            <Textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="VD: Test mat failure tại checkpoint cuối 21K"
+              className="mt-1"
+            />
+          </div>
+
+          {err && (
+            <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+              ❌ {err}
+            </div>
+          )}
         </div>
+
         <DialogFooter>
           <Button
             variant="outline"
