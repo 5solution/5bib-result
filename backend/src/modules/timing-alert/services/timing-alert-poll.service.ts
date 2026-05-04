@@ -178,6 +178,18 @@ export class TimingAlertPollService {
     triggeredBy: string,
   ): Promise<{ status: TimingAlertPollStatus; alerts_created: number; alerts_resolved: number; error?: string }> {
     const courseId = course.courseId;
+
+    // M2 — Check global reset lock first. Nếu admin đang reset → skip cycle
+    // tránh orphan alerts insert sau khi deleteMany.
+    const resetLockKey = `timing-alert:reset-lock:${raceId}`;
+    const resetActive = await this.redis.get(resetLockKey);
+    if (resetActive) {
+      this.logger.warn(
+        `[pollCourse] race=${raceId} reset-in-progress — skip cycle`,
+      );
+      return { status: 'PARTIAL', alerts_created: 0, alerts_resolved: 0, error: 'reset-in-progress' };
+    }
+
     const lockKey = `timing-alert:polling:${raceId}:${courseId}`;
     const ttl = Math.min(config.poll_interval_seconds ?? 90, 300);
     const acquired = await this.redis.set(lockKey, '1', 'EX', ttl, 'NX');
@@ -491,6 +503,15 @@ export class TimingAlertPollService {
    * Auto-resolve OPEN alerts: nếu athlete đã có time tại `missing_point` →
    * mark RESOLVED.
    *
+   * **Phase 3 refactor (Manager M1):** thay loop atomic per-alert →
+   * `bulkWrite` batch. Race day 1000+ OPEN alerts × 1000 individual writes
+   * mỗi 30s sẽ saturate Mongo. Bulk N ops = 1 round-trip = 50-100x faster.
+   *
+   * Trade-off: SSE emit cho từng alert resolved cần secondary read để biết
+   * doc nào affected. Optimization: chỉ emit `alert.resolved` event cho
+   * raceId (UI invalidates cache, refetch list). KHÔNG emit per-alert
+   * detail event — admin tab already polls.
+   *
    * Match poll cycle scope — chỉ resolve alerts mà BIB xuất hiện trong RR
    * response lần này. KHÔNG resolve alerts của BIB không có trong response
    * (RR API chưa update — giữ status OPEN).
@@ -500,43 +521,66 @@ export class TimingAlertPollService {
     parsedAthletes: ParsedAthlete[],
   ): Promise<number> {
     const byBib = new Map(parsedAthletes.map((a) => [a.bib, a]));
+
+    // Projection-only scan — chỉ load fields cần thiết để build bulk ops
     const openAlerts = await this.alertModel
       .find({ race_id: raceId, status: 'OPEN' })
-      .lean<TimingAlertDocument[]>()
+      .select({ _id: 1, bib_number: 1, missing_point: 1 })
+      .lean<Array<{ _id: unknown; bib_number: string; missing_point: string }>>()
       .exec();
 
-    let resolved = 0;
+    if (openAlerts.length === 0) return 0;
+
+    const now = new Date();
+    type BulkOp = {
+      updateOne: {
+        filter: Record<string, unknown>;
+        update: Record<string, unknown>;
+      };
+    };
+    const bulkOps: BulkOp[] = [];
+
     for (const alert of openAlerts) {
       const athlete = byBib.get(alert.bib_number);
       if (!athlete) continue;
       const time = athlete.checkpointTimes[alert.missing_point];
       if (!time || time.trim().length === 0) continue;
-
-      // Mark RESOLVED
-      const updated = await this.alertModel.findOneAndUpdate(
-        { _id: alert._id, status: 'OPEN' },
-        {
-          $set: {
-            status: 'RESOLVED',
-            resolved_by: 'auto',
-            resolved_at: new Date(),
-            resolution_note: `Auto-resolved: ${alert.missing_point} time appeared = ${time}`,
-          },
-          $push: {
-            audit_log: {
-              action: 'AUTO_RESOLVE',
-              by: 'system',
-              at: new Date(),
-              note: `Time appeared at ${alert.missing_point}: ${time}`,
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: alert._id, status: 'OPEN' },
+          update: {
+            $set: {
+              status: 'RESOLVED',
+              resolved_by: 'auto',
+              resolved_at: now,
+              resolution_note: `Auto-resolved: ${alert.missing_point} time appeared = ${time}`,
+            },
+            $push: {
+              audit_log: {
+                action: 'AUTO_RESOLVE',
+                by: 'system',
+                at: now,
+                note: `Time appeared at ${alert.missing_point}: ${time}`,
+              },
             },
           },
         },
-        { new: true },
-      ).exec();
-      if (updated) {
-        resolved += 1;
-        this.sse.emit('alert.resolved', raceId, this.alertSummary(updated));
-      }
+      });
+    }
+
+    if (bulkOps.length === 0) return 0;
+
+    // bulkWrite ordered:false → 1 op fail không block còn lại (best effort)
+    const result = await this.alertModel.bulkWrite(bulkOps, { ordered: false });
+    const resolved = result.modifiedCount ?? 0;
+
+    // Emit 1 SSE event per race (admin tab refetch list) thay vì N events.
+    // Subscribers gọi `invalidateQueries(['timing-alerts'])` → refetch sạch.
+    if (resolved > 0) {
+      this.sse.emit('alert.updated', raceId, {
+        bulkResolved: resolved,
+        reason: 'auto-resolve',
+      });
     }
     return resolved;
   }
@@ -847,7 +891,56 @@ export class TimingAlertPollService {
    */
   async resetRaceData(
     raceId: string,
-    options: { includeRaceResults?: boolean },
+    options: { includeRaceResults?: boolean; confirmToken?: string },
+    userId: string,
+  ): Promise<{
+    alertsDeleted: number;
+    pollsDeleted: number;
+    raceResultsDeleted: number;
+    redisKeysDeleted: number;
+  }> {
+    // Status guard — KHÔNG cho phép reset khi race đang `live` (race day production)
+    // hoặc `ended` (results đã chốt, audit history quan trọng).
+    const race = await this.raceModel.findById(raceId).lean<RaceDocument>().exec();
+    if (!race) {
+      throw new Error(`Race ${raceId} not found`);
+    }
+    if (race.status === 'live' || race.status === 'ended') {
+      throw new Error(
+        `Race ${race.title} đang ở status '${race.status}' — KHÔNG cho phép reset (chỉ reset khi draft/pre_race). Bypass: đổi status race trước.`,
+      );
+    }
+
+    // Confirm token guard — caller PHẢI gửi `confirmToken` = race.slug để
+    // chống accident click. UI tự gửi tự động (admin nhập slug để confirm).
+    const expectedToken = race.slug || race.title;
+    if (options.confirmToken !== expectedToken) {
+      throw new Error(
+        `confirmToken sai — phải gửi exact "${expectedToken}" (race slug/title) để confirm reset`,
+      );
+    }
+
+    // Global race-level lock chống concurrent reset + cron poll.
+    // Cron poll service phải check key này trước khi run.
+    const resetLockKey = `timing-alert:reset-lock:${raceId}`;
+    const acquired = await this.redis.set(resetLockKey, '1', 'EX', 60, 'NX');
+    if (acquired !== 'OK') {
+      throw new Error('Reset đang chạy bởi admin khác — đợi 60s rồi thử lại');
+    }
+
+    try {
+      return await this.doReset(raceId, options.includeRaceResults ?? false, userId);
+    } finally {
+      await this.redis.del(resetLockKey);
+    }
+  }
+
+  /**
+   * Inner reset logic — caller đã acquire global lock.
+   */
+  private async doReset(
+    raceId: string,
+    includeRaceResults: boolean,
     userId: string,
   ): Promise<{
     alertsDeleted: number;
@@ -861,11 +954,7 @@ export class TimingAlertPollService {
     ]);
 
     let raceResultsDeleted = 0;
-    if (options.includeRaceResults) {
-      // Note: race_results model from race-result module — inject lazily via
-      // module instance ko sạch, dùng connection raw thay vì add dependency.
-      // Cleanest: thêm RaceResult model vào constructor, nhưng để đơn giản
-      // dùng deleteMany trên cùng connection.
+    if (includeRaceResults) {
       const collection = this.alertModel.db.collection('race_results');
       const r = await collection.deleteMany({ raceId });
       raceResultsDeleted = r.deletedCount ?? 0;

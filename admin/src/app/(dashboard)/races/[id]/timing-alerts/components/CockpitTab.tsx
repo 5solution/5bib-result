@@ -330,59 +330,64 @@ function ProgressionRow({
             Chưa có checkpoint config. Click Auto-derive ở card trên.
           </div>
         ) : (
-          <div className="space-y-2">
-            {progression.points.map((pt, idx) => {
-              const ratio = pt.passedRatio;
-              const prevRatio =
-                idx > 0 ? progression.points[idx - 1].passedRatio : ratio;
-              const drop = prevRatio - ratio;
-              const isAnomaly = idx > 0 && drop > 0.3 && idx < progression.points.length - 1;
-              return (
-                <div key={pt.key} className="flex items-center gap-3 text-sm">
-                  <div className="w-32 truncate font-medium">
-                    {pt.name}
-                    {pt.distanceKm !== null && (
-                      <span className="ml-1 text-xs text-stone-500">
-                        {pt.distanceKm}km
+          /* B3 — overflow-x-auto + min-width đảm bảo chart không vỡ trên tablet/phone */
+          <div className="overflow-x-auto">
+            <div className="min-w-[640px] space-y-2">
+              {progression.points.map((pt, idx) => {
+                const ratio = pt.passedRatio;
+                const prevRatio =
+                  idx > 0 ? progression.points[idx - 1].passedRatio : ratio;
+                const drop = prevRatio - ratio;
+                const isAnomaly =
+                  idx > 0 && drop > 0.3 && idx < progression.points.length - 1;
+                return (
+                  <div key={pt.key} className="flex items-center gap-3 text-sm">
+                    <div className="w-32 shrink-0 truncate font-medium" title={pt.name}>
+                      {pt.name}
+                      {pt.distanceKm !== null && (
+                        <span className="ml-1 text-xs text-stone-500">
+                          {pt.distanceKm}km
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-[160px]">
+                      <div className="h-5 w-full overflow-hidden rounded bg-stone-200">
+                        <div
+                          className={`h-full transition-all ${
+                            isAnomaly
+                              ? 'bg-red-500'
+                              : ratio >= 0.95
+                                ? 'bg-green-600'
+                                : ratio >= 0.7
+                                  ? 'bg-blue-600'
+                                  : 'bg-amber-500'
+                          }`}
+                          style={{
+                            width: `${Math.max(2, Math.round(ratio * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="w-36 shrink-0 text-right font-mono text-xs">
+                      {pt.passedCount.toLocaleString('vi-VN')} /{' '}
+                      {pt.expectedCount.toLocaleString('vi-VN')}
+                      <span className="ml-1 text-stone-500">
+                        ({(ratio * 100).toFixed(1)}%)
                       </span>
+                    </div>
+                    {isAnomaly && (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 border-red-300 bg-red-50 text-red-800"
+                        title={`Drop ${(drop * 100).toFixed(1)}% so với checkpoint trước`}
+                      >
+                        ⚠ Drop
+                      </Badge>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <div className="h-5 w-full overflow-hidden rounded bg-stone-200">
-                      <div
-                        className={`h-full transition-all ${
-                          isAnomaly
-                            ? 'bg-red-500'
-                            : ratio >= 0.95
-                              ? 'bg-green-600'
-                              : ratio >= 0.7
-                                ? 'bg-blue-600'
-                                : 'bg-amber-500'
-                        }`}
-                        style={{
-                          width: `${Math.max(2, Math.round(ratio * 100))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="w-32 text-right font-mono text-xs">
-                    {pt.passedCount.toLocaleString('vi-VN')} / {pt.expectedCount.toLocaleString('vi-VN')}
-                    <span className="ml-1 text-stone-500">
-                      ({(ratio * 100).toFixed(1)}%)
-                    </span>
-                  </div>
-                  {isAnomaly && (
-                    <Badge
-                      variant="outline"
-                      className="border-red-300 bg-red-50 text-red-800"
-                      title={`Drop ${(drop * 100).toFixed(1)}% so với checkpoint trước`}
-                    >
-                      ⚠ Drop
-                    </Badge>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>

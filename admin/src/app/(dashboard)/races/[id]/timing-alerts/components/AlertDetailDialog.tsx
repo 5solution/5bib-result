@@ -15,19 +15,24 @@
  * - Audit log: detection events, resolution actions
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   getAlertDetail,
+  patchTimingAlert,
   type TimingAlertSeverity,
   type AlertDetailResponse,
 } from '@/lib/timing-alert-api';
@@ -76,14 +81,41 @@ export function AlertDetailDialog({ raceId, alertId, open, onOpenChange }: Props
           </div>
         )}
 
-        {detail.data && <DetailContent data={detail.data} />}
+        {detail.data && (
+          <DetailContent
+            data={detail.data}
+            raceId={raceId}
+            onAfterAction={() => onOpenChange(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function DetailContent({ data }: { data: AlertDetailResponse }) {
+function DetailContent({
+  data,
+  raceId,
+  onAfterAction,
+}: {
+  data: AlertDetailResponse;
+  raceId: string;
+  onAfterAction: () => void;
+}) {
   const { alert, trajectory } = data;
+  const qc = useQueryClient();
+  const [note, setNote] = useState('');
+
+  const action = useMutation({
+    mutationFn: (input: { action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN'; note: string }) =>
+      patchTimingAlert(raceId, alert._id, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+      qc.invalidateQueries({ queryKey: ['alert-detail', raceId, alert._id] });
+      onAfterAction();
+    },
+  });
 
   return (
     <div className="space-y-4">
@@ -330,6 +362,66 @@ function DetailContent({ data }: { data: AlertDetailResponse }) {
         {' · '}
         Last checked: {new Date(alert.last_checked_at).toLocaleString('vi-VN')}
       </div>
+
+      {/* C1 — Resolution actions (note optional, default fallback) */}
+      {alert.status === 'OPEN' && (
+        <div className="rounded border border-stone-200 bg-stone-50 p-3">
+          <div className="mb-2 text-sm font-semibold">Xử lý alert</div>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            placeholder="Ghi chú (optional) — VD: Đã verify với BTC tại trạm TM3, chip reader lỗi"
+            className="text-sm"
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              onClick={() =>
+                action.mutate({
+                  action: 'RESOLVE',
+                  note: note.trim() || 'Resolved (no detail note)',
+                })
+              }
+              disabled={action.isPending}
+            >
+              ✅ Resolve
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                action.mutate({
+                  action: 'FALSE_ALARM',
+                  note: note.trim() || 'False alarm — DNF confirmed',
+                })
+              }
+              disabled={action.isPending}
+            >
+              ❌ False alarm
+            </Button>
+          </div>
+          {action.isError && (
+            <div className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+              ❌ {(action.error as Error)?.message ?? 'Action failed'}
+            </div>
+          )}
+        </div>
+      )}
+      {alert.status !== 'OPEN' && (
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() =>
+              action.mutate({
+                action: 'REOPEN',
+                note: 'Reopened by admin',
+              })
+            }
+            disabled={action.isPending}
+          >
+            ↩ Reopen
+          </Button>
+        </DialogFooter>
+      )}
     </div>
   );
 }

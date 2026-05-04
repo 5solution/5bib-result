@@ -411,10 +411,12 @@ export interface ResetRaceDataResponse {
 export async function resetRaceData(
   raceId: string,
   includeRaceResults: boolean,
+  confirmToken: string,
 ): Promise<ResetRaceDataResponse> {
   const qs = includeRaceResults ? '?includeRaceResults=true' : '';
   return clientPost<ResetRaceDataResponse>(
     `/api/admin/races/${raceId}/timing-alert/reset${qs}`,
+    { confirmToken },
   );
 }
 

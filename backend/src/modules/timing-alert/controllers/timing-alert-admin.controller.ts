@@ -253,19 +253,26 @@ export class TimingAlertAdminController {
   @Post('reset')
   @HttpCode(200)
   @ApiOperation({
-    summary: 'Reset race test data — xóa alerts + poll logs + cache (giữ config + race document)',
+    summary: 'Reset race test data — destructive op, REQUIRE confirmToken = race.slug',
     description:
-      'Test tool: cho BTC re-run simulator nhiều lần. Optionally xóa race_results luôn (?includeRaceResults=true). KHÔNG xóa config, race document, courses, checkpoints.',
+      'Test tool: cho BTC re-run simulator nhiều lần. Optionally xóa race_results (?includeRaceResults=true).\n\n' +
+      '**Guard:** body PHẢI có `confirmToken === race.slug` để chống accident click. Service throw nếu race.status === live|ended (race day production lock).',
   })
+  @ApiResponse({ status: 200, description: 'Reset thành công' })
+  @ApiResponse({ status: 400, description: 'confirmToken sai hoặc race status không cho phép' })
   async resetRaceData(
     @Param('raceId') raceId: string,
     @Query('includeRaceResults') includeRaceResults: string | undefined,
+    @Body() body: { confirmToken?: string } | undefined,
     @Req() req: AuthenticatedRequest,
   ) {
     const userId = req.user?.sub ?? 'unknown';
     return this.pollService.resetRaceData(
       raceId,
-      { includeRaceResults: includeRaceResults === 'true' },
+      {
+        includeRaceResults: includeRaceResults === 'true',
+        confirmToken: body?.confirmToken,
+      },
       `admin:${userId}`,
     );
   }

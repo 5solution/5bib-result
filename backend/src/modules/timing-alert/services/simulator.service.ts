@@ -175,7 +175,7 @@ export class SimulatorService {
     }
 
     this.logger.log(
-      `[refreshSnapshot] sim=${simulationId} course=${course.label} fetching ${course.sourceUrl}`,
+      `[refreshSnapshot] sim=${simulationId} course=${course.label} simCourseId=${maskToken(course.simCourseId)} fetching ${maskUrl(course.sourceUrl)}`,
     );
 
     let data: RaceResultApiItem[] = [];
@@ -227,66 +227,129 @@ export class SimulatorService {
   // ─────────── Lifecycle controls ───────────
 
   /**
-   * Start hoặc resume simulation. Set `startedAt = now`, status `running`.
-   * `accumulatedSeconds` giữ nguyên — đảm bảo resume đúng vị trí trước.
+   * Phase 3 (Manager M3) — atomic lifecycle ops via `findOneAndUpdate`.
+   *
+   * Trước đây dùng `findById → mutate → save` → 2 admin tab click play/pause
+   * cùng lúc → race condition `accumulatedSeconds` doubling (compute elapsed
+   * 2 lần, ghi đè nhau). Giờ atomic với precondition status check.
+   *
+   * **Pattern:** read first cho compute (elapsed needs current state) →
+   * conditional update với `status === expectedStatus` → nếu race condition
+   * (status đã đổi), update fail no-op + log.
    */
   async play(id: string): Promise<TimingAlertSimulationDocument> {
-    const sim = await this.simModel.findById(id).exec();
+    const sim = await this.simModel.findById(id).lean<TimingAlertSimulationDocument>().exec();
     if (!sim) throw new NotFoundException(`Simulation ${id} not found`);
-    if (sim.status === 'running') return sim.toObject() as TimingAlertSimulationDocument;
+    if (sim.status === 'running') return sim;
 
-    sim.status = 'running';
-    sim.startedAt = new Date();
-    sim.pausedAt = null;
-    await sim.save();
-    this.logger.log(`[play] simulation=${id} accumulated=${sim.accumulatedSeconds}s`);
-    return sim.toObject() as TimingAlertSimulationDocument;
+    const updated = await this.simModel
+      .findOneAndUpdate(
+        { _id: id, status: { $ne: 'running' } },
+        {
+          $set: {
+            status: 'running',
+            startedAt: new Date(),
+            pausedAt: null,
+          },
+        },
+        { new: true },
+      )
+      .lean<TimingAlertSimulationDocument>()
+      .exec();
+    if (!updated) {
+      // Concurrent play — return current state
+      return (
+        (await this.simModel.findById(id).lean<TimingAlertSimulationDocument>().exec()) ?? sim
+      );
+    }
+    this.logger.log(`[play] simulation=${id} accumulated=${updated.accumulatedSeconds}s`);
+    return updated;
   }
 
   async pause(id: string): Promise<TimingAlertSimulationDocument> {
-    const sim = await this.simModel.findById(id).exec();
+    const sim = await this.simModel.findById(id).lean<TimingAlertSimulationDocument>().exec();
     if (!sim) throw new NotFoundException(`Simulation ${id} not found`);
-    if (sim.status !== 'running') return sim.toObject() as TimingAlertSimulationDocument;
+    if (sim.status !== 'running') return sim;
 
-    // Compute elapsed for current run + add to accumulated
     const now = new Date();
-    const elapsedRealMs =
-      sim.startedAt instanceof Date ? now.getTime() - sim.startedAt.getTime() : 0;
+    const startedAtMs =
+      sim.startedAt instanceof Date
+        ? sim.startedAt.getTime()
+        : new Date(sim.startedAt as unknown as string).getTime();
+    const elapsedRealMs = now.getTime() - startedAtMs;
     const elapsedSimSeconds = (elapsedRealMs / 1000) * sim.speedFactor;
+    const newAccumulated = Math.max(0, sim.accumulatedSeconds + elapsedSimSeconds);
 
-    sim.accumulatedSeconds = Math.max(0, sim.accumulatedSeconds + elapsedSimSeconds);
-    sim.status = 'paused';
-    sim.pausedAt = now;
-    sim.startedAt = null;
-    await sim.save();
-    this.logger.log(`[pause] simulation=${id} accumulated=${sim.accumulatedSeconds}s`);
-    return sim.toObject() as TimingAlertSimulationDocument;
+    // Precondition check: status === 'running' AND startedAt match
+    // (Nếu admin khác đã pause/reset trong khoảng thời gian read→update,
+    // condition fail → update no-op tránh double-count elapsed.)
+    const updated = await this.simModel
+      .findOneAndUpdate(
+        { _id: id, status: 'running', startedAt: sim.startedAt },
+        {
+          $set: {
+            accumulatedSeconds: newAccumulated,
+            status: 'paused',
+            pausedAt: now,
+            startedAt: null,
+          },
+        },
+        { new: true },
+      )
+      .lean<TimingAlertSimulationDocument>()
+      .exec();
+    if (!updated) {
+      this.logger.warn(`[pause] simulation=${id} concurrent state change — skip`);
+      return (
+        (await this.simModel.findById(id).lean<TimingAlertSimulationDocument>().exec()) ?? sim
+      );
+    }
+    this.logger.log(`[pause] simulation=${id} accumulated=${updated.accumulatedSeconds}s`);
+    return updated;
   }
 
   async reset(id: string): Promise<TimingAlertSimulationDocument> {
-    const sim = await this.simModel.findById(id).exec();
-    if (!sim) throw new NotFoundException(`Simulation ${id} not found`);
-    sim.accumulatedSeconds = 0;
-    sim.status = 'created';
-    sim.startedAt = null;
-    sim.pausedAt = null;
-    await sim.save();
+    const updated = await this.simModel
+      .findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            accumulatedSeconds: 0,
+            status: 'created',
+            startedAt: null,
+            pausedAt: null,
+          },
+        },
+        { new: true },
+      )
+      .lean<TimingAlertSimulationDocument>()
+      .exec();
+    if (!updated) throw new NotFoundException(`Simulation ${id} not found`);
     this.logger.log(`[reset] simulation=${id}`);
-    return sim.toObject() as TimingAlertSimulationDocument;
+    return updated;
   }
 
-  /** Seek tới T (giây) cụ thể — pause + override accumulatedSeconds. */
+  /** Seek tới T (giây) cụ thể — pause + override accumulatedSeconds. Atomic. */
   async seek(id: string, seconds: number): Promise<TimingAlertSimulationDocument> {
     if (seconds < 0) throw new BadRequestException('seconds phải >= 0');
-    const sim = await this.simModel.findById(id).exec();
-    if (!sim) throw new NotFoundException(`Simulation ${id} not found`);
-    sim.accumulatedSeconds = seconds;
-    sim.status = 'paused';
-    sim.startedAt = null;
-    sim.pausedAt = new Date();
-    await sim.save();
+    const updated = await this.simModel
+      .findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            accumulatedSeconds: seconds,
+            status: 'paused',
+            startedAt: null,
+            pausedAt: new Date(),
+          },
+        },
+        { new: true },
+      )
+      .lean<TimingAlertSimulationDocument>()
+      .exec();
+    if (!updated) throw new NotFoundException(`Simulation ${id} not found`);
     this.logger.log(`[seek] simulation=${id} → ${seconds}s`);
-    return sim.toObject() as TimingAlertSimulationDocument;
+    return updated;
   }
 
   // ─────────── Public serve (poll service hits this via apiUrl) ───────────
@@ -404,6 +467,17 @@ export class SimulatorService {
 }
 
 // ─────────── Pure helper functions ───────────
+
+/** Mask 32-hex token để log không leak full secret. Show first 8 + ***. */
+function maskToken(token: string): string {
+  if (!token || token.length < 12) return '***';
+  return `${token.slice(0, 8)}***`;
+}
+
+/** Mask RR API URL — token portion là 32-char uppercase + digits. */
+function maskUrl(url: string): string {
+  return url.replace(/\/[A-Z0-9]{32}(\/|$|\?)/g, '/***$1');
+}
 
 /**
  * Filter athlete's Chiptimes — chỉ giữ checkpoint có time ≤ cutoffSeconds.

@@ -20,6 +20,8 @@ import {
   type TimingAlertSeverity,
   type TimingAlertStatus,
 } from '@/lib/timing-alert-api';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
 import { AlertDetailDialog } from './AlertDetailDialog';
 
 const SEVERITY_COLORS: Record<TimingAlertSeverity, string> = {
@@ -27,6 +29,21 @@ const SEVERITY_COLORS: Record<TimingAlertSeverity, string> = {
   HIGH: 'bg-orange-100 text-orange-800 border-orange-300',
   WARNING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   INFO: 'bg-blue-100 text-blue-800 border-blue-300',
+};
+
+/** C4 fix — separate bg + text classes (split() trước render lỗi) */
+const SEVERITY_BG: Record<TimingAlertSeverity, string> = {
+  CRITICAL: 'border-red-300 bg-red-50',
+  HIGH: 'border-orange-300 bg-orange-50',
+  WARNING: 'border-yellow-300 bg-yellow-50',
+  INFO: 'border-blue-300 bg-blue-50',
+};
+
+const SEVERITY_TEXT: Record<TimingAlertSeverity, string> = {
+  CRITICAL: 'text-red-700',
+  HIGH: 'text-orange-700',
+  WARNING: 'text-yellow-700',
+  INFO: 'text-blue-700',
 };
 
 const SEVERITY_ORDER: TimingAlertSeverity[] = [
@@ -40,6 +57,7 @@ export function AlertsTab({ raceId }: { raceId: string }) {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<TimingAlertStatus>('OPEN');
   const [detailAlertId, setDetailAlertId] = useState<string | null>(null);
+  const [bibSearch, setBibSearch] = useState('');
 
   const alerts = useQuery({
     queryKey: ['timing-alerts', raceId, statusFilter],
@@ -68,44 +86,84 @@ export function AlertsTab({ raceId }: { raceId: string }) {
       WARNING: [],
       INFO: [],
     };
+    const search = bibSearch.trim().toLowerCase();
     for (const a of alerts.data?.items ?? []) {
+      // C6 — Search by BIB or athlete name
+      if (search) {
+        const bibMatch = a.bib_number.toLowerCase().includes(search);
+        const nameMatch = (a.athlete_name ?? '').toLowerCase().includes(search);
+        if (!bibMatch && !nameMatch) continue;
+      }
       grouped[a.severity].push(a);
     }
     return grouped;
-  }, [alerts.data]);
+  }, [alerts.data, bibSearch]);
 
   return (
     <div className="space-y-4">
-      {/* Stats by severity */}
+      {/* Stats by severity — C4 fix: parse class string properly */}
       {alerts.data?.stats && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {SEVERITY_ORDER.map((sev) => (
-            <Card key={sev} className={SEVERITY_COLORS[sev].split(' ')[0]}>
-              <CardContent className="p-4">
-                <div className={`text-xs font-semibold ${SEVERITY_COLORS[sev]}`}>
-                  {sev}
-                </div>
-                <div className="mt-1 text-2xl font-bold">
-                  {alerts.data.stats.by_severity[sev]}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {SEVERITY_ORDER.map((sev) => {
+            const count = alerts.data.stats.by_severity[sev];
+            return (
+              <Card key={sev} className={SEVERITY_BG[sev]}>
+                <CardContent className="p-4">
+                  <div className={`text-xs font-semibold ${SEVERITY_TEXT[sev]}`}>
+                    {sev}
+                  </div>
+                  <div className="mt-1 text-2xl font-bold text-stone-900">
+                    {count}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {/* Filter */}
-      <div className="flex gap-2">
-        {(['OPEN', 'RESOLVED', 'FALSE_ALARM'] as TimingAlertStatus[]).map((s) => (
-          <Button
-            key={s}
-            variant={statusFilter === s ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter(s)}
-          >
-            {s}
-          </Button>
-        ))}
+      {/* Filter + Search BIB row */}
+      <div className="flex flex-wrap items-center gap-2">
+        {(['OPEN', 'RESOLVED', 'FALSE_ALARM'] as TimingAlertStatus[]).map((s) => {
+          const count =
+            s === 'OPEN' ? alerts.data?.stats.open_count ?? 0 : null;
+          return (
+            <Button
+              key={s}
+              variant={statusFilter === s ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter(s)}
+            >
+              {s}
+              {count !== null && count > 0 && (
+                <span className="ml-1.5 rounded-full bg-stone-200 px-1.5 text-xs text-stone-800">
+                  {count}
+                </span>
+              )}
+            </Button>
+          );
+        })}
+        {/* C6 — Search by BIB / name */}
+        <div className="relative ml-auto flex w-full min-w-[200px] max-w-sm items-center">
+          <Search className="pointer-events-none absolute left-2.5 size-4 text-stone-400" />
+          <Input
+            value={bibSearch}
+            onChange={(e) => setBibSearch(e.target.value)}
+            placeholder="Tìm BIB hoặc tên VĐV..."
+            className="pl-8"
+            inputMode="search"
+          />
+          {bibSearch && (
+            <button
+              type="button"
+              onClick={() => setBibSearch('')}
+              className="absolute right-2 text-stone-400 hover:text-stone-700"
+              aria-label="Clear"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Alert list grouped */}
@@ -169,27 +227,50 @@ function AlertRow({
   onClickDetail: () => void;
   busy: boolean;
 }) {
-  const [note, setNote] = useState('');
+  // C1 fix — note KHÔNG required, default fallback string nếu BTC quick-resolve
+  // C2 fix — toàn bộ row clickable mở detail dialog (note input đã move vào dialog)
+  // Action buttons gọi quick action với default note. BTC muốn note chi tiết → mở dialog.
+
+  const handleQuick = (
+    e: React.MouseEvent,
+    action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN',
+    defaultNote: string,
+  ) => {
+    e.stopPropagation();
+    onAction(action, defaultNote);
+  };
+
+  // Note: KHÔNG dùng <button> bao quanh vì action buttons nested → invalid HTML.
+  // Dùng div role="button" + tabIndex + Enter/Space handler.
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClickDetail();
+    }
+  };
 
   return (
     <div
-      className="cursor-pointer rounded-md border border-stone-200 bg-white p-3 transition-all hover:border-blue-400 hover:shadow-sm"
-      onClick={(e) => {
-        // Don't trigger detail if click on button/input
-        const target = e.target as HTMLElement;
-        if (target.closest('button, input, label')) return;
-        onClickDetail();
-      }}
+      role="button"
+      tabIndex={0}
+      onClick={onClickDetail}
+      onKeyDown={onKeyDown}
+      className="block w-full cursor-pointer rounded-md border border-stone-200 bg-white p-3 text-left transition-all hover:border-blue-400 hover:shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex-1 min-w-[300px]">
+        <div className="flex-1 min-w-[280px]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-base font-bold">BIB {alert.bib_number}</span>
-            <span className="text-sm">·</span>
+            <span className="text-sm text-stone-400">·</span>
             <span className="text-sm text-stone-600">{alert.contest}</span>
-            <span className="text-sm">·</span>
-            <span className="text-sm text-stone-600">{alert.age_group}</span>
-            <span className="text-sm">·</span>
+            {alert.age_group && (
+              <>
+                <span className="text-sm text-stone-400">·</span>
+                <span className="text-sm text-stone-600">{alert.age_group}</span>
+              </>
+            )}
+            <span className="text-sm text-stone-400">·</span>
             <span className="text-sm font-medium">
               {alert.athlete_name ?? '?'}
             </span>
@@ -220,42 +301,45 @@ function AlertRow({
             <div className="mt-1 text-sm text-stone-700">
               Projected finish: <strong>{alert.projected_finish_time}</strong>
               {alert.projected_age_group_rank !== null &&
-                ` · Top ${alert.projected_age_group_rank} age group`}
+                ` · Top ${alert.projected_age_group_rank} AG`}
               {alert.projected_overall_rank !== null &&
                 ` / ${alert.projected_overall_rank} overall`}
-              {alert.projected_confidence !== null &&
-                ` · ${Math.round((alert.projected_confidence ?? 0) * 100)}% conf`}
             </div>
           )}
           {alert.reason && (
             <div className="mt-1 text-xs text-stone-500">{alert.reason}</div>
           )}
-          <div className="mt-1 text-xs text-blue-600">
-            👆 Click để xem chi tiết hành trình + audit log
-          </div>
         </div>
         {alert.status === 'OPEN' && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Resolution note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="rounded border border-stone-300 px-2 py-1 text-sm"
-            />
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               size="sm"
               variant="default"
-              disabled={busy || !note.trim()}
-              onClick={() => onAction('RESOLVE', note.trim())}
+              disabled={busy}
+              onClick={(e) =>
+                handleQuick(
+                  e,
+                  'RESOLVE',
+                  'Quick-resolve (chi tiết → mở detail dialog)',
+                )
+              }
+              title="Resolve nhanh — note default. Để note chi tiết, click row mở dialog."
+              className="min-w-[100px]"
             >
               ✅ Resolve
             </Button>
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || !note.trim()}
-              onClick={() => onAction('FALSE_ALARM', note.trim())}
+              disabled={busy}
+              onClick={(e) =>
+                handleQuick(
+                  e,
+                  'FALSE_ALARM',
+                  'Quick false-alarm — DNF confirmed',
+                )
+              }
+              className="min-w-[100px]"
             >
               ❌ False alarm
             </Button>
@@ -266,7 +350,7 @@ function AlertRow({
             size="sm"
             variant="outline"
             disabled={busy}
-            onClick={() => onAction('REOPEN', 'Reopen')}
+            onClick={(e) => handleQuick(e, 'REOPEN', 'Reopen')}
           >
             ↩ Reopen
           </Button>

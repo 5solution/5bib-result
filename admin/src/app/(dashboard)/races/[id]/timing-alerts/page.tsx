@@ -30,20 +30,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
   getTimingAlertConfig,
   forcePollTimingAlert,
-  resetRaceData,
   timingAlertSseUrl,
 } from '@/lib/timing-alert-api';
 import { CockpitTab } from './components/CockpitTab';
@@ -90,25 +78,6 @@ export default function TimingAlertsPage() {
   });
 
   const [forcePollMessage, setForcePollMessage] = useState<string | null>(null);
-  const [resetOpen, setResetOpen] = useState(false);
-  const [resetIncludeResults, setResetIncludeResults] = useState(true);
-  const reset = useMutation({
-    mutationFn: () => resetRaceData(raceId, resetIncludeResults),
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
-      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
-      qc.invalidateQueries({ queryKey: ['podium', raceId] });
-      setForcePollMessage(
-        `🧹 Reset xong: ${data.alertsDeleted} alerts, ${data.pollsDeleted} poll logs, ${data.raceResultsDeleted} results, ${data.redisKeysDeleted} cache keys xóa`,
-      );
-      setTimeout(() => setForcePollMessage(null), 6000);
-      setResetOpen(false);
-    },
-    onError: (err: Error) => {
-      setForcePollMessage(`❌ Reset fail: ${err.message}`);
-      setTimeout(() => setForcePollMessage(null), 6000);
-    },
-  });
 
   const forcePoll = useMutation({
     mutationFn: () => forcePollTimingAlert(raceId),
@@ -289,15 +258,8 @@ export default function TimingAlertsPage() {
                 📋 Poll logs
               </Button>
             </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setResetOpen(true)}
-              className="border-red-300 text-red-700 hover:bg-red-50"
-              title="Xóa alerts + poll logs + cache để re-test (giữ config + race document)"
-            >
-              🧹 Reset test data
-            </Button>
+            {/* A1 fix — Reset đã move khỏi action bar (race day risk).
+                Truy cập qua Config page hoặc keyboard combo (?reset=1 query). */}
           </div>
         </CardContent>
         {forcePollMessage && (
@@ -330,49 +292,6 @@ export default function TimingAlertsPage() {
 
       {/* Hidden audio element — Web Audio bypasses HTML element complexity */}
       <audio ref={audioRef} preload="auto" />
-
-      {/* Reset confirmation dialog */}
-      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>🧹 Reset test data?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Xóa toàn bộ data test cho race này. KHÔNG xóa config + race
-              document — anh chạy lại ngay sau reset.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2 px-6 pb-4 text-sm">
-            <ul className="ml-5 list-disc text-stone-700">
-              <li>Tất cả timing alerts (mọi severity, mọi status)</li>
-              <li>Tất cả poll logs (audit history)</li>
-              <li>Redis cache: dashboard snapshot, podium, anomaly rate-limit</li>
-            </ul>
-            <label className="mt-3 flex cursor-pointer items-center gap-2 rounded border border-stone-200 bg-stone-50 p-2">
-              <Checkbox
-                checked={resetIncludeResults}
-                onCheckedChange={(c) => setResetIncludeResults(!!c)}
-              />
-              <span>
-                <strong>Xóa luôn race_results</strong> (synced từ
-                RR/simulator) — recommend ON khi đổi simulation
-              </span>
-            </label>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={reset.isPending}>Hủy</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                reset.mutate();
-              }}
-              disabled={reset.isPending}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {reset.isPending ? 'Đang xóa...' : 'Reset ngay'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

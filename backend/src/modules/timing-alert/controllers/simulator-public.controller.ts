@@ -1,5 +1,6 @@
-import { Controller, Get, Param, Header } from '@nestjs/common';
+import { Controller, Get, Param, Header, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { SimulatorService } from '../services/simulator.service';
 import { RaceResultApiItem } from '../../race-result/types/race-result-api.types';
 
@@ -25,6 +26,8 @@ export class TimingAlertSimulatorPublicController {
   constructor(private readonly simulator: SimulatorService) {}
 
   @Get(':simCourseId')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Header('Cache-Control', 'no-store')
   @Header('Content-Type', 'application/json; charset=utf-8')
   @ApiOperation({

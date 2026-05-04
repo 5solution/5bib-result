@@ -11,6 +11,16 @@ const CP_42KM: CourseCheckpoint[] = [
   { key: 'Finish', distance_km: 42.195 },
 ];
 
+/** Course với 6 CP cho gap test (Start, TM1, TM2, TM3, TM4, Finish). */
+const CP_42KM_6PTS: CourseCheckpoint[] = [
+  { key: 'Start', distance_km: 0 },
+  { key: 'TM1', distance_km: 8 },
+  { key: 'TM2', distance_km: 16 },
+  { key: 'TM3', distance_km: 24 },
+  { key: 'TM4', distance_km: 32 },
+  { key: 'Finish', distance_km: 42.195 },
+];
+
 function athlete(overrides: Partial<ParsedAthlete>): ParsedAthlete {
   return {
     bib: '98898',
@@ -45,16 +55,15 @@ describe('MissDetectorService', () => {
       });
       // expected at TM3 (32km): pace * 32 * 1.05 = (2*3600/21) * 32 * 1.05 = 11520s = 3h12m
       // gap = 11520 - 7200 = 4320s = 72 min → over threshold 30min
-      const result = service.detect(a, CP_42KM, 30);
-      expect(result).not.toBeNull();
-      expect(result!.isPhantom).toBe(true);
-      expect(result!.lastSeenPoint).toBe('TM2');
-      expect(result!.missingPoint).toBe('TM3');
-      expect(result!.isMissingFinish).toBe(false);
-      expect(result!.overdueMinutes).toBeGreaterThanOrEqual(30);
-      // Projected finish: pace × 42.195 × 1.05
-      // = (2h/21km) × 42.195 × 1.05 = 4.219h ≈ 04:13:?? Some seconds.
-      expect(result!.projectedFinishTime).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+      const results = service.detect(a, CP_42KM, 30);
+      const phantom = results.find((r) => r.type === 'PHANTOM');
+      expect(phantom).toBeDefined();
+      expect(phantom!.isPhantom).toBe(true);
+      expect(phantom!.lastSeenPoint).toBe('TM2');
+      expect(phantom!.missingPoint).toBe('TM3');
+      expect(phantom!.isMissingFinish).toBe(false);
+      expect(phantom!.overdueMinutes).toBeGreaterThanOrEqual(30);
+      expect(phantom!.projectedFinishTime).toMatch(/^\d{2}:\d{2}:\d{2}$/);
     });
 
     it('TA-6 SYNTHETIC BIB 98898: Missing FINISH after TM2 (case fix race 192)', () => {
@@ -74,58 +83,104 @@ describe('MissDetectorService', () => {
       });
       // pace at TM3 = 3.5h/32km → expected Finish = pace × 42.195 × 1.05 ≈ 4:51:??
       // gap from TM3 = expected - lastSeenSeconds = 4.85*3600 - 3.5*3600 = 4860s = 81min
-      const result = service.detect(a, CP_42KM, 30);
-      expect(result).not.toBeNull();
-      expect(result!.missingPoint).toBe('Finish');
-      expect(result!.isMissingFinish).toBe(true);
-      expect(result!.overdueMinutes).toBeGreaterThanOrEqual(30);
+      const results = service.detect(a, CP_42KM, 30);
+      const phantom = results.find((r) => r.type === 'PHANTOM');
+      expect(phantom).toBeDefined();
+      expect(phantom!.missingPoint).toBe('Finish');
+      expect(phantom!.isMissingFinish).toBe(true);
+      expect(phantom!.overdueMinutes).toBeGreaterThanOrEqual(30);
     });
 
-    it('returns null for athlete who finished (last seen IS Finish)', () => {
+    it('returns empty for athlete who finished (last seen IS Finish)', () => {
       const a = athlete({
         lastSeenPoint: 'Finish',
         lastSeenTime: '04:30:00',
         checkpointTimes: { Finish: '04:30:00' },
       });
-      const result = service.detect(a, CP_42KM, 30);
-      expect(result).toBeNull();
+      const results = service.detect(a, CP_42KM, 30);
+      // No middle gaps (Start là idx 0, skipped) + no phantom (lastSeen=Finish)
+      expect(results.filter((r) => r.type === 'PHANTOM')).toHaveLength(0);
     });
 
-    it('returns null for athlete with NO checkpoint times (DNS)', () => {
+    it('returns empty for athlete with NO checkpoint times (DNS)', () => {
       const a = athlete({ lastSeenPoint: null, lastSeenTime: null });
-      const result = service.detect(a, CP_42KM, 30);
-      expect(result).toBeNull();
+      const results = service.detect(a, CP_42KM, 30);
+      expect(results).toHaveLength(0);
     });
 
-    it('returns null for Start-only athlete (no pace baseline)', () => {
+    it('returns empty for Start-only athlete (no pace baseline)', () => {
       const a = athlete({
         lastSeenPoint: 'Start',
         lastSeenTime: '06:00:00',
         checkpointTimes: { Start: '06:00:00' },
       });
-      // distance_km=0 → cannot derive pace
-      const result = service.detect(a, CP_42KM, 30);
-      expect(result).toBeNull();
+      const results = service.detect(a, CP_42KM, 30);
+      expect(results.filter((r) => r.type === 'PHANTOM')).toHaveLength(0);
     });
 
-    it('does NOT flag if overdue below threshold', () => {
-      // Fast pace — expected TM3 close to lastSeen, gap < 30min
+    it('does NOT flag PHANTOM if overdue below threshold', () => {
       const a = athlete({
         lastSeenPoint: 'TM2',
-        lastSeenTime: '01:30:00', // 1.5h at 21km → ~4:17 pace
+        lastSeenTime: '01:30:00',
         checkpointTimes: { TM2: '01:30:00' },
       });
-      // Expected TM3 = 1.5h/21 × 32 × 1.05 = 8640s = 2:24
-      // Gap = 2:24 - 1:30 = 54 min > 30 min threshold
-      // So this WILL flag. Adjust to test threshold guard:
-      const result = service.detect(a, CP_42KM, 60); // threshold 60min
-      // 54 min < 60 min → no flag
-      expect(result).toBeNull();
+      const results = service.detect(a, CP_42KM, 60);
+      expect(results.filter((r) => r.type === 'PHANTOM')).toHaveLength(0);
+    });
+
+    // ─── Phase 3 — Middle gap detection ───
+
+    it('TM2 → TM4 missing TM3 → 1 MIDDLE_GAP at TM3', () => {
+      const a = athlete({
+        lastSeenPoint: 'TM4',
+        lastSeenTime: '04:00:00',
+        checkpointTimes: {
+          Start: '00:00:00',
+          TM1: '01:00:00',
+          TM2: '02:00:00',
+          TM4: '04:00:00', // skip TM3
+        },
+      });
+      const results = service.detect(a, CP_42KM_6PTS, 30);
+      const gaps = results.filter((r) => r.type === 'MIDDLE_GAP');
+      expect(gaps).toHaveLength(1);
+      expect(gaps[0].missingPoint).toBe('TM3');
+      expect(gaps[0].lastSeenPoint).toBe('TM4');
+    });
+
+    it('TM1+TM4 only (skip TM2+TM3) → 2 MIDDLE_GAPs', () => {
+      const a = athlete({
+        lastSeenPoint: 'TM4',
+        lastSeenTime: '04:00:00',
+        checkpointTimes: {
+          Start: '00:00:00',
+          TM1: '01:00:00',
+          TM4: '04:00:00',
+        },
+      });
+      const results = service.detect(a, CP_42KM_6PTS, 30);
+      const gaps = results
+        .filter((r) => r.type === 'MIDDLE_GAP')
+        .map((g) => g.missingPoint)
+        .sort();
+      expect(gaps).toEqual(['TM2', 'TM3']);
+    });
+
+    it('Start không bao giờ bị flag là middle gap (idx 0 skipped)', () => {
+      const a = athlete({
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        checkpointTimes: { TM1: '01:00:00', TM2: '02:00:00' }, // Start empty
+      });
+      const results = service.detect(a, CP_42KM, 30);
+      const gaps = results.filter((r) => r.type === 'MIDDLE_GAP');
+      expect(gaps.find((g) => g.missingPoint === 'Start')).toBeUndefined();
     });
   });
 
   describe('classifySeverity()', () => {
     const baseDetection = {
+      type: 'PHANTOM' as const,
       isPhantom: true,
       isMissingFinish: true,
       lastSeenPoint: 'TM3',
@@ -135,6 +190,24 @@ describe('MissDetectorService', () => {
       projectedFinishTime: '04:30:00',
       projectedFinishSeconds: 16200,
     };
+
+    it('MIDDLE_GAP → severity INFO when not Top N', () => {
+      const result = service.classifySeverity(
+        { ...baseDetection, type: 'MIDDLE_GAP', missingPoint: 'TM3', lastSeenPoint: 'TM4', isMissingFinish: false },
+        { overallRank: 50, ageGroupRank: 20, confidence: 0.9, totalFinishers: 100 },
+        3,
+      );
+      expect(result.severity).toBe('INFO');
+    });
+
+    it('MIDDLE_GAP → severity WARNING when Top N (rank ≤ topNAlert)', () => {
+      const result = service.classifySeverity(
+        { ...baseDetection, type: 'MIDDLE_GAP', missingPoint: 'TM3', lastSeenPoint: 'TM4', isMissingFinish: false },
+        { overallRank: 2, ageGroupRank: 1, confidence: 0.9, totalFinishers: 100 },
+        3,
+      );
+      expect(result.severity).toBe('WARNING');
+    });
 
     it('CRITICAL when projected age group rank ≤ topN', () => {
       const result = service.classifySeverity(

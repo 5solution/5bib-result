@@ -14,13 +14,16 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+// Re-imported below for DangerZone — already in main page
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   getTimingAlertConfig,
+  resetRaceData,
   upsertTimingAlertConfig,
 } from '@/lib/timing-alert-api';
+import { Input } from '@/components/ui/input';
 
 export default function TimingAlertConfigPage() {
   const params = useParams();
@@ -223,6 +226,118 @@ export default function TimingAlertConfigPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* A1 — Danger Zone: Reset test data MOVED khỏi action bar dashboard
+           để tránh accident click race day. Hidden tab Config (admin focus). */}
+      <DangerZone raceId={raceId} />
     </div>
+  );
+}
+
+// ─────────── Danger Zone (Reset test data) ───────────
+
+function DangerZone({ raceId }: { raceId: string }) {
+  const [open, setOpen] = useState(false);
+  const [includeResults, setIncludeResults] = useState(true);
+  const [confirmToken, setConfirmToken] = useState('');
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const qc = useQueryClient();
+
+  const reset = useMutation({
+    mutationFn: () => resetRaceData(raceId, includeResults, confirmToken),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+      qc.invalidateQueries({ queryKey: ['podium', raceId] });
+      setMsg({
+        type: 'ok',
+        text: `✅ ${data.alertsDeleted} alerts, ${data.pollsDeleted} poll logs, ${data.raceResultsDeleted} results, ${data.redisKeysDeleted} cache keys xóa`,
+      });
+      setOpen(false);
+      setConfirmToken('');
+      setTimeout(() => setMsg(null), 6000);
+    },
+    onError: (err: Error) => {
+      setMsg({ type: 'err', text: `❌ ${err.message}` });
+    },
+  });
+
+  return (
+    <Card className="border-red-200">
+      <CardHeader>
+        <CardTitle className="text-red-700">🚨 Danger Zone</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-stone-600">
+          Reset test data — xóa alerts + poll logs + cache để re-run simulator.{' '}
+          <strong>Chỉ hoạt động khi race status = `draft` hoặc `pre_race`</strong>{' '}
+          (race day production tự lock). Confirm bằng cách nhập slug race vào ô bên dưới.
+        </p>
+        {!open ? (
+          <Button
+            variant="outline"
+            onClick={() => setOpen(true)}
+            className="border-red-300 text-red-700 hover:bg-red-50"
+          >
+            🧹 Hiện Reset panel
+          </Button>
+        ) : (
+          <div className="space-y-3 rounded border border-red-200 bg-red-50 p-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={includeResults}
+                onChange={(e) => setIncludeResults(e.target.checked)}
+              />
+              Xóa luôn race_results (synced từ RR/simulator)
+            </label>
+            <div>
+              <label className="text-xs font-semibold uppercase text-red-700">
+                Nhập slug race để confirm
+              </label>
+              <Input
+                value={confirmToken}
+                onChange={(e) => setConfirmToken(e.target.value)}
+                placeholder="VD: hanh-trinh-vi-an-ninh-2026"
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-stone-600">
+                Tìm slug ở /admin/races/[id]/edit hoặc URL race trang public.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpen(false);
+                  setConfirmToken('');
+                }}
+                disabled={reset.isPending}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={() => reset.mutate()}
+                disabled={reset.isPending || confirmToken.length < 3}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {reset.isPending ? 'Đang xóa...' : '🗑 Xóa vĩnh viễn'}
+              </Button>
+            </div>
+          </div>
+        )}
+        {msg && (
+          <div
+            className={`rounded border p-3 text-sm ${
+              msg.type === 'ok'
+                ? 'border-green-300 bg-green-50 text-green-800'
+                : 'border-red-300 bg-red-50 text-red-800'
+            }`}
+          >
+            {msg.text}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
