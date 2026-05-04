@@ -254,6 +254,8 @@ export interface DetectedCheckpoint {
   medianTimeSeconds: number;
   orderIndex: number;
   passedCount: number;
+  isImplicitStart: boolean;
+  isImplicitFinish: boolean;
 }
 
 export interface CheckpointDiscoveryResponse {

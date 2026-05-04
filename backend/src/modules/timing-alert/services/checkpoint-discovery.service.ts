@@ -45,6 +45,16 @@ export interface DetectedCheckpoint {
   orderIndex: number;
   /** Số athletes có time tại key này. */
   passedCount: number;
+  /**
+   * True nếu key này là vạch xuất phát (orderIndex=0). Vendor có thể dùng
+   * literal "Start" HOẶC custom key như "TM0". UI đánh dấu 🚩.
+   */
+  isImplicitStart: boolean;
+  /**
+   * True nếu key này là vạch đích (orderIndex=N-1). Vendor có thể dùng
+   * literal "Finish" HOẶC custom key như "TM5". UI đánh dấu 🏁.
+   */
+  isImplicitFinish: boolean;
 }
 
 export interface CheckpointDiscoveryResult {
@@ -128,7 +138,9 @@ export class CheckpointDiscoveryService {
       };
     }
 
-    // Per-key aggregation: collect time samples
+    // Per-key aggregation: collect time samples.
+    // Note: Start time = "00:00" → 0 seconds VALID (race start moment), KHÔNG reject.
+    // Chỉ reject nếu time format malformed (null) hoặc negative (vendor sentinel).
     const keyTimes = new Map<string, number[]>(); // key → seconds[]
     let athletesWithAnyTime = 0;
 
@@ -142,7 +154,7 @@ export class CheckpointDiscoveryService {
         const trimmed = timeStr.trim();
         if (trimmed.length === 0) continue;
         const seconds = parseTimeToSeconds(trimmed);
-        if (seconds === null || seconds <= 0) continue;
+        if (seconds === null || seconds < 0) continue;
         hasAnyTime = true;
         const list = keyTimes.get(key);
         if (list) list.push(seconds);
@@ -203,17 +215,42 @@ export class CheckpointDiscoveryService {
       );
     }
 
-    const detectedCheckpoints: DetectedCheckpoint[] = surviving.map((s, idx) => ({
-      key: s.key,
-      suggestedName: s.key,
-      suggestedDistanceKm: canDeriveDistance
-        ? roundTo(courseDistanceKm! * (s.medianTimeSeconds / finishMedian), 2)
-        : null,
-      coverage: roundTo(s.coverage, 3),
-      medianTimeSeconds: Math.round(s.medianTimeSeconds),
-      orderIndex: idx,
-      passedCount: s.passedCount,
-    }));
+    const lastIdx = surviving.length - 1;
+    const detectedCheckpoints: DetectedCheckpoint[] = surviving.map((s, idx) => {
+      const isImplicitStart = idx === 0;
+      const isImplicitFinish = idx === lastIdx && lastIdx > 0;
+      // Suggested name — gợi ý đẹp hơn cho start/finish nếu vendor dùng key
+      // không phải literal "Start"/"Finish"
+      let suggestedName = s.key;
+      const lower = s.key.toLowerCase();
+      if (isImplicitStart && lower !== 'start') {
+        suggestedName = `Start (${s.key})`;
+      } else if (isImplicitFinish && lower !== 'finish') {
+        suggestedName = `Finish (${s.key})`;
+      }
+      return {
+        key: s.key,
+        suggestedName,
+        suggestedDistanceKm:
+          isImplicitStart && s.medianTimeSeconds === 0
+            ? 0 // Start luôn = 0km
+            : isImplicitFinish && courseDistanceKm !== null
+              ? courseDistanceKm // Finish = course total distance
+              : canDeriveDistance
+                ? roundTo(
+                    courseDistanceKm! *
+                      (s.medianTimeSeconds / finishMedian),
+                    2,
+                  )
+                : null,
+        coverage: roundTo(s.coverage, 3),
+        medianTimeSeconds: Math.round(s.medianTimeSeconds),
+        orderIndex: idx,
+        passedCount: s.passedCount,
+        isImplicitStart,
+        isImplicitFinish,
+      };
+    });
 
     this.logger.log(
       `[discover] race=${raceId} course=${courseId} total=${totalAthletes} surviving=${surviving.length} finishers=${finishersCount}`,

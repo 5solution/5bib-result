@@ -58,6 +58,8 @@ export class DetectedCheckpointDto {
   @ApiProperty() medianTimeSeconds!: number;
   @ApiProperty() orderIndex!: number;
   @ApiProperty() passedCount!: number;
+  @ApiProperty() isImplicitStart!: boolean;
+  @ApiProperty() isImplicitFinish!: boolean;
 }
 
 export class CheckpointDiscoveryResponseDto {

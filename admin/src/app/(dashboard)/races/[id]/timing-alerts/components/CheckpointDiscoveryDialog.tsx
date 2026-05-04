@@ -176,6 +176,7 @@ export function CheckpointDiscoveryDialog({
                 <table className="w-full table-fixed text-sm">
                   <colgroup>
                     <col className="w-12" />
+                    <col className="w-28" />
                     <col className="w-24" />
                     <col className="w-[260px]" />
                     <col className="w-32" />
@@ -185,6 +186,7 @@ export function CheckpointDiscoveryDialog({
                   <thead className="bg-stone-100">
                     <tr>
                       <th className="px-3 py-2 text-left">#</th>
+                      <th className="px-3 py-2 text-left">Loại</th>
                       <th className="px-3 py-2 text-left">Key (RR)</th>
                       <th className="px-3 py-2 text-left">Tên hiển thị</th>
                       <th className="px-3 py-2 text-left">Distance (km)</th>
@@ -194,9 +196,41 @@ export function CheckpointDiscoveryDialog({
                   </thead>
                   <tbody>
                     {rows.map((r, idx) => (
-                      <tr key={r.key} className="border-t border-stone-200">
+                      <tr
+                        key={r.key}
+                        className={`border-t border-stone-200 ${
+                          r.isImplicitStart
+                            ? 'bg-green-50'
+                            : r.isImplicitFinish
+                              ? 'bg-amber-50'
+                              : ''
+                        }`}
+                      >
                         <td className="px-3 py-2 text-stone-500">
                           {idx + 1}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {r.isImplicitStart && (
+                            <Badge
+                              variant="outline"
+                              className="border-green-300 bg-green-50 text-green-800"
+                              title="Vạch xuất phát (orderIndex 0)"
+                            >
+                              🚩 Start
+                            </Badge>
+                          )}
+                          {r.isImplicitFinish && (
+                            <Badge
+                              variant="outline"
+                              className="border-amber-300 bg-amber-50 text-amber-800"
+                              title="Vạch đích (orderIndex N-1) — vendor có thể dùng key khác như TM5"
+                            >
+                              🏁 Finish
+                            </Badge>
+                          )}
+                          {!r.isImplicitStart && !r.isImplicitFinish && (
+                            <span className="text-stone-400">—</span>
+                          )}
                         </td>
                         <td className="px-3 py-2 font-mono text-xs">
                           {r.key}
