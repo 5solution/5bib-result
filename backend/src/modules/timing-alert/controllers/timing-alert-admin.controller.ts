@@ -23,11 +23,21 @@ import { LogtoAdminGuard } from '../../logto-auth/logto-admin.guard';
 import type { AuthenticatedRequest } from '../../logto-auth/types';
 import { TimingAlertConfigService } from '../services/timing-alert-config.service';
 import { TimingAlertPollService } from '../services/timing-alert-poll.service';
+import { CheckpointDiscoveryService } from '../services/checkpoint-discovery.service';
+import { DashboardSnapshotService } from '../services/dashboard-snapshot.service';
+import { PodiumService } from '../services/podium.service';
 import {
   CreateTimingAlertConfigDto,
   TimingAlertConfigResponseDto,
 } from '../dto/create-config.dto';
 import { AlertActionDto, ListAlertsQueryDto } from '../dto/alert-action.dto';
+import {
+  ApplyCheckpointsDto,
+  ApplyCheckpointsResponseDto,
+  CheckpointDiscoveryResponseDto,
+} from '../dto/checkpoint-discovery.dto';
+import { DashboardSnapshotResponseDto } from '../dto/dashboard-snapshot.dto';
+import { PodiumResponseDto } from '../dto/podium.dto';
 
 /**
  * Admin REST API cho Timing Miss Alert config.
@@ -49,6 +59,9 @@ export class TimingAlertAdminController {
   constructor(
     private readonly configService: TimingAlertConfigService,
     private readonly pollService: TimingAlertPollService,
+    private readonly discoveryService: CheckpointDiscoveryService,
+    private readonly snapshotService: DashboardSnapshotService,
+    private readonly podiumService: PodiumService,
   ) {}
 
   @Post('config')
@@ -133,6 +146,19 @@ export class TimingAlertAdminController {
     });
   }
 
+  @Get('alerts/:alertId')
+  @ApiOperation({
+    summary: 'Get full alert detail — audit log + trajectory + current state',
+    description:
+      'Trả về alert + course checkpoints + per-checkpoint trajectory (passed/missing/pending) + chiptimes hiện tại từ race_results vs frozen snapshot lúc fire alert.',
+  })
+  async getAlertDetail(
+    @Param('raceId') raceId: string,
+    @Param('alertId') alertId: string,
+  ) {
+    return this.pollService.getAlertDetail(raceId, alertId);
+  }
+
   @Patch('alerts/:alertId')
   @ApiOperation({
     summary: 'Resolve / mark false alarm / reopen alert',
@@ -166,5 +192,94 @@ export class TimingAlertAdminController {
       raceId,
       limit ? Number(limit) : 50,
     );
+  }
+
+  // ─────────── Phase 2.1 — Auto-derive checkpoints ───────────
+
+  @Post('discover-checkpoints/:courseId')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Auto-derive checkpoints từ RR API (preview, không save)',
+    description:
+      'Quét tất cả athletes của course → suy ra timing point keys + order chronological + distance proportional. BTC review preview rồi gọi /apply-checkpoints để save.',
+  })
+  @ApiResponse({ status: 200, type: CheckpointDiscoveryResponseDto })
+  @ApiResponse({ status: 400, description: 'Course thiếu apiUrl' })
+  @ApiResponse({ status: 404, description: 'Race hoặc course không tồn tại' })
+  async discoverCheckpoints(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+  ): Promise<CheckpointDiscoveryResponseDto> {
+    return this.discoveryService.discover(raceId, courseId);
+  }
+
+  @Post('apply-checkpoints/:courseId')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Save checkpoints array vào race document',
+    description:
+      'BTC sau khi review preview có thể override name + distanceKm. Service ghi vào race.courses[].checkpoints atomic.',
+  })
+  @ApiResponse({ status: 200, type: ApplyCheckpointsResponseDto })
+  async applyCheckpoints(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+    @Body() body: ApplyCheckpointsDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<ApplyCheckpointsResponseDto> {
+    const userId = req.user?.sub ?? 'unknown';
+    return this.discoveryService.apply(raceId, courseId, body.checkpoints, userId);
+  }
+
+  // ─────────── Phase 2.2 — Dashboard cockpit ───────────
+
+  @Get('dashboard-snapshot')
+  @ApiOperation({
+    summary: 'Operation dashboard snapshot — race-level + per-course + checkpoint progression + recent activity',
+    description:
+      'Gộp 4 query thành 1 endpoint giảm round-trip cho admin tab. Cache Redis 15s. Frontend poll 30s + invalidate khi SSE event.',
+  })
+  @ApiResponse({ status: 200, type: DashboardSnapshotResponseDto })
+  async dashboardSnapshot(
+    @Param('raceId') raceId: string,
+  ): Promise<DashboardSnapshotResponseDto> {
+    return this.snapshotService.getSnapshot(raceId);
+  }
+
+  // ─────────── Tab Podium — Top 10 per course ───────────
+
+  // ─────────── Reset (test loop tool) ───────────
+
+  @Post('reset')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Reset race test data — xóa alerts + poll logs + cache (giữ config + race document)',
+    description:
+      'Test tool: cho BTC re-run simulator nhiều lần. Optionally xóa race_results luôn (?includeRaceResults=true). KHÔNG xóa config, race document, courses, checkpoints.',
+  })
+  async resetRaceData(
+    @Param('raceId') raceId: string,
+    @Query('includeRaceResults') includeRaceResults: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const userId = req.user?.sub ?? 'unknown';
+    return this.pollService.resetRaceData(
+      raceId,
+      { includeRaceResults: includeRaceResults === 'true' },
+      `admin:${userId}`,
+    );
+  }
+
+  @Get('podium')
+  @ApiOperation({
+    summary: 'Top 10 per course — actual finishers + projected on-course',
+    description:
+      'Mỗi course trả Top 10 từ race_results đã sync (có chiptime), sort theo overallRankNumeric ASC. Khi athlete mới xuất hiện trong top → invalidate qua SSE.',
+  })
+  @ApiResponse({ status: 200, type: PodiumResponseDto })
+  async podium(
+    @Param('raceId') raceId: string,
+  ): Promise<PodiumResponseDto> {
+    return this.podiumService.getPodium(raceId);
   }
 }

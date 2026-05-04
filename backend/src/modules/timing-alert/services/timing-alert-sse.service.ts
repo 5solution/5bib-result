@@ -7,6 +7,7 @@ export type SseEventName =
   | 'alert.resolved'
   | 'poll.completed'
   | 'poll.failed'
+  | 'race.reset'
   | 'heartbeat';
 
 export interface SseEvent {

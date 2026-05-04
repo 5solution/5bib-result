@@ -63,6 +63,21 @@ export class TimingAlert {
   @Prop({ required: true })
   missing_point: string;
 
+  /**
+   * Phase 3 — Loại phát hiện:
+   * - PHANTOM: athlete dừng/chậm sau lastSeen (default cho data cũ)
+   * - MIDDLE_GAP: chip miss giữa course nhưng athlete vẫn passed CP sau
+   *   → severity thấp hơn (INFO/WARNING) vì athlete vẫn fine.
+   *
+   * Default 'PHANTOM' để backward compat với alert đã tồn tại.
+   */
+  @Prop({
+    enum: ['PHANTOM', 'MIDDLE_GAP'],
+    default: 'PHANTOM',
+    index: true,
+  })
+  detection_type: 'PHANTOM' | 'MIDDLE_GAP';
+
   // ── Projection ──
   @Prop({ type: String, default: null })
   projected_finish_time: string | null;
@@ -134,14 +149,23 @@ export const TimingAlertSchema = SchemaFactory.createForClass(TimingAlert);
 // ── Indexes ──
 
 /**
- * Unique partial: chỉ 1 alert OPEN per (race, bib). Re-detect cùng BIB →
- * service tăng `detection_count` thay vì insert mới (atomic findOneAndUpdate).
+ * Unique partial — Phase 3: chỉ 1 alert OPEN per (race, bib, missing_point).
+ * Multi-alert per BIB phân biệt theo missing_point — VD phantom miss TM5
+ * + middle gap miss TM3 = 2 alerts cùng OPEN cho 1 BIB.
+ *
+ * Re-detect cùng (race, bib, missing_point) → service tăng `detection_count`
+ * thay vì insert mới (atomic findOneAndUpdate).
  *
  * partialFilterExpression cho phép multiple RESOLVED/FALSE_ALARM cùng BIB
  * (history archive).
+ *
+ * **Migration note:** Index cũ `(race_id, bib_number)` partial OPEN sẽ
+ * conflict với index mới. Mongo cho phép tồn tại đồng thời (different
+ * field set) nhưng để clean DB cần drop index cũ:
+ * `db.timing_alerts.dropIndex('race_id_1_bib_number_1')`
  */
 TimingAlertSchema.index(
-  { race_id: 1, bib_number: 1 },
+  { race_id: 1, bib_number: 1, missing_point: 1 },
   {
     unique: true,
     partialFilterExpression: { status: 'OPEN' },

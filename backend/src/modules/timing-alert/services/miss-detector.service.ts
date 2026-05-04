@@ -9,15 +9,27 @@ import { CourseCheckpoint } from '../utils/parsed-athlete';
 import { TimingAlertSeverity } from '../schemas/timing-alert.schema';
 import { ProjectedRankResult } from './projected-rank.service';
 
+/**
+ * 2 detection types:
+ * - PHANTOM: athlete dừng/chậm sau lastSeen, KHÔNG có time tại nextCp.
+ *   → severity dựa projected rank (TopN = CRITICAL).
+ * - MIDDLE_GAP: athlete CÓ time tại CP sau missing point — chip miss giữa
+ *   course nhưng athlete vẫn chạy. Severity thấp hơn (INFO/WARNING) vì
+ *   athlete fine, chỉ mất data chip.
+ */
+export type DetectionType = 'PHANTOM' | 'MIDDLE_GAP';
+
 export interface DetectionResult {
-  /** True nếu athlete bị miss → caller upsert alert */
+  /** Loại phát hiện. */
+  type: DetectionType;
+  /** True nếu athlete bị miss → caller upsert alert (legacy field, luôn true) */
   isPhantom: boolean;
   /** True nếu missing point cuối cùng = "Finish" (case-insensitive) */
   isMissingFinish: boolean;
   /** Last seen point + time (KEY) */
   lastSeenPoint: string;
   lastSeenTime: string;
-  /** Missing point KEY (next sau lastSeen theo course order) */
+  /** Missing point KEY (next sau lastSeen theo course order, hoặc gap key) */
   missingPoint: string;
   /** Quá giờ expected bao nhiêu phút */
   overdueMinutes: number;
@@ -64,25 +76,85 @@ export class MissDetectorService {
    * @param now current time (parameterized cho testability)
    * @returns DetectionResult | null nếu KHÔNG phantom
    */
+  /**
+   * Detect miss cho 1 athlete tại thời điểm hiện tại. Trả về MẢNG results:
+   * - 0 results: athlete OK
+   * - 1+ PHANTOM: athlete chậm/dừng sau lastSeen
+   * - 1+ MIDDLE_GAP: chip miss giữa course (athlete vẫn passed CP sau)
+   *
+   * 1 athlete có thể đồng thời có MIDDLE_GAP + PHANTOM (gap ở giữa + chậm
+   * sau lastSeen). Caller upsert mỗi result thành 1 alert riêng (filter
+   * unique theo missing_point).
+   */
   detect(
     athlete: ParsedAthlete,
     courseCheckpoints: CourseCheckpoint[],
     overdueThresholdMinutes: number,
     options: {
-      /**
-       * TA-11: Cutoff time string "HH:MM:SS" của course này. Nếu projected
-       * finish vượt cutoff → KHÔNG flag (VĐV sẽ bị gate-closed, không phải
-       * miss timing thật sự — flag sẽ là false-positive).
-       *
-       * Caller (poll service) lấy từ config.cutoff_times[courseName].
-       * Null/undefined = không enforce.
-       */
       cutoffTime?: string | null;
     } = {},
     now: Date = new Date(),
+  ): DetectionResult[] {
+    const results: DetectionResult[] = [];
+
+    if (!athlete.lastSeenPoint || !athlete.lastSeenTime) {
+      return results;
+    }
+
+    // Phase 3 — Middle gap detection.
+    // Walk checkpoints by course order. Any CP có lastSeenPoint trước nó
+    // (theo course order) NHƯNG checkpointTimes[cp.key] empty → gap.
+    const lastSeenIdx = courseCheckpoints.findIndex(
+      (cp) => cp.key === athlete.lastSeenPoint,
+    );
+    if (lastSeenIdx > 0) {
+      // Walk từ idx 0 → lastSeenIdx-1, find missing.
+      // Không flag idx 0 (Start) vì có thể vendor không emit Start key cho mọi
+      // athlete — false positive cao.
+      for (let i = 1; i < lastSeenIdx; i++) {
+        const cp = courseCheckpoints[i];
+        const time = athlete.checkpointTimes[cp.key];
+        if (time && time.trim().length > 0) continue;
+        // Build gap result. Pace + projection lấy từ lastSeen.
+        const gapResult = this.buildResult({
+          type: 'MIDDLE_GAP',
+          athlete,
+          courseCheckpoints,
+          missingCpKey: cp.key,
+        });
+        if (gapResult) {
+          results.push(gapResult);
+        }
+      }
+    }
+
+    // Phase 1B phantom logic — chỉ flag nếu lastSeen chưa phải Finish.
+    const phantomResult = this.detectPhantom(
+      athlete,
+      courseCheckpoints,
+      overdueThresholdMinutes,
+      options,
+      now,
+    );
+    if (phantomResult) {
+      results.push(phantomResult);
+    }
+
+    return results;
+  }
+
+  /**
+   * Existing Phase 1B phantom detection — extracted vào method riêng.
+   * Returns DetectionResult với type='PHANTOM' hoặc null.
+   */
+  private detectPhantom(
+    athlete: ParsedAthlete,
+    courseCheckpoints: CourseCheckpoint[],
+    overdueThresholdMinutes: number,
+    options: { cutoffTime?: string | null } = {},
+    _now: Date = new Date(),
   ): DetectionResult | null {
     if (!athlete.lastSeenPoint || !athlete.lastSeenTime) {
-      // Chưa qua điểm nào — KHÔNG flag (DNS hoặc race chưa start với BIB này)
       return null;
     }
 
@@ -149,7 +221,7 @@ export class MissDetectorService {
       athlete,
       lastSeenSeconds,
       expectedSecondsAtNext,
-      now,
+      _now,
     );
     const overdueMinutes = Math.floor(overdueMs / 60_000);
 
@@ -179,6 +251,7 @@ export class MissDetectorService {
       typeof nextCp.key === 'string' && nextCp.key.toLowerCase() === 'finish';
 
     return {
+      type: 'PHANTOM',
       isPhantom: true,
       isMissingFinish,
       lastSeenPoint: athlete.lastSeenPoint,
@@ -186,6 +259,52 @@ export class MissDetectorService {
       missingPoint: nextCp.key,
       overdueMinutes,
       projectedFinishTime: secondsToHms(projectedFinishSeconds),
+      projectedFinishSeconds,
+    };
+  }
+
+  /**
+   * Build DetectionResult cho MIDDLE_GAP — chip miss giữa course nhưng
+   * athlete vẫn passed CP sau (lastSeenPoint > missingCpKey theo order).
+   *
+   * Pace + projection vẫn tính từ lastSeen (athlete vẫn còn moving).
+   * Severity sẽ được caller classify thấp hơn phantom (athlete OK, chỉ
+   * mất chip data tại 1 điểm).
+   */
+  private buildResult(input: {
+    type: DetectionType;
+    athlete: ParsedAthlete;
+    courseCheckpoints: CourseCheckpoint[];
+    missingCpKey: string;
+  }): DetectionResult | null {
+    const { athlete, courseCheckpoints, missingCpKey } = input;
+    const lastSeenCp = courseCheckpoints.find(
+      (cp) => cp.key === athlete.lastSeenPoint,
+    );
+    if (!lastSeenCp || !athlete.lastSeenTime) return null;
+
+    const lastSeenSeconds = parseTimeToSeconds(athlete.lastSeenTime);
+    if (lastSeenSeconds === null || lastSeenSeconds <= 0) return null;
+
+    let projectedFinishSeconds = 0;
+    if (lastSeenCp.distance_km > 0) {
+      const paceSecPerKm = lastSeenSeconds / lastSeenCp.distance_km;
+      const finishCp = courseCheckpoints[courseCheckpoints.length - 1];
+      projectedFinishSeconds = Math.round(
+        paceSecPerKm * finishCp.distance_km * MissDetectorService.PACE_BUFFER,
+      );
+    }
+
+    return {
+      type: input.type,
+      isPhantom: true,
+      isMissingFinish: false,
+      lastSeenPoint: athlete.lastSeenPoint!,
+      lastSeenTime: athlete.lastSeenTime,
+      missingPoint: missingCpKey,
+      overdueMinutes: 0, // gap = athlete đã pass beyond, không có overdue
+      projectedFinishTime:
+        projectedFinishSeconds > 0 ? secondsToHms(projectedFinishSeconds) : '',
       projectedFinishSeconds,
     };
   }
@@ -206,6 +325,26 @@ export class MissDetectorService {
     projectedRank: ProjectedRankResult | null,
     topNAlert: number,
   ): SeverityResult {
+    // MIDDLE_GAP — athlete vẫn moving, chip miss giữa course. Severity
+    // thấp hơn phantom: INFO (default), WARNING nếu Top N (vẫn có rank
+    // implications cho rectification post-race).
+    if (detection.type === 'MIDDLE_GAP') {
+      const ag = projectedRank?.ageGroupRank ?? null;
+      const ov = projectedRank?.overallRank ?? null;
+      if ((ag !== null && ag <= topNAlert) || (ov !== null && ov <= topNAlert)) {
+        const dim =
+          ag !== null && ag <= topNAlert ? `Top ${ag} age group` : `Top ${ov} overall`;
+        return {
+          severity: 'WARNING',
+          reason: `${dim} chip miss giữa course tại ${detection.missingPoint} (athlete đã qua điểm sau ${detection.lastSeenPoint})`,
+        };
+      }
+      return {
+        severity: 'INFO',
+        reason: `Chip miss giữa course tại ${detection.missingPoint} — VĐV đã qua ${detection.lastSeenPoint}, không khẩn cấp`,
+      };
+    }
+
     // No projected rank → degrade
     if (!projectedRank || (projectedRank.overallRank === null && projectedRank.ageGroupRank === null)) {
       if (detection.isMissingFinish) {

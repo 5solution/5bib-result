@@ -30,6 +30,29 @@ import { CourseCheckpoint } from '../utils/parsed-athlete';
 import { TimingAlertSseService } from './timing-alert-sse.service';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
 
+function parseChiptimesSafe(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'string') return {};
+  const trimmed = raw.trim();
+  if (!trimmed) return {};
+  try {
+    const p = JSON.parse(trimmed) as Record<string, string>;
+    return p && typeof p === 'object' && !Array.isArray(p) ? p : {};
+  } catch {
+    return {};
+  }
+}
+
+function findTimeCi(map: Record<string, string>, key: string): string | null {
+  const lower = key.toLowerCase();
+  for (const [k, v] of Object.entries(map)) {
+    if (k.toLowerCase() === lower) {
+      const trimmed = (v || '').trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+  }
+  return null;
+}
+
 /**
  * Parse "5K", "5KM", "42.195KM", "10km", "42 KM" → number km.
  * Fallback null nếu không parse được.
@@ -221,60 +244,61 @@ export class TimingAlertPollService {
       const cutoffTime = course.cutOffTime?.trim() || null;
 
       for (const athlete of parsed) {
-        const detection = this.missDetector.detect(
+        const detections = this.missDetector.detect(
           athlete,
           checkpoints,
           config.overdue_threshold_minutes ?? 30,
           { cutoffTime },
         );
-        if (!detection) continue;
+        if (detections.length === 0) continue;
 
-        // TA-12: FALSE_ALARM 3-day cooldown — skip flag nếu BIB đã được
-        // mark FALSE_ALARM trong 3 ngày qua (DNF confirmed). Tránh re-detect
-        // gây noise sau khi BTC đã verify.
+        // TA-12: FALSE_ALARM 3-day cooldown
         if (await this.isInFalseAlarmCooldown(raceId, athlete.bib)) {
           continue;
         }
 
         detectedBibs.add(athlete.bib);
 
-        // Compute projected rank — race_id Mongo string + courseId từ race
-        // document (Manager refactor 03/05: drop dual-ID + course_name → courseId)
+        // Compute projected rank 1 lần — share giữa các detections cùng athlete.
+        // Use detection có projectedFinishSeconds > 0 (phantom hoặc gap có lastSeenCp.distance > 0)
+        const refDetection =
+          detections.find((d) => d.projectedFinishSeconds > 0) ?? detections[0];
         const projectedRank = await this.projectedRankService.calculate(
           raceId,
           courseId,
           athlete.ageGroup,
-          detection.projectedFinishSeconds,
+          refDetection.projectedFinishSeconds,
         );
 
-        const severityResult = this.missDetector.classifySeverity(
-          detection,
-          projectedRank,
-          config.top_n_alert ?? 3,
-        );
+        for (const detection of detections) {
+          const severityResult = this.missDetector.classifySeverity(
+            detection,
+            projectedRank,
+            config.top_n_alert ?? 3,
+          );
 
-        const upsertResult = await this.upsertAlert(
-          raceId,
-          athlete,
-          detection,
-          severityResult.severity,
-          severityResult.reason,
-          projectedRank,
-        );
+          const upsertResult = await this.upsertAlert(
+            raceId,
+            athlete,
+            detection,
+            severityResult.severity,
+            severityResult.reason,
+            projectedRank,
+          );
 
-        if (upsertResult.isNew) {
-          alertsCreated += 1;
-          this.sse.emit('alert.created', raceId, this.alertSummary(upsertResult.doc));
+          if (upsertResult.isNew) {
+            alertsCreated += 1;
+            this.sse.emit('alert.created', raceId, this.alertSummary(upsertResult.doc));
 
-          if (severityResult.severity === 'CRITICAL') {
-            // Fire-and-forget Telegram dispatch — KHÔNG block poll cycle
-            this.notification.dispatchCritical(upsertResult.doc).catch((err: Error) => {
-              this.logger.warn(`[Telegram] dispatch fail: ${err.message}`);
-            });
+            if (severityResult.severity === 'CRITICAL') {
+              this.notification.dispatchCritical(upsertResult.doc).catch((err: Error) => {
+                this.logger.warn(`[Telegram] dispatch fail: ${err.message}`);
+              });
+            }
+          } else {
+            alertsUnchanged += 1;
+            this.sse.emit('alert.updated', raceId, this.alertSummary(upsertResult.doc));
           }
-        } else {
-          alertsUnchanged += 1;
-          this.sse.emit('alert.updated', raceId, this.alertSummary(upsertResult.doc));
         }
       }
 
@@ -354,9 +378,16 @@ export class TimingAlertPollService {
     reason: string,
     projectedRank: { overallRank: number | null; ageGroupRank: number | null; confidence: number; totalFinishers: number } | null,
   ): Promise<{ doc: TimingAlertDocument; isNew: boolean }> {
-    // Try findOneAndUpdate existing OPEN — increment detection_count, không tạo mới
+    // Filter compound `(race_id, bib, missing_point, status:OPEN)` — Phase 3
+    // multi-alert per BIB phân biệt theo missing_point. Phantom miss TM5 +
+    // gap miss TM3 = 2 alerts riêng cho 1 BIB.
     const existing = await this.alertModel.findOneAndUpdate(
-      { race_id: raceId, bib_number: athlete.bib, status: 'OPEN' },
+      {
+        race_id: raceId,
+        bib_number: athlete.bib,
+        missing_point: detection.missingPoint,
+        status: 'OPEN',
+      },
       {
         $inc: { detection_count: 1 },
         $set: {
@@ -369,13 +400,14 @@ export class TimingAlertPollService {
           projected_overall_rank: projectedRank?.overallRank ?? null,
           projected_age_group_rank: projectedRank?.ageGroupRank ?? null,
           projected_confidence: projectedRank?.confidence ?? null,
+          detection_type: detection.type,
         },
         $push: {
           audit_log: {
             action: 'RE_DETECT',
             by: 'system',
             at: new Date(),
-            note: `detection_count increment, severity=${severity}`,
+            note: `detection_count increment, severity=${severity}, type=${detection.type}`,
           },
         },
       },
@@ -397,6 +429,7 @@ export class TimingAlertPollService {
       last_seen_point: detection.lastSeenPoint,
       last_seen_time: detection.lastSeenTime,
       missing_point: detection.missingPoint,
+      detection_type: detection.type,
       projected_finish_time: detection.projectedFinishTime,
       projected_overall_rank: projectedRank?.overallRank ?? null,
       projected_age_group_rank: projectedRank?.ageGroupRank ?? null,
@@ -407,9 +440,19 @@ export class TimingAlertPollService {
       status: 'OPEN',
       detection_count: 1,
       audit_log: [
-        { action: 'CREATE', by: 'system', at: new Date(), note: `Initial detect — ${reason}` },
+        {
+          action: 'CREATE',
+          by: 'system',
+          at: new Date(),
+          note: `Initial detect [${detection.type}] — ${reason}`,
+        },
       ],
-      rr_api_snapshot: { Bib: athlete.raw.Bib, Chiptimes: athlete.raw.Chiptimes, TimingPoint: athlete.raw.TimingPoint, Category: athlete.raw.Category },
+      rr_api_snapshot: {
+        Bib: athlete.raw.Bib,
+        Chiptimes: athlete.raw.Chiptimes,
+        TimingPoint: athlete.raw.TimingPoint,
+        Category: athlete.raw.Category,
+      },
     });
 
     return { doc: created, isNew: true };
@@ -669,6 +712,119 @@ export class TimingAlertPollService {
     };
   }
 
+  /**
+   * Phase 2 — Get full alert detail (audit log + rr_api_snapshot + parsed
+   * trajectory). Dùng cho click-to-detail dialog ở admin Alerts tab.
+   *
+   * Augments alert với:
+   * - course checkpoints config (cho timeline render)
+   * - parsed trajectory: { key, name, distanceKm, time, status:passed|missing|pending }
+   * - current chiptimes từ race_results collection (vs frozen snapshot khi
+   *   first detected) → BTC thấy state hiện tại vs lúc fire alert
+   *
+   * IDOR fix: filter compound `{_id, race_id}` — admin Race A KHÔNG xem
+   * được alert Race B kể cả guess alertId.
+   */
+  async getAlertDetail(
+    raceId: string,
+    alertId: string,
+  ): Promise<{
+    alert: TimingAlertDocument;
+    courseCheckpoints: Array<{ key: string; name: string; distanceKm: number | null; orderIndex: number }>;
+    trajectory: Array<{
+      key: string;
+      name: string;
+      distanceKm: number | null;
+      orderIndex: number;
+      timeAtFirstDetect: string | null;  // từ rr_api_snapshot (frozen)
+      timeNow: string | null;            // current (race_results latest)
+      status: 'passed' | 'missing' | 'pending';
+      isLastSeen: boolean;
+      isMissingPoint: boolean;
+    }>;
+  }> {
+    const alert = await this.alertModel
+      .findOne({ _id: alertId, race_id: raceId })
+      .lean<TimingAlertDocument>()
+      .exec();
+    if (!alert) {
+      throw new Error(
+        `Alert ${alertId} not found in race ${raceId} (or wrong race scope)`,
+      );
+    }
+
+    // Load race document để lấy checkpoints config
+    const race = await this.raceModel.findById(raceId).lean<RaceDocument>().exec();
+    if (!race) {
+      throw new Error(`Race ${raceId} not found`);
+    }
+
+    // Find course matching alert.contest. Match by course name field.
+    const course = (race.courses ?? []).find((c) => c.name === alert.contest);
+    const checkpoints = course?.checkpoints ?? [];
+
+    const courseCheckpoints = checkpoints.map((cp, idx) => ({
+      key: cp.key,
+      name: cp.name || cp.key,
+      distanceKm: typeof cp.distanceKm === 'number' ? cp.distanceKm : null,
+      orderIndex: idx,
+    }));
+
+    // Parse rr_api_snapshot.Chiptimes (frozen state at first detect)
+    const snapshotChiptimes = parseChiptimesSafe(
+      (alert.rr_api_snapshot as { Chiptimes?: unknown } | undefined)?.Chiptimes,
+    );
+
+    // Get latest chiptimes from race_results (CURRENT state — VĐV có thể
+    // đã qua thêm CP sau khi alert fired)
+    let nowChiptimes: Record<string, string> = {};
+    if (course) {
+      const latestResult = await this.alertModel.db
+        .collection('race_results')
+        .findOne(
+          { raceId, courseId: course.courseId, bib: alert.bib_number },
+          { projection: { chiptimes: 1 } },
+        );
+      if (latestResult?.chiptimes && typeof latestResult.chiptimes === 'string') {
+        nowChiptimes = parseChiptimesSafe(latestResult.chiptimes);
+      }
+    }
+
+    const trajectory = courseCheckpoints.map((cp) => {
+      const timeAtFirstDetect = findTimeCi(snapshotChiptimes, cp.key);
+      const timeNow = findTimeCi(nowChiptimes, cp.key);
+      const isLastSeen = cp.key === alert.last_seen_point;
+      const isMissingPoint = cp.key === alert.missing_point;
+
+      // Status logic:
+      // - passed: athlete có time tại key này (now hoặc snapshot)
+      // - missing: là cái alert flag (key === missing_point) và chưa có time
+      // - pending: chưa qua, nhưng KHÔNG phải missing point
+      let status: 'passed' | 'missing' | 'pending';
+      if (timeNow || timeAtFirstDetect) {
+        status = 'passed';
+      } else if (isMissingPoint) {
+        status = 'missing';
+      } else {
+        status = 'pending';
+      }
+
+      return {
+        key: cp.key,
+        name: cp.name,
+        distanceKm: cp.distanceKm,
+        orderIndex: cp.orderIndex,
+        timeAtFirstDetect,
+        timeNow,
+        status,
+        isLastSeen,
+        isMissingPoint,
+      };
+    });
+
+    return { alert, courseCheckpoints, trajectory };
+  }
+
   async listPollLogs(raceId: string, limit = 50): Promise<TimingAlertPollDocument[]> {
     return this.pollModel
       .find({ race_id: raceId })
@@ -676,5 +832,88 @@ export class TimingAlertPollService {
       .limit(Math.min(200, Math.max(1, limit)))
       .lean<TimingAlertPollDocument[]>()
       .exec();
+  }
+
+  /**
+   * Phase 2 — Reset race data cho test loop. Xóa:
+   * - Tất cả timing_alerts của race
+   * - Tất cả timing_alert_polls của race
+   * - Optionally race_results (BTC chọn xóa hay giữ)
+   * - Flush Redis cache: dashboard-snapshot + podium + lock keys
+   *
+   * **KHÔNG xóa:** config, race document. Chỉ xóa "kết quả test".
+   *
+   * Use case: BTC test simulator nhiều lần, mỗi lần reset → state sạch.
+   */
+  async resetRaceData(
+    raceId: string,
+    options: { includeRaceResults?: boolean },
+    userId: string,
+  ): Promise<{
+    alertsDeleted: number;
+    pollsDeleted: number;
+    raceResultsDeleted: number;
+    redisKeysDeleted: number;
+  }> {
+    const [alertsRes, pollsRes] = await Promise.all([
+      this.alertModel.deleteMany({ race_id: raceId }).exec(),
+      this.pollModel.deleteMany({ race_id: raceId }).exec(),
+    ]);
+
+    let raceResultsDeleted = 0;
+    if (options.includeRaceResults) {
+      // Note: race_results model from race-result module — inject lazily via
+      // module instance ko sạch, dùng connection raw thay vì add dependency.
+      // Cleanest: thêm RaceResult model vào constructor, nhưng để đơn giản
+      // dùng deleteMany trên cùng connection.
+      const collection = this.alertModel.db.collection('race_results');
+      const r = await collection.deleteMany({ raceId });
+      raceResultsDeleted = r.deletedCount ?? 0;
+    }
+
+    // Flush Redis cache + lock keys liên quan race này
+    const keysToDelete = [
+      `dashboard-snapshot:${raceId}`,
+      `podium:${raceId}`,
+      `timing-alert:tg-rate:${raceId}`,
+    ];
+    // Pattern keys (anomaly per checkpoint, polling locks per course)
+    const patterns = [
+      `timing-alert:tg-anomaly:${raceId}:*`,
+      `timing-alert:polling:${raceId}:*`,
+    ];
+    const stream = this.redis.scanStream({ match: patterns[0], count: 100 });
+    const matched: string[] = [];
+    for await (const keys of stream) {
+      matched.push(...(keys as string[]));
+    }
+    const stream2 = this.redis.scanStream({ match: patterns[1], count: 100 });
+    for await (const keys of stream2) {
+      matched.push(...(keys as string[]));
+    }
+    const allKeys = [...keysToDelete, ...matched];
+    let redisKeysDeleted = 0;
+    if (allKeys.length > 0) {
+      redisKeysDeleted = await this.redis.del(...allKeys);
+    }
+
+    this.logger.warn(
+      `[resetRaceData] race=${raceId} by=${userId} alerts=${alertsRes.deletedCount} polls=${pollsRes.deletedCount} results=${raceResultsDeleted} redis=${redisKeysDeleted}`,
+    );
+
+    // SSE broadcast để mọi tab admin refetch
+    this.sse.emit('race.reset', raceId, {
+      alertsDeleted: alertsRes.deletedCount ?? 0,
+      pollsDeleted: pollsRes.deletedCount ?? 0,
+      raceResultsDeleted,
+      redisKeysDeleted,
+    });
+
+    return {
+      alertsDeleted: alertsRes.deletedCount ?? 0,
+      pollsDeleted: pollsRes.deletedCount ?? 0,
+      raceResultsDeleted,
+      redisKeysDeleted,
+    };
   }
 }

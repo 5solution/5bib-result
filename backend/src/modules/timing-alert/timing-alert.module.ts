@@ -23,9 +23,23 @@ import { MissDetectorService } from './services/miss-detector.service';
 import { ProjectedRankService } from './services/projected-rank.service';
 import { TimingAlertSseService } from './services/timing-alert-sse.service';
 import { NotificationDispatcherService } from './services/notification-dispatcher.service';
+import { CheckpointDiscoveryService } from './services/checkpoint-discovery.service';
+import { DashboardSnapshotService } from './services/dashboard-snapshot.service';
+import { PodiumService } from './services/podium.service';
+import { SimulatorService } from './services/simulator.service';
 import { TimingAlertPollCron } from './jobs/timing-alert-poll.cron';
 import { TimingAlertAdminController } from './controllers/timing-alert-admin.controller';
 import { TimingAlertSseController } from './controllers/timing-alert-sse.controller';
+import { TimingAlertSimulatorAdminController } from './controllers/simulator-admin.controller';
+import { TimingAlertSimulatorPublicController } from './controllers/simulator-public.controller';
+import {
+  TimingAlertSimulation,
+  TimingAlertSimulationSchema,
+} from './schemas/timing-alert-simulation.schema';
+import {
+  TimingAlertSimulationSnapshot,
+  TimingAlertSimulationSnapshotSchema,
+} from './schemas/timing-alert-simulation-snapshot.schema';
 import { LogtoAuthModule } from '../logto-auth';
 import { RaceResultModule } from '../race-result/race-result.module';
 
@@ -51,11 +65,22 @@ import { RaceResultModule } from '../race-result/race-result.module';
       // Race document — single source of truth cho apiUrl + checkpoints +
       // cutoff + start/endDate. Cùng schema đăng ký ở RacesModule (write).
       { name: Race.name, schema: RaceSchema },
+      // Simulator — replay RR snapshots theo simulation clock cho test
+      { name: TimingAlertSimulation.name, schema: TimingAlertSimulationSchema },
+      {
+        name: TimingAlertSimulationSnapshot.name,
+        schema: TimingAlertSimulationSnapshotSchema,
+      },
     ]),
     LogtoAuthModule,
     RaceResultModule,
   ],
-  controllers: [TimingAlertAdminController, TimingAlertSseController],
+  controllers: [
+    TimingAlertAdminController,
+    TimingAlertSseController,
+    TimingAlertSimulatorAdminController,
+    TimingAlertSimulatorPublicController,
+  ],
   providers: [
     TimingAlertConfigService,
     TimingAlertPollService,
@@ -64,6 +89,11 @@ import { RaceResultModule } from '../race-result/race-result.module';
     TimingAlertSseService,
     NotificationDispatcherService,
     TimingAlertPollCron,
+    // Phase 2 — Operation Dashboard cockpit services
+    CheckpointDiscoveryService,
+    DashboardSnapshotService,
+    PodiumService,
+    SimulatorService,
   ],
   exports: [TimingAlertConfigService],
 })

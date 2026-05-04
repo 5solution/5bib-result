@@ -35,6 +35,8 @@ export interface TimingAlertConfigResponse {
 export type TimingAlertSeverity = 'CRITICAL' | 'HIGH' | 'WARNING' | 'INFO';
 export type TimingAlertStatus = 'OPEN' | 'RESOLVED' | 'FALSE_ALARM';
 
+export type TimingAlertDetectionType = 'PHANTOM' | 'MIDDLE_GAP';
+
 export interface TimingAlert {
   _id: string;
   race_id: string;
@@ -46,6 +48,7 @@ export interface TimingAlert {
   last_seen_point: string;
   last_seen_time: string;
   missing_point: string;
+  detection_type: TimingAlertDetectionType;
   projected_finish_time: string | null;
   projected_overall_rank: number | null;
   projected_age_group_rank: number | null;
@@ -159,6 +162,46 @@ export async function listTimingAlerts(
   );
 }
 
+export interface AlertAuditEntry {
+  action: string;
+  by: string;
+  at: string;
+  note?: string;
+}
+
+export interface AlertDetailResponse {
+  alert: TimingAlert & {
+    audit_log: AlertAuditEntry[];
+    rr_api_snapshot: Record<string, unknown>;
+  };
+  courseCheckpoints: Array<{
+    key: string;
+    name: string;
+    distanceKm: number | null;
+    orderIndex: number;
+  }>;
+  trajectory: Array<{
+    key: string;
+    name: string;
+    distanceKm: number | null;
+    orderIndex: number;
+    timeAtFirstDetect: string | null;
+    timeNow: string | null;
+    status: 'passed' | 'missing' | 'pending';
+    isLastSeen: boolean;
+    isMissingPoint: boolean;
+  }>;
+}
+
+export async function getAlertDetail(
+  raceId: string,
+  alertId: string,
+): Promise<AlertDetailResponse> {
+  return clientGet<AlertDetailResponse>(
+    `/api/admin/races/${raceId}/timing-alert/alerts/${alertId}`,
+  );
+}
+
 export async function patchTimingAlert(
   raceId: string,
   alertId: string,
@@ -198,6 +241,180 @@ export async function listTimingAlertPollLogs(
 ): Promise<TimingAlertPollLog[]> {
   return clientGet<TimingAlertPollLog[]>(
     `/api/admin/races/${raceId}/timing-alert/poll-logs?limit=${limit}`,
+  );
+}
+
+// ─────────── Phase 2 — Operation Dashboard ───────────
+
+export interface DetectedCheckpoint {
+  key: string;
+  suggestedName: string;
+  suggestedDistanceKm: number | null;
+  coverage: number;
+  medianTimeSeconds: number;
+  orderIndex: number;
+  passedCount: number;
+}
+
+export interface CheckpointDiscoveryResponse {
+  courseId: string;
+  courseName: string;
+  courseDistanceKm: number | null;
+  totalAthletes: number;
+  athletesWithAnyTime: number;
+  finishersCount: number;
+  detectedCheckpoints: DetectedCheckpoint[];
+  notes: string[];
+}
+
+export async function discoverCheckpoints(
+  raceId: string,
+  courseId: string,
+): Promise<CheckpointDiscoveryResponse> {
+  return clientPost<CheckpointDiscoveryResponse>(
+    `/api/admin/races/${raceId}/timing-alert/discover-checkpoints/${courseId}`,
+  );
+}
+
+export interface CheckpointApplyItem {
+  key: string;
+  name: string;
+  distanceKm?: number | null;
+}
+
+export async function applyCheckpoints(
+  raceId: string,
+  courseId: string,
+  checkpoints: CheckpointApplyItem[],
+): Promise<{ raceId: string; courseId: string; saved: number }> {
+  return clientPost<{ raceId: string; courseId: string; saved: number }>(
+    `/api/admin/races/${raceId}/timing-alert/apply-checkpoints/${courseId}`,
+    { checkpoints },
+  );
+}
+
+export interface RaceMeta {
+  id: string;
+  title: string;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface RaceStats {
+  started: number;
+  finished: number;
+  onCourse: number;
+  suspectOpen: number;
+  criticalOpen: number;
+  progress: number;
+}
+
+export interface CourseStats {
+  courseId: string;
+  name: string;
+  distanceKm: number | null;
+  cutOffTime: string | null;
+  apiUrl: string | null;
+  hasCheckpoints: boolean;
+  started: number;
+  finished: number;
+  onCourse: number;
+  suspectCount: number;
+  leadingChipTime: string | null;
+}
+
+export interface CheckpointPoint {
+  key: string;
+  name: string;
+  distanceKm: number | null;
+  orderIndex: number;
+  passedCount: number;
+  expectedCount: number;
+  passedRatio: number;
+}
+
+export interface CheckpointProgression {
+  courseId: string;
+  courseName: string;
+  distanceKm: number | null;
+  startedCount: number;
+  points: CheckpointPoint[];
+}
+
+export interface RecentActivityItem {
+  type: string;
+  at: string;
+  payload: Record<string, unknown>;
+}
+
+export interface DashboardSnapshot {
+  race: RaceMeta;
+  raceStats: RaceStats;
+  courses: CourseStats[];
+  checkpointProgression: CheckpointProgression[];
+  recentActivity: RecentActivityItem[];
+  generatedAt: string;
+}
+
+export async function getDashboardSnapshot(
+  raceId: string,
+): Promise<DashboardSnapshot> {
+  return clientGet<DashboardSnapshot>(
+    `/api/admin/races/${raceId}/timing-alert/dashboard-snapshot`,
+  );
+}
+
+export interface PodiumEntry {
+  rank: number;
+  bib: string;
+  name: string | null;
+  chipTime: string | null;
+  gunTime: string | null;
+  pace: string | null;
+  ageGroup: string | null;
+  ageGroupRank: number | null;
+  gender: string | null;
+  nationality: string | null;
+  club: string | null;
+}
+
+export interface PodiumCourse {
+  courseId: string;
+  courseName: string;
+  distanceKm: number | null;
+  finishersCount: number;
+  podium: PodiumEntry[];
+}
+
+export interface PodiumResponse {
+  raceId: string;
+  raceTitle: string;
+  raceStatus: string;
+  generatedAt: string;
+  courses: PodiumCourse[];
+}
+
+export async function getPodium(raceId: string): Promise<PodiumResponse> {
+  return clientGet<PodiumResponse>(
+    `/api/admin/races/${raceId}/timing-alert/podium`,
+  );
+}
+
+export interface ResetRaceDataResponse {
+  alertsDeleted: number;
+  pollsDeleted: number;
+  raceResultsDeleted: number;
+  redisKeysDeleted: number;
+}
+
+export async function resetRaceData(
+  raceId: string,
+  includeRaceResults: boolean,
+): Promise<ResetRaceDataResponse> {
+  const qs = includeRaceResults ? '?includeRaceResults=true' : '';
+  return clientPost<ResetRaceDataResponse>(
+    `/api/admin/races/${raceId}/timing-alert/reset${qs}`,
   );
 }
 

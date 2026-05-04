@@ -30,7 +30,16 @@ export class NotificationDispatcherService {
   private readonly logger = new Logger(NotificationDispatcherService.name);
   private readonly telegram: Telegram | null = null;
   private readonly chatId: string | null = null;
+  /**
+   * Phase 2 — anomaly chat ID tách biệt với complaint channel.
+   * User Danny 03/05/2026: "tạo 1 channel riêng để nhận tin này tách biệt
+   * với phần khiếu nại". Env `TIMING_ALERT_ANOMALY_CHAT_ID`. Fallback về
+   * main `chatId` nếu chưa set (không silent drop).
+   */
+  private readonly anomalyChatId: string | null = null;
   private static readonly RATE_LIMIT_TTL_SECONDS = 900; // 15 phút
+  /** Anomaly cooldown ngắn hơn — mat failure cần BTC hành động ngay. */
+  private static readonly ANOMALY_RATE_LIMIT_TTL_SECONDS = 600; // 10 phút
 
   constructor(@InjectRedis() private readonly redis: Redis) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -38,12 +47,18 @@ export class NotificationDispatcherService {
       env.timingAlert.telegramChatId ||
       process.env.TELEGRAM_GROUP_CHAT_ID ||
       '';
+    const anomalyChatId =
+      process.env.TIMING_ALERT_ANOMALY_CHAT_ID ||
+      env.timingAlert.telegramChatId ||
+      process.env.TELEGRAM_GROUP_CHAT_ID ||
+      '';
 
     if (token && chatId) {
       this.telegram = new Telegram(token);
       this.chatId = chatId;
+      this.anomalyChatId = anomalyChatId || chatId;
       this.logger.log(
-        `Timing alert Telegram enabled — chat_id=${chatId.slice(0, 4)}***`,
+        `Timing alert Telegram enabled — alert chat=${chatId.slice(0, 4)}*** anomaly chat=${this.anomalyChatId.slice(0, 4)}***`,
       );
     } else {
       this.logger.warn(
@@ -124,6 +139,87 @@ export class NotificationDispatcherService {
   }
 
   /**
+   * Phase 2 — Anomaly push (mat failure / suspicious checkpoint drop).
+   *
+   * Triggered từ DashboardSnapshotService khi phát hiện checkpoint passedRatio
+   * drop > threshold so với checkpoint trước. Channel riêng để BTC mat ops
+   * team tách khỏi complaint thread.
+   *
+   * Rate limit: per (race, courseId, checkpointKey) 10 phút — tránh spam khi
+   * mat tiếp tục down qua nhiều poll cycles.
+   */
+  async dispatchAnomaly(input: {
+    raceId: string;
+    raceTitle: string;
+    courseName: string;
+    checkpointKey: string;
+    checkpointName: string;
+    expectedCount: number;
+    passedCount: number;
+    previousPassedRatio: number;
+    currentPassedRatio: number;
+    dropPercentage: number;
+  }): Promise<boolean> {
+    if (!this.telegram || !this.anomalyChatId) return false;
+
+    const acquired = await this.tryAcquireAnomalyRateLimit(
+      input.raceId,
+      input.courseName,
+      input.checkpointKey,
+    );
+    if (!acquired) {
+      this.logger.debug(
+        `[dispatchAnomaly] race=${input.raceId} course=${input.courseName} cp=${input.checkpointKey} rate-limited`,
+      );
+      return false;
+    }
+
+    const text = this.composeAnomalyMessage(input);
+    try {
+      await this.telegram.sendMessage(this.anomalyChatId, text, {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+      });
+      this.logger.warn(
+        `[dispatchAnomaly] mat failure pushed: ${input.courseName}/${input.checkpointKey} drop=${input.dropPercentage.toFixed(1)}%`,
+      );
+      return true;
+    } catch (err) {
+      this.logger.error(
+        `[dispatchAnomaly] Telegram send failed: ${(err as Error).message}`,
+      );
+      return false;
+    }
+  }
+
+  private composeAnomalyMessage(input: {
+    raceTitle: string;
+    courseName: string;
+    checkpointKey: string;
+    checkpointName: string;
+    expectedCount: number;
+    passedCount: number;
+    previousPassedRatio: number;
+    currentPassedRatio: number;
+    dropPercentage: number;
+  }): string {
+    const lines = [
+      `⚠️ <b>MAT FAILURE NGHI VẤN</b>`,
+      ``,
+      `<b>Race:</b> ${this.escape(input.raceTitle)}`,
+      `<b>Course:</b> ${this.escape(input.courseName)}`,
+      `<b>Checkpoint:</b> ${this.escape(input.checkpointName)} (key: ${this.escape(input.checkpointKey)})`,
+      ``,
+      `<b>Số athletes passed:</b> ${input.passedCount} / ${input.expectedCount} expected`,
+      `<b>Tỷ lệ passed:</b> ${(input.currentPassedRatio * 100).toFixed(1)}% (trước đó ${(input.previousPassedRatio * 100).toFixed(1)}%)`,
+      `<b>Drop:</b> ${input.dropPercentage.toFixed(1)}%`,
+      ``,
+      `<i>Action:</i> Verify mat tại checkpoint còn hoạt động không. Có thể chip reader unplug, ăng ten lệch, hoặc athletes bị bỏ qua.`,
+    ];
+    return lines.join('\n');
+  }
+
+  /**
    * SETNX EX 900s — single key per race. Returns true nếu acquire OK.
    *
    * Trade-off: rate limit per RACE, không per (race, severity). Phase 2 nếu
@@ -137,6 +233,23 @@ export class NotificationDispatcherService {
       '1',
       'EX',
       NotificationDispatcherService.RATE_LIMIT_TTL_SECONDS,
+      'NX',
+    );
+    return result === 'OK';
+  }
+
+  private async tryAcquireAnomalyRateLimit(
+    raceId: string,
+    courseName: string,
+    checkpointKey: string,
+  ): Promise<boolean> {
+    const safeCourse = courseName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const key = `timing-alert:tg-anomaly:${raceId}:${safeCourse}:${checkpointKey}`;
+    const result = await this.redis.set(
+      key,
+      '1',
+      'EX',
+      NotificationDispatcherService.ANOMALY_RATE_LIMIT_TTL_SECONDS,
       'NX',
     );
     return result === 'OK';

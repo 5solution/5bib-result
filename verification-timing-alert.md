@@ -332,3 +332,148 @@ PASS timing-alert-sse.service.spec.ts (3) — Phase 1C
 2. **API token masking** in error log uses regex `/\/[A-Z0-9]{32}(\/|$|\?)/g` — works for current RR Simple API token format (32-char base64 uppercase + digits). Future RR API key format change → masking may fail silent. Document in module README Phase 1A.
 
 ---
+
+---
+
+# Phase 2 — Race Timing Operation Dashboard (v1.1)
+
+**Status:** 🟠 READY_FOR_QC
+**Date:** 2026-05-03
+**User feedback driving refactor:**
+> "Tao muốn chúng mày phải nội suy từ API của RR ra, chứ bắt team tao nó đi
+> cấu hình 2 lần có mà điên... Tao kì vọng đây là 1 cái race timing
+> operation dashboard để theo dõi toàn bộ giải đấu"
+
+---
+
+## Locked decisions (Danny 2026-05-03)
+
+| # | Decision | Implementation |
+|---|----------|----------------|
+| 1 | Cutoff visibility — defer config 2 lần | Tự đọc `course.cutOffTime` nếu có, không bắt config riêng |
+| 2 | DNF → chỉ flag, không auto-mark | MissDetector giữ flag-only logic, RaceResult vendor mark DNF |
+| 3 | Podium = Top 10 per cự ly | `PodiumService.TOP_N = 10` |
+| 4 | Anomaly push → channel riêng | `TIMING_ALERT_ANOMALY_CHAT_ID` env, fallback main chat |
+| 5 | Multi-day → 1 dashboard | KHÔNG tách route, snapshot xử lý overall window |
+| 6 | Auth = LogtoAdminGuard chung | Reuse guard hiện tại, không tạo P3 BTC role mới |
+| 7 | Podium UI = tab khác trong cùng page | `?tab=podium` query param |
+
+---
+
+## Files Changed (Phase 2)
+
+### Backend (NEW)
+| File | Type | LOC |
+|------|------|-----|
+| `backend/src/modules/timing-alert/services/checkpoint-discovery.service.ts` | NEW | 246 |
+| `backend/src/modules/timing-alert/services/dashboard-snapshot.service.ts` | NEW | 480+ |
+| `backend/src/modules/timing-alert/services/podium.service.ts` | NEW | 130 |
+| `backend/src/modules/timing-alert/dto/checkpoint-discovery.dto.ts` | NEW | 65 |
+| `backend/src/modules/timing-alert/dto/dashboard-snapshot.dto.ts` | NEW | 95 |
+| `backend/src/modules/timing-alert/dto/podium.dto.ts` | NEW | 35 |
+
+### Backend (MODIFIED)
+| File | Change |
+|------|--------|
+| `backend/src/modules/timing-alert/controllers/timing-alert-admin.controller.ts` | +5 endpoints (discover-checkpoints, apply-checkpoints, dashboard-snapshot, podium) |
+| `backend/src/modules/timing-alert/services/notification-dispatcher.service.ts` | +`dispatchAnomaly()` + separate `anomalyChatId` from `TIMING_ALERT_ANOMALY_CHAT_ID` env, 10-min rate limit per (race, course, checkpoint) |
+| `backend/src/modules/timing-alert/timing-alert.module.ts` | Register 3 new services |
+
+### Frontend (NEW)
+| File | Type | LOC |
+|------|------|-----|
+| `admin/src/app/(dashboard)/races/[id]/timing-alerts/components/CockpitTab.tsx` | NEW | 380+ |
+| `admin/src/app/(dashboard)/races/[id]/timing-alerts/components/AlertsTab.tsx` | NEW | 240+ |
+| `admin/src/app/(dashboard)/races/[id]/timing-alerts/components/PodiumTab.tsx` | NEW | 150+ |
+| `admin/src/app/(dashboard)/races/[id]/timing-alerts/components/CheckpointDiscoveryDialog.tsx` | NEW | 270+ |
+
+### Frontend (MODIFIED)
+| File | Change |
+|------|--------|
+| `admin/src/app/(dashboard)/races/[id]/timing-alerts/page.tsx` | Refactor → tab routing (cockpit/alerts/podium), SSE listener invalidate cả `dashboard-snapshot` + `podium` queries |
+| `admin/src/lib/timing-alert-api.ts` | +5 API helpers (discover, apply, dashboard-snapshot, podium) + types |
+
+---
+
+## Architecture — Auto-derive checkpoints (Phase 2.1)
+
+**Algorithm:**
+1. Fetch all athletes from `course.apiUrl` qua `RaceResultApiService` (Phase 0 shared)
+2. Parse Chiptimes JSON cho mỗi athlete → set keys có time non-empty
+3. Aggregate per-key: coverage = athletesWithKey/totalActive, medianTimeSeconds
+4. Filter coverage ≥ 80% (drop noise/legacy fields)
+5. Sort theo medianTime ASC → Start sớm nhất, Finish muộn nhất
+6. Distance derivation:
+   - Nếu `course.distanceKm` có sẵn + finishers ≥ 10 → distance proportional theo time
+     `distance(cp_i) = courseDistanceKm × medianTime(cp_i) / medianTime(Finish)`
+   - Nếu không → null, BTC override
+
+**Edge cases handled:**
+- Race chưa start (RR trả 0 athletes) → empty preview + note
+- Course không đủ finishers (< 10) → distance null, hint BTC override
+- Athletes có Chiptimes empty/malformed → skip, không fail toàn cục
+
+---
+
+## Architecture — Dashboard snapshot (Phase 2.2-2.5)
+
+**Single endpoint** `GET /timing-alert/dashboard-snapshot/:raceId` gộp 4 sub-queries:
+1. `computePerCourseStats` — aggregate `race_results` group by (courseId, timingPoint) → started/finished/leader
+2. `computeAlertStats` — aggregate `timing_alerts` group by (contest, severity) status=OPEN
+3. `computeCheckpointProgression` — per course parse `chiptimes` JSON → count distinct bib per key
+4. `fetchRecentActivity` — top 30 alerts + poll completes timeline
+
+**Cache:** Redis 15s TTL `dashboard-snapshot:{raceId}` — race day 50-100 admin tabs OK
+**Mat failure detection:** Fire-and-forget Telegram anomaly khi `passedRatio drop > 30%` between consecutive checkpoints (skip first/last). Rate limit 10 min per (race, course, checkpoint).
+
+---
+
+## Architecture — Podium (Top 10)
+
+`GET /timing-alert/podium/:raceId` — per course query `race_results` filter:
+- `timingPoint` regex `/^finish$/i` (case-insensitive vendor quirk)
+- `overallRankNumeric < 900000` (DNF/DSQ sentinel filter — lesson L2)
+- Sort `overallRankNumeric ASC` limit 10
+
+Cache 30s TTL `podium:{raceId}`.
+
+---
+
+## Tests Written
+
+⚠ **Unit tests NOT yet written for Phase 2 services.** This is a known gap.
+Manual integration test plan:
+- TA-21: Discover checkpoints — race với apiUrl, chạy giả lập 3500 athletes → verify keys/order
+- TA-22: Apply checkpoints — POST với name/distanceKm override → verify `race.courses[].checkpoints` updated
+- TA-23: Dashboard snapshot — verify started/finished match `race_results` count distinct
+- TA-24: Mat failure detection — simulate 50% drop at TM2 → verify Telegram anomaly fired
+- TA-25: Podium — verify Top 10 sorted ASC, DNF athletes filtered
+- TA-26: Tab routing — `?tab=podium` lên reload preserved
+- TA-27: SSE invalidate cả dashboard-snapshot + podium khi alert.created/poll.completed
+
+**Recommend QC:** spawn `/5bib-qc` after manual smoke test.
+
+---
+
+## Build verification
+
+✅ `cd backend && npm run build` — zero errors
+✅ `cd admin && npx tsc --noEmit` — zero timing-alert errors (other unrelated TS errors are pre-existing)
+
+---
+
+## Known limitations / Tech debt
+
+1. **No unit tests** cho 3 services mới (discovery, snapshot, podium). Recommend skill block deploy until QC writes.
+2. **Mat failure threshold hardcoded 30%** — production có thể cần config per race (race terrain ảnh hưởng dropoff). Phase 3 nâng lên config knob.
+3. **`recharts` NOT added** — dùng pure Tailwind bar chart (đủ cho v1.1, defer recharts khi user yêu cầu fancier).
+4. **No anomaly-resolved dispatch** — mat failure khi recover (drop về < 30%) không auto-báo "đã khôi phục". Phase 3 if needed.
+5. **Multi-day race** — current snapshot không split theo day. OK với pilot pilot 2026-05-02 (single day) nhưng VMM 2 ngày sẽ count both days vào 1 KPI. Phase 3 nếu cần.
+
+---
+
+## PAUSE / Confirmation log — Phase 2
+
+- ✅ Danny 2026-05-03: confirm Option C hybrid + 5-section cockpit + 7 open questions
+- ✅ Danny 2026-05-03: "Làm toàn bộ đê" → green light Phase 2.1-2.5 + Tab Podium + Anomaly channel
+

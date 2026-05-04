@@ -1,63 +1,86 @@
 'use client';
 
 /**
- * Timing Miss Alert — Admin Dashboard
+ * Timing Miss Alert — Operation Dashboard (Phase 2 v1.1).
  *
  * URL: `/races/{raceId}/timing-alerts`
  *
- * Phase 2 minimal viable UI:
- * - Status header (active monitoring + last poll)
- * - Stats by severity
- * - Alerts list grouped by severity với resolve actions
- * - SSE realtime: alerts mới push trực tiếp + sound 880Hz cho CRITICAL
- * - Force poll button (debug + race day emergency)
+ * **Refactor 03/05/2026 (Danny user feedback):**
+ * - Tab routing: Cockpit (default) | Alerts | Trao giải
+ * - Cockpit = Hero stats + Course grid + Progression chart + Activity feed
+ * - SSE listener chung cho cả 3 tab — invalidate cả `dashboard-snapshot` +
+ *   `timing-alerts` queries khi có event
+ * - Sound alarm 880Hz CRITICAL giữ nguyên ở root page (không tab-specific)
  *
- * KHÔNG có config form ở page này — link sang `/timing-alerts/config`.
+ * Decisions locked (2026-05-03):
+ * - Auth: LogtoAdminGuard (vào được admin.5bib.com là xem được)
+ * - Multi-day race: 1 dashboard, không tách
+ * - DNF: chỉ flag, không auto-mark
+ * - Anomaly: auto Telegram tới channel riêng (TIMING_ALERT_ANOMALY_CHAT_ID)
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   getTimingAlertConfig,
-  listTimingAlerts,
-  patchTimingAlert,
   forcePollTimingAlert,
+  resetRaceData,
   timingAlertSseUrl,
-  type TimingAlert,
-  type TimingAlertSeverity,
-  type TimingAlertStatus,
 } from '@/lib/timing-alert-api';
+import { CockpitTab } from './components/CockpitTab';
+import { AlertsTab } from './components/AlertsTab';
+import { PodiumTab } from './components/PodiumTab';
 
-const SEVERITY_COLORS: Record<TimingAlertSeverity, string> = {
-  CRITICAL: 'bg-red-100 text-red-800 border-red-300',
-  HIGH: 'bg-orange-100 text-orange-800 border-orange-300',
-  WARNING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  INFO: 'bg-blue-100 text-blue-800 border-blue-300',
-};
+type TabKey = 'cockpit' | 'alerts' | 'podium';
 
-const SEVERITY_ORDER: TimingAlertSeverity[] = [
-  'CRITICAL',
-  'HIGH',
-  'WARNING',
-  'INFO',
-];
+const VALID_TABS: TabKey[] = ['cockpit', 'alerts', 'podium'];
 
 export default function TimingAlertsPage() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const raceId = String(
     Array.isArray(params?.id) ? params.id[0] : (params?.id ?? ''),
   );
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const qc = useQueryClient();
 
-  const [statusFilter, setStatusFilter] = useState<TimingAlertStatus>('OPEN');
+  // Tab state — sync với URL `?tab=`
+  const tabFromQuery = searchParams?.get('tab') as TabKey | null;
+  const initialTab: TabKey =
+    tabFromQuery && VALID_TABS.includes(tabFromQuery) ? tabFromQuery : 'cockpit';
+  const [tab, setTab] = useState<TabKey>(initialTab);
+
+  // Replace URL khi tab thay đổi (no scroll, no history bloat)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('tab') !== tab) {
+      sp.set('tab', tab);
+      router.replace(`/races/${raceId}/timing-alerts?${sp.toString()}`, {
+        scroll: false,
+      });
+    }
+  }, [tab, raceId, router]);
+
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   const config = useQuery({
@@ -66,20 +89,32 @@ export default function TimingAlertsPage() {
     enabled: isAuthenticated && !!raceId,
   });
 
-  const alerts = useQuery({
-    queryKey: ['timing-alerts', raceId, statusFilter],
-    queryFn: () => listTimingAlerts(raceId, { status: statusFilter, pageSize: 100 }),
-    enabled: isAuthenticated && !!raceId,
-    refetchInterval: 30_000,
-  });
-
   const [forcePollMessage, setForcePollMessage] = useState<string | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetIncludeResults, setResetIncludeResults] = useState(true);
+  const reset = useMutation({
+    mutationFn: () => resetRaceData(raceId, resetIncludeResults),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+      qc.invalidateQueries({ queryKey: ['podium', raceId] });
+      setForcePollMessage(
+        `🧹 Reset xong: ${data.alertsDeleted} alerts, ${data.pollsDeleted} poll logs, ${data.raceResultsDeleted} results, ${data.redisKeysDeleted} cache keys xóa`,
+      );
+      setTimeout(() => setForcePollMessage(null), 6000);
+      setResetOpen(false);
+    },
+    onError: (err: Error) => {
+      setForcePollMessage(`❌ Reset fail: ${err.message}`);
+      setTimeout(() => setForcePollMessage(null), 6000);
+    },
+  });
 
   const forcePoll = useMutation({
     mutationFn: () => forcePollTimingAlert(raceId),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
-      // UX feedback — hiển thị result poll cho admin biết
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
       const courses = data.courses ?? [];
       const created = courses.reduce((s, c) => s + c.alerts_created, 0);
       const resolved = courses.reduce((s, c) => s + c.alerts_resolved, 0);
@@ -88,7 +123,7 @@ export default function TimingAlertsPage() {
       const parts: string[] = [];
       if (created > 0) parts.push(`+${created} alerts mới`);
       if (resolved > 0) parts.push(`-${resolved} resolved`);
-      if (skipped > 0) parts.push(`${skipped} course skip (cron đang chạy)`);
+      if (skipped > 0) parts.push(`${skipped} course skip`);
       if (failed > 0) parts.push(`${failed} FAILED`);
       setForcePollMessage(
         parts.length > 0 ? parts.join(', ') : 'Poll OK, không có thay đổi',
@@ -101,18 +136,7 @@ export default function TimingAlertsPage() {
     },
   });
 
-  const resolveAction = useMutation({
-    mutationFn: (input: {
-      alertId: string;
-      action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN';
-      note: string;
-    }) => patchTimingAlert(raceId, input.alertId, input),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
-    },
-  });
-
-  // ─────────── SSE realtime ───────────
+  // ─────────── SSE realtime — listener chung cho mọi tab ───────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -120,61 +144,56 @@ export default function TimingAlertsPage() {
     const url = timingAlertSseUrl(raceId);
     const es = new EventSource(url, { withCredentials: true });
 
+    const invalidateAll = () => {
+      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+    };
+
     es.addEventListener('alert.created', (evt: MessageEvent) => {
       try {
         const data = JSON.parse(evt.data);
         if (soundEnabled && data.severity === 'CRITICAL') {
           playAlarm();
-          if (Notification.permission === 'granted') {
+          if (
+            typeof Notification !== 'undefined' &&
+            Notification.permission === 'granted'
+          ) {
             new Notification(`🔴 CRITICAL — BIB ${data.bib_number}`, {
               body: `${data.athlete_name ?? ''} miss ${data.missing_point}`,
             });
           }
         }
-        qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+        invalidateAll();
       } catch {
         /* ignore malformed event */
       }
     });
 
-    es.addEventListener('alert.resolved', () => {
-      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
-    });
-
-    es.addEventListener('alert.updated', () => {
-      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+    es.addEventListener('alert.resolved', invalidateAll);
+    es.addEventListener('alert.updated', invalidateAll);
+    es.addEventListener('poll.completed', () => {
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+      qc.invalidateQueries({ queryKey: ['podium', raceId] });
     });
 
     es.onerror = () => {
-      // EventSource auto-reconnects unless `es.close()`. Browser handles backoff.
+      // EventSource auto-reconnects unless es.close()
     };
 
     return () => es.close();
   }, [raceId, isAuthenticated, soundEnabled, qc]);
 
-  // Browser notification permission prompt khi user enable sound
+  // Browser notification permission prompt
   useEffect(() => {
-    if (soundEnabled && 'Notification' in window && Notification.permission === 'default') {
+    if (
+      soundEnabled &&
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'default'
+    ) {
       Notification.requestPermission().catch(() => undefined);
     }
   }, [soundEnabled]);
-
-  // CRITICAL: useMemo PHẢI gọi UNCONDITIONALLY trước mọi early return
-  // (Rules of Hooks). Bug đã từng: gọi sau `if (!config.data) return ...`
-  // → "Rendered more hooks than during the previous render" khi config
-  // chuyển từ pending → loaded.
-  const alertsByGroup = useMemo(() => {
-    const grouped: Record<TimingAlertSeverity, TimingAlert[]> = {
-      CRITICAL: [],
-      HIGH: [],
-      WARNING: [],
-      INFO: [],
-    };
-    for (const a of alerts.data?.items ?? []) {
-      grouped[a.severity].push(a);
-    }
-    return grouped;
-  }, [alerts.data]);
 
   // ─────────── UI ───────────
   if (authLoading) return <Skeleton className="h-64 w-full" />;
@@ -195,8 +214,10 @@ export default function TimingAlertsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-stone-600">
-              Cấu hình RaceResult API key + course checkpoints để bật phát hiện
-              miss timing realtime cho race này.
+              Cấu hình behavior knobs (poll interval, ngưỡng overdue, top N
+              CRITICAL) để bật phát hiện miss timing realtime cho race này.
+              Race-domain config (apiUrl, checkpoints, cutoff) đọc trực tiếp
+              từ race document — không cần config 2 lần.
             </p>
             <Link href={`/races/${raceId}/timing-alerts/config`}>
               <Button>Tạo cấu hình</Button>
@@ -207,53 +228,16 @@ export default function TimingAlertsPage() {
     );
   }
 
-  const totalOpen = alerts.data?.stats.open_count ?? 0;
-  const criticalOpen = alertsByGroup.CRITICAL.filter((a) => a.status === 'OPEN').length;
-
   return (
     <div className="space-y-4">
       {/* ─── Page header ─── */}
       <div>
-        <h1 className="text-2xl font-bold">⚠ Timing Miss Alert</h1>
+        <h1 className="text-2xl font-bold">⚠ Race Timing Operation</h1>
         <p className="text-sm text-stone-600">
-          Phát hiện VĐV miss timing point realtime. Poll RaceResult API mỗi {config.data.poll_interval_seconds}s.
+          Theo dõi giải đấu realtime — VĐV đang chạy, suspect chip miss, mat
+          failure. Poll mỗi {config.data.poll_interval_seconds}s.
         </p>
       </div>
-
-      {/* ─── Help banner (collapsible UX intro) ─── */}
-      {totalOpen > 0 && criticalOpen > 0 && (
-        <Card className="border-red-300 bg-red-50">
-          <CardContent className="p-4 text-sm">
-            <p className="font-semibold text-red-900">
-              🔴 Cần xử lý ngay — {criticalOpen} CRITICAL alerts đang OPEN
-            </p>
-            <p className="mt-1 text-stone-700">
-              <strong>Quy trình:</strong>
-              <span className="ml-2">
-                (1) Verify với BTC qua radio/Zalo (chip miss thật hay vendor lag?)
-                <span className="mx-1">→</span>
-                (2) Click <strong>Resolve</strong> nếu xác nhận đã finish (manual add Finish vào RR), hoặc
-                <strong> False alarm</strong> nếu DNF confirmed
-                <span className="mx-1">→</span>
-                (3) Note PHẢI ghi rõ lý do (audit trail)
-              </span>
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {totalOpen === 0 && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="p-4 text-sm">
-            <p>
-              <strong>📖 Hướng dẫn nhanh:</strong> Trang này hiển thị VĐV bị miss
-              timing point thời gian thực. Hệ thống auto-detect, anh chỉ cần verify
-              + resolve. Khi có alert mới CRITICAL, chuông sẽ kêu (cần click 🔊 Sound
-              ON 1 lần để cấp permission browser).
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* ─── Status header ─── */}
       <Card>
@@ -291,28 +275,29 @@ export default function TimingAlertsPage() {
               size="sm"
               onClick={() => forcePoll.mutate()}
               disabled={forcePoll.isPending}
-              title="Trigger 1 poll cycle ngay (bypass cron 30s) — debug + race day emergency"
+              title="Trigger 1 poll cycle ngay (bypass cron 30s)"
             >
-              {forcePoll.isPending ? 'Polling...' : '🔄 Force poll ngay'}
+              {forcePoll.isPending ? 'Polling...' : '🔄 Force poll'}
             </Button>
             <Link href={`/races/${raceId}/timing-alerts/config`}>
-              <Button
-                variant="outline"
-                size="sm"
-                title="Xem/sửa RR API keys, checkpoints, cutoff, polling interval"
-              >
+              <Button variant="outline" size="sm">
                 ⚙ Config
               </Button>
             </Link>
             <Link href={`/races/${raceId}/timing-alerts/poll-logs`}>
-              <Button
-                variant="outline"
-                size="sm"
-                title="Audit log mỗi poll cycle (debug + post-race retrospective)"
-              >
+              <Button variant="outline" size="sm">
                 📋 Poll logs
               </Button>
             </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setResetOpen(true)}
+              className="border-red-300 text-red-700 hover:bg-red-50"
+              title="Xóa alerts + poll logs + cache để re-test (giữ config + race document)"
+            >
+              🧹 Reset test data
+            </Button>
           </div>
         </CardContent>
         {forcePollMessage && (
@@ -322,72 +307,72 @@ export default function TimingAlertsPage() {
         )}
       </Card>
 
-      {/* ─── Stats by severity ─── */}
-      {alerts.data?.stats && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {SEVERITY_ORDER.map((sev) => (
-            <Card key={sev} className={SEVERITY_COLORS[sev].split(' ')[0]}>
-              <CardContent className="p-4">
-                <div className={`text-xs font-semibold ${SEVERITY_COLORS[sev]}`}>
-                  {sev}
-                </div>
-                <div className="mt-1 text-2xl font-bold">
-                  {alerts.data.stats.by_severity[sev]}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      {/* ─── Tabs ─── */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+        <TabsList>
+          <TabsTrigger value="cockpit">🎯 Cockpit</TabsTrigger>
+          <TabsTrigger value="alerts">⚠ Alerts</TabsTrigger>
+          <TabsTrigger value="podium">🏆 Trao giải</TabsTrigger>
+        </TabsList>
 
-      {/* ─── Filter ─── */}
-      <div className="flex gap-2">
-        {(['OPEN', 'RESOLVED', 'FALSE_ALARM'] as TimingAlertStatus[]).map((s) => (
-          <Button
-            key={s}
-            variant={statusFilter === s ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter(s)}
-          >
-            {s}
-          </Button>
-        ))}
-      </div>
+        <TabsContent value="cockpit" className="mt-4">
+          <CockpitTab raceId={raceId} />
+        </TabsContent>
 
-      {/* ─── Alert list grouped ─── */}
-      {alerts.isLoading ? (
-        <Skeleton className="h-64 w-full" />
-      ) : (
-        SEVERITY_ORDER.map((sev) => {
-          const list = alertsByGroup[sev];
-          if (list.length === 0) return null;
-          return (
-            <Card key={sev}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Badge className={SEVERITY_COLORS[sev]}>{sev}</Badge>
-                  <span className="text-base">{list.length} alerts</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {list.map((alert) => (
-                  <AlertRow
-                    key={alert._id}
-                    alert={alert}
-                    onAction={(action, note) =>
-                      resolveAction.mutate({ alertId: alert._id, action, note })
-                    }
-                    busy={resolveAction.isPending}
-                  />
-                ))}
-              </CardContent>
-            </Card>
-          );
-        })
-      )}
+        <TabsContent value="alerts" className="mt-4">
+          <AlertsTab raceId={raceId} />
+        </TabsContent>
 
-      {/* Hidden audio element for alarm — Web Audio bypasses HTML element complexity */}
+        <TabsContent value="podium" className="mt-4">
+          <PodiumTab raceId={raceId} />
+        </TabsContent>
+      </Tabs>
+
+      {/* Hidden audio element — Web Audio bypasses HTML element complexity */}
       <audio ref={audioRef} preload="auto" />
+
+      {/* Reset confirmation dialog */}
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🧹 Reset test data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Xóa toàn bộ data test cho race này. KHÔNG xóa config + race
+              document — anh chạy lại ngay sau reset.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 px-6 pb-4 text-sm">
+            <ul className="ml-5 list-disc text-stone-700">
+              <li>Tất cả timing alerts (mọi severity, mọi status)</li>
+              <li>Tất cả poll logs (audit history)</li>
+              <li>Redis cache: dashboard snapshot, podium, anomaly rate-limit</li>
+            </ul>
+            <label className="mt-3 flex cursor-pointer items-center gap-2 rounded border border-stone-200 bg-stone-50 p-2">
+              <Checkbox
+                checked={resetIncludeResults}
+                onCheckedChange={(c) => setResetIncludeResults(!!c)}
+              />
+              <span>
+                <strong>Xóa luôn race_results</strong> (synced từ
+                RR/simulator) — recommend ON khi đổi simulation
+              </span>
+            </label>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reset.isPending}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                reset.mutate();
+              }}
+              disabled={reset.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {reset.isPending ? 'Đang xóa...' : 'Reset ngay'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -396,7 +381,9 @@ export default function TimingAlertsPage() {
 
 function playAlarm(): void {
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const ctx = new (window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.frequency.value = 880;
@@ -411,93 +398,4 @@ function playAlarm(): void {
   } catch {
     /* browser blocked autoplay — user must interact first */
   }
-}
-
-// ─────────── Alert row ───────────
-
-function AlertRow({
-  alert,
-  onAction,
-  busy,
-}: {
-  alert: TimingAlert;
-  onAction: (action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN', note: string) => void;
-  busy: boolean;
-}) {
-  const [note, setNote] = useState('');
-
-  return (
-    <div className="rounded-md border border-stone-200 bg-white p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex-1 min-w-[300px]">
-          <div className="flex items-center gap-2">
-            <span className="text-base font-bold">BIB {alert.bib_number}</span>
-            <span className="text-sm">·</span>
-            <span className="text-sm text-stone-600">{alert.contest}</span>
-            <span className="text-sm">·</span>
-            <span className="text-sm text-stone-600">{alert.age_group}</span>
-            <span className="text-sm">·</span>
-            <span className="text-sm font-medium">
-              {alert.athlete_name ?? '?'}
-            </span>
-          </div>
-          <div className="mt-1 text-sm text-stone-700">
-            Last seen <strong>{alert.last_seen_point}</strong> (
-            {alert.last_seen_time}) → Miss <strong>{alert.missing_point}</strong>
-          </div>
-          {alert.projected_finish_time && (
-            <div className="mt-1 text-sm text-stone-700">
-              Projected finish: <strong>{alert.projected_finish_time}</strong>
-              {alert.projected_age_group_rank !== null &&
-                ` · Top ${alert.projected_age_group_rank} age group`}
-              {alert.projected_overall_rank !== null &&
-                ` / ${alert.projected_overall_rank} overall`}
-              {alert.projected_confidence !== null &&
-                ` · ${Math.round((alert.projected_confidence ?? 0) * 100)}% conf`}
-            </div>
-          )}
-          {alert.reason && (
-            <div className="mt-1 text-xs text-stone-500">{alert.reason}</div>
-          )}
-        </div>
-        {alert.status === 'OPEN' && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Resolution note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="rounded border border-stone-300 px-2 py-1 text-sm"
-            />
-            <Button
-              size="sm"
-              variant="default"
-              disabled={busy || !note.trim()}
-              onClick={() => onAction('RESOLVE', note.trim())}
-            >
-              ✅ Resolve
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || !note.trim()}
-              onClick={() => onAction('FALSE_ALARM', note.trim())}
-            >
-              ❌ False alarm
-            </Button>
-          </div>
-        )}
-        {alert.status !== 'OPEN' && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onAction('REOPEN', 'Reopen')}
-          >
-            ↩ Reopen
-          </Button>
-        )}
-      </div>
-    </div>
-  );
 }
