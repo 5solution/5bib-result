@@ -18,6 +18,7 @@ import { CertificatesModule } from './certificates/certificates.module';
 import { UsersModule } from './users/users.module';
 import { AthleteStarsModule } from './athlete-stars/athlete-stars.module';
 import { TimingModule } from './timing/timing.module';
+import { TimingAlertModule } from './timing-alert/timing-alert.module';
 import { EventTrackingModule } from './event-tracking/event-tracking.module';
 import { SponsoredModule } from './sponsored/sponsored.module';
 import { ArticlesModule } from './articles/articles.module';
@@ -97,6 +98,11 @@ const platformDbModules = env.platformDb.host
     ]
   : [];
 
+// Timing Miss Alert v1.0 — Mongo-native, no MySQL dependency.
+// Manager refactor 03/05: drop encryption key (race document apiUrl plaintext).
+// Module always loaded — feature flag qua per-race `enabled` field trong config.
+const timingAlertModules = [TimingAlertModule];
+
 // Conditional: chỉ khởi tạo Volunteer DB + Team Management module nếu VOLUNTEER_DB_HOST được cung cấp
 const volunteerDbModules = env.volunteerDb.host
   ? [
@@ -148,6 +154,7 @@ const volunteerDbModules = env.volunteerDb.host
     }),
     ...platformDbModules,
     ...volunteerDbModules,
+    ...timingAlertModules,
     RacesModule,
     RaceResultModule,
     AdminModule,

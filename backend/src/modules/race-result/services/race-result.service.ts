@@ -3,7 +3,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Model } from 'mongoose';
 import Redis from 'ioredis';
-import axios from 'axios';
 import { RaceResult, RaceResultDocument } from '../schemas/race-result.schema';
 import { SyncLog, SyncLogDocument } from '../schemas/sync-log.schema';
 import {
@@ -17,38 +16,9 @@ import { TelegramService } from '../../notification/telegram.service';
 import { MailService } from '../../notification/mail.service';
 import { UploadService } from '../../upload/upload.service';
 import { parseDistanceKm } from './badge.service';
+import { RaceResultApiService } from './race-result-api.service';
+import { RaceResultApiItem } from '../types/race-result-api.types';
 import * as crypto from 'crypto';
-
-interface RaceResultApiItem {
-  Bib: number;
-  Name: string;
-  OverallRank: number;
-  GenderRank: number;
-  CatRank: number;
-  Gender: string;
-  Category: string;
-  ChipTime: string;
-  GunTime: string;
-  TimingPoint: string;
-  Pace: string;
-  Certi: string;
-  Certificate: string;
-  OverallRanks: string;
-  GenderRanks: string;
-  Chiptimes: string;
-  Guntimes: string;
-  Paces: string;
-  TODs: string;
-  Sectors: string;
-  OverrankLive: number;
-  Gap: string;
-  Nationality: string;
-  Nation: string;
-  Member?: string;
-  Started?: number;
-  Finished?: number;
-  DNF?: number;
-}
 
 @Injectable()
 export class RaceResultService {
@@ -65,6 +35,7 @@ export class RaceResultService {
     private readonly telegramService: TelegramService,
     private readonly mailService: MailService,
     private readonly uploadService: UploadService,
+    private readonly apiService: RaceResultApiService,
     @InjectRedis() private readonly redis: Redis,
   ) { }
 
@@ -286,18 +257,19 @@ export class RaceResultService {
   ): Promise<number> {
     this.logger.log(`Syncing ${distance} race results from ${apiUrl}...`);
 
-    const response = await axios.get<RaceResultApiItem[]>(apiUrl, {
-      timeout: 30000,
-    });
+    // Phase 0 refactor: HTTP fetch delegated to shared `RaceResultApiService`.
+    // Service handles: axios timeout 30s, non-array body guard, error logging
+    // with API key masked. Throws Error nếu fetch fail → caller's try/catch
+    // marks sync FAILED + records errorMessage as before.
+    const data = await this.apiService.fetchRaceResults(apiUrl);
 
-    if (!response.data || !Array.isArray(response.data)) {
-      this.logger.warn(
-        `Invalid data received for ${distance}: ${typeof response.data}`,
-      );
-      return 0;
+    if (data.length === 0) {
+      // Vendor có thể trả empty array (race chưa có data) hoặc non-array body
+      // (đã được service log warn). Behavior cũ: bulkOps rỗng → return 0.
+      // KHÔNG log lại ở đây để tránh duplicate noise.
     }
 
-    const bulkOps = response.data.map((result, idx) => {
+    const bulkOps = data.map((result, idx) => {
       const overallRank = this.normalizeRankValue(result.OverallRank, result.TimingPoint);
       const genderRank = this.normalizeRankValue(result.GenderRank, result.TimingPoint);
       const catRank = this.normalizeRankValue(result.CatRank, result.TimingPoint);

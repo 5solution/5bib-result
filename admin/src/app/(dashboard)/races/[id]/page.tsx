@@ -66,6 +66,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
+import { DiscoverPreviewPanel } from "./components/DiscoverPreviewPanel";
 import {
   ArrowLeft,
   Plus,
@@ -707,6 +708,12 @@ export default function RaceDetailPage() {
             Chip Verify
           </Button>
         </Link>
+        <Link href={`/races/${raceId}/timing-alerts`}>
+          <Button variant="outline" size="sm">
+            <ShieldAlert className="size-4 mr-1.5" />
+            Timing Alerts
+          </Button>
+        </Link>
         <Link href={`/races/${raceId}/results`}>
           <Button variant="outline" size="sm">
             <Pencil className="size-4 mr-1.5" />
@@ -1226,6 +1233,17 @@ export default function RaceDetailPage() {
                           placeholder="https://my.raceresult.com/api/results?contest=708"
                         />
                       </div>
+
+                      {/* Phase B FEATURE-001: Discover preview inline */}
+                      {editingCourse && courseForm.apiUrl && (
+                        <DiscoverPreviewPanel
+                          raceId={raceId}
+                          courseId={editingCourse.courseId}
+                          courseName={editingCourse.name}
+                          apiUrl={courseForm.apiUrl}
+                          existingCheckpoints={courseForm.checkpoints || []}
+                        />
+                      )}
                     </TabsContent>
 
                     {/* ── Tab 2: Thông tin ── */}

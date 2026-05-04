@@ -32,6 +32,7 @@ import {
   Tags,
   KeyRound,
   Bug,
+  Film,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo5bib from "@/components/Logo5bib";
@@ -88,6 +89,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/api-keys", label: "API Keys", icon: KeyRound, badge: "NEW" },
       { href: "/sync-logs", label: "Nhật ký đồng bộ", icon: RefreshCw },
+      { href: "/timing-alert-simulator", label: "Timing Simulator", icon: Film, badge: "NEW" },
     ],
   },
 ];

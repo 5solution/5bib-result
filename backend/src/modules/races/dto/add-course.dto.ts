@@ -27,10 +27,18 @@ export class CourseCheckpointDto {
   @IsString()
   name: string;
 
-  @ApiPropertyOptional({ description: 'Distance label', example: '5K' })
+  @ApiPropertyOptional({ description: 'Distance label (display string)', example: '5K' })
   @IsOptional()
   @IsString()
   distance?: string;
+
+  @ApiPropertyOptional({
+    description: 'Distance in km (numeric, used by timing-alert pace projection)',
+    example: 5.2,
+  })
+  @IsOptional()
+  @IsNumber()
+  distanceKm?: number;
 
   @ApiPropertyOptional({ description: 'Aid station services available at this checkpoint' })
   @IsOptional()

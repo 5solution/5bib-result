@@ -8,6 +8,7 @@ import { ResultClaim, ResultClaimSchema } from './schemas/result-claim.schema';
 import { ShareEvent, ShareEventSchema } from './schemas/share-event.schema';
 import { RaceResultController } from './race-result.controller';
 import { RaceResultService } from './services/race-result.service';
+import { RaceResultApiService } from './services/race-result-api.service';
 import { ResultImageService } from './services/result-image.service';
 import { BadgeService } from './services/badge.service';
 import { RaceSyncCron } from './services/race-sync.cron';
@@ -41,6 +42,7 @@ import { UploadModule } from '../upload/upload.module';
   ],
   controllers: [RaceResultController],
   providers: [
+    RaceResultApiService,
     RaceResultService,
     ResultImageService,
     BadgeService,
@@ -48,6 +50,15 @@ import { UploadModule } from '../upload/upload.module';
     ShareEventService,
     ShareNurtureCron,
   ],
-  exports: [RaceResultService, BadgeService, ShareEventService],
+  // Phase 0 — export `RaceResultApiService` để Timing Alert module reuse
+  // shared HTTP client (axios timeout, error handling, URL masking) thay vì
+  // tự maintain HTTP client riêng. Timing Alert sẽ inject service này
+  // trong poll engine (Phase 1B) qua module imports list.
+  exports: [
+    RaceResultService,
+    RaceResultApiService,
+    BadgeService,
+    ShareEventService,
+  ],
 })
 export class RaceResultModule { }

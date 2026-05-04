@@ -19,7 +19,8 @@ export const CheckpointServicesSchema =
 export class CourseCheckpoint {
   @Prop({ required: true }) key: string; // timing point key, e.g. "TM1", "TM2", "Finish"
   @Prop({ required: true }) name: string; // display name, e.g. "Trạm 1 - Suối Vàng"
-  @Prop() distance?: string; // e.g. "5K"
+  @Prop() distance?: string; // e.g. "5K" — display string (legacy)
+  @Prop({ type: Number }) distanceKm?: number; // 5.0 — numeric km cho pace projection (timing-alert + charts)
   @Prop({ type: CheckpointServicesSchema }) services?: CheckpointServices;
 }
 
