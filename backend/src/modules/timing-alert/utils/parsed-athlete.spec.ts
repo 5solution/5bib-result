@@ -89,8 +89,11 @@ describe('parseRaceResultAthlete', () => {
     const result = parseRaceResultAthlete(item, CHECKPOINTS_42KM);
     expect(result.lastSeenPoint).toBe('TM2');
     expect(result.lastSeenTime).toBe('07:32:11');
-    // Finish in JSON but empty → not "last seen"
-    expect(result.checkpointTimes.Finish).toBe('');
+    // Finish key trong JSON nhưng value="" → mergeTimes filter empty out →
+    // KHÔNG có trong checkpointTimes map (dropped, không phải kept "").
+    // Đây là behavior chuẩn để miss-detector + scenario-engine hoạt động
+    // đúng — checkpoint chưa qua = absent key, không phải empty string.
+    expect(result.checkpointTimes.Finish).toBeUndefined();
   });
 
   it('handles malformed Chiptimes JSON → empty object', () => {

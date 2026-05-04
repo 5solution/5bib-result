@@ -809,3 +809,15 @@ function computeBounds(data: RaceResultApiItem[]): {
   }
   return { earliest, latest };
 }
+
+// ─────────── Test-only exports (FEATURE-002 TD-008 unit test access) ───────────
+// File-local pure functions exposed cho spec test, KHÔNG được dùng ở runtime
+// modules khác. Đặt namespace __test__ để dấu hiệu rõ.
+export const __test__ = {
+  filterAthlete,
+  filterMapField,
+  filterTimesField,
+  deriveScalarsFromTimes,
+  extractVisibleKeysFromJson,
+  safeParseMap,
+};
