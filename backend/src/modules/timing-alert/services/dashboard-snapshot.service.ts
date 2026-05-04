@@ -145,13 +145,19 @@ export class DashboardSnapshotService {
   }
 
   /**
-   * Per-course stats: started/finished/onCourse + leading times.
+   * Per-course stats — Phase 3 fix: đọc Redis cache `live-athletes:{race}:{course}`
+   * trước (timing-alert poll cập nhật mỗi 30s). Fallback sang race_results
+   * collection nếu cache miss (RaceSyncCron 10 phút/cycle).
    *
-   * Query strategy:
-   * - 1 aggregation per race: group by (courseId, timingPoint match Start|Finish)
-   * - count distinct bib + min(chipTimeSeconds) for leader
+   * **Count logic correct:**
+   * - `started` = bibs có time tại Start checkpoint (parse chiptimes JSON)
+   * - `finished` = bibs có time tại Finish checkpoint
+   * - `onCourse` = started - finished
+   * - `leadingChipTime` = min Finish time (sort ASC)
    *
-   * Output empty stats cho course chưa có race_results (race vừa start).
+   * Trước đây count theo `timingPoint` field của race_results document — sai
+   * vì timingPoint = CURRENT state (athlete finish thì timingPoint=Finish,
+   * KHÔNG còn 'Start' nữa) → started count luôn ≈ 0.
    */
   private async computePerCourseStats(
     raceId: string,
@@ -160,21 +166,90 @@ export class DashboardSnapshotService {
     const courses = race.courses ?? [];
     if (courses.length === 0) return [];
 
-    // 1 aggregation lấy tất cả courses cùng lúc
+    return Promise.all(
+      courses.map(async (c) => {
+        const stats = await this.computeOneCourseStats(raceId, c.courseId);
+        return {
+          courseId: c.courseId,
+          name: c.name,
+          distanceKm: typeof c.distanceKm === 'number' ? c.distanceKm : null,
+          cutOffTime: c.cutOffTime ?? null,
+          apiUrl: c.apiUrl ?? null,
+          hasCheckpoints: (c.checkpoints?.length ?? 0) > 0,
+          started: stats.started,
+          finished: stats.finished,
+          onCourse: Math.max(0, stats.started - stats.finished),
+          suspectCount: 0, // filled in later
+          leadingChipTime: stats.leadingChipTime,
+        };
+      }),
+    );
+  }
+
+  /**
+   * Compute 1 course stats — try cache first, fallback DB.
+   */
+  private async computeOneCourseStats(
+    raceId: string,
+    courseId: string,
+  ): Promise<{
+    started: number;
+    finished: number;
+    leadingChipTime: string | null;
+  }> {
+    // Try Redis cache first (live, 5min TTL)
+    const cacheKey = `timing-alert:live-athletes:${raceId}:${courseId}`;
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached) as {
+          athletes: Array<{
+            bib: string;
+            checkpointTimes: Record<string, string>;
+          }>;
+        };
+        let started = 0;
+        let finished = 0;
+        let leadingFinishSeconds: number | null = null;
+        let leadingFinishStr: string | null = null;
+        for (const a of data.athletes) {
+          const startTime = findTimeCi(a.checkpointTimes, 'start');
+          const finishTime = findTimeCi(a.checkpointTimes, 'finish');
+          if (startTime) started += 1;
+          if (finishTime) {
+            finished += 1;
+            const sec = parseTimeToSecondsLocal(finishTime);
+            if (sec !== null && sec > 0 && (leadingFinishSeconds === null || sec < leadingFinishSeconds)) {
+              leadingFinishSeconds = sec;
+              leadingFinishStr = finishTime;
+            }
+          }
+        }
+        return {
+          started,
+          finished,
+          leadingChipTime: leadingFinishStr,
+        };
+      }
+    } catch (err) {
+      this.logger.warn(
+        `[computeOneCourseStats] cache read fail race=${raceId} course=${courseId}: ${(err as Error).message}`,
+      );
+    }
+
+    // Fallback: race_results DB (RaceSyncCron, có thể stale 10 phút)
     type AggRow = {
-      _id: { courseId: string; timingPoint: string };
+      _id: { timingPoint: string };
       bibCount: number;
       leadingChipTime: string | null;
     };
-
     const rows = await this.resultModel
       .aggregate<AggRow>([
-        { $match: { raceId } },
+        { $match: { raceId, courseId } },
         {
           $group: {
-            _id: { courseId: '$courseId', timingPoint: '$timingPoint' },
+            _id: { timingPoint: '$timingPoint' },
             bibCount: { $addToSet: '$bib' },
-            // chipTime chỉ ý nghĩa với Finish records — leader = min chipTime
             leadingChipTime: { $min: '$chipTime' },
           },
         },
@@ -188,41 +263,26 @@ export class DashboardSnapshotService {
       ])
       .exec();
 
-    // Index by courseId
-    const startedByCourse = new Map<string, number>();
-    const finishedByCourse = new Map<string, number>();
-    const leaderByCourse = new Map<string, string | null>();
+    // Total docs = total athletes có ít nhất 1 timing point (= started)
+    const totalDocs = await this.resultModel
+      .countDocuments({ raceId, courseId })
+      .exec();
 
+    let finished = 0;
+    let leadingChipTime: string | null = null;
     for (const row of rows) {
-      const cid = row._id.courseId;
       const tp = (row._id.timingPoint || '').toLowerCase();
-      if (tp === 'start') {
-        startedByCourse.set(cid, row.bibCount);
-      } else if (tp === 'finish') {
-        finishedByCourse.set(cid, row.bibCount);
-        leaderByCourse.set(cid, row.leadingChipTime);
+      if (tp === 'finish') {
+        finished = row.bibCount;
+        leadingChipTime = row.leadingChipTime;
       }
     }
 
-    return courses.map((c) => {
-      const started = startedByCourse.get(c.courseId) ?? 0;
-      const finished = finishedByCourse.get(c.courseId) ?? 0;
-      const onCourse = Math.max(0, started - finished);
-      return {
-        courseId: c.courseId,
-        name: c.name,
-        distanceKm: typeof c.distanceKm === 'number' ? c.distanceKm : null,
-        cutOffTime: c.cutOffTime ?? null,
-        apiUrl: c.apiUrl ?? null,
-        hasCheckpoints: (c.checkpoints?.length ?? 0) > 0,
-        started,
-        finished,
-        onCourse,
-        // suspect filled in later sau khi alertStats có per-course
-        suspectCount: 0,
-        leadingChipTime: leaderByCourse.get(c.courseId) ?? null,
-      };
-    });
+    return {
+      started: totalDocs,
+      finished,
+      leadingChipTime,
+    };
   }
 
   /**
@@ -339,39 +399,69 @@ export class DashboardSnapshotService {
         continue;
       }
 
-      // Lấy 1 record per BIB cho course này — record có chiptimes JSON
-      // (RaceSyncCron stores raw chiptimes string trong field `chiptimes`).
-      // Use distinct bib + first chiptimes non-empty.
-      type Row = { bib: string; chiptimes: string };
-      const rows = await this.resultModel
-        .aggregate<Row>([
-          { $match: { raceId, courseId: course.courseId } },
-          { $sort: { _id: 1 } },
-          {
-            $group: {
-              _id: '$bib',
-              chiptimes: { $first: '$chiptimes' },
-            },
-          },
-          { $project: { _id: 0, bib: '$_id', chiptimes: 1 } },
-        ])
-        .exec();
-
-      // Count keys per checkpoint
+      // Phase 3 fix — Try Redis live cache first (timing-alert poll 30s),
+      // fallback DB (RaceSyncCron 10 phút).
       const keyCounts = new Map<string, number>();
-      for (const row of rows) {
-        const map = parseChiptimesSafe(row.chiptimes);
-        for (const [key, time] of Object.entries(map)) {
-          if (time && typeof time === 'string' && time.trim().length > 0) {
-            keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
+      let totalAthletes = 0;
+      const cacheKey = `timing-alert:live-athletes:${raceId}:${course.courseId}`;
+      let usedCache = false;
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) {
+          const data = JSON.parse(cached) as {
+            athletes: Array<{
+              bib: string;
+              checkpointTimes: Record<string, string>;
+            }>;
+          };
+          totalAthletes = data.athletes.length;
+          for (const a of data.athletes) {
+            for (const [key, time] of Object.entries(a.checkpointTimes)) {
+              if (time && typeof time === 'string' && time.trim().length > 0) {
+                keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
+              }
+            }
+          }
+          usedCache = true;
+        }
+      } catch {
+        // fall through to DB
+      }
+
+      if (!usedCache) {
+        // Fallback DB
+        type Row = { bib: string; chiptimes: string };
+        const rows = await this.resultModel
+          .aggregate<Row>([
+            { $match: { raceId, courseId: course.courseId } },
+            { $sort: { _id: 1 } },
+            {
+              $group: {
+                _id: '$bib',
+                chiptimes: { $first: '$chiptimes' },
+              },
+            },
+            { $project: { _id: 0, bib: '$_id', chiptimes: 1 } },
+          ])
+          .exec();
+        totalAthletes = rows.length;
+        for (const row of rows) {
+          const map = parseChiptimesSafe(row.chiptimes);
+          for (const [key, time] of Object.entries(map)) {
+            if (time && typeof time === 'string' && time.trim().length > 0) {
+              keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
+            }
           }
         }
       }
 
-      // Started = athletes có time tại checkpoint đầu (Start usually) HOẶC
-      // ít nhất 1 checkpoint time (athlete đã xuất hiện trên course)
+      // Started = athletes có time tại Start HOẶC nếu Start không count được
+      // (vendor không emit Start), dùng max keyCounts
       const firstKey = checkpoints[0]?.key;
-      const startedCount = firstKey ? (keyCounts.get(firstKey) ?? rows.length) : rows.length;
+      const startedCount =
+        firstKey && keyCounts.has(firstKey)
+          ? keyCounts.get(firstKey)!
+          : Math.max(0, ...Array.from(keyCounts.values()), totalAthletes);
 
       const points: CheckpointPointDto[] = checkpoints.map((cp, idx) => {
         const passed = keyCounts.get(cp.key) ?? 0;
@@ -535,5 +625,29 @@ function parseChiptimesSafe(raw: unknown): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+/** Find time string trong checkpointTimes map case-insensitive theo key. */
+function findTimeCi(
+  map: Record<string, string>,
+  matchKey: string,
+): string | null {
+  const lower = matchKey.toLowerCase();
+  for (const [k, v] of Object.entries(map)) {
+    if (k.toLowerCase() === lower) {
+      const trimmed = (v || '').trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+  }
+  return null;
+}
+
+/** Local copy parseTimeToSeconds — tránh re-import từ utils gây circular. */
+function parseTimeToSecondsLocal(time: string): number | null {
+  const parts = time.trim().split(':').map((p) => parseInt(p, 10));
+  if (parts.some(isNaN)) return null;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return null;
 }
 

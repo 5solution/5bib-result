@@ -63,42 +63,62 @@ export function CockpitTab({ raceId }: { raceId: string }) {
   const { raceStats, courses, checkpointProgression, recentActivity } =
     snapshot.data;
 
+  const generatedAt = snapshot.data.generatedAt;
+  const elapsedSec = generatedAt
+    ? Math.floor((Date.now() - new Date(generatedAt).getTime()) / 1000)
+    : 0;
+
   return (
     <div className="space-y-4">
+      {/* Data freshness indicator */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+        <span>
+          📊 Data live từ timing-alert poll cache (cập nhật mỗi 30s).{' '}
+          {elapsedSec < 60
+            ? `Snapshot ${elapsedSec}s trước`
+            : `Snapshot ${Math.floor(elapsedSec / 60)} phút trước`}
+        </span>
+        <span className="text-blue-700">
+          Auto-refresh 30s + push qua SSE
+        </span>
+      </div>
+
       {/* ─── Section 1: Hero Stats ─── */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <HeroCard
-          label="Started"
+          label="VĐV xuất phát"
           value={raceStats.started.toLocaleString('vi-VN')}
           accent="blue"
+          subtitle="có time tại Start"
         />
         <HeroCard
-          label="Finished"
+          label="VĐV về đích"
           value={raceStats.finished.toLocaleString('vi-VN')}
           accent="green"
-          subtitle={`${(raceStats.progress * 100).toFixed(1)}% progress`}
+          subtitle={`${(raceStats.progress * 100).toFixed(1)}% xong`}
         />
         <HeroCard
-          label="On-course"
+          label="Đang trên đường"
           value={raceStats.onCourse.toLocaleString('vi-VN')}
           accent="amber"
-          subtitle="đang trên đường"
+          subtitle="started − finished"
         />
         <HeroCard
-          label="Suspect"
+          label="Nghi vấn miss chip"
           value={raceStats.suspectOpen.toString()}
           accent={raceStats.criticalOpen > 0 ? 'red' : 'stone'}
           subtitle={
             raceStats.criticalOpen > 0
               ? `${raceStats.criticalOpen} CRITICAL`
-              : 'no critical'
+              : 'không có CRITICAL'
           }
         />
         <HeroCard
-          label="Race progress"
+          label="Tiến độ giải"
           value={`${(raceStats.progress * 100).toFixed(0)}%`}
           accent="stone"
           progressBar={raceStats.progress}
+          subtitle="finished / started"
         />
       </div>
 
@@ -223,9 +243,9 @@ function CourseCard({
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
         <div className="grid grid-cols-3 gap-2 text-sm">
-          <Mini label="Started" value={course.started} />
-          <Mini label="Finished" value={course.finished} accent="green" />
-          <Mini label="On-course" value={course.onCourse} accent="amber" />
+          <Mini label="Xuất phát" value={course.started} />
+          <Mini label="Về đích" value={course.finished} accent="green" />
+          <Mini label="Đang chạy" value={course.onCourse} accent="amber" />
         </div>
 
         <div className="h-2 w-full overflow-hidden rounded bg-stone-200">
@@ -326,8 +346,15 @@ function ProgressionRow({
       </CardHeader>
       <CardContent>
         {progression.points.length === 0 ? (
-          <div className="text-sm text-stone-500">
-            Chưa có checkpoint config. Click Auto-derive ở card trên.
+          <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            ⚠ Course chưa config checkpoints. Click <strong>🪄 Auto-derive</strong>{' '}
+            ở card cự ly bên trên.
+          </div>
+        ) : progression.startedCount === 0 ? (
+          <div className="rounded border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">
+            ⏳ Chưa có athlete nào qua điểm nào — race chưa bắt đầu HOẶC
+            simulation chưa Play. Đợi 30s sau khi simulator Play để timing-alert
+            poll fetch data.
           </div>
         ) : (
           /* B3 — overflow-x-auto + min-width đảm bảo chart không vỡ trên tablet/phone */

@@ -247,7 +247,13 @@ export class TimingAlertPollService {
         .map((a) => parseRaceResultAthlete(a, checkpoints))
         .filter((a) => a.bib && a.bib !== '0');
 
-      // 4. Detect phantoms + upsert alerts
+      // 4. Cache live athletes snapshot vào Redis cho dashboard.
+      // RaceSyncCron chỉ chạy 10 phút/lần → race_results stale.
+      // Dashboard đọc cache này (TTL 5 phút) để hiển thị data live trong 30s
+      // poll cycle, không phụ thuộc RaceSyncCron.
+      await this.cacheLiveAthletes(raceId, courseId, parsed, checkpoints);
+
+      // 5. Detect phantoms + upsert alerts
       let alertsCreated = 0;
       let alertsUnchanged = 0;
       const detectedBibs = new Set<string>();
@@ -372,6 +378,57 @@ export class TimingAlertPollService {
       return { status: 'FAILED', alerts_created: 0, alerts_resolved: 0, error: message };
     } finally {
       await this.redis.del(lockKey);
+    }
+  }
+
+  /**
+   * Phase 3 (UX fix race day) — cache parsed athletes vào Redis sau mỗi
+   * pollCourse. Dashboard cockpit đọc cache này (TTL 5 phút) để có data
+   * live trong 30s, không phụ thuộc RaceSyncCron (10 phút/cycle = stale
+   * 10 phút).
+   *
+   * **Shape:** array minimal cho mỗi athlete:
+   * `{ bib, fullName, contest, ageGroup, lastSeenPoint, chiptimes: { key→time } }`
+   *
+   * Dashboard parse trực tiếp chiptimes object để count started/finished/
+   * checkpoint progression.
+   *
+   * **Why not store in Mongo?** Cache thuần read-only render, không cần
+   * persist. Redis SET với TTL = max(poll_interval × 2, 5 phút) đảm bảo
+   * fresh nhưng survive race day reload backend.
+   */
+  private async cacheLiveAthletes(
+    raceId: string,
+    courseId: string,
+    parsedAthletes: ParsedAthlete[],
+    checkpoints: CourseCheckpoint[],
+  ): Promise<void> {
+    const cacheKey = `timing-alert:live-athletes:${raceId}:${courseId}`;
+    const minimal = parsedAthletes.map((a) => ({
+      bib: a.bib,
+      name: a.fullName,
+      contest: a.contest,
+      ageGroup: a.ageGroup,
+      lastSeenPoint: a.lastSeenPoint,
+      lastSeenTime: a.lastSeenTime,
+      checkpointTimes: a.checkpointTimes,
+    }));
+    try {
+      await this.redis.set(
+        cacheKey,
+        JSON.stringify({
+          checkpointKeys: checkpoints.map((c) => c.key),
+          athletes: minimal,
+          cachedAt: new Date().toISOString(),
+        }),
+        'EX',
+        300, // 5 phút TTL
+      );
+    } catch (err) {
+      // Cache fail KHÔNG block poll cycle
+      this.logger.warn(
+        `[cacheLiveAthletes] race=${raceId} course=${courseId} err=${(err as Error).message}`,
+      );
     }
   }
 
