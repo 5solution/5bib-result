@@ -284,10 +284,12 @@ function applyLateFinisher(
   simCourseId: string,
 ): { newWorking: RaceResultApiItem[]; affected: number } {
   const shiftSec = (scenario.shiftMinutes ?? 30) * 60;
+  // Eligible nếu CHIP hoặc GUN có Finish (post-merge sẽ thấy)
   const eligible = items
     .map((it, idx) => {
-      const map = parseChiptimes(it.Chiptimes);
-      return findKeyCi(map, 'finish') ? idx : null;
+      const chip = parseChiptimes(it.Chiptimes);
+      const gun = parseChiptimes(it.Guntimes);
+      return findKeyCi(chip, 'finish') || findKeyCi(gun, 'finish') ? idx : null;
     })
     .filter((idx): idx is number => idx !== null);
 
@@ -300,13 +302,27 @@ function applyLateFinisher(
   const targetSet = new Set(targets);
   const newWorking = items.map((it, idx) => {
     if (!targetSet.has(idx)) return it;
-    const map = parseChiptimes(it.Chiptimes);
-    const finishKey = findKeyCi(map, 'finish');
-    if (!finishKey) return it;
-    const sec = parseTimeToSeconds(map[finishKey]);
-    if (sec === null) return it;
-    map[finishKey] = secondsToHms(sec + shiftSec);
-    return { ...it, Chiptimes: JSON.stringify(map) };
+    // Shift Finish trong CẢ Chiptimes + Guntimes (parser merge cả 2 →
+    // nếu chỉ shift 1, parser sẽ priority Chiptimes, có thể skip Guntimes shift)
+    const chip = parseChiptimes(it.Chiptimes);
+    const gun = parseChiptimes(it.Guntimes);
+    const chipKey = findKeyCi(chip, 'finish');
+    const gunKey = findKeyCi(gun, 'finish');
+
+    if (chipKey) {
+      const sec = parseTimeToSeconds(chip[chipKey]);
+      if (sec !== null) chip[chipKey] = secondsToHms(sec + shiftSec);
+    }
+    if (gunKey) {
+      const sec = parseTimeToSeconds(gun[gunKey]);
+      if (sec !== null) gun[gunKey] = secondsToHms(sec + shiftSec);
+    }
+
+    return {
+      ...it,
+      Chiptimes: JSON.stringify(chip),
+      Guntimes: JSON.stringify(gun),
+    };
   });
   return { newWorking, affected: targetSet.size };
 }
@@ -360,23 +376,43 @@ function isMatchCi(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
 
+/**
+ * Drop key khỏi CẢ Chiptimes + Guntimes — symmetric strip.
+ *
+ * **Why both:** scenarios test miss-detection cho timing-alert poll.
+ * `parseRaceResultAthlete` (utils/parsed-athlete.ts) merge Chiptimes +
+ * Guntimes (Chiptimes priority, Guntimes fallback) → nếu chỉ drop
+ * Chiptimes, Guntimes "rescue" key → poll service vẫn thấy time → scenario
+ * NO-OP.
+ *
+ * Drop both → merged result thực sự thiếu key → scenario có effect đúng.
+ */
 function dropKeyFromItem(
   item: RaceResultApiItem,
   matchKey: string,
 ): RaceResultApiItem {
-  const map = parseChiptimes(item.Chiptimes);
-  const key = findKeyCi(map, matchKey);
-  if (!key) return item;
-  delete map[key];
-  // Recompute TimingPoint = key cuối cùng còn lại (theo time desc)
-  const remaining = Object.entries(map)
+  const chip = parseChiptimes(item.Chiptimes);
+  const gun = parseChiptimes(item.Guntimes);
+
+  const chipKey = findKeyCi(chip, matchKey);
+  if (chipKey) delete chip[chipKey];
+  const gunKey = findKeyCi(gun, matchKey);
+  if (gunKey) delete gun[gunKey];
+
+  if (!chipKey && !gunKey) return item; // key not present in either
+
+  // Recompute TimingPoint = key cuối còn lại theo time desc, từ merged map
+  const merged: Record<string, string> = { ...gun, ...chip }; // chip priority
+  const remaining = Object.entries(merged)
     .map(([k, v]) => ({ k, sec: parseTimeToSeconds(v) ?? -1 }))
     .filter((e) => e.sec > 0);
   remaining.sort((a, b) => b.sec - a.sec);
   const newTimingPoint = remaining[0]?.k ?? '';
+
   return {
     ...item,
-    Chiptimes: JSON.stringify(map),
+    Chiptimes: JSON.stringify(chip),
+    Guntimes: JSON.stringify(gun),
     TimingPoint: newTimingPoint,
   };
 }

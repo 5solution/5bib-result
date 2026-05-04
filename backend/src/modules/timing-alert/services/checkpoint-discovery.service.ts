@@ -81,6 +81,16 @@ const MIN_COVERAGE = 0.8;
 /** Min finishers để derive distance. Dưới ngưỡng → distance null. */
 const MIN_FINISHERS_FOR_DISTANCE = 10;
 
+/**
+ * Sentinel keys vendor đôi khi emit (status flags, không phải timing point thật).
+ * Filter trước khi vào surviving — defense in depth chống miss labeling như
+ * "Finish" implicit nhầm.
+ */
+const SENTINEL_KEYS = new Set([
+  'dns', 'dnf', 'dsq', 'dq', 'withdrawn', 'wd',
+  'status', 'gap', 'rank',
+]);
+
 @Injectable()
 export class CheckpointDiscoveryService {
   private readonly logger = new Logger(CheckpointDiscoveryService.name);
@@ -200,6 +210,8 @@ export class CheckpointDiscoveryService {
       medianTimeSeconds: number;
     }> = [];
     for (const [key, samples] of keyTimes.entries()) {
+      // Filter sentinel keys (DNS/DNF/DSQ/...) — vendor có thể emit như status flag
+      if (SENTINEL_KEYS.has(key.toLowerCase())) continue;
       const coverage = samples.length / denominator;
       if (coverage < MIN_COVERAGE) continue;
       surviving.push({
