@@ -201,11 +201,11 @@ function CreateSimulationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-3xl flex-col overflow-hidden">
+        <DialogHeader className="border-b border-stone-200 pb-3">
           <DialogTitle>Tạo simulation mới</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="flex-1 space-y-3 overflow-y-auto py-2">
           <div>
             <label className="text-sm font-semibold">Tên</label>
             <Input

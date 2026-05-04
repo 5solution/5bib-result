@@ -118,8 +118,8 @@ export function CheckpointDiscoveryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-5xl flex-col overflow-hidden">
+        <DialogHeader className="border-b border-stone-200 pb-3">
           <DialogTitle>🪄 Auto-derive checkpoints — {courseName}</DialogTitle>
           <DialogDescription>
             Hệ thống suy ra timing point từ kết quả RaceResult. Anh review
@@ -127,15 +127,16 @@ export function CheckpointDiscoveryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {discovery.isLoading && <Skeleton className="h-48 w-full" />}
+        <div className="flex-1 overflow-y-auto py-2">
+          {discovery.isLoading && <Skeleton className="h-48 w-full" />}
 
-        {discovery.isError && (
-          <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            ❌ {(discovery.error as Error)?.message ?? 'Discover thất bại'}
-          </div>
-        )}
+          {discovery.isError && (
+            <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              ❌ {(discovery.error as Error)?.message ?? 'Discover thất bại'}
+            </div>
+          )}
 
-        {discovery.data && (
+          {discovery.data && (
           <div className="space-y-4">
             {/* Stats summary */}
             <div className="grid grid-cols-3 gap-3 text-sm">
@@ -256,15 +257,16 @@ export function CheckpointDiscoveryDialog({
               </div>
             )}
           </div>
-        )}
+          )}
 
-        {errMsg && (
-          <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            ❌ {errMsg}
-          </div>
-        )}
+          {errMsg && (
+            <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              ❌ {errMsg}
+            </div>
+          )}
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-stone-200 pt-3">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

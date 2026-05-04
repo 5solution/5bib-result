@@ -65,24 +65,31 @@ export function AlertDetailDialog({ raceId, alertId, open, onOpenChange }: Props
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-6xl flex-col overflow-hidden">
+        <DialogHeader className="border-b border-stone-200 pb-3">
           <DialogTitle>Chi tiết alert</DialogTitle>
           <DialogDescription>
             Trajectory + audit log của VĐV bị flag miss timing.
           </DialogDescription>
         </DialogHeader>
 
-        {detail.isLoading && <Skeleton className="h-96 w-full" />}
+        <div className="flex-1 overflow-y-auto py-2">
+          {detail.isLoading && <Skeleton className="h-96 w-full" />}
 
-        {detail.isError && (
-          <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            ❌ {(detail.error as Error)?.message ?? 'Load detail thất bại'}
-          </div>
-        )}
+          {detail.isError && (
+            <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              ❌ {(detail.error as Error)?.message ?? 'Load detail thất bại'}
+            </div>
+          )}
 
+          {detail.data && (
+            <DetailContent data={detail.data} />
+          )}
+        </div>
+
+        {/* Sticky action panel ở bottom — race day muscle memory */}
         {detail.data && (
-          <DetailContent
+          <ActionFooter
             data={detail.data}
             raceId={raceId}
             onAfterAction={() => onOpenChange(false)}
@@ -93,91 +100,115 @@ export function AlertDetailDialog({ raceId, alertId, open, onOpenChange }: Props
   );
 }
 
-function DetailContent({
-  data,
-  raceId,
-  onAfterAction,
-}: {
-  data: AlertDetailResponse;
-  raceId: string;
-  onAfterAction: () => void;
-}) {
+function DetailContent({ data }: { data: AlertDetailResponse }) {
   const { alert, trajectory } = data;
-  const qc = useQueryClient();
-  const [note, setNote] = useState('');
-
-  const action = useMutation({
-    mutationFn: (input: { action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN'; note: string }) =>
-      patchTimingAlert(raceId, alert._id, input),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
-      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
-      qc.invalidateQueries({ queryKey: ['alert-detail', raceId, alert._id] });
-      onAfterAction();
-    },
-  });
 
   return (
-    <div className="space-y-4">
-      {/* Header summary */}
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-2xl font-bold">BIB {alert.bib_number}</span>
-        <span className="text-lg text-stone-700">{alert.athlete_name ?? '?'}</span>
-        <Badge className={SEVERITY_COLORS[alert.severity]}>{alert.severity}</Badge>
-        <Badge variant="outline">{alert.contest}</Badge>
-        <Badge variant="outline">{alert.age_group ?? '—'}</Badge>
-        <Badge variant="outline" className="text-xs">
-          status: {alert.status}
-        </Badge>
-        {alert.detection_type === 'MIDDLE_GAP' && (
+    <div className="space-y-5">
+      {/* Header — BIG BIB + name */}
+      <div className="rounded-lg border border-stone-200 bg-gradient-to-br from-stone-50 to-white p-4">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+          <span className="text-3xl font-bold tracking-tight">BIB {alert.bib_number}</span>
+          <span className="text-xl text-stone-700">{alert.athlete_name ?? '?'}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Badge className={SEVERITY_COLORS[alert.severity]}>{alert.severity}</Badge>
+          <Badge variant="outline">{alert.contest ?? '—'}</Badge>
+          {alert.age_group && <Badge variant="outline">{alert.age_group}</Badge>}
           <Badge
             variant="outline"
-            className="border-purple-300 bg-purple-50 text-purple-800"
+            className={
+              alert.status === 'OPEN'
+                ? 'border-amber-300 bg-amber-50 text-amber-800'
+                : alert.status === 'RESOLVED'
+                  ? 'border-green-300 bg-green-50 text-green-800'
+                  : 'border-stone-300 bg-stone-50 text-stone-700'
+            }
           >
-            🌀 Middle gap
+            {alert.status}
           </Badge>
+          {alert.detection_type === 'MIDDLE_GAP' && (
+            <Badge
+              variant="outline"
+              className="border-purple-300 bg-purple-50 text-purple-800"
+            >
+              🌀 Middle gap
+            </Badge>
+          )}
+          {alert.detection_type === 'PHANTOM' && (
+            <Badge
+              variant="outline"
+              className="border-stone-300 bg-stone-50 text-stone-700"
+            >
+              👻 Phantom
+            </Badge>
+          )}
+        </div>
+
+        {/* Reason inline */}
+        {alert.reason && (
+          <p className="mt-3 text-sm text-stone-700">
+            <strong>Lý do:</strong> {alert.reason}
+          </p>
+        )}
+
+        {/* Type-specific instruction */}
+        {alert.detection_type === 'MIDDLE_GAP' && (
+          <p className="mt-2 text-xs text-purple-800">
+            🌀 Athlete đã qua <strong>{alert.last_seen_point}</strong> nhưng
+            KHÔNG có time tại <strong>{alert.missing_point}</strong> — chip miss
+            giữa course. VĐV vẫn fine, chỉ mất data → BTC ghi note rectify
+            rank post-race.
+          </p>
         )}
         {alert.detection_type === 'PHANTOM' && (
-          <Badge
-            variant="outline"
-            className="border-stone-300 bg-stone-50 text-stone-700"
-          >
-            👻 Phantom
-          </Badge>
+          <p className="mt-2 text-xs text-stone-700">
+            👻 Athlete đã qua <strong>{alert.last_seen_point}</strong> nhưng
+            quá lâu chưa qua <strong>{alert.missing_point}</strong> (overdue ≥
+            threshold) → cần verify với BTC tại trạm xem VĐV có thật ở đó không.
+          </p>
         )}
       </div>
 
-      {/* Type explanation */}
-      {alert.detection_type === 'MIDDLE_GAP' && (
-        <Card className="border-purple-200 bg-purple-50">
-          <CardContent className="p-3 text-sm">
-            <strong>🌀 Middle gap detection:</strong> athlete đã qua{' '}
-            <strong>{alert.last_seen_point}</strong> nhưng KHÔNG có time tại{' '}
-            <strong>{alert.missing_point}</strong> (chip miss giữa course).
-            VĐV vẫn fine, chỉ mất data — BTC ghi note để rectify rank
-            post-race.
-          </CardContent>
-        </Card>
-      )}
-      {alert.detection_type === 'PHANTOM' && (
-        <Card className="border-stone-200 bg-stone-50">
-          <CardContent className="p-3 text-sm">
-            <strong>👻 Phantom detection:</strong> athlete đã qua{' '}
-            <strong>{alert.last_seen_point}</strong> nhưng quá lâu chưa qua{' '}
-            <strong>{alert.missing_point}</strong> (overdue ≥ threshold).
-            Cần verify với BTC tại trạm xem VĐV có thật ở đó không.
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Reason */}
-      {alert.reason && (
-        <Card className="border-stone-200 bg-stone-50">
-          <CardContent className="p-3 text-sm">
-            <strong>Lý do:</strong> {alert.reason}
-          </CardContent>
-        </Card>
-      )}
+      {/* Stats grid — 8 boxes responsive (2 mobile, 4 tablet, 8 desktop) */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-4">
+        <StatBox
+          label="Last seen"
+          value={`${alert.last_seen_point}`}
+          subtitle={alert.last_seen_time}
+          accent="green"
+        />
+        <StatBox label="Missing" value={alert.missing_point} accent="red" />
+        <StatBox label="Overdue" value={`${alert.overdue_minutes} phút`} accent="amber" />
+        <StatBox label="Detection count" value={String(alert.detection_count)} />
+        {alert.projected_finish_time && (
+          <StatBox
+            label="Projected finish"
+            value={alert.projected_finish_time}
+            accent="blue"
+          />
+        )}
+        {alert.projected_overall_rank !== null && (
+          <StatBox
+            label="Overall rank"
+            value={`#${alert.projected_overall_rank}`}
+            accent="blue"
+          />
+        )}
+        {alert.projected_age_group_rank !== null && (
+          <StatBox
+            label="Age group rank"
+            value={`#${alert.projected_age_group_rank}`}
+            accent="blue"
+          />
+        )}
+        {alert.projected_confidence !== null && (
+          <StatBox
+            label="Confidence"
+            value={`${Math.round((alert.projected_confidence ?? 0) * 100)}%`}
+          />
+        )}
+      </div>
 
       {/* Trajectory timeline */}
       <div>
@@ -263,47 +294,6 @@ function DetailContent({
         </p>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatBox
-          label="Last seen"
-          value={`${alert.last_seen_point} (${alert.last_seen_time})`}
-        />
-        <StatBox label="Missing" value={alert.missing_point} accent="red" />
-        <StatBox label="Overdue" value={`${alert.overdue_minutes} phút`} />
-        <StatBox
-          label="Detection count"
-          value={String(alert.detection_count)}
-        />
-        {alert.projected_finish_time && (
-          <StatBox
-            label="Projected finish"
-            value={alert.projected_finish_time}
-            accent="blue"
-          />
-        )}
-        {alert.projected_overall_rank !== null && (
-          <StatBox
-            label="Projected overall rank"
-            value={`#${alert.projected_overall_rank}`}
-            accent="blue"
-          />
-        )}
-        {alert.projected_age_group_rank !== null && (
-          <StatBox
-            label="Projected age group rank"
-            value={`#${alert.projected_age_group_rank}`}
-            accent="blue"
-          />
-        )}
-        {alert.projected_confidence !== null && (
-          <StatBox
-            label="Confidence"
-            value={`${Math.round((alert.projected_confidence ?? 0) * 100)}%`}
-          />
-        )}
-      </div>
-
       {/* Audit log */}
       <div>
         <h3 className="mb-2 text-sm font-semibold uppercase text-stone-500">
@@ -362,66 +352,108 @@ function DetailContent({
         {' · '}
         Last checked: {new Date(alert.last_checked_at).toLocaleString('vi-VN')}
       </div>
+    </div>
+  );
+}
 
-      {/* C1 — Resolution actions (note optional, default fallback) */}
-      {alert.status === 'OPEN' && (
-        <div className="rounded border border-stone-200 bg-stone-50 p-3">
-          <div className="mb-2 text-sm font-semibold">Xử lý alert</div>
-          <Textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            placeholder="Ghi chú (optional) — VD: Đã verify với BTC tại trạm TM3, chip reader lỗi"
-            className="text-sm"
-          />
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button
-              onClick={() =>
-                action.mutate({
-                  action: 'RESOLVE',
-                  note: note.trim() || 'Resolved (no detail note)',
-                })
-              }
-              disabled={action.isPending}
-            >
-              ✅ Resolve
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() =>
-                action.mutate({
-                  action: 'FALSE_ALARM',
-                  note: note.trim() || 'False alarm — DNF confirmed',
-                })
-              }
-              disabled={action.isPending}
-            >
-              ❌ False alarm
-            </Button>
-          </div>
-          {action.isError && (
-            <div className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">
-              ❌ {(action.error as Error)?.message ?? 'Action failed'}
-            </div>
-          )}
+/**
+ * Sticky action panel ở DialogFooter (bottom) — race day muscle memory.
+ * BTC click 100 alerts liên tiếp, button luôn ở same position → no scroll.
+ */
+function ActionFooter({
+  data,
+  raceId,
+  onAfterAction,
+}: {
+  data: AlertDetailResponse;
+  raceId: string;
+  onAfterAction: () => void;
+}) {
+  const { alert } = data;
+  const qc = useQueryClient();
+  const [note, setNote] = useState('');
+
+  const action = useMutation({
+    mutationFn: (input: {
+      action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN';
+      note: string;
+    }) => patchTimingAlert(raceId, alert._id, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['timing-alerts', raceId] });
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+      qc.invalidateQueries({ queryKey: ['alert-detail', raceId, alert._id] });
+      onAfterAction();
+    },
+  });
+
+  if (alert.status !== 'OPEN') {
+    return (
+      <div className="flex items-center justify-between gap-3 border-t border-stone-200 bg-stone-50 px-6 py-3">
+        <div className="text-xs text-stone-600">
+          Status: <strong>{alert.status}</strong>
+          {alert.resolved_by && ` · by ${alert.resolved_by}`}
         </div>
-      )}
-      {alert.status !== 'OPEN' && (
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() =>
-              action.mutate({
-                action: 'REOPEN',
-                note: 'Reopened by admin',
-              })
-            }
-            disabled={action.isPending}
-          >
-            ↩ Reopen
-          </Button>
-        </DialogFooter>
-      )}
+        <Button
+          variant="outline"
+          onClick={() =>
+            action.mutate({ action: 'REOPEN', note: 'Reopened by admin' })
+          }
+          disabled={action.isPending}
+        >
+          ↩ Reopen
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-3 border-t border-stone-200 bg-stone-50 px-6 py-3">
+      <div className="min-w-[280px] flex-1">
+        <label className="mb-1 block text-xs font-semibold uppercase text-stone-500">
+          Ghi chú (optional)
+        </label>
+        <Textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          placeholder="VD: Đã verify với BTC tại trạm, chip reader lỗi"
+          className="text-sm"
+        />
+        {action.isError && (
+          <div className="mt-1 text-xs text-red-700">
+            ❌ {(action.error as Error)?.message ?? 'Action failed'}
+          </div>
+        )}
+      </div>
+      <div className="flex shrink-0 gap-2">
+        <Button
+          onClick={() =>
+            action.mutate({
+              action: 'RESOLVE',
+              note: note.trim() || 'Resolved (no detail note)',
+            })
+          }
+          disabled={action.isPending}
+          size="lg"
+          className="min-w-[120px]"
+        >
+          ✅ Resolve
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() =>
+            action.mutate({
+              action: 'FALSE_ALARM',
+              note: note.trim() || 'False alarm — DNF confirmed',
+            })
+          }
+          disabled={action.isPending}
+          size="lg"
+          className="min-w-[120px]"
+        >
+          ❌ False alarm
+        </Button>
+      </div>
     </div>
   );
 }
@@ -465,21 +497,34 @@ function StatusBadge({
 function StatBox({
   label,
   value,
+  subtitle,
   accent,
 }: {
   label: string;
   value: string;
-  accent?: 'red' | 'blue';
+  subtitle?: string;
+  accent?: 'red' | 'blue' | 'green' | 'amber';
 }) {
   const colorMap: Record<string, string> = {
     red: 'border-red-200 bg-red-50',
     blue: 'border-blue-200 bg-blue-50',
+    green: 'border-green-200 bg-green-50',
+    amber: 'border-amber-200 bg-amber-50',
   };
   return (
     <Card className={accent ? colorMap[accent] : 'border-stone-200 bg-stone-50'}>
       <CardContent className="p-3">
-        <div className="text-[10px] uppercase text-stone-500">{label}</div>
-        <div className="mt-0.5 text-sm font-bold">{value}</div>
+        <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+          {label}
+        </div>
+        <div className="mt-1 truncate text-base font-bold text-stone-900" title={value}>
+          {value}
+        </div>
+        {subtitle && (
+          <div className="mt-0.5 truncate font-mono text-xs text-stone-600">
+            {subtitle}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

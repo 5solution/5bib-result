@@ -355,12 +355,12 @@ function CreateScenarioDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-2xl flex-col overflow-hidden">
+        <DialogHeader className="border-b border-stone-200 pb-3">
           <DialogTitle>Add scenario</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 space-y-4 overflow-y-auto py-2">
           {/* Type select dropdown */}
           <div>
             <label className="text-sm font-semibold">Loại scenario</label>
