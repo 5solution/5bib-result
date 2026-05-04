@@ -449,6 +449,19 @@ export class SimulatorService {
     return sim.toObject() as TimingAlertSimulationDocument;
   }
 
+  /**
+   * Get raw snapshot data — bypass time filter + scenarios.
+   * Used by discover service để see all vendor keys mà không bị scenarios
+   * (MISS_FINISH, MISS_MIDDLE_CP) modify dữ liệu.
+   */
+  async getRawSnapshot(simCourseId: string): Promise<RaceResultApiItem[]> {
+    const snapshot = await this.snapshotModel
+      .findOne({ simCourseId })
+      .lean<TimingAlertSimulationSnapshotDocument>()
+      .exec();
+    return snapshot?.data ?? [];
+  }
+
   /** Compute và return current simulation seconds (đọc-only). */
   async getCurrentSimSeconds(simulationId: string): Promise<number> {
     const sim = await this.simModel

@@ -73,8 +73,17 @@ export function parseRaceResultAthlete(
     fullName = item.Name.trim() || null;
   }
 
-  // Parse Chiptimes JSON — vendor returns string, có thể empty hoặc malformed
-  const checkpointTimes = parseChiptimesJson(item.Chiptimes);
+  // Parse Chiptimes + Guntimes JSON — merge với Chiptimes priority.
+  //
+  // **Why merge:** vendor có khi emit chỉ Chiptimes hoặc chỉ Guntimes per
+  // checkpoint. VD race "Hành trình vì an ninh tổ quốc" 42Km: Chiptimes
+  // không có "Finish" key nhưng Guntimes có. Merge → checkpointTimes đầy
+  // đủ keys.
+  //
+  // **Priority:** Chiptimes time value > Guntimes (chip-timed accurate hơn
+  // gun-timed cho per-athlete elapsed). Nếu Chiptimes thiếu key → fallback
+  // Guntimes.
+  const checkpointTimes = mergeTimes(item.Chiptimes, item.Guntimes);
 
   // Determine last seen point THEO course order (not JSON key order).
   // VD course = [Start, TM1, TM2, TM3, Finish]. Athlete có Chiptimes
@@ -103,6 +112,38 @@ export function parseRaceResultAthlete(
     lastSeenTime,
     raw: item,
   };
+}
+
+/**
+ * Merge Chiptimes (primary) + Guntimes (fallback) thành 1 checkpointTimes
+ * map. Chiptimes time value win nếu có, fallback Guntimes nếu thiếu key.
+ *
+ * Real RR data examples:
+ * - 5K/10K/21K: Chiptimes có đủ Start, TM*, Finish → merge no-op (Chiptimes win)
+ * - 42K: Chiptimes có Start, TM1-TM5 (no Finish) | Guntimes có thêm Finish
+ *   → merged map = Start, TM1-TM5, Finish (đầy đủ)
+ */
+function mergeTimes(
+  chiptimesRaw: string | undefined | null,
+  guntimesRaw: string | undefined | null,
+): Record<string, string> {
+  const chip = parseChiptimesJson(chiptimesRaw);
+  const gun = parseChiptimesJson(guntimesRaw);
+  const merged: Record<string, string> = {};
+
+  // Add Guntimes first (fallback layer)
+  for (const [k, v] of Object.entries(gun)) {
+    if (v && typeof v === 'string' && v.trim().length > 0) {
+      merged[k] = v;
+    }
+  }
+  // Override với Chiptimes (priority)
+  for (const [k, v] of Object.entries(chip)) {
+    if (v && typeof v === 'string' && v.trim().length > 0) {
+      merged[k] = v;
+    }
+  }
+  return merged;
 }
 
 /**

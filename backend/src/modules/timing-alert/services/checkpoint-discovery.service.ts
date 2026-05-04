@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Race, RaceDocument } from '../../races/schemas/race.schema';
 import { RaceResultApiService } from '../../race-result/services/race-result-api.service';
+import { SimulatorService } from './simulator.service';
 import { parseTimeToSeconds } from '../utils/parsed-athlete';
 
 /**
@@ -88,7 +89,19 @@ export class CheckpointDiscoveryService {
     @InjectModel(Race.name)
     private readonly raceModel: Model<RaceDocument>,
     private readonly apiService: RaceResultApiService,
+    private readonly simulatorService: SimulatorService,
   ) {}
+
+  /**
+   * Detect xem URL có phải simulator URL không. Nếu phải → return simCourseId
+   * để fetch raw snapshot (bypass time filter + scenarios). Nếu không → null.
+   */
+  private extractSimCourseId(apiUrl: string): string | null {
+    const match = apiUrl.match(
+      /\/api\/timing-alert\/simulator-data\/([a-f0-9]{32})/i,
+    );
+    return match ? match[1] : null;
+  }
 
   /**
    * Discover checkpoints cho 1 race × 1 course. Read-only — KHÔNG ghi DB.
@@ -120,8 +133,19 @@ export class CheckpointDiscoveryService {
         ? course.distanceKm
         : null;
 
-    // Fetch RR API
-    const rawAthletes = await this.apiService.fetchRaceResults(apiUrl);
+    // Fetch data — nếu apiUrl là simulator URL → đọc raw snapshot bypass
+    // time filter + scenarios. Discover cần biết vendor return keys gì,
+    // KHÔNG nên thấy data đã bị MISS_FINISH/MISS_MIDDLE_CP scenario drop.
+    const simCourseId = this.extractSimCourseId(apiUrl);
+    const rawAthletes = simCourseId
+      ? await this.simulatorService.getRawSnapshot(simCourseId)
+      : await this.apiService.fetchRaceResults(apiUrl);
+
+    if (simCourseId) {
+      this.logger.log(
+        `[discover] race=${raceId} course=${courseId} bypass simulator filter (raw snapshot ${rawAthletes.length} athletes)`,
+      );
+    }
     const totalAthletes = rawAthletes.length;
     if (totalAthletes === 0) {
       return {
@@ -141,11 +165,15 @@ export class CheckpointDiscoveryService {
     // Per-key aggregation: collect time samples.
     // Note: Start time = "00:00" → 0 seconds VALID (race start moment), KHÔNG reject.
     // Chỉ reject nếu time format malformed (null) hoặc negative (vendor sentinel).
+    //
+    // **Merge Chiptimes + Guntimes:** vendor 42Km có Finish chỉ trong Guntimes
+    // (gun-timed elapsed) NHƯNG không có trong Chiptimes (chip không bắt được
+    // tại Finish line). Merge để discover thấy đầy đủ keys.
     const keyTimes = new Map<string, number[]>(); // key → seconds[]
     let athletesWithAnyTime = 0;
 
     for (const item of rawAthletes) {
-      const chiptimes = parseChiptimesSafe(item.Chiptimes);
+      const chiptimes = mergeTimes(item.Chiptimes, item.Guntimes);
       if (Object.keys(chiptimes).length === 0) continue;
 
       let hasAnyTime = false;
@@ -217,12 +245,19 @@ export class CheckpointDiscoveryService {
 
     const lastIdx = surviving.length - 1;
     const detectedCheckpoints: DetectedCheckpoint[] = surviving.map((s, idx) => {
+      const lower = s.key.toLowerCase();
+      // Start: orderIndex = 0
       const isImplicitStart = idx === 0;
+      // Finish: orderIndex = N-1 AND N > 1.
+      // Note: nếu vendor có literal "Finish" key, sort theo time ASC →
+      // Finish key sẽ có median time muộn nhất → naturally orderIndex=N-1.
+      // Cả 2 trường hợp (literal "Finish" hoặc vendor dùng "TM5"):
+      // last surviving = vạch về đích.
       const isImplicitFinish = idx === lastIdx && lastIdx > 0;
+
       // Suggested name — gợi ý đẹp hơn cho start/finish nếu vendor dùng key
       // không phải literal "Start"/"Finish"
       let suggestedName = s.key;
-      const lower = s.key.toLowerCase();
       if (isImplicitStart && lower !== 'start') {
         suggestedName = `Start (${s.key})`;
       } else if (isImplicitFinish && lower !== 'finish') {
@@ -350,6 +385,27 @@ function parseChiptimesSafe(raw: unknown): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+/**
+ * Merge Chiptimes (primary) + Guntimes (fallback) — Chiptimes value win.
+ * Identical helper as utils/parsed-athlete.ts (duplicated để tránh circular
+ * import; behavior must match).
+ */
+function mergeTimes(
+  chiptimesRaw: unknown,
+  guntimesRaw: unknown,
+): Record<string, string> {
+  const chip = parseChiptimesSafe(chiptimesRaw);
+  const gun = parseChiptimesSafe(guntimesRaw);
+  const merged: Record<string, string> = {};
+  for (const [k, v] of Object.entries(gun)) {
+    if (v && typeof v === 'string' && v.trim().length > 0) merged[k] = v;
+  }
+  for (const [k, v] of Object.entries(chip)) {
+    if (v && typeof v === 'string' && v.trim().length > 0) merged[k] = v;
+  }
+  return merged;
 }
 
 function median(samples: number[]): number {
