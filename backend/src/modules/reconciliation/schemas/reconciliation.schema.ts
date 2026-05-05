@@ -190,3 +190,12 @@ export class Reconciliation {
 }
 
 export const ReconciliationSchema = SchemaFactory.createForClass(Reconciliation);
+
+// Compound index for overlap detection in preflight/range (FEATURE-003 BR-11).
+// Speeds up: { tenant_id, mysql_race_id, period_start <= X, period_end >= Y }.
+ReconciliationSchema.index({
+  tenant_id: 1,
+  mysql_race_id: 1,
+  period_start: 1,
+  period_end: 1,
+});

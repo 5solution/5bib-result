@@ -136,13 +136,20 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// FEATURE-003 BR-12 — render kỳ for list table:
+//   N=1 → "Tháng MM/YYYY"
+//   N>1 → "Tháng MMs/YYYYs → Tháng MMe/YYYYe"
 function formatPeriod(start: string, end: string) {
   if (!start || !end) return "—";
-  const s = new Date(start);
-  const e = new Date(end);
-  const fmt = (d: Date) =>
-    d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
-  return `${fmt(s)} – ${fmt(e)}`;
+  const s = start.split("-");
+  const e = end.split("-");
+  if (s.length !== 3 || e.length !== 3) return `${start} – ${end}`;
+  const [sy, sm] = s;
+  const [ey, em] = e;
+  if (sy === ey && sm === em) {
+    return `Tháng ${Number(sm)}/${sy}`;
+  }
+  return `Tháng ${Number(sm)}/${sy} → Tháng ${Number(em)}/${ey}`;
 }
 
 function isRecentPeriod(period: string): boolean {
@@ -186,11 +193,21 @@ export default function ReconciliationsPage() {
   const [exportProgress, setExportProgress] = useState<{ total: number; done: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  // M3: Batch modal state
+  // M3: Batch modal state — FEATURE-003 BR-04: month is 1-indexed (1-12) to keep
+  // SelectValue, "Kỳ được chọn" label, and API payload all in lockstep.
+  // Default to previous month (kỳ trước is the natural target for đối soát).
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchStep, setBatchStep] = useState<0 | 1 | 2>(0);
-  const [batchMonth, setBatchMonth] = useState(String(new Date().getMonth())); // 0-indexed
-  const [batchYear, setBatchYear] = useState(String(new Date().getFullYear()));
+  const [batchMonth, setBatchMonth] = useState(() => {
+    const now = new Date();
+    const m = now.getMonth(); // 0-indexed
+    // previous month (1-indexed); rolls to December of previous year if January
+    return String(m === 0 ? 12 : m);
+  });
+  const [batchYear, setBatchYear] = useState(() => {
+    const now = new Date();
+    return String(now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+  });
   const [batchPreflight, setBatchPreflight] = useState<BatchPreflightItem[]>([]);
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchSelected, setBatchSelected] = useState<Set<number>>(new Set());
@@ -200,8 +217,8 @@ export default function ReconciliationsPage() {
 
   const cronLog = cronLogs[0] ?? null;
 
-  // Computed period string "YYYY-MM"
-  const batchPeriod = `${batchYear}-${String(Number(batchMonth) + 1).padStart(2, "0")}`;
+  // Computed period string "YYYY-MM" — batchMonth is now 1-indexed.
+  const batchPeriod = `${batchYear}-${String(Number(batchMonth)).padStart(2, "0")}`;
 
   const fetchItems = useCallback(async () => {
     if (!token) return;
@@ -909,7 +926,7 @@ export default function ReconciliationsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {MONTH_NAMES.map((name, idx) => (
-                        <SelectItem key={idx} value={String(idx)}>
+                        <SelectItem key={idx + 1} value={String(idx + 1)}>
                           {name}
                         </SelectItem>
                       ))}
@@ -935,7 +952,7 @@ export default function ReconciliationsPage() {
               <p className="text-sm text-muted-foreground">
                 Kỳ được chọn:{" "}
                 <span className="font-medium text-foreground">
-                  {MONTH_NAMES[Number(batchMonth)]} {batchYear}
+                  {MONTH_NAMES[Number(batchMonth) - 1]} {batchYear}
                 </span>
               </p>
               <DialogFooter>

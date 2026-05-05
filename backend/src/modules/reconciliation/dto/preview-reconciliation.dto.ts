@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsPeriodBoundaryDate,
+  IsValidPeriodRange,
+} from '../../../common/validators/period.validator';
 
 export class PreviewReconciliationDto {
   @ApiProperty({ description: 'MySQL tenant.id', example: 1 })
@@ -15,12 +19,19 @@ export class PreviewReconciliationDto {
   @IsString()
   race_title?: string;
 
-  @ApiProperty({ description: 'Period start date YYYY-MM-DD', example: '2025-01-01' })
-  @IsDateString()
+  @ApiProperty({
+    description: 'Period start date YYYY-MM-DD (must be the 1st of a month)',
+    example: '2025-01-01',
+  })
+  @IsPeriodBoundaryDate('start')
   period_start: string;
 
-  @ApiProperty({ description: 'Period end date YYYY-MM-DD', example: '2025-03-31' })
-  @IsDateString()
+  @ApiProperty({
+    description: 'Period end date YYYY-MM-DD (must be the last day of a month, span ≤ 12 months)',
+    example: '2025-03-31',
+  })
+  @IsPeriodBoundaryDate('end')
+  @IsValidPeriodRange()
   period_end: string;
 
   @ApiPropertyOptional({ description: 'Override fee rate % (e.g. 6.5 for 6.5%)', example: 6.5 })

@@ -459,6 +459,85 @@ export class ReconciliationService {
     return this.cronLogModel.find({}).sort({ ran_at: -1 }).limit(limit).lean();
   }
 
+  /**
+   * FEATURE-003 BR-10 — Audit reconciliations whose stored period_start/period_end
+   * does NOT snap to month-boundary. Read-only, no mutation.
+   */
+  async auditPeriodBoundary(): Promise<{
+    total: number;
+    items: Array<{
+      id: string;
+      tenant_id: number;
+      tenant_name: string;
+      race_title: string;
+      period_start: string;
+      period_end: string;
+      expected_period_start: string;
+      expected_period_end: string;
+      deviation_start_days: number;
+      deviation_end_days: number;
+    }>;
+  }> {
+    const docs = await this.reconciliationModel
+      .find(
+        {},
+        {
+          _id: 1,
+          tenant_id: 1,
+          tenant_name: 1,
+          race_title: 1,
+          period_start: 1,
+          period_end: 1,
+        },
+      )
+      .lean();
+
+    const items = docs.flatMap((doc) => {
+      const start = doc.period_start ?? '';
+      const end = doc.period_end ?? '';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        return [];
+      }
+      const expectedStart = `${start.slice(0, 7)}-01`;
+      const [yEnd, mEnd] = end.split('-').map(Number);
+      const lastDay = new Date(Date.UTC(yEnd, mEnd, 0)).getUTCDate();
+      const expectedEnd = `${end.slice(0, 7)}-${String(lastDay).padStart(2, '0')}`;
+      const dStart = this.diffDays(start, expectedStart);
+      const dEnd = this.diffDays(end, expectedEnd);
+      if (dStart === 0 && dEnd === 0) return [];
+      return [
+        {
+          id: String(doc._id),
+          tenant_id: doc.tenant_id,
+          tenant_name: doc.tenant_name ?? '',
+          race_title: doc.race_title ?? '',
+          period_start: start,
+          period_end: end,
+          expected_period_start: expectedStart,
+          expected_period_end: expectedEnd,
+          deviation_start_days: dStart,
+          deviation_end_days: dEnd,
+        },
+      ];
+    });
+
+    return { total: items.length, items };
+  }
+
+  private diffDays(a: string, b: string): number {
+    const ta = Date.UTC(
+      Number(a.slice(0, 4)),
+      Number(a.slice(5, 7)) - 1,
+      Number(a.slice(8, 10)),
+    );
+    const tb = Date.UTC(
+      Number(b.slice(0, 4)),
+      Number(b.slice(5, 7)) - 1,
+      Number(b.slice(8, 10)),
+    );
+    return Math.round((ta - tb) / 86400000);
+  }
+
   private parsePeriod(period: string): { period_start: string; period_end: string } {
     const [year, month] = period.split('-').map(Number);
     const mm = String(month).padStart(2, '0');

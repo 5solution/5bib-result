@@ -205,6 +205,148 @@ export class ReconciliationPreflightService {
     };
   }
 
+  /**
+   * FEATURE-003 BR-11 — Pre-flight for a single (tenant × race × range).
+   * Supports multi-month range (period_start/period_end already validated to month-boundary).
+   * Returns standard PreflightResult + adds RANGE_OVERLAP_WITH_EXISTING warnings if any
+   * existing reconciliation (status != 'draft') overlaps the requested range.
+   */
+  async runRange(params: {
+    tenant_id: number;
+    mysql_race_id: number;
+    period_start: string;
+    period_end: string;
+  }): Promise<PreflightResult & { overlap_warnings: Array<{ existing_id: string; existing_period_start: string; existing_period_end: string; existing_status: string }> }> {
+    const { tenant_id, mysql_race_id, period_start, period_end } = params;
+    const period = `${period_start.slice(0, 7)} → ${period_end.slice(0, 7)}`;
+    const tenant = await this.queryService.getTenant(tenant_id);
+    const config = await this.configModel.findOne({ tenantId: tenant_id }).lean();
+
+    const merchantName = tenant?.name ?? `Merchant #${tenant_id}`;
+    const warnings: PreflightFlag[] = [];
+    const racesWithOrders: PreflightRaceResult[] = [];
+    const racesSkipped: PreflightRaceSkipped[] = [];
+
+    if (!config?.service_fee_rate) {
+      warnings.push({
+        type: 'NO_FEE_RATE',
+        severity: 'ERROR',
+        message: 'Merchant chưa thiết lập service_fee_rate',
+        count: null,
+      });
+    }
+
+    // Resolve race title
+    const allRaces = await this.queryService.getRacesByTenant(tenant_id);
+    const found = allRaces.find((r) => Number(r.race_id) === mysql_race_id);
+    const raceName = found?.title ?? `Race #${mysql_race_id}`;
+
+    const { fiveBibOrders, manualOrders, missingPaymentRef } =
+      await this.queryService.queryOrders(mysql_race_id, period_start, period_end);
+
+    const totalOrders = fiveBibOrders.length + manualOrders.length;
+
+    if (totalOrders === 0) {
+      racesSkipped.push({
+        race_id: mysql_race_id,
+        race_name: raceName,
+        reason: 'Không có giao dịch trong kỳ',
+      });
+    } else {
+      const uniqueFiveBib = this.dedup(fiveBibOrders);
+      const grossRevenue = uniqueFiveBib.reduce(
+        (s, r) => s + Number(r.subtotal_price || 0),
+        0,
+      );
+      const uniqueManual = this.dedup(manualOrders);
+      const manualRevenue = uniqueManual.reduce(
+        (s, r) => s + Number(r.subtotal_price || 0),
+        0,
+      );
+
+      racesWithOrders.push({
+        race_id: mysql_race_id,
+        race_name: raceName,
+        order_count: uniqueFiveBib.length,
+        gross_revenue: grossRevenue + manualRevenue,
+        manual_order_count: uniqueManual.length,
+        ordinary_missing_payment_ref: missingPaymentRef.length,
+      });
+
+      if (missingPaymentRef.length > 0) {
+        warnings.push({
+          type: 'MISSING_PAYMENT_REF',
+          severity: 'ERROR',
+          message: `${missingPaymentRef.length} đơn ORDINARY thiếu payment_ref tại "${raceName}" — cần kiểm tra trước khi tạo`,
+          count: missingPaymentRef.length,
+        });
+      }
+
+      const manualRatio =
+        totalOrders > 0 ? (manualOrders.length / totalOrders) * 100 : 0;
+      if (manualRatio > HIGH_MANUAL_RATIO_THRESHOLD) {
+        warnings.push({
+          type: 'HIGH_MANUAL_RATIO',
+          severity: 'WARNING',
+          message: `Đơn MANUAL chiếm ${Math.round(manualRatio)}% tổng đơn tại "${raceName}"`,
+          count: null,
+        });
+      }
+    }
+
+    // BR-11 — Overlap detection for the same (tenant × race).
+    // Caveat-01: status filter uses $ne 'draft' (schema enum has NO 'cancelled').
+    const overlapDocs = await this.reconciliationModel
+      .find(
+        {
+          tenant_id,
+          mysql_race_id,
+          period_start: { $lte: period_end },
+          period_end: { $gte: period_start },
+          status: { $ne: 'draft' },
+        },
+        { _id: 1, period_start: 1, period_end: 1, status: 1 },
+      )
+      .lean();
+
+    const overlap_warnings = overlapDocs.map((d) => ({
+      existing_id: String(d._id),
+      existing_period_start: d.period_start,
+      existing_period_end: d.period_end,
+      existing_status: d.status,
+    }));
+
+    if (overlap_warnings.length > 0) {
+      warnings.push({
+        type: 'RANGE_OVERLAP_WITH_EXISTING',
+        severity: 'WARNING',
+        message: `Đã tồn tại ${overlap_warnings.length} bản đối soát giao thời cho race "${raceName}"`,
+        count: overlap_warnings.length,
+      });
+    }
+
+    const totalGross = racesWithOrders.reduce((s, r) => s + r.gross_revenue, 0);
+    const feeRate = config?.service_fee_rate ?? null;
+    const estimatedFee = feeRate ? Math.round((totalGross * feeRate) / 100) : null;
+    const hasOrders = racesWithOrders.length > 0;
+
+    return {
+      tenant_id,
+      merchant_name: merchantName,
+      period,
+      can_create: hasOrders,
+      races_with_orders: racesWithOrders,
+      races_skipped: racesSkipped,
+      warnings,
+      summary: {
+        total_orders: racesWithOrders.reduce((s, r) => s + r.order_count, 0),
+        estimated_gross_revenue: totalGross,
+        estimated_fee: estimatedFee,
+      },
+      overlap_warnings,
+    };
+  }
+
   /** Compute flags array from a preflight result for embedding into a Reconciliation document */
   extractFlags(preflight: PreflightResult): PreflightFlag[] {
     return preflight.warnings;

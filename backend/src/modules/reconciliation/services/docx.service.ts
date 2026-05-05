@@ -18,6 +18,7 @@ import {
   WidthType,
 } from 'docx';
 import { ReconciliationDocument } from '../schemas/reconciliation.schema';
+import { renderPeriodLabel } from './period-label.helper';
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -175,8 +176,7 @@ export class DocxService {
     const bankAccount = tenantMeta.bankAccount ?? '';
     const bankName = tenantMeta.bankName ?? '';
 
-    const periodStart = formatDate(rec.period_start);
-    const periodEnd = formatDate(rec.period_end);
+    const periodLabel = renderPeriodLabel(rec.period_start, rec.period_end);
     const signedDate = formatDate(
       rec.signed_date_str ?? new Date().toISOString().slice(0, 10),
     );
@@ -279,7 +279,7 @@ export class DocxService {
               size: SZ_14,
               align: AlignmentType.CENTER,
             }),
-            para(`(Từ ${periodStart} đến hết ${periodEnd})`, {
+            para(`Kỳ đối soát: ${periodLabel}`, {
               bold: true,
               align: AlignmentType.CENTER,
               spacingAfter: 120,
