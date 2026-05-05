@@ -26,6 +26,7 @@ import { TimingAlertPollService } from '../services/timing-alert-poll.service';
 import { CheckpointDiscoveryService } from '../services/checkpoint-discovery.service';
 import { DashboardSnapshotService } from '../services/dashboard-snapshot.service';
 import { PodiumService } from '../services/podium.service';
+import { CommandCenterService } from '../services/command-center.service';
 import {
   CreateTimingAlertConfigDto,
   TimingAlertConfigResponseDto,
@@ -38,6 +39,8 @@ import {
 } from '../dto/checkpoint-discovery.dto';
 import { DashboardSnapshotResponseDto } from '../dto/dashboard-snapshot.dto';
 import { PodiumResponseDto } from '../dto/podium.dto';
+import { LiveLeaderboardCourseDto } from '../dto/live-leaderboard.dto';
+import { ForceRefreshResponseDto } from '../dto/force-refresh-response.dto';
 
 /**
  * Admin REST API cho Timing Miss Alert config.
@@ -62,6 +65,7 @@ export class TimingAlertAdminController {
     private readonly discoveryService: CheckpointDiscoveryService,
     private readonly snapshotService: DashboardSnapshotService,
     private readonly podiumService: PodiumService,
+    private readonly commandCenterService: CommandCenterService,
   ) {}
 
   @Post('config')
@@ -264,6 +268,69 @@ export class TimingAlertAdminController {
     @Param('raceId') raceId: string,
   ): Promise<DashboardSnapshotResponseDto> {
     return this.snapshotService.getSnapshot(raceId);
+  }
+
+  // ─────────── F-005 — Command Center: Live Leaderboard ───────────
+
+  @Get('leaderboard/:courseId')
+  @ApiOperation({
+    summary: 'Top N live leaderboard for 1 course (F-005 Command Center)',
+    description:
+      'Sort: athletes có Finish ASC theo finishTime; chưa Finish → projected by last CP. ' +
+      'Limit 1..50 (default 10). Cache Redis 60s. Race draft/pre_race → empty entries (BR-CC-01).',
+  })
+  @ApiResponse({ status: 200, type: LiveLeaderboardCourseDto })
+  @ApiResponse({ status: 404, description: 'Race hoặc course không tồn tại' })
+  async getLeaderboard(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+    @Query('limit') limit?: string,
+  ): Promise<LiveLeaderboardCourseDto> {
+    const parsedLimit = limit
+      ? Math.min(50, Math.max(1, parseInt(limit, 10) || 10))
+      : 10;
+    return this.commandCenterService.getLiveLeaderboard(
+      raceId,
+      courseId,
+      parsedLimit,
+    );
+  }
+
+  // ─────────── F-005 BR-CC-10 — Command Center: Force Refresh ───────────
+
+  @Post('command-center/force-refresh')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Force re-poll race + invalidate cache (Command Center BR-CC-10)',
+    description:
+      'Trigger immediate re-poll vendor RR API + clear master:rr-snapshot cache. ' +
+      '2-layer rate-limit: per user 30s (UX spam guard) + reuse F-001 race lock (anti-stampede).',
+  })
+  @ApiResponse({ status: 200, type: ForceRefreshResponseDto })
+  @ApiResponse({
+    status: 409,
+    description:
+      'User lock đang held — đợi 30s (BR-CC-10 layer 1 spam guard)',
+  })
+  @ApiResponse({ status: 404, description: 'Race không tồn tại' })
+  async forceRefreshCommandCenter(
+    @Param('raceId') raceId: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<ForceRefreshResponseDto> {
+    const userId = req.user?.sub ?? 'unknown';
+    const status = await this.commandCenterService.forceRefresh(
+      raceId,
+      userId,
+    );
+    return {
+      status,
+      refreshed: status === 'TRIGGERED',
+      message:
+        status === 'TRIGGERED'
+          ? 'Đã refresh dữ liệu từ RR API'
+          : 'Đang có poll khác chạy — dùng dữ liệu cache, đợi 30s rồi thử lại',
+    };
   }
 
   // ─────────── Tab Podium — Top 10 per course ───────────

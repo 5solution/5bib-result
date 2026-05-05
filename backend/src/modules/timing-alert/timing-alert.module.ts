@@ -27,6 +27,7 @@ import { CheckpointDiscoveryService } from './services/checkpoint-discovery.serv
 import { DashboardSnapshotService } from './services/dashboard-snapshot.service';
 import { PodiumService } from './services/podium.service';
 import { SimulatorService } from './services/simulator.service';
+import { CommandCenterService } from './services/command-center.service';
 import { TimingAlertMigrationsService } from './migrations/timing-alert-migrations';
 import { TimingAlertPollCron } from './jobs/timing-alert-poll.cron';
 import { TimingAlertAdminController } from './controllers/timing-alert-admin.controller';
@@ -95,6 +96,8 @@ import { RaceResultModule } from '../race-result/race-result.module';
     DashboardSnapshotService,
     PodiumService,
     SimulatorService,
+    // F-005 — Command Center aggregator (live leaderboard + summary cards)
+    CommandCenterService,
     // Phase 3 — auto migrations on startup (drop legacy index + backfill detection_type)
     TimingAlertMigrationsService,
   ],

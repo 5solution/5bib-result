@@ -1,21 +1,28 @@
 'use client';
 
 /**
- * Phase 2.2-2.5 — Race Timing Operation Dashboard cockpit.
+ * F-005 — Race Day Command Center (was Cockpit, F-002).
  *
- * Sections:
- * 1. Hero stats — race-level KPI bar
- * 2. Course breakdown grid — 1 card / cự ly với "Auto-derive checkpoints" CTA
- * 3. Checkpoint progression — Tailwind bar chart per course
- * 4. Live activity feed — timeline alerts + poll completes
+ * Sections (per design canvas Artboard 3):
+ * 1. Race elapsed clock + freshness indicator (F-002 base)
+ * 2. Hero stats — race-level KPI bar (F-002 base)
+ * 3. Athlete Flow Monitor (chart per checkpoint)
+ * 4. Live Leaderboard (top N per course) — F-005 NEW
+ * 5. Timing Alert Feed (recent activity)
+ * 6. Summary Cards Row (racekit / started / finished / dns / miss%) — F-005 NEW
+ * 7. Course breakdown grid (F-002 retained for auto-derive CTA)
  *
- * **Data:** `dashboard-snapshot` endpoint gộp 4 sources, refetch 30s + on SSE.
- * **Note:** SSE invalidation handled bởi parent page (page.tsx) — listener
- * chung cho tab Cockpit + Alerts.
+ * **Note:** Component file name kept as `CockpitTab.tsx` per Manager directive
+ * (giảm git diff noise; UI label đổi "Cockpit" → "Command Center").
+ *
+ * **Data:** `dashboard-snapshot` endpoint gộp tất cả sources, refetch 30s + on SSE.
+ * Query key `['dashboard-snapshot', raceId]` GIỮ NGUYÊN — backward compat F-002.
  */
 
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Card,
   CardContent,
@@ -26,12 +33,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  forceRefreshCommandCenter,
   getDashboardSnapshot,
+  HttpError,
   type CourseStats,
-  type CheckpointProgression,
-  type RecentActivityItem,
+  type ForceRefreshResponse,
 } from '@/lib/timing-alert-api';
 import { CheckpointDiscoveryDialog } from './CheckpointDiscoveryDialog';
+import { LiveLeaderboardTable } from './command-center/LiveLeaderboardTable';
+import { SummaryCardsRow } from './command-center/SummaryCardsRow';
+import { AthleteFlowChart } from './command-center/AthleteFlowChart';
+import { AlertFeedPanel } from './command-center/AlertFeedPanel';
 
 export function CockpitTab({ raceId }: { raceId: string }) {
   const [discoveryCourse, setDiscoveryCourse] = useState<{
@@ -39,11 +51,42 @@ export function CockpitTab({ raceId }: { raceId: string }) {
     name: string;
   } | null>(null);
 
+  const qc = useQueryClient();
+
   const snapshot = useQuery({
     queryKey: ['dashboard-snapshot', raceId],
     queryFn: () => getDashboardSnapshot(raceId),
     enabled: !!raceId,
     refetchInterval: 30_000,
+  });
+
+  /**
+   * F-005 BR-CC-10 — Force Refresh mutation.
+   * onSuccess: invalidate dashboard-snapshot query → fresh leaderboard + summary.
+   * onError 409: magenta toast (PRD `--5sport-magenta` #FF0E65) — user spam guard 30s.
+   * onError other: red destructive toast.
+   */
+  const forceRefreshMutation = useMutation<ForceRefreshResponse, unknown>({
+    mutationFn: () => forceRefreshCommandCenter(raceId),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+      if (data.refreshed) {
+        toast.success(data.message);
+      } else {
+        toast(data.message, { duration: 4000 });
+      }
+    },
+    onError: (err) => {
+      if (err instanceof HttpError && err.status === 409) {
+        toast.error('Bạn vừa refresh, đợi 30s rồi thử lại', {
+          style: { background: '#FF0E65', color: '#fff' },
+        });
+        return;
+      }
+      const msg =
+        err instanceof Error ? err.message : 'Force Refresh thất bại';
+      toast.error(`Lỗi: ${msg}`);
+    },
   });
 
   if (snapshot.isLoading) {
@@ -60,8 +103,14 @@ export function CockpitTab({ raceId }: { raceId: string }) {
     );
   }
 
-  const { raceStats, courses, checkpointProgression, recentActivity } =
-    snapshot.data;
+  const {
+    raceStats,
+    courses,
+    checkpointProgression,
+    recentActivity,
+    liveLeaderboard,
+    summary,
+  } = snapshot.data;
 
   const generatedAt = snapshot.data.generatedAt;
   const elapsedSec = generatedAt
@@ -77,7 +126,7 @@ export function CockpitTab({ raceId }: { raceId: string }) {
         status={snapshot.data.race.status}
       />
 
-      {/* Data freshness indicator */}
+      {/* Data freshness indicator + F-005 BR-CC-10 Force Refresh button */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
         <span>
           📊 Data live từ timing-alert poll cache (cập nhật mỗi 30s).{' '}
@@ -85,9 +134,27 @@ export function CockpitTab({ raceId }: { raceId: string }) {
             ? `Snapshot ${elapsedSec}s trước`
             : `Snapshot ${Math.floor(elapsedSec / 60)} phút trước`}
         </span>
-        <span className="text-blue-700">
-          Auto-refresh 30s + push qua SSE
-        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => forceRefreshMutation.mutate()}
+            disabled={forceRefreshMutation.isPending}
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${
+                forceRefreshMutation.isPending ? 'animate-spin' : ''
+              }`}
+            />
+            {forceRefreshMutation.isPending
+              ? 'Đang refresh...'
+              : 'Force Refresh'}
+          </Button>
+          <span className="text-blue-700">
+            Auto-refresh 30s + push qua SSE
+          </span>
+        </div>
       </div>
 
       {/* ─── Section 1: Hero Stats ─── */}
@@ -129,9 +196,60 @@ export function CockpitTab({ raceId }: { raceId: string }) {
         />
       </div>
 
-      {/* ─── Section 2: Course breakdown ─── */}
+      {/* ─── F-005 Section: Summary Cards Row ─── */}
       <div>
-        <h2 className="mb-2 text-lg font-semibold">📊 Theo cự ly</h2>
+        <h2
+          className="mb-2 text-lg font-semibold"
+          style={{ fontFamily: 'var(--font-sans)' }}
+        >
+          📊 Tổng quan giải
+        </h2>
+        <SummaryCardsRow summary={summary} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        {/* ─── F-005 Section A: Athlete Flow Monitor (60%) ─── */}
+        <div className="lg:col-span-3">
+          <h2
+            className="mb-2 text-lg font-semibold"
+            style={{ fontFamily: 'var(--font-sans)' }}
+          >
+            📈 Athlete Flow Monitor
+          </h2>
+          <AthleteFlowChart progression={checkpointProgression} />
+        </div>
+
+        {/* ─── F-005 Section B: Live Leaderboard (40%) ─── */}
+        <div className="lg:col-span-2">
+          <h2
+            className="mb-2 text-lg font-semibold"
+            style={{ fontFamily: 'var(--font-sans)' }}
+          >
+            🏁 Live Leaderboard
+          </h2>
+          <LiveLeaderboardTable leaderboard={liveLeaderboard} />
+        </div>
+      </div>
+
+      {/* ─── F-005 Section C: Timing Alert Feed ─── */}
+      <div>
+        <h2
+          className="mb-2 text-lg font-semibold"
+          style={{ fontFamily: 'var(--font-sans)' }}
+        >
+          🔔 Timing Alert Feed
+        </h2>
+        <AlertFeedPanel items={recentActivity} />
+      </div>
+
+      {/* ─── F-002 retained: Course breakdown grid (Auto-derive CTA) ─── */}
+      <div>
+        <h2
+          className="mb-2 text-lg font-semibold"
+          style={{ fontFamily: 'var(--font-sans)' }}
+        >
+          ⚙ Cài đặt theo cự ly
+        </h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {courses.map((c) => (
             <CourseCard
@@ -143,31 +261,6 @@ export function CockpitTab({ raceId }: { raceId: string }) {
             />
           ))}
         </div>
-      </div>
-
-      {/* ─── Section 3: Checkpoint progression ─── */}
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">📈 Tiến độ qua checkpoint</h2>
-        {checkpointProgression.length === 0 ? (
-          <Card>
-            <CardContent className="p-4 text-sm text-stone-600">
-              Chưa có course nào có checkpoints config. Click 🪄 Auto-derive
-              ở mỗi card cự ly trên kia.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {checkpointProgression.map((p) => (
-              <ProgressionRow key={p.courseId} progression={p} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ─── Section 5: Live activity feed ─── */}
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">🔔 Hoạt động gần đây</h2>
-        <ActivityFeed items={recentActivity} />
       </div>
 
       {/* Discovery dialog */}
@@ -335,188 +428,9 @@ function Mini({
   );
 }
 
-function ProgressionRow({
-  progression,
-}: {
-  progression: CheckpointProgression;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">
-          {progression.courseName}
-          <span className="ml-2 text-sm font-normal text-stone-500">
-            · {progression.startedCount} started
-            {progression.distanceKm && ` · ${progression.distanceKm}km`}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {progression.points.length === 0 ? (
-          <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            ⚠ Course chưa config checkpoints. Click <strong>🪄 Auto-derive</strong>{' '}
-            ở card cự ly bên trên.
-          </div>
-        ) : progression.startedCount === 0 ? (
-          <div className="rounded border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">
-            ⏳ Chưa có athlete nào qua điểm nào — race chưa bắt đầu HOẶC
-            simulation chưa Play. Đợi 30s sau khi simulator Play để timing-alert
-            poll fetch data.
-          </div>
-        ) : (
-          /* B3 — overflow-x-auto + min-width đảm bảo chart không vỡ trên tablet/phone */
-          <div className="overflow-x-auto">
-            <div className="min-w-[640px] space-y-2">
-              {progression.points.map((pt, idx) => {
-                const ratio = pt.passedRatio;
-                const prevRatio =
-                  idx > 0 ? progression.points[idx - 1].passedRatio : ratio;
-                const drop = prevRatio - ratio;
-                const isAnomaly =
-                  idx > 0 && drop > 0.3 && idx < progression.points.length - 1;
-                return (
-                  <div key={pt.key} className="flex items-center gap-3 text-sm">
-                    <div className="w-32 shrink-0 truncate font-medium" title={pt.name}>
-                      {pt.name}
-                      {pt.distanceKm !== null && (
-                        <span className="ml-1 text-xs text-stone-500">
-                          {pt.distanceKm}km
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-[160px]">
-                      <div className="h-5 w-full overflow-hidden rounded bg-stone-200">
-                        <div
-                          className={`h-full transition-all ${
-                            isAnomaly
-                              ? 'bg-red-500'
-                              : ratio >= 0.95
-                                ? 'bg-green-600'
-                                : ratio >= 0.7
-                                  ? 'bg-blue-600'
-                                  : 'bg-amber-500'
-                          }`}
-                          style={{
-                            width: `${Math.max(2, Math.round(ratio * 100))}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="w-36 shrink-0 text-right font-mono text-xs">
-                      {pt.passedCount.toLocaleString('vi-VN')} /{' '}
-                      {pt.expectedCount.toLocaleString('vi-VN')}
-                      <span className="ml-1 text-stone-500">
-                        ({(ratio * 100).toFixed(1)}%)
-                      </span>
-                    </div>
-                    {isAnomaly && (
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 border-red-300 bg-red-50 text-red-800"
-                        title={`Drop ${(drop * 100).toFixed(1)}% so với checkpoint trước`}
-                      >
-                        ⚠ Drop
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ActivityFeed({ items }: { items: RecentActivityItem[] }) {
-  if (items.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-4 text-sm text-stone-600">
-          Chưa có hoạt động.
-        </CardContent>
-      </Card>
-    );
-  }
-  return (
-    <Card>
-      <CardContent className="max-h-96 overflow-y-auto p-0">
-        <ul className="divide-y divide-stone-200">
-          {items.map((it, idx) => (
-            <li key={idx} className="flex items-start gap-3 px-4 py-2 text-sm">
-              <span className="mt-0.5 flex w-6 shrink-0 items-center justify-center">
-                {iconForType(it.type)}
-              </span>
-              <div className="flex-1 min-w-0">
-                <ActivityLine item={it} />
-              </div>
-              <span className="shrink-0 font-mono text-xs text-stone-500">
-                {formatRelative(it.at)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  );
-}
-
-function iconForType(type: string): string {
-  if (type === 'alert.created') return '🔴';
-  if (type === 'alert.resolved') return '✅';
-  if (type === 'poll.completed') return '🔄';
-  return '•';
-}
-
-function ActivityLine({ item }: { item: RecentActivityItem }) {
-  const p = item.payload;
-  if (item.type === 'alert.created' || item.type === 'alert.resolved') {
-    return (
-      <span>
-        <strong>BIB {String(p.bib ?? '?')}</strong>{' '}
-        {String(p.name ?? '')} — {String(p.contest ?? '')}{' '}
-        <Badge
-          variant="outline"
-          className={
-            p.severity === 'CRITICAL'
-              ? 'ml-1 border-red-300 bg-red-50 text-red-800'
-              : 'ml-1'
-          }
-        >
-          {String(p.severity ?? '')}
-        </Badge>{' '}
-        miss {String(p.missingPoint ?? '')}
-        {item.type === 'alert.resolved' && (
-          <span className="ml-2 text-stone-500">(resolved)</span>
-        )}
-      </span>
-    );
-  }
-  if (item.type === 'poll.completed') {
-    return (
-      <span>
-        Poll <strong>{String(p.course ?? '')}</strong> — fetched{' '}
-        {Number(p.athletesFetched ?? 0).toLocaleString('vi-VN')}, +
-        {String(p.alertsCreated ?? 0)} new, -{String(p.alertsResolved ?? 0)} resolved
-      </span>
-    );
-  }
-  return <span className="text-stone-500">{item.type}</span>;
-}
-
-function formatRelative(iso: string): string {
-  try {
-    const t = new Date(iso).getTime();
-    const diff = Date.now() - t;
-    if (diff < 60_000) return 'vừa xong';
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
-    return new Date(iso).toLocaleDateString('vi-VN');
-  } catch {
-    return iso;
-  }
-}
+// F-005 — Inline ProgressionRow / ActivityFeed / iconForType / ActivityLine /
+// formatRelative đã được REMOVED. Logic moved sang components/command-center/
+// (AthleteFlowChart + AlertFeedPanel) để follow design canvas Artboard 3.
 
 /**
  * Race elapsed clock — ticks 1Hz client-side từ `startedAt` ISO timestamp.

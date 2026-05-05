@@ -373,13 +373,60 @@ export interface RecentActivityItem {
   payload: Record<string, unknown>;
 }
 
+// ─────────── F-005 — Command Center additive types ───────────
+
+export interface LiveLeaderboardEntry {
+  rank: number;
+  bib: string;
+  athleteName: string;
+  lastCheckpoint: string;
+  lastCheckpointTime: string;
+  finishTime: string | null;
+  gap: string | null;
+  hasMissingFinish: boolean;
+  gender: string | null;
+  ageGroup: string | null;
+}
+
+export interface LiveLeaderboardCourse {
+  courseId: string;
+  courseName: string;
+  distanceKm: number | null;
+  entries: LiveLeaderboardEntry[];
+}
+
+export interface SummaryCards {
+  totalRegistered: number;
+  racekitPickedUp: number;
+  started: number;
+  finished: number;
+  dns: number;
+  missCount: number;
+  /** 0..100 percentage */
+  missRate: number;
+}
+
 export interface DashboardSnapshot {
   race: RaceMeta;
   raceStats: RaceStats;
   courses: CourseStats[];
   checkpointProgression: CheckpointProgression[];
   recentActivity: RecentActivityItem[];
+  /** F-005 — top N live leaderboard per course (default 10) */
+  liveLeaderboard: LiveLeaderboardCourse[];
+  /** F-005 — race-level summary metric cards */
+  summary: SummaryCards;
   generatedAt: string;
+}
+
+export async function getLiveLeaderboard(
+  raceId: string,
+  courseId: string,
+  limit = 10,
+): Promise<LiveLeaderboardCourse> {
+  return clientGet<LiveLeaderboardCourse>(
+    `/api/admin/races/${raceId}/timing-alert/leaderboard/${courseId}?limit=${limit}`,
+  );
 }
 
 export async function getDashboardSnapshot(
@@ -387,6 +434,29 @@ export async function getDashboardSnapshot(
 ): Promise<DashboardSnapshot> {
   return clientGet<DashboardSnapshot>(
     `/api/admin/races/${raceId}/timing-alert/dashboard-snapshot`,
+  );
+}
+
+// ─────────── F-005 BR-CC-10 — Force Refresh ───────────
+
+export interface ForceRefreshResponse {
+  status: 'TRIGGERED' | 'STAMPEDE_WAIT';
+  refreshed: boolean;
+  message: string;
+}
+
+/**
+ * Force re-poll race + invalidate cache (Command Center BR-CC-10).
+ *
+ * 409 → user spam guard (30s window): caller phải hiển thị toast magenta
+ * "đợi 30s rồi thử lại". Use `err instanceof HttpError && err.status === 409`
+ * để discriminate.
+ */
+export async function forceRefreshCommandCenter(
+  raceId: string,
+): Promise<ForceRefreshResponse> {
+  return clientPost<ForceRefreshResponse>(
+    `/api/admin/races/${raceId}/timing-alert/command-center/force-refresh`,
   );
 }
 

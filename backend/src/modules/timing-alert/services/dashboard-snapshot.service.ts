@@ -17,6 +17,7 @@ import {
   TimingAlertPollDocument,
 } from '../schemas/timing-alert-poll.schema';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
+import { CommandCenterService } from './command-center.service';
 import {
   DashboardSnapshotResponseDto,
   RaceStatsDto,
@@ -77,15 +78,16 @@ export class DashboardSnapshotService {
     private readonly pollModel: Model<TimingAlertPollDocument>,
     @InjectRedis() private readonly redis: Redis,
     private readonly notification: NotificationDispatcherService,
+    private readonly commandCenter: CommandCenterService,
   ) {}
 
   /**
-   * Main entry — orchestrate 4 sub-queries song song + assemble snapshot.
+   * Main entry — orchestrate sub-queries song song + assemble snapshot.
    *
-   * Cache key: `dashboard-snapshot:{raceId}` TTL 15s.
+   * Cache key: `master:rr-snapshot:{raceId}` TTL 15s (F-005 namespace align).
    */
   async getSnapshot(raceId: string): Promise<DashboardSnapshotResponseDto> {
-    const cacheKey = `dashboard-snapshot:${raceId}`;
+    const cacheKey = `master:rr-snapshot:${raceId}`;
     const cached = await this.redis.get(cacheKey);
     if (cached) {
       try {
@@ -113,6 +115,12 @@ export class DashboardSnapshotService {
     // Checkpoint progression (1 query aggregation cho all courses)
     const progression = await this.computeCheckpointProgression(raceId, race);
 
+    // F-005 — Command Center sections: live leaderboard + summary cards
+    const [liveLeaderboard, summary] = await Promise.all([
+      this.commandCenter.aggregateLeaderboardForAllCourses(raceId, race),
+      this.commandCenter.getSummaryCards(raceId, race, raceStats),
+    ]);
+
     // Mat failure detection — fire-and-forget Telegram anomaly per checkpoint
     // có drop > threshold. Rate limited 10min/(race,course,checkpoint).
     this.detectAndDispatchMatFailures(race, progression).catch((err: Error) => {
@@ -134,6 +142,8 @@ export class DashboardSnapshotService {
       courses: courseStats,
       checkpointProgression: progression,
       recentActivity: pollLogs,
+      liveLeaderboard,
+      summary,
       generatedAt: new Date().toISOString(),
     };
 

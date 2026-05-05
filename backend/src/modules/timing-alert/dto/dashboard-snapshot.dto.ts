@@ -1,13 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { LiveLeaderboardCourseDto } from './live-leaderboard.dto';
+import { SummaryCardsDto } from './summary-cards.dto';
 
 /**
  * Phase 2.2 — Response DTO cho `GET /timing-alert/dashboard-snapshot/:raceId`.
  *
- * Single endpoint trả 4 sections cho admin cockpit:
+ * Single endpoint trả nhiều sections cho admin Command Center (F-005, ex-Cockpit):
  * - race-level KPI (Hero stats bar)
  * - per-course breakdown grid
- * - checkpoint progression (cho stacked bar chart Recharts)
- * - recent activity timeline
+ * - checkpoint progression (athlete flow chart)
+ * - recent activity timeline (alert feed)
+ * - F-005: live leaderboard (top N per course)
+ * - F-005: summary cards (racekit / started / finished / dns / miss%)
  */
 
 export class RaceMetaDto {
@@ -115,6 +119,21 @@ export class DashboardSnapshotResponseDto {
   checkpointProgression!: CheckpointProgressionDto[];
   @ApiProperty({ type: [RecentActivityItemDto] })
   recentActivity!: RecentActivityItemDto[];
+
+  // F-005 — Command Center additive fields (additive only, KHÔNG đổi shape hiện có)
+  @ApiProperty({
+    type: [LiveLeaderboardCourseDto],
+    description:
+      'Top N live leaderboard per course (default 10). Empty array nếu race draft/pre_race.',
+  })
+  liveLeaderboard!: LiveLeaderboardCourseDto[];
+
+  @ApiProperty({
+    type: SummaryCardsDto,
+    description: 'Race-level summary cards (racekit / started / finished / dns / miss%)',
+  })
+  summary!: SummaryCardsDto;
+
   @ApiProperty({ description: 'ISO timestamp khi snapshot generated' })
   generatedAt!: string;
 }

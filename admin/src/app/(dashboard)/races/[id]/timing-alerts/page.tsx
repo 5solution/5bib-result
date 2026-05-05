@@ -212,10 +212,15 @@ export default function TimingAlertsPage() {
     <div className="space-y-4">
       {/* ─── Page header ─── */}
       <div>
-        <h1 className="text-2xl font-bold">⚠ Race Timing Operation</h1>
+        <h1
+          className="text-2xl font-bold"
+          style={{ fontFamily: 'var(--font-sans)' }}
+        >
+          🎯 Race Day Command Center
+        </h1>
         <p className="text-sm text-stone-600">
-          Theo dõi giải đấu realtime — VĐV đang chạy, suspect chip miss, mat
-          failure. Poll mỗi {config.data.poll_interval_seconds}s.
+          Theo dõi giải đấu realtime — athlete flow, live leaderboard, timing
+          alerts. Poll mỗi {config.data.poll_interval_seconds}s.
         </p>
       </div>
 
@@ -283,7 +288,7 @@ export default function TimingAlertsPage() {
       {/* ─── Tabs ─── */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
         <TabsList>
-          <TabsTrigger value="cockpit">🎯 Cockpit</TabsTrigger>
+          <TabsTrigger value="cockpit">🎯 Command Center</TabsTrigger>
           <TabsTrigger value="alerts">⚠ Alerts</TabsTrigger>
           <TabsTrigger value="podium">🏆 Trao giải</TabsTrigger>
         </TabsList>
