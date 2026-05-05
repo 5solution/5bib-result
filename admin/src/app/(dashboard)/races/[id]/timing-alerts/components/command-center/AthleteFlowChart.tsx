@@ -3,17 +3,14 @@
 /**
  * FEATURE-005 — Athlete Flow Chart component (Command Center).
  *
- * Reuse `checkpointProgression` từ F-002 snapshot. Per design canvas Artboard 3:
- * - Course tabs ở top
- * - Bar colors theo health (good blue / warn amber / critical magenta)
- * - Vertical horizontal bars per checkpoint (consistent với F-002 style)
- *
- * Note: F-002 đã dùng pure Tailwind bars trong CockpitTab `ProgressionRow`.
- * Component này extract layout đó + thêm course tab navigation theo F-005 design.
+ * Per design canvas Artboard 3 (race-ops-command.jsx FlowChart):
+ * - Dual-bar overlay: ghost dashed (expected) + filled gradient (actual)
+ * - Health colors: good ≥90% (green), warn 70-90% (amber), fail <70% (red)
+ * - Pct-of-expected label + status badge (OK/ATT/CRIT)
+ * - Pill course tabs (Tab primitive style)
  */
 
 import { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import type { CheckpointProgression } from '@/lib/timing-alert-api';
 
 interface AthleteFlowChartProps {
@@ -27,11 +24,11 @@ export function AthleteFlowChart({ progression }: AthleteFlowChartProps) {
 
   if (progression.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-4 text-sm text-stone-600">
+      <CardShell>
+        <div className="p-4 text-sm text-stone-600">
           Chưa có course nào có checkpoints config — chưa render được chart flow.
-        </CardContent>
-      </Card>
+        </div>
+      </CardShell>
     );
   }
 
@@ -39,119 +36,228 @@ export function AthleteFlowChart({ progression }: AthleteFlowChartProps) {
     progression.find((p) => p.courseId === activeCourseId) ?? progression[0];
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        {/* Course tabs */}
-        <div className="flex flex-wrap gap-1 border-b border-stone-200 bg-stone-50 px-3 py-2">
-          {progression.map((p) => {
-            const isActive = p.courseId === active.courseId;
-            return (
-              <button
-                key={p.courseId}
-                type="button"
-                onClick={() => setActiveCourseId(p.courseId)}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-stone-700 hover:bg-stone-200'
-                }`}
-                style={{ fontFamily: 'var(--font-sans)' }}
-              >
-                {p.courseName}
-                {p.distanceKm !== null && (
-                  <span className="ml-1 opacity-75">{p.distanceKm}km</span>
-                )}
-              </button>
-            );
-          })}
+    <CardShell>
+      {/* Course pill tabs */}
+      <div
+        className="flex items-center gap-3 border-b px-4 py-3"
+        style={{ borderColor: 'var(--5s-border)' }}
+      >
+        <h3
+          className="text-[15px] font-extrabold tracking-tight"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          Athlete Flow Monitor
+        </h3>
+        <div
+          className="ml-auto flex items-center gap-1 rounded-full p-[3px]"
+          style={{ background: 'var(--5s-surface)' }}
+        >
+          {progression.map((p) => (
+            <PillTab
+              key={p.courseId}
+              active={p.courseId === active.courseId}
+              onClick={() => setActiveCourseId(p.courseId)}
+            >
+              {p.courseName}
+            </PillTab>
+          ))}
         </div>
+      </div>
 
-        <div className="p-4">
-          {active.points.length === 0 ? (
-            <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              ⚠ Course chưa config checkpoints. Mở tab Course settings để
-              auto-derive.
+      <div className="p-4">
+        {active.points.length === 0 ? (
+          <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            ⚠ Course chưa config checkpoints. Mở tab Course settings để
+            auto-derive.
+          </div>
+        ) : active.startedCount === 0 ? (
+          <div
+            className="rounded border bg-stone-50 p-3 text-sm text-stone-600"
+            style={{ borderColor: 'var(--5s-border)' }}
+          >
+            ⏳ Chưa có athlete nào qua điểm nào.
+          </div>
+        ) : (
+          <FlowRows points={active.points} startedCount={active.startedCount} />
+        )}
+      </div>
+    </CardShell>
+  );
+}
+
+function FlowRows({
+  points,
+  startedCount,
+}: {
+  points: CheckpointProgression['points'];
+  startedCount: number;
+}) {
+  const max = Math.max(
+    ...points.map((p) => Math.max(p.passedCount, p.expectedCount)),
+    1,
+  );
+  const colors = {
+    good: '#16A34A',
+    warn: '#F59E0B',
+    fail: '#DC2626',
+  };
+  const health = (c: number, e: number): keyof typeof colors =>
+    c >= e * 0.9 ? 'good' : c >= e * 0.7 ? 'warn' : 'fail';
+
+  return (
+    <div className="flex flex-col gap-3.5">
+      {points.map((pt, idx) => {
+        const h = health(pt.passedCount, pt.expectedCount);
+        const actualPct = (pt.passedCount / max) * 100;
+        const expPct = (pt.expectedCount / max) * 100;
+        const pctOfExp =
+          pt.expectedCount > 0
+            ? (pt.passedCount / pt.expectedCount) * 100
+            : 0;
+        const color = colors[h];
+        const badgeLabel = h === 'good' ? 'OK' : h === 'warn' ? 'ATT' : 'CRIT';
+
+        return (
+          <div
+            key={pt.key}
+            className="grid items-center gap-3"
+            style={{ gridTemplateColumns: '130px 1fr 110px' }}
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold text-stone-900">
+              <span
+                className="w-5 text-[11px] text-stone-500"
+                style={{ fontFamily: 'var(--font-mono)' }}
+              >
+                {idx + 1}.
+              </span>
+              <span className="truncate" title={pt.name}>
+                {pt.name}
+              </span>
             </div>
-          ) : active.startedCount === 0 ? (
-            <div className="rounded border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">
-              ⏳ Chưa có athlete nào qua điểm nào.
-            </div>
-          ) : (
-            <div className="space-y-2">
+            <div className="relative h-[30px]">
+              {/* expected ghost bar */}
               <div
-                className="text-xs text-stone-600"
-                style={{ fontFamily: 'var(--font-sans)' }}
+                className="absolute left-0 top-0 bottom-0 rounded-md border-[1.5px] border-dashed"
+                style={{
+                  width: `${expPct}%`,
+                  borderColor: `${color}40`,
+                }}
+              />
+              {/* actual filled bar */}
+              <div
+                className="absolute left-0 top-0 bottom-0 flex items-center rounded-md pl-2.5"
+                style={{
+                  width: `${actualPct}%`,
+                  background: `linear-gradient(90deg, ${color}30, ${color}80)`,
+                  borderLeft: `3px solid ${color}`,
+                }}
               >
-                {active.startedCount.toLocaleString('vi-VN')} VĐV đã xuất phát
+                <span
+                  className="text-xs font-bold text-[#0F172A]"
+                  style={{ fontFamily: 'var(--font-mono)' }}
+                >
+                  {pt.passedCount.toLocaleString('vi-VN')}
+                </span>
               </div>
-              <div className="overflow-x-auto">
-                <div className="min-w-[480px] space-y-2">
-                  {active.points.map((pt, idx) => {
-                    const ratio = pt.passedRatio;
-                    const prevRatio =
-                      idx > 0 ? active.points[idx - 1].passedRatio : ratio;
-                    const drop = prevRatio - ratio;
-                    const isAnomaly =
-                      idx > 0 &&
-                      drop > 0.3 &&
-                      idx < active.points.length - 1;
-                    const barColor = isAnomaly
-                      ? 'bg-[#FF0E65]'
-                      : ratio >= 0.95
-                        ? 'bg-emerald-600'
-                        : ratio >= 0.7
-                          ? 'bg-blue-600'
-                          : 'bg-amber-500';
-
-                    return (
-                      <div
-                        key={pt.key}
-                        className="flex items-center gap-3 text-sm"
-                      >
-                        <div
-                          className="w-32 shrink-0 truncate font-medium"
-                          title={pt.name}
-                          style={{ fontFamily: 'var(--font-sans)' }}
-                        >
-                          {pt.name}
-                          {pt.distanceKm !== null && (
-                            <span
-                              className="ml-1 text-xs text-stone-500"
-                              style={{ fontFamily: 'var(--font-mono)' }}
-                            >
-                              {pt.distanceKm}km
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="h-5 w-full overflow-hidden rounded bg-stone-200">
-                            <div
-                              className={`h-full transition-all ${barColor}`}
-                              style={{
-                                width: `${Math.max(2, Math.round(ratio * 100))}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div
-                          className="w-32 shrink-0 text-right text-xs text-stone-700"
-                          style={{ fontFamily: 'var(--font-mono)' }}
-                        >
-                          {pt.passedCount.toLocaleString('vi-VN')} /{' '}
-                          {pt.expectedCount.toLocaleString('vi-VN')}
-                          <span className="ml-1 text-stone-500">
-                            ({(ratio * 100).toFixed(1)}%)
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              {/* expected label */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] text-stone-500"
+                style={{
+                  left: `${expPct}%`,
+                  transform: 'translate(8px, -50%)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                ~{pt.expectedCount.toLocaleString('vi-VN')}
               </div>
             </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            <div className="flex items-center justify-end gap-2">
+              <div
+                className="text-[13px] font-bold"
+                style={{ fontFamily: 'var(--font-mono)', color }}
+              >
+                {pctOfExp.toFixed(1)}%
+              </div>
+              <span
+                className="rounded-full px-1.5 py-[2px] text-[9px] font-extrabold uppercase tracking-wider"
+                style={{
+                  background: `${color}18`,
+                  color,
+                  letterSpacing: '.05em',
+                }}
+              >
+                {badgeLabel}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+      <div
+        className="mt-2 flex flex-wrap items-center gap-4 border-t border-dashed pt-3 text-[11px] text-stone-500"
+        style={{ borderColor: 'var(--5s-border)' }}
+      >
+        <Legend color="#16A34A" label="≥90% — healthy" />
+        <Legend color="#F59E0B" label="70–90% — attention" />
+        <Legend color="#DC2626" label="<70% — possible equipment" />
+        <span
+          className="ml-auto"
+          style={{ fontFamily: 'var(--font-mono)' }}
+        >
+          Started: {startedCount.toLocaleString('vi-VN')}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="inline-block h-2.5 w-2.5 rounded"
+        style={{ background: color }}
+      />
+      {label}
+    </span>
+  );
+}
+
+function PillTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center rounded-full px-3.5 text-[12px] font-bold transition-colors"
+      style={{
+        height: 30,
+        background: active ? '#0F172A' : 'transparent',
+        color: active ? '#fff' : 'var(--5s-text-muted)',
+        fontFamily: 'var(--font-display)',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CardShell({ children }: { children: React.ReactNode }) {
+  return (
+    <section
+      className="overflow-hidden rounded-[14px] border bg-white"
+      style={{
+        borderColor: 'var(--5s-border)',
+        boxShadow: 'var(--shadow-xs)',
+      }}
+    >
+      {children}
+    </section>
   );
 }

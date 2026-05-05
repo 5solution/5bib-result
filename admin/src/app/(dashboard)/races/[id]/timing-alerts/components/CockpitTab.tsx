@@ -3,17 +3,18 @@
 /**
  * F-005 — Race Day Command Center (was Cockpit, F-002).
  *
- * Sections (per design canvas Artboard 3):
- * 1. Race elapsed clock + freshness indicator (F-002 base)
- * 2. Hero stats — race-level KPI bar (F-002 base)
- * 3. Athlete Flow Monitor (chart per checkpoint)
- * 4. Live Leaderboard (top N per course) — F-005 NEW
- * 5. Timing Alert Feed (recent activity)
- * 6. Summary Cards Row (racekit / started / finished / dns / miss%) — F-005 NEW
- * 7. Course breakdown grid (F-002 retained for auto-derive CTA)
+ * Visual polish round 2026-05-05 — applies design canvas Artboard 3:
+ * - 1 unified header (eyebrow + race title + status pill + sync info + poll + refresh)
+ * - SummaryCardsRow (5 metrics)
+ * - 2-col grid: AthleteFlowChart (60%) + LiveLeaderboardTable (40%)
+ * - AlertFeedPanel full width
  *
- * **Note:** Component file name kept as `CockpitTab.tsx` per Manager directive
- * (giảm git diff noise; UI label đổi "Cockpit" → "Command Center").
+ * REMOVED in polish round (3 duplicates):
+ * - Hero Stats grid (5 cards) — duplicate of SummaryCardsRow
+ * - Freshness blue strip + RaceElapsedClock standalone — consolidated into unified header
+ * - Course breakdown grid ("Cài đặt theo cự ly") — deferred per F-006 Course Map
+ *
+ * **Note:** Component file name kept as `CockpitTab.tsx` per Manager directive.
  *
  * **Data:** `dashboard-snapshot` endpoint gộp tất cả sources, refetch 30s + on SSE.
  * Query key `['dashboard-snapshot', raceId]` GIỮ NGUYÊN — backward compat F-002.
@@ -23,20 +24,13 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   forceRefreshCommandCenter,
   getDashboardSnapshot,
   HttpError,
-  type CourseStats,
   type ForceRefreshResponse,
 } from '@/lib/timing-alert-api';
 import { CheckpointDiscoveryDialog } from './CheckpointDiscoveryDialog';
@@ -50,6 +44,7 @@ export function CockpitTab({ raceId }: { raceId: string }) {
     id: string;
     name: string;
   } | null>(null);
+  const [pollInterval, setPollInterval] = useState<number>(30);
 
   const qc = useQueryClient();
 
@@ -57,7 +52,7 @@ export function CockpitTab({ raceId }: { raceId: string }) {
     queryKey: ['dashboard-snapshot', raceId],
     queryFn: () => getDashboardSnapshot(raceId),
     enabled: !!raceId,
-    refetchInterval: 30_000,
+    refetchInterval: pollInterval * 1000,
   });
 
   /**
@@ -104,8 +99,7 @@ export function CockpitTab({ raceId }: { raceId: string }) {
   }
 
   const {
-    raceStats,
-    courses,
+    race,
     checkpointProgression,
     recentActivity,
     liveLeaderboard,
@@ -116,154 +110,41 @@ export function CockpitTab({ raceId }: { raceId: string }) {
   const elapsedSec = generatedAt
     ? Math.floor((Date.now() - new Date(generatedAt).getTime()) / 1000)
     : 0;
+  const stale = elapsedSec > 300;
 
   return (
-    <div className="space-y-4">
-      {/* Race elapsed clock — ticks 1Hz client-side từ race.startedAt */}
-      <RaceElapsedClock
-        startedAt={snapshot.data.race.startedAt}
-        startedAtSource={snapshot.data.race.startedAtSource}
-        status={snapshot.data.race.status}
+    <div
+      className="-mx-4 -mt-4 space-y-4 px-4 pt-4 pb-8"
+      style={{ background: 'var(--5s-bg)' }}
+    >
+      {/* ─── Unified Header ─── */}
+      <CommandHeader
+        race={race}
+        elapsedSec={elapsedSec}
+        stale={stale}
+        pollInterval={pollInterval}
+        setPollInterval={setPollInterval}
+        onForceRefresh={() => forceRefreshMutation.mutate()}
+        refreshing={forceRefreshMutation.isPending}
       />
 
-      {/* Data freshness indicator + F-005 BR-CC-10 Force Refresh button */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-        <span>
-          📊 Data live từ timing-alert poll cache (cập nhật mỗi 30s).{' '}
-          {elapsedSec < 60
-            ? `Snapshot ${elapsedSec}s trước`
-            : `Snapshot ${Math.floor(elapsedSec / 60)} phút trước`}
-        </span>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => forceRefreshMutation.mutate()}
-            disabled={forceRefreshMutation.isPending}
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${
-                forceRefreshMutation.isPending ? 'animate-spin' : ''
-              }`}
-            />
-            {forceRefreshMutation.isPending
-              ? 'Đang refresh...'
-              : 'Force Refresh'}
-          </Button>
-          <span className="text-blue-700">
-            Auto-refresh 30s + push qua SSE
-          </span>
-        </div>
-      </div>
+      {/* ─── Summary Cards Row (5 metrics) ─── */}
+      <SummaryCardsRow summary={summary} />
 
-      {/* ─── Section 1: Hero Stats ─── */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <HeroCard
-          label="VĐV xuất phát"
-          value={raceStats.started.toLocaleString('vi-VN')}
-          accent="blue"
-          subtitle="có time tại Start"
-        />
-        <HeroCard
-          label="VĐV về đích"
-          value={raceStats.finished.toLocaleString('vi-VN')}
-          accent="green"
-          subtitle={`${(raceStats.progress * 100).toFixed(1)}% xong`}
-        />
-        <HeroCard
-          label="Đang trên đường"
-          value={raceStats.onCourse.toLocaleString('vi-VN')}
-          accent="amber"
-          subtitle="started − finished"
-        />
-        <HeroCard
-          label="Nghi vấn miss chip"
-          value={raceStats.suspectOpen.toString()}
-          accent={raceStats.criticalOpen > 0 ? 'red' : 'stone'}
-          subtitle={
-            raceStats.criticalOpen > 0
-              ? `${raceStats.criticalOpen} CRITICAL`
-              : 'không có CRITICAL'
-          }
-        />
-        <HeroCard
-          label="Tiến độ giải"
-          value={`${(raceStats.progress * 100).toFixed(0)}%`}
-          accent="stone"
-          progressBar={raceStats.progress}
-          subtitle="finished / started"
-        />
-      </div>
-
-      {/* ─── F-005 Section: Summary Cards Row ─── */}
-      <div>
-        <h2
-          className="mb-2 text-lg font-semibold"
-          style={{ fontFamily: 'var(--font-sans)' }}
-        >
-          📊 Tổng quan giải
-        </h2>
-        <SummaryCardsRow summary={summary} />
-      </div>
-
+      {/* ─── Main 2-col grid ─── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        {/* ─── F-005 Section A: Athlete Flow Monitor (60%) ─── */}
         <div className="lg:col-span-3">
-          <h2
-            className="mb-2 text-lg font-semibold"
-            style={{ fontFamily: 'var(--font-sans)' }}
-          >
-            📈 Athlete Flow Monitor
-          </h2>
           <AthleteFlowChart progression={checkpointProgression} />
         </div>
-
-        {/* ─── F-005 Section B: Live Leaderboard (40%) ─── */}
         <div className="lg:col-span-2">
-          <h2
-            className="mb-2 text-lg font-semibold"
-            style={{ fontFamily: 'var(--font-sans)' }}
-          >
-            🏁 Live Leaderboard
-          </h2>
           <LiveLeaderboardTable leaderboard={liveLeaderboard} />
         </div>
       </div>
 
-      {/* ─── F-005 Section C: Timing Alert Feed ─── */}
-      <div>
-        <h2
-          className="mb-2 text-lg font-semibold"
-          style={{ fontFamily: 'var(--font-sans)' }}
-        >
-          🔔 Timing Alert Feed
-        </h2>
-        <AlertFeedPanel items={recentActivity} />
-      </div>
+      {/* ─── Timing Alert Feed ─── */}
+      <AlertFeedPanel items={recentActivity} />
 
-      {/* ─── F-002 retained: Course breakdown grid (Auto-derive CTA) ─── */}
-      <div>
-        <h2
-          className="mb-2 text-lg font-semibold"
-          style={{ fontFamily: 'var(--font-sans)' }}
-        >
-          ⚙ Cài đặt theo cự ly
-        </h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {courses.map((c) => (
-            <CourseCard
-              key={c.courseId}
-              course={c}
-              onAutoDerive={() =>
-                setDiscoveryCourse({ id: c.courseId, name: c.name })
-              }
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Discovery dialog */}
+      {/* Discovery dialog — KEEP for F-002 auto-derive (TODO F-006 Course Map sẽ thay) */}
       <CheckpointDiscoveryDialog
         raceId={raceId}
         courseId={discoveryCourse?.id ?? null}
@@ -277,175 +158,188 @@ export function CockpitTab({ raceId }: { raceId: string }) {
   );
 }
 
-// ─────────── Sub-components ───────────
+// ─────────── Unified header ───────────
 
-function HeroCard({
-  label,
-  value,
-  accent,
-  subtitle,
-  progressBar,
-}: {
-  label: string;
-  value: string;
-  accent: 'blue' | 'green' | 'amber' | 'red' | 'stone';
-  subtitle?: string;
-  progressBar?: number;
-}) {
-  const colorMap: Record<string, string> = {
-    blue: 'border-blue-200 bg-blue-50 text-blue-900',
-    green: 'border-green-200 bg-green-50 text-green-900',
-    amber: 'border-amber-200 bg-amber-50 text-amber-900',
-    red: 'border-red-200 bg-red-50 text-red-900',
-    stone: 'border-stone-200 bg-stone-50 text-stone-900',
+interface CommandHeaderProps {
+  race: {
+    title: string;
+    status: string;
+    startedAt: string | null;
+    startedAtSource:
+      | 'status_history'
+      | 'course_start_time'
+      | 'recent_history'
+      | null;
   };
-  return (
-    <Card className={colorMap[accent]}>
-      <CardContent className="p-4">
-        <div className="text-xs font-semibold uppercase tracking-wide opacity-70">
-          {label}
-        </div>
-        <div className="mt-1 text-3xl font-bold">{value}</div>
-        {subtitle && (
-          <div className="mt-1 text-xs opacity-70">{subtitle}</div>
-        )}
-        {progressBar !== undefined && (
-          <div className="mt-2 h-2 w-full overflow-hidden rounded bg-stone-200">
-            <div
-              className="h-full bg-blue-600 transition-all"
-              style={{ width: `${Math.round(progressBar * 100)}%` }}
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+  elapsedSec: number;
+  stale: boolean;
+  pollInterval: number;
+  setPollInterval: (v: number) => void;
+  onForceRefresh: () => void;
+  refreshing: boolean;
 }
 
-function CourseCard({
-  course,
-  onAutoDerive,
-}: {
-  course: CourseStats;
-  onAutoDerive: () => void;
-}) {
-  const finishRatio =
-    course.started > 0 ? course.finished / course.started : 0;
+function CommandHeader({
+  race,
+  elapsedSec,
+  stale,
+  pollInterval,
+  setPollInterval,
+  onForceRefresh,
+  refreshing,
+}: CommandHeaderProps) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between text-base">
-          <span>{course.name}</span>
-          {course.distanceKm !== null && (
-            <Badge variant="outline">{course.distanceKm}km</Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 pt-0">
-        <div className="grid grid-cols-3 gap-2 text-sm">
-          <Mini label="Xuất phát" value={course.started} />
-          <Mini label="Về đích" value={course.finished} accent="green" />
-          <Mini label="Đang chạy" value={course.onCourse} accent="amber" />
+    <header
+      className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border bg-white p-4"
+      style={{
+        borderColor: 'var(--5s-border)',
+        boxShadow: 'var(--shadow-xs)',
+      }}
+    >
+      <div className="min-w-[280px] flex-1">
+        <div
+          className="text-[11px] font-extrabold uppercase tracking-[.14em] text-stone-500"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          Race · Command Center
         </div>
-
-        <div className="h-2 w-full overflow-hidden rounded bg-stone-200">
-          <div
-            className="h-full bg-green-600 transition-all"
-            style={{ width: `${Math.round(finishRatio * 100)}%` }}
-          />
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          <h1
+            className="text-2xl font-extrabold tracking-tight"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            {race.title}
+          </h1>
+          <StatusPill status={race.status} />
         </div>
-
-        <div className="flex items-center justify-between text-xs text-stone-600">
-          {course.leadingChipTime ? (
-            <span>🥇 {course.leadingChipTime}</span>
-          ) : (
-            <span className="text-stone-400">chưa có finisher</span>
-          )}
-          {course.suspectCount > 0 && (
-            <Badge
-              variant="outline"
-              className="border-red-300 bg-red-50 text-red-800"
-            >
-              {course.suspectCount} suspect
-            </Badge>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between gap-2 pt-2">
-          {course.hasCheckpoints ? (
-            <Badge
-              variant="outline"
-              className="border-green-300 bg-green-50 text-green-800"
-            >
-              ✓ Checkpoints OK
-            </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="border-amber-300 bg-amber-50 text-amber-800"
-            >
-              ⚠ Chưa có checkpoints
-            </Badge>
-          )}
-          {course.apiUrl ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onAutoDerive}
-              className="text-xs"
-            >
-              🪄 Auto-derive
-            </Button>
-          ) : (
-            <span className="text-xs text-stone-400">No apiUrl</span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Mini({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent?: 'green' | 'amber';
-}) {
-  const colorMap: Record<string, string> = {
-    green: 'text-green-700',
-    amber: 'text-amber-700',
-  };
-  return (
-    <div>
-      <div className="text-[10px] uppercase text-stone-500">{label}</div>
-      <div className={`text-lg font-bold ${accent ? colorMap[accent] : ''}`}>
-        {value.toLocaleString('vi-VN')}
+        <ElapsedClockInline
+          startedAt={race.startedAt}
+          startedAtSource={race.startedAtSource}
+          status={race.status}
+        />
       </div>
-    </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span
+          className="inline-flex items-center gap-2 text-xs"
+          style={{
+            color: stale ? 'var(--5s-magenta)' : 'var(--5s-text-muted)',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{
+              background: stale ? 'var(--5s-magenta)' : 'var(--5s-success)',
+              animation: stale ? 'none' : 'ro-blink 2s infinite',
+            }}
+          />
+          Last sync: {elapsedSec}s ago
+        </span>
+        <label
+          className="inline-flex items-center gap-2 rounded-md border bg-white px-3 text-xs"
+          style={{
+            height: 34,
+            borderColor: 'var(--5s-border)',
+          }}
+        >
+          <span className="text-stone-500">Poll</span>
+          <select
+            value={pollInterval}
+            onChange={(e) => setPollInterval(Number(e.target.value))}
+            className="cursor-pointer border-none bg-transparent text-xs font-bold outline-none"
+            style={{ fontFamily: 'var(--font-mono)' }}
+          >
+            <option value={60}>60s</option>
+            <option value={90}>90s</option>
+            <option value={120}>120s</option>
+            <option value={300}>300s</option>
+          </select>
+        </label>
+        <Button
+          onClick={onForceRefresh}
+          disabled={refreshing}
+          variant="outline"
+          size="sm"
+          className="h-9 gap-2"
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
+          />
+          {refreshing ? 'Đang refresh...' : 'Force Refresh'}
+        </Button>
+      </div>
+    </header>
   );
 }
 
-// F-005 — Inline ProgressionRow / ActivityFeed / iconForType / ActivityLine /
-// formatRelative đã được REMOVED. Logic moved sang components/command-center/
-// (AthleteFlowChart + AlertFeedPanel) để follow design canvas Artboard 3.
+// ─────────── Status pill ───────────
+
+function StatusPill({ status }: { status: string }) {
+  const map: Record<
+    string,
+    { bg: string; fg: string; border: string; label: string; live?: boolean }
+  > = {
+    live: {
+      bg: '#FEE2E2',
+      fg: '#991B1B',
+      border: '#FCA5A5',
+      label: 'LIVE',
+      live: true,
+    },
+    ended: {
+      bg: '#E7E5E4',
+      fg: '#44403C',
+      border: '#D6D3D1',
+      label: 'ENDED',
+    },
+    pre_race: {
+      bg: '#FEF3C7',
+      fg: '#92400E',
+      border: '#FCD34D',
+      label: 'PRE-RACE',
+    },
+    draft: {
+      bg: '#F3F0EB',
+      fg: '#44403C',
+      border: '#D6D3D1',
+      label: 'DRAFT',
+    },
+  };
+  const cfg = map[status] ?? {
+    bg: '#F3F0EB',
+    fg: '#44403C',
+    border: '#D6D3D1',
+    label: status.toUpperCase(),
+  };
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider"
+      style={{
+        background: cfg.bg,
+        color: cfg.fg,
+        borderColor: cfg.border,
+      }}
+    >
+      <span
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{
+          background: cfg.fg,
+          animation: cfg.live ? 'ro-blink 1.4s infinite' : 'none',
+        }}
+      />
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─────────── Elapsed clock inline ───────────
 
 /**
- * Race elapsed clock — ticks 1Hz client-side từ `startedAt` ISO timestamp.
- *
- * 3 modes hiển thị:
- * - **Race chưa start** (`startedAt=null`, status=draft/pre_race): hiển thị
- *   "⏳ Race chưa bắt đầu" + scheduled startDate nếu có
- * - **Race live** (status=live): big clock HH:MM:SS xanh + animated pulse
- * - **Race ended** (status=ended): clock đứng tại giờ kết thúc + màu xám
- *
- * Source label hiển thị nhỏ bên cạnh để BTC biết startedAt từ đâu:
- * - `status_history` → "✓ Admin transition" (most accurate)
- * - `course_start_time` → "≈ Theo giờ start course" (fallback estimate)
+ * Inline elapsed clock ticking 1Hz from race.startedAt.
+ * Compact display embedded in unified header (replaces standalone block).
  */
-function RaceElapsedClock({
+function ElapsedClockInline({
   startedAt,
   startedAtSource,
   status,
@@ -458,54 +352,22 @@ function RaceElapsedClock({
     | null;
   status: string;
 }) {
-  // Tick state — increment counter mỗi 1s để force re-render. Dùng counter
-  // thay vì store elapsed string để tránh re-render lúc null/ended.
   const [tickCount, setTickCount] = useState(0);
   useEffect(() => {
     if (!startedAt) return;
-    if (status === 'ended') return; // race over — no need ticking
+    if (status === 'ended') return;
     const interval = setInterval(() => setTickCount((c) => c + 1), 1000);
     return () => clearInterval(interval);
   }, [startedAt, status]);
-  // Reference tickCount in JSX để TS không drop dependency
   void tickCount;
 
-  // Race chưa start hoặc thiếu data config
   if (!startedAt) {
     const isLiveButMissing = status === 'live' || status === 'ended';
     return (
-      <div
-        className={`rounded-lg border p-4 text-center ${
-          isLiveButMissing
-            ? 'border-amber-300 bg-amber-50'
-            : 'border-stone-200 bg-stone-50'
-        }`}
-      >
-        <div
-          className={`text-xs uppercase tracking-wide ${
-            isLiveButMissing ? 'text-amber-700' : 'text-stone-500'
-          }`}
-        >
-          {isLiveButMissing
-            ? '⚠️ Race đang live nhưng chưa config startTime'
-            : '⏳ Race chưa bắt đầu'}
-        </div>
-        <div className="mt-1 text-sm text-stone-700">
-          {isLiveButMissing ? (
-            <>
-              BTC vào <strong>/admin/races/[id]/edit</strong> và set{' '}
-              <code className="rounded bg-stone-200 px-1">race.startDate</code> +{' '}
-              <code className="rounded bg-stone-200 px-1">course.startTime</code>{' '}
-              để clock chạy đúng. (Status: <strong>{status}</strong>)
-            </>
-          ) : (
-            <>
-              Status hiện tại: <strong>{status}</strong>. Đổi sang{' '}
-              <code className="rounded bg-stone-200 px-1">live</code> để bắt đầu
-              tracking.
-            </>
-          )}
-        </div>
+      <div className="mt-2 text-xs text-stone-600">
+        {isLiveButMissing
+          ? '⚠️ Race live nhưng chưa config startedAt — set race.startDate + course.startTime'
+          : '⏳ Race chưa bắt đầu'}
       </div>
     );
   }
@@ -517,65 +379,27 @@ function RaceElapsedClock({
   const ss = elapsedSec % 60;
   const formatted = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 
-  const isLive = status === 'live';
-  const isEnded = status === 'ended';
-  const startedAtLocal = new Date(startedAt).toLocaleString('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-  });
+  const sourceLabel =
+    startedAtSource === 'status_history'
+      ? '✓ Admin transition'
+      : startedAtSource === 'course_start_time'
+        ? '≈ Theo giờ start course'
+        : startedAtSource === 'recent_history'
+          ? '⚠️ Ước tính từ history'
+          : '';
 
   return (
-    <div
-      className={`rounded-lg border p-4 ${
-        isLive
-          ? 'border-emerald-300 bg-emerald-50'
-          : isEnded
-            ? 'border-stone-300 bg-stone-100'
-            : 'border-blue-300 bg-blue-50'
-      }`}
-    >
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <div
-            className={`text-xs font-semibold uppercase tracking-wide ${
-              isLive ? 'text-emerald-700' : 'text-stone-600'
-            }`}
-          >
-            {isLive ? '🟢 Race đang diễn ra' : isEnded ? '⏹ Race đã kết thúc' : '⏱ Elapsed'}
-            {isLive && (
-              <span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-            )}
-          </div>
-          <div
-            className={`mt-1 font-mono text-3xl font-bold tracking-tight md:text-4xl ${
-              isLive
-                ? 'text-emerald-900'
-                : isEnded
-                  ? 'text-stone-700'
-                  : 'text-blue-900'
-            }`}
-          >
-            {formatted}
-          </div>
-        </div>
-        <div className="text-right text-xs text-stone-600">
-          <div>
-            Started: <strong>{startedAtLocal}</strong>
-          </div>
-          <div className="mt-0.5 text-stone-500">
-            {startedAtSource === 'status_history'
-              ? '✓ Theo lịch sử admin transition'
-              : startedAtSource === 'course_start_time'
-                ? '≈ Theo giờ start course (BTC chưa transition status)'
-                : startedAtSource === 'recent_history'
-                  ? '⚠️ Ước tính từ entry history gần nhất — BTC nên config startDate'
-                  : ''}
-          </div>
-        </div>
-      </div>
+    <div className="mt-2 flex items-center gap-3 text-xs text-stone-600">
+      <span className="text-stone-500">⏱ Elapsed</span>
+      <span
+        className="text-base font-bold tracking-tight text-stone-900"
+        style={{ fontFamily: 'var(--font-mono)' }}
+      >
+        {formatted}
+      </span>
+      {sourceLabel && (
+        <span className="text-[11px] text-stone-500">{sourceLabel}</span>
+      )}
     </div>
   );
 }

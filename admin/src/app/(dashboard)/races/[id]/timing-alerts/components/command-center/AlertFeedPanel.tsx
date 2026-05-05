@@ -9,7 +9,6 @@
  * - Compact list 5-10 items
  */
 
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { RecentActivityItem } from '@/lib/timing-alert-api';
 
@@ -24,18 +23,29 @@ export function AlertFeedPanel({ items, limit = 8 }: AlertFeedPanelProps) {
 
   if (visible.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-4 text-sm text-stone-600">
+      <CardShell>
+        <div className="p-4 text-sm text-stone-600">
           Chưa có hoạt động alert nào.
-        </CardContent>
-      </Card>
+        </div>
+      </CardShell>
     );
   }
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <ul className="divide-y divide-stone-200">
+    <CardShell>
+      <div
+        className="border-b px-4 py-3"
+        style={{ borderColor: 'var(--5s-border)' }}
+      >
+        <h3
+          className="text-[15px] font-extrabold tracking-tight"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          Timing Alert Feed
+        </h3>
+      </div>
+      <div className="p-0">
+        <ul className="divide-y" style={{ borderColor: 'var(--5s-border)' }}>
           {visible.map((it, idx) => (
             <li
               key={`${it.type}-${idx}-${it.at}`}
@@ -56,8 +66,22 @@ export function AlertFeedPanel({ items, limit = 8 }: AlertFeedPanelProps) {
             </li>
           ))}
         </ul>
-      </CardContent>
-    </Card>
+      </div>
+    </CardShell>
+  );
+}
+
+function CardShell({ children }: { children: React.ReactNode }) {
+  return (
+    <section
+      className="overflow-hidden rounded-[14px] border bg-white"
+      style={{
+        borderColor: 'var(--5s-border)',
+        boxShadow: 'var(--shadow-xs)',
+      }}
+    >
+      {children}
+    </section>
   );
 }
 

@@ -140,7 +140,25 @@
   --duration-fast: 150ms;
   --duration-normal: 280ms;
   --duration-slow: 500ms;
+
+  /* ── 5Solution design canvas tokens (FEATURE-005 Command Center) ── */
+  --5s-bg: #FAF8F5;
+  --5s-surface: #F3F0EB;
+  --5s-text: #1C1917;
+  --5s-text-muted: #78716C;
+  --5s-border: #E7E2D9;
+  --5s-border-strong: #C7C0B4;
+  --5s-blue: #1D49FF;
+  --5s-blue-50: #E6ECFF;
+  --5s-magenta: #FF0E65;
+  --5s-success: #16A34A;
+  --5s-warning: #F59E0B;
+  --5s-danger: #DC2626;
 }
+
+/* ── Command Center keyframes (race-ops) ── */
+@keyframes ro-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }
+@keyframes ro-pulse { 0% { transform: scale(.9); opacity:.5 } 70% { transform: scale(2.1); opacity:0 } 100% { transform: scale(2.1); opacity:0 } }
 
 /* ── Dark mode (keep simple — admin mostly light) ── */
 .dark {

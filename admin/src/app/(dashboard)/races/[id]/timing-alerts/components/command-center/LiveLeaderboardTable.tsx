@@ -20,7 +20,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import type { LiveLeaderboardCourse } from '@/lib/timing-alert-api';
 
 interface LiveLeaderboardTableProps {
@@ -38,11 +37,11 @@ export function LiveLeaderboardTable({
 
   if (leaderboard.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-4 text-sm text-stone-600">
+      <CardShell>
+        <div className="p-4 text-sm text-stone-600">
           Chưa có data leaderboard. Race có thể đang ở trạng thái draft / pre_race.
-        </CardContent>
-      </Card>
+        </div>
+      </CardShell>
     );
   }
 
@@ -50,10 +49,22 @@ export function LiveLeaderboardTable({
     leaderboard.find((c) => c.courseId === activeCourseId) ?? leaderboard[0];
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        {/* Course tabs */}
-        <div className="flex flex-wrap gap-1 border-b border-stone-200 bg-stone-50 px-3 py-2">
+    <CardShell>
+      {/* Header: title + pill tabs */}
+      <div
+        className="flex items-center gap-3 border-b px-4 py-3"
+        style={{ borderColor: 'var(--5s-border)' }}
+      >
+        <h3
+          className="text-[15px] font-extrabold tracking-tight"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          Live Leaderboard
+        </h3>
+        <div
+          className="ml-auto flex items-center gap-1 rounded-full p-[3px]"
+          style={{ background: 'var(--5s-surface)' }}
+        >
           {leaderboard.map((course) => {
             const isActive = course.courseId === activeCourse.courseId;
             return (
@@ -61,21 +72,21 @@ export function LiveLeaderboardTable({
                 key={course.courseId}
                 type="button"
                 onClick={() => setActiveCourseId(course.courseId)}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-stone-700 hover:bg-stone-200'
-                }`}
-                style={{ fontFamily: 'var(--font-sans)' }}
+                className="inline-flex items-center rounded-full px-3.5 text-[12px] font-bold transition-colors"
+                style={{
+                  height: 30,
+                  background: isActive ? '#0F172A' : 'transparent',
+                  color: isActive ? '#fff' : 'var(--5s-text-muted)',
+                  fontFamily: 'var(--font-display)',
+                }}
               >
                 {course.courseName}
-                {course.distanceKm !== null && (
-                  <span className="ml-1 opacity-75">{course.distanceKm}km</span>
-                )}
               </button>
             );
           })}
         </div>
+      </div>
+      <div className="p-0">
 
         {activeCourse.entries.length === 0 ? (
           <div className="p-6 text-center text-sm text-stone-600">
@@ -190,7 +201,21 @@ export function LiveLeaderboardTable({
             </Table>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </CardShell>
+  );
+}
+
+function CardShell({ children }: { children: React.ReactNode }) {
+  return (
+    <section
+      className="overflow-hidden rounded-[14px] border bg-white"
+      style={{
+        borderColor: 'var(--5s-border)',
+        boxShadow: 'var(--shadow-xs)',
+      }}
+    >
+      {children}
+    </section>
   );
 }
