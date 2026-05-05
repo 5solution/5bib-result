@@ -79,7 +79,7 @@ export class SponsorsService {
 
   async update(id: string, dto: UpdateSponsorDto) {
     const sponsor = await this.sponsorModel
-      .findByIdAndUpdate(id, { $set: dto }, { new: true })
+      .findByIdAndUpdate(id, { $set: dto }, { returnDocument: "after" })
       .lean()
       .exec();
 
@@ -92,7 +92,7 @@ export class SponsorsService {
 
   async softDelete(id: string) {
     const sponsor = await this.sponsorModel
-      .findByIdAndUpdate(id, { $set: { isActive: false } }, { new: true })
+      .findByIdAndUpdate(id, { $set: { isActive: false } }, { returnDocument: "after" })
       .lean()
       .exec();
 

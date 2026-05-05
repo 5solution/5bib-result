@@ -1560,7 +1560,7 @@ export class RaceResultService {
           adminNote: resolutionNote,
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     ).exec();
 
     if (!claim) {
@@ -1658,7 +1658,7 @@ export class RaceResultService {
         $set: updateSet,
         ...(auditEntries.length > 0 ? { $push: { editHistory: { $each: auditEntries } } } : {}),
       },
-      { new: true },
+      { returnDocument: "after" },
     ).lean().exec();
 
     // Invalidate course-level cache + athlete-level cache + badge cache.
@@ -1794,7 +1794,7 @@ export class RaceResultService {
     if (!url) throw new BadRequestException('Upload failed');
 
     const updated = await this.resultModel
-      .findOneAndUpdate({ raceId, bib }, { $set: { avatarUrl: url } }, { new: true })
+      .findOneAndUpdate({ raceId, bib }, { $set: { avatarUrl: url } }, { returnDocument: "after" })
       .lean()
       .exec();
 

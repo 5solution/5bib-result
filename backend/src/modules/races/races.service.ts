@@ -150,7 +150,7 @@ export class RacesService {
     if (dto.endDate) update.endDate = new Date(dto.endDate);
 
     const race = await this.raceModel
-      .findByIdAndUpdate(id, { $set: update }, { new: true })
+      .findByIdAndUpdate(id, { $set: update }, { returnDocument: "after" })
       .lean()
       .exec();
 
@@ -203,7 +203,7 @@ export class RacesService {
     }
 
     const updated = await this.raceModel
-      .findByIdAndUpdate(id, { $set: { status: dto.status } }, { new: true })
+      .findByIdAndUpdate(id, { $set: { status: dto.status } }, { returnDocument: "after" })
       .lean()
       .exec();
 
@@ -248,7 +248,7 @@ export class RacesService {
           $set: { status: to },
           $push: { statusHistory: historyEntry },
         },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean()
       .exec();
@@ -273,7 +273,7 @@ export class RacesService {
     }
 
     const race = await this.raceModel
-      .findByIdAndUpdate(raceId, { $push: { courses: dto } }, { new: true })
+      .findByIdAndUpdate(raceId, { $push: { courses: dto } }, { returnDocument: "after" })
       .lean()
       .exec();
 
@@ -297,7 +297,7 @@ export class RacesService {
       .findOneAndUpdate(
         { _id: raceId, 'courses.courseId': courseId },
         { $set: setFields },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean()
       .exec();
@@ -325,7 +325,7 @@ export class RacesService {
       .findByIdAndUpdate(
         raceId,
         { $pull: { courses: { courseId } } },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean()
       .exec();
@@ -649,7 +649,7 @@ export class RacesService {
     await this.raceModel.findOneAndUpdate(
       { productId },
       { $set: raceDoc },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     );
 
     this.logger.log(`Synced race: ${raceDoc.title} (productId: ${productId})`);

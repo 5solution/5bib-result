@@ -517,7 +517,7 @@ export class CheckpointDiscoveryService {
             'courses.$.checkpoints': sanitized,
           },
         },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean<RaceDocument>()
       .exec();

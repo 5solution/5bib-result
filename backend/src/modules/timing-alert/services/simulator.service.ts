@@ -138,7 +138,7 @@ export class SimulatorService {
     },
   ): Promise<TimingAlertSimulationDocument> {
     const updated = await this.simModel
-      .findByIdAndUpdate(id, { $set: patch }, { new: true })
+      .findByIdAndUpdate(id, { $set: patch }, { returnDocument: "after" })
       .lean<TimingAlertSimulationDocument>()
       .exec();
     if (!updated) throw new NotFoundException(`Simulation ${id} not found`);
@@ -202,7 +202,7 @@ export class SimulatorService {
             fetchedAt: new Date(),
           },
         },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: "after" },
       )
       .exec();
 
@@ -252,7 +252,7 @@ export class SimulatorService {
             pausedAt: null,
           },
         },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean<TimingAlertSimulationDocument>()
       .exec();
@@ -294,7 +294,7 @@ export class SimulatorService {
             startedAt: null,
           },
         },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean<TimingAlertSimulationDocument>()
       .exec();
@@ -320,7 +320,7 @@ export class SimulatorService {
             pausedAt: null,
           },
         },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean<TimingAlertSimulationDocument>()
       .exec();
@@ -343,7 +343,7 @@ export class SimulatorService {
             pausedAt: new Date(),
           },
         },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean<TimingAlertSimulationDocument>()
       .exec();

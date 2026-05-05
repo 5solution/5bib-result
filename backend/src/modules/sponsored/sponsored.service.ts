@@ -202,7 +202,7 @@ export class SponsoredService {
       : null;
 
     const slot = await this.slotModel
-      .findByIdAndUpdate(id, { $set: update }, { new: true })
+      .findByIdAndUpdate(id, { $set: update }, { returnDocument: "after" })
       .exec();
     if (!slot) throw new NotFoundException(`Slot ${id} not found`);
 

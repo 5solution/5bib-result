@@ -41,7 +41,7 @@ export class TimingService {
       .findOneAndUpdate(
         { _id: LEAD_COUNTER_ID },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: "after", upsert: true },
       )
       .lean()
       .exec();
@@ -238,7 +238,7 @@ export class TimingService {
     if (dto.is_archived !== undefined) update.is_archived = dto.is_archived;
 
     const doc = await this.leadModel
-      .findByIdAndUpdate(id, update, { new: true })
+      .findByIdAndUpdate(id, update, { returnDocument: "after" })
       .lean()
       .exec();
     if (!doc) throw new NotFoundException('Không tìm thấy lead');

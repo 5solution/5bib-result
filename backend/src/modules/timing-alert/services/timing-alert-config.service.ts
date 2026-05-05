@@ -71,7 +71,7 @@ export class TimingAlertConfigService {
       .findOneAndUpdate(
         { race_id: raceId },
         { $set: update },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
+        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
       )
       .exec();
 

@@ -491,7 +491,7 @@ export class TimingAlertPollService {
           },
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     ).exec();
 
     if (existing) {
@@ -734,7 +734,7 @@ export class TimingAlertPollService {
           },
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     ).exec();
 
     if (!updated) {
