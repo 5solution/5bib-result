@@ -98,10 +98,12 @@ export function CockpitTab({ raceId }: { raceId: string }) {
     );
   }
 
+  // recentActivity vẫn còn trên snapshot.data nhưng KHÔNG destructure ở đây —
+  // AlertFeedPanel refactor 2026-05-05 tự fetch listTimingAlerts(OPEN) thay vì
+  // dùng recentActivity (poll noise spam mỗi 30s × N courses).
   const {
     race,
     checkpointProgression,
-    recentActivity,
     liveLeaderboard,
     summary,
   } = snapshot.data;
@@ -142,7 +144,7 @@ export function CockpitTab({ raceId }: { raceId: string }) {
       </div>
 
       {/* ─── Timing Alert Feed ─── */}
-      <AlertFeedPanel items={recentActivity} />
+      <AlertFeedPanel raceId={raceId} />
 
       {/* Discovery dialog — KEEP for F-002 auto-derive (TODO F-006 Course Map sẽ thay) */}
       <CheckpointDiscoveryDialog
