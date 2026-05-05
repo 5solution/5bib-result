@@ -24,7 +24,8 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
+import { RealIpThrottlerGuard } from './guards/real-ip-throttler.guard';
 import {
   FileInterceptor,
   FileFieldsInterceptor,
@@ -455,7 +456,7 @@ export class RaceResultController {
   // Rate-limited per IP to protect against scraping + brute-force cache busting.
 
   @Post('result-image/upload-bg')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(RealIpThrottlerGuard)
   @ApiOperation({
     summary: 'Upload a custom background photo, get back a photoId for reuse',
     description:
@@ -503,7 +504,7 @@ export class RaceResultController {
   }
 
   @Get('result-image/:raceId/:bib')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(RealIpThrottlerGuard)
   // Generous limit — a single modal open = 7 preview requests (6 thumbs + 1
   // main), and toggling gradient/template bumps the token → fresh requests.
   // 120/min allows ~15 modal interactions per minute per IP before throttling.
@@ -571,7 +572,7 @@ export class RaceResultController {
   }
 
   @Post('result-image/:raceId/:bib')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(RealIpThrottlerGuard)
   // @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @ApiOperation({
     summary: 'Generate full-res result image for an athlete (S3-cached)',
@@ -731,7 +732,7 @@ export class RaceResultController {
   }
 
   @Get('badges/:raceId/:bib')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(RealIpThrottlerGuard)
   // @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({
     summary: 'Get badges (PB / Podium / Sub-X / Ultra / Streak) for an athlete',
@@ -766,7 +767,7 @@ export class RaceResultController {
   }
 
   @Post('share-count/:raceId')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(RealIpThrottlerGuard)
   // @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @ApiOperation({
     summary:
@@ -783,7 +784,7 @@ export class RaceResultController {
   // ─── Analytics (D-1) + Admin stats (D-3) ──────────────────────
 
   @Post('result-image-share')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(RealIpThrottlerGuard)
   // @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @ApiOperation({
     summary:

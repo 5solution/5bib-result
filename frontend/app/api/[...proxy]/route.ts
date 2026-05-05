@@ -32,6 +32,12 @@ async function proxyRequest(req: NextRequest) {
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("Content-Type", contentType);
 
+  // Forward real client IP so backend throttler can rate-limit per user,
+  // not per proxy container. nginx sets X-Forwarded-For; we pass it through.
+  const clientIp =
+    req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "";
+  if (clientIp) headers.set("x-forwarded-for", clientIp);
+
   const init: RequestInit = { method: req.method, headers };
 
   if (req.method !== "GET" && req.method !== "HEAD") {
