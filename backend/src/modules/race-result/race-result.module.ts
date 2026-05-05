@@ -13,6 +13,7 @@ import { BadgeService } from './services/badge.service';
 import { RaceSyncCron } from './services/race-sync.cron';
 import { ShareEventService } from './services/share-event.service';
 import { ShareNurtureCron } from './services/share-nurture.cron';
+import { RealIpThrottlerGuard } from './guards/real-ip-throttler.guard';
 import { RacesModule } from '../races/races.module';
 import { UploadModule } from '../upload/upload.module';
 
@@ -28,14 +29,15 @@ import { UploadModule } from '../upload/upload.module';
     // Module-scoped throttler so @Throttle decorators on result-image /
     // share-count endpoints apply without colliding with other modules.
     // Default cap is an umbrella; per-endpoint @Throttle() decorators override.
-
-    // temporatyly disable throttler to unblock sync while we investigate performance issues
-    // ThrottlerModule.forRoot([
-    //   {
-    //     ttl: 60_000,
-    //     limit: 60*20,
-    //   },
-    // ]),
+    // RealIpThrottlerGuard (registered in providers) overrides getTracker() to
+    // extract the real client IP from X-Forwarded-For instead of req.ip, since
+    // all requests arrive via the Next.js proxy container.
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 60 * 20,
+      },
+    ]),
     RacesModule,
     UploadModule,
   ],
