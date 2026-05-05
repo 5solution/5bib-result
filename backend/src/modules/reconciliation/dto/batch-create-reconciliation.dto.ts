@@ -1,9 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsBoolean } from 'class-validator';
+import { IsOptional, IsBoolean } from 'class-validator';
+import { IsPeriodString } from '../../../common/validators/period.validator';
 
 export class BatchCreateReconciliationDto {
-  @ApiProperty({ example: '2026-03' })
-  @IsString()
+  @ApiProperty({ example: '2026-03', description: 'Period as YYYY-MM (single month)' })
+  @IsPeriodString()
   period: string;
 
   @ApiProperty({ description: 'Array of merchant IDs or "all"' })

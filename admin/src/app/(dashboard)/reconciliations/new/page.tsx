@@ -4,6 +4,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
+import {
+  MonthRangePicker,
+  type MonthRangeValue,
+} from "@/components/reconciliation/MonthRangePicker";
+import {
+  currentVnYearMonth,
+  inclusiveMonthCount,
+  monthRangeToPeriod,
+  presetPreviousMonth,
+} from "@/lib/period-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -119,7 +129,11 @@ interface PreviewResult {
 
 interface CreateResult {
   _id: string;
+  /** S3 URL — INTERNAL USE ONLY (batch-export pipe to ZIP server-side).
+   *  DO NOT render trực tiếp ở UI client — bucket private, Bearer Logto KHÔNG hợp với S3 auth.
+   *  Dùng `GET /api/reconciliations/:id/download/xlsx` cho user download (FEATURE-004). */
   xlsx_url: string | null;
+  /** Same as `xlsx_url` — internal use only. Use backend download endpoint for UI. */
   docx_url: string | null;
 }
 
@@ -158,23 +172,15 @@ function formatVnd(n: number) {
   return new Intl.NumberFormat("vi-VN").format(n) + " đ";
 }
 
+// FEATURE-003 BR-06 — UTC+7-safe "today" string for default signed date.
+// Use the period-helpers VN-aware year/month, then read local day from VN time.
 function getTodayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getMonthStart(offset = 0) {
-  const d = new Date();
-  d.setDate(1);
-  d.setMonth(d.getMonth() + offset);
-  return d.toISOString().slice(0, 10);
-}
-
-function getMonthEnd(offset = 0) {
-  const d = new Date();
-  d.setDate(1);
-  d.setMonth(d.getMonth() + offset + 1);
-  d.setDate(0);
-  return d.toISOString().slice(0, 10);
+  const now = new Date();
+  const vn = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const y = vn.getUTCFullYear();
+  const m = String(vn.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(vn.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 const STEPS = ["Chọn thông tin", "Xem xét & Điều chỉnh", "Tạo tài liệu"];
@@ -193,8 +199,14 @@ export default function NewReconciliationPage() {
   const [racesLoading, setRacesLoading] = useState(false);
   const [selectedRaceId, setSelectedRaceId] = useState<string>("");
   const [raceTitle, setRaceTitle] = useState("");
-  const [periodStart, setPeriodStart] = useState(getMonthStart(-1));
-  const [periodEnd, setPeriodEnd] = useState(getMonthEnd(-1));
+  // FEATURE-003 BR-05 — Month-Range-Picker state. Default: previous month (Từ = Đến).
+  const [monthRange, setMonthRange] = useState<MonthRangeValue>(() => presetPreviousMonth());
+  // Derive period_start/end from month range (always snaps to month-boundary).
+  const periodRange = monthRangeToPeriod(monthRange.from, monthRange.to);
+  const periodStart = periodRange?.period_start ?? "";
+  const periodEnd = periodRange?.period_end ?? "";
+  const monthCount = inclusiveMonthCount(monthRange.from, monthRange.to);
+  const periodInvalid = monthCount < 1 || monthCount > 12;
   const [previewLoading, setPreviewLoading] = useState(false);
 
   // Preflight state
@@ -261,15 +273,25 @@ export default function NewReconciliationPage() {
       toast.error("Vui lòng điền đầy đủ thông tin");
       return;
     }
+    if (periodInvalid) {
+      toast.error("Kỳ đối soát không hợp lệ (max 12 tháng, Đến ≥ Từ)");
+      return;
+    }
     setPreflightLoading(true);
     setPreflight(null);
     setErrorConfirmed(false);
     try {
-      const period = periodStart.slice(0, 7); // YYYY-MM
-      const res = await fetch(
-        `/api/reconciliations/preflight?merchant_id=${selectedMerchantId}&period=${period}&race_id=${selectedRaceId}`,
-        { headers: authHeaders(token).headers }
-      );
+      // FEATURE-003 — POST /preflight/range supports multi-month range + overlap detection.
+      const res = await fetch(`/api/reconciliations/preflight/range`, {
+        method: "POST",
+        headers: { ...authHeaders(token).headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: Number(selectedMerchantId),
+          mysql_race_id: Number(selectedRaceId),
+          period_start: periodStart,
+          period_end: periodEnd,
+        }),
+      });
       const json = await res.json();
       setPreflight(json.data ?? json);
     } catch {
@@ -496,56 +518,18 @@ export default function NewReconciliationPage() {
               <p className="text-xs text-muted-foreground">Để trống sẽ dùng tên giải từ hệ thống</p>
             </div>
 
-            {/* Period */}
+            {/* Period — FEATURE-003 BR-05: Month-Range-Picker (replaces free-form date range). */}
             <div className="flex flex-col gap-1.5">
               <Label>Kỳ đối soát</Label>
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setPeriodStart(getMonthStart(0));
-                    setPeriodEnd(getMonthEnd(0));
-                    setPreflight(null);
-                    setErrorConfirmed(false);
-                  }}
-                >
-                  Tháng này
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setPeriodStart(getMonthStart(-1));
-                    setPeriodEnd(getMonthEnd(-1));
-                    setPreflight(null);
-                    setErrorConfirmed(false);
-                  }}
-                >
-                  Tháng trước
-                </Button>
-              </div>
-              <div className="flex gap-3 items-center">
-                <div className="flex flex-col gap-1 flex-1">
-                  <Label className="text-xs text-muted-foreground">Từ ngày</Label>
-                  <Input
-                    type="date"
-                    value={periodStart}
-                    onChange={(e) => { setPeriodStart(e.target.value); setPreflight(null); setErrorConfirmed(false); }}
-                  />
-                </div>
-                <span className="text-muted-foreground mt-5">—</span>
-                <div className="flex flex-col gap-1 flex-1">
-                  <Label className="text-xs text-muted-foreground">Đến ngày</Label>
-                  <Input
-                    type="date"
-                    value={periodEnd}
-                    onChange={(e) => { setPeriodEnd(e.target.value); setPreflight(null); setErrorConfirmed(false); }}
-                  />
-                </div>
-              </div>
+              <MonthRangePicker
+                value={monthRange}
+                onChange={(next) => {
+                  setMonthRange(next);
+                  setPreflight(null);
+                  setErrorConfirmed(false);
+                }}
+                centerYear={currentVnYearMonth().year}
+              />
             </div>
 
             {/* Preflight panel */}
@@ -1048,7 +1032,7 @@ export default function NewReconciliationPage() {
                 <button
                   onClick={() =>
                     downloadWithAuth(
-                      createResult.xlsx_url || `/api/reconciliations/${createResult._id}/download/xlsx`,
+                      `/api/reconciliations/${createResult._id}/download/xlsx`,
                       buildRecFilename(createResult, "xlsx"),
                       token!,
                     ).catch(() => toast.error("Tải XLSX thất bại"))
@@ -1063,7 +1047,7 @@ export default function NewReconciliationPage() {
                 <button
                   onClick={() =>
                     downloadWithAuth(
-                      createResult.docx_url || `/api/reconciliations/${createResult._id}/download/docx`,
+                      `/api/reconciliations/${createResult._id}/download/docx`,
                       buildRecFilename(createResult, "docx"),
                       token!,
                     ).catch(() => toast.error("Tải DOCX thất bại"))

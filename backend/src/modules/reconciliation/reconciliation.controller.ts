@@ -27,6 +27,9 @@ import { CreateReconciliationDto } from './dto/create-reconciliation.dto';
 import { UpdateReconciliationStatusDto } from './dto/update-reconciliation-status.dto';
 import { BatchCreateReconciliationDto } from './dto/batch-create-reconciliation.dto';
 import { ExportZipByIdsDto, ExportZipByPeriodDto } from './dto/export-zip.dto';
+import { PreflightRangeDto } from './dto/preflight-range.dto';
+import { PreflightBatchDto } from './dto/preflight-batch.dto';
+import { AuditPeriodBoundaryDto } from './dto/audit-period-boundary.dto';
 
 function fmtDate(s: string): string {
   if (!s) return '';
@@ -85,19 +88,42 @@ export class ReconciliationController {
     status: 200,
     description: 'Pre-flight results for all merchants',
   })
-  async preflightBatch(
-    @Body() body: { period: string; merchant_ids: number[] | 'all' },
-  ) {
+  async preflightBatch(@Body() dto: PreflightBatchDto) {
     let merchantIds: number[];
-    if (body.merchant_ids === 'all') {
+    if (dto.merchant_ids === 'all') {
       merchantIds = await this.reconciliationService.getAllMerchantIds();
     } else {
-      merchantIds = body.merchant_ids;
+      merchantIds = dto.merchant_ids;
     }
     const results = await Promise.all(
-      merchantIds.map((id) => this.preflightService.run(id, body.period)),
+      merchantIds.map((id) => this.preflightService.run(id, dto.period)),
     );
     return results;
+  }
+
+  @Post('preflight/range')
+  @ApiOperation({
+    summary:
+      'Pre-flight check for a single (tenant × race × month-range). Detects overlap with existing reconciliations.',
+  })
+  @ApiResponse({ status: 200, description: 'Pre-flight result with overlap warnings' })
+  preflightRange(@Body() dto: PreflightRangeDto) {
+    return this.preflightService.runRange({
+      tenant_id: dto.tenant_id,
+      mysql_race_id: dto.mysql_race_id,
+      period_start: dto.period_start,
+      period_end: dto.period_end,
+    });
+  }
+
+  @Get('audit/period-boundary')
+  @ApiOperation({
+    summary:
+      'Audit reconciliations whose period_start/period_end does not snap to month-boundary',
+  })
+  @ApiResponse({ status: 200, type: AuditPeriodBoundaryDto })
+  auditPeriodBoundary(): Promise<AuditPeriodBoundaryDto> {
+    return this.reconciliationService.auditPeriodBoundary();
   }
 
   @Post('batch')

@@ -19,6 +19,7 @@ import { TongHopService, TongHopRow } from './tong-hop.service';
 import { XlsxService } from '../services/xlsx.service';
 import { DocxService } from '../services/docx.service';
 import { ReconciliationQueryService } from '../services/reconciliation-query.service';
+import { filenamePeriodSegment } from '../services/period-label.helper';
 
 const BUCKET = env.s3.bucket;
 const REGION = env.s3.region;
@@ -145,10 +146,10 @@ export class BatchExportService {
       try {
         // folder = ASCII slug of tenant name, e.g. "Cong_Ty_ABC"
         const folder = slugify(doc.tenant_name || String(doc.tenant_id));
-        // period = YYYY_MM from period_start, e.g. "2026-04-01" → "2026_04"
-        const periodStr = doc.period_start
-          ? doc.period_start.slice(0, 7).replace('-', '_')
-          : 'unknown';
+        // FEATURE-003 BR-12 — period segment supports multi-month range:
+        //   N=1 → "YYYY_MM" (legacy)
+        //   N>1 → "YYYY_MMs_den_YYYY_MMe"
+        const periodStr = filenamePeriodSegment(doc.period_start ?? '', doc.period_end ?? '');
         // raceId disambiguates multiple races per merchant in same period
         const raceId = doc.mysql_race_id ?? doc._id;
 

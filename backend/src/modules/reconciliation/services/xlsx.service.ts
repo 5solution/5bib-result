@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { ReconciliationDocument } from '../schemas/reconciliation.schema';
+import { renderPeriodLabel } from './period-label.helper';
 
 const FONT_BASE: Partial<ExcelJS.Font> = {
   name: 'Times New Roman',
@@ -102,7 +103,7 @@ export class XlsxService {
     r++;
     styleCell(
       ws.getRow(r).getCell(1),
-      `Giai đoạn: Từ ${formatDate(rec.period_start)} đến hết ${formatDate(rec.period_end)}`,
+      `Kỳ đối soát: ${renderPeriodLabel(rec.period_start, rec.period_end)}`,
       { font: FONT_HEADER, border: false },
     );
     r += 2; // skip blank row

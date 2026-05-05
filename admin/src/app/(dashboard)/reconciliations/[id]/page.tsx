@@ -124,7 +124,11 @@ interface ReconciliationDetail {
   approved_by?: number | null;
   approved_at?: string | null;
   created_source?: string;
+  /** S3 URL — INTERNAL USE ONLY (batch-export pipe to ZIP server-side với AWS SDK signed request).
+   *  DO NOT render trực tiếp ở UI client — bucket private, Bearer Logto KHÔNG hợp với S3 auth.
+   *  Dùng `GET /api/reconciliations/:id/download/xlsx` cho user download (FEATURE-004). */
   xlsx_url: string | null;
+  /** Same as `xlsx_url` — internal use only. Use backend download endpoint for UI. */
   docx_url: string | null;
   signed_at: string | null;
   line_items: LineItem[];
@@ -529,7 +533,7 @@ export default function ReconciliationDetailPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => downloadWithAuth(
-                    data.xlsx_url || `/api/reconciliations/${data._id}/download/xlsx`,
+                    `/api/reconciliations/${data._id}/download/xlsx`,
                     buildRecFilename(data, "xlsx"), token!
                   ).catch(() => toast.error("Tải XLSX thất bại"))}
                   className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
@@ -539,7 +543,7 @@ export default function ReconciliationDetailPage() {
                 </button>
                 <button
                   onClick={() => downloadWithAuth(
-                    data.docx_url || `/api/reconciliations/${data._id}/download/docx`,
+                    `/api/reconciliations/${data._id}/download/docx`,
                     buildRecFilename(data, "docx"), token!
                   ).catch(() => toast.error("Tải DOCX thất bại"))}
                   className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
