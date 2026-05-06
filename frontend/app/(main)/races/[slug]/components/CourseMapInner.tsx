@@ -20,8 +20,12 @@ import type {
 } from '@/lib/api-generated/types.gen';
 
 interface CourseMapInnerProps {
-  /** Public S3 URL of simplified GeoJSON (LineString FeatureCollection). */
+  /** Public S3 URL of simplified GeoJSON (LineString FeatureCollection). Used as
+   *  fallback when `geoJson` (inlined by backend, BR-CM-11b) is unavailable. */
   gpxSimplifiedUrl: string;
+  /** Backend-inlined simplified GeoJSON (BR-CM-11b — bypasses S3 CORS). When
+   *  present, no client-side S3 fetch is needed. */
+  geoJson?: Record<string, unknown> | null;
   /** WGS84 bounds for fitBounds (BR-CM-04). */
   bounds: GpxBoundsDto;
   /** Course checkpoints with optional lat/lng (BR-CM-05). */
@@ -68,7 +72,7 @@ function cpIcon(label: string, hasAid: boolean): L.DivIcon {
     : '';
   return L.divIcon({
     className: '5bib-cm-cp',
-    html: `<div style="position:relative;width:26px;height:26px;border-radius:50%;background:#1D49FF;border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,0.25);">${safeLabel}${aidBadge}</div>`,
+    html: `<div style="position:relative;width:26px;height:26px;border-radius:50%;background:#FF0E65;border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,0.25);">${safeLabel}${aidBadge}</div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
   });
@@ -89,17 +93,32 @@ function hasAidServices(cp: CheckpointWithPositionDto): boolean {
   return Boolean(s.water || s.food || s.medical || s.dropBag || s.sleep);
 }
 
-/** Lightweight bounds-fitter that hooks into the map instance once on mount. */
+/**
+ * BR-CM-13 — Sovereignty safeguard.
+ * Lock map view to race bounds + small padding so user cannot pan/zoom out
+ * to surrounding regions. OpenStreetMap default tiles do NOT label Hoàng Sa
+ * & Trường Sa as Vietnamese sovereign — Vietnamese law requires correct
+ * sovereignty labelling on public-facing maps. By restricting `maxBounds` +
+ * `minZoom`, the user can only view the race area, never the contested
+ * island regions. Future: switch tile provider to Goong Maps (Vietnamese,
+ * sovereignty-correct) — see TD-F006.
+ */
 function FitBounds({ bounds }: { bounds: GpxBoundsDto }): null {
   const map = useMap();
   React.useEffect(() => {
-    map.fitBounds(
-      [
-        [bounds.south, bounds.west],
-        [bounds.north, bounds.east],
-      ],
-      { padding: [20, 20] },
-    );
+    const sw: [number, number] = [bounds.south, bounds.west];
+    const ne: [number, number] = [bounds.north, bounds.east];
+    const latPad = (bounds.north - bounds.south) * 0.05;
+    const lngPad = (bounds.east - bounds.west) * 0.05;
+    const maxBounds: [[number, number], [number, number]] = [
+      [bounds.south - latPad, bounds.west - lngPad],
+      [bounds.north + latPad, bounds.east + lngPad],
+    ];
+    map.fitBounds([sw, ne], { padding: [20, 20] });
+    map.setMaxBounds(maxBounds);
+    map.options.maxBoundsViscosity = 1.0;
+    const currentZoom = map.getZoom();
+    map.setMinZoom(Math.max(currentZoom - 1, 0));
   }, [map, bounds]);
   return null;
 }
@@ -120,8 +139,18 @@ function isLineStringFeature(feature: unknown): feature is GeoJsonLineString {
   return f.geometry?.type === 'LineString' && Array.isArray(f.geometry?.coordinates);
 }
 
+function extractLineString(
+  data: GeoJsonFC | GeoJsonLineString | Record<string, unknown>,
+): GeoJsonLineString | undefined {
+  if ('features' in data && Array.isArray((data as GeoJsonFC).features)) {
+    return (data as GeoJsonFC).features.find(isLineStringFeature);
+  }
+  return isLineStringFeature(data) ? data : undefined;
+}
+
 export default function CourseMapInner({
   gpxSimplifiedUrl,
+  geoJson,
   bounds,
   checkpoints,
 }: CourseMapInnerProps): React.ReactElement {
@@ -132,6 +161,23 @@ export default function CourseMapInner({
     let cancelled = false;
     setLoadError(null);
     setPolylineLatLngs([]);
+
+    // BR-CM-11b — prefer inlined geoJson from backend (no CORS preflight to S3).
+    if (geoJson) {
+      const feature = extractLineString(geoJson);
+      if (!feature) {
+        setLoadError('GeoJSON không chứa LineString.');
+        return;
+      }
+      const coords = feature.geometry.coordinates.map(
+        ([lng, lat]) => [lat, lng] as [number, number],
+      );
+      setPolylineLatLngs(coords);
+      return;
+    }
+
+    // Fallback — direct S3 fetch (legacy path, only if backend inline failed
+    // for any reason). S3 bucket must allow CORS for this to succeed.
     fetch(gpxSimplifiedUrl)
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -139,12 +185,7 @@ export default function CourseMapInner({
       })
       .then((data) => {
         if (cancelled) return;
-        const feature: GeoJsonLineString | undefined =
-          'features' in data
-            ? data.features.find(isLineStringFeature)
-            : isLineStringFeature(data)
-              ? data
-              : undefined;
+        const feature = extractLineString(data);
         if (!feature) {
           setLoadError('GeoJSON không chứa LineString.');
           return;
@@ -162,7 +203,7 @@ export default function CourseMapInner({
     return () => {
       cancelled = true;
     };
-  }, [gpxSimplifiedUrl]);
+  }, [gpxSimplifiedUrl, geoJson]);
 
   // Number CP markers excluding start/finish for readable 1, 2, 3...
   const cpCounter: Record<string, number> = {};
@@ -190,6 +231,7 @@ export default function CourseMapInner({
         scrollWheelZoom={false}
         touchZoom
         keyboard
+        maxBoundsViscosity={1.0}
         className="h-[300px] w-full overflow-hidden rounded-lg md:h-[400px]"
       >
         <TileLayer
@@ -200,7 +242,7 @@ export default function CourseMapInner({
         {polylineLatLngs.length > 1 && (
           <Polyline
             positions={polylineLatLngs}
-            pathOptions={{ color: '#1D49FF', weight: 4, opacity: 0.85 }}
+            pathOptions={{ color: '#FF0E65', weight: 4, opacity: 0.85 }}
           />
         )}
         {checkpoints.map((cp) => {

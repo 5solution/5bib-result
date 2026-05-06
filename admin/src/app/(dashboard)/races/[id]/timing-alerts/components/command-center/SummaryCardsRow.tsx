@@ -34,7 +34,7 @@ export function SummaryCardsRow({ summary }: SummaryCardsRowProps) {
         label="Racekit nhận"
         value={summary.racekitPickedUp.toLocaleString('vi-VN')}
         sublabel={`/ ${summary.totalRegistered.toLocaleString('vi-VN')}`}
-        accent={{ bg: '#E6ECFF', fg: '#1D49FF' }}
+        accent={{ bg: '#FFE0EC', fg: '#FF0E65' }}
         progress={
           summary.totalRegistered > 0
             ? (summary.racekitPickedUp / summary.totalRegistered) * 100
@@ -55,7 +55,7 @@ export function SummaryCardsRow({ summary }: SummaryCardsRowProps) {
             ? `${((summary.finished / summary.started) * 100).toFixed(1)}% / xuất phát`
             : 'có time tại Finish'
         }
-        accent={{ bg: '#E6ECFF', fg: '#1D49FF' }}
+        accent={{ bg: '#FFE0EC', fg: '#FF0E65' }}
         progress={
           summary.started > 0
             ? (summary.finished / summary.started) * 100

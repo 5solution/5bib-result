@@ -13,6 +13,7 @@ import * as React from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ElevationChart } from '@/components/course-map/ElevationChart';
 import {
   useCourseMapData,
@@ -63,17 +64,27 @@ export function CourseMapTab({ raceId, courseId }: CourseMapTabProps): React.Rea
   const remove = useDeleteCourseGpx(raceId, courseIdSafe);
   const mapData = useCourseMapData(raceId, courseIdSafe);
 
+  // Bug 4 — compute unmatched checkpoints (no lat/lng) so we can show a
+  // banner above the map prompting the admin to enable manual mode.
+  // ⚠️ MUST be called BEFORE any early return — Rules of Hooks: hooks must
+  // run in the same order every render. Moving this below the `!courseId`
+  // early return causes "Rendered fewer hooks than expected" runtime error.
+  const unmatchedCheckpoints = React.useMemo(() => {
+    const list = mapData.data?.checkpoints ?? [];
+    return list.filter(
+      (cp) => typeof cp.lat !== 'number' || typeof cp.lng !== 'number',
+    );
+  }, [mapData.data?.checkpoints]);
+
   // ── Empty state for not-yet-saved course ──
+  // F-007 Item #3 — reusable EmptyState component (4-element pattern).
   if (!courseId) {
     return (
-      <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-stone-300 bg-stone-50 p-6 text-center">
-        <p className="font-display text-sm font-semibold text-stone-700">
-          Lưu cự ly trước để tải GPX/KML
-        </p>
-        <p className="text-xs text-stone-500">
-          Tab Map chỉ khả dụng sau khi cự ly đã được lưu (cần courseId).
-        </p>
-      </div>
+      <EmptyState
+        icon="💾"
+        title="Lưu cự ly trước để tải GPX/KML"
+        description="Tab Map chỉ khả dụng sau khi cự ly đã được lưu (cần courseId)."
+      />
     );
   }
 
@@ -124,10 +135,35 @@ export function CourseMapTab({ raceId, courseId }: CourseMapTabProps): React.Rea
   const isLoading = mapData.isLoading;
   const hasGpx = Boolean(mapData.data?.hasGpx);
   const isUploading = upload.isPending;
+  // Bug 8 — when GPX uploaded but course.checkpoints[] is empty (BTC chưa
+  // discover từ RR API), nothing can auto-match. Surface a warning banner so
+  // admin understands why the map renders polyline-only with no markers.
+  const hasNoCheckpointsConfigured = (mapData.data?.checkpoints?.length ?? 0) === 0;
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="font-display text-sm font-semibold text-stone-900">Bản đồ cự ly</h3>
+      {/* Bug 3 — title + manual-mode toggle inline at TOP of the tab so admin
+          doesn't have to scroll past elevation chart to find it. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-display text-sm font-semibold text-stone-900">
+          Bản đồ cự ly
+        </h3>
+        {hasGpx && mapData.data && (
+          <Button
+            type="button"
+            variant={manualMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setManualMode((v) => !v)}
+            style={
+              manualMode
+                ? { background: '#FF0E65', borderColor: '#FF0E65' }
+                : undefined
+            }
+          >
+            {manualMode ? 'Tắt manual mode' : 'Bật manual mode (kéo CP)'}
+          </Button>
+        )}
+      </div>
 
       {parseError && (
         <div
@@ -144,36 +180,49 @@ export function CourseMapTab({ raceId, courseId }: CourseMapTabProps): React.Rea
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
             <div
               className="h-full animate-pulse"
-              style={{ width: '60%', background: '#1D49FF' }}
+              style={{ width: '60%', background: '#FF0E65' }}
             />
           </div>
         </div>
       )}
 
       {!hasGpx && !isLoading && !isUploading && (
-        <div
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-          className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-300 bg-stone-50 p-6 text-center transition-colors hover:border-[#1D49FF] hover:bg-[#E6ECFF]"
-          onClick={() => fileInputRef.current?.click()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
-          }}
-        >
-          <p className="font-display text-sm font-semibold text-stone-700">
-            Kéo .gpx hoặc .kml vào đây hoặc bấm chọn file
-          </p>
-          <p className="text-xs text-stone-500">Tối đa 10MB. Hỗ trợ tracks + waypoints.</p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPT}
-            className="hidden"
-            onChange={onSelectFile}
-          />
-        </div>
+        <>
+          {/* Bug 10 — 2-step workflow hint above empty drag-drop zone. Helps
+              admin discover the API-discover → upload → manual-drag flow before
+              they upload a GPX with no checkpoints configured. */}
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+            <p className="font-semibold">📋 Workflow:</p>
+            <ol className="mt-1 space-y-0.5">
+              <li>1️⃣ Tab &quot;Cơ bản&quot; → paste API URL → discover checkpoint keys (TM1, TM2, ...)</li>
+              <li>2️⃣ Tab này → upload GPX → hệ thống auto-match waypoint name → checkpoint key</li>
+              <li>3️⃣ Bật manual mode → kéo các CP chưa match vào vị trí thật trên map</li>
+            </ol>
+          </div>
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={onDrop}
+            className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-300 bg-stone-50 p-6 text-center transition-colors hover:border-[#FF0E65] hover:bg-[#FFE0EC]"
+            onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
+            }}
+          >
+            <p className="font-display text-sm font-semibold text-stone-700">
+              Kéo .gpx hoặc .kml vào đây hoặc bấm chọn file
+            </p>
+            <p className="text-xs text-stone-500">Tối đa 10MB. Hỗ trợ tracks + waypoints.</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPT}
+              className="hidden"
+              onChange={onSelectFile}
+            />
+          </div>
+        </>
       )}
 
       {hasGpx && mapData.data && (
@@ -219,14 +268,84 @@ export function CourseMapTab({ raceId, courseId }: CourseMapTabProps): React.Rea
             </div>
           </div>
 
+          {/* Bug 4 — banner above map listing checkpoints needing manual drag.
+              Pills are clickable to enable manual mode (visual focus is handled
+              by Leaflet's marker pulse in CourseMapTabInner).
+              Bug 9 — sub-label clarifies that GPX waypoints (e.g. TP42.1.2) are
+              reference-only; RR API is the source-of-truth for checkpoint keys. */}
+          {unmatchedCheckpoints.length > 0 && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex flex-col gap-1.5 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-amber-900">
+                  ⚠️ Cần kéo thủ công:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {unmatchedCheckpoints.map((cp) => (
+                    <span
+                      key={cp.key}
+                      className="rounded-full border border-amber-400 bg-white px-2 py-0.5 font-mono text-xs font-semibold text-amber-900"
+                    >
+                      {cp.key}
+                    </span>
+                  ))}
+                </div>
+                {!manualMode && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setManualMode(true)}
+                    className="ml-auto border-amber-500 text-amber-900 hover:bg-amber-100"
+                  >
+                    Bật manual mode để kéo thả
+                  </Button>
+                )}
+              </div>
+              <span className="text-xs text-stone-500">
+                Waypoints khác trong GPX (TP42.1.2, ...) chỉ để tham khảo, không tạo
+                checkpoint mới — RR API là source-of-truth cho checkpoint keys.
+              </span>
+            </div>
+          )}
+
+          {/* Bug 8 — banner displayed BELOW the unmatched banner (priority lower)
+              when course.checkpoints[] is empty: GPX uploads polyline + bounds
+              but cannot auto-match anything because there are no checkpoint keys
+              from the RR API. */}
+          {hasNoCheckpointsConfigured && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="rounded-md border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900"
+            >
+              <p className="font-semibold">
+                💡 Course chưa có checkpoint từ RR API. Map sẽ render polyline + bounds
+                nhưng KHÔNG có marker nào auto-match.
+              </p>
+              <p className="mt-1 text-xs text-blue-800">
+                → Vào tab &quot;Cơ bản&quot; paste API URL → discover checkpoints trước khi
+                upload GPX để hệ thống auto-match lat/lng.
+              </p>
+            </div>
+          )}
+
           {mapData.data.gpxSimplifiedUrl && mapData.data.bounds && (
             <CourseMapTabInner
               raceId={raceId}
               courseId={courseId}
               gpxSimplifiedUrl={mapData.data.gpxSimplifiedUrl}
+              geoJson={
+                (mapData.data.geoJson ?? null) as Record<string, unknown> | null
+              }
               bounds={mapData.data.bounds}
+              totalDistanceKm={mapData.data.gpxParsed?.totalDistanceKm}
               checkpoints={mapData.data.checkpoints}
               manualMode={manualMode}
+              unmatchedKeys={unmatchedCheckpoints.map((cp) => cp.key)}
             />
           )}
 
@@ -238,22 +357,11 @@ export function CourseMapTab({ raceId, courseId }: CourseMapTabProps): React.Rea
             height={150}
           />
 
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant={manualMode ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setManualMode((v) => !v)}
-              style={manualMode ? { background: '#FF0E65', borderColor: '#FF0E65' } : undefined}
-            >
-              {manualMode ? 'Tắt manual mode' : 'Bật manual mode (kéo CP)'}
-            </Button>
-            {manualMode && (
-              <span className="text-xs text-stone-600">
-                Kéo marker trên bản đồ để cập nhật vị trí — tự động lưu khi thả.
-              </span>
-            )}
-          </div>
+          {manualMode && (
+            <span className="text-xs text-stone-600">
+              Kéo marker trên bản đồ để cập nhật vị trí — tự động lưu khi thả.
+            </span>
+          )}
         </>
       )}
 

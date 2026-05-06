@@ -150,8 +150,8 @@ export function ElevationChart({
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#1D49FF" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#1D49FF" stopOpacity="0" />
+            <stop offset="0%" stopColor="#FF0E65" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#FF0E65" stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -162,7 +162,7 @@ export function ElevationChart({
         <path
           d={linePath}
           fill="none"
-          stroke="#1D49FF"
+          stroke="#FF0E65"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"

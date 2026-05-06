@@ -4,12 +4,14 @@ import { HttpService } from '@nestjs/axios';
 import { NotFoundException } from '@nestjs/common';
 import { RacesService } from './races.service';
 import { Race } from './schemas/race.schema';
+import { CourseMapService } from './services/course-map.service';
 
 describe('RacesService', () => {
   let service: RacesService;
   let mockModel: any;
   let mockHttpService: any;
   let mockRedis: { get: jest.Mock; set: jest.Mock; del: jest.Mock };
+  let mockCourseMapService: { deleteGpxFromS3: jest.Mock };
 
   const mockRace = {
     _id: '665abc123',
@@ -62,6 +64,10 @@ describe('RacesService', () => {
       del: jest.fn().mockResolvedValue(1),
     };
 
+    mockCourseMapService = {
+      deleteGpxFromS3: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RacesService,
@@ -71,6 +77,9 @@ describe('RacesService', () => {
         // in updateCourse). Provide the same DI token nest-modules/ioredis
         // registers so the test module compiles.
         { provide: 'default_IORedisModuleConnectionToken', useValue: mockRedis },
+        // TD-F006-09 — RacesService now injects CourseMapService for S3 GPX
+        // cleanup on course removal. Provide a stub mock for tests.
+        { provide: CourseMapService, useValue: mockCourseMapService },
       ],
     }).compile();
 
@@ -128,7 +137,7 @@ describe('RacesService', () => {
       expect(mockModel.findByIdAndUpdate).toHaveBeenCalledWith(
         '665abc123',
         { $set: expect.objectContaining({ title: 'Updated Title' }) },
-        { new: true },
+        { returnDocument: 'after' },
       );
       expect(result.success).toBe(true);
     });
@@ -158,7 +167,7 @@ describe('RacesService', () => {
       expect(mockModel.findByIdAndUpdate).toHaveBeenCalledWith(
         '665abc123',
         { $set: { status: 'live' } },
-        { new: true },
+        { returnDocument: 'after' },
       );
       expect(result.success).toBe(true);
       expect(result.data.status).toBe('live');
@@ -225,7 +234,7 @@ describe('RacesService', () => {
       expect(mockModel.findByIdAndUpdate).toHaveBeenCalledWith(
         '665abc123',
         { $push: { courses: dto } },
-        { new: true },
+        { returnDocument: 'after' },
       );
       expect(result.success).toBe(true);
       expect(result.data.courses).toHaveLength(2);
@@ -344,6 +353,57 @@ describe('RacesService', () => {
         'master:course-map:665abc123:708',
       );
     });
+
+    // TD-F006-09 — when the removed course had `gpxUrl` or `gpxSimplifiedUrl`,
+    // deleteGpxFromS3 must run BEFORE the $pull so we don't leave orphaned S3
+    // objects under `courses/<raceId>/<courseId>/`.
+    it('TD-F006-09: should call deleteGpxFromS3 when course had gpxUrl', async () => {
+      const courseWithGpx = {
+        courseId: '708',
+        gpxUrl: 'https://s3.example/courses/665abc123/708/original.gpx',
+        gpxSimplifiedUrl:
+          'https://s3.example/courses/665abc123/708/simplified.geojson',
+      };
+      // findOne returns the projected course-only doc
+      mockModel.findOne = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ courses: [courseWithGpx] }),
+        }),
+      });
+      const updatedRace = { ...mockRace, slug: 's', courses: [] };
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
+
+      await service.removeCourse('665abc123', '708');
+
+      expect(mockCourseMapService.deleteGpxFromS3).toHaveBeenCalledWith(
+        '665abc123',
+        '708',
+      );
+    });
+
+    it('TD-F006-09: should NOT call deleteGpxFromS3 when course had no GPX', async () => {
+      mockModel.findOne = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            courses: [{ courseId: '708' /* no gpxUrl */ }],
+          }),
+        }),
+      });
+      const updatedRace = { ...mockRace, slug: 's', courses: [] };
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
+
+      await service.removeCourse('665abc123', '708');
+
+      expect(mockCourseMapService.deleteGpxFromS3).not.toHaveBeenCalled();
+    });
   });
 
   // ─── searchRaces ──────────────────────────────────────────────
@@ -415,7 +475,16 @@ describe('RacesService', () => {
         slug: 'vietnam-marathon-2026',
       });
       expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockRace);
+      // BR-UX-31 / TD-F006-04 — getRaceBySlug strips private fields for public
+      // callers (default isPrivileged=false): _id is replaced by id (string),
+      // cacheTtlSeconds is removed, and per-course apiUrl is scrubbed.
+      const { _id, cacheTtlSeconds, courses, ...publicBase } = mockRace;
+      const expectedPublic = {
+        ...publicBase,
+        id: _id,
+        courses: courses.map(({ apiUrl: _api, ...rest }) => rest),
+      };
+      expect(result.data).toEqual(expectedPublic);
     });
 
     it('should return not found when slug does not match', async () => {
