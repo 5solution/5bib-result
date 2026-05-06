@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="5BIB-test">
+  <metadata><name>F-006 sample</name></metadata>
+  <wpt lat="11.940" lon="108.440"><name>Start</name></wpt>
+  <wpt lat="11.945" lon="108.445"><name>TM1</name></wpt>
+  <wpt lat="11.950" lon="108.450"><name>TM2</name></wpt>
+  <wpt lat="11.955" lon="108.455"><name>TM3</name></wpt>
+  <wpt lat="11.960" lon="108.460"><name>TM4</name></wpt>
+  <wpt lat="11.965" lon="108.465"><name>TM5</name></wpt>
+  <wpt lat="11.970" lon="108.470"><name>TM6</name></wpt>
+  <wpt lat="11.975" lon="108.475"><name>TM7</name></wpt>
+  <wpt lat="11.980" lon="108.480"><name>TM8</name></wpt>
+  <wpt lat="11.985" lon="108.485"><name>Finish</name></wpt>
+  <trk>
+    <name>F-006 sample track</name>
+    <trkseg>
+      <trkpt lat="11.940" lon="108.440"><ele>1500</ele></trkpt>
+      <trkpt lat="11.941" lon="108.441"><ele>1502</ele></trkpt>
+      <trkpt lat="11.942" lon="108.442"><ele>1505</ele></trkpt>
+      <trkpt lat="11.945" lon="108.445"><ele>1510</ele></trkpt>
+      <trkpt lat="11.950" lon="108.450"><ele>1520</ele></trkpt>
+      <trkpt lat="11.955" lon="108.455"><ele>1535</ele></trkpt>
+      <trkpt lat="11.960" lon="108.460"><ele>1550</ele></trkpt>
+      <trkpt lat="11.965" lon="108.465"><ele>1545</ele></trkpt>
+      <trkpt lat="11.970" lon="108.470"><ele>1530</ele></trkpt>
+      <trkpt lat="11.975" lon="108.475"><ele>1520</ele></trkpt>
+      <trkpt lat="11.980" lon="108.480"><ele>1510</ele></trkpt>
+      <trkpt lat="11.985" lon="108.485"><ele>1500</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

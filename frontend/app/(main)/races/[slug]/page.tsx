@@ -9,6 +9,7 @@ import { Search, MapPin, Calendar, ChevronLeft, Trophy, ArrowRight, User, Clock,
 import LiveTimer from '@/components/LiveTimer';
 import { useRaceBySlug, useSponsors } from '@/lib/api-hooks';
 import { raceResultControllerGetRaceResults, raceResultControllerGetCourseStats } from '@/lib/api-generated';
+import { CourseMapSection } from './components/CourseMapSection';
 
 const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
 
@@ -647,6 +648,16 @@ export default function RaceDetailPage() {
             );
           })}
         </div>
+
+        {/* F-006 Course Map section — hidden when race is draft (BR-CM-07: backend returns 404) */}
+        {race.id && race.courses.length > 0 && (
+          <div className="mt-10">
+            <CourseMapSection
+              raceId={String(race.id)}
+              courses={race.courses.map((c) => ({ id: c.id, label: c.distance, name: c.name }))}
+            />
+          </div>
+        )}
       </div>
     </div>
     </>

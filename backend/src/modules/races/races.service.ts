@@ -287,16 +287,27 @@ export class RacesService {
 
   async updateCourse(raceId: string, courseId: string, dto: UpdateCourseDto) {
     const setFields: Record<string, any> = {};
+    const unsetFields: Record<string, ''> = {};
     for (const [key, value] of Object.entries(dto)) {
-      if (value !== undefined) {
+      if (value === undefined) {
+        // Caller (e.g. DELETE GPX endpoint) signals an unset by passing
+        // `undefined` for the field. $unset handles both top-level course
+        // fields (gpxUrl, gpxParsed, gpxSimplifiedUrl) without removing the
+        // course element itself.
+        unsetFields[`courses.$.${key}`] = '';
+      } else {
         setFields[`courses.$.${key}`] = value;
       }
     }
 
+    const update: Record<string, unknown> = {};
+    if (Object.keys(setFields).length > 0) update.$set = setFields;
+    if (Object.keys(unsetFields).length > 0) update.$unset = unsetFields;
+
     const race = await this.raceModel
       .findOneAndUpdate(
         { _id: raceId, 'courses.courseId': courseId },
-        { $set: setFields },
+        update,
         { returnDocument: "after" },
       )
       .lean()
@@ -307,6 +318,13 @@ export class RacesService {
     }
 
     await this.invalidateRaceCache(raceId, race.slug);
+    // F-006 BR-CM-10 + Concern 2 — direct DEL (no CourseMapService inject;
+    // avoids circular DI per Clarification 3 in 02-manager-plan.md).
+    try {
+      await this.redis.del(`master:course-map:${raceId}:${courseId}`);
+    } catch {
+      /* Redis down — non-fatal */
+    }
     return { data: race, success: true };
   }
 
@@ -335,6 +353,14 @@ export class RacesService {
     }
 
     await this.invalidateRaceCache(raceId, race.slug);
+    // TD-F006-08 — same direct DEL pattern as updateCourse(); without this the
+    // public `master:course-map:<raceId>:<courseId>` cache would serve a stale
+    // course-map response after BTC removes the course.
+    try {
+      await this.redis.del(`master:course-map:${raceId}:${courseId}`);
+    } catch {
+      /* Redis down — non-fatal */
+    }
     return { data: race, success: true, message: 'Course removed' };
   }
 

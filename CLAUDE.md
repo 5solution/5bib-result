@@ -159,20 +159,38 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `articles:categories:<type>` | ArticleCategoriesService public list cache | 300s |
 | `ratelimit:article-view:<slug>:<ip>` | View dedup per IP per article | 5m |
 | `ratelimit:article-helpful:<slug>:<ip>` | Helpful vote dedup per IP per article (value = 'y'\|'n') | 24h |
+| `master:rr-snapshot:<raceId>` | TimingAlert dashboard-snapshot cache (F-005, replaced legacy `dashboard-snapshot:`) | 15s |
+| `master:cc-leaderboard:<raceId>:<courseId>:<limit>` | Live leaderboard per course (F-005 Command Center) | 15s |
+| `master:cc-refresh-lock-user:<userId>` | F-005 per-user UX rate-limit (BR-CC-10 Tier 1) | 30s |
+| `master:course-map:<raceId>:<courseId>` | F-006 Course Map data response cache (gpxParsed + checkpoints + simplified URL) | 600s |
+| `master:course-map-lock:<raceId>:<courseId>` | F-006 SETNX anti-stampede lock during cache miss compute | 30s |
 
 Cache invalidation: any admin write (create/update/publish/unpublish/delete/restore on articles OR categories) flushes ALL `articles:*` keys via `scanStream` + pipeline. Rate-limit keys use a different `ratelimit:*` prefix so they survive cache flushes — view/vote dedup state is preserved across admin edits.
+
+F-006 Course Map invalidation: `master:course-map:<raceId>:<courseId>` is DEL'd directly by `RacesService.updateCourse()` after `$set` succeeds (Clarification 3 — direct redis.del, NOT via CourseMapService injection to avoid circular DI), AND by CourseMapService methods on POST upload / DELETE / PATCH checkpoint-position.
 
 Flush pattern (careful — global):
 ```bash
 ssh 5solution-vps "docker exec 5bib-result-backend node -e \"require('ioredis').createClient(process.env.REDIS_URL).keys('badge:*').then(k => ...)\""
 ```
 
-## S3 Lifecycle (Result Image Creator v1.0)
+## S3 Lifecycle (Result Image Creator v1.0 + Course Map v1.0)
 Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
-Required lifecycle rule (configure via AWS console or CDK):
+
+### Lifecycle rule 1 — Generated result images
 - **Prefix**: `result-images/`
 - **Expiration**: 24 hours after creation
 - **Reason**: Generated PNGs are re-creatable from canvas; no need for long-term storage. Keeps bucket clean and cost low.
+
+### Lifecycle rule 2 — Course Map (F-006)
+- **Prefix**: `courses/`
+- **Expiration**: NONE (keep indefinitely for race history)
+- **Path convention**:
+  - Original upload: `courses/{raceId}/{courseId}/original.gpx` (or `.kml`)
+  - Simplified GeoJSON: `courses/{raceId}/{courseId}/simplified.geojson`
+- **Reason**: GPX/KML are race-day source-of-truth artifacts; preserve for athlete reference + future course certification audit. Bucket size acceptable (≤10MB per course, ~58 tenants × ~10 races × ~4 courses = ~23GB max).
+- **Access**: codebase pattern uses bucket policy for public read (Block Public Access aware), not per-object ACL. Original.gpx technically accessible if path known but not indexed via UI; simplified.geojson fetched directly by frontend Leaflet renderer. No PII in GPX → acceptable risk for MVP (Clarification 5).
+- **CRITICAL**: do NOT mix `courses/` and `result-images/` prefixes — lifecycle rule 1 would delete GPX files in 24h.
 
 
 ## Development Rules

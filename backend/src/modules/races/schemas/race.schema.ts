@@ -22,6 +22,9 @@ export class CourseCheckpoint {
   @Prop() distance?: string; // e.g. "5K" — display string (legacy)
   @Prop({ type: Number }) distanceKm?: number; // 5.0 — numeric km cho pace projection (timing-alert + charts)
   @Prop({ type: CheckpointServicesSchema }) services?: CheckpointServices;
+  // F-006 BR-CM-04/05 — auto-matched waypoint OR manual drag position (WGS84)
+  @Prop({ type: Number }) lat?: number;
+  @Prop({ type: Number }) lng?: number;
 }
 
 export const CourseCheckpointSchema =
@@ -45,7 +48,22 @@ export class RaceCourse {
   @Prop() startLocation?: string; // e.g. "Quảng trường Lâm Viên"
   @Prop() cutOffTime?: string; // Cut-off time e.g. "12:00:00" or "24 giờ"
   @Prop() mapUrl?: string; // Course map image URL (S3)
-  @Prop() gpxUrl?: string; // GPX file URL (S3)
+  @Prop() gpxUrl?: string; // GPX file URL (S3) — original .gpx/.kml
+  // F-006 BR-CM-02/03/06 — server-parsed metadata (raw + simplified counts, distance, elevation, bounds)
+  @Prop({ type: Object })
+  gpxParsed?: {
+    trackPoints: number;
+    simplifiedPoints: number;
+    totalDistanceKm: number;
+    elevationGain: number | null;
+    elevationLoss: number | null;
+    maxElevation: number | null;
+    minElevation: number | null;
+    bounds: { north: number; south: number; east: number; west: number };
+  };
+  // F-006 BR-CM-11 — S3 URL of simplified GeoJSON (public-read)
+  @Prop({ type: String })
+  gpxSimplifiedUrl?: string;
   @Prop({ type: [CourseCheckpointSchema], default: [] })
   checkpoints: CourseCheckpoint[];
 }

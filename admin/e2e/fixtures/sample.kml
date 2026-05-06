@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>F-006 sample KML</name>
+    <Placemark><name>Start</name><Point><coordinates>108.440,11.940,1500</coordinates></Point></Placemark>
+    <Placemark><name>TM1</name><Point><coordinates>108.450,11.950,1520</coordinates></Point></Placemark>
+    <Placemark><name>Finish</name><Point><coordinates>108.485,11.985,1500</coordinates></Point></Placemark>
+    <Placemark>
+      <name>F-006 sample track</name>
+      <LineString>
+        <coordinates>
+          108.440,11.940,1500
+          108.445,11.945,1510
+          108.450,11.950,1520
+          108.460,11.960,1550
+          108.470,11.970,1530
+          108.485,11.985,1500
+        </coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>

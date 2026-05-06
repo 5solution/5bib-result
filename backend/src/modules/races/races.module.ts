@@ -4,6 +4,7 @@ import { HttpModule } from '@nestjs/axios';
 import { Race, RaceSchema } from './schemas/race.schema';
 import { RacesController } from './races.controller';
 import { RacesService } from './races.service';
+import { CourseMapService } from './services/course-map.service';
 
 @Module({
   imports: [
@@ -11,7 +12,7 @@ import { RacesService } from './races.service';
     HttpModule,
   ],
   controllers: [RacesController],
-  providers: [RacesService],
-  exports: [RacesService],
+  providers: [RacesService, CourseMapService],
+  exports: [RacesService, CourseMapService],
 })
 export class RacesModule {}

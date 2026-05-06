@@ -66,7 +66,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
-import { DiscoverPreviewPanel } from "./components/DiscoverPreviewPanel";
+import { CourseDialog } from "./components/CourseDialog";
 import {
   ArrowLeft,
   Plus,
@@ -75,11 +75,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
-  Mountain,
   RadioTower,
-  Clock,
-  MapPin,
-  Image as ImageIcon,
   Download,
   Copy,
   ShieldAlert,
@@ -1140,299 +1136,23 @@ export default function RaceDetailPage() {
                 <Plus className="size-4 mr-1" />
                 Thêm
               </Button>
-              <Dialog open={courseDialogOpen} onOpenChange={(open) => {
-                setCourseDialogOpen(open);
-                if (!open) {
-                  setEditingCourse(null);
-                  setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [], imageUrl: "", elevationGain: undefined, cutOffTime: "", startTime: "", startLocation: "", mapUrl: "", gpxUrl: "" });
-                }
-              }}>
-                <DialogContent className="sm:max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>
-                      {editingCourse ? "Sửa cự ly" : "Thêm cự ly"}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {editingCourse ? editingCourse.name : "Nhập thông tin cự ly mới"}
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <Tabs defaultValue="basic" className="mt-1">
-                    <TabsList className="w-full grid grid-cols-4">
-                      <TabsTrigger value="basic">Cơ bản</TabsTrigger>
-                      <TabsTrigger value="info">Thông tin</TabsTrigger>
-                      <TabsTrigger value="media">Hình ảnh</TabsTrigger>
-                      <TabsTrigger value="checkpoints">
-                        Checkpoints
-                        {(courseForm.checkpoints as Checkpoint[])?.length > 0 && (
-                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#dbeafe", color: "#1d4ed8" }}>
-                            {(courseForm.checkpoints as Checkpoint[]).length}
-                          </span>
-                        )}
-                      </TabsTrigger>
-                    </TabsList>
-
-                    {/* ── Tab 1: Cơ bản ── */}
-                    <TabsContent value="basic" className="mt-4 flex flex-col gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Label>Tên cự ly *</Label>
-                        <Input
-                          value={courseForm.name ?? ""}
-                          onChange={(e) => setCourseForm((p: any) => ({ ...p, name: e.target.value }))}
-                          placeholder="42km Full Marathon"
-                          autoFocus
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-2">
-                          <Label>Nhãn khoảng cách</Label>
-                          <Input
-                            value={courseForm.distance ?? ""}
-                            onChange={(e) => setCourseForm((p: any) => ({ ...p, distance: e.target.value }))}
-                            placeholder="42km"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label>Km (số)</Label>
-                          <Input
-                            type="number"
-                            value={courseForm.distanceKm ?? ""}
-                            onChange={(e) => setCourseForm((p: any) => ({ ...p, distanceKm: parseFloat(e.target.value) || undefined }))}
-                            placeholder="42.195"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-2">
-                          <Label>Loại cự ly</Label>
-                          <Select value={courseForm.courseType ?? "split"} onValueChange={(val) => setCourseForm((p: any) => ({ ...p, courseType: val }))}>
-                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="split">Split Race</SelectItem>
-                              <SelectItem value="lap">Lap Race</SelectItem>
-                              <SelectItem value="team_relay">Team Relay</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label>Định dạng API</Label>
-                          <Select value={courseForm.apiFormat ?? "json"} onValueChange={(val) => setCourseForm((p: any) => ({ ...p, apiFormat: val }))}>
-                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="json">JSON</SelectItem>
-                              <SelectItem value="csv">CSV</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>API URL</Label>
-                        <Input
-                          value={courseForm.apiUrl ?? ""}
-                          onChange={(e) => setCourseForm((p: any) => ({ ...p, apiUrl: e.target.value }))}
-                          placeholder="https://my.raceresult.com/api/results?contest=708"
-                        />
-                      </div>
-
-                      {/* Phase B FEATURE-001: Discover preview inline */}
-                      {editingCourse && courseForm.apiUrl && (
-                        <DiscoverPreviewPanel
-                          raceId={raceId}
-                          courseId={editingCourse.courseId}
-                          courseName={editingCourse.name}
-                          apiUrl={courseForm.apiUrl}
-                          existingCheckpoints={courseForm.checkpoints || []}
-                        />
-                      )}
-                    </TabsContent>
-
-                    {/* ── Tab 2: Thông tin ── */}
-                    <TabsContent value="info" className="mt-4 flex flex-col gap-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-2">
-                          <Label className="flex items-center gap-1.5"><Mountain className="size-3.5" /> Tổng leo cao (m)</Label>
-                          <Input
-                            type="number"
-                            value={courseForm.elevationGain ?? ""}
-                            onChange={(e) => setCourseForm((p: any) => ({ ...p, elevationGain: parseInt(e.target.value) || undefined }))}
-                            placeholder="1500"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label className="flex items-center gap-1.5"><Clock className="size-3.5" /> Thời gian xuất phát</Label>
-                          <Input
-                            type="datetime-local"
-                            value={courseForm.startTime ?? ""}
-                            onChange={(e) => setCourseForm((p: any) => ({ ...p, startTime: e.target.value }))}
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-2">
-                          <Label className="flex items-center gap-1.5"><MapPin className="size-3.5" /> Địa điểm xuất phát</Label>
-                          <Input
-                            value={courseForm.startLocation ?? ""}
-                            onChange={(e) => setCourseForm((p: any) => ({ ...p, startLocation: e.target.value }))}
-                            placeholder="Quảng trường Lâm Viên"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label className="flex items-center gap-1.5"><Clock className="size-3.5" /> Cut-off time (COT)</Label>
-                          <Input
-                            type="datetime-local"
-                            value={courseForm.cutOffTime ?? ""}
-                            onChange={(e) => setCourseForm((p: any) => ({ ...p, cutOffTime: e.target.value }))}
-                          />
-                        </div>
-                      </div>
-                    </TabsContent>
-
-                    {/* ── Tab 3: Hình ảnh ── */}
-                    <TabsContent value="media" className="mt-4 flex flex-col gap-4">
-                      <div className="flex flex-col gap-2">
-                        <Label className="flex items-center gap-1.5"><ImageIcon className="size-3.5" /> Ảnh cự ly</Label>
-                        <ImageUpload
-                          value={courseForm.imageUrl}
-                          onChange={(url) => setCourseForm((p: any) => ({ ...p, imageUrl: url }))}
-                          folder={`races/${raceId}/courses`}
-                          token={token || undefined}
-                          label="Tải ảnh cự ly"
-                          previewHeight="h-28"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>Bản đồ cự ly</Label>
-                        <ImageUpload
-                          value={courseForm.mapUrl}
-                          onChange={(url) => setCourseForm((p: any) => ({ ...p, mapUrl: url }))}
-                          folder={`races/${raceId}/maps`}
-                          token={token || undefined}
-                          label="Tải bản đồ"
-                          previewHeight="h-28"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>File GPX</Label>
-                        <Input
-                          value={courseForm.gpxUrl ?? ""}
-                          onChange={(e) => setCourseForm((p: any) => ({ ...p, gpxUrl: e.target.value }))}
-                          placeholder="URL file GPX"
-                        />
-                      </div>
-                    </TabsContent>
-
-                    {/* ── Tab 4: Checkpoints ── */}
-                    <TabsContent value="checkpoints" className="mt-4">
-                      <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-1">
-                        {(courseForm.checkpoints as Checkpoint[] || []).map((cp: Checkpoint, idx: number) => (
-                          <div key={idx} className="border rounded-lg p-3 space-y-2">
-                            <div className="flex items-start gap-2">
-                              <div className="grid flex-1 grid-cols-3 gap-2">
-                                <Input
-                                  value={cp.key}
-                                  onChange={(e) => {
-                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                    updated[idx] = { ...updated[idx], key: e.target.value };
-                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                  }}
-                                  placeholder="Key (TM1)"
-                                  className="text-sm"
-                                />
-                                <Input
-                                  value={cp.name}
-                                  onChange={(e) => {
-                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                    updated[idx] = { ...updated[idx], name: e.target.value };
-                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                  }}
-                                  placeholder="Tên CP"
-                                  className="text-sm"
-                                />
-                                <Input
-                                  value={cp.distance ?? ""}
-                                  onChange={(e) => {
-                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                    updated[idx] = { ...updated[idx], distance: e.target.value || undefined };
-                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                  }}
-                                  placeholder="Km"
-                                  className="text-sm"
-                                />
-                              </div>
-                              <Button
-                                type="button" variant="ghost" size="icon-xs"
-                                onClick={() => {
-                                  const updated = (courseForm.checkpoints as Checkpoint[]).filter((_: Checkpoint, i: number) => i !== idx);
-                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                }}
-                                title="Xóa checkpoint"
-                              >
-                                <Trash2 className="size-3 text-destructive" />
-                              </Button>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 pt-1">
-                              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Dịch vụ:</span>
-                              {([
-                                { key: 'water', label: '💧 Nước' },
-                                { key: 'food', label: '🍌 Đồ ăn' },
-                                { key: 'sleep', label: '🛏 Ngủ nghỉ' },
-                                { key: 'dropBag', label: '🎒 Drop Bag' },
-                                { key: 'medical', label: '🏥 Y tế' },
-                              ] as { key: keyof CheckpointServices; label: string }[]).map(({ key, label }) => (
-                                <button
-                                  key={key} type="button"
-                                  onClick={() => {
-                                    const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                    const svc = updated[idx].services || { water: false, food: false, sleep: false, dropBag: false, medical: false };
-                                    updated[idx] = { ...updated[idx], services: { ...svc, [key]: !svc[key as keyof CheckpointServices] } };
-                                    setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                  }}
-                                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors border ${
-                                    cp.services?.[key as keyof CheckpointServices]
-                                      ? 'bg-blue-50 text-blue-700 border-blue-300'
-                                      : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400'
-                                  }`}
-                                >
-                                  {label}
-                                </button>
-                              ))}
-                            </div>
-                            {(cp.services?.water || cp.services?.food || cp.services?.sleep || cp.services?.dropBag || cp.services?.medical) && (
-                              <Input
-                                value={cp.services?.notes ?? ""}
-                                onChange={(e) => {
-                                  const updated = [...(courseForm.checkpoints as Checkpoint[])];
-                                  const svc = updated[idx].services || { water: false, food: false, sleep: false, dropBag: false, medical: false };
-                                  updated[idx] = { ...updated[idx], services: { ...svc, notes: e.target.value || undefined } };
-                                  setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                                }}
-                                placeholder="Ghi chú dịch vụ (VD: Nước + gel + chuối)"
-                                className="text-xs"
-                              />
-                            )}
-                          </div>
-                        ))}
-                        <Button
-                          type="button" variant="outline" size="sm"
-                          onClick={() => {
-                            const updated = [...(courseForm.checkpoints as Checkpoint[] || []), { key: "", name: "", distance: "" }];
-                            setCourseForm((p: any) => ({ ...p, checkpoints: updated }));
-                          }}
-                        >
-                          <Plus className="size-4 mr-1" /> Thêm checkpoint
-                        </Button>
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-
-                  <DialogFooter className="mt-4">
-                    <Button variant="outline" onClick={() => setCourseDialogOpen(false)}>Hủy</Button>
-                    <Button onClick={handleSaveCourse} disabled={savingCourse || !courseForm.name}>
-                      {savingCourse ? "Đang lưu..." : "Lưu cự ly"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <CourseDialog
+                open={courseDialogOpen}
+                onOpenChange={(open) => {
+                  setCourseDialogOpen(open);
+                  if (!open) {
+                    setEditingCourse(null);
+                    setCourseForm({ courseId: "", name: "", distance: "", courseType: "split", apiFormat: "json", apiUrl: "", checkpoints: [], imageUrl: "", elevationGain: undefined, cutOffTime: "", startTime: "", startLocation: "", mapUrl: "", gpxUrl: "" });
+                  }
+                }}
+                raceId={raceId}
+                editingCourse={editingCourse}
+                courseForm={courseForm}
+                setCourseForm={setCourseForm}
+                onSubmit={handleSaveCourse}
+                isSubmitting={savingCourse}
+                token={token}
+              />
             </CardHeader>
             <CardContent>
               {!race.courses || race.courses.length === 0 ? (

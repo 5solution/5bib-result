@@ -9,6 +9,7 @@ describe('RacesService', () => {
   let service: RacesService;
   let mockModel: any;
   let mockHttpService: any;
+  let mockRedis: { get: jest.Mock; set: jest.Mock; del: jest.Mock };
 
   const mockRace = {
     _id: '665abc123',
@@ -55,11 +56,21 @@ describe('RacesService', () => {
       get: jest.fn(),
     };
 
+    mockRedis = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RacesService,
         { provide: getModelToken(Race.name), useValue: mockModel },
         { provide: HttpService, useValue: mockHttpService },
+        // F-006 — RacesService now @InjectRedis() (cache invalidate hook
+        // in updateCourse). Provide the same DI token nest-modules/ioredis
+        // registers so the test module compiles.
+        { provide: 'default_IORedisModuleConnectionToken', useValue: mockRedis },
       ],
     }).compile();
 
@@ -263,6 +274,23 @@ describe('RacesService', () => {
         service.updateCourse('nonexistent', '999', { apiUrl: 'x' }),
       ).rejects.toThrow(NotFoundException);
     });
+
+    // F-006 BR-CM-10 + Concern 2 — direct DEL master:course-map: key
+    // after $set succeeds (avoids circular DI per Clarification 3).
+    it('should invalidate master:course-map cache after update', async () => {
+      const updatedRace = { ...mockRace, slug: 's' };
+      mockModel.findOneAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
+
+      await service.updateCourse('665abc123', '708', { apiUrl: 'x' });
+
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        'master:course-map:665abc123:708',
+      );
+    });
   });
 
   // ─── removeCourse ─────────────────────────────────────────────
@@ -270,25 +298,51 @@ describe('RacesService', () => {
   describe('removeCourse', () => {
     it('should remove a course from the array', async () => {
       const updatedRace = { ...mockRace, courses: [] };
-      mockModel.exec.mockResolvedValue(updatedRace);
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
 
       const result = await service.removeCourse('665abc123', '708');
 
       expect(mockModel.findByIdAndUpdate).toHaveBeenCalledWith(
         '665abc123',
         { $pull: { courses: { courseId: '708' } } },
-        { new: true },
+        { returnDocument: 'after' },
       );
       expect(result.success).toBe(true);
       expect(result.data.courses).toHaveLength(0);
     });
 
     it('should throw NotFoundException when race not found', async () => {
-      mockModel.exec.mockResolvedValue(null);
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
+      });
 
       await expect(
         service.removeCourse('nonexistent', '708'),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    // TD-F006-08 — direct DEL master:course-map: key after $pull succeeds
+    // (mirrors updateCourse pattern; prevents stale public response after
+    // BTC removes a course).
+    it('should invalidate master:course-map cache after removeCourse', async () => {
+      const updatedRace = { ...mockRace, slug: 's', courses: [] };
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
+
+      await service.removeCourse('665abc123', '708');
+
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        'master:course-map:665abc123:708',
+      );
     });
   });
 
