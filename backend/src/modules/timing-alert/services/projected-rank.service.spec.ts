@@ -100,4 +100,54 @@ describe('ProjectedRankService', () => {
     expect(result.totalFinishers).toBe(3); // count includes invalid
     expect(result.overallRank).toBe(2); // 1 valid faster
   });
+
+  // ─── F-010 BR-FC-15/16/17 — Confidence formula percentage-based ───
+
+  it('F-010 confidence percentage-based: 50 finished / 500 registered with multiplier 0.20 → 0.5', async () => {
+    const finishers = Array(50).fill({ chipTime: '04:00:00', category: 'X' });
+    mockModel.exec.mockResolvedValue(finishers);
+    const result = await service.calculate('race1', 'c42', 'X', 18000, 500, 0.2);
+    // threshold = 500 × 0.20 = 100. confidence = 50 / 100 = 0.5
+    expect(result.confidence).toBe(0.5);
+  });
+
+  it('F-010 confidence with multiplier 0.10 → easier to reach 1.0', async () => {
+    const finishers = Array(50).fill({ chipTime: '04:00:00', category: 'X' });
+    mockModel.exec.mockResolvedValue(finishers);
+    const result = await service.calculate('race1', 'c42', 'X', 18000, 500, 0.1);
+    // threshold = 500 × 0.10 = 50. confidence = 50 / 50 = 1.0
+    expect(result.confidence).toBe(1);
+  });
+
+  it('F-010 confidence with multiplier 0.50 → harder to reach 1.0', async () => {
+    const finishers = Array(50).fill({ chipTime: '04:00:00', category: 'X' });
+    mockModel.exec.mockResolvedValue(finishers);
+    const result = await service.calculate('race1', 'c42', 'X', 18000, 500, 0.5);
+    // threshold = 500 × 0.50 = 250. confidence = 50 / 250 = 0.2
+    expect(result.confidence).toBe(0.2);
+  });
+
+  it('F-010 totalRegistered=0 falls back to absolute threshold 50 (pre-F-010 behavior)', async () => {
+    const finishers = Array(25).fill({ chipTime: '04:00:00', category: 'X' });
+    mockModel.exec.mockResolvedValue(finishers);
+    const result = await service.calculate('race1', 'c42', 'X', 18000, 0, 0.2);
+    // totalRegistered=0 → fallback threshold 50. confidence = 25/50 = 0.5
+    expect(result.confidence).toBe(0.5);
+  });
+
+  it('F-010 backward compat: omitting totalRegistered/multiplier → absolute threshold 50', async () => {
+    const finishers = Array(50).fill({ chipTime: '04:00:00', category: 'X' });
+    mockModel.exec.mockResolvedValue(finishers);
+    const result = await service.calculate('race1', 'c42', 'X', 18000);
+    // No new params → threshold 50. confidence = 50/50 = 1.0
+    expect(result.confidence).toBe(1);
+  });
+
+  it('F-010 confidence caps at 1.0 even when totalFinishers exceeds threshold', async () => {
+    const finishers = Array(200).fill({ chipTime: '04:00:00', category: 'X' });
+    mockModel.exec.mockResolvedValue(finishers);
+    const result = await service.calculate('race1', 'c42', 'X', 18000, 500, 0.2);
+    // threshold = 100. confidence = MIN(1, 200/100) = 1.0
+    expect(result.confidence).toBe(1);
+  });
 });

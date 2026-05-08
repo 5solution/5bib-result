@@ -47,6 +47,16 @@ export class CourseMapDataDto {
   gpxSimplifiedUrl?: string;
 
   @ApiPropertyOptional({
+    description:
+      'Inlined simplified GeoJSON FeatureCollection (BR-CM-11b). Backend fetches from S3 server-side ' +
+      'so frontend avoids CORS round-trip. Shape: GeoJSON FeatureCollection with one LineString feature. ' +
+      'Absent when hasGpx=false or when S3 fetch failed (frontend should fall back to gpxSimplifiedUrl).',
+    type: 'object',
+    additionalProperties: true,
+  })
+  geoJson?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
     type: GpxParsedDto,
     description: 'Parsed metadata (BR-CM-02/03/06). Absent when hasGpx=false.',
   })

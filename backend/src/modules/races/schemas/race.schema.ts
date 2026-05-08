@@ -132,6 +132,15 @@ export class Race {
   // External IDs
   @Prop() externalRaceId: string; // RaceResult race ID
 
+  // F-015 BR-CK-06 — Check-in window. Default null = window closed; admin must set explicitly.
+  // Backfilled by `2026-05-08-add-check-in-window.ts` migration: start = startDate - 3 days, end = startDate - 1 hour.
+  @Prop({
+    type: { start: { type: Date, default: null }, end: { type: Date, default: null } },
+    default: null,
+    _id: false,
+  })
+  checkInWindow?: { start: Date | null; end: Date | null } | null;
+
   // Status override audit trail (BR: forward-only normally; admin can override with reason)
   @Prop({ type: [RaceStatusHistoryEntrySchema], default: [] })
   statusHistory: RaceStatusHistoryEntry[];

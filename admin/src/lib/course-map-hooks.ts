@@ -60,9 +60,46 @@ export function useDeleteCourseGpx(raceId: string, courseId: string) {
 
 export function useUpdateCheckpointPosition(raceId: string, courseId: string) {
   const qc = useQueryClient();
-  return useMutation<void, Error, UpdateCheckpointPositionDto>({
+  return useMutation<
+    void,
+    Error,
+    UpdateCheckpointPositionDto,
+    { previous: CourseMapDataDto | null | undefined }
+  >({
     mutationFn: (body) => updateCheckpointPosition(raceId, courseId, body),
-    onSuccess: () => {
+    // ⚡ Optimistic update — apply lat/lng to cached query data IMMEDIATELY
+    // so the marker stays at the dropped position without waiting for the
+    // 1-3s server round-trip (DEV MongoDB tunnel + Redis DEL × 2). Without
+    // this, the marker visibly snaps back to the placeholder position
+    // during the await, then back to the new position when refetch lands.
+    onMutate: async (body) => {
+      await qc.cancelQueries({ queryKey: courseMapDataKey(raceId, courseId) });
+      const previous = qc.getQueryData<CourseMapDataDto | null>(
+        courseMapDataKey(raceId, courseId),
+      );
+      qc.setQueryData<CourseMapDataDto | null>(
+        courseMapDataKey(raceId, courseId),
+        (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            checkpoints: current.checkpoints.map((cp) =>
+              cp.key === body.key ? { ...cp, lat: body.lat, lng: body.lng } : cp,
+            ),
+          };
+        },
+      );
+      return { previous };
+    },
+    onError: (_err, _body, ctx) => {
+      // Rollback on failure
+      if (ctx?.previous !== undefined) {
+        qc.setQueryData(courseMapDataKey(raceId, courseId), ctx.previous);
+      }
+    },
+    onSettled: () => {
+      // Always refetch to sync with server (in case discover ran in parallel
+      // and re-merged checkpoints).
       void qc.invalidateQueries({ queryKey: ['race', raceId] });
       void qc.invalidateQueries({ queryKey: courseMapDataKey(raceId, courseId) });
     },

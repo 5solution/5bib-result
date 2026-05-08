@@ -12,15 +12,55 @@
 
 import { useState } from 'react';
 import type { CheckpointProgression } from '@/lib/timing-alert-api';
+import { vnHealthLabel } from '@/lib/vn-microcopy';
+
+// F-011 BR-PB-03 — race status type aligned with backend Race schema.
+// Optional prop: backward-compat default `undefined` → existing behavior preserved.
+type RaceStatus = 'draft' | 'pre_race' | 'live' | 'ended';
 
 interface AthleteFlowChartProps {
   progression: CheckpointProgression[];
+  /** F-011 BR-PB-03 — optional race status. When 'draft' | 'pre_race', component
+   *  short-circuits to a neutral "race chưa khởi động" card instead of rendering
+   *  health badges (which would mislead BTC about timing devices). */
+  raceStatus?: RaceStatus;
 }
 
-export function AthleteFlowChart({ progression }: AthleteFlowChartProps) {
+export function AthleteFlowChart({
+  progression,
+  raceStatus,
+}: AthleteFlowChartProps) {
   const [activeCourseId, setActiveCourseId] = useState<string>(
     progression[0]?.courseId ?? '',
   );
+
+  // F-011 BR-PB-04 — pre-race status guard ABOVE existing empty-state ladder.
+  // Backend health calc (lines below) is technically correct (0/N = fail) but
+  // pre-race UI must NOT show "KIỂM TRA THIẾT BỊ" badge (BTC misreads as device fail).
+  // Render single neutral grey card instead of FlowRows.
+  if (raceStatus === 'draft' || raceStatus === 'pre_race') {
+    return (
+      <CardShell>
+        <div
+          className="flex items-center gap-3 px-4 py-6 text-sm text-stone-600"
+          style={{
+            background: 'var(--5s-surface)',
+            borderTop: '1px solid var(--5s-border)',
+          }}
+        >
+          <span aria-hidden className="text-lg">
+            ⏱
+          </span>
+          <div className="flex flex-col leading-tight">
+            <span className="font-semibold text-stone-700">
+              Race chưa khởi động
+            </span>
+            <span className="text-xs text-stone-500">— chờ start gun —</span>
+          </div>
+        </div>
+      </CardShell>
+    );
+  }
 
   if (progression.length === 0) {
     return (
@@ -115,7 +155,8 @@ function FlowRows({
             ? (pt.passedCount / pt.expectedCount) * 100
             : 0;
         const color = colors[h];
-        const badgeLabel = h === 'good' ? 'OK' : h === 'warn' ? 'ATT' : 'CRIT';
+        // F-007 Item #4 — VN microcopy: TỐT / CHÚ Ý / KIỂM TRA THIẾT BỊ.
+        const badgeLabel = vnHealthLabel(h);
 
         return (
           <div
@@ -135,13 +176,16 @@ function FlowRows({
               </span>
             </div>
             <div className="relative h-[30px]">
-              {/* expected ghost bar */}
+              {/* F-011 BR-PB-06 — ghost dashed track full-width fallback.
+                  When expPct === 0 (edge live race), ghost still visible at 100%
+                  as background reference so layout không "lẻ loi". */}
               <div
                 className="absolute left-0 top-0 bottom-0 rounded-md border-[1.5px] border-dashed"
                 style={{
-                  width: `${expPct}%`,
+                  width: expPct > 0 ? `${expPct}%` : '100%',
                   borderColor: `${color}40`,
                 }}
+                aria-hidden
               />
               {/* actual filled bar */}
               <div
@@ -159,21 +203,33 @@ function FlowRows({
                   {pt.passedCount.toLocaleString('vi-VN')}
                 </span>
               </div>
-              {/* expected label */}
+              {/* F-011 BR-PB-07 — expected label.
+                  When expPct < 5 (edge boundary, e.g. live race with 0 expected),
+                  pin label to RIGHT of track to avoid collision with actual count "0". */}
               <div
-                className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] text-stone-500"
-                style={{
-                  left: `${expPct}%`,
-                  transform: 'translate(8px, -50%)',
-                  fontFamily: 'var(--font-mono)',
-                }}
+                className="absolute top-1/2 whitespace-nowrap text-[11px] text-stone-500"
+                style={
+                  expPct < 5
+                    ? {
+                        right: 0,
+                        transform: 'translate(-4px, -50%)',
+                        fontFamily: 'var(--font-mono)',
+                      }
+                    : {
+                        left: `${expPct}%`,
+                        transform: 'translate(8px, -50%)',
+                        fontFamily: 'var(--font-mono)',
+                      }
+                }
               >
                 ~{pt.expectedCount.toLocaleString('vi-VN')}
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2">
+            {/* F-011 BR-PB-07 — right column vertical stacking (count top / pct middle / badge bottom).
+                Eliminates overlap with `~{expectedCount}` label when expPct === 0. */}
+            <div className="flex flex-col items-end justify-center gap-0.5 text-right">
               <div
-                className="text-[13px] font-bold"
+                className="text-[13px] font-bold leading-none"
                 style={{ fontFamily: 'var(--font-mono)', color }}
               >
                 {pctOfExp.toFixed(1)}%
@@ -196,9 +252,9 @@ function FlowRows({
         className="mt-2 flex flex-wrap items-center gap-4 border-t border-dashed pt-3 text-[11px] text-stone-500"
         style={{ borderColor: 'var(--5s-border)' }}
       >
-        <Legend color="#16A34A" label="≥90% — healthy" />
-        <Legend color="#F59E0B" label="70–90% — attention" />
-        <Legend color="#DC2626" label="<70% — possible equipment" />
+        <Legend color="#16A34A" label="≥90% — TỐT" />
+        <Legend color="#F59E0B" label="70–90% — CHÚ Ý" />
+        <Legend color="#DC2626" label="<70% — KIỂM TRA THIẾT BỊ" />
         <span
           className="ml-auto"
           style={{ fontFamily: 'var(--font-mono)' }}

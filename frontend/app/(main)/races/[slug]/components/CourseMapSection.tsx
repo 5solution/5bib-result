@@ -53,15 +53,50 @@ const PILL_COLORS = [
 ];
 
 /**
- * Build elevation profile from `gpxSimplifiedUrl`. Phase 1 backend returns
- * `gpxParsed.{totalDistanceKm, elevationGain/Loss}` aggregates only — we lazy
- * fetch the simplified GeoJSON to derive a sampled elevation profile here so
- * the chart matches the actual track without bloating the API payload.
+ * Build elevation profile from a GeoJSON LineString. Prefers the backend-
+ * inlined `geoJson` (BR-CM-11b — no CORS) and falls back to fetching
+ * `gpxSimplifiedUrl` directly for backward compat.
+ *
+ * Phase 1 backend returns `gpxParsed.{totalDistanceKm, elevationGain/Loss}`
+ * aggregates only — we derive the sampled elevation profile here so the chart
+ * matches the actual track without bloating the API payload further.
  */
-function useElevationProfile(gpxSimplifiedUrl: string | undefined): ElevationPoint[] {
+function useElevationProfile(
+  geoJson: Record<string, unknown> | null | undefined,
+  gpxSimplifiedUrl: string | undefined,
+): ElevationPoint[] {
   const [profile, setProfile] = React.useState<ElevationPoint[]>([]);
 
   React.useEffect(() => {
+    const buildFromData = (data: unknown): ElevationPoint[] => {
+      const features =
+        data && typeof data === 'object' && 'features' in data
+          ? (data as { features: Array<{ geometry?: { type?: string; coordinates?: [number, number, number?][] } }> }).features
+          : null;
+      const lineCoords = features?.find((f) => f.geometry?.type === 'LineString')?.geometry?.coordinates;
+      if (!Array.isArray(lineCoords) || lineCoords.length < 2) return [];
+      const out: ElevationPoint[] = [];
+      let cumKm = 0;
+      let prevLat: number | null = null;
+      let prevLng: number | null = null;
+      for (const [lng, lat, ele] of lineCoords) {
+        if (typeof lng !== 'number' || typeof lat !== 'number') continue;
+        if (prevLat !== null && prevLng !== null) {
+          cumKm += haversineKm(prevLat, prevLng, lat, lng);
+        }
+        out.push({ distanceKm: cumKm, elevation: typeof ele === 'number' ? ele : 0 });
+        prevLat = lat;
+        prevLng = lng;
+      }
+      if (out.every((p) => p.elevation === 0)) return [];
+      return out;
+    };
+
+    // BR-CM-11b — backend pre-inlined GeoJSON; no CORS round-trip needed.
+    if (geoJson) {
+      setProfile(buildFromData(geoJson));
+      return;
+    }
     if (!gpxSimplifiedUrl) {
       setProfile([]);
       return;
@@ -71,35 +106,7 @@ function useElevationProfile(gpxSimplifiedUrl: string | undefined): ElevationPoi
       .then((r) => (r.ok ? r.json() : null))
       .then((data: unknown) => {
         if (cancelled || !data) return;
-        const features =
-          data && typeof data === 'object' && 'features' in data
-            ? (data as { features: Array<{ geometry?: { type?: string; coordinates?: [number, number, number?][] } }> }).features
-            : null;
-        const lineCoords = features?.find((f) => f.geometry?.type === 'LineString')?.geometry?.coordinates;
-        if (!Array.isArray(lineCoords) || lineCoords.length < 2) {
-          setProfile([]);
-          return;
-        }
-        // Build cumulative distance + elevation array. Use haversine for distance.
-        const out: ElevationPoint[] = [];
-        let cumKm = 0;
-        let prevLat: number | null = null;
-        let prevLng: number | null = null;
-        for (const [lng, lat, ele] of lineCoords) {
-          if (typeof lng !== 'number' || typeof lat !== 'number') continue;
-          if (prevLat !== null && prevLng !== null) {
-            cumKm += haversineKm(prevLat, prevLng, lat, lng);
-          }
-          out.push({ distanceKm: cumKm, elevation: typeof ele === 'number' ? ele : 0 });
-          prevLat = lat;
-          prevLng = lng;
-        }
-        // If no point had elevation, return empty so chart shows "Không có dữ liệu độ cao"
-        if (out.every((p) => p.elevation === 0)) {
-          setProfile([]);
-        } else {
-          setProfile(out);
-        }
+        setProfile(buildFromData(data));
       })
       .catch(() => {
         if (!cancelled) setProfile([]);
@@ -107,7 +114,7 @@ function useElevationProfile(gpxSimplifiedUrl: string | undefined): ElevationPoi
     return () => {
       cancelled = true;
     };
-  }, [gpxSimplifiedUrl]);
+  }, [geoJson, gpxSimplifiedUrl]);
 
   return profile;
 }
@@ -169,7 +176,10 @@ export function CourseMapSection({ raceId, courses }: CourseMapSectionProps): Re
     staleTime: 60_000,
   });
 
-  const elevationProfile = useElevationProfile(data?.gpxSimplifiedUrl);
+  // BR-CM-11b — backend inlines geoJson in the response so we don't need a
+  // second CORS-y fetch to S3 from the browser.
+  const inlinedGeoJson = (data?.geoJson ?? null) as Record<string, unknown> | null;
+  const elevationProfile = useElevationProfile(inlinedGeoJson, data?.gpxSimplifiedUrl);
   const elevationCheckpoints: ElevationCheckpoint[] = (data?.checkpoints ?? [])
     .filter((cp): cp is CheckpointWithPositionDto & { distanceKm: number } => typeof cp.distanceKm === 'number')
     .map((cp) => ({ distanceKm: cp.distanceKm, name: cp.name || cp.key }));
@@ -225,10 +235,21 @@ export function CourseMapSection({ raceId, courses }: CourseMapSectionProps): Re
           </div>
         )}
         {!isLoading && !isError && data && !data.hasGpx && (
-          <div className="flex h-[200px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 bg-stone-50 text-center">
-            <Mountain className="mb-2 h-8 w-8 text-stone-400" />
-            <p className="text-sm font-semibold text-stone-700">BTC chưa upload course map</p>
-            <p className="mt-1 text-xs text-stone-500">Bản đồ chi tiết sẽ được cập nhật trước race day.</p>
+          // F-007 Item #3 — public empty-state mirroring the admin EmptyState
+          // pattern (icon + title + description, no CTA for athletes since
+          // they can't fix it themselves).
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-stone-300 bg-stone-50 p-6 text-center"
+          >
+            <Mountain className="h-10 w-10 text-stone-400" aria-hidden="true" />
+            <p className="text-sm font-semibold text-stone-700">
+              Chưa có bản đồ cự ly
+            </p>
+            <p className="max-w-md text-xs text-stone-500">
+              BTC sẽ cập nhật bản đồ chi tiết và độ cao trước race day.
+            </p>
           </div>
         )}
         {!isLoading && !isError && data && data.hasGpx && data.gpxSimplifiedUrl && data.bounds && (
@@ -239,6 +260,7 @@ export function CourseMapSection({ raceId, courses }: CourseMapSectionProps): Re
             {/* Map */}
             <CourseMapInner
               gpxSimplifiedUrl={data.gpxSimplifiedUrl}
+              geoJson={inlinedGeoJson}
               bounds={data.bounds}
               checkpoints={data.checkpoints}
             />
@@ -286,12 +308,16 @@ function StatsLine({ parsed }: { parsed: GpxParsedDto | undefined }): React.Reac
 function CheckpointFlow({ checkpoints }: { checkpoints: CheckpointWithPositionDto[] }): React.ReactElement | null {
   if (checkpoints.length === 0) return null;
 
-  // Sort by distanceKm if present, fallback to original order.
-  const sorted = [...checkpoints].sort((a, b) => {
-    const ax = typeof a.distanceKm === 'number' ? a.distanceKm : Number.MAX_SAFE_INTEGER;
-    const bx = typeof b.distanceKm === 'number' ? b.distanceKm : Number.MAX_SAFE_INTEGER;
-    return ax - bx;
-  });
+  // Bug 5 — sort by distanceKm ascending so Start (≈0km) is first and Finish
+  // (≈totalKm) is last. When distanceKm is missing we anchor Start to 0 and
+  // Finish to +Infinity (so it stays last) — vendors regularly omit Start km.
+  const distFor = (cp: CheckpointWithPositionDto): number => {
+    if (typeof cp.distanceKm === 'number') return cp.distanceKm;
+    if (isStartKey(cp.key)) return 0;
+    if (isFinishKey(cp.key)) return Number.POSITIVE_INFINITY;
+    return Number.MAX_SAFE_INTEGER;
+  };
+  const sorted = [...checkpoints].sort((a, b) => distFor(a) - distFor(b));
 
   return (
     <div

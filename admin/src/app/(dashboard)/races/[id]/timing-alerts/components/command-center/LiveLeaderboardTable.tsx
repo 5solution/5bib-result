@@ -1,13 +1,20 @@
 'use client';
 
 /**
- * FEATURE-005 — Live Leaderboard Table component (Command Center).
+ * FEATURE-005 + FEATURE-008 — Live Leaderboard Table (Command Center).
  *
- * Per design canvas Artboard 3:
+ * Per F-008 Canvas 03 + scope lock:
  * - Top 3 → blue-50 left border highlight
  * - Row click → external link athlete detail public page
- * - MISS-Finish row magenta + icon (BR-CC-09)
- * - Course tabs ở top
+ * - MISS badge inline cho rows missing CP (BR-CC-14)
+ * - Course pills filter
+ *
+ * F-008 changes (BR-CC-11/scope lock):
+ *   - REMOVED F-007 v1 Top N export toolbar (`Top [10▾] [Copy] [CSV] [Print]`)
+ *     → moved to page-level top bar via single Export CSV button (full data)
+ *   - ADDED `activeCourseId` + `onActiveCourseChange` controlled props (so the
+ *     parent CommandCenterLayout knows which course pill is active for export)
+ *   - Local-state fallback preserved for backward compat F-005 sub-page
  */
 
 import { useState } from 'react';
@@ -25,15 +32,29 @@ import type { LiveLeaderboardCourse } from '@/lib/timing-alert-api';
 interface LiveLeaderboardTableProps {
   leaderboard: LiveLeaderboardCourse[];
   raceSlug?: string;
+  /**
+   * F-008 — controlled active course pill. If omitted, component manages
+   * local state (F-005 backward compat).
+   */
+  activeCourseId?: string;
+  onActiveCourseChange?: (courseId: string) => void;
 }
 
 export function LiveLeaderboardTable({
   leaderboard,
   raceSlug,
+  activeCourseId: controlledCourseId,
+  onActiveCourseChange,
 }: LiveLeaderboardTableProps) {
-  const [activeCourseId, setActiveCourseId] = useState<string>(
+  const [internalCourseId, setInternalCourseId] = useState<string>(
     leaderboard[0]?.courseId ?? '',
   );
+  const activeCourseId =
+    controlledCourseId !== undefined ? controlledCourseId : internalCourseId;
+  const setActiveCourseId = (id: string) => {
+    if (onActiveCourseChange) onActiveCourseChange(id);
+    if (controlledCourseId === undefined) setInternalCourseId(id);
+  };
 
   if (leaderboard.length === 0) {
     return (
@@ -52,7 +73,7 @@ export function LiveLeaderboardTable({
     <CardShell>
       {/* Header: title + pill tabs */}
       <div
-        className="flex items-center gap-3 border-b px-4 py-3"
+        className="flex flex-wrap items-center gap-3 border-b px-4 py-3"
         style={{ borderColor: 'var(--5s-border)' }}
       >
         <h3
@@ -62,7 +83,7 @@ export function LiveLeaderboardTable({
           Live Leaderboard
         </h3>
         <div
-          className="ml-auto flex items-center gap-1 rounded-full p-[3px]"
+          className="flex items-center gap-1 rounded-full p-[3px]"
           style={{ background: 'var(--5s-surface)' }}
         >
           {leaderboard.map((course) => {
@@ -85,6 +106,9 @@ export function LiveLeaderboardTable({
             );
           })}
         </div>
+        {/* F-008 PAUSE-CC-02 — F-007 v1 Top N toolbar REMOVED. Replacement
+            lives on the page top bar (single Export CSV button, full data per
+            BR-CC-11). Keep the table render + pills only. */}
       </div>
       <div className="p-0">
 

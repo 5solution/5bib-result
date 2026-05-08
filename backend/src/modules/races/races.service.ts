@@ -18,6 +18,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { CourseMapService } from './services/course-map.service';
 
 /**
  * Top-level fields stripped from public race responses.
@@ -53,6 +54,10 @@ export class RacesService {
     @InjectModel(Race.name) private readonly raceModel: Model<RaceDocument>,
     private readonly httpService: HttpService,
     @InjectRedis() private readonly redis: Redis,
+    // TD-F006-09 — inject CourseMapService for S3 GPX cleanup on course
+    // removal. Verified safe: CourseMapService only depends on Race model +
+    // Redis (NO RacesService dep) — no circular DI.
+    private readonly courseMapService: CourseMapService,
   ) {}
 
   private async getRaceFromCache(key: string): Promise<any | null> {
@@ -339,6 +344,29 @@ export class RacesService {
   // discover cho races sắp live.
 
   async removeCourse(raceId: string, courseId: string) {
+    // TD-F006-09 — clean orphaned S3 GPX objects BEFORE the $pull. Read the
+    // course first to check if it had GPX uploaded; if so, fire-and-forget
+    // delete to S3 so we don't leave orphan objects under
+    // `courses/<raceId>/<courseId>/`.
+    //
+    // We swallow errors: even if S3 cleanup fails, we still proceed with the
+    // DB delete (CourseMapService.deleteGpxFromS3 is already graceful per its
+    // own implementation — uses safeDelete internally).
+    try {
+      const existing = await this.raceModel
+        .findOne({ _id: raceId, 'courses.courseId': courseId }, { 'courses.$': 1 })
+        .lean()
+        .exec();
+      const targetCourse = existing?.courses?.[0];
+      if (targetCourse?.gpxUrl || targetCourse?.gpxSimplifiedUrl) {
+        await this.courseMapService.deleteGpxFromS3(raceId, courseId);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `TD-F006-09: S3 GPX cleanup failed for ${raceId}/${courseId} — continuing with DB delete: ${(err as Error).message}`,
+      );
+    }
+
     const race = await this.raceModel
       .findByIdAndUpdate(
         raceId,

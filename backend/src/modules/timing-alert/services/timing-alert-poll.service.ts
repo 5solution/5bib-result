@@ -272,12 +272,48 @@ export class TimingAlertPollService {
       // TA-11: cutoff time từ race document
       const cutoffTime = course.cutOffTime?.trim() || null;
 
+      // F-010 — pre-load config-driven values once per cycle
+      const paceBuffer = config.pace_buffer ?? 1.10;
+      const confidenceMultiplier = config.confidence_multiplier ?? 0.20;
+      const totalRegistered = await this.getTotalRegistered(raceId, courseId);
+
+      // F-010 OBS-1 BR-FC-18 — wall-clock overdue uses lastPollAt from existing
+      // alert. Pre-fetch existing OPEN alerts for this race to pass last_checked_at
+      // into detect(). Indexed query (race_id, status:OPEN) — < 5ms typical.
+      const existingOpenAlerts = await this.alertModel
+        .find({ race_id: raceId, status: 'OPEN' })
+        .select({ bib_number: 1, last_checked_at: 1 })
+        .lean<
+          Array<{
+            bib_number: string;
+            last_checked_at?: Date;
+          }>
+        >()
+        .exec();
+      const lastPollByBib = new Map<string, Date | null>();
+      for (const a of existingOpenAlerts) {
+        const prev = lastPollByBib.get(a.bib_number);
+        const t = a.last_checked_at ?? null;
+        // Keep the most recent timestamp per bib if multiple alerts exist
+        if (
+          !prev ||
+          (t && prev && t.getTime() > prev.getTime()) ||
+          (t && !prev)
+        ) {
+          lastPollByBib.set(a.bib_number, t);
+        }
+      }
+
       for (const athlete of parsed) {
         const detections = this.missDetector.detect(
           athlete,
           checkpoints,
           config.overdue_threshold_minutes ?? 30,
-          { cutoffTime },
+          {
+            cutoffTime,
+            paceBuffer,
+            lastPollAt: lastPollByBib.get(athlete.bib) ?? null,
+          },
         );
         if (detections.length === 0) continue;
 
@@ -297,13 +333,21 @@ export class TimingAlertPollService {
           courseId,
           athlete.ageGroup,
           refDetection.projectedFinishSeconds,
+          totalRegistered,
+          confidenceMultiplier,
         );
+
+        // F-010 OBS-2 BR-FC-19 — count consecutive MIDDLE_GAP for severity escalation
+        const middleGapCount = detections.filter(
+          (d) => d.type === 'MIDDLE_GAP',
+        ).length;
 
         for (const detection of detections) {
           const severityResult = this.missDetector.classifySeverity(
             detection,
             projectedRank,
             config.top_n_alert ?? 3,
+            detection.type === 'MIDDLE_GAP' ? middleGapCount : 1,
           );
 
           const upsertResult = await this.upsertAlert(
@@ -389,6 +433,33 @@ export class TimingAlertPollService {
       return { status: 'FAILED', alerts_created: 0, alerts_resolved: 0, error: message };
     } finally {
       await this.redis.del(lockKey);
+    }
+  }
+
+  /**
+   * F-010 BR-FC-15/17 — Total registered athletes for confidence formula.
+   * Source: distinct race_results count for raceId+courseId. Single
+   * countDocuments query, indexed (raceId, courseId) — < 10ms for 94K docs.
+   *
+   * Returns 0 if no race_results yet (race draft / pre-sync) — caller falls
+   * back to absolute confidence threshold.
+   */
+  private async getTotalRegistered(
+    raceId: string,
+    courseId: string,
+  ): Promise<number> {
+    try {
+      // Use the alertModel's db connection to access race_results collection
+      // (avoids RaceResultModule cross-module DI here — pattern matches
+      // getAlertDetail's existing direct collection access).
+      return await this.alertModel.db
+        .collection('race_results')
+        .countDocuments({ raceId, courseId });
+    } catch (err) {
+      this.logger.warn(
+        `[getTotalRegistered] race=${raceId} course=${courseId} err=${(err as Error).message}`,
+      );
+      return 0;
     }
   }
 
@@ -590,11 +661,20 @@ export class TimingAlertPollService {
   ): Promise<number> {
     const byBib = new Map(parsedAthletes.map((a) => [a.bib, a]));
 
-    // Projection-only scan — chỉ load fields cần thiết để build bulk ops
+    // Projection-only scan — chỉ load fields cần thiết để build bulk ops.
+    // F-010 BR-FC-03/04 — also include detection_type cho CUTOFF_RISK
+    // auto-resolve (resolves on Finish OR next checkpoint pass).
     const openAlerts = await this.alertModel
       .find({ race_id: raceId, status: 'OPEN' })
-      .select({ _id: 1, bib_number: 1, missing_point: 1 })
-      .lean<Array<{ _id: unknown; bib_number: string; missing_point: string }>>()
+      .select({ _id: 1, bib_number: 1, missing_point: 1, detection_type: 1 })
+      .lean<
+        Array<{
+          _id: unknown;
+          bib_number: string;
+          missing_point: string;
+          detection_type?: 'PHANTOM' | 'MIDDLE_GAP' | 'CUTOFF_RISK';
+        }>
+      >()
       .exec();
 
     if (openAlerts.length === 0) return 0;
@@ -611,7 +691,73 @@ export class TimingAlertPollService {
     for (const alert of openAlerts) {
       const athlete = byBib.get(alert.bib_number);
       if (!athlete) continue;
+
       const time = athlete.checkpointTimes[alert.missing_point];
+
+      // F-010 BR-FC-03/04 — CUTOFF_RISK auto-resolve. Two triggers:
+      //  (a) athlete now has time at the originally-missing checkpoint
+      //  (b) athlete now has Finish time (proved they finished anyway)
+      // Either trigger resolves the alert with descriptive note.
+      if (alert.detection_type === 'CUTOFF_RISK') {
+        let finishTime: string | null = null;
+        for (const [k, v] of Object.entries(athlete.checkpointTimes)) {
+          if (k.toLowerCase() === 'finish' && v && v.trim().length > 0) {
+            finishTime = v.trim();
+            break;
+          }
+        }
+        if (time && time.trim().length > 0) {
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: alert._id, status: 'OPEN' },
+              update: {
+                $set: {
+                  status: 'RESOLVED',
+                  resolved_by: 'auto',
+                  resolved_at: now,
+                  resolution_note: `Auto-resolved: athlete passed ${alert.missing_point} = ${time}`,
+                },
+                $push: {
+                  audit_log: {
+                    action: 'AUTO_RESOLVE',
+                    by: 'system',
+                    at: now,
+                    note: `CUTOFF_RISK cleared — athlete passed ${alert.missing_point}: ${time}`,
+                  },
+                },
+              },
+            },
+          });
+          continue;
+        }
+        if (finishTime) {
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: alert._id, status: 'OPEN' },
+              update: {
+                $set: {
+                  status: 'RESOLVED',
+                  resolved_by: 'auto',
+                  resolved_at: now,
+                  resolution_note: `Auto-resolved: athlete finished (Finish=${finishTime})`,
+                },
+                $push: {
+                  audit_log: {
+                    action: 'AUTO_RESOLVE',
+                    by: 'system',
+                    at: now,
+                    note: `CUTOFF_RISK cleared — athlete finished at ${finishTime}`,
+                  },
+                },
+              },
+            },
+          });
+          continue;
+        }
+        // No new evidence — keep CUTOFF_RISK open
+        continue;
+      }
+
       if (!time || time.trim().length === 0) continue;
       bulkOps.push({
         updateOne: {

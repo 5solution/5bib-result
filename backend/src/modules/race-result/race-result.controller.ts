@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Post,
   Query,
   Param,
@@ -37,6 +38,10 @@ import {
   normalizeImageConfig,
 } from './dto/result-image-query.dto';
 import { SubmitClaimDto } from './dto/submit-claim.dto';
+import {
+  UpdateDnsChipFailDto,
+  UpdateDnsChipFailResponseDto,
+} from './dto/update-dns-chip-fail.dto';
 import {
   TimeDistributionResponseDto,
   CountryStatsResponseDto,
@@ -913,6 +918,49 @@ export class RaceResultController {
     } catch {
       return { raceName: '', raceSlug: '', courseName: '' };
     }
+  }
+
+  // ─── F-010 BR-FC-07 — DNS chip fail admin manual flag ────────
+
+  @Patch(':id/dns-chip-fail')
+  @UseGuards(LogtoAdminGuard)
+  @ApiOperation({
+    summary: 'F-010 — Admin flag a race result as DNS_CHIP_FAIL sub-state',
+    description:
+      'Admin manual override khi athlete có evidence qua start mat (photo/manual) ' +
+      'nhưng chip không ghi nhận → DNS_CHIP_FAIL. Boolean toggle (true/false). ' +
+      'Race-result :id = MongoDB ObjectId (24-hex).',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    description: 'race_result _id (MongoDB ObjectId)',
+  })
+  @ApiBody({ type: UpdateDnsChipFailDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Updated dnsChipFail flag',
+    type: UpdateDnsChipFailResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid ObjectId' })
+  @ApiResponse({ status: 404, description: 'Race result not found' })
+  async patchDnsChipFail(
+    @Param('id') id: string,
+    @Body() dto: UpdateDnsChipFailDto,
+  ): Promise<UpdateDnsChipFailResponseDto> {
+    if (!id || !/^[a-fA-F0-9]{24}$/.test(id)) {
+      throw new BadRequestException(
+        'Invalid race_result id — must be 24-char hex ObjectId',
+      );
+    }
+    const updated = await this.raceResultService.updateDnsChipFail(
+      id,
+      dto.dnsChipFail,
+    );
+    if (!updated) {
+      throw new NotFoundException(`Race result ${id} not found`);
+    }
+    return { success: true, dnsChipFail: updated.dnsChipFail ?? dto.dnsChipFail };
   }
 
   @UseGuards(LogtoAdminGuard)

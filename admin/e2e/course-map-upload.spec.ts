@@ -102,6 +102,17 @@ test.describe('F-006 Course Map upload — admin', () => {
     // for QC. Tag with @manual if your runner supports it.)
   });
 
+  test('TD-F006-10: Upload no-elevation.gpx → ElevationChart shows "Không có dữ liệu độ cao"', async ({ page }) => {
+    await openCourseMapTab(page);
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(FIX('no-elevation.gpx'));
+    await expect(page.getByText(/gpx đã được tải lên/i)).toBeVisible({ timeout: 30_000 });
+    // ElevationChart empty state — pure SVG with role="img" + aria-label.
+    await expect(
+      page.getByRole('img', { name: /không có dữ liệu độ cao/i }),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
   test('Multi-course race: 5K and 21K GPX persist independently', async ({ page }) => {
     // Open course "5K"
     await page.goto(RACE_DETAIL_URL);

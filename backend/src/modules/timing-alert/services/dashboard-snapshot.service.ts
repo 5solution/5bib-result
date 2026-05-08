@@ -18,6 +18,7 @@ import {
 } from '../schemas/timing-alert-poll.schema';
 import { NotificationDispatcherService } from './notification-dispatcher.service';
 import { CommandCenterService } from './command-center.service';
+import { TimingAlertConfigService } from './timing-alert-config.service';
 import {
   DashboardSnapshotResponseDto,
   RaceStatsDto,
@@ -25,7 +26,11 @@ import {
   CheckpointProgressionDto,
   CheckpointPointDto,
   RecentActivityItemDto,
+  ThroughputBucketDto,
+  CourseHealthDto,
+  CheckpointHealthDto,
 } from '../dto/dashboard-snapshot.dto';
+import { DnsBreakdownDto } from '../dto/dashboard-snapshot-dns-breakdown.dto';
 
 /**
  * Phase 2.2 — Race Timing Operation Dashboard backend.
@@ -79,6 +84,7 @@ export class DashboardSnapshotService {
     @InjectRedis() private readonly redis: Redis,
     private readonly notification: NotificationDispatcherService,
     private readonly commandCenter: CommandCenterService,
+    private readonly timingAlertConfig: TimingAlertConfigService,
   ) {}
 
   /**
@@ -116,9 +122,25 @@ export class DashboardSnapshotService {
     const progression = await this.computeCheckpointProgression(raceId, race);
 
     // F-005 — Command Center sections: live leaderboard + summary cards
-    const [liveLeaderboard, summary] = await Promise.all([
+    // F-008 — additive: dnsCount + throughputHistory + checkpointHealthMatrix
+    // F-008 v2 BR-CC2-27 — additive: lastPollAt from TimingAlertConfig
+    // F-010 BR-FC-05/06 — additive: dnsBreakdown (notPicked / noStart / chipFail)
+    const [
+      liveLeaderboard,
+      summary,
+      dnsCount,
+      throughputHistory,
+      checkpointHealthMatrix,
+      lastPollAt,
+      dnsBreakdown,
+    ] = await Promise.all([
       this.commandCenter.aggregateLeaderboardForAllCourses(raceId, race),
       this.commandCenter.getSummaryCards(raceId, race, raceStats),
+      this.computeDnsCount(raceId, race),
+      this.computeThroughputHistory(raceId, race),
+      this.computeCheckpointHealthMatrix(raceId, race),
+      this.computeLastPollAt(raceId),
+      this.computeDnsBreakdown(raceId, race),
     ]);
 
     // Mat failure detection — fire-and-forget Telegram anomaly per checkpoint
@@ -144,6 +166,11 @@ export class DashboardSnapshotService {
       recentActivity: pollLogs,
       liveLeaderboard,
       summary,
+      dnsCount,
+      throughputHistory,
+      checkpointHealthMatrix,
+      lastPollAt,
+      dnsBreakdown,
       generatedAt: new Date().toISOString(),
     };
 
@@ -576,6 +603,357 @@ export class DashboardSnapshotService {
 
     items.sort((a, b) => (a.at > b.at ? -1 : 1));
     return items.slice(0, 30);
+  }
+
+  // ─────────── F-008 — Command Center Refactor compute methods ───────────
+
+  /**
+   * F-008 BR-CC-02 — DNS count = athletes registered nhưng KHÔNG có Start time.
+   *
+   * Formula: `dnsCount = registeredAthletes - startedAthletes`. Started =
+   * distinct bibs with Start chiptime non-empty. Registered = distinct bibs
+   * trong race_results (sync mới nhất). Race draft → 0.
+   *
+   * Reuses the per-course aggregation pattern (case-insensitive Start key
+   * lookup matching `findTimeCi`).
+   */
+  async computeDnsCount(raceId: string, race: RaceDocument): Promise<number> {
+    if (race.status === 'draft') return 0;
+
+    const courses = race.courses ?? [];
+    if (courses.length === 0) return 0;
+
+    let registered = 0;
+    let started = 0;
+    for (const course of courses) {
+      type Row = { bib: string; chiptimes: string };
+      const rows = await this.resultModel
+        .aggregate<Row>([
+          { $match: { raceId, courseId: course.courseId } },
+          { $sort: { _id: 1 } },
+          {
+            $group: {
+              _id: '$bib',
+              chiptimes: { $first: '$chiptimes' },
+            },
+          },
+          { $project: { _id: 0, bib: '$_id', chiptimes: 1 } },
+        ])
+        .exec();
+      registered += rows.length;
+      for (const row of rows) {
+        const map = parseChiptimesSafe(row.chiptimes);
+        if (findTimeCi(map, 'start')) started += 1;
+      }
+    }
+    return Math.max(0, registered - started);
+  }
+
+  /**
+   * F-008 BR-CC-03 — Throughput history `last 60 min × 5 min buckets = 12`.
+   *
+   * Bucketing strategy:
+   * - For each athlete với Finish chiptime non-empty + race.startedAt available,
+   *   absolute finish time = startedAt + parseTimeToSeconds(Finish).
+   * - Bucket boundaries = floor((now - 60min) / 5min) * 5min .. now, 12 slots.
+   * - Each bucket counts distinct bibs whose absolute finish falls in slot.
+   * - Race draft / missing startedAt → return 12 zeros (flat sparkline).
+   *
+   * Returns oldest → newest (sparkline reads left → right).
+   */
+  async computeThroughputHistory(
+    raceId: string,
+    race: RaceDocument,
+  ): Promise<ThroughputBucketDto[]> {
+    const BUCKET_MIN = 5;
+    const NUM_BUCKETS = 12;
+    const BUCKET_MS = BUCKET_MIN * 60 * 1000;
+
+    // Build empty 12 buckets oldest → newest, anchored on now
+    const now = Date.now();
+    // Align newest bucket start to floor(now / 5min)
+    const newestStart = Math.floor(now / BUCKET_MS) * BUCKET_MS;
+    const buckets: ThroughputBucketDto[] = [];
+    for (let i = NUM_BUCKETS - 1; i >= 0; i--) {
+      buckets.push({
+        timestamp: new Date(newestStart - i * BUCKET_MS).toISOString(),
+        finishersCount: 0,
+      });
+    }
+
+    // Race chưa start → flat zeros
+    const startedAtInfo = computeRaceStartedAt(race);
+    if (!startedAtInfo.startedAt) return buckets;
+    const startedAtMs = new Date(startedAtInfo.startedAt).getTime();
+    if (Number.isNaN(startedAtMs)) return buckets;
+
+    const courses = race.courses ?? [];
+    if (courses.length === 0) return buckets;
+
+    const oldestSlot = newestStart - (NUM_BUCKETS - 1) * BUCKET_MS;
+
+    for (const course of courses) {
+      type Row = { bib: string; chiptimes: string };
+      const rows = await this.resultModel
+        .aggregate<Row>([
+          { $match: { raceId, courseId: course.courseId } },
+          { $sort: { _id: 1 } },
+          {
+            $group: {
+              _id: '$bib',
+              chiptimes: { $first: '$chiptimes' },
+            },
+          },
+          { $project: { _id: 0, bib: '$_id', chiptimes: 1 } },
+        ])
+        .exec();
+
+      for (const row of rows) {
+        const map = parseChiptimesSafe(row.chiptimes);
+        const finishStr = findTimeCi(map, 'finish');
+        if (!finishStr) continue;
+        const finishSec = parseTimeToSecondsLocal(finishStr);
+        if (finishSec === null || finishSec <= 0) continue;
+        const absFinishMs = startedAtMs + finishSec * 1000;
+        if (absFinishMs < oldestSlot || absFinishMs >= newestStart + BUCKET_MS) {
+          continue; // outside 60-min window
+        }
+        const slotIdx = Math.floor((absFinishMs - oldestSlot) / BUCKET_MS);
+        if (slotIdx >= 0 && slotIdx < NUM_BUCKETS) {
+          buckets[slotIdx].finishersCount += 1;
+        }
+      }
+    }
+
+    return buckets;
+  }
+
+  /**
+   * F-008 BR-CC-05 / BR-CC-06 — Checkpoint Health Matrix per course × per CP.
+   *
+   * - `current` = distinct bibs có chiptime non-empty cho key này.
+   * - `expected` = registered × (cp.distanceKm / course.distanceKm) **linear
+   *   ratio** (smooth progressive expectation). Fallback flat `registered`
+   *   nếu cp.distanceKm hoặc course.distanceKm missing.
+   * - `healthPercent` = current / expected × 100 (clamp 0..100, 1dp).
+   * - `overallPercent` = avg(checkpoints[*].healthPercent) (1dp).
+   *
+   * Race draft → all 0%. Course với 0 athletes → 0%.
+   */
+  async computeCheckpointHealthMatrix(
+    raceId: string,
+    race: RaceDocument,
+  ): Promise<CourseHealthDto[]> {
+    const courses = race.courses ?? [];
+    const result: CourseHealthDto[] = [];
+
+    for (const course of courses) {
+      const checkpoints = course.checkpoints ?? [];
+      if (checkpoints.length === 0) {
+        result.push({
+          courseId: course.courseId,
+          courseName: course.name,
+          totalAthletes: 0,
+          overallPercent: 0,
+          checkpoints: [],
+        });
+        continue;
+      }
+
+      type Row = { bib: string; chiptimes: string };
+      const rows = await this.resultModel
+        .aggregate<Row>([
+          { $match: { raceId, courseId: course.courseId } },
+          { $sort: { _id: 1 } },
+          {
+            $group: {
+              _id: '$bib',
+              chiptimes: { $first: '$chiptimes' },
+            },
+          },
+          { $project: { _id: 0, bib: '$_id', chiptimes: 1 } },
+        ])
+        .exec();
+      const totalAthletes = rows.length;
+
+      // Count per-key passers (case-sensitive — match config keys exactly)
+      const keyCounts = new Map<string, number>();
+      for (const row of rows) {
+        const map = parseChiptimesSafe(row.chiptimes);
+        for (const [k, v] of Object.entries(map)) {
+          if (typeof v === 'string' && v.trim().length > 0) {
+            keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1);
+          }
+        }
+      }
+
+      const courseTotalKm =
+        typeof course.distanceKm === 'number' && course.distanceKm > 0
+          ? course.distanceKm
+          : null;
+
+      const cells: CheckpointHealthDto[] = checkpoints.map((cp) => {
+        const current = keyCounts.get(cp.key) ?? 0;
+        // Linear ratio: registered × (cpKm / totalKm), fallback flat registered.
+        let expected: number;
+        if (
+          courseTotalKm !== null &&
+          typeof cp.distanceKm === 'number' &&
+          cp.distanceKm > 0
+        ) {
+          const ratio = Math.min(1, cp.distanceKm / courseTotalKm);
+          expected = Math.max(1, Math.round(totalAthletes * ratio));
+        } else {
+          expected = Math.max(1, totalAthletes);
+        }
+        // Race draft / no participants → expected=1 (above) but current=0,
+        // forced to 0% (avoid 0/0 → NaN, prevent misleading 100%).
+        const healthRaw =
+          totalAthletes === 0 ? 0 : (current / expected) * 100;
+        const healthPercent =
+          Math.round(Math.max(0, Math.min(100, healthRaw)) * 10) / 10;
+        return {
+          key: cp.key,
+          name: cp.name || cp.key,
+          current,
+          expected,
+          healthPercent,
+        };
+      });
+
+      const overallRaw =
+        cells.length === 0
+          ? 0
+          : cells.reduce((s, c) => s + c.healthPercent, 0) / cells.length;
+      const overallPercent = Math.round(overallRaw * 10) / 10;
+
+      result.push({
+        courseId: course.courseId,
+        courseName: course.name,
+        totalAthletes,
+        overallPercent,
+        checkpoints: cells,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * F-010 BR-FC-05/06 — DNS sub-state breakdown computed at query time.
+   *
+   * Three sub-states (mutually exclusive within DNS population):
+   *   - DNS_CHIP_FAIL  → dnsChipFail === true (admin manual flag)
+   *   - DNS_NOT_PICKED → racekitPickedUp === false AND no Start time AND !dnsChipFail
+   *   - DNS_NO_START   → fallthrough: no Start time, !dnsChipFail, racekit ok/unset
+   *
+   * Note `racekitPickedUp` is currently a TD-F005-01 placeholder (no field on
+   * race_results schema yet). Until that wiring lands, `notPicked` will be 0
+   * and all DNS without dnsChipFail flag count as `noStart` — graceful
+   * degradation (BR-FC-05 PRD acknowledges this).
+   *
+   * Race draft → empty breakdown (skip aggregation).
+   */
+  async computeDnsBreakdown(
+    raceId: string,
+    race: RaceDocument,
+  ): Promise<DnsBreakdownDto> {
+    const empty: DnsBreakdownDto = {
+      total: 0,
+      notPicked: 0,
+      noStart: 0,
+      chipFail: 0,
+    };
+    if (race.status === 'draft') return empty;
+    const courses = race.courses ?? [];
+    if (courses.length === 0) return empty;
+
+    let notPicked = 0;
+    let noStart = 0;
+    let chipFail = 0;
+
+    for (const course of courses) {
+      type Row = {
+        bib: string;
+        chiptimes: string;
+        dnsChipFail?: boolean;
+        // Future TD-F005-01 wiring will surface racekitPickedUp on race_results.
+        racekitPickedUp?: boolean;
+      };
+      const rows = await this.resultModel
+        .aggregate<Row>([
+          { $match: { raceId, courseId: course.courseId } },
+          { $sort: { _id: 1 } },
+          {
+            $group: {
+              _id: '$bib',
+              chiptimes: { $first: '$chiptimes' },
+              dnsChipFail: { $first: '$dnsChipFail' },
+              racekitPickedUp: { $first: '$racekitPickedUp' },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              bib: '$_id',
+              chiptimes: 1,
+              dnsChipFail: 1,
+              racekitPickedUp: 1,
+            },
+          },
+        ])
+        .exec();
+
+      for (const row of rows) {
+        const map = parseChiptimesSafe(row.chiptimes);
+        const hasStart = !!findTimeCi(map, 'start');
+        if (hasStart) {
+          // BR-FC-07 — admin can flag chipFail even on athletes with Start
+          // (override edge case UP-11). Count toward chipFail bucket but
+          // not toward notPicked/noStart.
+          if (row.dnsChipFail === true) chipFail += 1;
+          continue;
+        }
+        // No Start time → DNS population
+        if (row.dnsChipFail === true) {
+          chipFail += 1;
+        } else if (row.racekitPickedUp === false) {
+          notPicked += 1;
+        } else {
+          noStart += 1;
+        }
+      }
+    }
+
+    return {
+      total: notPicked + noStart + chipFail,
+      notPicked,
+      noStart,
+      chipFail,
+    };
+  }
+
+  /**
+   * F-008 v2 BR-CC2-27 — Last successful poll timestamp from TimingAlertConfig.
+   *
+   * Returns `config.last_polled_at` (Date) when config exists, else null. This
+   * field is distinct from `generatedAt` (snapshot computed time) — it tracks
+   * the underlying poller cron's last successful execution. MC dùng để biết
+   * timing-alert pipeline có healthy không (vs UI render freshness).
+   *
+   * Edge cases:
+   * - Config missing → null
+   * - Config exists but never polled (last_polled_at null) → null
+   * - Config service throws → null (fail-safe; do NOT break snapshot)
+   */
+  async computeLastPollAt(raceId: string): Promise<Date | null> {
+    try {
+      const config = await this.timingAlertConfig.getByRaceId(raceId);
+      if (!config) return null;
+      return config.last_polled_at ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**

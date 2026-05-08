@@ -9,6 +9,10 @@ import {
   ResultClaim,
   ResultClaimDocument,
 } from '../schemas/result-claim.schema';
+import {
+  TimingAlertConfig,
+  TimingAlertConfigDocument,
+} from '../../timing-alert/schemas/timing-alert-config.schema';
 import { GetRaceResultsDto } from '../dto/get-race-results.dto';
 import { SubmitClaimDto } from '../dto/submit-claim.dto';
 import { RacesService } from '../../races/races.service';
@@ -37,7 +41,72 @@ export class RaceResultService {
     private readonly uploadService: UploadService,
     private readonly apiService: RaceResultApiService,
     @InjectRedis() private readonly redis: Redis,
+    /**
+     * F-010 BR-FC-10/11 — read pace_alert_threshold from timing_alert_configs.
+     * Cross-module dependency to TimingAlertConfig schema (read-only).
+     * Module imports MongooseModule.forFeature for it (race-result.module.ts).
+     */
+    @InjectModel(TimingAlertConfig.name)
+    private readonly timingAlertConfigModel: Model<TimingAlertConfigDocument>,
   ) { }
+
+  /**
+   * F-010 BR-FC-07 — Admin manual flag athlete as DNS_CHIP_FAIL.
+   * Toggle boolean `dnsChipFail` on race_results document. Returns updated
+   * doc or null if id not found. Indexed `_id` lookup — < 5ms.
+   *
+   * Side-effect: invalidate dashboard-snapshot cache so DNS breakdown
+   * updates immediately on next snapshot read (no race day stale).
+   */
+  async updateDnsChipFail(
+    id: string,
+    dnsChipFail: boolean,
+  ): Promise<RaceResultDocument | null> {
+    const updated = await this.resultModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { dnsChipFail } },
+        { new: true },
+      )
+      .exec();
+    if (!updated) return null;
+
+    // Invalidate dashboard-snapshot cache for this race so DNS breakdown
+    // refreshes on next read (race day live ops cannot wait 15s TTL).
+    try {
+      const cacheKey = `master:rr-snapshot:${updated.raceId}`;
+      await this.redis.del(cacheKey);
+    } catch (err) {
+      this.logger.warn(
+        `[updateDnsChipFail] cache invalidation fail race=${updated.raceId} — err=${(err as Error).message}`,
+      );
+    }
+    return updated;
+  }
+
+  /**
+   * F-010 BR-FC-10/11 — read paceAlertThreshold from race timing config.
+   * Fallback to 0.80 (pre-F-010 hardcoded value) when config doc missing
+   * or threshold not set. Single indexed query (race_id) — < 5ms.
+   */
+  async getPaceAlertThreshold(raceId: string): Promise<number> {
+    try {
+      const config = await this.timingAlertConfigModel
+        .findOne({ race_id: raceId })
+        .select({ pace_alert_threshold: 1 })
+        .lean<{ pace_alert_threshold?: number }>()
+        .exec();
+      const v = config?.pace_alert_threshold;
+      if (typeof v === 'number' && v >= 0.2 && v <= 0.95) {
+        return v;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `[getPaceAlertThreshold] race=${raceId} fallback default — err=${(err as Error).message}`,
+      );
+    }
+    return 0.80;
+  }
 
   // ─── Cache helpers ────────────────────────────────────────────
 
@@ -656,6 +725,10 @@ export class RaceResultService {
       if (hours && hours > 0) avgSpeed = distanceKm / hours;
     }
 
+    // F-010 BR-FC-10/11 — pace alert threshold per race config
+    // (TRAIL=0.45, ULTRA=0.40, default ROAD=0.80). Pre-F-010 hardcoded 0.80.
+    const paceAlertThreshold = await this.getPaceAlertThreshold(raceId);
+
     // Augment splits with rankDelta + isPaceAlert
     if (Array.isArray(result.splits)) {
       mapped.splits = result.splits.map((split, index) => {
@@ -667,7 +740,7 @@ export class RaceResultService {
             : prevRank - currRank; // positive = moved up (BR-01)
         const isPaceAlert =
           split.speed != null && avgSpeed != null
-            ? split.speed < avgSpeed * 0.8 // pace drop ≥ 20% (BR-02)
+            ? split.speed < avgSpeed * paceAlertThreshold // pace drop config-driven (BR-02 + F-010)
             : false;
         return { ...split, rankDelta, isPaceAlert };
       });

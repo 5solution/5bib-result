@@ -1,11 +1,19 @@
 "use client";
 
 /**
- * F-007 BR-AF-01/02/04/05/17/18/26/27 — 8-tab race-ops navigation.
+ * F-007 BR-AF-01/02/04/05/17/18/26/27 — race-ops navigation.
  *
- * Locked tab order (BR-AF-01):
+ * F-008 v2 BR-CC2-33 EXTEND: 8 → 9 tabs. Awards (Trao giải) inserted slot 6
+ * between Result Kiosk and Athletes ("post-race output" group). Manager
+ * partial-unlock pre-approved per 02-manager-plan.md.
+ *
+ * F-015 EXTEND: 9 → 10 tabs. Check-In Kiosk inserted before Settings.
+ * BREAKS F-008v2's 8-tab lock — sets Cluster #9 precedent (Manager Plan §4
+ * LOCKED). "More" dropdown refactor when shell >12 tabs (Danny policy A).
+ *
+ * Locked tab order:
  *   Overview / Readiness / Course Map / Command Center / Result Kiosk /
- *   Athletes / Results / Settings
+ *   Trao giải / Athletes / Results / Check-In / Settings
  *
  * - English labels match canvas (BR-AF-02). Vietnamese tooltip via title attr.
  * - Disabled matrix per race state (BR-AF-04). Disabled tab renders gray + cursor-not-allowed.
@@ -27,6 +35,8 @@ export interface RaceTabsBadges {
   readinessFailCount?: number;
   /** Result Kiosk unverified results count (drives blue dot). */
   kioskUnverifiedCount?: number;
+  /** F-015 BR-CK pickup completion ratio (0..1). Drives blue dot when 0 < rate < 1. */
+  checkInPickupRate?: number;
 }
 
 export interface RaceTabsNavProps {
@@ -51,8 +61,15 @@ const TABS: ReadonlyArray<TabSpec> = [
   { key: "course-map", segment: "course-map", label: "Course Map", tooltip: "Bản đồ đường đua", enabledIn: ["draft", "pre_race", "live", "ended"] },
   { key: "command-center", segment: "command-center", label: "Command Center", tooltip: "Trung tâm điều hành", enabledIn: ["pre_race", "live", "ended"] },
   { key: "result-kiosk", segment: "result-kiosk", label: "Result Kiosk", tooltip: "Kiosk kết quả", enabledIn: ["live", "ended"] },
+  // F-008 v2 BR-CC2-33 — Awards (Trao giải) slot 6, post-race output group.
+  // Awards data depends on finishers, so enable only when race has gone live.
+  { key: "awards", segment: "awards", label: "Trao giải", tooltip: "Trao giải / Top finishers", enabledIn: ["live", "ended"] },
   { key: "athletes", segment: "athletes", label: "Athletes", tooltip: "Vận động viên", enabledIn: ["pre_race", "live", "ended"] },
   { key: "results", segment: "results", label: "Results", tooltip: "Kết quả", enabledIn: ["ended"] },
+  // F-015 BR-CK-19 — Check-In Kiosk tab #10. Enabled in pre_race/live/ended.
+  // Race-day operation surface; race needs to be at least pre_race for athletes
+  // to be valid pickup targets.
+  { key: "check-in", segment: "check-in-kiosk", label: "Check-In", tooltip: "Pickup BIB", enabledIn: ["pre_race", "live", "ended"] },
   { key: "settings", segment: "settings", label: "Settings", tooltip: "Cài đặt", enabledIn: ["draft", "pre_race", "live", "ended"] },
 ] as const;
 
@@ -70,6 +87,13 @@ function dotFor(tabKey: string, raceStatus: RaceState, badges?: RaceTabsBadges):
   }
   if (tabKey === "result-kiosk" && (badges?.kioskUnverifiedCount ?? 0) > 0) {
     return { color: "bg-blue-600", label: `${badges?.kioskUnverifiedCount} unverified results` };
+  }
+  // F-015 — blue dot on Check-In tab when pickup is in-progress (0 < rate < 1).
+  if (tabKey === "check-in") {
+    const rate = badges?.checkInPickupRate;
+    if (typeof rate === "number" && rate > 0 && rate < 1) {
+      return { color: "bg-blue-600", label: `${Math.round(rate * 100)}% picked up` };
+    }
   }
   return null;
 }

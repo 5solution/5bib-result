@@ -1,37 +1,48 @@
-"use client";
+'use client';
 
 /**
- * F-007 placeholder — Command Center tab (Canvas 03). Full impl ships in F-008
- * (Health Matrix + 6 cards + Export CSV).
+ * F-008 — Command Center page (was F-007 placeholder).
  *
- * Transition: BR-AF-21 — old `/timing-alerts/cockpit` route 301-redirects here
- * via middleware.ts (30-day deprecation). Until F-008 lands the placeholder
- * deep-links to the existing F-005 sub-page tree.
+ * Architectural shape per BR-CC-27 LOCK:
+ *   /admin/races/[id]/command-center → tab body inside F-007 8-tab race-ops
+ *   shell (RaceOpsHeader + RaceLiveTimer + Breadcrumb + RaceTabsNav already
+ *   global trong [id]/layout.tsx). This file ONLY renders the tab body —
+ *   PageHero (variant per race.status) + CommandCenterLayout orchestrator.
+ *
+ * NOT modal, NOT drawer, NOT sub-page. NO chrome re-implementation.
+ *
+ * Per BR-CC-22 — PageHero variant `red-live` khi race.status === 'live',
+ * else `white`. Race meta fetched via existing SDK racesControllerGetRaceById.
  */
 
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth-context";
-import "@/lib/api";
-import { authHeaders } from "@/lib/api";
-import { racesControllerGetRaceById } from "@/lib/api-generated";
-import { PageHero } from "@/components/race-ops-shell/PageHero";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
+import '@/lib/api';
+import { authHeaders } from '@/lib/api';
+import { racesControllerGetRaceById } from '@/lib/api-generated';
+import { PageHero } from '@/components/race-ops-shell/PageHero';
+import { Skeleton } from '@/components/ui/skeleton';
+import { CommandCenterLayout } from './components/CommandCenterLayout';
 
 interface RaceMeta {
   title: string;
-  status: "draft" | "pre_race" | "live" | "ended";
+  status: 'draft' | 'pre_race' | 'live' | 'ended';
+  slug?: string;
 }
 
-export default function CommandCenterPlaceholder() {
+type ViewMode = 'dashboard' | 'alerts';
+
+export default function CommandCenterPage() {
   const params = useParams();
-  const raceId = String((params as { id?: string }).id ?? "");
+  const searchParams = useSearchParams();
+  const raceId = String((params as { id?: string }).id ?? '');
   const { token } = useAuth();
   const [race, setRace] = useState<RaceMeta | null>(null);
+
+  // F-008 v2 BR-CC2-32 — `?view=alerts` triggers drill-in render in Layout.
+  const viewParam = searchParams?.get('view');
+  const viewMode: ViewMode = viewParam === 'alerts' ? 'alerts' : 'dashboard';
 
   useEffect(() => {
     let cancelled = false;
@@ -54,48 +65,34 @@ export default function CommandCenterPlaceholder() {
     };
   }, [token, raceId]);
 
-  const variant = race?.status === "live" ? "red-live" : "white";
+  // BR-CC-22 — variant red-live khi race.status === 'live', else white.
+  const variant = race?.status === 'live' ? 'red-live' : 'white';
+
+  if (!raceId) {
+    return <Skeleton className="h-[600px] w-full" />;
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <PageHero
         variant={variant}
         eyebrow="RACE · COMMAND CENTER"
-        title={race?.title || "..."}
-        meta={race?.status === "live" ? "RACE LIVE — Operations cockpit" : "Race-day operations cockpit"}
+        title={race?.title || '...'}
+        // F-011 BR-PB-08 — VN microcopy mandate: "Race Command Center" canonical
+        // brand term replaces previous English subtitle (per Danny chốt #3).
+        meta={
+          race?.status === 'live'
+            ? 'RACE LIVE — Race Command Center'
+            : 'Race Command Center'
+        }
       />
-      <Card>
-        <CardContent className="flex flex-col items-start gap-3 py-10">
-          {!race ? <Skeleton className="h-5 w-48" /> : null}
-          <span className="inline-flex items-center gap-2 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-stone-600">
-            F-008 · Sprint sắp tới
-          </span>
-          <h2 className="font-display text-xl font-bold text-stone-900">Coming soon — Command Center refactor</h2>
-          <p className="max-w-prose text-sm text-stone-600">
-            Theo Canvas 03: Health Matrix toàn checkpoint, 6 summary card có throughput sparkline,
-            Athlete Flow, Live Leaderboard, Timing Alerts feed, Export CSV full data. Đến khi F-008
-            ship, dùng F-005 sub-page tree hiện tại.
-          </p>
-          <div className="mt-1 flex flex-wrap gap-2">
-            <Link href={`/races/${raceId}/timing-alerts/cockpit`}>
-              <Button size="sm" variant="outline">
-                Tới F-005 cockpit
-                <ArrowRight className="ml-1.5 size-4" />
-              </Button>
-            </Link>
-            <Link href={`/races/${raceId}/timing-alerts/alerts`}>
-              <Button size="sm" variant="outline">
-                Alerts feed
-              </Button>
-            </Link>
-            <Link href={`/races/${raceId}/timing-alerts/podium`}>
-              <Button size="sm" variant="outline">
-                Podium
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+      <CommandCenterLayout
+        raceId={raceId}
+        raceSlug={race?.slug}
+        viewMode={viewMode}
+        raceTitle={race?.title}
+        raceStatus={race?.status}
+      />
     </div>
   );
 }

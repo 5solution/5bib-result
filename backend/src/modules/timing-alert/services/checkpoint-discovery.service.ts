@@ -496,18 +496,61 @@ export class CheckpointDiscoveryService {
       throw new BadRequestException('checkpoint keys phải unique trong cùng course');
     }
 
-    const sanitized = checkpoints.map((c) => ({
-      key: c.key.trim(),
-      name: (c.name || c.key).trim(),
-      distance:
-        typeof c.distanceKm === 'number' && c.distanceKm > 0
-          ? `${c.distanceKm}K`
-          : undefined,
-      distanceKm:
-        typeof c.distanceKm === 'number' && c.distanceKm > 0
-          ? c.distanceKm
-          : undefined,
-    }));
+    // ⚠️ MERGE-PRESERVE pattern (F-006 fix).
+    // Discover apply() previously overwrote the whole `courses.$.checkpoints`
+    // array using only the discover-derived fields (key/name/distance/
+    // distanceKm), wiping any lat/lng saved via F-006 manual drag and any
+    // `services` (water/food/medical/etc.) flags admins had toggled in the
+    // Checkpoints tab. We must KEEP those augment-fields when re-applying
+    // discover output. RR API is source-of-truth for KEYS + DISTANCE; GPX +
+    // BTC manual config are source-of-truth for POSITION + SERVICES — neither
+    // side may unilaterally clobber the other.
+    type CheckpointAugmentFields = {
+      lat?: number;
+      lng?: number;
+      services?: Record<string, unknown>;
+    };
+    const existingRace = await this.raceModel
+      .findOne({ _id: raceId, 'courses.courseId': courseId })
+      .lean<RaceDocument>()
+      .exec();
+    const existingCourse = (existingRace as unknown as {
+      courses?: Array<{
+        courseId?: string;
+        checkpoints?: Array<{ key?: string } & CheckpointAugmentFields>;
+      }>;
+    } | null)?.courses?.find((c) => c?.courseId === courseId);
+    const augmentByKey = new Map<string, CheckpointAugmentFields>();
+    for (const cp of existingCourse?.checkpoints ?? []) {
+      if (typeof cp?.key === 'string') {
+        augmentByKey.set(cp.key, {
+          lat: cp.lat,
+          lng: cp.lng,
+          services: cp.services,
+        });
+      }
+    }
+
+    const sanitized = checkpoints.map((c) => {
+      const key = c.key.trim();
+      const augment = augmentByKey.get(key) ?? {};
+      return {
+        key,
+        name: (c.name || c.key).trim(),
+        distance:
+          typeof c.distanceKm === 'number' && c.distanceKm > 0
+            ? `${c.distanceKm}K`
+            : undefined,
+        distanceKm:
+          typeof c.distanceKm === 'number' && c.distanceKm > 0
+            ? c.distanceKm
+            : undefined,
+        // Preserve fields owned by other sources:
+        ...(typeof augment.lat === 'number' ? { lat: augment.lat } : {}),
+        ...(typeof augment.lng === 'number' ? { lng: augment.lng } : {}),
+        ...(augment.services ? { services: augment.services } : {}),
+      };
+    });
 
     const result = await this.raceModel
       .findOneAndUpdate(
@@ -527,6 +570,20 @@ export class CheckpointDiscoveryService {
         `Race ${raceId} hoặc course ${courseId} không tồn tại`,
       );
     }
+
+    // F-006 cache invalidation — checkpoints array changed → invalidate
+    // `master:course-map:` so the public/admin Map view re-fetches fresh
+    // data on next request. Direct DEL (no service injection) to avoid
+    // circular DI between TimingAlertModule and RacesModule.
+    await this.redis
+      .del(`master:course-map:${raceId}:${courseId}`)
+      .catch((err) => {
+        this.logger.warn(
+          `[apply] failed to DEL master:course-map cache: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
 
     this.logger.log(
       `[apply] race=${raceId} course=${courseId} saved=${sanitized.length} by=${userId}`,

@@ -72,6 +72,30 @@ const lockKey = (raceId: string, courseId: string) =>
   `master:course-map-lock:${raceId}:${courseId}`;
 
 /**
+ * BR-CM-04b helper — strip a trailing distance-style suffix from a waypoint or
+ * checkpoint name. Suffix must be preceded by a word boundary (whitespace, `_`,
+ * or `-`) and start with one or more digits, optionally followed by alphanum
+ * (e.g. ` 42`, `_5K`, ` 21K`, ` 42.2K`). Anything else (e.g. dotted numerics
+ * like `TP42.1.2`) is returned unchanged so it falls through to L3 no-match.
+ */
+function stripDistanceSuffix(name: string): string {
+  const trimmed = name.trim();
+  // Require a true word-boundary separator before the digit suffix so
+  // `TP42.1.2` (no separator) is NOT stripped — keeps false-positive guard.
+  const stripped = trimmed.replace(/[\s_\-]+\d+(?:\.\d+)?[A-Za-z]*$/u, '');
+  return stripped.trim();
+}
+
+/**
+ * BR-CM-04b helper — true when `s` is purely alphabetic (Latin) AND length ≥ 2.
+ * Guards against accidentally matching numeric-only stems (e.g. stripping
+ * `TM10` to `TM` is fine, but stripping pure `10` to `` is rejected).
+ */
+function isAlphaStem(s: string): boolean {
+  return /^[A-Za-z]{2,}$/u.test(s);
+}
+
+/**
  * GPX/KML parsing, server-side simplification, S3 storage, public map-data
  * caching, and waypoint↔checkpoint auto-matching for FEATURE-006.
  *
@@ -220,13 +244,43 @@ export class CourseMapService {
   }
 
   /**
-   * Strict 3-level waypoint↔checkpoint matcher (BR-CM-04). Returns matched
+   * 4-level waypoint↔checkpoint matcher (BR-CM-04 + BR-CM-04b). Returns matched
    * checkpoints with assigned lat/lng plus the keys that did NOT match
    * (admin must drag manually per BR-CM-05).
+   *
+   * Levels:
+   *   L1  exact            — `wp.name === cp.key` (case-sensitive)
+   *   L2  case-insensitive — `wp.name.toLowerCase() === cp.key.toLowerCase()`
+   *   L2.5 normalized-prefix (BR-CM-04b) — strip a trailing distance suffix
+   *        like ` 42`, `_5K`, ` 21K` from BOTH sides and compare
+   *        case-insensitive, but ONLY when the remaining stem is purely
+   *        alphabetic AND length ≥ 2. This handles the Vietnamese race-day
+   *        reality where vendors export `START 42` / `FINISH 42K` waypoints
+   *        against course keys `Start` / `Finish`.
+   *   L3  no match         — manual drag required
+   *
+   * Conservative false-positive guard:
+   *   - `TM10` vs `TM1` → strip leaves stems `TM` vs `TM1` → mismatch (no false positive)
+   *   - `TP42.1.2` vs `TM1` → no trailing digit-suffix stripped from `TP42.1.2`
+   *     (regex requires word-boundary separator like space/`_`/`-` before digits) → mismatch
+   *   - `Cp1` vs `TM1` → stems `Cp` vs `TM` → mismatch
+   *   - `TM01` vs `TM1` → stem `TM` length 2, candidate stem `TM` → MATCH IF stems equal
+   *     case-insensitively. NOTE: this would actually match `TM01`↔`TM1` which is
+   *     BR-CM-04b acceptable (vendor must use exact for ambiguous numerics; if
+   *     ambiguity surfaces we move to L1/L2 only).
    *
    * NEVER substring/Levenshtein — that would false-positive `TM10` ↔ `TM1`.
    *
    * Reachable via POST /admin/.../gpx (uploadGpx flow).
+   *
+   * BR-CM-04 — Source-of-truth resolution rules:
+   * - RR API (CheckpointDiscoveryService) wins for: key, name, distance, distanceKm
+   * - GPX/manual drag wins for: lat, lng
+   * - BTC manual config (Checkpoints tab) wins for: services (water/food/medical/...)
+   *
+   * If both sources have data for the same field, the source-of-truth above
+   * takes precedence. CheckpointDiscoveryService.apply() implements
+   * MERGE-PRESERVE pattern to honor this contract.
    */
   matchWaypoints(
     waypoints: WaypointInfo[],
@@ -234,29 +288,63 @@ export class CourseMapService {
   ): MatchWaypointsResult {
     const matched: MatchedWaypoint[] = [];
     const unmatchedKeys: string[] = [];
+    const usedWpIdx = new Set<number>();
 
     for (const cp of checkpoints) {
       // L1 exact (case-sensitive)
-      const l1 = waypoints.find((w) => w.name === cp.key);
-      if (l1) {
-        matched.push({ key: cp.key, lat: l1.lat, lng: l1.lng, matchType: 'exact' });
-        this.logger.log(`matched exact: waypoint "${l1.name}" → checkpoint "${cp.key}"`);
+      const l1Idx = waypoints.findIndex(
+        (w, i) => !usedWpIdx.has(i) && w.name === cp.key,
+      );
+      if (l1Idx >= 0) {
+        const w = waypoints[l1Idx];
+        matched.push({ key: cp.key, lat: w.lat, lng: w.lng, matchType: 'exact' });
+        usedWpIdx.add(l1Idx);
+        this.logger.log(`matched exact: waypoint "${w.name}" → checkpoint "${cp.key}"`);
         continue;
       }
       // L2 case-insensitive
       const cpLower = cp.key.toLowerCase();
-      const l2 = waypoints.find((w) => w.name.toLowerCase() === cpLower);
-      if (l2) {
+      const l2Idx = waypoints.findIndex(
+        (w, i) => !usedWpIdx.has(i) && w.name.toLowerCase() === cpLower,
+      );
+      if (l2Idx >= 0) {
+        const w = waypoints[l2Idx];
         matched.push({
           key: cp.key,
-          lat: l2.lat,
-          lng: l2.lng,
+          lat: w.lat,
+          lng: w.lng,
           matchType: 'case-insensitive',
         });
+        usedWpIdx.add(l2Idx);
         this.logger.warn(
-          `case mismatch normalized: waypoint "${l2.name}" → checkpoint "${cp.key}"`,
+          `case mismatch normalized: waypoint "${w.name}" → checkpoint "${cp.key}"`,
         );
         continue;
+      }
+      // L2.5 normalized-prefix (BR-CM-04b) — strip distance suffix on both sides
+      const cpStem = stripDistanceSuffix(cp.key);
+      if (cpStem && isAlphaStem(cpStem)) {
+        const cpStemLower = cpStem.toLowerCase();
+        const lFuzzyIdx = waypoints.findIndex((w, i) => {
+          if (usedWpIdx.has(i)) return false;
+          const wpStem = stripDistanceSuffix(w.name);
+          if (!wpStem || !isAlphaStem(wpStem)) return false;
+          return wpStem.toLowerCase() === cpStemLower;
+        });
+        if (lFuzzyIdx >= 0) {
+          const w = waypoints[lFuzzyIdx];
+          matched.push({
+            key: cp.key,
+            lat: w.lat,
+            lng: w.lng,
+            matchType: 'case-insensitive',
+          });
+          usedWpIdx.add(lFuzzyIdx);
+          this.logger.warn(
+            `normalized-prefix matched (BR-CM-04b): waypoint "${w.name}" → checkpoint "${cp.key}" (stems "${stripDistanceSuffix(w.name)}" ↔ "${cpStem}")`,
+          );
+          continue;
+        }
       }
       // L3 no match
       this.logger.warn(`no match — manual drag required: checkpoint "${cp.key}"`);
@@ -450,13 +538,43 @@ export class CourseMapService {
       return { hasGpx: false, checkpoints };
     }
 
+    // BR-CM-11b — inline simplified GeoJSON in the response so the public
+    // frontend doesn't have to fetch S3 directly (avoids CORS preflight).
+    // Fetch is best-effort: on failure we still return the URL and frontend
+    // can fall back to direct fetch (admin's hosted CORS may differ).
+    const geoJson = await this.safeFetchGeoJson(course.gpxSimplifiedUrl);
+
     return {
       hasGpx: true,
       gpxSimplifiedUrl: course.gpxSimplifiedUrl,
+      ...(geoJson ? { geoJson } : {}),
       gpxParsed: course.gpxParsed as GpxParsedDto,
       checkpoints,
       bounds: course.gpxParsed.bounds as GpxBoundsDto,
     };
+  }
+
+  /**
+   * Fetch the simplified GeoJSON from S3 server-side (no CORS) and return the
+   * parsed object. Returns null on network failure / non-2xx / parse error so
+   * the caller can fall back to client-side fetch via gpxSimplifiedUrl.
+   *
+   * Bounded by AbortSignal.timeout(5000) — S3 is normally <100ms; if the
+   * bucket is unreachable we don't want to block the entire map-data response.
+   */
+  private async safeFetchGeoJson(url: string): Promise<Record<string, unknown> | null> {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) {
+        this.logger.warn(`safeFetchGeoJson: ${url} returned HTTP ${res.status}`);
+        return null;
+      }
+      const json = (await res.json()) as Record<string, unknown>;
+      return json;
+    } catch (err) {
+      this.logger.warn(`safeFetchGeoJson failed for ${url}: ${(err as Error).message}`);
+      return null;
+    }
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────

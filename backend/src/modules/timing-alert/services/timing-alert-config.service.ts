@@ -57,7 +57,7 @@ export class TimingAlertConfigService {
       throw new NotFoundException(`Race ${raceId} not found`);
     }
 
-    const update = {
+    const update: Record<string, unknown> = {
       race_id: raceId,
       poll_interval_seconds: dto.poll_interval_seconds ?? 90,
       overdue_threshold_minutes: dto.overdue_threshold_minutes ?? 30,
@@ -66,6 +66,17 @@ export class TimingAlertConfigService {
       enabled_by_user_id: userId,
       enabled_at: dto.enabled ? new Date() : null,
     };
+
+    // F-010 — additive fields. Only $set when caller provided (avoid clobbering
+    // existing values with defaults on partial PATCH).
+    if (dto.course_type !== undefined) update.course_type = dto.course_type;
+    if (dto.pace_buffer !== undefined) update.pace_buffer = dto.pace_buffer;
+    if (dto.pace_alert_threshold !== undefined) {
+      update.pace_alert_threshold = dto.pace_alert_threshold;
+    }
+    if (dto.confidence_multiplier !== undefined) {
+      update.confidence_multiplier = dto.confidence_multiplier;
+    }
 
     const doc = await this.configModel
       .findOneAndUpdate(
@@ -161,6 +172,13 @@ export class TimingAlertConfigService {
       enabled_by_user_id: doc.enabled_by_user_id ?? null,
       enabled_at: doc.enabled_at ?? null,
       last_polled_at: doc.last_polled_at ?? null,
+      // F-010 — defaults match schema defaults to keep response shape stable
+      // even when DB doc was created pre-F-010 (Mongoose auto-fills via schema
+      // defaults but lean() may skip → defensive fallback here).
+      course_type: doc.course_type ?? null,
+      pace_buffer: doc.pace_buffer ?? 1.10,
+      pace_alert_threshold: doc.pace_alert_threshold ?? 0.80,
+      confidence_multiplier: doc.confidence_multiplier ?? 0.20,
     };
   }
 }

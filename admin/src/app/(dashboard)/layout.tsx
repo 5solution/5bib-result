@@ -246,7 +246,9 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-screen bg-[#F7F7F8]">
       {/* Desktop Sidebar — dark slate-900, sticky */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-[var(--sidebar)] text-[var(--sidebar-foreground)] lg:flex">
+      {/* F-011 BR-PB-01 — `data-admin-sidebar` enables Command Center fullscreen
+          (`body[data-fullscreen]`) to hide admin shell. Additive only — ZERO class change. */}
+      <aside data-admin-sidebar className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-[var(--sidebar)] text-[var(--sidebar-foreground)] lg:flex">
         <div className="flex h-[60px] items-center gap-2.5 border-b border-white/8 px-4">
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <Logo5bib className="h-6 [&_*]:fill-white" />
@@ -267,7 +269,9 @@ export default function DashboardLayout({
       {/* Main Content */}
       <div className="flex flex-1 flex-col">
         {/* Topbar */}
-        <header className="sticky top-0 z-30 flex h-[60px] items-center gap-3 border-b border-border bg-card px-4 md:px-7">
+        {/* F-011 BR-PB-01 — `data-admin-topbar` enables Command Center fullscreen
+            (`body[data-fullscreen]`) to hide admin shell. Additive only — ZERO class change. */}
+        <header data-admin-topbar className="sticky top-0 z-30 flex h-[60px] items-center gap-3 border-b border-border bg-card px-4 md:px-7">
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger className="lg:hidden inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">

@@ -10,14 +10,18 @@ import { TimingAlertSeverity } from '../schemas/timing-alert.schema';
 import { ProjectedRankResult } from './projected-rank.service';
 
 /**
- * 2 detection types:
+ * 3 detection types (F-010 R14-R15 BR-FC-01..04 added CUTOFF_RISK):
  * - PHANTOM: athlete dừng/chậm sau lastSeen, KHÔNG có time tại nextCp.
  *   → severity dựa projected rank (TopN = CRITICAL).
  * - MIDDLE_GAP: athlete CÓ time tại CP sau missing point — chip miss giữa
  *   course nhưng athlete vẫn chạy. Severity thấp hơn (INFO/WARNING) vì
- *   athlete fine, chỉ mất data chip.
+ *   athlete fine, chỉ mất data chip. F-010 OBS-2: nâng default WARNING,
+ *   2+ consecutive → HIGH, TopN → CRITICAL.
+ * - CUTOFF_RISK (F-010): athlete projectedFinish > cutoffTime — sắp gate-close.
+ *   Pre-F-010 logic skip silent (false negative). Severity WARNING default,
+ *   HIGH nếu Top N. Auto-resolve khi athlete pass next CP / finish.
  */
-export type DetectionType = 'PHANTOM' | 'MIDDLE_GAP';
+export type DetectionType = 'PHANTOM' | 'MIDDLE_GAP' | 'CUTOFF_RISK';
 
 export interface DetectionResult {
   /** Loại phát hiện. */
@@ -62,8 +66,12 @@ export interface SeverityResult {
 export class MissDetectorService {
   private readonly logger = new Logger(MissDetectorService.name);
 
-  /** Pace buffer trước khi flag — match spec 5%. */
-  private static readonly PACE_BUFFER = 1.05;
+  /**
+   * F-010 BR-FC-08/09 — pace buffer DEFAULT (caller passes via options.paceBuffer
+   * from race config). 1.10 = ROAD preset; TRAIL=1.35, ULTRA=1.50. Pre-F-010
+   * value was 1.05 — now ROAD default 1.10 per Race Ops Expert review.
+   */
+  static readonly DEFAULT_PACE_BUFFER = 1.10;
 
   /**
    * Detect miss cho 1 athlete tại thời điểm hiện tại.
@@ -92,6 +100,10 @@ export class MissDetectorService {
     overdueThresholdMinutes: number,
     options: {
       cutoffTime?: string | null;
+      /** F-010 BR-FC-08/09 — pace buffer multiplier from race config (default 1.10) */
+      paceBuffer?: number;
+      /** F-010 OBS-1 BR-FC-18 — last poll timestamp for wall-clock overdue compute */
+      lastPollAt?: Date | null;
     } = {},
     now: Date = new Date(),
   ): DetectionResult[] {
@@ -100,6 +112,9 @@ export class MissDetectorService {
     if (!athlete.lastSeenPoint || !athlete.lastSeenTime) {
       return results;
     }
+
+    const paceBuffer =
+      options.paceBuffer ?? MissDetectorService.DEFAULT_PACE_BUFFER;
 
     // Phase 3 — Middle gap detection.
     // Walk checkpoints by course order. Any CP có lastSeenPoint trước nó
@@ -121,6 +136,7 @@ export class MissDetectorService {
           athlete,
           courseCheckpoints,
           missingCpKey: cp.key,
+          paceBuffer,
         });
         if (gapResult) {
           results.push(gapResult);
@@ -129,11 +145,13 @@ export class MissDetectorService {
     }
 
     // Phase 1B phantom logic — chỉ flag nếu lastSeen chưa phải Finish.
+    // F-010 R14-R15: pre-F-010 returned null when projectedFinish > cutoff
+    // (silent skip → false negative). Now returns CUTOFF_RISK detection instead.
     const phantomResult = this.detectPhantom(
       athlete,
       courseCheckpoints,
       overdueThresholdMinutes,
-      options,
+      { ...options, paceBuffer },
       now,
     );
     if (phantomResult) {
@@ -145,15 +163,24 @@ export class MissDetectorService {
 
   /**
    * Existing Phase 1B phantom detection — extracted vào method riêng.
-   * Returns DetectionResult với type='PHANTOM' hoặc null.
+   * Returns DetectionResult với type='PHANTOM' | 'CUTOFF_RISK' hoặc null.
+   *
+   * F-010 R14-R15 BR-FC-01..04 — instead of `return null` khi projectedFinish
+   * > cutoff (false negative), return CUTOFF_RISK detection.
    */
   private detectPhantom(
     athlete: ParsedAthlete,
     courseCheckpoints: CourseCheckpoint[],
     overdueThresholdMinutes: number,
-    options: { cutoffTime?: string | null } = {},
-    _now: Date = new Date(),
+    options: {
+      cutoffTime?: string | null;
+      paceBuffer?: number;
+      lastPollAt?: Date | null;
+    } = {},
+    now: Date = new Date(),
   ): DetectionResult | null {
+    const paceBuffer =
+      options.paceBuffer ?? MissDetectorService.DEFAULT_PACE_BUFFER;
     if (!athlete.lastSeenPoint || !athlete.lastSeenTime) {
       return null;
     }
@@ -184,8 +211,10 @@ export class MissDetectorService {
     // Pace seconds/km tại điểm last seen
     const paceSecPerKm = lastSeenSeconds / lastSeenCp.distance_km;
 
-    // Expected reach time at next checkpoint (relative to start, with buffer)
-    const expectedSecondsAtNext = paceSecPerKm * nextCp.distance_km * MissDetectorService.PACE_BUFFER;
+    // Expected reach time at next checkpoint (relative to start, with buffer).
+    // F-010 BR-FC-09 — paceBuffer from race config (TRAIL=1.35, ULTRA=1.50)
+    // replaces hardcoded 1.05.
+    const expectedSecondsAtNext = paceSecPerKm * nextCp.distance_km * paceBuffer;
 
     // Now = giờ hiện tại tính bằng giây từ start. Cần convert.
     // Athlete start time: lấy từ checkpointTimes['Start'] nếu có, hoặc
@@ -221,7 +250,8 @@ export class MissDetectorService {
       athlete,
       lastSeenSeconds,
       expectedSecondsAtNext,
-      _now,
+      now,
+      options.lastPollAt ?? null,
     );
     const overdueMinutes = Math.floor(overdueMs / 60_000);
 
@@ -229,26 +259,39 @@ export class MissDetectorService {
       return null;
     }
 
-    // Projected finish: pace × Finish.distance_km × buffer
+    // Projected finish: pace × Finish.distance_km × buffer (config-driven)
     const finishCp = courseCheckpoints[courseCheckpoints.length - 1];
     const projectedFinishSeconds = Math.round(
-      paceSecPerKm * finishCp.distance_km * MissDetectorService.PACE_BUFFER,
+      paceSecPerKm * finishCp.distance_km * paceBuffer,
     );
 
-    // TA-11: Skip flag nếu projected finish vượt cutoff time. VĐV slow này
-    // sẽ bị gate-closed, KHÔNG phải miss timing thật. Cap noise alerts.
+    const isMissingFinish =
+      typeof nextCp.key === 'string' && nextCp.key.toLowerCase() === 'finish';
+
+    // F-010 R14-R15 BR-FC-01..04 — pre-F-010 logic was `return null` here when
+    // projectedFinish > cutoff (silent skip = false negative; Race Director
+    // never saw athletes most likely to miss cutoff). Now create CUTOFF_RISK
+    // detection instead. Auto-resolve handled by poll service when athlete
+    // gets time at nextCp / finish.
     if (options.cutoffTime) {
       const cutoffSeconds = parseTimeToSeconds(options.cutoffTime);
       if (cutoffSeconds !== null && projectedFinishSeconds > cutoffSeconds) {
         this.logger.debug(
-          `[detect] bib=${athlete.bib} skip — projected finish ${secondsToHms(projectedFinishSeconds)} > cutoff ${options.cutoffTime}`,
+          `[detect] bib=${athlete.bib} CUTOFF_RISK — projected finish ${secondsToHms(projectedFinishSeconds)} > cutoff ${options.cutoffTime}`,
         );
-        return null;
+        return {
+          type: 'CUTOFF_RISK',
+          isPhantom: false,
+          isMissingFinish,
+          lastSeenPoint: athlete.lastSeenPoint,
+          lastSeenTime: athlete.lastSeenTime,
+          missingPoint: nextCp.key,
+          overdueMinutes,
+          projectedFinishTime: secondsToHms(projectedFinishSeconds),
+          projectedFinishSeconds,
+        };
       }
     }
-
-    const isMissingFinish =
-      typeof nextCp.key === 'string' && nextCp.key.toLowerCase() === 'finish';
 
     return {
       type: 'PHANTOM',
@@ -276,8 +319,12 @@ export class MissDetectorService {
     athlete: ParsedAthlete;
     courseCheckpoints: CourseCheckpoint[];
     missingCpKey: string;
+    /** F-010 — paceBuffer config-driven (replaces hardcoded 1.05) */
+    paceBuffer?: number;
   }): DetectionResult | null {
     const { athlete, courseCheckpoints, missingCpKey } = input;
+    const paceBuffer =
+      input.paceBuffer ?? MissDetectorService.DEFAULT_PACE_BUFFER;
     const lastSeenCp = courseCheckpoints.find(
       (cp) => cp.key === athlete.lastSeenPoint,
     );
@@ -291,7 +338,7 @@ export class MissDetectorService {
       const paceSecPerKm = lastSeenSeconds / lastSeenCp.distance_km;
       const finishCp = courseCheckpoints[courseCheckpoints.length - 1];
       projectedFinishSeconds = Math.round(
-        paceSecPerKm * finishCp.distance_km * MissDetectorService.PACE_BUFFER,
+        paceSecPerKm * finishCp.distance_km * paceBuffer,
       );
     }
 
@@ -324,24 +371,66 @@ export class MissDetectorService {
     detection: DetectionResult,
     projectedRank: ProjectedRankResult | null,
     topNAlert: number,
+    /**
+     * F-010 OBS-2 BR-FC-19 — number of MIDDLE_GAP results for THIS athlete
+     * in the current detect() call. 2+ → escalate to HIGH (consecutive gaps
+     * = possible course-cutting). Default 1.
+     */
+    consecutiveGapCount: number = 1,
   ): SeverityResult {
-    // MIDDLE_GAP — athlete vẫn moving, chip miss giữa course. Severity
-    // thấp hơn phantom: INFO (default), WARNING nếu Top N (vẫn có rank
-    // implications cho rectification post-race).
-    if (detection.type === 'MIDDLE_GAP') {
+    // F-010 R14-R15 BR-FC-02 — CUTOFF_RISK severity:
+    //   - Top N (overall or age group) → HIGH
+    //   - Default → WARNING
+    if (detection.type === 'CUTOFF_RISK') {
       const ag = projectedRank?.ageGroupRank ?? null;
       const ov = projectedRank?.overallRank ?? null;
-      if ((ag !== null && ag <= topNAlert) || (ov !== null && ov <= topNAlert)) {
+      if (
+        (ag !== null && ag <= topNAlert) ||
+        (ov !== null && ov <= topNAlert)
+      ) {
         const dim =
-          ag !== null && ag <= topNAlert ? `Top ${ag} age group` : `Top ${ov} overall`;
+          ag !== null && ag <= topNAlert
+            ? `Top ${ag} age group`
+            : `Top ${ov} overall`;
         return {
-          severity: 'WARNING',
-          reason: `${dim} chip miss giữa course tại ${detection.missingPoint} (athlete đã qua điểm sau ${detection.lastSeenPoint})`,
+          severity: 'HIGH',
+          reason: `${dim} cutoff risk — projected finish ${detection.projectedFinishTime} exceeds cutoff`,
         };
       }
       return {
-        severity: 'INFO',
-        reason: `Chip miss giữa course tại ${detection.missingPoint} — VĐV đã qua ${detection.lastSeenPoint}, không khẩn cấp`,
+        severity: 'WARNING',
+        reason: `Projected finish ${detection.projectedFinishTime} exceeds cutoff — VĐV sắp bị gate-close`,
+      };
+    }
+
+    // MIDDLE_GAP — F-010 OBS-2 BR-FC-19 escalation:
+    //   - Top N (overall or age group)        → CRITICAL
+    //   - 2+ consecutive gaps (course-cutting) → HIGH
+    //   - Default                               → WARNING (was INFO pre-F-010)
+    if (detection.type === 'MIDDLE_GAP') {
+      const ag = projectedRank?.ageGroupRank ?? null;
+      const ov = projectedRank?.overallRank ?? null;
+      const isTopN =
+        (ag !== null && ag <= topNAlert) || (ov !== null && ov <= topNAlert);
+      if (isTopN) {
+        const dim =
+          ag !== null && ag <= topNAlert
+            ? `Top ${ag} age group`
+            : `Top ${ov} overall`;
+        return {
+          severity: 'CRITICAL',
+          reason: `${dim} chip miss giữa course tại ${detection.missingPoint} — Top N athlete cần xác minh ngay`,
+        };
+      }
+      if (consecutiveGapCount >= 2) {
+        return {
+          severity: 'HIGH',
+          reason: `${consecutiveGapCount} consecutive checkpoints missed — possible course cut tại ${detection.missingPoint}`,
+        };
+      }
+      return {
+        severity: 'WARNING',
+        reason: `Chip miss giữa course tại ${detection.missingPoint} — VĐV đã qua ${detection.lastSeenPoint}, kiểm tra equipment`,
       };
     }
 
@@ -417,9 +506,21 @@ export class MissDetectorService {
     _athlete: ParsedAthlete,
     lastSeenSeconds: number,
     expectedSecondsAtNext: number,
-    _now: Date,
+    now: Date,
+    lastPollAt: Date | null = null,
   ): number {
-    const gapSeconds = Math.max(0, expectedSecondsAtNext - lastSeenSeconds);
-    return gapSeconds * 1000;
+    // F-010 OBS-1 BR-FC-18 — wall-clock improvement when lastPollAt available.
+    // Pre-F-010: only `expectedSecondsAtNext - lastSeenSeconds` (static gap).
+    // Post-F-010: also include wall-clock elapsed since last poll, so overdue
+    // grows realistically as time passes between polls (poll cycle 90s).
+    //
+    // Formula: overdueMs = max(0, gap) + max(0, (now - lastPollAt))
+    // where gap = expectedSecondsAtNext - lastSeenSeconds (in ms).
+    const gapMs = Math.max(0, expectedSecondsAtNext - lastSeenSeconds) * 1000;
+    if (lastPollAt) {
+      const wallClockMs = Math.max(0, now.getTime() - lastPollAt.getTime());
+      return gapMs + wallClockMs;
+    }
+    return gapMs;
   }
 }

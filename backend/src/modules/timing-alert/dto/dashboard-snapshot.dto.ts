@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { LiveLeaderboardCourseDto } from './live-leaderboard.dto';
 import { SummaryCardsDto } from './summary-cards.dto';
+import { DnsBreakdownDto } from './dashboard-snapshot-dns-breakdown.dto';
 
 /**
  * Phase 2.2 — Response DTO cho `GET /timing-alert/dashboard-snapshot/:raceId`.
@@ -111,6 +112,68 @@ export class RecentActivityItemDto {
   payload!: Record<string, unknown>;
 }
 
+// ─────────── F-008 — Command Center Refactor additive sub-DTOs ───────────
+
+/**
+ * F-008 BR-CC-03 — One bucket of throughput history (5-min window).
+ *
+ * Aggregated from `race_results.finished_at` timestamps. Last 60 min is split
+ * into 12 buckets ordered oldest → newest. Used by ThroughputSparkline.
+ */
+export class ThroughputBucketDto {
+  @ApiProperty({
+    description: 'ISO timestamp marking the START of this 5-min bucket',
+  })
+  timestamp!: string;
+  @ApiProperty({
+    description: 'Distinct bibs that finished within this 5-min bucket',
+  })
+  finishersCount!: number;
+}
+
+/**
+ * F-008 BR-CC-05 — Per-checkpoint health cell trong Health Matrix.
+ *
+ * `healthPercent = current / expected * 100` (capped 0..100, rounded 1dp).
+ * Threshold theo BR-CC-07: green ≥90% / amber 70-90% / red <70%.
+ */
+export class CheckpointHealthDto {
+  @ApiProperty({ description: 'Checkpoint key (Start, TM1, Finish, ...)' })
+  key!: string;
+  @ApiProperty({ description: 'Display name (e.g. "CP1 - Suoi Vang")' })
+  name!: string;
+  @ApiProperty({ description: 'Distinct bibs đã passed checkpoint' })
+  current!: number;
+  @ApiProperty({
+    description:
+      'Expected count tại checkpoint (linear ratio = registered × cp.distanceKm/course.distanceKm; fallback flat course.registered)',
+  })
+  expected!: number;
+  @ApiProperty({ description: '0..100 ratio current/expected (clamp + 1dp)' })
+  healthPercent!: number;
+}
+
+/**
+ * F-008 BR-CC-05 — Per-course Health Matrix row aggregate.
+ *
+ * `overallPercent` = average of `checkpoints[*].healthPercent` (1dp). Empty
+ * checkpoints → 0. Used by `CheckpointHealthMatrix` grid render.
+ */
+export class CourseHealthDto {
+  @ApiProperty() courseId!: string;
+  @ApiProperty() courseName!: string;
+  @ApiProperty({
+    description: 'Distinct bibs registered in this course (denominator base)',
+  })
+  totalAthletes!: number;
+  @ApiProperty({
+    description: '0..100 average of checkpoint healthPercents (1dp)',
+  })
+  overallPercent!: number;
+  @ApiProperty({ type: [CheckpointHealthDto] })
+  checkpoints!: CheckpointHealthDto[];
+}
+
 export class DashboardSnapshotResponseDto {
   @ApiProperty() race!: RaceMetaDto;
   @ApiProperty() raceStats!: RaceStatsDto;
@@ -134,6 +197,45 @@ export class DashboardSnapshotResponseDto {
   })
   summary!: SummaryCardsDto;
 
+  // F-008 — Command Center Refactor additive fields (BR-CC-15)
+  @ApiProperty({
+    description:
+      'F-008 BR-CC-02 — Athletes registered nhưng KHÔNG có Start chiptime',
+  })
+  dnsCount!: number;
+
+  @ApiProperty({
+    type: [ThroughputBucketDto],
+    description:
+      'F-008 BR-CC-03 — Last 60 min finisher rate (12 buckets × 5 min, oldest → newest)',
+  })
+  throughputHistory!: ThroughputBucketDto[];
+
+  @ApiProperty({
+    type: [CourseHealthDto],
+    description:
+      'F-008 BR-CC-05 — Per-course × per-checkpoint health matrix (4 courses × N CPs grid)',
+  })
+  checkpointHealthMatrix!: CourseHealthDto[];
+
   @ApiProperty({ description: 'ISO timestamp khi snapshot generated' })
   generatedAt!: string;
+
+  // F-008 v2 — Command Center Refactor additive field (BR-CC2-26)
+  @ApiProperty({
+    description:
+      'F-008 v2 BR-CC2-26 — Last successful poll timestamp from TimingAlertConfig. Distinct from `generatedAt` (snapshot computed time). Null when config missing or never polled.',
+    example: '2026-05-06T07:30:00Z',
+    nullable: true,
+    type: String,
+  })
+  lastPollAt!: Date | null;
+
+  // F-010 — DNS sub-state breakdown (additive)
+  @ApiProperty({
+    type: DnsBreakdownDto,
+    description:
+      'F-010 BR-FC-05/06 — DNS sub-state breakdown (notPicked / noStart / chipFail). Computed at query time; not persisted.',
+  })
+  dnsBreakdown!: DnsBreakdownDto;
 }

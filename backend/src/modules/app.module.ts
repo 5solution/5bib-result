@@ -7,6 +7,8 @@ import { ConfigModule } from '@nestjs/config';
 import { env } from 'src/config';
 import { RacesModule } from './races/races.module';
 import { RaceResultModule } from './race-result/race-result.module';
+// F-015 Check-In Kiosk module — sibling of RaceResultModule mounted under /api/race-results.
+import { CheckInModule } from './race-result/check-in/check-in.module';
 import { AdminModule } from './admin/admin.module';
 import { LogtoAuthModule } from './logto-auth';
 import { UploadModule } from './upload/upload.module';
@@ -157,6 +159,9 @@ const volunteerDbModules = env.volunteerDb.host
     ...timingAlertModules,
     RacesModule,
     RaceResultModule,
+    // F-015 — Check-In Kiosk endpoints (mounted as sibling, NOT inside RaceResultModule
+    // to avoid registering CheckInService into RaceResult provider tree).
+    CheckInModule,
     AdminModule,
     LogtoAuthModule,
     UploadModule,

@@ -65,6 +65,17 @@ export class ProjectedRankService {
     courseId: string,
     ageGroup: string | null,
     projectedFinishSeconds: number,
+    /**
+     * F-010 BR-FC-15/17 — total registered athletes per race+course (countDocuments).
+     * When omitted (legacy callers / 0), confidence falls back to absolute
+     * threshold = 50 (matches pre-F-010 behavior).
+     */
+    totalRegistered?: number,
+    /**
+     * F-010 BR-FC-15/16 — confidence multiplier per race config (default 0.20).
+     * `confidence = MIN(1, totalFinishers / (totalRegistered × multiplier))`.
+     */
+    confidenceMultiplier?: number,
   ): Promise<ProjectedRankResult> {
     if (projectedFinishSeconds <= 0) {
       return { overallRank: null, ageGroupRank: null, confidence: 0, totalFinishers: 0 };
@@ -124,11 +135,23 @@ export class ProjectedRankService {
       ageGroupRank = ageFaster + 1;
     }
 
-    // Confidence — match spec section 5: dựa % finished. Threshold 50.
-    // < 50 finishers → linear scale. ≥ 50 → 1.0 (đủ data).
+    // F-010 BR-FC-15/16/17 — confidence formula change:
+    //   confidence = MIN(1, totalFinishers / (totalRegistered × multiplier))
+    // Falls back to absolute threshold (50) when totalRegistered is missing or 0
+    // (matches pre-F-010 behavior — backward compat for legacy callers).
+    //
+    // Why this matters: pre-F-010, race with 500 registered would hit confidence=1
+    // when only 50 athletes finished (10% completion → claim "high confidence").
+    // Post-F-010 with default multiplier 0.20: same race needs 100 finishers
+    // (20% completion) for confidence=1. More accurate signal for projection trust.
+    const multiplier = confidenceMultiplier ?? 0.20;
+    const threshold =
+      typeof totalRegistered === 'number' && totalRegistered > 0
+        ? totalRegistered * multiplier
+        : ProjectedRankService.CONFIDENCE_FINISHER_THRESHOLD;
     const confidence = Math.min(
       1,
-      totalFinishers / ProjectedRankService.CONFIDENCE_FINISHER_THRESHOLD,
+      totalFinishers / Math.max(threshold, 1),
     );
 
     return {

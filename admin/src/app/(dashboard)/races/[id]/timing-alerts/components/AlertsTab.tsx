@@ -26,7 +26,8 @@ import {
   type TimingAlertStatus,
 } from '@/lib/timing-alert-api';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import { ArrowRight, Info, Search } from 'lucide-react';
+import { useRouter, useParams } from 'next/navigation';
 import { AlertDetailDialog } from './AlertDetailDialog';
 
 const SEVERITY_COLORS: Record<TimingAlertSeverity, string> = {
@@ -62,6 +63,11 @@ const PAGE_SIZE = 20;
 
 export function AlertsTab({ raceId }: { raceId: string }) {
   const qc = useQueryClient();
+  const router = useRouter();
+  const routeParams = useParams();
+  const linkRaceId = String(
+    (routeParams as { id?: string }).id ?? raceId,
+  );
   const [statusFilter, setStatusFilter] = useState<TimingAlertStatus>('OPEN');
   const [detailAlertId, setDetailAlertId] = useState<string | null>(null);
   const [bibSearch, setBibSearch] = useState('');
@@ -193,6 +199,42 @@ export function AlertsTab({ raceId }: { raceId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* F-008 v2 BR-CC2-31 — Deprecation banner (30-day window before
+          hard-delete). Middleware redirect /timing-alerts/alerts →
+          /command-center?view=alerts already covers bookmarks; banner shown
+          when AlertsTab mounted via the legacy 3-tab page. */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border px-4 py-3"
+        style={{
+          background: '#FEF3C7',
+          borderColor: '#FCD34D',
+          color: '#92400E',
+        }}
+        role="status"
+        aria-live="polite"
+        data-testid="f008-v2-alerts-deprecation-banner"
+      >
+        <div className="flex items-start gap-2.5 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <strong className="font-bold">Trang này sẽ được thay thế.</strong>{' '}
+            Chuyển sang <strong>Command Center → Xem tất cả alerts</strong>{' '}
+            (drill-in từ Alert Feed) để dùng layout mới.
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5 border-amber-700 bg-white text-amber-900 hover:bg-amber-100"
+          onClick={() =>
+            router.push(`/races/${linkRaceId}/command-center?view=alerts`)
+          }
+        >
+          Chuyển ngay
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
       {/* Stats by severity — C4 fix: parse class string properly */}
       {stats && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

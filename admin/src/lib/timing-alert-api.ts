@@ -35,7 +35,11 @@ export interface TimingAlertConfigResponse {
 export type TimingAlertSeverity = 'CRITICAL' | 'HIGH' | 'WARNING' | 'INFO';
 export type TimingAlertStatus = 'OPEN' | 'RESOLVED' | 'FALSE_ALARM';
 
-export type TimingAlertDetectionType = 'PHANTOM' | 'MIDDLE_GAP';
+export type TimingAlertDetectionType =
+  | 'PHANTOM'
+  | 'MIDDLE_GAP'
+  /** F-010 R14-R15 BR-FC-01..04 — projected finish exceeds cutoff time */
+  | 'CUTOFF_RISK';
 
 export interface TimingAlert {
   _id: string;
@@ -406,6 +410,36 @@ export interface SummaryCards {
   missRate: number;
 }
 
+// ─────────── F-008 — Command Center Refactor additive types ───────────
+
+/** F-008 BR-CC-03 — Throughput sparkline bucket (5-min window). */
+export interface ThroughputBucket {
+  /** ISO timestamp marking the start of the bucket */
+  timestamp: string;
+  /** Distinct bibs that finished within this 5-min bucket */
+  finishersCount: number;
+}
+
+/** F-008 BR-CC-05 — Per-checkpoint health cell. */
+export interface CheckpointHealth {
+  key: string;
+  name: string;
+  current: number;
+  expected: number;
+  /** 0..100 ratio current/expected */
+  healthPercent: number;
+}
+
+/** F-008 BR-CC-05 — Per-course Health Matrix row aggregate. */
+export interface CourseHealth {
+  courseId: string;
+  courseName: string;
+  totalAthletes: number;
+  /** 0..100 average of checkpoint healthPercents */
+  overallPercent: number;
+  checkpoints: CheckpointHealth[];
+}
+
 export interface DashboardSnapshot {
   race: RaceMeta;
   raceStats: RaceStats;
@@ -416,6 +450,28 @@ export interface DashboardSnapshot {
   liveLeaderboard: LiveLeaderboardCourse[];
   /** F-005 — race-level summary metric cards */
   summary: SummaryCards;
+  /** F-008 BR-CC-02 — Athletes registered nhưng KHÔNG có Start chiptime */
+  dnsCount: number;
+  /** F-008 BR-CC-03 — last 60 min × 5 min buckets, oldest → newest */
+  throughputHistory: ThroughputBucket[];
+  /** F-008 BR-CC-05 — per-course × per-checkpoint health matrix */
+  checkpointHealthMatrix: CourseHealth[];
+  /**
+   * F-008 v2 BR-CC2-26 — Last successful poll timestamp from TimingAlertConfig.
+   * Distinct from `generatedAt` (snapshot computed time). Null when config
+   * missing or never polled. ISO string per backend serialization.
+   */
+  lastPollAt: string | null;
+  /**
+   * F-010 BR-FC-05/06 — DNS sub-state breakdown. Optional (graceful degrade
+   * to 0/0/0 on legacy servers without F-010 deploy).
+   */
+  dnsBreakdown?: {
+    total: number;
+    notPicked: number;
+    noStart: number;
+    chipFail: number;
+  };
   generatedAt: string;
 }
 

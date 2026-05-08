@@ -16,6 +16,13 @@ import { ShareEventService } from './services/share-event.service';
 import { ShareNurtureCron } from './services/share-nurture.cron';
 import { RacesModule } from '../races/races.module';
 import { UploadModule } from '../upload/upload.module';
+// F-010 — read-only access to timing-alert config schema (pace_alert_threshold).
+// Cross-module @InjectModel direct, NO TimingAlertModule import (avoid circular DI:
+// TimingAlertModule already imports RaceResultModule for RaceResultApiService).
+import {
+  TimingAlertConfig,
+  TimingAlertConfigSchema,
+} from '../timing-alert/schemas/timing-alert-config.schema';
 
 @Module({
   imports: [
@@ -24,6 +31,9 @@ import { UploadModule } from '../upload/upload.module';
       { name: SyncLog.name, schema: SyncLogSchema },
       { name: ResultClaim.name, schema: ResultClaimSchema },
       { name: ShareEvent.name, schema: ShareEventSchema },
+      // F-010 BR-FC-10/11 — register TimingAlertConfig schema for read-only
+      // pace_alert_threshold lookup in RaceResultService.getPaceAlertThreshold().
+      { name: TimingAlertConfig.name, schema: TimingAlertConfigSchema },
     ]),
     HttpModule,
     // Module-scoped throttler so @Throttle decorators on result-image /

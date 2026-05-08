@@ -1,22 +1,41 @@
 'use client';
 
 /**
- * FEATURE-005 — Summary Cards Row component (Command Center).
+ * FEATURE-005 + FEATURE-008 — Summary Cards Row component (Command Center).
  *
- * 5 metric cards horizontal: Racekit nhận / VĐV xuất phát / VĐV về đích / DNS / Miss%
+ * F-008 BR-CC-01 — 6 cards canonical order match Canvas 03:
+ *   [1] Racekit Pickup [2] Started [3] Finished [4] DNS [5] Miss Rate [6] Throughput
+ *
+ * Backward compat: if `dnsCount` / `throughputHistory` not passed (F-005 sub-page),
+ * card 4 falls back to `summary.dns` (legacy F-005 wiring) and card 6 omits sparkline.
+ * F-008 callers MUST pass both for full Canvas 03 fidelity.
+ *
  * - Plus Jakarta Sans labels (var(--font-display))
  * - JetBrains Mono numbers (var(--font-mono))
  * - Color-coded miss% (green <2%, amber 2-5%, magenta >5%)
  * - Card style matches design canvas: rounded-[14px] + shadow-xs + border --5s-border
  */
 
-import type { SummaryCards } from '@/lib/timing-alert-api';
+import type {
+  SummaryCards,
+  ThroughputBucket,
+} from '@/lib/timing-alert-api';
+import { DnsCounterCard } from '@/app/(dashboard)/races/[id]/command-center/components/DnsCounterCard';
+import { ThroughputSparkline } from '@/app/(dashboard)/races/[id]/command-center/components/ThroughputSparkline';
 
 interface SummaryCardsRowProps {
   summary: SummaryCards;
+  /** F-008 BR-CC-02 — DNS count (overrides summary.dns when provided). */
+  dnsCount?: number;
+  /** F-008 BR-CC-03 — 12-bucket throughput history; absent → sparkline omitted. */
+  throughputHistory?: ThroughputBucket[];
 }
 
-export function SummaryCardsRow({ summary }: SummaryCardsRowProps) {
+export function SummaryCardsRow({
+  summary,
+  dnsCount,
+  throughputHistory,
+}: SummaryCardsRowProps) {
   const missColorMap = {
     bg: '#DCFCE7',
     fg: '#166534',
@@ -28,8 +47,14 @@ export function SummaryCardsRow({ summary }: SummaryCardsRowProps) {
         ? { bg: '#FEF3C7', fg: '#92400E' }
         : missColorMap;
 
+  const effectiveDns =
+    typeof dnsCount === 'number' ? dnsCount : summary.dns;
+  const showThroughput = Array.isArray(throughputHistory);
+  // F-008: 6-card grid (BR-CC-01). F-005 fallback: 5 cards (no throughput slot).
+  const gridCols = showThroughput ? 'md:grid-cols-6' : 'md:grid-cols-5';
+
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+    <div className={`grid grid-cols-2 gap-3 ${gridCols}`}>
       <MetricCard
         label="Racekit nhận"
         value={summary.racekitPickedUp.toLocaleString('vi-VN')}
@@ -62,12 +87,8 @@ export function SummaryCardsRow({ summary }: SummaryCardsRowProps) {
             : undefined
         }
       />
-      <MetricCard
-        label="DNS"
-        value={summary.dns.toLocaleString('vi-VN')}
-        sublabel="không xuất phát"
-        accent={{ bg: '#F3F0EB', fg: '#78716C' }}
-      />
+      {/* F-008 BR-CC-02 — DNS slot via dedicated component. */}
+      <DnsCounterCard count={effectiveDns} />
       <MetricCard
         label="Miss %"
         value={`${summary.missRate.toFixed(1)}%`}
@@ -81,6 +102,10 @@ export function SummaryCardsRow({ summary }: SummaryCardsRowProps) {
               : 'text-emerald-700'
         }
       />
+      {/* F-008 BR-CC-03 — Throughput sparkline slot (omitted when caller omits). */}
+      {showThroughput ? (
+        <ThroughputSparkline history={throughputHistory ?? []} />
+      ) : null}
     </div>
   );
 }

@@ -18,7 +18,10 @@
  */
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +30,7 @@ import {
   type TimingAlert,
   type TimingAlertSeverity,
 } from '@/lib/timing-alert-api';
+import { vnSeverityLabel } from '@/lib/vn-microcopy';
 import { AlertDetailDialog } from '../AlertDetailDialog';
 
 interface AlertFeedPanelProps {
@@ -40,12 +44,14 @@ interface FilterTabConfig {
   label: string;
 }
 
+// F-008 BR-CC-21 — VN labels resolved via vn-microcopy single source of truth.
+// Filter chips show short forms (Nghiêm trọng / Cao / Cảnh báo / Thông tin).
 const FILTER_TABS: FilterTabConfig[] = [
-  { key: 'ALL', label: 'All' },
-  { key: 'CRITICAL', label: 'Critical' },
-  { key: 'HIGH', label: 'High' },
-  { key: 'WARNING', label: 'Med' },
-  { key: 'INFO', label: 'Low' },
+  { key: 'ALL', label: 'Tất cả' },
+  { key: 'CRITICAL', label: vnSeverityLabel('CRITICAL') },
+  { key: 'HIGH', label: vnSeverityLabel('HIGH') },
+  { key: 'WARNING', label: vnSeverityLabel('WARNING') },
+  { key: 'INFO', label: vnSeverityLabel('INFO') },
 ];
 
 /** Per-severity color tokens — ngang với Artboard 3 design canvas. */
@@ -56,18 +62,22 @@ const SEV_COLOR: Record<TimingAlertSeverity, string> = {
   INFO: '#16A34A',
 };
 
-const SEV_LABEL: Record<TimingAlertSeverity, string> = {
-  CRITICAL: 'CRITICAL',
-  HIGH: 'HIGH',
-  WARNING: 'MED',
-  INFO: 'LOW',
-};
+// F-008 BR-CC-21 — per-row badge labels resolved via vnSeverityLabel().
+// Mapping uppercase form for inline severity badge inside row.
+function severityBadgeLabel(sev: TimingAlertSeverity): string {
+  return vnSeverityLabel(sev).toUpperCase();
+}
 
 /** "NEW" threshold — alert nào first_detected_at trong < 5 phút gần nhất. */
 const NEW_THRESHOLD_MS = 5 * 60 * 1000;
 
 export function AlertFeedPanel({ raceId }: AlertFeedPanelProps) {
   const qc = useQueryClient();
+  const params = useParams();
+  // F-008 v2 BR-CC2-36 — drill-in link reuses the same raceId from URL params
+  // so the "Xem tất cả" button works whether the panel renders inside Command
+  // Center or somewhere else with the same raceId.
+  const linkRaceId = String((params as { id?: string }).id ?? raceId);
   const [filter, setFilter] = useState<SevFilter>('ALL');
   const [detailAlertId, setDetailAlertId] = useState<string | null>(null);
 
@@ -206,6 +216,24 @@ export function AlertFeedPanel({ raceId }: AlertFeedPanelProps) {
         )}
       </div>
 
+      {/* F-008 v2 BR-CC2-36 — drill-in link bottom-right "Xem tất cả N alerts →" */}
+      {totalAll > 0 && (
+        <div
+          className="flex justify-end border-t px-4 py-2"
+          style={{ borderColor: 'var(--5s-border)' }}
+        >
+          <Link
+            href={`/races/${linkRaceId}/command-center?view=alerts`}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold transition-colors hover:underline"
+            style={{ color: 'var(--5s-magenta, #FF0E65)' }}
+            data-testid="view-all-alerts-link"
+          >
+            Xem tất cả {totalAll} alerts
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
+
       {/* Reuse F-001 detail dialog */}
       <AlertDetailDialog
         raceId={raceId}
@@ -249,7 +277,7 @@ function AlertRow({
   dismissing,
 }: AlertRowProps) {
   const sevColor = SEV_COLOR[alert.severity];
-  const sevLabel = SEV_LABEL[alert.severity];
+  const sevLabel = severityBadgeLabel(alert.severity);
   const projected = alert.projected_age_group_rank;
   const showProjected =
     projected !== null && projected !== undefined && projected <= 10;
@@ -348,7 +376,7 @@ function AlertRow({
               onInvestigate();
             }}
           >
-            Investigate
+            Điều tra
           </Button>
           <button
             type="button"

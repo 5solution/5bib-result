@@ -72,11 +72,11 @@ export class TimingAlert {
    * Default 'PHANTOM' để backward compat với alert đã tồn tại.
    */
   @Prop({
-    enum: ['PHANTOM', 'MIDDLE_GAP'],
+    enum: ['PHANTOM', 'MIDDLE_GAP', 'CUTOFF_RISK'],
     default: 'PHANTOM',
     index: true,
   })
-  detection_type: 'PHANTOM' | 'MIDDLE_GAP';
+  detection_type: 'PHANTOM' | 'MIDDLE_GAP' | 'CUTOFF_RISK';
 
   // ── Projection ──
   @Prop({ type: String, default: null })

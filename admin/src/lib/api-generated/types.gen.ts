@@ -508,6 +508,22 @@ export type CreateTimingAlertConfigDto = {
      * Bật/tắt monitoring per race. Cron tick mỗi 30s sẽ poll race.courses[].apiUrl khi true.
      */
     enabled?: boolean;
+    /**
+     * F-010 BR-FC-08 — Course type preset (ROAD | TRAIL | ULTRA).
+     */
+    course_type?: 'ROAD' | 'TRAIL' | 'ULTRA';
+    /**
+     * F-010 BR-FC-08/09 — Pace buffer (1.01-2.00). Defaults: ROAD=1.10, TRAIL=1.35, ULTRA=1.50.
+     */
+    pace_buffer?: number;
+    /**
+     * F-010 BR-FC-10/11 — Pace alert threshold (0.20-0.95). Defaults: ROAD=0.80, TRAIL=0.45, ULTRA=0.40.
+     */
+    pace_alert_threshold?: number;
+    /**
+     * F-010 BR-FC-15/16 — Confidence multiplier (0.05-1.00). Default 0.20.
+     */
+    confidence_multiplier?: number;
 };
 
 export type TimingAlertConfigResponseDto = {
@@ -520,6 +536,36 @@ export type TimingAlertConfigResponseDto = {
     enabled_by_user_id: string | null;
     enabled_at: string | null;
     last_polled_at: string | null;
+    /** F-010 — null nếu admin chưa chọn preset */
+    course_type: 'ROAD' | 'TRAIL' | 'ULTRA' | null;
+    /** F-010 BR-FC-08/09 — pace buffer multiplier (1.01-2.00) */
+    pace_buffer: number;
+    /** F-010 BR-FC-10/11 — pace alert threshold (0.20-0.95) */
+    pace_alert_threshold: number;
+    /** F-010 BR-FC-15/16 — confidence multiplier (0.05-1.00) */
+    confidence_multiplier: number;
+};
+
+/**
+ * F-010 BR-FC-05/06/07 — DNS sub-state breakdown (computed at query time).
+ */
+export type DnsBreakdownDto = {
+    total: number;
+    notPicked: number;
+    noStart: number;
+    chipFail: number;
+};
+
+/**
+ * F-010 BR-FC-07 — PATCH body cho /api/race-results/:id/dns-chip-fail.
+ */
+export type UpdateDnsChipFailDto = {
+    dnsChipFail: boolean;
+};
+
+export type UpdateDnsChipFailResponseDto = {
+    success: boolean;
+    dnsChipFail: boolean;
 };
 
 export type AlertActionDto = {
@@ -796,6 +842,10 @@ export type DashboardSnapshotResponseDto = {
      * ISO timestamp khi snapshot generated
      */
     generatedAt: string;
+    /**
+     * F-010 BR-FC-05/06 — DNS sub-state breakdown.
+     */
+    dnsBreakdown?: DnsBreakdownDto;
 };
 
 export type ForceRefreshResponseDto = {
@@ -1511,6 +1561,12 @@ export type CourseMapDataDto = {
      * Public S3 URL for the simplified GeoJSON track (BR-CM-11). Absent when hasGpx=false.
      */
     gpxSimplifiedUrl?: string;
+    /**
+     * Inlined simplified GeoJSON FeatureCollection (BR-CM-11b). Backend fetches from S3 server-side so frontend avoids CORS round-trip. Shape: GeoJSON FeatureCollection with one LineString feature. Absent when hasGpx=false or when S3 fetch failed (frontend should fall back to gpxSimplifiedUrl).
+     */
+    geoJson?: {
+        [key: string]: unknown;
+    };
     /**
      * Parsed metadata (BR-CM-02/03/06). Absent when hasGpx=false.
      */

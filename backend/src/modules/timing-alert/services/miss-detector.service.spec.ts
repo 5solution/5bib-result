@@ -124,7 +124,9 @@ describe('MissDetectorService', () => {
         lastSeenTime: '01:30:00',
         checkpointTimes: { TM2: '01:30:00' },
       });
-      const results = service.detect(a, CP_42KM, 60);
+      // pace 257s/km × 32km × 1.10 = 9046s. Gap from lastSeen 5400s = 3646s = 60.7min.
+      // Use threshold 90 to verify "below threshold" logic.
+      const results = service.detect(a, CP_42KM, 90);
       expect(results.filter((r) => r.type === 'PHANTOM')).toHaveLength(0);
     });
 
@@ -191,22 +193,22 @@ describe('MissDetectorService', () => {
       projectedFinishSeconds: 16200,
     };
 
-    it('MIDDLE_GAP → severity INFO when not Top N', () => {
+    it('MIDDLE_GAP → severity WARNING when not Top N (F-010 OBS-2 BR-FC-19: was INFO pre-F-010)', () => {
       const result = service.classifySeverity(
         { ...baseDetection, type: 'MIDDLE_GAP', missingPoint: 'TM3', lastSeenPoint: 'TM4', isMissingFinish: false },
         { overallRank: 50, ageGroupRank: 20, confidence: 0.9, totalFinishers: 100 },
         3,
       );
-      expect(result.severity).toBe('INFO');
+      expect(result.severity).toBe('WARNING');
     });
 
-    it('MIDDLE_GAP → severity WARNING when Top N (rank ≤ topNAlert)', () => {
+    it('MIDDLE_GAP → severity CRITICAL when Top N (F-010 OBS-2 BR-FC-19: escalated from WARNING)', () => {
       const result = service.classifySeverity(
         { ...baseDetection, type: 'MIDDLE_GAP', missingPoint: 'TM3', lastSeenPoint: 'TM4', isMissingFinish: false },
         { overallRank: 2, ageGroupRank: 1, confidence: 0.9, totalFinishers: 100 },
         3,
       );
-      expect(result.severity).toBe('WARNING');
+      expect(result.severity).toBe('CRITICAL');
     });
 
     it('CRITICAL when projected age group rank ≤ topN', () => {
@@ -268,6 +270,223 @@ describe('MissDetectorService', () => {
       const phantom = { ...baseDetection, isMissingFinish: false };
       const result = service.classifySeverity(phantom, null, 3);
       expect(result.severity).toBe('INFO');
+    });
+  });
+
+  // ─── F-010 — Formula Correction & Config Upgrade ───
+
+  describe('F-010 BR-FC-01..04 CUTOFF_RISK detection', () => {
+    it('creates CUTOFF_RISK when projectedFinish exceeds cutoff (was returning null pre-F-010)', () => {
+      // Athlete pace ~5:42/km at TM2 (21km in 2h). Projected Finish ~ 4:00:30 with 1.05.
+      // Apply paceBuffer=1.10 → projected = 12656s ~ 3:30:56. Cutoff 03:00:00 → CUTOFF_RISK.
+      const a = athlete({
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        checkpointTimes: { Start: '00:00:00', TM1: '00:55:00', TM2: '02:00:00' },
+      });
+      const results = service.detect(a, CP_42KM, 30, {
+        cutoffTime: '03:00:00',
+        paceBuffer: 1.10,
+      });
+      const cutoffRisk = results.find((r) => r.type === 'CUTOFF_RISK');
+      expect(cutoffRisk).toBeDefined();
+      expect(cutoffRisk!.missingPoint).toBe('TM3');
+      expect(cutoffRisk!.projectedFinishSeconds).toBeGreaterThan(10800); // > cutoff 3h
+      // CUTOFF_RISK should NOT be flagged as PHANTOM (mutually exclusive)
+      expect(results.find((r) => r.type === 'PHANTOM')).toBeUndefined();
+    });
+
+    it('creates PHANTOM (not CUTOFF_RISK) when projected finish under cutoff', () => {
+      const a = athlete({
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        checkpointTimes: { Start: '00:00:00', TM1: '00:55:00', TM2: '02:00:00' },
+      });
+      // Generous cutoff 5h → projected finish ~3:30 < 5:00 → PHANTOM
+      const results = service.detect(a, CP_42KM, 30, {
+        cutoffTime: '05:00:00',
+        paceBuffer: 1.10,
+      });
+      expect(results.find((r) => r.type === 'PHANTOM')).toBeDefined();
+      expect(results.find((r) => r.type === 'CUTOFF_RISK')).toBeUndefined();
+    });
+
+    it('CUTOFF_RISK severity HIGH when athlete is Top N (overall)', () => {
+      const cutoffDetection = {
+        type: 'CUTOFF_RISK' as const,
+        isPhantom: false,
+        isMissingFinish: false,
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        missingPoint: 'TM3',
+        overdueMinutes: 30,
+        projectedFinishTime: '04:00:00',
+        projectedFinishSeconds: 14400,
+      };
+      const result = service.classifySeverity(
+        cutoffDetection,
+        { overallRank: 2, ageGroupRank: 5, confidence: 0.9, totalFinishers: 100 },
+        3,
+      );
+      expect(result.severity).toBe('HIGH');
+      expect(result.reason).toMatch(/Top 2 overall/);
+    });
+
+    it('CUTOFF_RISK severity WARNING for non-Top-N athletes', () => {
+      const cutoffDetection = {
+        type: 'CUTOFF_RISK' as const,
+        isPhantom: false,
+        isMissingFinish: false,
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        missingPoint: 'TM3',
+        overdueMinutes: 30,
+        projectedFinishTime: '04:00:00',
+        projectedFinishSeconds: 14400,
+      };
+      const result = service.classifySeverity(
+        cutoffDetection,
+        { overallRank: 100, ageGroupRank: 50, confidence: 0.9, totalFinishers: 100 },
+        3,
+      );
+      expect(result.severity).toBe('WARNING');
+      expect(result.reason).toMatch(/cutoff/i);
+    });
+  });
+
+  describe('F-010 BR-FC-08/09 paceBuffer config-driven', () => {
+    it('paceBuffer 1.10 (ROAD) flags athlete that 1.50 (ULTRA) does not flag', () => {
+      // pace at TM2 = 2h/21km = 343s/km. Expected at TM3 (32km):
+      //   1.10: 343 × 32 × 1.10 = 12,074s (3:21:14)
+      //   1.50: 343 × 32 × 1.50 = 16,464s (4:34:24)
+      // Athlete elapsed at lastSeen = 7200s. Gap = 4874s ROAD vs 9264s ULTRA.
+      // Both > 30 min threshold → both flag PHANTOM. We test that overdue
+      // matches the buffer: ULTRA should produce LARGER overdue.
+      const a = athlete({
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        checkpointTimes: { Start: '00:00:00', TM1: '00:55:00', TM2: '02:00:00' },
+      });
+      const roadResults = service.detect(a, CP_42KM, 30, { paceBuffer: 1.10 });
+      const ultraResults = service.detect(a, CP_42KM, 30, { paceBuffer: 1.50 });
+      const roadPhantom = roadResults.find((r) => r.type === 'PHANTOM');
+      const ultraPhantom = ultraResults.find((r) => r.type === 'PHANTOM');
+      expect(roadPhantom).toBeDefined();
+      expect(ultraPhantom).toBeDefined();
+      expect(ultraPhantom!.overdueMinutes).toBeGreaterThan(roadPhantom!.overdueMinutes);
+    });
+
+    it('default paceBuffer 1.10 when options.paceBuffer omitted', () => {
+      const a = athlete({
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        checkpointTimes: { Start: '00:00:00', TM1: '00:55:00', TM2: '02:00:00' },
+      });
+      const results = service.detect(a, CP_42KM, 30);
+      // pace = 2h/21km = 343s/km. Projected finish = 343 × 42.195 × 1.10 ≈ 15914s
+      const phantom = results.find((r) => r.type === 'PHANTOM');
+      expect(phantom).toBeDefined();
+      expect(phantom!.projectedFinishSeconds).toBeGreaterThanOrEqual(15800);
+      expect(phantom!.projectedFinishSeconds).toBeLessThanOrEqual(16000);
+    });
+  });
+
+  describe('F-010 OBS-1 BR-FC-18 wall-clock overdue', () => {
+    it('overdueMinutes increases when lastPollAt provided (wall-clock added)', () => {
+      const a = athlete({
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        checkpointTimes: { Start: '00:00:00', TM1: '00:55:00', TM2: '02:00:00' },
+      });
+      const now = new Date('2026-05-06T08:00:00Z');
+      const lastPollAt = new Date('2026-05-06T07:45:00Z'); // 15 min ago
+      const noPollResults = service.detect(a, CP_42KM, 30, { paceBuffer: 1.10 }, now);
+      const wallClockResults = service.detect(
+        a,
+        CP_42KM,
+        30,
+        { paceBuffer: 1.10, lastPollAt },
+        now,
+      );
+      const noPoll = noPollResults.find((r) => r.type === 'PHANTOM')!;
+      const wall = wallClockResults.find((r) => r.type === 'PHANTOM')!;
+      // Wall-clock should add ~15min to overdue
+      expect(wall.overdueMinutes).toBeGreaterThanOrEqual(noPoll.overdueMinutes + 14);
+    });
+
+    it('lastPollAt null falls back to static gap (matches pre-F-010 behavior)', () => {
+      const a = athlete({
+        lastSeenPoint: 'TM2',
+        lastSeenTime: '02:00:00',
+        checkpointTimes: { Start: '00:00:00', TM1: '00:55:00', TM2: '02:00:00' },
+      });
+      const now = new Date('2026-05-06T08:00:00Z');
+      const r1 = service.detect(a, CP_42KM, 30, { paceBuffer: 1.10 }, now);
+      const r2 = service.detect(
+        a,
+        CP_42KM,
+        30,
+        { paceBuffer: 1.10, lastPollAt: null },
+        now,
+      );
+      const p1 = r1.find((r) => r.type === 'PHANTOM')!;
+      const p2 = r2.find((r) => r.type === 'PHANTOM')!;
+      expect(p1.overdueMinutes).toBe(p2.overdueMinutes);
+    });
+  });
+
+  describe('F-010 OBS-2 BR-FC-19 MIDDLE_GAP severity escalation', () => {
+    const gapDetection = {
+      type: 'MIDDLE_GAP' as const,
+      isPhantom: true,
+      isMissingFinish: false,
+      lastSeenPoint: 'TM4',
+      lastSeenTime: '04:00:00',
+      missingPoint: 'TM3',
+      overdueMinutes: 0,
+      projectedFinishTime: '05:00:00',
+      projectedFinishSeconds: 18000,
+    };
+
+    it('MIDDLE_GAP single gap → WARNING (was INFO pre-F-010)', () => {
+      const result = service.classifySeverity(
+        gapDetection,
+        { overallRank: 100, ageGroupRank: 50, confidence: 0.9, totalFinishers: 100 },
+        3,
+        1, // single gap
+      );
+      expect(result.severity).toBe('WARNING');
+    });
+
+    it('MIDDLE_GAP 2+ consecutive gaps → HIGH (course-cutting risk)', () => {
+      const result = service.classifySeverity(
+        gapDetection,
+        { overallRank: 100, ageGroupRank: 50, confidence: 0.9, totalFinishers: 100 },
+        3,
+        2, // consecutive gaps
+      );
+      expect(result.severity).toBe('HIGH');
+      expect(result.reason).toMatch(/consecutive/i);
+    });
+
+    it('MIDDLE_GAP TopN → CRITICAL (regardless of gap count)', () => {
+      const result = service.classifySeverity(
+        gapDetection,
+        { overallRank: 2, ageGroupRank: 1, confidence: 0.9, totalFinishers: 100 },
+        3,
+        1,
+      );
+      expect(result.severity).toBe('CRITICAL');
+    });
+
+    it('MIDDLE_GAP TopN with consecutive gaps still CRITICAL (TopN wins)', () => {
+      const result = service.classifySeverity(
+        gapDetection,
+        { overallRank: 2, ageGroupRank: 5, confidence: 0.9, totalFinishers: 100 },
+        3,
+        3,
+      );
+      expect(result.severity).toBe('CRITICAL');
     });
   });
 });

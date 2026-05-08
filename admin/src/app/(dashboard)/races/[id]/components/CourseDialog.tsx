@@ -11,7 +11,8 @@
  * when editing an existing course (we need a `courseId` to upload against).
  */
 import * as React from 'react';
-import { Clock, ImageIcon, MapPin, Mountain, Plus, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Clock, ImageIcon, Info, MapPin, Mountain, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +34,12 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ImageUpload from '@/components/ImageUpload';
+import {
+  StepIndicator,
+  type Step,
+  type StepState,
+} from '@/components/wizard/StepIndicator';
+import { useCourseMapData } from '@/lib/course-map-hooks';
 
 import { DiscoverPreviewPanel } from './DiscoverPreviewPanel';
 import { CourseMapTab } from './CourseMapTab';
@@ -107,9 +114,96 @@ export function CourseDialog({
 }: CourseDialogProps): React.ReactElement {
   const checkpoints = (courseForm.checkpoints ?? []) as Checkpoint[];
 
+  // F-007 Item #1 — wizard step state derived from form state. Hooks MUST run
+  // unconditionally; we pass empty courseId when not editing → useCourseMapData
+  // disables itself internally (its own enabled gate).
+  const editingCourseId = editingCourse?.courseId ?? '';
+  const mapData = useCourseMapData(raceId, editingCourseId);
+  const hasGpx = Boolean(mapData.data?.hasGpx);
+  const unmatchedCheckpointsCount = React.useMemo(() => {
+    const list = mapData.data?.checkpoints ?? [];
+    return list.filter(
+      (cp) => typeof cp.lat !== 'number' || typeof cp.lng !== 'number',
+    ).length;
+  }, [mapData.data?.checkpoints]);
+
+  const steps: Step[] = React.useMemo(() => {
+    const isSaved = Boolean(editingCourse);
+    const hasCps = checkpoints.length > 0;
+
+    const step1State: StepState = isSaved ? 'done' : 'active';
+    const step2State: StepState = !isSaved
+      ? 'pending'
+      : hasCps
+        ? 'done'
+        : 'active';
+    const step3State: StepState = !isSaved
+      ? 'pending'
+      : !hasCps
+        ? 'pending'
+        : hasGpx
+          ? 'done'
+          : 'active';
+    const step4State: StepState = !isSaved
+      ? 'pending'
+      : !hasCps
+        ? 'pending'
+        : !hasGpx
+          ? 'pending'
+          : unmatchedCheckpointsCount > 0
+            ? 'blocked'
+            : 'done';
+
+    return [
+      { label: 'Cơ bản', state: step1State },
+      { label: 'Discover RR', state: step2State },
+      { label: 'Upload GPX', state: step3State },
+      {
+        label: 'Manual drag',
+        state: step4State,
+        hint:
+          step4State === 'blocked'
+            ? `${unmatchedCheckpointsCount} CP chưa khớp`
+            : undefined,
+      },
+    ];
+  }, [editingCourse, checkpoints.length, hasGpx, unmatchedCheckpointsCount]);
+
+  const mapTabDisabled = !editingCourse;
+  const mapTabTooltip = !editingCourse
+    ? 'Lưu cự ly trước'
+    : checkpoints.length === 0
+      ? 'Discover RR API trước để có checkpoint keys'
+      : '';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      {/*
+        Bug fix — Map tab content (banner + map 400px + elevation chart) đẩy
+        Hủy/Lưu footer off-screen. Solution: flex column layout with
+        - Header: fixed top
+        - Body (Tabs): flex-1 + overflow-y-auto → scroll inside dialog
+        - Footer: fixed bottom (always visible)
+        max-h-[90vh] caps total dialog height for small viewports.
+      */}
+      <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
+        {/* F-009 deprecation banner — additive only (BR-AF-23 byte-for-byte preserve below) */}
+        <div className="-mx-6 -mt-6 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-t-lg border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-900">
+          <span className="flex items-center gap-1.5">
+            <Info className="size-3.5" aria-hidden="true" />
+            Đã có trang Course Map fullpage mới — modal sẽ retire trong 30 ngày.
+          </span>
+          {editingCourse ? (
+            <Link
+              href={`/races/${raceId}/course-map?course=${encodeURIComponent(editingCourse.courseId)}`}
+              className="inline-flex items-center gap-1 rounded-md border border-amber-400 bg-white px-2 py-0.5 font-semibold text-amber-900 hover:bg-amber-100"
+              onClick={() => onOpenChange(false)}
+            >
+              Chuyển ngay
+              <ArrowRight className="size-3" aria-hidden="true" />
+            </Link>
+          ) : null}
+        </div>
         <DialogHeader>
           <DialogTitle>{editingCourse ? 'Sửa cự ly' : 'Thêm cự ly'}</DialogTitle>
           <DialogDescription>
@@ -117,7 +211,13 @@ export function CourseDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="basic" className="mt-1">
+        {/* F-007 Item #1 — wizard step indicator above tabs so admin always
+            knows where they are in the 4-step setup flow. */}
+        <div className="px-1">
+          <StepIndicator steps={steps} />
+        </div>
+
+        <Tabs defaultValue="basic" className="mt-1 flex flex-1 flex-col overflow-hidden">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="basic">Cơ bản</TabsTrigger>
             <TabsTrigger value="info">Thông tin</TabsTrigger>
@@ -133,8 +233,18 @@ export function CourseDialog({
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="map">Map</TabsTrigger>
+            <TabsTrigger
+              value="map"
+              disabled={mapTabDisabled}
+              title={mapTabTooltip || undefined}
+              aria-label={mapTabTooltip ? `Map (${mapTabTooltip})` : 'Map'}
+            >
+              Map
+            </TabsTrigger>
           </TabsList>
+
+          {/* Scroll container — only tabs body scrolls; footer stays sticky */}
+          <div className="flex-1 overflow-y-auto pr-1">
 
           {/* ── Tab 1: Cơ bản ── */}
           <TabsContent value="basic" className="mt-4 flex flex-col gap-4">
@@ -231,17 +341,35 @@ export function CourseDialog({
                 <Label className="flex items-center gap-1.5">
                   <Mountain className="size-3.5" /> Tổng leo cao (m)
                 </Label>
-                <Input
-                  type="number"
-                  value={courseForm.elevationGain ?? ''}
-                  onChange={(e) =>
-                    setCourseForm((p) => ({
-                      ...p,
-                      elevationGain: parseInt(e.target.value, 10) || undefined,
-                    }))
-                  }
-                  placeholder="1500"
-                />
+                {/* F-007 Item #10 — GPX consolidation: when GPX uploaded the
+                    parsed elevation gain is the source-of-truth (read-only).
+                    Fall back to manual input until a GPX exists so legacy
+                    races without GPX keep working. */}
+                {hasGpx && typeof mapData.data?.gpxParsed?.elevationGain === 'number' ? (
+                  <div className="flex flex-col gap-1">
+                    <Input
+                      type="number"
+                      value={mapData.data.gpxParsed.elevationGain}
+                      readOnly
+                      className="bg-stone-50 text-stone-700"
+                    />
+                    <span className="text-[11px] text-stone-500">
+                      Từ GPX đã upload — quản lý ở tab Map
+                    </span>
+                  </div>
+                ) : (
+                  <Input
+                    type="number"
+                    value={courseForm.elevationGain ?? ''}
+                    onChange={(e) =>
+                      setCourseForm((p) => ({
+                        ...p,
+                        elevationGain: parseInt(e.target.value, 10) || undefined,
+                      }))
+                    }
+                    placeholder="1500"
+                  />
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 <Label className="flex items-center gap-1.5">
@@ -306,11 +434,31 @@ export function CourseDialog({
             </div>
             <div className="flex flex-col gap-2">
               <Label>File GPX (URL)</Label>
-              <Input
-                value={(courseForm.gpxUrl as string | undefined) ?? ''}
-                onChange={(e) => setCourseForm((p) => ({ ...p, gpxUrl: e.target.value }))}
-                placeholder="URL file GPX (nếu nhập tay — ngược lại dùng tab Map)"
-              />
+              {/* F-007 Item #10 — when admin upload GPX qua tab Map, gpxUrl là
+                  read-only display (source-of-truth ở tab Map). Trường hợp
+                  legacy race chưa upload GPX vẫn giữ free-form input. */}
+              {hasGpx ? (
+                <div className="flex flex-col gap-1">
+                  <Input
+                    value={
+                      (courseForm.gpxUrl as string | undefined) ??
+                      mapData.data?.gpxSimplifiedUrl ??
+                      ''
+                    }
+                    readOnly
+                    className="bg-stone-50 font-mono text-xs text-stone-700"
+                  />
+                  <span className="text-[11px] text-stone-500">
+                    Từ file GPX đã upload — quản lý ở tab Map
+                  </span>
+                </div>
+              ) : (
+                <Input
+                  value={(courseForm.gpxUrl as string | undefined) ?? ''}
+                  onChange={(e) => setCourseForm((p) => ({ ...p, gpxUrl: e.target.value }))}
+                  placeholder="URL file GPX (nếu nhập tay — ngược lại dùng tab Map)"
+                />
+              )}
             </div>
           </TabsContent>
 
@@ -458,9 +606,11 @@ export function CourseDialog({
           <TabsContent value="map" className="mt-4">
             <CourseMapTab raceId={raceId} courseId={editingCourse?.courseId ?? null} />
           </TabsContent>
+
+          </div>{/* end scroll container */}
         </Tabs>
 
-        <DialogFooter className="mt-4">
+        <DialogFooter className="mt-4 border-t border-stone-200 pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>

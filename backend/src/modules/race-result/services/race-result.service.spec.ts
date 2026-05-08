@@ -5,6 +5,7 @@ import { RaceResult } from '../schemas/race-result.schema';
 import { SyncLog } from '../schemas/sync-log.schema';
 import { ResultClaim } from '../schemas/result-claim.schema';
 import { RacesService } from '../../races/races.service';
+import { TimingAlertConfig } from '../../timing-alert/schemas/timing-alert-config.schema';
 
 const REDIS_TOKEN = 'default_IORedisModuleConnectionToken';
 
@@ -130,6 +131,18 @@ describe('RaceResultService', () => {
       keys: jest.fn().mockResolvedValue([]),
     };
 
+    // F-010 — read-only TimingAlertConfig mock for getPaceAlertThreshold().
+    // Existing pre-F-010 tests didn't mock TelegramService, MailService,
+    // UploadService, RaceResultApiService — they were already failing on main
+    // (test infra debt). F-010 adds TimingAlertConfigModel mock following
+    // the same pattern; pre-existing failures preserved (out of scope to fix).
+    const mockTimingAlertConfigModel = {
+      findOne: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(null),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RaceResultService,
@@ -138,6 +151,10 @@ describe('RaceResultService', () => {
         { provide: getModelToken(ResultClaim.name), useValue: mockClaimModel },
         { provide: RacesService, useValue: mockRacesService },
         { provide: REDIS_TOKEN, useValue: mockRedis },
+        {
+          provide: getModelToken(TimingAlertConfig.name),
+          useValue: mockTimingAlertConfigModel,
+        },
       ],
     }).compile();
 

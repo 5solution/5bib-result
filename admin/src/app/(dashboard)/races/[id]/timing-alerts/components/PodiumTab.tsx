@@ -8,17 +8,25 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { useRouter, useParams } from 'next/navigation';
+import { ArrowRight, Info } from 'lucide-react';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { getPodium, type PodiumCourse } from '@/lib/timing-alert-api';
 
 export function PodiumTab({ raceId }: { raceId: string }) {
+  const router = useRouter();
+  const routeParams = useParams();
+  const linkRaceId = String(
+    (routeParams as { id?: string }).id ?? raceId,
+  );
   const podium = useQuery({
     queryKey: ['podium', raceId],
     queryFn: () => getPodium(raceId),
@@ -43,9 +51,41 @@ export function PodiumTab({ raceId }: { raceId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* F-008 v2 BR-CC2-31 — Deprecation banner (30-day window). Middleware
+          redirect /timing-alerts/podium → /awards already covers bookmarks. */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border px-4 py-3"
+        style={{
+          background: '#FEF3C7',
+          borderColor: '#FCD34D',
+          color: '#92400E',
+        }}
+        role="status"
+        aria-live="polite"
+        data-testid="f008-v2-podium-deprecation-banner"
+      >
+        <div className="flex items-start gap-2.5 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <strong className="font-bold">Trang này sẽ được thay thế.</strong>{' '}
+            Tab <strong>Trao giải</strong> đã được chuyển thành tab riêng trên
+            shell race-ops 9-tab.
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5 border-amber-700 bg-white text-amber-900 hover:bg-amber-100"
+          onClick={() => router.push(`/races/${linkRaceId}/awards`)}
+        >
+          Chuyển ngay
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
       <Card className="border-amber-200 bg-amber-50">
         <CardContent className="p-4 text-sm">
-          <p className="font-semibold">🏆 Top 10 per course</p>
+          <p className="font-semibold">Top 10 per course</p>
           <p className="mt-1 text-stone-700">
             BTC chuẩn bị trao giải. Top 10 cập nhật mỗi 60 giây từ
             race_results MongoDB. DNF/DNS/DSQ đã filter (rank ≥ 900000).

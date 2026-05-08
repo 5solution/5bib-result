@@ -36,7 +36,10 @@ export function RaceOpsHeader({ race, badges }: RaceOpsHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/85 backdrop-blur-md">
+    <header
+      data-race-ops-shell-header
+      className="sticky top-0 z-30 border-b border-stone-200 bg-white/85 backdrop-blur-md"
+    >
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 pb-0 pt-3 sm:px-6">
         <div className="flex items-center justify-between gap-3">
           <Breadcrumb

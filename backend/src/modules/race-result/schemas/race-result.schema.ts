@@ -100,6 +100,15 @@ export class RaceResult {
   @Prop() email?: string;
   @Prop() avatarUrl?: string;
 
+  /**
+   * F-010 BR-FC-05/07 — DNS sub-state admin manual flag.
+   * Default false. Admin set true when athlete có evidence qua start mat
+   * (photo/manual) nhưng chip không ghi nhận → DNS_CHIP_FAIL sub-state.
+   * Optional, default = backward-compat existing 94K docs.
+   */
+  @Prop({ default: false })
+  dnsChipFail?: boolean;
+
   @Prop() syncedAt: Date;
 
   created_at: Date;

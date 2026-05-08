@@ -284,6 +284,101 @@ describe('CourseMapService — Adversarial Probe (QC Phase 3)', () => {
     );
   });
 
+  // ─── TD-F006-11: billion-laughs XML entity expansion ─────────────
+
+  it('TD-F006-11: billion-laughs entity expansion → does NOT cause exponential blowup', async () => {
+    // Classic XML bomb. If the parser naively expands &lol9;, memory/CPU
+    // explodes (10^9 expansions). @xmldom/xmldom by default does NOT
+    // expand recursive internal entities — we verify the call either
+    // rejects with BadRequestException (parse error / invalid GPX) OR
+    // resolves quickly (<5s) without consuming exponential memory.
+    const billionLaughs = `<?xml version="1.0"?>
+<!DOCTYPE lolz [
+  <!ENTITY lol "lol">
+  <!ENTITY lol1 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+  <!ENTITY lol2 "&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;&lol1;">
+  <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+  <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
+  <!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;">
+  <!ENTITY lol6 "&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;">
+  <!ENTITY lol7 "&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;">
+  <!ENTITY lol8 "&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;">
+  <!ENTITY lol9 "&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;">
+]>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>&lol9;</name><trkseg>
+    <trkpt lat="20.9" lon="105.8"></trkpt>
+    <trkpt lat="20.95" lon="105.85"></trkpt>
+  </trkseg></trk>
+</gpx>`;
+
+    const start = Date.now();
+    let outcome: 'resolved' | 'rejected' = 'rejected';
+    try {
+      // Either: BadRequestException (preferred) OR resolves with finite track.
+      // What we MUST avoid is a multi-second hang or OOM crash.
+      const r = await Promise.race([
+        service
+          .parseGpxOrKml(Buffer.from(billionLaughs), 'billion-laughs.gpx')
+          .then((res) => {
+            outcome = 'resolved';
+            return res;
+          }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('TIMEOUT_5S')), 5000),
+        ),
+      ]);
+      // If we got here, parser resolved within 5s — the GPX has valid track
+      // points so a successful parse is acceptable. Just assert finite shape.
+      expect(r.gpxParsed.trackPoints).toBeGreaterThanOrEqual(2);
+    } catch (err) {
+      // Acceptable failures: BadRequestException OR our own TIMEOUT marker
+      // (which would itself indicate a problem — fail loudly).
+      if ((err as Error).message === 'TIMEOUT_5S') {
+        throw new Error(
+          'billion-laughs took >5s — parser may be expanding entities',
+        );
+      }
+      expect(err).toBeInstanceOf(BadRequestException);
+    }
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(5000);
+    // Sanity assertion so unused-var lints don't strip outcome
+    expect(['resolved', 'rejected']).toContain(outcome);
+  });
+
+  // ─── TD-F006-12: 10MB-exact boundary ─────────────────────────────
+
+  it('TD-F006-12: 10MB exact buffer parses successfully (BR-CM-01 boundary)', async () => {
+    // Build a GPX exactly 10 * 1024 * 1024 bytes long. Strategy:
+    //  1. Start with valid header + 2 trkpts (parser-valid baseline).
+    //  2. Pad an XML comment with spaces until the total is exactly 10MB.
+    //  3. Close the GPX.
+    const TEN_MB = 10 * 1024 * 1024;
+    const header = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><trkseg>
+    <trkpt lat="20.9" lon="105.8"></trkpt>
+    <trkpt lat="20.95" lon="105.85"></trkpt>
+  </trkseg></trk>
+  <!-- pad:`;
+    const footer = `-->
+</gpx>`;
+    const remaining = TEN_MB - Buffer.byteLength(header) - Buffer.byteLength(footer);
+    // ASCII spaces are 1 byte each → exact-byte padding without re-encoding.
+    expect(remaining).toBeGreaterThan(0);
+    const pad = ' '.repeat(remaining);
+    const xml = header + pad + footer;
+    const buf = Buffer.from(xml, 'utf-8');
+    expect(buf.byteLength).toBe(TEN_MB);
+
+    // CourseMapService.parseGpxOrKml does not enforce the 10MB cap itself
+    // (controller-level Multer cap does). The boundary test verifies the
+    // service can still parse a buffer of exactly 10MB without crashing.
+    const parsed = await service.parseGpxOrKml(buf, 'big.gpx');
+    expect(parsed.gpxParsed.trackPoints).toBe(2);
+  }, 15_000);
+
   // ─── Public response leak audit ─────────────────────────────────
 
   it('Public map-data response excludes apiUrl/importStatus (course internals)', async () => {

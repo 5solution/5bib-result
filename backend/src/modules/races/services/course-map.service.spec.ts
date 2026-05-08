@@ -125,6 +125,18 @@ describe('CourseMapService', () => {
     s3SendSpy = jest
       .spyOn(S3Client.prototype, 'send')
       .mockImplementation(async () => ({}) as never);
+
+    // BR-CM-11b — computeMapData calls global fetch() server-side to inline
+    // simplified GeoJSON. Default to a benign 404 so existing tests don't
+    // accidentally hit the network; specific tests override.
+    jest.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        ({
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+        }) as Response,
+    );
   });
 
   afterEach(() => {
@@ -277,6 +289,104 @@ describe('CourseMapService', () => {
       );
       expect(r.unmatchedKeys).toEqual(['TM2']);
     });
+
+    // ─── BR-CM-04b normalized-prefix matching ────────────────────────
+    describe('BR-CM-04b normalized-prefix (Vietnamese race-day naming)', () => {
+      it('"START 42" waypoint matches "Start" checkpoint via L2.5 strip', () => {
+        const r = service.matchWaypoints(
+          [{ name: 'START 42', lat: 10, lng: 20 }],
+          [{ key: 'Start' }],
+        );
+        expect(r.matched).toHaveLength(1);
+        expect(r.matched[0].lat).toBe(10);
+        expect(r.unmatchedKeys).toHaveLength(0);
+      });
+
+      it('"FINISH 42K" waypoint matches "Finish" checkpoint via L2.5 strip', () => {
+        const r = service.matchWaypoints(
+          [{ name: 'FINISH 42K', lat: 11, lng: 21 }],
+          [{ key: 'Finish' }],
+        );
+        expect(r.matched).toHaveLength(1);
+        expect(r.matched[0].lat).toBe(11);
+      });
+
+      it('"FINISH" waypoint still matches "Finish" via L2 (no strip needed)', () => {
+        const r = service.matchWaypoints(
+          [{ name: 'FINISH', lat: 12, lng: 22 }],
+          [{ key: 'Finish' }],
+        );
+        expect(r.matched).toHaveLength(1);
+        expect(r.matched[0].matchType).toBe('case-insensitive');
+      });
+
+      it('CRITICAL false-positive guard: "TP42.1.2" must NOT match "TM1" (different stem)', () => {
+        const r = service.matchWaypoints(
+          [{ name: 'TP42.1.2', lat: 1, lng: 2 }],
+          [{ key: 'TM1' }],
+        );
+        expect(r.matched).toHaveLength(0);
+        expect(r.unmatchedKeys).toEqual(['TM1']);
+      });
+
+      it('CRITICAL false-positive guard: "Cp1" must NOT match "TM1" (different stem)', () => {
+        const r = service.matchWaypoints(
+          [{ name: 'Cp1', lat: 1, lng: 2 }],
+          [{ key: 'TM1' }],
+        );
+        expect(r.matched).toHaveLength(0);
+      });
+
+      it('does NOT strip from undelimited names: "TM10" stays "TM10" (not "TM"), so no L2.5 match against "TM1"', () => {
+        // The stripDistanceSuffix regex requires a separator (space/_/-) before
+        // the digits. "TM10" has no separator → returned unchanged. cp.key
+        // "TM1" stem is "TM1" (also no separator → unchanged) → no fuzzy match.
+        const r = service.matchWaypoints(
+          [{ name: 'TM10', lat: 1, lng: 2 }],
+          [{ key: 'TM1' }],
+        );
+        expect(r.matched).toHaveLength(0);
+      });
+
+      it('full Vietnamese vendor scenario: 7 waypoints from real GPX, 2 auto-match Start/Finish', () => {
+        const r = service.matchWaypoints(
+          [
+            { name: 'START 42', lat: 10, lng: 20 },
+            { name: 'FINISH', lat: 11, lng: 21 },
+            { name: 'TP42.1.2', lat: 12, lng: 22 },
+            { name: 'TP42.2.2', lat: 13, lng: 23 },
+            { name: 'TP42.3.2', lat: 14, lng: 24 },
+            { name: 'TP42.4.2', lat: 15, lng: 25 },
+            { name: 'TP42.5.2', lat: 16, lng: 26 },
+          ],
+          [
+            { key: 'Start' },
+            { key: 'TM1' },
+            { key: 'TM2' },
+            { key: 'TM3' },
+            { key: 'TM4' },
+            { key: 'TM5' },
+            { key: 'Finish' },
+          ],
+        );
+        // Start + Finish auto-match, TM1-TM5 unmatched (manual drag required)
+        expect(r.matched.map((m) => m.key).sort()).toEqual(['Finish', 'Start']);
+        expect(r.unmatchedKeys.sort()).toEqual(['TM1', 'TM2', 'TM3', 'TM4', 'TM5']);
+      });
+
+      it('does NOT double-assign a single waypoint to multiple checkpoints', () => {
+        // If two checkpoints both fuzzy-match same waypoint, only the first
+        // wins (usedWpIdx guard). Prevents Start + StartLine both grabbing
+        // "START 42" lat/lng.
+        const r = service.matchWaypoints(
+          [{ name: 'START 42', lat: 10, lng: 20 }],
+          [{ key: 'Start' }, { key: 'StartAlt' }],
+        );
+        expect(r.matched).toHaveLength(1);
+        expect(r.matched[0].key).toBe('Start');
+        expect(r.unmatchedKeys).toEqual(['StartAlt']);
+      });
+    });
   });
 
   // ─── uploadGpxToS3 ───────────────────────────────────────────────
@@ -377,6 +487,50 @@ describe('CourseMapService', () => {
       expect(r.hasGpx).toBe(true);
       expect(r.gpxSimplifiedUrl).toBe('https://s3/simplified.geojson');
       expect(r.bounds?.north).toBe(21);
+    });
+
+    it('inlines geoJson in response when S3 fetch succeeds (BR-CM-11b — bypasses CORS)', async () => {
+      const fakeGeoJson = {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: [[105, 21], [106, 22]] },
+          },
+        ],
+      };
+      (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => fakeGeoJson,
+      } as unknown as Response);
+
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set.mockResolvedValue('OK');
+      mockModel.findById.mockReturnValue({
+        lean: () => ({ exec: () => Promise.resolve(baseRace('pre_race')) }),
+      });
+
+      const r = await service.getCachedMapData('race1', 'c1');
+      expect(r.hasGpx).toBe(true);
+      expect(r.geoJson).toEqual(fakeGeoJson);
+      // Backward compat: gpxSimplifiedUrl is still present so frontend can
+      // fall back to direct fetch if geoJson is somehow stripped.
+      expect(r.gpxSimplifiedUrl).toBe('https://s3/simplified.geojson');
+    });
+
+    it('omits geoJson when S3 fetch fails (frontend falls back to gpxSimplifiedUrl)', async () => {
+      // Default mock returns 404 — this validates the graceful fallback path.
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set.mockResolvedValue('OK');
+      mockModel.findById.mockReturnValue({
+        lean: () => ({ exec: () => Promise.resolve(baseRace('pre_race')) }),
+      });
+
+      const r = await service.getCachedMapData('race1', 'c1');
+      expect(r.hasGpx).toBe(true);
+      expect(r.geoJson).toBeUndefined();
+      expect(r.gpxSimplifiedUrl).toBe('https://s3/simplified.geojson');
     });
 
     it('serves cached payload on hit without querying Mongo', async () => {
