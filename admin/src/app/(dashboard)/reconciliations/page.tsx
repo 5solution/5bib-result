@@ -463,7 +463,10 @@ export default function ReconciliationsPage() {
         method: "DELETE",
         headers: authHeaders(token!).headers,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // RFC 7231 idempotent DELETE — 404 nghĩa là recon đã không còn,
+      // mục tiêu đã đạt. Treat như success thay vì lỗi để UX không gây hiểu nhầm
+      // khi user click nhiều lần hoặc multiple tabs cùng xóa.
+      if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
       toast.success(`Đã xóa đối soát của ${deleteTarget.tenant_name}`);
       setDeleteTarget(null);
       fetchItems();
