@@ -192,6 +192,14 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - **Access**: codebase pattern uses bucket policy for public read (Block Public Access aware), not per-object ACL. Original.gpx technically accessible if path known but not indexed via UI; simplified.geojson fetched directly by frontend Leaflet renderer. No PII in GPX → acceptable risk for MVP (Clarification 5).
 - **CRITICAL**: do NOT mix `courses/` and `result-images/` prefixes — lifecycle rule 1 would delete GPX files in 24h.
 
+### Lifecycle rule 3 — Result Kiosk Sponsor Logos (F-017)
+- **Prefix**: `result-kiosk-sponsors/`
+- **Expiration**: NONE (keep indefinitely — sponsor logos are race-asset artifacts referenced by display config)
+- **Path convention**: `result-kiosk-sponsors/{mongoRaceId}/{randomHex8}.{ext}` where ext ∈ {png, jpeg, webp, svg}.
+- **Max size**: 2MB per logo. Max 5 logos per race (enforced by `ResultKioskDisplayService.appendSponsorLogo`).
+- **Reason**: Result Kiosk display config holds public sponsor logos shown on the kiosk result card. Same lifecycle as `courses/` — keep indefinitely so an admin can still reference past races' branding when cloning configs.
+- **CRITICAL**: do NOT mix `result-kiosk-sponsors/` with `result-images/` 24h TTL — sponsor logos must persist.
+
 
 ## Development Rules
 

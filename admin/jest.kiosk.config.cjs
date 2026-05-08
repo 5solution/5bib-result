@@ -21,12 +21,13 @@ module.exports = {
   rootDir: __dirname,
   testEnvironment: 'node',
   // F-013: only kiosk.types.spec.ts is runnable without @testing-library/react.
-  // F-015 EXTEND: also matches checkin.types.spec.ts (BR-CK-18 runtime guard).
+  // F-017 EXTEND: also matches result-display-config.spec.ts (pure TS runtime guard).
+  // F-015 checkin.types regex REMOVED 2026-05-08 — Check-In Kiosk feature scrapped.
   // The component/hook specs (BibNumberPad / KioskResultCard / KioskIdleOverlay /
-  // useKioskIdle / useKioskSound / F-015 hooks) require RTL + jsdom which are NOT
-  // installed in admin. Switch this regex to '.*\\.spec\\.(ts|tsx)$' once admin
-  // gains the test stack (TD-F013-TESTSTACK).
-  testRegex: '.*(kiosk|checkin)\\.types\\.spec\\.ts$',
+  // useKioskIdle / useKioskSound) require RTL + jsdom which are NOT installed
+  // in admin. Switch this regex to '.*\\.spec\\.(ts|tsx)$' once admin gains the
+  // test stack (TD-F013-TESTSTACK).
+  testRegex: '.*(kiosk\\.types\\.spec\\.ts|result-display-config\\.spec\\.ts)$',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
   transform: {
     '^.+\\.tsx?$': [

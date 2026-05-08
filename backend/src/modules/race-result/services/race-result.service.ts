@@ -23,6 +23,11 @@ import { parseDistanceKm } from './badge.service';
 import { RaceResultApiService } from './race-result-api.service';
 import { RaceResultApiItem } from '../types/race-result-api.types';
 import * as crypto from 'crypto';
+// F-017 — cross-module DI for chip lookup. Race-day flow is MongoDB-only:
+// ChipConfigService.findByMongoId (chip_race_configs) → ChipMappingService.findByChipId
+// (chip_mappings) → existing getAthleteDetail (race_results). NEVER live MySQL.
+import { ChipConfigService } from '../../chip-verification/services/chip-config.service';
+import { ChipMappingService } from '../../chip-verification/services/chip-mapping.service';
 
 @Injectable()
 export class RaceResultService {
@@ -48,7 +53,109 @@ export class RaceResultService {
      */
     @InjectModel(TimingAlertConfig.name)
     private readonly timingAlertConfigModel: Model<TimingAlertConfigDocument>,
+    /**
+     * F-017 — chip → BIB resolution at race-day. MongoDB-only path.
+     * ChipConfigService.findByMongoId reads chip_race_configs (Mongo).
+     * ChipMappingService.findByChipId reads chip_mappings (Mongo).
+     */
+    private readonly chipConfigService: ChipConfigService,
+    private readonly chipMappingService: ChipMappingService,
   ) { }
+
+  /**
+   * F-017 BR-RK-CHIP — Resolve chip → bib → athlete envelope.
+   *
+   * MongoDB-only race-day flow (Danny clarification 2026-05-08):
+   *   [1] ChipConfigService.findByMongoId(mongoRaceId) → chip_race_configs doc
+   *       returns mysql_race_id (sharding key in chip_mappings docs).
+   *       NULL → 404 'race-not-mapped'.
+   *   [2] ChipMappingService.findByChipId(mysql_race_id, normalizedChipId)
+   *       → chip_mappings doc. NULL/deleted → 404 'chip-not-found'.
+   *       status === 'DISABLED' → 410 'chip-disabled'.
+   *       returns bib_number.
+   *   [3] this.getAthleteDetail(mongoRaceId, bib) → race_results doc.
+   *       NULL → 404 'athlete-not-found'.
+   *
+   * Returns the same public-safe envelope as F-013 /athlete/:raceId/:bib
+   * with `bib` echoed at top level for kiosk parsing convenience.
+   */
+  async lookupByChip(mongoRaceId: string, rawChipId: string): Promise<{
+    bib: string | null;
+    data: Record<string, unknown> | null;
+    success: boolean;
+    message?: string;
+    errorCode?: string;
+  }> {
+    if (!mongoRaceId || !rawChipId) {
+      return { bib: null, data: null, success: false, errorCode: 'bad-request', message: 'Missing input' };
+    }
+
+    // BR-01: normalize chipId — UPPER + TRIM (per chip-verification convention).
+    const chipId = rawChipId.trim().toUpperCase();
+    if (!chipId) {
+      return { bib: null, data: null, success: false, errorCode: 'bad-request', message: 'Empty chipId' };
+    }
+
+    // [1] Mongo: chip_race_configs lookup by mongo_race_id link.
+    const cfg = await this.chipConfigService.findByMongoId(mongoRaceId);
+    if (!cfg) {
+      this.logger.warn(`[lookupByChip] race-not-mapped mongoRaceId=${mongoRaceId}`);
+      return {
+        bib: null,
+        data: null,
+        success: false,
+        errorCode: 'race-not-mapped',
+        message: 'Race chưa enable Chip Verify — vào tab Chip Verify để link mysql_race_id',
+      };
+    }
+    const mysqlRaceId = cfg.mysql_race_id;
+
+    // [2] Mongo: chip_mappings lookup.
+    const mapping = await this.chipMappingService.findByChipId(mysqlRaceId, chipId);
+    if (!mapping) {
+      return {
+        bib: null,
+        data: null,
+        success: false,
+        errorCode: 'chip-not-found',
+        message: `Chip ${chipId} chưa map BIB`,
+      };
+    }
+    if (mapping.status === 'DISABLED') {
+      return {
+        bib: mapping.bib_number,
+        data: null,
+        success: false,
+        errorCode: 'chip-disabled',
+        message: `Chip ${chipId} đã bị disable`,
+      };
+    }
+
+    const bib = mapping.bib_number;
+
+    // [3] Mongo: race_results lookup via existing getAthleteDetail (cache-aware).
+    const detail = await this.getAthleteDetail(mongoRaceId, bib);
+    if (!detail) {
+      return {
+        bib,
+        data: null,
+        success: false,
+        errorCode: 'athlete-not-found',
+        message: `BIB ${bib} chưa có data race result`,
+      };
+    }
+
+    // Strip internal fields (BR-RK-05 privacy guard — same scrub as
+    // /athlete/:raceId/:bib endpoint at controller level).
+    const { _id, editHistory, isManuallyEdited, ...publicData } = detail as typeof detail & {
+      _id?: string;
+      editHistory?: unknown[];
+      isManuallyEdited?: boolean;
+    };
+    void _id; void editHistory; void isManuallyEdited;
+
+    return { bib, data: publicData, success: true };
+  }
 
   /**
    * F-010 BR-FC-07 — Admin manual flag athlete as DNS_CHIP_FAIL.

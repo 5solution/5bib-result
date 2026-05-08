@@ -77,4 +77,57 @@ export const KIOSK_COPY = {
     label: 'Thoát Kiosk',
     title: 'Thoát chế độ Kiosk (Esc)',
   },
+  // F-017 — Chip scan flow
+  chip: {
+    waitingTitle: 'Vui lòng dí chip BIB vào đầu đọc',
+    waitingHint: 'Đầu đọc sẽ tự nhận chip — không cần bấm phím',
+    fallbackCta: 'Nhập BIB thủ công',
+    raceNotMappedTitle: 'Chip Verify chưa enable',
+    raceNotMappedBody:
+      'BTC cần vào tab Chip Verify → Enable + import chip mappings trước race-day để chế độ kiosk chip-scan hoạt động.',
+    chipNotFoundTitle: 'Chip chưa map BIB',
+    chipNotFoundBody: (chipId: string) =>
+      `Chip ${chipId} chưa được gán cho VĐV nào — kiểm tra danh sách mapping ở tab Chip Verify.`,
+    chipDisabledTitle: 'Chip bị disable',
+    chipDisabledBody: (bib: string) =>
+      `BIB ${bib} đã bị disable — liên hệ Race Director để xử lý.`,
+    operationalWarning:
+      '⚠️ Chip Verification chưa enable cho race này. Vào tab Chip Verify → Enable + import chip mappings trước race-day.',
+  },
+  // F-017 — Display config UI labels
+  config: {
+    cta: 'Cấu hình hiển thị',
+    title: 'Cấu hình hiển thị Result Kiosk',
+    presetLabel: 'Preset',
+    heroLabel: 'Khu vực Hero',
+    sectionsLabel: 'Section hiển thị',
+    themeLabel: 'Màu chủ đạo',
+    customMessageLabel: 'Tin nhắn tùy chỉnh',
+    sponsorLogosLabel: 'Logo nhà tài trợ',
+    soundLabel: 'Âm thanh',
+    idleLabel: 'Tự reset (giây)',
+    save: 'Lưu',
+    cancel: 'Huỷ',
+    preview: 'Xem trước',
+    presets: {
+      DEFAULT: 'Mặc định',
+      MINIMAL: 'Tối giản',
+      PREMIUM: 'Cao cấp',
+      CUSTOM: 'Tùy chỉnh',
+    },
+    heroChoices: {
+      'rank': 'Hạng chung cuộc',
+      'finish-time': 'Thời gian về đích',
+      'photo': 'Ảnh VĐV',
+    },
+    sections: {
+      rank: 'Hạng',
+      finishTime: 'Thời gian',
+      splits: 'Chặng',
+      sponsorBanner: 'Banner sponsor',
+      customMessage: 'Tin nhắn',
+      qrShare: 'QR chia sẻ (Phase 2)',
+      photo: 'Ảnh VĐV',
+    },
+  },
 } as const;

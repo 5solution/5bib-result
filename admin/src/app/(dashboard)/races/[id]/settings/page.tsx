@@ -98,6 +98,10 @@ export default function RaceSettingsPage() {
   const [loading, setLoading] = useState(true);
 
   const dirty = useDirtyFormPerSection();
+  // Destructure stable refs (useCallback inside hook) to avoid putting the
+  // whole `dirty` object literal in deps — its identity changes every render
+  // and causes infinite fetchRace → useEffect → setState loop.
+  const { clearAll: clearDirty, setDirty } = dirty;
 
   const fetchRace = useCallback(async () => {
     if (!token) return;
@@ -139,13 +143,13 @@ export default function RaceSettingsPage() {
         enablePrivateList: raceData.enablePrivateList ?? false,
         privateListLimit: raceData.privateListLimit ?? 20,
       });
-      dirty.clearAll();
+      clearDirty();
     } catch {
       toast.error('Không thể tải thông tin giải');
     } finally {
       setLoading(false);
     }
-  }, [token, raceId, dirty]);
+  }, [token, raceId, clearDirty]);
 
   useEffect(() => {
     fetchRace();

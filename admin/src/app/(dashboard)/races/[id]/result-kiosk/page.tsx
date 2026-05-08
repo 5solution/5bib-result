@@ -25,13 +25,23 @@ import { KioskModeProvider, useKioskContext } from './components/KioskModeProvid
 import { KioskTabBody } from './components/KioskTabBody';
 import { KioskBibInputScreen } from './components/KioskBibInputScreen';
 import { KioskResultScreen } from './components/KioskResultScreen';
+import { ChipScanWaitingScreen } from './components/ChipScanWaitingScreen';
 
 function KioskSurfaceSwitch({ raceId, raceTitle }: { raceId: string; raceTitle: string }) {
   const ctx = useKioskContext();
-  if (ctx.mode === 'admin') {
+  if (ctx.mode === 'admin' || ctx.mode === 'config-dialog') {
     return <KioskTabBody raceId={raceId} />;
   }
-  if (ctx.mode === 'bib-input') {
+  if (ctx.mode === 'chip-input') {
+    return (
+      <ChipScanWaitingScreen
+        raceTitle={raceTitle}
+        onChipScanned={(chipId) => void ctx.submitChip(chipId)}
+        onFallback={ctx.switchToFallback}
+      />
+    );
+  }
+  if (ctx.mode === 'bib-input-fallback' || ctx.mode === 'bib-input') {
     return <KioskBibInputScreen raceTitle={raceTitle} />;
   }
   return <KioskResultScreen />;

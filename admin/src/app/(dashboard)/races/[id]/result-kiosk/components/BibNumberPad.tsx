@@ -1,7 +1,13 @@
 'use client';
 
 /**
- * F-013 BR-RK-01 — Custom on-screen 4×3 number pad.
+ * F-013 BR-RK-01 / F-017 BR-AF-23 verbatim port — Manual BIB number pad
+ * (FALLBACK input — primary input on F-017 is RFID chip scanner).
+ *
+ * @deprecated Renamed in F-017 from `BibNumberPad` → `BibNumberPadFallback`.
+ *   Logic byte-for-byte preserved. Only the component name changed to
+ *   communicate that the chip-scan flow is now primary; the manual pad is
+ *   reserved for the (rare) cases where chip read fails or scanner is offline.
  *
  * Why custom (not native HTML `<input type="number">`)?
  *   - Native triggers OS keyboard inconsistently across iPad / Android tablets.
@@ -20,7 +26,7 @@ import { Delete, Eraser } from 'lucide-react';
 import { KIOSK_CONFIG } from '../kiosk.constant';
 import { KIOSK_COPY } from '../kiosk.microcopy';
 
-export interface BibNumberPadProps {
+export interface BibNumberPadFallbackProps {
   value: string;
   onAppend: (digit: string) => void;
   onBackspace: () => void;
@@ -29,16 +35,19 @@ export interface BibNumberPadProps {
   disabled?: boolean;
 }
 
+/** @deprecated Use {@link BibNumberPadFallbackProps}. Kept for type compat. */
+export type BibNumberPadProps = BibNumberPadFallbackProps;
+
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 
-export function BibNumberPad({
+export function BibNumberPadFallback({
   value,
   onAppend,
   onBackspace,
   onClear,
   onSubmit,
   disabled,
-}: BibNumberPadProps) {
+}: BibNumberPadFallbackProps) {
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
       if (disabled) return;
@@ -148,3 +157,10 @@ export function BibNumberPad({
     </div>
   );
 }
+
+/**
+ * @deprecated Use {@link BibNumberPadFallback}. F-017 RENAME for chip-scan-first
+ * UX. Logic identical (BR-AF-23 byte-for-byte preserved). Compat alias retained
+ * during migration window so any stray imports still resolve.
+ */
+export const BibNumberPad = BibNumberPadFallback;

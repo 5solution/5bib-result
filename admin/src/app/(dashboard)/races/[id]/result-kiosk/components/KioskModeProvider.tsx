@@ -1,21 +1,21 @@
 'use client';
 
 /**
- * F-013 — Kiosk-mode context provider.
+ * F-013 + F-017 — Kiosk-mode context provider.
  *
- * Single source of truth for the 3-surface state machine:
- *   admin → bib-input → result → bib-input → ... (until exit)
+ * F-017 EXTENDED state machine (4 active surfaces):
+ *   admin → chip-input → result → chip-input → ... (until exit)
+ *           ↘ bib-input-fallback (manual pad escape hatch)
  *
  * Provides:
- *   - mode: 'admin' | 'bib-input' | 'result'
- *   - bib: current input string
+ *   - mode: 'admin' | 'chip-input' | 'bib-input-fallback' | 'result' | 'config-dialog'
+ *   - bib: current input string (manual pad)
+ *   - lastChipId: last scanned chip (debug + UI)
  *   - result: current envelope payload (or null)
- *   - resultStatus: 'success' | 'not-found' | 'data-error' | null
+ *   - resultKind: 'found' | 'not-found' | 'chip-disabled' | 'race-not-mapped' | 'athlete-not-found' | 'data-error' | 'network-error' | null
  *   - sound on/off (delegated to useKioskSound)
- *   - enterKiosk() / exitKiosk() / submitBib() / reset() / appendDigit() / clearBib() / backspace()
- *
- * Hooks (`useKioskFullscreen`, `useKioskSound`, `useResultLookup`) are wired
- * here so child components consume one provider instead of orchestrating four.
+ *   - enterKiosk() / exitKiosk() / submitBib() / submitChip() / switchToFallback() /
+ *     resetToInput() / appendDigit() / clearBib() / backspace()
  */
 
 import {
@@ -29,15 +29,25 @@ import {
 import { useKioskFullscreen } from '../hooks/useKioskFullscreen';
 import { useKioskSound } from '../hooks/useKioskSound';
 import { useResultLookup, type LookupOutcome } from '../hooks/useResultLookup';
+import { useChipScan, type ChipScanOutcome } from '../hooks/useChipScan';
 import { KIOSK_CONFIG } from '../kiosk.constant';
 import type { AthleteDetailEnvelope, KioskMode } from '../kiosk.types';
+
+/**
+ * F-017 — extended outcome union covers F-013 lookup outcomes + new
+ * chip-specific outcomes. Discriminated union for KioskResultScreen render.
+ */
+export type ResultKind =
+  | LookupOutcome['kind']
+  | ChipScanOutcome['kind'];
 
 interface KioskContextValue {
   // State
   mode: KioskMode;
   bib: string;
+  lastChipId: string | null;
   result: AthleteDetailEnvelope | null;
-  resultKind: LookupOutcome['kind'] | null;
+  resultKind: ResultKind | null;
   loading: boolean;
   // Sound
   soundEnabled: boolean;
@@ -51,7 +61,16 @@ interface KioskContextValue {
   enterKiosk: () => Promise<void>;
   exitKiosk: () => Promise<void>;
   submitBib: () => Promise<void>;
+  /** F-017 — chip scan submission. Called by ChipScanInput.onScan. */
+  submitChip: (chipId: string) => Promise<void>;
+  /** F-017 — switch from chip-input to manual BIB number pad (BR-AF-23 fallback). */
+  switchToFallback: () => void;
+  /** F-017 — switch back from fallback to chip-input. */
+  switchToChipInput: () => void;
   resetToInput: () => void;
+  /** F-017 — open / close display config dialog from admin tab body. */
+  openConfigDialog: () => void;
+  closeConfigDialog: () => void;
 }
 
 const Ctx = createContext<KioskContextValue | null>(null);
@@ -70,12 +89,14 @@ interface KioskModeProviderProps {
 export function KioskModeProvider({ raceId, children }: KioskModeProviderProps) {
   const [mode, setMode] = useState<KioskMode>('admin');
   const [bib, setBibState] = useState<string>('');
+  const [lastChipId, setLastChipId] = useState<string | null>(null);
   const [result, setResult] = useState<AthleteDetailEnvelope | null>(null);
-  const [resultKind, setResultKind] = useState<LookupOutcome['kind'] | null>(null);
+  const [resultKind, setResultKind] = useState<ResultKind | null>(null);
 
   const fullscreen = useKioskFullscreen();
   const sound = useKioskSound();
   const lookup = useResultLookup({ raceId });
+  const chipScan = useChipScan({ raceId });
 
   const setBib = useCallback((next: string) => {
     // BR-RK-01: digits only, max 6 chars
@@ -104,9 +125,11 @@ export function KioskModeProvider({ raceId, children }: KioskModeProviderProps) 
     sound.ensureAudioContext();
     await fullscreen.enterFullscreen();
     setBibState('');
+    setLastChipId(null);
     setResult(null);
     setResultKind(null);
-    setMode('bib-input');
+    // F-017 — chip-input is the primary entry mode (was 'bib-input' in F-013).
+    setMode('chip-input');
   }, [fullscreen, sound]);
 
   const exitKiosk = useCallback(async () => {
@@ -119,10 +142,58 @@ export function KioskModeProvider({ raceId, children }: KioskModeProviderProps) 
 
   const resetToInput = useCallback(() => {
     setBibState('');
+    setLastChipId(null);
     setResult(null);
     setResultKind(null);
-    setMode('bib-input');
+    // F-017 — return to chip-input by default (primary mode).
+    setMode('chip-input');
   }, []);
+
+  const switchToFallback = useCallback(() => {
+    setBibState('');
+    setMode('bib-input-fallback');
+  }, []);
+
+  const switchToChipInput = useCallback(() => {
+    setBibState('');
+    setMode('chip-input');
+  }, []);
+
+  const openConfigDialog = useCallback(() => {
+    setMode('config-dialog');
+  }, []);
+
+  const closeConfigDialog = useCallback(() => {
+    setMode('admin');
+  }, []);
+
+  const submitChip = useCallback(
+    async (chipId: string) => {
+      const trimmed = chipId.trim();
+      if (!trimmed) return;
+      setLastChipId(trimmed);
+      const outcome = await chipScan.mutateAsync(trimmed);
+      setResultKind(outcome.kind);
+      if (outcome.kind === 'found') {
+        setBibState(outcome.bib);
+        setResult(outcome.envelope);
+        sound.beepSuccess();
+        setMode('result');
+      } else if (outcome.kind === 'network-error') {
+        sound.beepError();
+        // stay on chip-input
+      } else {
+        // chip-not-found / chip-disabled / race-not-mapped / athlete-not-found / data-error
+        if ('bib' in outcome && typeof outcome.bib === 'string') {
+          setBibState(outcome.bib);
+        }
+        setResult(null);
+        sound.beepError();
+        setMode('result');
+      }
+    },
+    [chipScan, sound],
+  );
 
   const submitBib = useCallback(async () => {
     if (!bib) return;
@@ -150,9 +221,10 @@ export function KioskModeProvider({ raceId, children }: KioskModeProviderProps) 
     () => ({
       mode,
       bib,
+      lastChipId,
       result,
       resultKind,
-      loading: lookup.isPending,
+      loading: lookup.isPending || chipScan.isPending,
       soundEnabled: sound.enabled,
       toggleSound: sound.toggle,
       appendDigit,
@@ -162,14 +234,21 @@ export function KioskModeProvider({ raceId, children }: KioskModeProviderProps) 
       enterKiosk,
       exitKiosk,
       submitBib,
+      submitChip,
+      switchToFallback,
+      switchToChipInput,
       resetToInput,
+      openConfigDialog,
+      closeConfigDialog,
     }),
     [
       mode,
       bib,
+      lastChipId,
       result,
       resultKind,
       lookup.isPending,
+      chipScan.isPending,
       sound.enabled,
       sound.toggle,
       appendDigit,
@@ -179,7 +258,12 @@ export function KioskModeProvider({ raceId, children }: KioskModeProviderProps) 
       enterKiosk,
       exitKiosk,
       submitBib,
+      submitChip,
+      switchToFallback,
+      switchToChipInput,
       resetToInput,
+      openConfigDialog,
+      closeConfigDialog,
     ],
   );
 

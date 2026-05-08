@@ -17,7 +17,7 @@
 
 import { Volume2, VolumeX } from 'lucide-react';
 import { useKioskContext } from './KioskModeProvider';
-import { BibNumberPad } from './BibNumberPad';
+import { BibNumberPadFallback } from './BibNumberPad';
 import { KioskExitButton } from './KioskExitButton';
 import { KIOSK_COPY } from '../kiosk.microcopy';
 import { KIOSK_CONFIG } from '../kiosk.constant';
@@ -65,7 +65,7 @@ export function KioskBibInputScreen({ raceTitle, courseName }: KioskBibInputScre
         >
           {ctx.bib || <span className="opacity-30">{KIOSK_COPY.input.placeholder}</span>}
         </div>
-        <BibNumberPad
+        <BibNumberPadFallback
           value={ctx.bib}
           onAppend={ctx.appendDigit}
           onBackspace={ctx.backspace}

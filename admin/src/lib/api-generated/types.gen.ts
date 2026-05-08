@@ -509,19 +509,19 @@ export type CreateTimingAlertConfigDto = {
      */
     enabled?: boolean;
     /**
-     * F-010 BR-FC-08 — Course type preset (ROAD | TRAIL | ULTRA).
+     * F-010 BR-FC-08 — Course type preset. Indicator only — admin chọn preset → auto-fill 4 values, có thể override.
      */
     course_type?: 'ROAD' | 'TRAIL' | 'ULTRA';
     /**
-     * F-010 BR-FC-08/09 — Pace buffer (1.01-2.00). Defaults: ROAD=1.10, TRAIL=1.35, ULTRA=1.50.
+     * F-010 BR-FC-08/09 — Pace buffer multiplier dùng trong MissDetector. Range 1.01-2.00. Defaults: ROAD=1.10, TRAIL=1.35, ULTRA=1.50.
      */
     pace_buffer?: number;
     /**
-     * F-010 BR-FC-10/11 — Pace alert threshold (0.20-0.95). Defaults: ROAD=0.80, TRAIL=0.45, ULTRA=0.40.
+     * F-010 BR-FC-10/11 — isPaceAlert threshold. Range 0.20-0.95. Defaults: ROAD=0.80, TRAIL=0.45, ULTRA=0.40.
      */
     pace_alert_threshold?: number;
     /**
-     * F-010 BR-FC-15/16 — Confidence multiplier (0.05-1.00). Default 0.20.
+     * F-010 BR-FC-15/16 — Confidence multiplier cho ProjectedRankService. Range 0.05-1.00. Default 0.20.
      */
     confidence_multiplier?: number;
 };
@@ -536,36 +536,22 @@ export type TimingAlertConfigResponseDto = {
     enabled_by_user_id: string | null;
     enabled_at: string | null;
     last_polled_at: string | null;
-    /** F-010 — null nếu admin chưa chọn preset */
-    course_type: 'ROAD' | 'TRAIL' | 'ULTRA' | null;
-    /** F-010 BR-FC-08/09 — pace buffer multiplier (1.01-2.00) */
+    /**
+     * F-010 — course type preset, null nếu admin chưa chọn preset
+     */
+    course_type: 'ROAD' | 'TRAIL' | 'ULTRA';
+    /**
+     * F-010 BR-FC-08/09 — pace buffer multiplier (1.01-2.00)
+     */
     pace_buffer: number;
-    /** F-010 BR-FC-10/11 — pace alert threshold (0.20-0.95) */
+    /**
+     * F-010 BR-FC-10/11 — pace alert threshold (0.20-0.95)
+     */
     pace_alert_threshold: number;
-    /** F-010 BR-FC-15/16 — confidence multiplier (0.05-1.00) */
+    /**
+     * F-010 BR-FC-15/16 — confidence multiplier cho projected rank (0.05-1.00)
+     */
     confidence_multiplier: number;
-};
-
-/**
- * F-010 BR-FC-05/06/07 — DNS sub-state breakdown (computed at query time).
- */
-export type DnsBreakdownDto = {
-    total: number;
-    notPicked: number;
-    noStart: number;
-    chipFail: number;
-};
-
-/**
- * F-010 BR-FC-07 — PATCH body cho /api/race-results/:id/dns-chip-fail.
- */
-export type UpdateDnsChipFailDto = {
-    dnsChipFail: boolean;
-};
-
-export type UpdateDnsChipFailResponseDto = {
-    success: boolean;
-    dnsChipFail: boolean;
 };
 
 export type AlertActionDto = {
@@ -824,6 +810,73 @@ export type SummaryCardsDto = {
     missRate: number;
 };
 
+export type ThroughputBucketDto = {
+    /**
+     * ISO timestamp marking the START of this 5-min bucket
+     */
+    timestamp: string;
+    /**
+     * Distinct bibs that finished within this 5-min bucket
+     */
+    finishersCount: number;
+};
+
+export type CheckpointHealthDto = {
+    /**
+     * Checkpoint key (Start, TM1, Finish, ...)
+     */
+    key: string;
+    /**
+     * Display name (e.g. "CP1 - Suoi Vang")
+     */
+    name: string;
+    /**
+     * Distinct bibs đã passed checkpoint
+     */
+    current: number;
+    /**
+     * Expected count tại checkpoint (linear ratio = registered × cp.distanceKm/course.distanceKm; fallback flat course.registered)
+     */
+    expected: number;
+    /**
+     * 0..100 ratio current/expected (clamp + 1dp)
+     */
+    healthPercent: number;
+};
+
+export type CourseHealthDto = {
+    courseId: string;
+    courseName: string;
+    /**
+     * Distinct bibs registered in this course (denominator base)
+     */
+    totalAthletes: number;
+    /**
+     * 0..100 average of checkpoint healthPercents (1dp)
+     */
+    overallPercent: number;
+    checkpoints: Array<CheckpointHealthDto>;
+};
+
+export type DnsBreakdownDto = {
+    /**
+     * Tổng DNS = notPicked + noStart + chipFail (sum of sub-states)
+     */
+    total: number;
+    /**
+     * F-010 BR-FC-05 — Athletes có racekitPickedUp=false AND no Start time. Indicator: chưa nhận racekit / no-show.
+     */
+    notPicked: number;
+    /**
+     * F-010 BR-FC-05 — Athletes có racekit (or unflagged) AND no Start time AND !dnsChipFail. Indicator: đã nhận BIB nhưng không xuất phát.
+     */
+    noStart: number;
+    /**
+     * F-010 BR-FC-05/07 — Athletes có dnsChipFail=true admin flag. Indicator: vendor chip fail/timing equipment issue.
+     */
+    chipFail: number;
+};
+
 export type DashboardSnapshotResponseDto = {
     race: RaceMetaDto;
     raceStats: RaceStatsDto;
@@ -839,13 +892,29 @@ export type DashboardSnapshotResponseDto = {
      */
     summary: SummaryCardsDto;
     /**
+     * F-008 BR-CC-02 — Athletes registered nhưng KHÔNG có Start chiptime
+     */
+    dnsCount: number;
+    /**
+     * F-008 BR-CC-03 — Last 60 min finisher rate (12 buckets × 5 min, oldest → newest)
+     */
+    throughputHistory: Array<ThroughputBucketDto>;
+    /**
+     * F-008 BR-CC-05 — Per-course × per-checkpoint health matrix (4 courses × N CPs grid)
+     */
+    checkpointHealthMatrix: Array<CourseHealthDto>;
+    /**
      * ISO timestamp khi snapshot generated
      */
     generatedAt: string;
     /**
-     * F-010 BR-FC-05/06 — DNS sub-state breakdown.
+     * F-008 v2 BR-CC2-26 — Last successful poll timestamp from TimingAlertConfig. Distinct from `generatedAt` (snapshot computed time). Null when config missing or never polled.
      */
-    dnsBreakdown?: DnsBreakdownDto;
+    lastPollAt: string | null;
+    /**
+     * F-010 BR-FC-05/06 — DNS sub-state breakdown (notPicked / noStart / chipFail). Computed at query time; not persisted.
+     */
+    dnsBreakdown: DnsBreakdownDto;
 };
 
 export type ForceRefreshResponseDto = {
@@ -1629,6 +1698,32 @@ export type RaceResultsPaginatedDto = {
     pagination: PaginationMeta;
 };
 
+export type ByChipRequestDto = {
+    /**
+     * Raw chip ID from RFID reader (will be UPPER+TRIM normalized)
+     */
+    chipId: string;
+};
+
+export type ByChipResponseDto = {
+    /**
+     * Resolved BIB number (null if chip not mapped)
+     */
+    bib: string | null;
+    /**
+     * Public-safe athlete detail (same shape as F-013 /athlete/:raceId/:bib)
+     */
+    data: {
+        [key: string]: unknown;
+    } | null;
+    success: boolean;
+    message?: string;
+    /**
+     * Error code: race-not-mapped | chip-not-found | chip-disabled | athlete-not-found
+     */
+    errorCode?: string;
+};
+
 export type TimeDistributionBucketDto = {
     /**
      * Time range label
@@ -1840,6 +1935,18 @@ export type ShareStatsDto = {
      * Fraction of shares that hit template fallback (0..1)
      */
     fallbackRate: number;
+};
+
+export type UpdateDnsChipFailDto = {
+    /**
+     * F-010 — Mark athlete as DNS_CHIP_FAIL (true) hoặc revert (false). Admin override only.
+     */
+    dnsChipFail: boolean;
+};
+
+export type UpdateDnsChipFailResponseDto = {
+    success: boolean;
+    dnsChipFail: boolean;
 };
 
 export type ResolveClaimV2Dto = {
@@ -2860,6 +2967,33 @@ export type UpdateBugAssigneeDto = {
 export type UpdateBugTriageDto = {
     severity?: 'critical' | 'high' | 'medium' | 'low' | 'unknown';
     category?: 'payment' | 'race_result' | 'bib_avatar' | 'account_login' | 'ui_display' | 'mobile_app' | 'other';
+};
+
+export type VisibleSectionsDto = {
+    rank: boolean;
+    finishTime: boolean;
+    splits: boolean;
+    sponsorBanner: boolean;
+    customMessage: boolean;
+    qrShare: boolean;
+    photo: boolean;
+};
+
+export type UpdateDisplayConfigDto = {
+    heroChoice?: 'rank' | 'finish-time' | 'photo';
+    visibleSections?: VisibleSectionsDto;
+    themeColor?: string;
+    customMessage?: string;
+    sponsorLogos?: Array<string>;
+    soundEnabled?: boolean;
+    idleTimeoutSeconds?: number;
+    preset?: 'DEFAULT' | 'MINIMAL' | 'PREMIUM' | 'CUSTOM';
+};
+
+export type SponsorLogoUploadResponseDto = {
+    success: boolean;
+    url: string;
+    key: string;
 };
 
 export type MerchantControllerFindAllData = {
@@ -5356,6 +5490,24 @@ export type RaceResultControllerGetAthleteDetailResponses = {
     200: unknown;
 };
 
+export type RaceResultControllerLookupByChipData = {
+    body: ByChipRequestDto;
+    path: {
+        /**
+         * Mongo Race._id
+         */
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-results/{raceId}/by-chip';
+};
+
+export type RaceResultControllerLookupByChipResponses = {
+    200: ByChipResponseDto;
+};
+
+export type RaceResultControllerLookupByChipResponse = RaceResultControllerLookupByChipResponses[keyof RaceResultControllerLookupByChipResponses];
+
 export type RaceResultControllerGetCertificateData = {
     body?: never;
     path: {
@@ -5865,6 +6017,38 @@ export type RaceResultControllerGetShareStatsResponses = {
 };
 
 export type RaceResultControllerGetShareStatsResponse = RaceResultControllerGetShareStatsResponses[keyof RaceResultControllerGetShareStatsResponses];
+
+export type RaceResultControllerPatchDnsChipFailData = {
+    body: UpdateDnsChipFailDto;
+    path: {
+        /**
+         * race_result _id (MongoDB ObjectId)
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/race-results/{id}/dns-chip-fail';
+};
+
+export type RaceResultControllerPatchDnsChipFailErrors = {
+    /**
+     * Invalid ObjectId
+     */
+    400: unknown;
+    /**
+     * Race result not found
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerPatchDnsChipFailResponses = {
+    /**
+     * Updated dnsChipFail flag
+     */
+    200: UpdateDnsChipFailResponseDto;
+};
+
+export type RaceResultControllerPatchDnsChipFailResponse = RaceResultControllerPatchDnsChipFailResponses[keyof RaceResultControllerPatchDnsChipFailResponses];
 
 export type RaceResultControllerManualSyncData = {
     body?: never;
@@ -7624,3 +7808,79 @@ export type BugReportsAdminControllerUpdateTriageResponses = {
 };
 
 export type BugReportsAdminControllerUpdateTriageResponse = BugReportsAdminControllerUpdateTriageResponses[keyof BugReportsAdminControllerUpdateTriageResponses];
+
+export type ResultKioskDisplayControllerGetConfigData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+    };
+    query?: never;
+    url: '/api/result-kiosk-display/{mongoRaceId}';
+};
+
+export type ResultKioskDisplayControllerGetConfigResponses = {
+    /**
+     * Returns display config doc
+     */
+    200: unknown;
+};
+
+export type ResultKioskDisplayControllerUpdateConfigData = {
+    body: UpdateDisplayConfigDto;
+    path: {
+        mongoRaceId: string;
+    };
+    query?: never;
+    url: '/api/result-kiosk-display/{mongoRaceId}';
+};
+
+export type ResultKioskDisplayControllerUpdateConfigResponses = {
+    /**
+     * Returns updated config
+     */
+    200: unknown;
+};
+
+export type ResultKioskDisplayControllerApplyPresetData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+        preset: 'DEFAULT' | 'MINIMAL' | 'PREMIUM';
+    };
+    query?: never;
+    url: '/api/result-kiosk-display/{mongoRaceId}/preset/{preset}';
+};
+
+export type ResultKioskDisplayControllerApplyPresetResponses = {
+    200: unknown;
+};
+
+export type ResultKioskDisplayControllerRemoveSponsorLogoData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+    };
+    query: {
+        url: string;
+    };
+    url: '/api/result-kiosk-display/{mongoRaceId}/sponsor-logo';
+};
+
+export type ResultKioskDisplayControllerRemoveSponsorLogoResponses = {
+    200: unknown;
+};
+
+export type ResultKioskDisplayControllerUploadSponsorLogoData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+    };
+    query?: never;
+    url: '/api/result-kiosk-display/{mongoRaceId}/sponsor-logo';
+};
+
+export type ResultKioskDisplayControllerUploadSponsorLogoResponses = {
+    200: SponsorLogoUploadResponseDto;
+};
+
+export type ResultKioskDisplayControllerUploadSponsorLogoResponse = ResultKioskDisplayControllerUploadSponsorLogoResponses[keyof ResultKioskDisplayControllerUploadSponsorLogoResponses];

@@ -18,11 +18,17 @@ import { KioskResultCard } from './KioskResultCard';
 import { KioskExitButton } from './KioskExitButton';
 import { KioskIdleOverlay } from './KioskIdleOverlay';
 import { useKioskIdle } from '../hooks/useKioskIdle';
+import { useDisplayConfig } from '../hooks/useDisplayConfig';
 import { KIOSK_COPY } from '../kiosk.microcopy';
 import { KIOSK_CONFIG } from '../kiosk.constant';
 
-export function KioskResultScreen() {
+interface Props {
+  raceId?: string;
+}
+
+export function KioskResultScreen({ raceId }: Props = {}) {
   const ctx = useKioskContext();
+  const { data: displayConfig } = useDisplayConfig(raceId ?? '');
 
   // BR-RK-06: 60s idle reset to input. Pause-on-non-result kinds where a
   // 5s auto-reset already runs (BR-RK-02 not-found).
@@ -77,7 +83,75 @@ export function KioskResultScreen() {
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 py-4">
         {ctx.resultKind === 'found' && ctx.result?.data && (
-          <KioskResultCard data={ctx.result.data} />
+          <KioskResultCard data={ctx.result.data} config={displayConfig} />
+        )}
+
+        {/* F-017 — chip-specific error kinds */}
+        {ctx.resultKind === 'race-not-mapped' && (
+          <div
+            className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-8 text-center"
+            data-testid="kiosk-race-not-mapped"
+          >
+            <AlertCircle className="mx-auto h-12 w-12 text-amber-500" aria-hidden />
+            <div className="mt-4 text-2xl font-bold text-amber-800">
+              {KIOSK_COPY.chip.raceNotMappedTitle}
+            </div>
+            <div className="mt-2 text-sm text-amber-700">
+              {KIOSK_COPY.chip.raceNotMappedBody}
+            </div>
+            <button
+              type="button"
+              onClick={() => void ctx.exitKiosk()}
+              className="mt-6 rounded-xl bg-amber-600 px-6 py-3 font-bold text-white"
+            >
+              {KIOSK_COPY.exit.label}
+            </button>
+          </div>
+        )}
+
+        {ctx.resultKind === 'chip-not-found' && (
+          <div
+            className="rounded-3xl border-2 border-rose-300 bg-rose-50 p-8 text-center"
+            data-testid="kiosk-chip-not-found"
+          >
+            <AlertCircle className="mx-auto h-12 w-12 text-rose-500" aria-hidden />
+            <div className="mt-4 text-2xl font-bold text-rose-700">
+              {KIOSK_COPY.chip.chipNotFoundTitle}
+            </div>
+            <div className="mt-2 font-mono text-3xl font-bold text-rose-900">
+              {ctx.lastChipId || '—'}
+            </div>
+            <div className="mt-4 text-sm text-rose-600">
+              {KIOSK_COPY.chip.chipNotFoundBody(ctx.lastChipId || '?')}
+            </div>
+          </div>
+        )}
+
+        {ctx.resultKind === 'chip-disabled' && (
+          <div
+            className="rounded-3xl border-2 border-rose-400 bg-rose-50 p-8 text-center"
+            data-testid="kiosk-chip-disabled"
+          >
+            <AlertCircle className="mx-auto h-12 w-12 text-rose-600" aria-hidden />
+            <div className="mt-4 text-2xl font-bold text-rose-700">
+              {KIOSK_COPY.chip.chipDisabledTitle}
+            </div>
+            <div className="mt-4 text-sm text-rose-600">
+              {KIOSK_COPY.chip.chipDisabledBody(ctx.bib || '?')}
+            </div>
+          </div>
+        )}
+
+        {ctx.resultKind === 'athlete-not-found' && (
+          <div
+            className="rounded-3xl border-2 border-rose-300 bg-rose-50 p-8 text-center"
+            data-testid="kiosk-athlete-not-found"
+          >
+            <AlertCircle className="mx-auto h-12 w-12 text-rose-500" aria-hidden />
+            <div className="mt-4 text-2xl font-bold text-rose-700">
+              BIB {ctx.bib || '—'} chưa có data race result
+            </div>
+          </div>
         )}
 
         {ctx.resultKind === 'not-found' && (

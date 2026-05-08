@@ -122,10 +122,23 @@ export function parseSplitsFromData(data: Record<string, unknown>): SplitTime[] 
   }
 }
 
+import type { DisplayConfig } from '@/lib/kiosk/result-display-config';
+import { HeroRank } from './configurable-sections/HeroRank';
+import { HeroFinishTime } from './configurable-sections/HeroFinishTime';
+import { HeroPhoto } from './configurable-sections/HeroPhoto';
+import { SponsorBanner } from './configurable-sections/SponsorBanner';
+import { CustomMessageSection } from './configurable-sections/CustomMessageSection';
+import { QrShareSection } from './configurable-sections/QrShareSection';
+
 interface KioskResultCardProps {
   data: AthleteDetailData;
   /** Optional override (test injection). Default: derive from data via deriveKioskStatus. */
   status?: KioskResultStatus;
+  /**
+   * F-017 — admin-configurable display config. When omitted, falls back to
+   * F-013 legacy render (preserves backward compat for any non-config caller).
+   */
+  config?: DisplayConfig;
 }
 
 const STATUS_STYLES: Record<KioskResultStatus, { label: string; bg: string; border: string; text: string; Icon: typeof Award }> = {
@@ -166,10 +179,68 @@ const STATUS_STYLES: Record<KioskResultStatus, { label: string; bg: string; bord
   },
 };
 
-export function KioskResultCard({ data, status: statusOverride }: KioskResultCardProps) {
+export function KioskResultCard({ data, status: statusOverride, config }: KioskResultCardProps) {
   const status = statusOverride ?? deriveKioskStatus(data) ?? 'FIN';
   const cfg = STATUS_STYLES[status];
   const [splitsOpen, setSplitsOpen] = useState(false);
+
+  // F-017 — config-driven render path. When config provided, use visibleSections
+  // + heroChoice + themeColor to compose the card. Falls back to F-013 layout
+  // when caller omits config (backward compat).
+  if (config) {
+    const themeColor = config.themeColor;
+    const Hero =
+      config.heroChoice === 'finish-time'
+        ? HeroFinishTime
+        : config.heroChoice === 'photo'
+          ? HeroPhoto
+          : HeroRank;
+    const v = config.visibleSections;
+    return (
+      <div
+        className={`rounded-3xl border-2 p-6 sm:p-8 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-reduce:animate-none`}
+        style={{ borderColor: themeColor, backgroundColor: themeColor + '08' }}
+        data-testid="kiosk-result-card"
+        data-status={status}
+        data-config-driven="true"
+      >
+        <div className="space-y-6">
+          {(v.rank || v.finishTime || v.photo) && <Hero data={data} themeColor={themeColor} />}
+          <div className="text-center">
+            <div className="font-mono text-4xl font-bold tabular-nums text-stone-900">
+              {data.bib != null ? String(data.bib) : '—'}
+            </div>
+            <div className="mt-1 text-xl font-bold text-stone-800">{data.name || '—'}</div>
+          </div>
+          {v.splits && status !== 'DNS' && (() => {
+            const splits = parseSplitsFromData(data as unknown as Record<string, unknown>);
+            if (!splits || splits.length === 0) return null;
+            return (
+              <div className="rounded-xl border border-stone-200 bg-white p-4" data-testid="kiosk-splits-list">
+                <ul className="divide-y divide-stone-100 text-sm">
+                  {splits.map((s, i) => (
+                    <li key={`${s.name}-${i}`} className="flex items-center justify-between px-2 py-2">
+                      <span className="font-medium text-stone-700">{s.name}</span>
+                      <span className="font-mono tabular-nums">{s.time}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
+          {v.customMessage && (
+            <CustomMessageSection message={config.customMessage} themeColor={themeColor} />
+          )}
+          {v.sponsorBanner && config.sponsorLogos.length > 0 && (
+            <SponsorBanner logos={config.sponsorLogos} />
+          )}
+          {v.qrShare && (
+            <QrShareSection bib={data.bib} raceId={data.raceId} themeColor={themeColor} />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const splits = useMemo(
     () => parseSplitsFromData(data as unknown as Record<string, unknown>),

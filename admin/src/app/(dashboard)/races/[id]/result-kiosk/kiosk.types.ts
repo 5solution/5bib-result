@@ -13,8 +13,27 @@
  * defensive superset (matches frontend `[bib]/page.tsx` reads).
  */
 
-/** Kiosk surface mode tracked by KioskModeProvider. */
-export type KioskMode = 'admin' | 'bib-input' | 'result';
+/**
+ * Kiosk surface mode tracked by KioskModeProvider.
+ *
+ * F-017 EXTENDED — chip-scan input is now the primary mode; manual BIB pad
+ * (`bib-input-fallback`) is the fallback when scanner fails or BTC opts in.
+ *
+ *   admin              → tab body (kiosk OFF, settings card)
+ *   chip-input         → fullscreen waiting screen, ChipScanInput active
+ *   bib-input-fallback → fullscreen manual number-pad (BR-AF-23 verbatim)
+ *   result             → result card / not-found / data-error / chip-disabled
+ *   config-dialog      → admin tab body with DisplayConfigDialog open
+ */
+export type KioskMode =
+  | 'admin'
+  | 'chip-input'
+  | 'bib-input-fallback'
+  | 'result'
+  | 'config-dialog'
+  // Legacy F-013 alias retained for migration window — KioskBibInputScreen
+  // imported by name. Treat as `bib-input-fallback` semantically.
+  | 'bib-input';
 
 /** Status value rendered by KioskResultCard (BR-RK-03/04/05/08). */
 export type KioskResultStatus = 'FIN' | 'DNS' | 'DNF' | 'DSQ' | 'LIVE';

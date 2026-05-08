@@ -30,6 +30,15 @@ export const KIOSK_CONFIG = {
   SOUND_LS_KEY: '5bib:kiosk-sound',
   /** Animation duration cap (200ms transitions per PRD §5). */
   TRANSITION_MS: 200,
+  // F-017 — chip scan flow timeouts
+  /** ChipScanInput buffer reset gap — RFID readers send <50ms between keys. */
+  CHIP_SCAN_BUFFER_GAP_MS: 200,
+  /** Same-chip debounce — RFID kiosk often double-triggers. */
+  CHIP_SCAN_DEBOUNCE_MS: 1500,
+  /** Max sponsor logo file size in bytes. */
+  SPONSOR_LOGO_MAX_BYTES: 2 * 1024 * 1024,
+  /** Max sponsor logos per race (display config). */
+  SPONSOR_LOGO_MAX_COUNT: 5,
 } as const;
 
 export type KioskConfig = typeof KIOSK_CONFIG;

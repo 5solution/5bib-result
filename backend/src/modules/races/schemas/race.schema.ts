@@ -132,8 +132,9 @@ export class Race {
   // External IDs
   @Prop() externalRaceId: string; // RaceResult race ID
 
-  // F-015 BR-CK-06 — Check-in window. Default null = window closed; admin must set explicitly.
-  // Backfilled by `2026-05-08-add-check-in-window.ts` migration: start = startDate - 3 days, end = startDate - 1 hour.
+  // ❌ DEPRECATED 2026-05-08 — F-015 Check-In Kiosk feature scrapped (duplicate of ORG.5bib.com).
+  // Field left in schema to avoid migration. Always null. Will be hard-deleted when other
+  // breaking schema changes need a migration anyway. DO NOT use in new code.
   @Prop({
     type: { start: { type: Date, default: null }, end: { type: Date, default: null } },
     default: null,

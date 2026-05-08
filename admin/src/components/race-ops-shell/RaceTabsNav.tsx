@@ -66,10 +66,8 @@ const TABS: ReadonlyArray<TabSpec> = [
   { key: "awards", segment: "awards", label: "Trao giải", tooltip: "Trao giải / Top finishers", enabledIn: ["live", "ended"] },
   { key: "athletes", segment: "athletes", label: "Athletes", tooltip: "Vận động viên", enabledIn: ["pre_race", "live", "ended"] },
   { key: "results", segment: "results", label: "Results", tooltip: "Kết quả", enabledIn: ["ended"] },
-  // F-015 BR-CK-19 — Check-In Kiosk tab #10. Enabled in pre_race/live/ended.
-  // Race-day operation surface; race needs to be at least pre_race for athletes
-  // to be valid pickup targets.
-  { key: "check-in", segment: "check-in-kiosk", label: "Check-In", tooltip: "Pickup BIB", enabledIn: ["pre_race", "live", "ended"] },
+  // F-015 Check-In Kiosk REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
+  // Restored to 9-tab shell (post F-008v2).
   { key: "settings", segment: "settings", label: "Settings", tooltip: "Cài đặt", enabledIn: ["draft", "pre_race", "live", "ended"] },
 ] as const;
 
@@ -88,13 +86,7 @@ function dotFor(tabKey: string, raceStatus: RaceState, badges?: RaceTabsBadges):
   if (tabKey === "result-kiosk" && (badges?.kioskUnverifiedCount ?? 0) > 0) {
     return { color: "bg-blue-600", label: `${badges?.kioskUnverifiedCount} unverified results` };
   }
-  // F-015 — blue dot on Check-In tab when pickup is in-progress (0 < rate < 1).
-  if (tabKey === "check-in") {
-    const rate = badges?.checkInPickupRate;
-    if (typeof rate === "number" && rate > 0 && rate < 1) {
-      return { color: "bg-blue-600", label: `${Math.round(rate * 100)}% picked up` };
-    }
-  }
+  // F-015 check-in dot REMOVED 2026-05-08 — Check-In Kiosk feature scrapped.
   return null;
 }
 

@@ -7,8 +7,7 @@ import { ConfigModule } from '@nestjs/config';
 import { env } from 'src/config';
 import { RacesModule } from './races/races.module';
 import { RaceResultModule } from './race-result/race-result.module';
-// F-015 Check-In Kiosk module — sibling of RaceResultModule mounted under /api/race-results.
-import { CheckInModule } from './race-result/check-in/check-in.module';
+// F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
 import { AdminModule } from './admin/admin.module';
 import { LogtoAuthModule } from './logto-auth';
 import { UploadModule } from './upload/upload.module';
@@ -31,6 +30,7 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { Tenant } from './merchant/entities/tenant.entity';
 import { ChipVerificationModule } from './chip-verification/chip-verification.module';
+import { ResultKioskDisplayModule } from './result-kiosk-display/result-kiosk-display.module';
 import { RaceMasterDataModule } from './race-master-data/race-master-data.module';
 import { AthleteReadonly } from './race-master-data/entities/athlete-readonly.entity';
 import { AthleteSubinfoReadonly } from './race-master-data/entities/athlete-subinfo-readonly.entity';
@@ -159,9 +159,7 @@ const volunteerDbModules = env.volunteerDb.host
     ...timingAlertModules,
     RacesModule,
     RaceResultModule,
-    // F-015 — Check-In Kiosk endpoints (mounted as sibling, NOT inside RaceResultModule
-    // to avoid registering CheckInService into RaceResult provider tree).
-    CheckInModule,
+    // F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
     AdminModule,
     LogtoAuthModule,
     UploadModule,
@@ -178,6 +176,8 @@ const volunteerDbModules = env.volunteerDb.host
     ApiKeysModule,
     ArticlesModule,
     BugReportsModule,
+    // F-017 — Result Kiosk Display Configuration (admin-only CRUD).
+    ResultKioskDisplayModule,
   ],
 })
 export class AppModule {}

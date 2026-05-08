@@ -42,6 +42,7 @@ import {
   UpdateDnsChipFailDto,
   UpdateDnsChipFailResponseDto,
 } from './dto/update-dns-chip-fail.dto';
+import { ByChipRequestDto, ByChipResponseDto } from './dto/by-chip-response.dto';
 import {
   TimeDistributionResponseDto,
   CountryStatsResponseDto,
@@ -152,6 +153,31 @@ export class RaceResultController {
     };
     void _id; void editHistory; void isManuallyEdited;
     return { data: publicData, success: true };
+  }
+
+  /**
+   * F-017 BR-RK-CHIP — Resolve raw chip ID → BIB → athlete detail in one call.
+   *
+   * Race-day flow is MongoDB-only (Danny lock 2026-05-08):
+   *   chip_race_configs (Mongo) → chip_mappings (Mongo) → race_results (Mongo).
+   * NEVER live MySQL at runtime.
+   *
+   * Status semantics:
+   *   200 success=true  → bib + full athlete envelope
+   *   200 success=false → errorCode in {race-not-mapped, chip-not-found, chip-disabled, athlete-not-found}
+   * (Returns 200 with discriminated union to keep kiosk client logic simple.)
+   */
+  @Post(':raceId/by-chip')
+  @UseGuards(LogtoAdminGuard)
+  @ApiOperation({ summary: 'F-017 — Resolve chip ID to athlete result (kiosk RFID scan)' })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Mongo Race._id' })
+  @ApiBody({ type: ByChipRequestDto })
+  @ApiResponse({ status: 200, type: ByChipResponseDto })
+  async lookupByChip(
+    @Param('raceId') raceId: string,
+    @Body() body: ByChipRequestDto,
+  ): Promise<ByChipResponseDto> {
+    return this.raceResultService.lookupByChip(raceId, body.chipId);
   }
 
   @Get('certificate/:raceId/:bib')
