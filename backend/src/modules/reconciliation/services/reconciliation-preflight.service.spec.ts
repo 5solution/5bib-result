@@ -134,4 +134,79 @@ describe('ReconciliationPreflightService.runRange — BR-11 overlap detection', 
     expect(result.summary.total_orders).toBe(1);
     expect(result.summary.estimated_gross_revenue).toBe(600000);
   });
+
+  // ============================================================
+  // FEATURE-016 v1.6.5 BR-04 — UNKNOWN_CATEGORY_DROPPED warning emission
+  // ============================================================
+
+  describe('BR-04 UNKNOWN_CATEGORY_DROPPED warning (FEATURE-016 v1.6.5)', () => {
+    it('TC-QC-PRE-01: emits UNKNOWN_CATEGORY_DROPPED ERROR when queryService reports unknownCategoryCount > 0', async () => {
+      mockReconciliationModel.lean.mockResolvedValue([]);
+      mockQueryService.queryOrders.mockResolvedValue({
+        fiveBibOrders: [{ order_id: 1, subtotal_price: 500000 }],
+        manualOrders: [],
+        missingPaymentRef: [],
+        unknownCategoryCount: 3, // 3 dirty rows dropped
+      });
+      const result = await service.runRange(baseRequest);
+      const unknownWarning = result.warnings.find(
+        (w) => w.type === 'UNKNOWN_CATEGORY_DROPPED',
+      );
+      expect(unknownWarning).toBeDefined();
+      expect(unknownWarning?.severity).toBe('ERROR');
+      expect(unknownWarning?.count).toBe(3);
+      expect(unknownWarning?.message).toContain('3 đơn');
+      expect(unknownWarning?.message).toContain('không xác định');
+    });
+
+    it('TC-QC-PRE-02: NO UNKNOWN_CATEGORY_DROPPED warning when count = 0 (clean recon)', async () => {
+      mockReconciliationModel.lean.mockResolvedValue([]);
+      mockQueryService.queryOrders.mockResolvedValue({
+        fiveBibOrders: [{ order_id: 1, subtotal_price: 500000 }],
+        manualOrders: [],
+        missingPaymentRef: [],
+        unknownCategoryCount: 0,
+      });
+      const result = await service.runRange(baseRequest);
+      const unknownWarning = result.warnings.find(
+        (w) => w.type === 'UNKNOWN_CATEGORY_DROPPED',
+      );
+      expect(unknownWarning).toBeUndefined();
+    });
+
+    it('TC-QC-PRE-03: emits UNKNOWN_CATEGORY_DROPPED ngay cả khi totalOrders=0 (race rỗng nhưng có dirty data)', async () => {
+      mockReconciliationModel.lean.mockResolvedValue([]);
+      mockQueryService.queryOrders.mockResolvedValue({
+        fiveBibOrders: [],
+        manualOrders: [],
+        missingPaymentRef: [],
+        unknownCategoryCount: 5, // race rỗng nhưng có 5 đơn null category
+      });
+      const result = await service.runRange(baseRequest);
+      const unknownWarning = result.warnings.find(
+        (w) => w.type === 'UNKNOWN_CATEGORY_DROPPED',
+      );
+      expect(unknownWarning).toBeDefined();
+      expect(unknownWarning?.count).toBe(5);
+      // Race vẫn skipped vì totalOrders=0
+      expect(result.races_skipped).toHaveLength(1);
+    });
+
+    it('TC-QC-PRE-04 (backward compat): runRange xử lý đúng khi queryService KHÔNG return unknownCategoryCount field (undefined → falsy → no warning)', async () => {
+      // Old caller pre-F-016 không trả field này. Defensive — preflight không crash.
+      mockReconciliationModel.lean.mockResolvedValue([]);
+      mockQueryService.queryOrders.mockResolvedValue({
+        fiveBibOrders: [{ order_id: 1, subtotal_price: 100000 }],
+        manualOrders: [],
+        missingPaymentRef: [],
+        // unknownCategoryCount field absent
+      });
+      const result = await service.runRange(baseRequest);
+      const unknownWarning = result.warnings.find(
+        (w) => w.type === 'UNKNOWN_CATEGORY_DROPPED',
+      );
+      expect(unknownWarning).toBeUndefined();
+      expect(result.can_create).toBe(true);
+    });
+  });
 });

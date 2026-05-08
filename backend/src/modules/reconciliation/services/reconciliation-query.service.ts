@@ -1,12 +1,50 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant } from '../../merchant/entities/tenant.entity';
 
-const FIVE_BIB_CATEGORIES = ['ORDINARY', 'PERSONAL_GROUP', 'CHANGE_COURSE'];
+/**
+ * FEATURE-016 v1.6.5 — extend FIVE_BIB_CATEGORIES.
+ *
+ * Trước F-016: array thiếu GROUP_BUY, GROUP_BUY_FIXED, CODE_TRANSFER → drop silently.
+ * Sau F-016 (BR-01): include 6 categories với % fee theo CLAUDE.md business invariant.
+ *
+ * BR-02 — payment_ref split pattern:
+ *   - Categories trong SPLIT_BY_PAYMENT_REF: có payment_ref → 5BIB GMV; không → manual fallback.
+ *   - ORDINARY + CHANGE_COURSE: KHÔNG split (BR-03 preserve existing behavior).
+ */
+const FIVE_BIB_CATEGORIES = new Set([
+  'ORDINARY',
+  'PERSONAL_GROUP',
+  'CHANGE_COURSE',
+  'GROUP_BUY',
+  'GROUP_BUY_FIXED',
+  'CODE_TRANSFER',
+]);
+
+const SPLIT_BY_PAYMENT_REF = new Set([
+  'PERSONAL_GROUP',
+  'GROUP_BUY',
+  'GROUP_BUY_FIXED',
+  'CODE_TRANSFER',
+]);
+
+export interface QueryOrdersResult {
+  fiveBibOrders: Record<string, unknown>[];
+  manualOrders: Record<string, unknown>[];
+  missingPaymentRef: Record<string, unknown>[];
+  /**
+   * FEATURE-016 BR-04 — số đơn có order_category KHÔNG match enum (vd: null, 'CORPORATE', future).
+   * Preflight sẽ emit ERROR-severity warning UNKNOWN_CATEGORY_DROPPED nếu count > 0.
+   * Defensive guard — KHÔNG silent drop dirty data.
+   */
+  unknownCategoryCount: number;
+}
 
 @Injectable()
 export class ReconciliationQueryService {
+  private readonly logger = new Logger(ReconciliationQueryService.name);
+
   constructor(
     @InjectRepository(Tenant, 'platform')
     private tenantRepo: Repository<Tenant>,
@@ -16,11 +54,7 @@ export class ReconciliationQueryService {
     mysql_race_id: number,
     period_start: string,
     period_end: string,
-  ): Promise<{
-    fiveBibOrders: any[];
-    manualOrders: any[];
-    missingPaymentRef: any[];
-  }> {
+  ): Promise<QueryOrdersResult> {
     const sql = `
       SELECT
         oli.id as oli_id, oli.order_id, o.order_category,
@@ -43,34 +77,100 @@ export class ReconciliationQueryService {
       ORDER BY o.order_category, oli.id ASC
     `;
 
-    const rows: any[] = await this.tenantRepo.manager.query(sql, [
-      mysql_race_id,
-      period_start + ' 00:00:00',
-      period_end + ' 23:59:59',
-    ]);
-
-    // PERSONAL_GROUP có payment_ref = đã thanh toán qua 5BIB → tính vào Section 1
-    // PERSONAL_GROUP không có payment_ref = nhập tay bởi organizer → tính vào Section 2 (Manual)
-    const fiveBibOrders = rows.filter((r) => {
-      if (r.order_category === 'PERSONAL_GROUP') return !!r.payment_ref;
-      return FIVE_BIB_CATEGORIES.includes(r.order_category);
-    });
-    const manualOrders = rows.filter((r) =>
-      r.order_category === 'MANUAL' ||
-      (r.order_category === 'PERSONAL_GROUP' && !r.payment_ref),
-    );
-    const missingPaymentRef = fiveBibOrders.filter(
-      (r) => !r.payment_ref,
+    const rows: Record<string, unknown>[] = await this.tenantRepo.manager.query(
+      sql,
+      [mysql_race_id, period_start + ' 00:00:00', period_end + ' 23:59:59'],
     );
 
-    return { fiveBibOrders, manualOrders, missingPaymentRef };
+    return this.categorize(rows, mysql_race_id, period_start, period_end);
+  }
+
+  /**
+   * FEATURE-016 BR-01..BR-04 — categorize order rows into 5BIB / manual / unknown.
+   *
+   * Pure function (testable). Logging side-effect for unknown categories.
+   *
+   * @param rows MySQL query result
+   * @param mysql_race_id used for log context only
+   * @param period_start used for log context only
+   * @param period_end used for log context only
+   */
+  private categorize(
+    rows: Record<string, unknown>[],
+    mysql_race_id: number,
+    period_start: string,
+    period_end: string,
+  ): QueryOrdersResult {
+    const fiveBibOrders: Record<string, unknown>[] = [];
+    const manualOrders: Record<string, unknown>[] = [];
+    const unknownRows: Record<string, unknown>[] = [];
+
+    for (const r of rows) {
+      const category = r.order_category as string | null | undefined;
+
+      // Defensive: null / undefined / unknown enum → drop with warning (BR-04)
+      if (typeof category !== 'string') {
+        unknownRows.push(r);
+        continue;
+      }
+
+      if (category === 'MANUAL') {
+        manualOrders.push(r);
+        continue;
+      }
+
+      if (!FIVE_BIB_CATEGORIES.has(category)) {
+        unknownRows.push(r);
+        continue;
+      }
+
+      // BR-02 — payment_ref split for 4 categories (PERSONAL_GROUP + 3 mới)
+      if (SPLIT_BY_PAYMENT_REF.has(category)) {
+        if (r.payment_ref) {
+          fiveBibOrders.push(r);
+        } else {
+          manualOrders.push(r);
+        }
+        continue;
+      }
+
+      // ORDINARY + CHANGE_COURSE: BR-03 preserve — pass through to 5BIB regardless of payment_ref
+      fiveBibOrders.push(r);
+    }
+
+    if (unknownRows.length > 0) {
+      // Build category distribution for log context
+      const distribution: Record<string, number> = {};
+      for (const r of unknownRows) {
+        const key = String(r.order_category ?? 'NULL');
+        distribution[key] = (distribution[key] ?? 0) + 1;
+      }
+      this.logger.warn('Unknown order_category dropped during reconciliation query', {
+        mysql_race_id,
+        period_start,
+        period_end,
+        dropped_count: unknownRows.length,
+        category_distribution: distribution,
+      });
+    }
+
+    const missingPaymentRef = fiveBibOrders.filter((r) => !r.payment_ref);
+
+    return {
+      fiveBibOrders,
+      manualOrders,
+      missingPaymentRef,
+      unknownCategoryCount: unknownRows.length,
+    };
   }
 
   async getTenant(tenant_id: number): Promise<Tenant | null> {
     return this.tenantRepo.findOne({ where: { id: tenant_id } });
   }
 
-  async getRacesByTenant(tenant_id: number): Promise<any[]> {
+  async getRacesByTenant(
+    tenant_id: number,
+  ): Promise<{ race_id: string; title: string; created_on: Date; modified_on: Date }[]> {
     const sql = `
       SELECT r.race_id, r.title, r.created_on, r.modified_on
       FROM races r

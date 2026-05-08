@@ -107,12 +107,12 @@ export class ReconciliationPreflightService {
       const raceId = Number(race.race_id);
       const raceName = race.title;
 
-      const { fiveBibOrders, manualOrders, missingPaymentRef } =
+      const { fiveBibOrders, manualOrders, missingPaymentRef, unknownCategoryCount } =
         await this.queryService.queryOrders(raceId, period_start, period_end);
 
       const totalOrders = fiveBibOrders.length + manualOrders.length;
 
-      if (totalOrders === 0) {
+      if (totalOrders === 0 && unknownCategoryCount === 0) {
         racesSkipped.push({ race_id: raceId, race_name: raceName, reason: 'Không có giao dịch trong kỳ' });
         continue;
       }
@@ -139,6 +139,16 @@ export class ReconciliationPreflightService {
           severity: 'ERROR',
           message: `${missingPaymentRef.length} đơn ORDINARY thiếu payment_ref tại "${raceName}" — cần kiểm tra trước khi tạo`,
           count: missingPaymentRef.length,
+        });
+      }
+
+      // FEATURE-016 BR-04 — defensive guard: dirty/unknown order_category dropped silently
+      if (unknownCategoryCount > 0) {
+        warnings.push({
+          type: 'UNKNOWN_CATEGORY_DROPPED',
+          severity: 'ERROR',
+          message: `${unknownCategoryCount} đơn có order_category không xác định bị bỏ qua tại "${raceName}" — liên hệ engineering để verify dữ liệu`,
+          count: unknownCategoryCount,
         });
       }
 
@@ -241,10 +251,20 @@ export class ReconciliationPreflightService {
     const found = allRaces.find((r) => Number(r.race_id) === mysql_race_id);
     const raceName = found?.title ?? `Race #${mysql_race_id}`;
 
-    const { fiveBibOrders, manualOrders, missingPaymentRef } =
+    const { fiveBibOrders, manualOrders, missingPaymentRef, unknownCategoryCount } =
       await this.queryService.queryOrders(mysql_race_id, period_start, period_end);
 
     const totalOrders = fiveBibOrders.length + manualOrders.length;
+
+    // FEATURE-016 BR-04 — defensive guard: emit warning ngay cả khi totalOrders=0 nhưng có unknown
+    if (unknownCategoryCount > 0) {
+      warnings.push({
+        type: 'UNKNOWN_CATEGORY_DROPPED',
+        severity: 'ERROR',
+        message: `${unknownCategoryCount} đơn có order_category không xác định bị bỏ qua tại "${raceName}" — liên hệ engineering để verify dữ liệu`,
+        count: unknownCategoryCount,
+      });
+    }
 
     if (totalOrders === 0) {
       racesSkipped.push({
