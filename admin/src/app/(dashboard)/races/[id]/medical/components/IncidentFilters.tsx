@@ -136,17 +136,20 @@ export function IncidentFilters({
             t.minutes < 0
               ? null
               : new Date(Date.now() - t.minutes * 60_000).toISOString();
-          const isActive =
+          const isActive = Boolean(
             (since === null && value.since === null) ||
-            (since && value.since && Math.abs(
-              new Date(since).getTime() - new Date(value.since).getTime(),
-            ) < 60_000);
+              (since &&
+                value.since &&
+                Math.abs(
+                  new Date(since).getTime() - new Date(value.since).getTime(),
+                ) < 60_000),
+          );
           return (
             <button
               key={t.key}
               type="button"
               onClick={() => onChange({ ...value, since })}
-              aria-pressed={isActive ?? false}
+              aria-pressed={isActive}
               className={cn(
                 'rounded-md border px-2 py-1 text-[11px]',
                 isActive
