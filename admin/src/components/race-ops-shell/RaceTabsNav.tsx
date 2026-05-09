@@ -11,9 +11,12 @@
  * BREAKS F-008v2's 8-tab lock — sets Cluster #9 precedent (Manager Plan §4
  * LOCKED). "More" dropdown refactor when shell >12 tabs (Danny policy A).
  *
+ * F-018 EXTEND: 9 → 10 tabs. Medical (Y tế) inserted before Settings (replaces
+ * F-015 scrapped slot). enabledIn pre_race / live / ended (no incidents in draft).
+ *
  * Locked tab order:
  *   Overview / Readiness / Course Map / Command Center / Result Kiosk /
- *   Trao giải / Athletes / Results / Check-In / Settings
+ *   Trao giải / Athletes / Results / Y tế / Settings
  *
  * - English labels match canvas (BR-AF-02). Vietnamese tooltip via title attr.
  * - Disabled matrix per race state (BR-AF-04). Disabled tab renders gray + cursor-not-allowed.
@@ -37,6 +40,8 @@ export interface RaceTabsBadges {
   kioskUnverifiedCount?: number;
   /** F-015 BR-CK pickup completion ratio (0..1). Drives blue dot when 0 < rate < 1. */
   checkInPickupRate?: number;
+  /** F-018 — count of active medical incidents (drives red number bubble). */
+  medicalActiveCount?: number;
 }
 
 export interface RaceTabsNavProps {
@@ -61,13 +66,19 @@ const TABS: ReadonlyArray<TabSpec> = [
   { key: "course-map", segment: "course-map", label: "Course Map", tooltip: "Bản đồ đường đua", enabledIn: ["draft", "pre_race", "live", "ended"] },
   { key: "command-center", segment: "command-center", label: "Command Center", tooltip: "Trung tâm điều hành", enabledIn: ["pre_race", "live", "ended"] },
   { key: "result-kiosk", segment: "result-kiosk", label: "Result Kiosk", tooltip: "Kiosk kết quả", enabledIn: ["live", "ended"] },
+  // 2026-05-09 — Chip Verify promoted to top-level tab (was hidden link in Settings).
+  { key: "chip-mappings", segment: "chip-mappings", label: "Chip Verify", tooltip: "Chip ↔ BIB mapping verification", enabledIn: ["pre_race", "live", "ended"] },
   // F-008 v2 BR-CC2-33 — Awards (Trao giải) slot 6, post-race output group.
   // Awards data depends on finishers, so enable only when race has gone live.
   { key: "awards", segment: "awards", label: "Trao giải", tooltip: "Trao giải / Top finishers", enabledIn: ["live", "ended"] },
   { key: "athletes", segment: "athletes", label: "Athletes", tooltip: "Vận động viên", enabledIn: ["pre_race", "live", "ended"] },
-  { key: "results", segment: "results", label: "Results", tooltip: "Kết quả", enabledIn: ["ended"] },
+  // 2026-05-09 — Results tab HIDDEN per Danny (overlap với Athletes / public race result page).
+  // Page vẫn truy cập qua /races/[id]/results direct URL.
+  // { key: "results", segment: "results", label: "Results", tooltip: "Kết quả", enabledIn: ["ended"] },
   // F-015 Check-In Kiosk REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
   // Restored to 9-tab shell (post F-008v2).
+  // F-018 — Medical (Y tế) tab inserted before Settings (Race Ops Cluster #9 #1).
+  { key: "medical", segment: "medical", label: "Y tế", tooltip: "Y tế / Medical incidents", enabledIn: ["pre_race", "live", "ended"] },
   { key: "settings", segment: "settings", label: "Settings", tooltip: "Cài đặt", enabledIn: ["draft", "pre_race", "live", "ended"] },
 ] as const;
 
@@ -87,6 +98,10 @@ function dotFor(tabKey: string, raceStatus: RaceState, badges?: RaceTabsBadges):
     return { color: "bg-blue-600", label: `${badges?.kioskUnverifiedCount} unverified results` };
   }
   // F-015 check-in dot REMOVED 2026-05-08 — Check-In Kiosk feature scrapped.
+  // F-018 — red dot when there are active (open) medical incidents.
+  if (tabKey === "medical" && (badges?.medicalActiveCount ?? 0) > 0) {
+    return { color: "bg-red-600", label: `${badges?.medicalActiveCount} active medical incident(s)` };
+  }
   return null;
 }
 

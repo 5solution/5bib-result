@@ -2996,6 +2996,138 @@ export type SponsorLogoUploadResponseDto = {
     key: string;
 };
 
+export type GpsLocationResponseDto = {
+    lat: number;
+    lng: number;
+    source: 'manual' | 'course-pin' | 'aid-station' | 'device';
+    aidStationId?: string;
+    accuracyMeters?: number;
+};
+
+export type IncidentTransitionResponseDto = {
+    from: string;
+    to: 'REPORTED' | 'MEDIC_DISPATCHED' | 'MEDIC_ON_SITE' | 'AMB_REQUESTED' | 'HOSPITAL_TRANSFER' | 'RESOLVED_ONSITE' | 'RESOLVED_DNF' | 'CLOSED';
+    actorId: string;
+    actorRole: 'operator' | 'medic' | 'race_director';
+    at: string;
+    reason?: string;
+    gps?: GpsLocationResponseDto;
+};
+
+export type WitnessStatementResponseDto = {
+    name: string;
+    statement?: string;
+    contact?: string;
+    signedAt: string;
+};
+
+export type MedicalDirectorSignatureResponseDto = {
+    name: string;
+    signedAt: string;
+};
+
+export type IncidentAttachmentResponseDto = {
+    s3Key: string;
+    mime: string;
+    sizeBytes: number;
+    uploadedAt: string;
+    signedUrl?: string;
+};
+
+export type IncidentResponseDto = {
+    id: string;
+    raceId: string;
+    bib?: string;
+    athleteName?: string;
+    severity: 1 | 2 | 3 | 4 | 5;
+    category: 'cardiac' | 'trauma' | 'heat_stroke' | 'dehydration' | 'musculoskeletal' | 'neurological' | 'allergic' | 'other';
+    traumaSubtype?: 'fall' | 'laceration' | 'head' | 'other';
+    description?: string;
+    gpsLocation: GpsLocationResponseDto;
+    reportedByUserId: string;
+    reportedAt: string;
+    state: 'REPORTED' | 'MEDIC_DISPATCHED' | 'MEDIC_ON_SITE' | 'AMB_REQUESTED' | 'HOSPITAL_TRANSFER' | 'RESOLVED_ONSITE' | 'RESOLVED_DNF' | 'CLOSED';
+    closureReason?: 'RESOLVED' | 'FALSE_ALARM' | 'DUPLICATE' | 'ATHLETE_REFUSED_TREATMENT';
+    incidentTransitions: Array<IncidentTransitionResponseDto>;
+    medicalTeamAssigned: Array<string>;
+    witnessStatements: Array<WitnessStatementResponseDto>;
+    medicalDirectorSignature?: MedicalDirectorSignatureResponseDto;
+    attachments: Array<IncidentAttachmentResponseDto>;
+    ambulanceETA?: string;
+    medicArrivedAt?: string;
+    outcome?: string;
+    anonymized: boolean;
+    latestPdfS3Key?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type IncidentListResponseDto = {
+    items: Array<IncidentResponseDto>;
+    total: number;
+    limit: number;
+    offset: number;
+    activeCount: number;
+};
+
+export type GpsLocationDto = {
+    lat: number;
+    lng: number;
+    source: 'manual' | 'course-pin' | 'aid-station' | 'device';
+    aidStationId?: string;
+    accuracyMeters?: number;
+};
+
+export type WitnessStatementDto = {
+    name: string;
+    statement?: string;
+    contact?: string;
+};
+
+export type CreateIncidentDto = {
+    severity: 1 | 2 | 3 | 4 | 5;
+    category: 'cardiac' | 'trauma' | 'heat_stroke' | 'dehydration' | 'musculoskeletal' | 'neurological' | 'allergic' | 'other';
+    traumaSubtype?: 'fall' | 'laceration' | 'head' | 'other';
+    bib?: string;
+    athleteName?: string;
+    description?: string;
+    gpsLocation: GpsLocationDto;
+    medicalTeamAssigned?: Array<string>;
+    witnessStatements?: Array<WitnessStatementDto>;
+    attachmentKeys?: Array<string>;
+    reportedAt?: string;
+};
+
+export type MedicalDirectorSignatureDto = {
+    name: string;
+    signedAt: string;
+};
+
+export type UpdateIncidentStatusDto = {
+    to: 'REPORTED' | 'MEDIC_DISPATCHED' | 'MEDIC_ON_SITE' | 'AMB_REQUESTED' | 'HOSPITAL_TRANSFER' | 'RESOLVED_ONSITE' | 'RESOLVED_DNF' | 'CLOSED';
+    reasonNote?: string;
+    closureReason?: 'RESOLVED' | 'FALSE_ALARM' | 'DUPLICATE' | 'ATHLETE_REFUSED_TREATMENT';
+    gps?: GpsLocationDto;
+    medicsToAssign?: Array<string>;
+    witnessStatements?: Array<WitnessStatementDto>;
+    medicalDirectorSignature?: MedicalDirectorSignatureDto;
+    newSeverity?: 1 | 2 | 3 | 4 | 5;
+};
+
+export type PdfExportOptionsDto = {
+    incidentIds?: Array<string>;
+    includeAppendix?: boolean;
+    includeSignature?: boolean;
+};
+
+export type PdfExportResponseDto = {
+    s3Key: string;
+    signedUrl: string;
+    expiresAtIso: string;
+    incidentCount: number;
+    warning: string;
+};
+
 export type MerchantControllerFindAllData = {
     body?: never;
     path?: never;
@@ -7884,3 +8016,167 @@ export type ResultKioskDisplayControllerUploadSponsorLogoResponses = {
 };
 
 export type ResultKioskDisplayControllerUploadSponsorLogoResponse = ResultKioskDisplayControllerUploadSponsorLogoResponses[keyof ResultKioskDisplayControllerUploadSponsorLogoResponses];
+
+export type MedicalIncidentControllerListData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        severity?: Array<number>;
+        state?: Array<'REPORTED' | 'MEDIC_DISPATCHED' | 'MEDIC_ON_SITE' | 'AMB_REQUESTED' | 'HOSPITAL_TRANSFER' | 'RESOLVED_ONSITE' | 'RESOLVED_DNF' | 'CLOSED'>;
+        category?: 'cardiac' | 'trauma' | 'heat_stroke' | 'dehydration' | 'musculoskeletal' | 'neurological' | 'allergic' | 'other';
+        /**
+         * ISO 8601 — only incidents reportedAt >= this
+         */
+        since?: string;
+        bib?: string;
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/admin/races/{raceId}/medical-incidents';
+};
+
+export type MedicalIncidentControllerListResponses = {
+    200: IncidentListResponseDto;
+};
+
+export type MedicalIncidentControllerListResponse = MedicalIncidentControllerListResponses[keyof MedicalIncidentControllerListResponses];
+
+export type MedicalIncidentControllerCreateData = {
+    body: CreateIncidentDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents';
+};
+
+export type MedicalIncidentControllerCreateResponses = {
+    201: IncidentResponseDto;
+};
+
+export type MedicalIncidentControllerCreateResponse = MedicalIncidentControllerCreateResponses[keyof MedicalIncidentControllerCreateResponses];
+
+export type MedicalIncidentControllerDetailData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}';
+};
+
+export type MedicalIncidentControllerDetailResponses = {
+    200: IncidentResponseDto;
+};
+
+export type MedicalIncidentControllerDetailResponse = MedicalIncidentControllerDetailResponses[keyof MedicalIncidentControllerDetailResponses];
+
+export type MedicalIncidentControllerTransitionStatusData = {
+    body: UpdateIncidentStatusDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}/status';
+};
+
+export type MedicalIncidentControllerTransitionStatusResponses = {
+    200: IncidentResponseDto;
+};
+
+export type MedicalIncidentControllerTransitionStatusResponse = MedicalIncidentControllerTransitionStatusResponses[keyof MedicalIncidentControllerTransitionStatusResponses];
+
+export type MedicalIncidentControllerUploadPhotoData = {
+    body: {
+        photo?: Blob | File;
+    };
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}/photo';
+};
+
+export type MedicalIncidentControllerUploadPhotoResponses = {
+    201: IncidentAttachmentResponseDto;
+};
+
+export type MedicalIncidentControllerUploadPhotoResponse = MedicalIncidentControllerUploadPhotoResponses[keyof MedicalIncidentControllerUploadPhotoResponses];
+
+export type MedicalIncidentControllerExportPdfData = {
+    body: PdfExportOptionsDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/pdf';
+};
+
+export type MedicalIncidentControllerExportPdfResponses = {
+    201: PdfExportResponseDto;
+};
+
+export type MedicalIncidentControllerExportPdfResponse = MedicalIncidentControllerExportPdfResponses[keyof MedicalIncidentControllerExportPdfResponses];
+
+export type MedicalIncidentControllerAutoBatchData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/auto-pdf-batch';
+};
+
+export type MedicalIncidentControllerAutoBatchResponses = {
+    201: PdfExportResponseDto;
+};
+
+export type MedicalIncidentControllerAutoBatchResponse = MedicalIncidentControllerAutoBatchResponses[keyof MedicalIncidentControllerAutoBatchResponses];
+
+export type MedicalIncidentControllerSignPhotoData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query: {
+        s3Key: string;
+    };
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}/photo-url';
+};
+
+export type MedicalIncidentControllerSignPhotoResponses = {
+    200: unknown;
+};
+
+export type MedicalIncidentControllerStreamData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/stream';
+};
+
+export type MedicalIncidentControllerStreamResponses = {
+    200: unknown;
+};
+
+export type MedicalIncidentControllerSignUploadUrlData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}/photo-upload-url';
+};
+
+export type MedicalIncidentControllerSignUploadUrlResponses = {
+    201: unknown;
+};

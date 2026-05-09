@@ -164,10 +164,14 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `master:cc-refresh-lock-user:<userId>` | F-005 per-user UX rate-limit (BR-CC-10 Tier 1) | 30s |
 | `master:course-map:<raceId>:<courseId>` | F-006 Course Map data response cache (gpxParsed + checkpoints + simplified URL) | 600s |
 | `master:course-map-lock:<raceId>:<courseId>` | F-006 SETNX anti-stampede lock during cache miss compute | 30s |
+| `medical:race:<raceId>:active-count` | F-018 medical-incident tab badge count of incidents NOT in CLOSED/RESOLVED_* states | 60s |
+| `medical:incident-lock:<incidentId>` | F-018 SETNX lock on concurrent state transitions (multi-station Race Director writes) | 5s |
 
 Cache invalidation: any admin write (create/update/publish/unpublish/delete/restore on articles OR categories) flushes ALL `articles:*` keys via `scanStream` + pipeline. Rate-limit keys use a different `ratelimit:*` prefix so they survive cache flushes — view/vote dedup state is preserved across admin edits.
 
 F-006 Course Map invalidation: `master:course-map:<raceId>:<courseId>` is DEL'd directly by `RacesService.updateCourse()` after `$set` succeeds (Clarification 3 — direct redis.del, NOT via CourseMapService injection to avoid circular DI), AND by CourseMapService methods on POST upload / DELETE / PATCH checkpoint-position.
+
+F-018 Medical Incident invalidation: `medical:race:<raceId>:active-count` is DEL'd by `MedicalIncidentService` after every create + state transition + severity change, paired with SSE emit (`incident.created` / `incident.state_changed` / `incident.severity_escalated`). The 5s SETNX lock `medical:incident-lock:<incidentId>` short-circuits concurrent state writes — second writer gets ConflictException 409 with VN message asking to retry.
 
 Flush pattern (careful — global):
 ```bash
@@ -199,6 +203,18 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - **Max size**: 2MB per logo. Max 5 logos per race (enforced by `ResultKioskDisplayService.appendSponsorLogo`).
 - **Reason**: Result Kiosk display config holds public sponsor logos shown on the kiosk result card. Same lifecycle as `courses/` — keep indefinitely so an admin can still reference past races' branding when cloning configs.
 - **CRITICAL**: do NOT mix `result-kiosk-sponsors/` with `result-images/` 24h TTL — sponsor logos must persist.
+
+### Lifecycle rule 4 — Medical Incident Tracker (F-018)
+- **Prefixes**: `medical-attachments/` and `medical-reports/`
+- **Expiration**: NONE (legal retention 7 years per VN Civil Code Art. 588–589 personal injury statute of limitations + ITRA + insurance audit). After 7y the `pii-anonymization` cron strips athleteName/bib/description/photo S3 keys but keeps severity/category/timestamps for analytics (BR-MI-31).
+- **Path convention**:
+  - Photo: `medical-attachments/{raceId}/{incidentId}/{ts}.{jpg|png|webp}`
+  - Report PDF: `medical-reports/{raceId}/{ts}.pdf` (Phase 1 PNG-as-PDF placeholder; Phase 2 pdf-lib swap)
+- **Access**: SIGNED URL ONLY — 5min for upload PUT, 15min for read GET (BR-MI-32 role-gated). NO public bucket policy for these prefixes.
+- **EXIF**: stripped post-upload except `timestamp` + `gps` (BR-MI-28).
+- **MIME allowlist**: `image/jpeg`, `image/png`, `image/webp` only. Server-side max 10MB pre-resize defense in depth (clients resize <2MB via canvas.toBlob).
+- **Audit log**: Sev 4-5 reads by Back-Office Admin role logged via `Logger.log` (BR-MI-32).
+- **CRITICAL**: do NOT mix `medical-attachments/` or `medical-reports/` with `result-images/` 24h TTL — medical evidence must persist for legal audit. Distinct from `courses/` (no PII) and `result-kiosk-sponsors/` (public logos).
 
 
 ## Development Rules

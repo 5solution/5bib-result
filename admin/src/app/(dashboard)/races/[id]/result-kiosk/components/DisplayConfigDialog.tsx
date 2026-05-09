@@ -19,7 +19,6 @@ import { X, Save, RotateCcw, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { authHeaders } from '@/lib/api';
-import { resultKioskDisplayControllerUploadSponsorLogo } from '@/lib/api-generated';
 import {
   type DisplayConfig,
   type DisplayPreset,
@@ -102,16 +101,30 @@ export function DisplayConfigDialog({ raceId, open, onClose }: Props) {
     setUploading(true);
     setUploadError(null);
     try {
-      const { data, error, response } = await resultKioskDisplayControllerUploadSponsorLogo({
-        path: { mongoRaceId: raceId },
-        body: { file } as Parameters<typeof resultKioskDisplayControllerUploadSponsorLogo>[0]['body'],
-        ...authHeaders(token ?? ''),
-      });
-      if (error) {
-        setUploadError(`Upload thất bại (${response?.status ?? 'error'})`);
+      // CLAUDE.md exception: backend uses @FileInterceptor + multipart/form-data
+      // for binary upload. SDK auto-gen doesn't handle multipart File bodies (sends
+      // JSON `{ file: {} }` which serializes File to empty object → backend "No file"
+      // 400). Raw fetch + FormData is the only sane path for binary uploads —
+      // same pattern as F-018 photo upload S3 PUT exception.
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const headers = authHeaders(token ?? '').headers ?? {};
+      const response = await fetch(
+        `/api/result-kiosk-display/${raceId}/sponsor-logo`,
+        {
+          method: 'POST',
+          headers, // do NOT set Content-Type — browser sets multipart boundary
+          body: formData,
+        },
+      );
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        setUploadError(`Upload thất bại (${response.status}) ${text}`);
         return;
       }
-      const json = (data ?? {}) as { url?: string };
+      const json = (await response.json().catch(() => ({}))) as { url?: string };
       if (json?.url) {
         setDraft((prev) => ({
           ...prev,

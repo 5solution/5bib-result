@@ -70,6 +70,20 @@ export class RaceCourse {
 
 export const RaceCourseSchema = SchemaFactory.createForClass(RaceCourse);
 
+/**
+ * F-018 A4 — race-level medical config (insurance hotline shown in incident
+ * detail drawer as `tel:` link). Optional, no migration backfill.
+ */
+@Schema({ _id: false })
+export class RaceMedicalConfig {
+  @Prop({ type: String }) insuranceHotline?: string;
+  @Prop({ type: String }) insuranceCarrierName?: string;
+  @Prop({ type: String }) medicalDirectorName?: string;
+  @Prop({ type: String }) medicalDirectorContact?: string;
+}
+export const RaceMedicalConfigSchema =
+  SchemaFactory.createForClass(RaceMedicalConfig);
+
 @Schema({ _id: false })
 export class RaceStatusHistoryEntry {
   @Prop({ required: true }) from: string;
@@ -145,6 +159,11 @@ export class Race {
   // Status override audit trail (BR: forward-only normally; admin can override with reason)
   @Prop({ type: [RaceStatusHistoryEntrySchema], default: [] })
   statusHistory: RaceStatusHistoryEntry[];
+
+  // F-018 A4 — race-level medical config (insurance hotline + medical director).
+  // Optional, lazy-set by admin Settings page; no migration backfill required.
+  @Prop({ type: RaceMedicalConfigSchema, default: () => ({}) })
+  medicalConfig?: RaceMedicalConfig;
 
   // Raw data from 5bib API (preserve all original fields)
   @Prop({ type: Object }) rawData: Record<string, any>;
