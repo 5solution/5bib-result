@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="5BIB-test-no-elevation">
+  <metadata><name>F-006 no-elevation fixture (TD-F006-10)</name></metadata>
+  <wpt lat="11.940" lon="108.440"><name>Start</name></wpt>
+  <wpt lat="11.985" lon="108.485"><name>Finish</name></wpt>
+  <trk>
+    <name>F-006 no-elevation track</name>
+    <trkseg>
+      <trkpt lat="11.940" lon="108.440"></trkpt>
+      <trkpt lat="11.945" lon="108.445"></trkpt>
+      <trkpt lat="11.955" lon="108.455"></trkpt>
+      <trkpt lat="11.965" lon="108.465"></trkpt>
+      <trkpt lat="11.975" lon="108.475"></trkpt>
+      <trkpt lat="11.985" lon="108.485"></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

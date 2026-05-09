@@ -103,7 +103,7 @@ export class RaceCertificateConfigService {
       .findOneAndUpdate(
         { race_id: raceId },
         { $set: update, $setOnInsert: { race_id: raceId } },
-        { new: true, upsert: true, setDefaultsOnInsert: true },
+        { returnDocument: "after", upsert: true, setDefaultsOnInsert: true },
       )
       .lean()
       .exec();

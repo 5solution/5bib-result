@@ -8,6 +8,7 @@ import { ResultClaim, ResultClaimSchema } from './schemas/result-claim.schema';
 import { ShareEvent, ShareEventSchema } from './schemas/share-event.schema';
 import { RaceResultController } from './race-result.controller';
 import { RaceResultService } from './services/race-result.service';
+import { RaceResultApiService } from './services/race-result-api.service';
 import { ResultImageService } from './services/result-image.service';
 import { BadgeService } from './services/badge.service';
 import { RaceSyncCron } from './services/race-sync.cron';
@@ -15,6 +16,18 @@ import { ShareEventService } from './services/share-event.service';
 import { ShareNurtureCron } from './services/share-nurture.cron';
 import { RacesModule } from '../races/races.module';
 import { UploadModule } from '../upload/upload.module';
+// F-017 — cross-module DI for chip lookup (ChipMappingService + ChipConfigService).
+// Imports ChipVerificationModule which already exports both services. Race-day
+// flow is MongoDB-only: ChipConfigService.findByMongoId → ChipMappingService.findByChipId
+// → existing RaceResultService.getAthleteDetail. NEVER live MySQL at runtime.
+import { ChipVerificationModule } from '../chip-verification/chip-verification.module';
+// F-010 — read-only access to timing-alert config schema (pace_alert_threshold).
+// Cross-module @InjectModel direct, NO TimingAlertModule import (avoid circular DI:
+// TimingAlertModule already imports RaceResultModule for RaceResultApiService).
+import {
+  TimingAlertConfig,
+  TimingAlertConfigSchema,
+} from '../timing-alert/schemas/timing-alert-config.schema';
 
 @Module({
   imports: [
@@ -23,6 +36,9 @@ import { UploadModule } from '../upload/upload.module';
       { name: SyncLog.name, schema: SyncLogSchema },
       { name: ResultClaim.name, schema: ResultClaimSchema },
       { name: ShareEvent.name, schema: ShareEventSchema },
+      // F-010 BR-FC-10/11 — register TimingAlertConfig schema for read-only
+      // pace_alert_threshold lookup in RaceResultService.getPaceAlertThreshold().
+      { name: TimingAlertConfig.name, schema: TimingAlertConfigSchema },
     ]),
     HttpModule,
     // Module-scoped throttler so @Throttle decorators on result-image /
@@ -38,9 +54,13 @@ import { UploadModule } from '../upload/upload.module';
     // ]),
     RacesModule,
     UploadModule,
+    // F-017 — cross-module DI ChipMappingService + ChipConfigService.
+    // ChipVerificationModule exports both per existing chip-verification.module.ts:61-62.
+    ChipVerificationModule,
   ],
   controllers: [RaceResultController],
   providers: [
+    RaceResultApiService,
     RaceResultService,
     ResultImageService,
     BadgeService,
@@ -48,6 +68,15 @@ import { UploadModule } from '../upload/upload.module';
     ShareEventService,
     ShareNurtureCron,
   ],
-  exports: [RaceResultService, BadgeService, ShareEventService],
+  // Phase 0 — export `RaceResultApiService` để Timing Alert module reuse
+  // shared HTTP client (axios timeout, error handling, URL masking) thay vì
+  // tự maintain HTTP client riêng. Timing Alert sẽ inject service này
+  // trong poll engine (Phase 1B) qua module imports list.
+  exports: [
+    RaceResultService,
+    RaceResultApiService,
+    BadgeService,
+    ShareEventService,
+  ],
 })
 export class RaceResultModule { }

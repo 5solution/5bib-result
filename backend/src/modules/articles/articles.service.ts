@@ -512,7 +512,7 @@ export class ArticlesService {
       .findOneAndUpdate(
         { slug, status: 'published', isDeleted: false },
         { $inc: { viewCount: 1 } },
-        { new: true, projection: { viewCount: 1 } },
+        { returnDocument: "after", projection: { viewCount: 1 } },
       )
       .lean()
       .exec();
@@ -552,7 +552,7 @@ export class ArticlesService {
       .findOneAndUpdate(
         { slug, status: 'published', isDeleted: false },
         update,
-        { new: true, projection: { helpfulYes: 1, helpfulNo: 1 } },
+        { returnDocument: "after", projection: { helpfulYes: 1, helpfulNo: 1 } },
       )
       .lean()
       .exec();

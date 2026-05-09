@@ -51,10 +51,31 @@ async function proxyRequest(req: NextRequest) {
   }
 
   const res = await fetch(targetUrl, init);
+
+  // SSE streaming pass-through: nếu backend trả `text/event-stream`,
+  // KHÔNG await arrayBuffer() (sẽ block forever vì SSE không close).
+  // Forward ReadableStream trực tiếp để EventSource browser nhận được
+  // events realtime. Detect qua Content-Type backend hoặc URL pattern /sse.
+  const contentTypeRes = res.headers.get("Content-Type") || "";
+  const isSse =
+    contentTypeRes.includes("text/event-stream") ||
+    targetPath.endsWith("/sse");
+  if (isSse) {
+    return new NextResponse(res.body, {
+      status: res.status,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+
   const data = await res.arrayBuffer();
 
   const responseHeaders: Record<string, string> = {
-    "Content-Type": res.headers.get("Content-Type") || "application/json",
+    "Content-Type": contentTypeRes || "application/json",
   };
   const disposition = res.headers.get("Content-Disposition");
   if (disposition) responseHeaders["Content-Disposition"] = disposition;

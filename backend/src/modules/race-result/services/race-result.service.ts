@@ -3,13 +3,16 @@ import { InjectModel } from '@nestjs/mongoose';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Model } from 'mongoose';
 import Redis from 'ioredis';
-import axios from 'axios';
 import { RaceResult, RaceResultDocument } from '../schemas/race-result.schema';
 import { SyncLog, SyncLogDocument } from '../schemas/sync-log.schema';
 import {
   ResultClaim,
   ResultClaimDocument,
 } from '../schemas/result-claim.schema';
+import {
+  TimingAlertConfig,
+  TimingAlertConfigDocument,
+} from '../../timing-alert/schemas/timing-alert-config.schema';
 import { GetRaceResultsDto } from '../dto/get-race-results.dto';
 import { SubmitClaimDto } from '../dto/submit-claim.dto';
 import { RacesService } from '../../races/races.service';
@@ -17,38 +20,14 @@ import { TelegramService } from '../../notification/telegram.service';
 import { MailService } from '../../notification/mail.service';
 import { UploadService } from '../../upload/upload.service';
 import { parseDistanceKm } from './badge.service';
+import { RaceResultApiService } from './race-result-api.service';
+import { RaceResultApiItem } from '../types/race-result-api.types';
 import * as crypto from 'crypto';
-
-interface RaceResultApiItem {
-  Bib: number;
-  Name: string;
-  OverallRank: number;
-  GenderRank: number;
-  CatRank: number;
-  Gender: string;
-  Category: string;
-  ChipTime: string;
-  GunTime: string;
-  TimingPoint: string;
-  Pace: string;
-  Certi: string;
-  Certificate: string;
-  OverallRanks: string;
-  GenderRanks: string;
-  Chiptimes: string;
-  Guntimes: string;
-  Paces: string;
-  TODs: string;
-  Sectors: string;
-  OverrankLive: number;
-  Gap: string;
-  Nationality: string;
-  Nation: string;
-  Member?: string;
-  Started?: number;
-  Finished?: number;
-  DNF?: number;
-}
+// F-017 — cross-module DI for chip lookup. Race-day flow is MongoDB-only:
+// ChipConfigService.findByMongoId (chip_race_configs) → ChipMappingService.findByChipId
+// (chip_mappings) → existing getAthleteDetail (race_results). NEVER live MySQL.
+import { ChipConfigService } from '../../chip-verification/services/chip-config.service';
+import { ChipMappingService } from '../../chip-verification/services/chip-mapping.service';
 
 @Injectable()
 export class RaceResultService {
@@ -65,8 +44,176 @@ export class RaceResultService {
     private readonly telegramService: TelegramService,
     private readonly mailService: MailService,
     private readonly uploadService: UploadService,
+    private readonly apiService: RaceResultApiService,
     @InjectRedis() private readonly redis: Redis,
+    /**
+     * F-010 BR-FC-10/11 — read pace_alert_threshold from timing_alert_configs.
+     * Cross-module dependency to TimingAlertConfig schema (read-only).
+     * Module imports MongooseModule.forFeature for it (race-result.module.ts).
+     */
+    @InjectModel(TimingAlertConfig.name)
+    private readonly timingAlertConfigModel: Model<TimingAlertConfigDocument>,
+    /**
+     * F-017 — chip → BIB resolution at race-day. MongoDB-only path.
+     * ChipConfigService.findByMongoId reads chip_race_configs (Mongo).
+     * ChipMappingService.findByChipId reads chip_mappings (Mongo).
+     */
+    private readonly chipConfigService: ChipConfigService,
+    private readonly chipMappingService: ChipMappingService,
   ) { }
+
+  /**
+   * F-017 BR-RK-CHIP — Resolve chip → bib → athlete envelope.
+   *
+   * MongoDB-only race-day flow (Danny clarification 2026-05-08):
+   *   [1] ChipConfigService.findByMongoId(mongoRaceId) → chip_race_configs doc
+   *       returns mysql_race_id (sharding key in chip_mappings docs).
+   *       NULL → 404 'race-not-mapped'.
+   *   [2] ChipMappingService.findByChipId(mysql_race_id, normalizedChipId)
+   *       → chip_mappings doc. NULL/deleted → 404 'chip-not-found'.
+   *       status === 'DISABLED' → 410 'chip-disabled'.
+   *       returns bib_number.
+   *   [3] this.getAthleteDetail(mongoRaceId, bib) → race_results doc.
+   *       NULL → 404 'athlete-not-found'.
+   *
+   * Returns the same public-safe envelope as F-013 /athlete/:raceId/:bib
+   * with `bib` echoed at top level for kiosk parsing convenience.
+   */
+  async lookupByChip(mongoRaceId: string, rawChipId: string): Promise<{
+    bib: string | null;
+    data: Record<string, unknown> | null;
+    success: boolean;
+    message?: string;
+    errorCode?: string;
+  }> {
+    if (!mongoRaceId || !rawChipId) {
+      return { bib: null, data: null, success: false, errorCode: 'bad-request', message: 'Missing input' };
+    }
+
+    // BR-01: normalize chipId — UPPER + TRIM (per chip-verification convention).
+    const chipId = rawChipId.trim().toUpperCase();
+    if (!chipId) {
+      return { bib: null, data: null, success: false, errorCode: 'bad-request', message: 'Empty chipId' };
+    }
+
+    // [1] Mongo: chip_race_configs lookup by mongo_race_id link.
+    const cfg = await this.chipConfigService.findByMongoId(mongoRaceId);
+    if (!cfg) {
+      this.logger.warn(`[lookupByChip] race-not-mapped mongoRaceId=${mongoRaceId}`);
+      return {
+        bib: null,
+        data: null,
+        success: false,
+        errorCode: 'race-not-mapped',
+        message: 'Race chưa enable Chip Verify — vào tab Chip Verify để link mysql_race_id',
+      };
+    }
+    const mysqlRaceId = cfg.mysql_race_id;
+
+    // [2] Mongo: chip_mappings lookup.
+    const mapping = await this.chipMappingService.findByChipId(mysqlRaceId, chipId);
+    if (!mapping) {
+      return {
+        bib: null,
+        data: null,
+        success: false,
+        errorCode: 'chip-not-found',
+        message: `Chip ${chipId} chưa map BIB`,
+      };
+    }
+    if (mapping.status === 'DISABLED') {
+      return {
+        bib: mapping.bib_number,
+        data: null,
+        success: false,
+        errorCode: 'chip-disabled',
+        message: `Chip ${chipId} đã bị disable`,
+      };
+    }
+
+    const bib = mapping.bib_number;
+
+    // [3] Mongo: race_results lookup via existing getAthleteDetail (cache-aware).
+    const detail = await this.getAthleteDetail(mongoRaceId, bib);
+    if (!detail) {
+      return {
+        bib,
+        data: null,
+        success: false,
+        errorCode: 'athlete-not-found',
+        message: `BIB ${bib} chưa có data race result`,
+      };
+    }
+
+    // Strip internal fields (BR-RK-05 privacy guard — same scrub as
+    // /athlete/:raceId/:bib endpoint at controller level).
+    const { _id, editHistory, isManuallyEdited, ...publicData } = detail as typeof detail & {
+      _id?: string;
+      editHistory?: unknown[];
+      isManuallyEdited?: boolean;
+    };
+    void _id; void editHistory; void isManuallyEdited;
+
+    return { bib, data: publicData, success: true };
+  }
+
+  /**
+   * F-010 BR-FC-07 — Admin manual flag athlete as DNS_CHIP_FAIL.
+   * Toggle boolean `dnsChipFail` on race_results document. Returns updated
+   * doc or null if id not found. Indexed `_id` lookup — < 5ms.
+   *
+   * Side-effect: invalidate dashboard-snapshot cache so DNS breakdown
+   * updates immediately on next snapshot read (no race day stale).
+   */
+  async updateDnsChipFail(
+    id: string,
+    dnsChipFail: boolean,
+  ): Promise<RaceResultDocument | null> {
+    const updated = await this.resultModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { dnsChipFail } },
+        { new: true },
+      )
+      .exec();
+    if (!updated) return null;
+
+    // Invalidate dashboard-snapshot cache for this race so DNS breakdown
+    // refreshes on next read (race day live ops cannot wait 15s TTL).
+    try {
+      const cacheKey = `master:rr-snapshot:${updated.raceId}`;
+      await this.redis.del(cacheKey);
+    } catch (err) {
+      this.logger.warn(
+        `[updateDnsChipFail] cache invalidation fail race=${updated.raceId} — err=${(err as Error).message}`,
+      );
+    }
+    return updated;
+  }
+
+  /**
+   * F-010 BR-FC-10/11 — read paceAlertThreshold from race timing config.
+   * Fallback to 0.80 (pre-F-010 hardcoded value) when config doc missing
+   * or threshold not set. Single indexed query (race_id) — < 5ms.
+   */
+  async getPaceAlertThreshold(raceId: string): Promise<number> {
+    try {
+      const config = await this.timingAlertConfigModel
+        .findOne({ race_id: raceId })
+        .select({ pace_alert_threshold: 1 })
+        .lean<{ pace_alert_threshold?: number }>()
+        .exec();
+      const v = config?.pace_alert_threshold;
+      if (typeof v === 'number' && v >= 0.2 && v <= 0.95) {
+        return v;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `[getPaceAlertThreshold] race=${raceId} fallback default — err=${(err as Error).message}`,
+      );
+    }
+    return 0.80;
+  }
 
   // ─── Cache helpers ────────────────────────────────────────────
 
@@ -286,18 +433,19 @@ export class RaceResultService {
   ): Promise<number> {
     this.logger.log(`Syncing ${distance} race results from ${apiUrl}...`);
 
-    const response = await axios.get<RaceResultApiItem[]>(apiUrl, {
-      timeout: 30000,
-    });
+    // Phase 0 refactor: HTTP fetch delegated to shared `RaceResultApiService`.
+    // Service handles: axios timeout 30s, non-array body guard, error logging
+    // with API key masked. Throws Error nếu fetch fail → caller's try/catch
+    // marks sync FAILED + records errorMessage as before.
+    const data = await this.apiService.fetchRaceResults(apiUrl);
 
-    if (!response.data || !Array.isArray(response.data)) {
-      this.logger.warn(
-        `Invalid data received for ${distance}: ${typeof response.data}`,
-      );
-      return 0;
+    if (data.length === 0) {
+      // Vendor có thể trả empty array (race chưa có data) hoặc non-array body
+      // (đã được service log warn). Behavior cũ: bulkOps rỗng → return 0.
+      // KHÔNG log lại ở đây để tránh duplicate noise.
     }
 
-    const bulkOps = response.data.map((result, idx) => {
+    const bulkOps = data.map((result, idx) => {
       const overallRank = this.normalizeRankValue(result.OverallRank, result.TimingPoint);
       const genderRank = this.normalizeRankValue(result.GenderRank, result.TimingPoint);
       const catRank = this.normalizeRankValue(result.CatRank, result.TimingPoint);
@@ -684,6 +832,10 @@ export class RaceResultService {
       if (hours && hours > 0) avgSpeed = distanceKm / hours;
     }
 
+    // F-010 BR-FC-10/11 — pace alert threshold per race config
+    // (TRAIL=0.45, ULTRA=0.40, default ROAD=0.80). Pre-F-010 hardcoded 0.80.
+    const paceAlertThreshold = await this.getPaceAlertThreshold(raceId);
+
     // Augment splits with rankDelta + isPaceAlert
     if (Array.isArray(result.splits)) {
       mapped.splits = result.splits.map((split, index) => {
@@ -695,7 +847,7 @@ export class RaceResultService {
             : prevRank - currRank; // positive = moved up (BR-01)
         const isPaceAlert =
           split.speed != null && avgSpeed != null
-            ? split.speed < avgSpeed * 0.8 // pace drop ≥ 20% (BR-02)
+            ? split.speed < avgSpeed * paceAlertThreshold // pace drop config-driven (BR-02 + F-010)
             : false;
         return { ...split, rankDelta, isPaceAlert };
       });
@@ -1588,7 +1740,7 @@ export class RaceResultService {
           adminNote: resolutionNote,
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     ).exec();
 
     if (!claim) {
@@ -1686,7 +1838,7 @@ export class RaceResultService {
         $set: updateSet,
         ...(auditEntries.length > 0 ? { $push: { editHistory: { $each: auditEntries } } } : {}),
       },
-      { new: true },
+      { returnDocument: "after" },
     ).lean().exec();
 
     // Invalidate course-level cache + athlete-level cache + badge cache.
@@ -1822,7 +1974,7 @@ export class RaceResultService {
     if (!url) throw new BadRequestException('Upload failed');
 
     const updated = await this.resultModel
-      .findOneAndUpdate({ raceId, bib }, { $set: { avatarUrl: url } }, { new: true })
+      .findOneAndUpdate({ raceId, bib }, { $set: { avatarUrl: url } }, { returnDocument: "after" })
       .lean()
       .exec();
 

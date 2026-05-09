@@ -18,6 +18,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { ForceUpdateStatusDto } from './dto/force-update-status.dto';
 import { AddCourseDto } from './dto/add-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { CourseMapService } from './services/course-map.service';
 
 /**
  * Top-level fields stripped from public race responses.
@@ -53,6 +54,10 @@ export class RacesService {
     @InjectModel(Race.name) private readonly raceModel: Model<RaceDocument>,
     private readonly httpService: HttpService,
     @InjectRedis() private readonly redis: Redis,
+    // TD-F006-09 — inject CourseMapService for S3 GPX cleanup on course
+    // removal. Verified safe: CourseMapService only depends on Race model +
+    // Redis (NO RacesService dep) — no circular DI.
+    private readonly courseMapService: CourseMapService,
   ) {}
 
   private async getRaceFromCache(key: string): Promise<any | null> {
@@ -150,7 +155,7 @@ export class RacesService {
     if (dto.endDate) update.endDate = new Date(dto.endDate);
 
     const race = await this.raceModel
-      .findByIdAndUpdate(id, { $set: update }, { new: true })
+      .findByIdAndUpdate(id, { $set: update }, { returnDocument: "after" })
       .lean()
       .exec();
 
@@ -203,7 +208,7 @@ export class RacesService {
     }
 
     const updated = await this.raceModel
-      .findByIdAndUpdate(id, { $set: { status: dto.status } }, { new: true })
+      .findByIdAndUpdate(id, { $set: { status: dto.status } }, { returnDocument: "after" })
       .lean()
       .exec();
 
@@ -248,7 +253,7 @@ export class RacesService {
           $set: { status: to },
           $push: { statusHistory: historyEntry },
         },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean()
       .exec();
@@ -273,7 +278,7 @@ export class RacesService {
     }
 
     const race = await this.raceModel
-      .findByIdAndUpdate(raceId, { $push: { courses: dto } }, { new: true })
+      .findByIdAndUpdate(raceId, { $push: { courses: dto } }, { returnDocument: "after" })
       .lean()
       .exec();
 
@@ -287,17 +292,28 @@ export class RacesService {
 
   async updateCourse(raceId: string, courseId: string, dto: UpdateCourseDto) {
     const setFields: Record<string, any> = {};
+    const unsetFields: Record<string, ''> = {};
     for (const [key, value] of Object.entries(dto)) {
-      if (value !== undefined) {
+      if (value === undefined) {
+        // Caller (e.g. DELETE GPX endpoint) signals an unset by passing
+        // `undefined` for the field. $unset handles both top-level course
+        // fields (gpxUrl, gpxParsed, gpxSimplifiedUrl) without removing the
+        // course element itself.
+        unsetFields[`courses.$.${key}`] = '';
+      } else {
         setFields[`courses.$.${key}`] = value;
       }
     }
 
+    const update: Record<string, unknown> = {};
+    if (Object.keys(setFields).length > 0) update.$set = setFields;
+    if (Object.keys(unsetFields).length > 0) update.$unset = unsetFields;
+
     const race = await this.raceModel
       .findOneAndUpdate(
         { _id: raceId, 'courses.courseId': courseId },
-        { $set: setFields },
-        { new: true },
+        update,
+        { returnDocument: "after" },
       )
       .lean()
       .exec();
@@ -307,15 +323,55 @@ export class RacesService {
     }
 
     await this.invalidateRaceCache(raceId, race.slug);
+    // F-006 BR-CM-10 + Concern 2 — direct DEL (no CourseMapService inject;
+    // avoids circular DI per Clarification 3 in 02-manager-plan.md).
+    try {
+      await this.redis.del(`master:course-map:${raceId}:${courseId}`);
+    } catch {
+      /* Redis down — non-fatal */
+    }
     return { data: race, success: true };
   }
 
+  // Phase B FEATURE-001 NOTE: Event hook auto-trigger discover preview defer
+  // — dùng frontend-driven discover thay vì backend event hook để tránh
+  // circular DI giữa RacesModule ↔ TimingAlertModule. Frontend
+  // `DiscoverPreviewPanel` debounce 800ms apiUrl change → call existing
+  // POST /discover-checkpoints/:courseId endpoint trực tiếp.
+  //
+  // discoverAndCachePreview/getCachedPreview methods trong CheckpointDiscoveryService
+  // giữ lại như utility — có thể dùng nếu sau này cần backend cron pre-warm
+  // discover cho races sắp live.
+
   async removeCourse(raceId: string, courseId: string) {
+    // TD-F006-09 — clean orphaned S3 GPX objects BEFORE the $pull. Read the
+    // course first to check if it had GPX uploaded; if so, fire-and-forget
+    // delete to S3 so we don't leave orphan objects under
+    // `courses/<raceId>/<courseId>/`.
+    //
+    // We swallow errors: even if S3 cleanup fails, we still proceed with the
+    // DB delete (CourseMapService.deleteGpxFromS3 is already graceful per its
+    // own implementation — uses safeDelete internally).
+    try {
+      const existing = await this.raceModel
+        .findOne({ _id: raceId, 'courses.courseId': courseId }, { 'courses.$': 1 })
+        .lean()
+        .exec();
+      const targetCourse = existing?.courses?.[0];
+      if (targetCourse?.gpxUrl || targetCourse?.gpxSimplifiedUrl) {
+        await this.courseMapService.deleteGpxFromS3(raceId, courseId);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `TD-F006-09: S3 GPX cleanup failed for ${raceId}/${courseId} — continuing with DB delete: ${(err as Error).message}`,
+      );
+    }
+
     const race = await this.raceModel
       .findByIdAndUpdate(
         raceId,
         { $pull: { courses: { courseId } } },
-        { new: true },
+        { returnDocument: "after" },
       )
       .lean()
       .exec();
@@ -325,6 +381,14 @@ export class RacesService {
     }
 
     await this.invalidateRaceCache(raceId, race.slug);
+    // TD-F006-08 — same direct DEL pattern as updateCourse(); without this the
+    // public `master:course-map:<raceId>:<courseId>` cache would serve a stale
+    // course-map response after BTC removes the course.
+    try {
+      await this.redis.del(`master:course-map:${raceId}:${courseId}`);
+    } catch {
+      /* Redis down — non-fatal */
+    }
     return { data: race, success: true, message: 'Course removed' };
   }
 
@@ -639,7 +703,7 @@ export class RacesService {
     await this.raceModel.findOneAndUpdate(
       { productId },
       { $set: raceDoc },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     );
 
     this.logger.log(`Synced race: ${raceDoc.title} (productId: ${productId})`);

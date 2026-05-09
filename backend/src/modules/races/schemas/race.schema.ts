@@ -19,8 +19,12 @@ export const CheckpointServicesSchema =
 export class CourseCheckpoint {
   @Prop({ required: true }) key: string; // timing point key, e.g. "TM1", "TM2", "Finish"
   @Prop({ required: true }) name: string; // display name, e.g. "Trạm 1 - Suối Vàng"
-  @Prop() distance?: string; // e.g. "5K"
+  @Prop() distance?: string; // e.g. "5K" — display string (legacy)
+  @Prop({ type: Number }) distanceKm?: number; // 5.0 — numeric km cho pace projection (timing-alert + charts)
   @Prop({ type: CheckpointServicesSchema }) services?: CheckpointServices;
+  // F-006 BR-CM-04/05 — auto-matched waypoint OR manual drag position (WGS84)
+  @Prop({ type: Number }) lat?: number;
+  @Prop({ type: Number }) lng?: number;
 }
 
 export const CourseCheckpointSchema =
@@ -44,12 +48,70 @@ export class RaceCourse {
   @Prop() startLocation?: string; // e.g. "Quảng trường Lâm Viên"
   @Prop() cutOffTime?: string; // Cut-off time e.g. "12:00:00" or "24 giờ"
   @Prop() mapUrl?: string; // Course map image URL (S3)
-  @Prop() gpxUrl?: string; // GPX file URL (S3)
+  @Prop() gpxUrl?: string; // GPX file URL (S3) — original .gpx/.kml
+  // F-006 BR-CM-02/03/06 — server-parsed metadata (raw + simplified counts, distance, elevation, bounds)
+  @Prop({ type: Object })
+  gpxParsed?: {
+    trackPoints: number;
+    simplifiedPoints: number;
+    totalDistanceKm: number;
+    elevationGain: number | null;
+    elevationLoss: number | null;
+    maxElevation: number | null;
+    minElevation: number | null;
+    bounds: { north: number; south: number; east: number; west: number };
+  };
+  // F-006 BR-CM-11 — S3 URL of simplified GeoJSON (public-read)
+  @Prop({ type: String })
+  gpxSimplifiedUrl?: string;
   @Prop({ type: [CourseCheckpointSchema], default: [] })
   checkpoints: CourseCheckpoint[];
+
+  // F-019 BR-AG-05/37/38 — AG preset config per course (optional, lazy default).
+  // PAUSE-CODER-09: NO migration script needed — service code handles missing
+  // field gracefully (defaultPresetFor(courseType) fallback).
+  @Prop({ type: String })
+  ageGroupPreset?: string; // 'vn_road_default' | 'road_5_year' | 'trail_itra' | 'trail_lite' | 'open_only'
+
+  @Prop({ type: Object })
+  ageGroupOverride?: {
+    bracketsM?: Array<{ key: string; label: string; min: number; max: number }>;
+    bracketsF?: Array<{ key: string; label: string; min: number; max: number }>;
+    boundaryMode?: 'upper' | 'lower';
+  };
+
+  @Prop({ type: Number })
+  paceThresholdOverride?: number; // sec/km lower bound override Pattern G
+
+  /**
+   * F-019 v2 — Race-specific bracket source override (Path B trust mode).
+   *
+   * - `'5bib'` (default): tự tính bracket từ master-data DOB (Path A primary).
+   *   Khi DOB null → exclude athlete khỏi AG bucket.
+   * - `'vendor'`: Path B trust mode — chỉ dùng vendor `Category` string.
+   *   BTC chọn khi DOB coverage < 50% (xem AGEligibilityReport). Risk:
+   *   vendor sai → 5BIB mất uy tín "trọng tài độc lập".
+   * - `'hybrid'`: Path A first, fallback Path B cho athletes thiếu DOB.
+   */
+  @Prop({ enum: ['5bib', 'vendor', 'hybrid'], default: '5bib' })
+  bracketSource?: '5bib' | 'vendor' | 'hybrid';
 }
 
 export const RaceCourseSchema = SchemaFactory.createForClass(RaceCourse);
+
+/**
+ * F-018 A4 — race-level medical config (insurance hotline shown in incident
+ * detail drawer as `tel:` link). Optional, no migration backfill.
+ */
+@Schema({ _id: false })
+export class RaceMedicalConfig {
+  @Prop({ type: String }) insuranceHotline?: string;
+  @Prop({ type: String }) insuranceCarrierName?: string;
+  @Prop({ type: String }) medicalDirectorName?: string;
+  @Prop({ type: String }) medicalDirectorContact?: string;
+}
+export const RaceMedicalConfigSchema =
+  SchemaFactory.createForClass(RaceMedicalConfig);
 
 @Schema({ _id: false })
 export class RaceStatusHistoryEntry {
@@ -113,9 +175,36 @@ export class Race {
   // External IDs
   @Prop() externalRaceId: string; // RaceResult race ID
 
+  // ❌ DEPRECATED 2026-05-08 — F-015 Check-In Kiosk feature scrapped (duplicate of ORG.5bib.com).
+  // Field left in schema to avoid migration. Always null. Will be hard-deleted when other
+  // breaking schema changes need a migration anyway. DO NOT use in new code.
+  @Prop({
+    type: { start: { type: Date, default: null }, end: { type: Date, default: null } },
+    default: null,
+    _id: false,
+  })
+  checkInWindow?: { start: Date | null; end: Date | null } | null;
+
   // Status override audit trail (BR: forward-only normally; admin can override with reason)
   @Prop({ type: [RaceStatusHistoryEntrySchema], default: [] })
   statusHistory: RaceStatusHistoryEntry[];
+
+  // F-018 A4 — race-level medical config (insurance hotline + medical director).
+  // Optional, lazy-set by admin Settings page; no migration backfill required.
+  @Prop({ type: RaceMedicalConfigSchema, default: () => ({}) })
+  medicalConfig?: RaceMedicalConfig;
+
+  /**
+   * F-019 v2.1 — Compounding mode cho podium calc.
+   * 'mutually_exclusive' (default VN amateur): top 3 overall EXCLUDED khỏi AG buckets.
+   * 'compounding' (WA TR9): top 3 overall vẫn được tính top AG (cộng dồn).
+   * Admin override per-race qua Race Settings UI.
+   */
+  @Prop({
+    enum: ['mutually_exclusive', 'compounding'],
+    default: 'mutually_exclusive',
+  })
+  awardsCompoundingMode: 'mutually_exclusive' | 'compounding';
 
   // Raw data from 5bib API (preserve all original fields)
   @Prop({ type: Object }) rawData: Record<string, any>;

@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { GpxParsedDto } from './gpx-parsed.dto';
 
 export class CheckpointServicesDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() water?: boolean;
@@ -27,16 +28,42 @@ export class CourseCheckpointDto {
   @IsString()
   name: string;
 
-  @ApiPropertyOptional({ description: 'Distance label', example: '5K' })
+  @ApiPropertyOptional({ description: 'Distance label (display string)', example: '5K' })
   @IsOptional()
   @IsString()
   distance?: string;
+
+  @ApiPropertyOptional({
+    description: 'Distance in km (numeric, used by timing-alert pace projection)',
+    example: 5.2,
+  })
+  @IsOptional()
+  @IsNumber()
+  distanceKm?: number;
 
   @ApiPropertyOptional({ description: 'Aid station services available at this checkpoint' })
   @IsOptional()
   @ValidateNested()
   @Type(() => CheckpointServicesDto)
   services?: CheckpointServicesDto;
+
+  @ApiPropertyOptional({
+    description:
+      'Latitude (WGS84). Set by GPX waypoint auto-match (BR-CM-04) or manual drag (BR-CM-05).',
+    example: 20.9612,
+  })
+  @IsOptional()
+  @IsNumber()
+  lat?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Longitude (WGS84). Set by GPX waypoint auto-match (BR-CM-04) or manual drag (BR-CM-05).',
+    example: 105.8542,
+  })
+  @IsOptional()
+  @IsNumber()
+  lng?: number;
 }
 
 export class AddCourseDto {
@@ -121,4 +148,22 @@ export class AddCourseDto {
   @ValidateNested({ each: true })
   @Type(() => CourseCheckpointDto)
   checkpoints?: CourseCheckpointDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Server-parsed GPX metadata (BR-CM-02/03/06). Populated by CourseMapService.uploadGpx; admin can also overwrite via UpdateCourseDto.',
+    type: GpxParsedDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GpxParsedDto)
+  gpxParsed?: GpxParsedDto;
+
+  @ApiPropertyOptional({
+    description:
+      'Public S3 URL for the simplified GeoJSON of the course track (BR-CM-11).',
+  })
+  @IsOptional()
+  @IsString()
+  gpxSimplifiedUrl?: string;
 }

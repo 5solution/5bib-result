@@ -4,11 +4,14 @@ import { HttpService } from '@nestjs/axios';
 import { NotFoundException } from '@nestjs/common';
 import { RacesService } from './races.service';
 import { Race } from './schemas/race.schema';
+import { CourseMapService } from './services/course-map.service';
 
 describe('RacesService', () => {
   let service: RacesService;
   let mockModel: any;
   let mockHttpService: any;
+  let mockRedis: { get: jest.Mock; set: jest.Mock; del: jest.Mock };
+  let mockCourseMapService: { deleteGpxFromS3: jest.Mock };
 
   const mockRace = {
     _id: '665abc123',
@@ -55,11 +58,28 @@ describe('RacesService', () => {
       get: jest.fn(),
     };
 
+    mockRedis = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+    };
+
+    mockCourseMapService = {
+      deleteGpxFromS3: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RacesService,
         { provide: getModelToken(Race.name), useValue: mockModel },
         { provide: HttpService, useValue: mockHttpService },
+        // F-006 — RacesService now @InjectRedis() (cache invalidate hook
+        // in updateCourse). Provide the same DI token nest-modules/ioredis
+        // registers so the test module compiles.
+        { provide: 'default_IORedisModuleConnectionToken', useValue: mockRedis },
+        // TD-F006-09 — RacesService now injects CourseMapService for S3 GPX
+        // cleanup on course removal. Provide a stub mock for tests.
+        { provide: CourseMapService, useValue: mockCourseMapService },
       ],
     }).compile();
 
@@ -117,7 +137,7 @@ describe('RacesService', () => {
       expect(mockModel.findByIdAndUpdate).toHaveBeenCalledWith(
         '665abc123',
         { $set: expect.objectContaining({ title: 'Updated Title' }) },
-        { new: true },
+        { returnDocument: 'after' },
       );
       expect(result.success).toBe(true);
     });
@@ -147,7 +167,7 @@ describe('RacesService', () => {
       expect(mockModel.findByIdAndUpdate).toHaveBeenCalledWith(
         '665abc123',
         { $set: { status: 'live' } },
-        { new: true },
+        { returnDocument: 'after' },
       );
       expect(result.success).toBe(true);
       expect(result.data.status).toBe('live');
@@ -214,7 +234,7 @@ describe('RacesService', () => {
       expect(mockModel.findByIdAndUpdate).toHaveBeenCalledWith(
         '665abc123',
         { $push: { courses: dto } },
-        { new: true },
+        { returnDocument: 'after' },
       );
       expect(result.success).toBe(true);
       expect(result.data.courses).toHaveLength(2);
@@ -263,6 +283,23 @@ describe('RacesService', () => {
         service.updateCourse('nonexistent', '999', { apiUrl: 'x' }),
       ).rejects.toThrow(NotFoundException);
     });
+
+    // F-006 BR-CM-10 + Concern 2 — direct DEL master:course-map: key
+    // after $set succeeds (avoids circular DI per Clarification 3).
+    it('should invalidate master:course-map cache after update', async () => {
+      const updatedRace = { ...mockRace, slug: 's' };
+      mockModel.findOneAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
+
+      await service.updateCourse('665abc123', '708', { apiUrl: 'x' });
+
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        'master:course-map:665abc123:708',
+      );
+    });
   });
 
   // ─── removeCourse ─────────────────────────────────────────────
@@ -270,25 +307,102 @@ describe('RacesService', () => {
   describe('removeCourse', () => {
     it('should remove a course from the array', async () => {
       const updatedRace = { ...mockRace, courses: [] };
-      mockModel.exec.mockResolvedValue(updatedRace);
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
 
       const result = await service.removeCourse('665abc123', '708');
 
       expect(mockModel.findByIdAndUpdate).toHaveBeenCalledWith(
         '665abc123',
         { $pull: { courses: { courseId: '708' } } },
-        { new: true },
+        { returnDocument: 'after' },
       );
       expect(result.success).toBe(true);
       expect(result.data.courses).toHaveLength(0);
     });
 
     it('should throw NotFoundException when race not found', async () => {
-      mockModel.exec.mockResolvedValue(null);
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
+      });
 
       await expect(
         service.removeCourse('nonexistent', '708'),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    // TD-F006-08 — direct DEL master:course-map: key after $pull succeeds
+    // (mirrors updateCourse pattern; prevents stale public response after
+    // BTC removes a course).
+    it('should invalidate master:course-map cache after removeCourse', async () => {
+      const updatedRace = { ...mockRace, slug: 's', courses: [] };
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
+
+      await service.removeCourse('665abc123', '708');
+
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        'master:course-map:665abc123:708',
+      );
+    });
+
+    // TD-F006-09 — when the removed course had `gpxUrl` or `gpxSimplifiedUrl`,
+    // deleteGpxFromS3 must run BEFORE the $pull so we don't leave orphaned S3
+    // objects under `courses/<raceId>/<courseId>/`.
+    it('TD-F006-09: should call deleteGpxFromS3 when course had gpxUrl', async () => {
+      const courseWithGpx = {
+        courseId: '708',
+        gpxUrl: 'https://s3.example/courses/665abc123/708/original.gpx',
+        gpxSimplifiedUrl:
+          'https://s3.example/courses/665abc123/708/simplified.geojson',
+      };
+      // findOne returns the projected course-only doc
+      mockModel.findOne = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ courses: [courseWithGpx] }),
+        }),
+      });
+      const updatedRace = { ...mockRace, slug: 's', courses: [] };
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
+
+      await service.removeCourse('665abc123', '708');
+
+      expect(mockCourseMapService.deleteGpxFromS3).toHaveBeenCalledWith(
+        '665abc123',
+        '708',
+      );
+    });
+
+    it('TD-F006-09: should NOT call deleteGpxFromS3 when course had no GPX', async () => {
+      mockModel.findOne = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            courses: [{ courseId: '708' /* no gpxUrl */ }],
+          }),
+        }),
+      });
+      const updatedRace = { ...mockRace, slug: 's', courses: [] };
+      mockModel.findByIdAndUpdate = jest.fn().mockReturnValue({
+        lean: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedRace),
+        }),
+      });
+
+      await service.removeCourse('665abc123', '708');
+
+      expect(mockCourseMapService.deleteGpxFromS3).not.toHaveBeenCalled();
     });
   });
 
@@ -361,7 +475,16 @@ describe('RacesService', () => {
         slug: 'vietnam-marathon-2026',
       });
       expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockRace);
+      // BR-UX-31 / TD-F006-04 — getRaceBySlug strips private fields for public
+      // callers (default isPrivileged=false): _id is replaced by id (string),
+      // cacheTtlSeconds is removed, and per-course apiUrl is scrubbed.
+      const { _id, cacheTtlSeconds, courses, ...publicBase } = mockRace;
+      const expectedPublic = {
+        ...publicBase,
+        id: _id,
+        courses: courses.map(({ apiUrl: _api, ...rest }) => rest),
+      };
+      expect(result.data).toEqual(expectedPublic);
     });
 
     it('should return not found when slug does not match', async () => {

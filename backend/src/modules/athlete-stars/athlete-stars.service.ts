@@ -62,7 +62,7 @@ export class AthleteStarsService {
           courseName: course?.name || course?.distance || courseId,
         },
       },
-      { upsert: true, new: true, lean: true },
+      { upsert: true, returnDocument: "after", lean: true },
     );
     return doc;
   }

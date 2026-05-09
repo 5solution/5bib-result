@@ -70,8 +70,10 @@
   --5bib-bg: #faf8f5;
   --5bib-surface: #f3f0eb;
   --5bib-surface-2: #e8e4dd;
-  --5bib-accent: #1D49FF;
-  --5bib-accent-dim: #0B36E6;
+  --5bib-accent: #FF0E65;
+  --5bib-accent-dim: #d9094f;
+  --5bib-info: #1D49FF;
+  --5bib-info-dim: #0B36E6;
   --5bib-magenta: #FF0E65;
   --5bib-magenta-dim: #E60057;
   --5bib-accent-warm: #d97706;
@@ -94,7 +96,7 @@
   --card-foreground: #1c1917;
   --popover: #ffffff;
   --popover-foreground: #1c1917;
-  --primary: #1D49FF;
+  --primary: #FF0E65;
   --primary-foreground: #ffffff;
   --secondary: #f3f0eb;
   --secondary-foreground: #1c1917;
@@ -105,18 +107,18 @@
   --destructive: #dc2626;
   --border: #e7e5e4;
   --input: #e7e5e4;
-  --ring: #1D49FF;
+  --ring: #FF0E65;
   --radius: 0.625rem;
 
   /* Sidebar — DARK theme per 5Solution design (slate-900 surface, white text) */
   --sidebar: #0F172A;
   --sidebar-foreground: rgba(255, 255, 255, 0.78);
-  --sidebar-primary: #1D49FF;
+  --sidebar-primary: #FF0E65;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(29, 73, 255, 0.18);
+  --sidebar-accent: rgba(255, 14, 101, 0.18);
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #1D49FF;
+  --sidebar-ring: #FF0E65;
 
   /* Charts */
   --chart-1: #1D49FF;
@@ -140,7 +142,32 @@
   --duration-fast: 150ms;
   --duration-normal: 280ms;
   --duration-slow: 500ms;
+
+  /* ── 5Solution design canvas tokens (FEATURE-005 Command Center) ── */
+  --5s-bg: #FAF8F5;
+  --5s-surface: #F3F0EB;
+  --5s-text: #1C1917;
+  --5s-text-muted: #78716C;
+  --5s-border: #E7E2D9;
+  --5s-border-strong: #C7C0B4;
+  /* F-007 BR-AF-15 — magenta primary token, blue retained as info for data viz */
+  --5s-primary: #FF0E65;
+  --5s-primary-hover: #d9094f;
+  --5s-info: #1D49FF;
+  --5s-info-50: #E6ECFF;
+  --5s-live: #FF0E65;
+  /* Backwards-compat aliases (kept so existing F-005/F-006 components keep compiling) */
+  --5s-blue: #1D49FF;
+  --5s-blue-50: #E6ECFF;
+  --5s-magenta: #FF0E65;
+  --5s-success: #16A34A;
+  --5s-warning: #F59E0B;
+  --5s-danger: #DC2626;
 }
+
+/* ── Command Center keyframes (race-ops) ── */
+@keyframes ro-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }
+@keyframes ro-pulse { 0% { transform: scale(.9); opacity:.5 } 70% { transform: scale(2.1); opacity:0 } 100% { transform: scale(2.1); opacity:0 } }
 
 /* ── Dark mode (keep simple — admin mostly light) ── */
 .dark {
@@ -331,3 +358,38 @@
 .duong-mon-scope {
   font-family: var(--font-sans);
 }
+
+/* ──────────────────────────────────────────────────────────────────
+   F-008 v2 BR-CC2-22 — Command Center fullscreen mode.
+   Toggle activated by `CommandCenterFullscreenButton` setting
+   `data-fullscreen` on <body>. Hides race-ops shell sticky header so
+   the dashboard body fills the viewport. NO browser F11 — admin-only
+   fullscreen designed for race-day MC big-screen mounting.
+   ────────────────────────────────────────────────────────────────── */
+body[data-fullscreen] [data-race-ops-shell-header] {
+  transform: translateY(-100%);
+  transition: transform 200ms ease-out;
+  pointer-events: none;
+}
+body[data-fullscreen] main {
+  padding-top: 0 !important;
+  transition: padding 200ms ease-out;
+}
+
+/* F-011 BR-PB-02 — Extend fullscreen scope to admin shell (sidebar + topbar).
+   Danny chốt A: instant `display:none` for race-day big-screen viewport-max.
+   `!important` overrides Tailwind `lg:flex` on <aside>. */
+body[data-fullscreen] [data-admin-sidebar],
+body[data-fullscreen] [data-admin-topbar] {
+  display: none !important;
+}
+
+/* F-013 BR-RK-07 — Result Kiosk fullscreen containment.
+   When `data-fullscreen="true"` (kiosk-mode), lock viewport so touchscreen
+   layout cannot scroll the underlying admin shell off-canvas. The existing
+   F-008v2/F-011 rules above handle chrome hiding; this adds containment. */
+body[data-fullscreen="true"] {
+  overflow: hidden;
+  height: 100vh;
+}
+

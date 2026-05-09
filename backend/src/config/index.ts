@@ -57,6 +57,18 @@ const envVarsSchema = Joi.object()
       .default('https://result-admin.5bib.com'),
     // Event Tracking — behavioral analytics ingest endpoint
     ANALYTICS_API_KEY: Joi.string().optional().allow(''),
+    // Timing Miss Alert v1.0 — module conditional load theo encryption key.
+    // Key 32 bytes RAW (= 44-char base64 hoặc 64-char hex). Required nếu
+    // muốn bật module — RR API keys của BTC encrypted at rest bằng AES-256-GCM.
+    TIMING_ALERT_ENCRYPTION_KEY: Joi.string().optional().allow(''),
+    TIMING_ALERT_DEFAULT_POLL_INTERVAL: Joi.number()
+      .min(60)
+      .max(300)
+      .default(90),
+    // Telegram chat_id receive CRITICAL alerts (Phase 1C). PAUSE #8 chưa
+    // resolve — Phase 1A em accept default empty, Phase 1C sẽ block khởi
+    // động poll cron nếu vẫn empty.
+    TIMING_ALERT_TELEGRAM_CHAT_ID: Joi.string().optional().allow(''),
   })
   .unknown();
 
@@ -127,5 +139,13 @@ export const env = {
       .map((s) => s.trim())
       .filter(Boolean),
     adminBaseUrl: (envVars.TIMING_ADMIN_BASE_URL as string) || '',
+  },
+  // Timing Miss Alert v1.0 — module mới (KHÔNG CONFLICT namespace với
+  // `timing` ở trên — đó là TIMING_NOTIFY_EMAILS cho race-result service).
+  timingAlert: {
+    encryptionKey: (envVars.TIMING_ALERT_ENCRYPTION_KEY as string) || '',
+    defaultPollIntervalSeconds:
+      envVars.TIMING_ALERT_DEFAULT_POLL_INTERVAL as number,
+    telegramChatId: (envVars.TIMING_ALERT_TELEGRAM_CHAT_ID as string) || '',
   },
 };

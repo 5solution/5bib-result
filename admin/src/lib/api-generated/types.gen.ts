@@ -491,6 +491,609 @@ export type ChipRecentResponseDto = {
     items: Array<ChipRecentItemDto>;
 };
 
+export type CreateTimingAlertConfigDto = {
+    /**
+     * Polling interval (60-300s)
+     */
+    poll_interval_seconds?: number;
+    /**
+     * Overdue threshold trước khi flag (1-180 phút)
+     */
+    overdue_threshold_minutes?: number;
+    /**
+     * Top N rank threshold cho CRITICAL severity
+     */
+    top_n_alert?: number;
+    /**
+     * Bật/tắt monitoring per race. Cron tick mỗi 30s sẽ poll race.courses[].apiUrl khi true.
+     */
+    enabled?: boolean;
+    /**
+     * F-010 BR-FC-08 — Course type preset. Indicator only — admin chọn preset → auto-fill 4 values, có thể override.
+     */
+    course_type?: 'ROAD' | 'TRAIL' | 'ULTRA';
+    /**
+     * F-010 BR-FC-08/09 — Pace buffer multiplier dùng trong MissDetector. Range 1.01-2.00. Defaults: ROAD=1.10, TRAIL=1.35, ULTRA=1.50.
+     */
+    pace_buffer?: number;
+    /**
+     * F-010 BR-FC-10/11 — isPaceAlert threshold. Range 0.20-0.95. Defaults: ROAD=0.80, TRAIL=0.45, ULTRA=0.40.
+     */
+    pace_alert_threshold?: number;
+    /**
+     * F-010 BR-FC-15/16 — Confidence multiplier cho ProjectedRankService. Range 0.05-1.00. Default 0.20.
+     */
+    confidence_multiplier?: number;
+};
+
+export type TimingAlertConfigResponseDto = {
+    config_id: string;
+    race_id: string;
+    poll_interval_seconds: number;
+    overdue_threshold_minutes: number;
+    top_n_alert: number;
+    enabled: boolean;
+    enabled_by_user_id: string | null;
+    enabled_at: string | null;
+    last_polled_at: string | null;
+    /**
+     * F-010 — course type preset, null nếu admin chưa chọn preset
+     */
+    course_type: 'ROAD' | 'TRAIL' | 'ULTRA';
+    /**
+     * F-010 BR-FC-08/09 — pace buffer multiplier (1.01-2.00)
+     */
+    pace_buffer: number;
+    /**
+     * F-010 BR-FC-10/11 — pace alert threshold (0.20-0.95)
+     */
+    pace_alert_threshold: number;
+    /**
+     * F-010 BR-FC-15/16 — confidence multiplier cho projected rank (0.05-1.00)
+     */
+    confidence_multiplier: number;
+};
+
+export type AlertActionDto = {
+    action: 'RESOLVE' | 'FALSE_ALARM' | 'REOPEN';
+    /**
+     * Resolution note (audit log)
+     */
+    note: string;
+};
+
+export type DetectedCheckpointDto = {
+    key: string;
+    suggestedName: string;
+    suggestedDistanceKm: number | null;
+    /**
+     * Fraction athletes có time non-empty (0..1)
+     */
+    coverage: number;
+    medianTimeSeconds: number;
+    orderIndex: number;
+    passedCount: number;
+    isImplicitStart: boolean;
+    isImplicitFinish: boolean;
+};
+
+export type CheckpointDiscoveryResponseDto = {
+    courseId: string;
+    courseName: string;
+    courseDistanceKm: number | null;
+    totalAthletes: number;
+    athletesWithAnyTime: number;
+    finishersCount: number;
+    detectedCheckpoints: Array<DetectedCheckpointDto>;
+    /**
+     * Explanation messages cho admin UI
+     */
+    notes: Array<string>;
+};
+
+export type CheckpointApplyItemDto = {
+    /**
+     * Timing point key từ RR API (VD "Start", "TM1")
+     */
+    key: string;
+    /**
+     * Display name (BTC override được)
+     */
+    name: string;
+    /**
+     * Distance từ start tới checkpoint này (km). Null nếu BTC chưa nhập.
+     */
+    distanceKm?: number | null;
+};
+
+export type ApplyCheckpointsDto = {
+    /**
+     * Danh sách checkpoint sau khi BTC review preview. Order trong array = order chronological của course.
+     */
+    checkpoints: Array<CheckpointApplyItemDto>;
+};
+
+export type ApplyCheckpointsResponseDto = {
+    raceId: string;
+    courseId: string;
+    saved: number;
+};
+
+export type RaceMetaDto = {
+    id: string;
+    title: string;
+    /**
+     * draft | pre_race | live | ended
+     */
+    status: string;
+    startDate: string | null;
+    endDate: string | null;
+    /**
+     * ISO timestamp khi race CHÍNH THỨC start (status → live). Null nếu chưa start (draft/pre_race). Frontend dùng để hiển thị elapsed clock trên Cockpit.
+     */
+    startedAt: string | null;
+    /**
+     * Source của startedAt: status_history (admin manual transition, most accurate) | course_start_time (fallback từ startDate + course.startTime sớm nhất) | recent_history (fallback Tier 3 — dùng changedAt entry gần nhất nếu race=live mà không có data nào tốt hơn). Null khi startedAt null.
+     */
+    startedAtSource: string | null;
+};
+
+export type RaceStatsDto = {
+    /**
+     * Athletes có Start time
+     */
+    started: number;
+    /**
+     * Athletes có Finish time
+     */
+    finished: number;
+    /**
+     * Started - Finished (đang trên đường)
+     */
+    onCourse: number;
+    /**
+     * Số alerts OPEN tổng cộng
+     */
+    suspectOpen: number;
+    /**
+     * Số CRITICAL alerts OPEN
+     */
+    criticalOpen: number;
+    /**
+     * Race progress 0..1 = finished / started
+     */
+    progress: number;
+};
+
+export type CourseStatsDto = {
+    courseId: string;
+    name: string;
+    distanceKm: number | null;
+    cutOffTime: string | null;
+    /**
+     * RR API URL — null nếu BTC chưa wire
+     */
+    apiUrl: string | null;
+    /**
+     * Course đã có checkpoints config (BTC apply discover)
+     */
+    hasCheckpoints: boolean;
+    started: number;
+    finished: number;
+    onCourse: number;
+    suspectCount: number;
+    /**
+     * Top finisher chiptime cho card hiển thị
+     */
+    leadingChipTime: string | null;
+};
+
+export type CheckpointPointDto = {
+    key: string;
+    name: string;
+    distanceKm: number | null;
+    orderIndex: number;
+    /**
+     * Số athletes đã passed checkpoint này
+     */
+    passedCount: number;
+    /**
+     * Started count — denominator cho ratio
+     */
+    expectedCount: number;
+    /**
+     * 0..1 = passedCount / expectedCount
+     */
+    passedRatio: number;
+};
+
+export type CheckpointProgressionDto = {
+    courseId: string;
+    courseName: string;
+    distanceKm: number | null;
+    startedCount: number;
+    points: Array<CheckpointPointDto>;
+};
+
+export type RecentActivityItemDto = {
+    /**
+     * alert.created | alert.resolved | poll.completed
+     */
+    type: string;
+    /**
+     * ISO timestamp
+     */
+    at: string;
+    /**
+     * Type-specific payload
+     */
+    payload: {
+        [key: string]: unknown;
+    };
+};
+
+export type LiveLeaderboardEntryDto = {
+    /**
+     * Sort rank within course (1..N)
+     */
+    rank: number;
+    /**
+     * Athlete BIB number
+     */
+    bib: string;
+    /**
+     * Display name (fallback "BIB X" nếu thiếu)
+     */
+    athleteName: string;
+    /**
+     * Last checkpoint key đã pass (vd Start, TM1, Finish)
+     */
+    lastCheckpoint: string;
+    /**
+     * Time at lastCheckpoint (HH:MM:SS hoặc MM:SS)
+     */
+    lastCheckpointTime: string;
+    /**
+     * Finish chip time (null nếu chưa finish)
+     */
+    finishTime: string | null;
+    /**
+     * Gap so với leader trên cùng course (null nếu chưa có data hoặc là leader)
+     */
+    gap: string | null;
+    /**
+     * TRUE nếu có intermediate time nhưng MISS Finish — UI highlight magenta (BR-CC-09)
+     */
+    hasMissingFinish: boolean;
+    gender: string | null;
+    /**
+     * Age group / category
+     */
+    ageGroup: string | null;
+};
+
+export type LiveLeaderboardCourseDto = {
+    courseId: string;
+    courseName: string;
+    distanceKm: number | null;
+    entries: Array<LiveLeaderboardEntryDto>;
+};
+
+export type SummaryCardsDto = {
+    /**
+     * Tổng athletes registered (proxy: race_results count)
+     */
+    totalRegistered: number;
+    /**
+     * Số racekit đã được pickup tại Bàn 2 (chip-verifications FOUND/ALREADY_PICKED_UP). 0 nếu chưa wire mysql_race_id mapping.
+     */
+    racekitPickedUp: number;
+    /**
+     * Athletes có Start time
+     */
+    started: number;
+    /**
+     * Athletes có Finish time
+     */
+    finished: number;
+    /**
+     * Did Not Start = totalRegistered - started
+     */
+    dns: number;
+    /**
+     * Số alerts OPEN (miss timing)
+     */
+    missCount: number;
+    /**
+     * Miss rate % = missCount / max(started, 1) * 100. Range 0..100.
+     */
+    missRate: number;
+};
+
+export type ThroughputBucketDto = {
+    /**
+     * ISO timestamp marking the START of this 5-min bucket
+     */
+    timestamp: string;
+    /**
+     * Distinct bibs that finished within this 5-min bucket
+     */
+    finishersCount: number;
+};
+
+export type CheckpointHealthDto = {
+    /**
+     * Checkpoint key (Start, TM1, Finish, ...)
+     */
+    key: string;
+    /**
+     * Display name (e.g. "CP1 - Suoi Vang")
+     */
+    name: string;
+    /**
+     * Distinct bibs đã passed checkpoint
+     */
+    current: number;
+    /**
+     * Expected count tại checkpoint (linear ratio = registered × cp.distanceKm/course.distanceKm; fallback flat course.registered)
+     */
+    expected: number;
+    /**
+     * 0..100 ratio current/expected (clamp + 1dp)
+     */
+    healthPercent: number;
+};
+
+export type CourseHealthDto = {
+    courseId: string;
+    courseName: string;
+    /**
+     * Distinct bibs registered in this course (denominator base)
+     */
+    totalAthletes: number;
+    /**
+     * 0..100 average of checkpoint healthPercents (1dp)
+     */
+    overallPercent: number;
+    checkpoints: Array<CheckpointHealthDto>;
+};
+
+export type DnsBreakdownDto = {
+    /**
+     * Tổng DNS = notPicked + noStart + chipFail (sum of sub-states)
+     */
+    total: number;
+    /**
+     * F-010 BR-FC-05 — Athletes có racekitPickedUp=false AND no Start time. Indicator: chưa nhận racekit / no-show.
+     */
+    notPicked: number;
+    /**
+     * F-010 BR-FC-05 — Athletes có racekit (or unflagged) AND no Start time AND !dnsChipFail. Indicator: đã nhận BIB nhưng không xuất phát.
+     */
+    noStart: number;
+    /**
+     * F-010 BR-FC-05/07 — Athletes có dnsChipFail=true admin flag. Indicator: vendor chip fail/timing equipment issue.
+     */
+    chipFail: number;
+};
+
+export type DashboardSnapshotResponseDto = {
+    race: RaceMetaDto;
+    raceStats: RaceStatsDto;
+    courses: Array<CourseStatsDto>;
+    checkpointProgression: Array<CheckpointProgressionDto>;
+    recentActivity: Array<RecentActivityItemDto>;
+    /**
+     * Top N live leaderboard per course (default 10). Empty array nếu race draft/pre_race.
+     */
+    liveLeaderboard: Array<LiveLeaderboardCourseDto>;
+    /**
+     * Race-level summary cards (racekit / started / finished / dns / miss%)
+     */
+    summary: SummaryCardsDto;
+    /**
+     * F-008 BR-CC-02 — Athletes registered nhưng KHÔNG có Start chiptime
+     */
+    dnsCount: number;
+    /**
+     * F-008 BR-CC-03 — Last 60 min finisher rate (12 buckets × 5 min, oldest → newest)
+     */
+    throughputHistory: Array<ThroughputBucketDto>;
+    /**
+     * F-008 BR-CC-05 — Per-course × per-checkpoint health matrix (4 courses × N CPs grid)
+     */
+    checkpointHealthMatrix: Array<CourseHealthDto>;
+    /**
+     * ISO timestamp khi snapshot generated
+     */
+    generatedAt: string;
+    /**
+     * F-008 v2 BR-CC2-26 — Last successful poll timestamp from TimingAlertConfig. Distinct from `generatedAt` (snapshot computed time). Null when config missing or never polled.
+     */
+    lastPollAt: string | null;
+    /**
+     * F-010 BR-FC-05/06 — DNS sub-state breakdown (notPicked / noStart / chipFail). Computed at query time; not persisted.
+     */
+    dnsBreakdown: DnsBreakdownDto;
+};
+
+export type ForceRefreshResponseDto = {
+    /**
+     * Raw service status — TRIGGERED nghĩa là đã refresh, STAMPEDE_WAIT nghĩa là caller phải dùng cached snapshot
+     */
+    status: 'TRIGGERED' | 'STAMPEDE_WAIT';
+    /**
+     * true nếu fresh poll đã trigger; false nếu stampede-wait
+     */
+    refreshed: boolean;
+    /**
+     * Human-readable Vietnamese message cho toast UI
+     */
+    message: string;
+};
+
+export type PodiumEntryDto = {
+    rank: number;
+    bib: string;
+    name: string | null;
+    chipTime: string | null;
+    gunTime: string | null;
+    pace: string | null;
+    ageGroup: string | null;
+    ageGroupRank: number | null;
+    gender: string | null;
+    nationality: string | null;
+    club: string | null;
+};
+
+export type PodiumCourseDto = {
+    courseId: string;
+    courseName: string;
+    distanceKm: number | null;
+    finishersCount: number;
+    podium: Array<PodiumEntryDto>;
+};
+
+export type PodiumResponseDto = {
+    id: string;
+    raceId: string;
+    courseId: string;
+    courseName: string;
+    courseDistanceKm?: number;
+    ageGroup: string;
+    ageGroupKey: string;
+    ageGroupLabel: string;
+    gender: 'M' | 'F';
+    presetKey: string;
+    compoundingMode: 'compounding' | 'mutually_exclusive';
+    agTopN: number;
+    athletes: Array<PodiumAthleteResponseDto>;
+    state: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
+    stateHistory: Array<PodiumStateTransitionResponseDto>;
+    computedAt?: string;
+    lockedAt?: string;
+    publishedAt?: string;
+    disputedAt?: string;
+    finalAt?: string;
+    latestPdfS3Key?: string;
+    latestPdfGeneratedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type SimulationCourseResponseDto = {
+    simCourseId: string;
+    label: string;
+    sourceUrl: string;
+    snapshotFetchedAt: string | null;
+    snapshotItems: number;
+    earliestSeconds: number | null;
+    latestSeconds: number | null;
+    /**
+     * Public URL để paste vào course.apiUrl
+     */
+    publicUrl: string;
+};
+
+export type ScenarioResponseDto = {
+    id: string;
+    type: 'MISS_FINISH' | 'MISS_MIDDLE_CP' | 'MISS_START' | 'MAT_FAILURE' | 'TOP_N_MISS_FINISH' | 'LATE_FINISHER' | 'PHANTOM_RUNNER';
+    enabled: boolean;
+    count: number;
+    checkpointKey?: string;
+    topN?: number;
+    shiftMinutes?: number;
+    scopeSimCourseId?: string;
+    description?: string;
+};
+
+export type SimulationResponseDto = {
+    id: string;
+    name: string;
+    description: string | null;
+    speedFactor: number;
+    startOffsetSeconds: number;
+    status: string;
+    startedAt: string | null;
+    pausedAt: string | null;
+    accumulatedSeconds: number;
+    currentSimSeconds: number;
+    courses: Array<SimulationCourseResponseDto>;
+    scenarios: Array<ScenarioResponseDto>;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type SimulationCourseInputDto = {
+    label: string;
+    sourceUrl: string;
+};
+
+export type CreateSimulationDto = {
+    name: string;
+    description?: string;
+    /**
+     * 1.0 = realtime, 5.0 = 5x speed
+     */
+    speedFactor?: number;
+    /**
+     * Skip vào T=N giây race
+     */
+    startOffsetSeconds?: number;
+    courses: Array<SimulationCourseInputDto>;
+};
+
+export type UpdateSimulationDto = {
+    name?: string;
+    description?: string;
+    speedFactor?: number;
+    startOffsetSeconds?: number;
+};
+
+export type SeekSimulationDto = {
+    seconds: number;
+};
+
+export type CreateScenarioDto = {
+    /**
+     * MISS_FINISH | MISS_MIDDLE_CP | MISS_START | MAT_FAILURE | TOP_N_MISS_FINISH | LATE_FINISHER | PHANTOM_RUNNER
+     */
+    type: 'MISS_FINISH' | 'MISS_MIDDLE_CP' | 'MISS_START' | 'MAT_FAILURE' | 'TOP_N_MISS_FINISH' | 'LATE_FINISHER' | 'PHANTOM_RUNNER';
+    enabled: boolean;
+    /**
+     * Số athletes affected (count). TOP_N dùng topN thay thế.
+     */
+    count: number;
+    /**
+     * MAT_FAILURE: checkpoint key cụ thể (VD "TM2")
+     */
+    checkpointKey?: string;
+    /**
+     * TOP_N_MISS_FINISH: số top athletes
+     */
+    topN?: number;
+    /**
+     * LATE_FINISHER: số phút shift Finish
+     */
+    shiftMinutes?: number;
+    /**
+     * Optional scope chỉ apply cho 1 course
+     */
+    scopeSimCourseId?: string;
+    description?: string;
+};
+
+export type UpdateScenarioDto = {
+    enabled?: boolean;
+    count?: number;
+    checkpointKey?: string;
+    topN?: number;
+    shiftMinutes?: number;
+    scopeSimCourseId?: string;
+    description?: string;
+};
+
 export type CreateRaceDto = {
     /**
      * Race title
@@ -592,6 +1195,10 @@ export type CreateRaceDto = {
      * Max athletes shown without search when enablePrivateList=true
      */
     privateListLimit?: number;
+    /**
+     * F-019 v2.1 — Compounding mode for podium calc. mutually_exclusive (default VN amateur): top 3 overall excluded from AG buckets. compounding (WA TR9): top 3 overall still counted in AG buckets.
+     */
+    awardsCompoundingMode?: 'mutually_exclusive' | 'compounding';
 };
 
 export type UpdateRaceDto = {
@@ -695,6 +1302,10 @@ export type UpdateRaceDto = {
      * Max athletes shown without search when enablePrivateList=true
      */
     privateListLimit?: number;
+    /**
+     * F-019 v2.1 — Compounding mode for podium calc. mutually_exclusive (default VN amateur): top 3 overall excluded from AG buckets. compounding (WA TR9): top 3 overall still counted in AG buckets.
+     */
+    awardsCompoundingMode?: 'mutually_exclusive' | 'compounding';
 };
 
 export type UpdateStatusDto = {
@@ -734,13 +1345,79 @@ export type CourseCheckpointDto = {
      */
     name: string;
     /**
-     * Distance label
+     * Distance label (display string)
      */
     distance?: string;
+    /**
+     * Distance in km (numeric, used by timing-alert pace projection)
+     */
+    distanceKm?: number;
     /**
      * Aid station services available at this checkpoint
      */
     services?: CheckpointServicesDto;
+    /**
+     * Latitude (WGS84). Set by GPX waypoint auto-match (BR-CM-04) or manual drag (BR-CM-05).
+     */
+    lat?: number;
+    /**
+     * Longitude (WGS84). Set by GPX waypoint auto-match (BR-CM-04) or manual drag (BR-CM-05).
+     */
+    lng?: number;
+};
+
+export type GpxBoundsDto = {
+    /**
+     * Northernmost latitude
+     */
+    north: number;
+    /**
+     * Southernmost latitude
+     */
+    south: number;
+    /**
+     * Easternmost longitude
+     */
+    east: number;
+    /**
+     * Westernmost longitude
+     */
+    west: number;
+};
+
+export type GpxParsedDto = {
+    /**
+     * Original track point count
+     */
+    trackPoints: number;
+    /**
+     * Simplified point count after Douglas-Peucker (≤ 5000)
+     */
+    simplifiedPoints: number;
+    /**
+     * Total course distance in kilometres (great-circle)
+     */
+    totalDistanceKm: number;
+    /**
+     * Total elevation gain in metres (positive deltas, noise-filtered). Null when no <ele> tag.
+     */
+    elevationGain?: number | null;
+    /**
+     * Total elevation loss in metres (absolute negative deltas). Null when no <ele> tag.
+     */
+    elevationLoss?: number | null;
+    /**
+     * Highest point above sea level (metres). Null when no <ele> tag.
+     */
+    maxElevation?: number | null;
+    /**
+     * Lowest point above sea level (metres). Null when no <ele> tag.
+     */
+    minElevation?: number | null;
+    /**
+     * Track bounding box (WGS84)
+     */
+    bounds: GpxBoundsDto;
 };
 
 export type AddCourseDto = {
@@ -804,6 +1481,14 @@ export type AddCourseDto = {
      * Course checkpoints (timing points)
      */
     checkpoints?: Array<CourseCheckpointDto>;
+    /**
+     * Server-parsed GPX metadata (BR-CM-02/03/06). Populated by CourseMapService.uploadGpx; admin can also overwrite via UpdateCourseDto.
+     */
+    gpxParsed?: GpxParsedDto;
+    /**
+     * Public S3 URL for the simplified GeoJSON of the course track (BR-CM-11).
+     */
+    gpxSimplifiedUrl?: string;
 };
 
 export type UpdateCourseDto = {
@@ -867,6 +1552,129 @@ export type UpdateCourseDto = {
      * Course checkpoints (timing points)
      */
     checkpoints?: Array<CourseCheckpointDto>;
+    /**
+     * Server-parsed GPX metadata (BR-CM-02/03/06). Populated by CourseMapService.uploadGpx; admin can also overwrite via UpdateCourseDto.
+     */
+    gpxParsed?: GpxParsedDto;
+    /**
+     * Public S3 URL for the simplified GeoJSON of the course track (BR-CM-11).
+     */
+    gpxSimplifiedUrl?: string;
+};
+
+export type WaypointMatchDto = {
+    /**
+     * Checkpoint key the waypoint was matched to (e.g. "TM1")
+     */
+    key: string;
+    /**
+     * Latitude assigned to the checkpoint (WGS84)
+     */
+    lat: number;
+    /**
+     * Longitude assigned to the checkpoint (WGS84)
+     */
+    lng: number;
+    /**
+     * Match level — exact (case-sensitive) or case-insensitive normalisation
+     */
+    matchType: 'exact' | 'case-insensitive';
+};
+
+export type CourseMapUploadResultDto = {
+    /**
+     * Parsed GPX metadata (BR-CM-02/03/06)
+     */
+    gpxParsed: GpxParsedDto;
+    /**
+     * Public S3 URL for the simplified GeoJSON track
+     */
+    gpxSimplifiedUrl: string;
+    /**
+     * Checkpoints whose lat/lng were auto-assigned from a matching waypoint.
+     */
+    autoMatchedCheckpoints: Array<WaypointMatchDto>;
+    /**
+     * Checkpoint keys that did NOT match any waypoint — admin must drag manually (BR-CM-05).
+     */
+    unmatchedCheckpointKeys: Array<string>;
+};
+
+export type UpdateCheckpointPositionDto = {
+    /**
+     * Checkpoint key (must already exist in course.checkpoints[])
+     */
+    key: string;
+    /**
+     * Latitude (WGS84, [-90, 90])
+     */
+    lat: number;
+    /**
+     * Longitude (WGS84, [-180, 180])
+     */
+    lng: number;
+};
+
+export type CheckpointWithPositionDto = {
+    /**
+     * Timing point key (e.g. "TM1", "Finish")
+     */
+    key: string;
+    /**
+     * Display name (e.g. "Trạm 1 - Suối Vàng")
+     */
+    name: string;
+    /**
+     * Distance label (display string)
+     */
+    distance?: string;
+    /**
+     * Numeric km for pace projection
+     */
+    distanceKm?: number;
+    /**
+     * Latitude (WGS84) — null if not yet positioned
+     */
+    lat?: number;
+    /**
+     * Longitude (WGS84) — null if not yet positioned
+     */
+    lng?: number;
+    /**
+     * Aid station services (water/food/medical/dropBag/sleep/notes).
+     */
+    services?: {
+        [key: string]: unknown;
+    };
+};
+
+export type CourseMapDataDto = {
+    /**
+     * True when the course has a parsed GPX/KML.
+     */
+    hasGpx: boolean;
+    /**
+     * Public S3 URL for the simplified GeoJSON track (BR-CM-11). Absent when hasGpx=false.
+     */
+    gpxSimplifiedUrl?: string;
+    /**
+     * Inlined simplified GeoJSON FeatureCollection (BR-CM-11b). Backend fetches from S3 server-side so frontend avoids CORS round-trip. Shape: GeoJSON FeatureCollection with one LineString feature. Absent when hasGpx=false or when S3 fetch failed (frontend should fall back to gpxSimplifiedUrl).
+     */
+    geoJson?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Parsed metadata (BR-CM-02/03/06). Absent when hasGpx=false.
+     */
+    gpxParsed?: GpxParsedDto;
+    /**
+     * Course checkpoints with positions when available. Returned even when hasGpx=false — UI may show distance pills without map markers.
+     */
+    checkpoints: Array<CheckpointWithPositionDto>;
+    /**
+     * Track bounding box (WGS84). Absent when hasGpx=false.
+     */
+    bounds?: GpxBoundsDto;
 };
 
 export type RaceResultItemDto = {
@@ -915,6 +1723,32 @@ export type PaginationMeta = {
 export type RaceResultsPaginatedDto = {
     data: Array<RaceResultItemDto>;
     pagination: PaginationMeta;
+};
+
+export type ByChipRequestDto = {
+    /**
+     * Raw chip ID from RFID reader (will be UPPER+TRIM normalized)
+     */
+    chipId: string;
+};
+
+export type ByChipResponseDto = {
+    /**
+     * Resolved BIB number (null if chip not mapped)
+     */
+    bib: string | null;
+    /**
+     * Public-safe athlete detail (same shape as F-013 /athlete/:raceId/:bib)
+     */
+    data: {
+        [key: string]: unknown;
+    } | null;
+    success: boolean;
+    message?: string;
+    /**
+     * Error code: race-not-mapped | chip-not-found | chip-disabled | athlete-not-found
+     */
+    errorCode?: string;
 };
 
 export type TimeDistributionBucketDto = {
@@ -1128,6 +1962,18 @@ export type ShareStatsDto = {
      * Fraction of shares that hit template fallback (0..1)
      */
     fallbackRate: number;
+};
+
+export type UpdateDnsChipFailDto = {
+    /**
+     * F-010 — Mark athlete as DNS_CHIP_FAIL (true) hoặc revert (false). Admin override only.
+     */
+    dnsChipFail: boolean;
+};
+
+export type UpdateDnsChipFailResponseDto = {
+    success: boolean;
+    dnsChipFail: boolean;
 };
 
 export type ResolveClaimV2Dto = {
@@ -2148,6 +2994,413 @@ export type UpdateBugAssigneeDto = {
 export type UpdateBugTriageDto = {
     severity?: 'critical' | 'high' | 'medium' | 'low' | 'unknown';
     category?: 'payment' | 'race_result' | 'bib_avatar' | 'account_login' | 'ui_display' | 'mobile_app' | 'other';
+};
+
+export type VisibleSectionsDto = {
+    rank: boolean;
+    finishTime: boolean;
+    splits: boolean;
+    sponsorBanner: boolean;
+    customMessage: boolean;
+    qrShare: boolean;
+    photo: boolean;
+};
+
+export type UpdateDisplayConfigDto = {
+    heroChoice?: 'rank' | 'finish-time' | 'photo';
+    visibleSections?: VisibleSectionsDto;
+    themeColor?: string;
+    customMessage?: string;
+    sponsorLogos?: Array<string>;
+    soundEnabled?: boolean;
+    idleTimeoutSeconds?: number;
+    preset?: 'DEFAULT' | 'MINIMAL' | 'PREMIUM' | 'CUSTOM';
+};
+
+export type SponsorLogoUploadResponseDto = {
+    success: boolean;
+    url: string;
+    key: string;
+};
+
+export type GpsLocationResponseDto = {
+    lat: number;
+    lng: number;
+    source: 'manual' | 'course-pin' | 'aid-station' | 'device';
+    aidStationId?: string;
+    accuracyMeters?: number;
+};
+
+export type IncidentTransitionResponseDto = {
+    from: string;
+    to: 'REPORTED' | 'MEDIC_DISPATCHED' | 'MEDIC_ON_SITE' | 'AMB_REQUESTED' | 'HOSPITAL_TRANSFER' | 'RESOLVED_ONSITE' | 'RESOLVED_DNF' | 'CLOSED';
+    actorId: string;
+    actorRole: 'operator' | 'medic' | 'race_director';
+    at: string;
+    reason?: string;
+    gps?: GpsLocationResponseDto;
+};
+
+export type WitnessStatementResponseDto = {
+    name: string;
+    statement?: string;
+    contact?: string;
+    signedAt: string;
+};
+
+export type MedicalDirectorSignatureResponseDto = {
+    name: string;
+    signedAt: string;
+};
+
+export type IncidentAttachmentResponseDto = {
+    s3Key: string;
+    mime: string;
+    sizeBytes: number;
+    uploadedAt: string;
+    signedUrl?: string;
+};
+
+export type IncidentResponseDto = {
+    id: string;
+    raceId: string;
+    bib?: string;
+    athleteName?: string;
+    severity: 1 | 2 | 3 | 4 | 5;
+    category: 'cardiac' | 'trauma' | 'heat_stroke' | 'dehydration' | 'musculoskeletal' | 'neurological' | 'allergic' | 'other';
+    traumaSubtype?: 'fall' | 'laceration' | 'head' | 'other';
+    description?: string;
+    gpsLocation: GpsLocationResponseDto;
+    reportedByUserId: string;
+    reportedAt: string;
+    state: 'REPORTED' | 'MEDIC_DISPATCHED' | 'MEDIC_ON_SITE' | 'AMB_REQUESTED' | 'HOSPITAL_TRANSFER' | 'RESOLVED_ONSITE' | 'RESOLVED_DNF' | 'CLOSED';
+    closureReason?: 'RESOLVED' | 'FALSE_ALARM' | 'DUPLICATE' | 'ATHLETE_REFUSED_TREATMENT';
+    incidentTransitions: Array<IncidentTransitionResponseDto>;
+    medicalTeamAssigned: Array<string>;
+    witnessStatements: Array<WitnessStatementResponseDto>;
+    medicalDirectorSignature?: MedicalDirectorSignatureResponseDto;
+    attachments: Array<IncidentAttachmentResponseDto>;
+    ambulanceETA?: string;
+    medicArrivedAt?: string;
+    outcome?: string;
+    anonymized: boolean;
+    latestPdfS3Key?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type IncidentListResponseDto = {
+    items: Array<IncidentResponseDto>;
+    total: number;
+    limit: number;
+    offset: number;
+    activeCount: number;
+};
+
+export type GpsLocationDto = {
+    lat: number;
+    lng: number;
+    source: 'manual' | 'course-pin' | 'aid-station' | 'device';
+    aidStationId?: string;
+    accuracyMeters?: number;
+};
+
+export type WitnessStatementDto = {
+    name: string;
+    statement?: string;
+    contact?: string;
+};
+
+export type CreateIncidentDto = {
+    severity: 1 | 2 | 3 | 4 | 5;
+    category: 'cardiac' | 'trauma' | 'heat_stroke' | 'dehydration' | 'musculoskeletal' | 'neurological' | 'allergic' | 'other';
+    traumaSubtype?: 'fall' | 'laceration' | 'head' | 'other';
+    bib?: string;
+    athleteName?: string;
+    description?: string;
+    gpsLocation: GpsLocationDto;
+    medicalTeamAssigned?: Array<string>;
+    witnessStatements?: Array<WitnessStatementDto>;
+    attachmentKeys?: Array<string>;
+    reportedAt?: string;
+};
+
+export type MedicalDirectorSignatureDto = {
+    name: string;
+    signedAt: string;
+};
+
+export type UpdateIncidentStatusDto = {
+    to: 'REPORTED' | 'MEDIC_DISPATCHED' | 'MEDIC_ON_SITE' | 'AMB_REQUESTED' | 'HOSPITAL_TRANSFER' | 'RESOLVED_ONSITE' | 'RESOLVED_DNF' | 'CLOSED';
+    reasonNote?: string;
+    closureReason?: 'RESOLVED' | 'FALSE_ALARM' | 'DUPLICATE' | 'ATHLETE_REFUSED_TREATMENT';
+    gps?: GpsLocationDto;
+    medicsToAssign?: Array<string>;
+    witnessStatements?: Array<WitnessStatementDto>;
+    medicalDirectorSignature?: MedicalDirectorSignatureDto;
+    newSeverity?: 1 | 2 | 3 | 4 | 5;
+};
+
+export type PdfExportOptionsDto = {
+    /**
+     * Include footer 5BIB watermark (default true).
+     */
+    includeWatermark?: boolean;
+    /**
+     * Include race-organizer signature line (Phase 1 typed name; default true).
+     */
+    includeSignatureLine?: boolean;
+};
+
+export type PdfExportResponseDto = {
+    s3Key: string;
+    signedUrl: string;
+    expiresAtIso: string;
+    incidentCount: number;
+    warning: string;
+};
+
+export type BracketDistributionItemDto = {
+    /**
+     * Bracket key
+     */
+    ageGroup: string;
+    gender: 'M' | 'F';
+    /**
+     * Số athletes trong bracket × gender
+     */
+    count: number;
+};
+
+export type VendorCategoryHealthDto = {
+    /**
+     * Số athletes có vendor Category populated đúng format
+     */
+    populated: number;
+    /**
+     * Số athletes có vendor Category empty/whitespace (Giải Công An bug)
+     */
+    empty: number;
+    /**
+     * Số athletes có vendor Category sai format (regex fail)
+     */
+    malformed: number;
+};
+
+export type AgEligibilityReportDto = {
+    raceId: string;
+    /**
+     * Tổng athletes registered cho race
+     */
+    totalAthletes: number;
+    /**
+     * Số athletes có ageOnRaceDay computed (DOB available)
+     */
+    withDob: number;
+    /**
+     * Số athletes thiếu DOB (cần BTC nhập bù)
+     */
+    withoutDob: number;
+    /**
+     * Coverage ratio (0..1) = withDob/totalAthletes
+     */
+    coverage: number;
+    /**
+     * Threshold based on coverage: ≥95% READY / 80-94% WARNING / <80% NOT_READY
+     */
+    readinessLevel: 'READY' | 'WARNING' | 'NOT_READY';
+    /**
+     * Top 100 BIBs thiếu DOB (cho BTC drilldown export CSV)
+     */
+    missingDobBibs: Array<string>;
+    /**
+     * Preview bracket distribution — help BTC chuẩn bị medal đúng số bracket
+     */
+    bracketDistribution: Array<BracketDistributionItemDto>;
+    /**
+     * Vendor Category sanity check — flag BTC sửa config RaceResult trước race day
+     */
+    vendorCategoryHealth: VendorCategoryHealthDto;
+    /**
+     * Current bracketSource override on race (default 5bib)
+     */
+    bracketSource: '5bib' | 'vendor' | 'hybrid';
+    /**
+     * Last age-sync timestamp (cron T-1 EVERY_DAY_AT_MIDNIGHT or on-demand)
+     */
+    lastSyncedAt: string;
+};
+
+export type PodiumListResponseDto = {
+    items: Array<PodiumResponseDto>;
+    total: number;
+    /**
+     * Distribution by state (banner counts): { RAW_RESULT: 5, PODIUM_LOCKED: 3, ... }
+     */
+    countsByState: {
+        [key: string]: number;
+    };
+};
+
+export type PodiumAthleteResponseDto = {
+    bib: string;
+    name: string;
+    rank: number;
+    chipTimeMs?: number;
+    chipTime?: string;
+    gunTimeMs?: number;
+    gender?: string;
+    ageOnRaceDay?: number;
+    nationality?: string;
+    athleteId?: string;
+    tied?: boolean;
+};
+
+export type PodiumStateTransitionResponseDto = {
+    fromState: string;
+    toState: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
+    actorId: string;
+    at: string;
+    note?: string;
+    evidenceUrl?: string;
+};
+
+export type RecomputeRequestDto = {
+    /**
+     * Optional limit recompute to specific course; nếu không truyền thì recompute toàn race.
+     */
+    courseId?: string;
+};
+
+export type RecomputeResponseDto = {
+    raceId: string;
+    podiumsCreatedOrUpdated: number;
+    warningsCreated: number;
+    durationMs: number;
+    /**
+     * F-019 v2 — bracketSource used in this recompute (race-level override or default 5bib)
+     */
+    bracketSource?: '5bib' | 'vendor' | 'hybrid';
+};
+
+export type WarningTransitionResponseDto = {
+    action: string;
+    actorId: string;
+    at: string;
+    note?: string;
+    evidenceUrl?: string;
+    priorTier?: number;
+    newTier?: number;
+};
+
+export type AnomalyWarningResponseDto = {
+    id: string;
+    raceId: string;
+    courseId: string;
+    bib: string;
+    athleteId?: string;
+    athleteName?: string;
+    pattern: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
+    tier: 1 | 2 | 3;
+    confidence: number;
+    evidence: {
+        [key: string]: unknown;
+    };
+    ackedBy?: string;
+    ackedAt?: string;
+    ackNote?: string;
+    resolution: 'pending' | 'ignored' | 'fixed' | 'btc_override';
+    resolvedBy?: string;
+    resolvedAt?: string;
+    resolutionNote?: string;
+    overrideTier?: number;
+    transitionHistory: Array<WarningTransitionResponseDto>;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AnomalyWarningListResponseDto = {
+    items: Array<AnomalyWarningResponseDto>;
+    total: number;
+    /**
+     * Số lượng theo tier cho banner: { "1": x, "2": y, "3": z }
+     */
+    countsByTier: {
+        [key: string]: number;
+    };
+    /**
+     * Số Mức 1 + Mức 2 đang pending — gate cho podium lock
+     */
+    blockingCount: number;
+};
+
+export type AckWarningDto = {
+    /**
+     * Note bắt buộc khi ack Mức 2
+     */
+    note: string;
+    evidenceUrl?: string;
+};
+
+export type ResolveWarningDto = {
+    resolution: 'ignored' | 'fixed' | 'btc_override';
+    note: string;
+    evidenceUrl?: string;
+    /**
+     * BR-AG-22 — BTC tier override (KHÔNG mutate confidence)
+     */
+    overrideTier?: 1 | 2 | 3;
+};
+
+export type PodiumStateUpdateDto = {
+    toState: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
+    /**
+     * Note bắt buộc cho transitions: PODIUM_DRAFT → PODIUM_LOCKED, PUBLISHED → DISPUTE_OPEN.
+     */
+    note?: string;
+    evidenceUrl?: string;
+};
+
+export type PredictedRankItemDto = {
+    athleteId: string;
+    bib: string;
+    name?: string;
+    courseId: string;
+    ageGroup: string;
+    gender: string;
+    /**
+     * Predicted final rank trong AG
+     */
+    predictedRank: number;
+    estimatedFinishSec: number;
+    /**
+     * Tổng quãng đường từ lastSplit (km)
+     */
+    remainingKm: number;
+    /**
+     * Distance lastSplit (km)
+     */
+    lastSplitDistanceKm: number;
+    /**
+     * Sai số ước lượng theo loại race (phút)
+     */
+    errorMarginMin: number;
+    pattern: string;
+    confidence: number;
+};
+
+export type PredictedRankListResponseDto = {
+    items: Array<PredictedRankItemDto>;
+    total: number;
+};
+
+export type PodiumPdfResponseDto = {
+    s3Key: string;
+    signedUrl: string;
+    expiresAtIso: string;
+    bytes: number;
+    generatedAt: string;
+    warning?: string;
 };
 
 export type MerchantControllerFindAllData = {
@@ -3509,6 +4762,536 @@ export type ChipVerificationPublicControllerStatsResponses = {
 
 export type ChipVerificationPublicControllerStatsResponse = ChipVerificationPublicControllerStatsResponses[keyof ChipVerificationPublicControllerStatsResponses];
 
+export type TimingAlertAdminControllerGetConfigData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/config';
+};
+
+export type TimingAlertAdminControllerGetConfigErrors = {
+    /**
+     * Config not found for this race
+     */
+    404: unknown;
+};
+
+export type TimingAlertAdminControllerGetConfigResponses = {
+    200: TimingAlertConfigResponseDto;
+};
+
+export type TimingAlertAdminControllerGetConfigResponse = TimingAlertAdminControllerGetConfigResponses[keyof TimingAlertAdminControllerGetConfigResponses];
+
+export type TimingAlertAdminControllerUpsertConfigData = {
+    body: CreateTimingAlertConfigDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/config';
+};
+
+export type TimingAlertAdminControllerUpsertConfigErrors = {
+    /**
+     * Validation failed
+     */
+    400: unknown;
+    /**
+     * Logto JWT invalid
+     */
+    401: unknown;
+};
+
+export type TimingAlertAdminControllerUpsertConfigResponses = {
+    200: TimingAlertConfigResponseDto;
+};
+
+export type TimingAlertAdminControllerUpsertConfigResponse = TimingAlertAdminControllerUpsertConfigResponses[keyof TimingAlertAdminControllerUpsertConfigResponses];
+
+export type TimingAlertAdminControllerUpdateConfigData = {
+    body: CreateTimingAlertConfigDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/config';
+};
+
+export type TimingAlertAdminControllerUpdateConfigResponses = {
+    200: TimingAlertConfigResponseDto;
+};
+
+export type TimingAlertAdminControllerUpdateConfigResponse = TimingAlertAdminControllerUpdateConfigResponses[keyof TimingAlertAdminControllerUpdateConfigResponses];
+
+export type TimingAlertAdminControllerForcePollData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/poll';
+};
+
+export type TimingAlertAdminControllerForcePollResponses = {
+    200: unknown;
+};
+
+export type TimingAlertAdminControllerListAlertsData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        severity?: 'CRITICAL' | 'HIGH' | 'WARNING' | 'INFO';
+        status?: 'OPEN' | 'RESOLVED' | 'FALSE_ALARM';
+        /**
+         * Filter by contest (course name)
+         */
+        course?: string;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/admin/races/{raceId}/timing-alert/alerts';
+};
+
+export type TimingAlertAdminControllerListAlertsResponses = {
+    200: unknown;
+};
+
+export type TimingAlertAdminControllerGetAlertDetailData = {
+    body?: never;
+    path: {
+        raceId: string;
+        alertId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/alerts/{alertId}';
+};
+
+export type TimingAlertAdminControllerGetAlertDetailResponses = {
+    200: unknown;
+};
+
+export type TimingAlertAdminControllerPatchAlertData = {
+    body: AlertActionDto;
+    path: {
+        raceId: string;
+        alertId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/alerts/{alertId}';
+};
+
+export type TimingAlertAdminControllerPatchAlertResponses = {
+    200: unknown;
+};
+
+export type TimingAlertAdminControllerPollLogsData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query: {
+        limit: string;
+    };
+    url: '/api/admin/races/{raceId}/timing-alert/poll-logs';
+};
+
+export type TimingAlertAdminControllerPollLogsResponses = {
+    200: unknown;
+};
+
+export type TimingAlertAdminControllerDiscoverCheckpointsData = {
+    body?: never;
+    path: {
+        raceId: string;
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/discover-checkpoints/{courseId}';
+};
+
+export type TimingAlertAdminControllerDiscoverCheckpointsErrors = {
+    /**
+     * Course thiếu apiUrl
+     */
+    400: unknown;
+    /**
+     * Race hoặc course không tồn tại
+     */
+    404: unknown;
+};
+
+export type TimingAlertAdminControllerDiscoverCheckpointsResponses = {
+    200: CheckpointDiscoveryResponseDto;
+};
+
+export type TimingAlertAdminControllerDiscoverCheckpointsResponse = TimingAlertAdminControllerDiscoverCheckpointsResponses[keyof TimingAlertAdminControllerDiscoverCheckpointsResponses];
+
+export type TimingAlertAdminControllerGetDiscoverPreviewData = {
+    body?: never;
+    path: {
+        raceId: string;
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/discover-preview/{courseId}';
+};
+
+export type TimingAlertAdminControllerGetDiscoverPreviewErrors = {
+    /**
+     * Cache miss — fallback manual discover
+     */
+    404: unknown;
+};
+
+export type TimingAlertAdminControllerGetDiscoverPreviewResponses = {
+    /**
+     * Preview cached
+     */
+    200: unknown;
+};
+
+export type TimingAlertAdminControllerApplyCheckpointsData = {
+    body: ApplyCheckpointsDto;
+    path: {
+        raceId: string;
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/apply-checkpoints/{courseId}';
+};
+
+export type TimingAlertAdminControllerApplyCheckpointsResponses = {
+    200: ApplyCheckpointsResponseDto;
+};
+
+export type TimingAlertAdminControllerApplyCheckpointsResponse = TimingAlertAdminControllerApplyCheckpointsResponses[keyof TimingAlertAdminControllerApplyCheckpointsResponses];
+
+export type TimingAlertAdminControllerDashboardSnapshotData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/dashboard-snapshot';
+};
+
+export type TimingAlertAdminControllerDashboardSnapshotResponses = {
+    200: DashboardSnapshotResponseDto;
+};
+
+export type TimingAlertAdminControllerDashboardSnapshotResponse = TimingAlertAdminControllerDashboardSnapshotResponses[keyof TimingAlertAdminControllerDashboardSnapshotResponses];
+
+export type TimingAlertAdminControllerGetLeaderboardData = {
+    body?: never;
+    path: {
+        raceId: string;
+        courseId: string;
+    };
+    query: {
+        limit: string;
+    };
+    url: '/api/admin/races/{raceId}/timing-alert/leaderboard/{courseId}';
+};
+
+export type TimingAlertAdminControllerGetLeaderboardErrors = {
+    /**
+     * Race hoặc course không tồn tại
+     */
+    404: unknown;
+};
+
+export type TimingAlertAdminControllerGetLeaderboardResponses = {
+    200: LiveLeaderboardCourseDto;
+};
+
+export type TimingAlertAdminControllerGetLeaderboardResponse = TimingAlertAdminControllerGetLeaderboardResponses[keyof TimingAlertAdminControllerGetLeaderboardResponses];
+
+export type TimingAlertAdminControllerForceRefreshCommandCenterData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/command-center/force-refresh';
+};
+
+export type TimingAlertAdminControllerForceRefreshCommandCenterErrors = {
+    /**
+     * Race không tồn tại
+     */
+    404: unknown;
+    /**
+     * User lock đang held — đợi 30s (BR-CC-10 layer 1 spam guard)
+     */
+    409: unknown;
+};
+
+export type TimingAlertAdminControllerForceRefreshCommandCenterResponses = {
+    200: ForceRefreshResponseDto;
+};
+
+export type TimingAlertAdminControllerForceRefreshCommandCenterResponse = TimingAlertAdminControllerForceRefreshCommandCenterResponses[keyof TimingAlertAdminControllerForceRefreshCommandCenterResponses];
+
+export type TimingAlertAdminControllerResetRaceDataData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query: {
+        includeRaceResults: string;
+    };
+    url: '/api/admin/races/{raceId}/timing-alert/reset';
+};
+
+export type TimingAlertAdminControllerResetRaceDataErrors = {
+    /**
+     * confirmToken sai hoặc race status không cho phép
+     */
+    400: unknown;
+};
+
+export type TimingAlertAdminControllerResetRaceDataResponses = {
+    /**
+     * Reset thành công
+     */
+    200: unknown;
+};
+
+export type TimingAlertAdminControllerPodiumData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alert/podium';
+};
+
+export type TimingAlertAdminControllerPodiumResponses = {
+    200: PodiumResponseDto;
+};
+
+export type TimingAlertAdminControllerPodiumResponse = TimingAlertAdminControllerPodiumResponses[keyof TimingAlertAdminControllerPodiumResponses];
+
+export type TimingAlertSseControllerStreamData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/timing-alerts/sse';
+};
+
+export type TimingAlertSseControllerStreamResponses = {
+    200: unknown;
+};
+
+export type TimingAlertSimulatorAdminControllerListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/timing-alert/simulator';
+};
+
+export type TimingAlertSimulatorAdminControllerListResponses = {
+    200: Array<SimulationResponseDto>;
+};
+
+export type TimingAlertSimulatorAdminControllerListResponse = TimingAlertSimulatorAdminControllerListResponses[keyof TimingAlertSimulatorAdminControllerListResponses];
+
+export type TimingAlertSimulatorAdminControllerCreateData = {
+    body: CreateSimulationDto;
+    path?: never;
+    query?: never;
+    url: '/api/admin/timing-alert/simulator';
+};
+
+export type TimingAlertSimulatorAdminControllerCreateResponses = {
+    201: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerCreateResponse = TimingAlertSimulatorAdminControllerCreateResponses[keyof TimingAlertSimulatorAdminControllerCreateResponses];
+
+export type TimingAlertSimulatorAdminControllerDeleteData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}';
+};
+
+export type TimingAlertSimulatorAdminControllerDeleteResponses = {
+    200: unknown;
+};
+
+export type TimingAlertSimulatorAdminControllerGetData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}';
+};
+
+export type TimingAlertSimulatorAdminControllerGetResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerGetResponse = TimingAlertSimulatorAdminControllerGetResponses[keyof TimingAlertSimulatorAdminControllerGetResponses];
+
+export type TimingAlertSimulatorAdminControllerUpdateData = {
+    body: UpdateSimulationDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}';
+};
+
+export type TimingAlertSimulatorAdminControllerUpdateResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerUpdateResponse = TimingAlertSimulatorAdminControllerUpdateResponses[keyof TimingAlertSimulatorAdminControllerUpdateResponses];
+
+export type TimingAlertSimulatorAdminControllerRefreshData = {
+    body?: never;
+    path: {
+        id: string;
+        simCourseId: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}/refresh-snapshot/{simCourseId}';
+};
+
+export type TimingAlertSimulatorAdminControllerRefreshResponses = {
+    200: unknown;
+};
+
+export type TimingAlertSimulatorAdminControllerPlayData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}/play';
+};
+
+export type TimingAlertSimulatorAdminControllerPlayResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerPlayResponse = TimingAlertSimulatorAdminControllerPlayResponses[keyof TimingAlertSimulatorAdminControllerPlayResponses];
+
+export type TimingAlertSimulatorAdminControllerPauseData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}/pause';
+};
+
+export type TimingAlertSimulatorAdminControllerPauseResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerPauseResponse = TimingAlertSimulatorAdminControllerPauseResponses[keyof TimingAlertSimulatorAdminControllerPauseResponses];
+
+export type TimingAlertSimulatorAdminControllerResetData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}/reset';
+};
+
+export type TimingAlertSimulatorAdminControllerResetResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerResetResponse = TimingAlertSimulatorAdminControllerResetResponses[keyof TimingAlertSimulatorAdminControllerResetResponses];
+
+export type TimingAlertSimulatorAdminControllerSeekData = {
+    body: SeekSimulationDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}/seek';
+};
+
+export type TimingAlertSimulatorAdminControllerSeekResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerSeekResponse = TimingAlertSimulatorAdminControllerSeekResponses[keyof TimingAlertSimulatorAdminControllerSeekResponses];
+
+export type TimingAlertSimulatorAdminControllerAddScenarioData = {
+    body: CreateScenarioDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}/scenarios';
+};
+
+export type TimingAlertSimulatorAdminControllerAddScenarioResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerAddScenarioResponse = TimingAlertSimulatorAdminControllerAddScenarioResponses[keyof TimingAlertSimulatorAdminControllerAddScenarioResponses];
+
+export type TimingAlertSimulatorAdminControllerDeleteScenarioData = {
+    body?: never;
+    path: {
+        id: string;
+        scenarioId: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}/scenarios/{scenarioId}';
+};
+
+export type TimingAlertSimulatorAdminControllerDeleteScenarioResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerDeleteScenarioResponse = TimingAlertSimulatorAdminControllerDeleteScenarioResponses[keyof TimingAlertSimulatorAdminControllerDeleteScenarioResponses];
+
+export type TimingAlertSimulatorAdminControllerUpdateScenarioData = {
+    body: UpdateScenarioDto;
+    path: {
+        id: string;
+        scenarioId: string;
+    };
+    query?: never;
+    url: '/api/admin/timing-alert/simulator/{id}/scenarios/{scenarioId}';
+};
+
+export type TimingAlertSimulatorAdminControllerUpdateScenarioResponses = {
+    200: SimulationResponseDto;
+};
+
+export type TimingAlertSimulatorAdminControllerUpdateScenarioResponse = TimingAlertSimulatorAdminControllerUpdateScenarioResponses[keyof TimingAlertSimulatorAdminControllerUpdateScenarioResponses];
+
+export type TimingAlertSimulatorPublicControllerServeData = {
+    body?: never;
+    path: {
+        simCourseId: string;
+    };
+    query?: never;
+    url: '/api/timing-alert/simulator-data/{simCourseId}';
+};
+
+export type TimingAlertSimulatorPublicControllerServeResponses = {
+    200: unknown;
+};
+
 export type RacesControllerSearchRacesData = {
     body?: never;
     path?: never;
@@ -3865,6 +5648,110 @@ export type RacesControllerSyncRacesResponses = {
 
 export type RacesControllerSyncRacesResponse = RacesControllerSyncRacesResponses[keyof RacesControllerSyncRacesResponses];
 
+export type RacesControllerDeleteCourseGpxData = {
+    body?: never;
+    path: {
+        raceId: string;
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/races/{raceId}/courses/{courseId}/gpx';
+};
+
+export type RacesControllerDeleteCourseGpxErrors = {
+    /**
+     * Race or course not found
+     */
+    404: unknown;
+};
+
+export type RacesControllerDeleteCourseGpxResponses = {
+    /**
+     * GPX removed (S3 + DB unset)
+     */
+    200: unknown;
+};
+
+export type RacesControllerUploadCourseGpxData = {
+    body: {
+        file: Blob | File;
+    };
+    path: {
+        raceId: string;
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/races/{raceId}/courses/{courseId}/gpx';
+};
+
+export type RacesControllerUploadCourseGpxErrors = {
+    /**
+     * File invalid, > 10MB, or wrong extension
+     */
+    400: unknown;
+    /**
+     * Race or course not found
+     */
+    404: unknown;
+};
+
+export type RacesControllerUploadCourseGpxResponses = {
+    200: CourseMapUploadResultDto;
+};
+
+export type RacesControllerUploadCourseGpxResponse = RacesControllerUploadCourseGpxResponses[keyof RacesControllerUploadCourseGpxResponses];
+
+export type RacesControllerUpdateCheckpointPositionData = {
+    body: UpdateCheckpointPositionDto;
+    path: {
+        raceId: string;
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/races/{raceId}/courses/{courseId}/checkpoint-position';
+};
+
+export type RacesControllerUpdateCheckpointPositionErrors = {
+    /**
+     * Invalid lat/lng (out of WGS84 bounds)
+     */
+    400: unknown;
+    /**
+     * Race, course, or checkpoint key not found
+     */
+    404: unknown;
+};
+
+export type RacesControllerUpdateCheckpointPositionResponses = {
+    /**
+     * Checkpoint position updated
+     */
+    200: unknown;
+};
+
+export type RacesControllerGetCourseMapDataData = {
+    body?: never;
+    path: {
+        raceId: string;
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/races/{raceId}/courses/{courseId}/map-data';
+};
+
+export type RacesControllerGetCourseMapDataErrors = {
+    /**
+     * Race in draft status, or race/course not found
+     */
+    404: unknown;
+};
+
+export type RacesControllerGetCourseMapDataResponses = {
+    200: CourseMapDataDto;
+};
+
+export type RacesControllerGetCourseMapDataResponse = RacesControllerGetCourseMapDataResponses[keyof RacesControllerGetCourseMapDataResponses];
+
 export type RaceResultControllerGetRaceDistancesData = {
     body?: never;
     path?: never;
@@ -4009,6 +5896,24 @@ export type RaceResultControllerGetAthleteDetailResponses = {
      */
     200: unknown;
 };
+
+export type RaceResultControllerLookupByChipData = {
+    body: ByChipRequestDto;
+    path: {
+        /**
+         * Mongo Race._id
+         */
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-results/{raceId}/by-chip';
+};
+
+export type RaceResultControllerLookupByChipResponses = {
+    200: ByChipResponseDto;
+};
+
+export type RaceResultControllerLookupByChipResponse = RaceResultControllerLookupByChipResponses[keyof RaceResultControllerLookupByChipResponses];
 
 export type RaceResultControllerGetCertificateData = {
     body?: never;
@@ -4279,6 +6184,37 @@ export type RaceResultControllerSubmitClaimResponses = {
     201: unknown;
 };
 
+export type RaceResultControllerUploadResultImageBgData = {
+    body: {
+        /**
+         * Background image (JPG/PNG/WebP, ≤10MB)
+         */
+        file?: Blob | File;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/race-results/result-image/upload-bg';
+};
+
+export type RaceResultControllerUploadResultImageBgErrors = {
+    /**
+     * Invalid file (not JPG/PNG/WebP or >10MB)
+     */
+    400: unknown;
+};
+
+export type RaceResultControllerUploadResultImageBgResponses = {
+    /**
+     * Photo uploaded
+     */
+    201: {
+        photoId?: string;
+        expiresAt?: string;
+    };
+};
+
+export type RaceResultControllerUploadResultImageBgResponse = RaceResultControllerUploadResultImageBgResponses[keyof RaceResultControllerUploadResultImageBgResponses];
+
 export type RaceResultControllerPreviewResultImageData = {
     body?: never;
     path: {
@@ -4310,6 +6246,10 @@ export type RaceResultControllerPreviewResultImageData = {
         textColor?: 'auto' | 'light' | 'dark';
         preview?: boolean;
         t?: string;
+        /**
+         * Background photo ID from /upload-bg
+         */
+        photoId?: string;
     };
     url: '/api/race-results/result-image/{raceId}/{bib}';
 };
@@ -4350,9 +6290,13 @@ export type RaceResultControllerGenerateResultImageData = {
         textColor?: 'auto' | 'light' | 'dark';
         customMessage?: string;
         /**
-         * Custom background photo (JPG/PNG/WebP, ≤10MB)
+         * Custom background photo (JPG/PNG/WebP, ≤10MB). Prefer uploading once via /result-image/upload-bg + reusing photoId for template switches.
          */
         customPhoto?: Blob | File;
+        /**
+         * Reference to a previously-uploaded photo via /upload-bg. Wins over customPhoto if both present.
+         */
+        photoId?: string;
     };
     path: {
         /**
@@ -4480,6 +6424,38 @@ export type RaceResultControllerGetShareStatsResponses = {
 };
 
 export type RaceResultControllerGetShareStatsResponse = RaceResultControllerGetShareStatsResponses[keyof RaceResultControllerGetShareStatsResponses];
+
+export type RaceResultControllerPatchDnsChipFailData = {
+    body: UpdateDnsChipFailDto;
+    path: {
+        /**
+         * race_result _id (MongoDB ObjectId)
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/race-results/{id}/dns-chip-fail';
+};
+
+export type RaceResultControllerPatchDnsChipFailErrors = {
+    /**
+     * Invalid ObjectId
+     */
+    400: unknown;
+    /**
+     * Race result not found
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerPatchDnsChipFailResponses = {
+    /**
+     * Updated dnsChipFail flag
+     */
+    200: UpdateDnsChipFailResponseDto;
+};
+
+export type RaceResultControllerPatchDnsChipFailResponse = RaceResultControllerPatchDnsChipFailResponses[keyof RaceResultControllerPatchDnsChipFailResponses];
 
 export type RaceResultControllerManualSyncData = {
     body?: never;
@@ -6239,3 +8215,425 @@ export type BugReportsAdminControllerUpdateTriageResponses = {
 };
 
 export type BugReportsAdminControllerUpdateTriageResponse = BugReportsAdminControllerUpdateTriageResponses[keyof BugReportsAdminControllerUpdateTriageResponses];
+
+export type ResultKioskDisplayControllerGetConfigData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+    };
+    query?: never;
+    url: '/api/result-kiosk-display/{mongoRaceId}';
+};
+
+export type ResultKioskDisplayControllerGetConfigResponses = {
+    /**
+     * Returns display config doc
+     */
+    200: unknown;
+};
+
+export type ResultKioskDisplayControllerUpdateConfigData = {
+    body: UpdateDisplayConfigDto;
+    path: {
+        mongoRaceId: string;
+    };
+    query?: never;
+    url: '/api/result-kiosk-display/{mongoRaceId}';
+};
+
+export type ResultKioskDisplayControllerUpdateConfigResponses = {
+    /**
+     * Returns updated config
+     */
+    200: unknown;
+};
+
+export type ResultKioskDisplayControllerApplyPresetData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+        preset: 'DEFAULT' | 'MINIMAL' | 'PREMIUM';
+    };
+    query?: never;
+    url: '/api/result-kiosk-display/{mongoRaceId}/preset/{preset}';
+};
+
+export type ResultKioskDisplayControllerApplyPresetResponses = {
+    200: unknown;
+};
+
+export type ResultKioskDisplayControllerRemoveSponsorLogoData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+    };
+    query: {
+        url: string;
+    };
+    url: '/api/result-kiosk-display/{mongoRaceId}/sponsor-logo';
+};
+
+export type ResultKioskDisplayControllerRemoveSponsorLogoResponses = {
+    200: unknown;
+};
+
+export type ResultKioskDisplayControllerUploadSponsorLogoData = {
+    body?: never;
+    path: {
+        mongoRaceId: string;
+    };
+    query?: never;
+    url: '/api/result-kiosk-display/{mongoRaceId}/sponsor-logo';
+};
+
+export type ResultKioskDisplayControllerUploadSponsorLogoResponses = {
+    200: SponsorLogoUploadResponseDto;
+};
+
+export type ResultKioskDisplayControllerUploadSponsorLogoResponse = ResultKioskDisplayControllerUploadSponsorLogoResponses[keyof ResultKioskDisplayControllerUploadSponsorLogoResponses];
+
+export type MedicalIncidentControllerListData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        severity?: Array<number>;
+        state?: Array<'REPORTED' | 'MEDIC_DISPATCHED' | 'MEDIC_ON_SITE' | 'AMB_REQUESTED' | 'HOSPITAL_TRANSFER' | 'RESOLVED_ONSITE' | 'RESOLVED_DNF' | 'CLOSED'>;
+        category?: 'cardiac' | 'trauma' | 'heat_stroke' | 'dehydration' | 'musculoskeletal' | 'neurological' | 'allergic' | 'other';
+        /**
+         * ISO 8601 — only incidents reportedAt >= this
+         */
+        since?: string;
+        bib?: string;
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/admin/races/{raceId}/medical-incidents';
+};
+
+export type MedicalIncidentControllerListResponses = {
+    200: IncidentListResponseDto;
+};
+
+export type MedicalIncidentControllerListResponse = MedicalIncidentControllerListResponses[keyof MedicalIncidentControllerListResponses];
+
+export type MedicalIncidentControllerCreateData = {
+    body: CreateIncidentDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents';
+};
+
+export type MedicalIncidentControllerCreateResponses = {
+    201: IncidentResponseDto;
+};
+
+export type MedicalIncidentControllerCreateResponse = MedicalIncidentControllerCreateResponses[keyof MedicalIncidentControllerCreateResponses];
+
+export type MedicalIncidentControllerDetailData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}';
+};
+
+export type MedicalIncidentControllerDetailResponses = {
+    200: IncidentResponseDto;
+};
+
+export type MedicalIncidentControllerDetailResponse = MedicalIncidentControllerDetailResponses[keyof MedicalIncidentControllerDetailResponses];
+
+export type MedicalIncidentControllerTransitionStatusData = {
+    body: UpdateIncidentStatusDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}/status';
+};
+
+export type MedicalIncidentControllerTransitionStatusResponses = {
+    200: IncidentResponseDto;
+};
+
+export type MedicalIncidentControllerTransitionStatusResponse = MedicalIncidentControllerTransitionStatusResponses[keyof MedicalIncidentControllerTransitionStatusResponses];
+
+export type MedicalIncidentControllerUploadPhotoData = {
+    body: {
+        photo?: Blob | File;
+    };
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}/photo';
+};
+
+export type MedicalIncidentControllerUploadPhotoResponses = {
+    201: IncidentAttachmentResponseDto;
+};
+
+export type MedicalIncidentControllerUploadPhotoResponse = MedicalIncidentControllerUploadPhotoResponses[keyof MedicalIncidentControllerUploadPhotoResponses];
+
+export type MedicalIncidentControllerExportPdfData = {
+    body: PdfExportOptionsDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/pdf';
+};
+
+export type MedicalIncidentControllerExportPdfResponses = {
+    201: PdfExportResponseDto;
+};
+
+export type MedicalIncidentControllerExportPdfResponse = MedicalIncidentControllerExportPdfResponses[keyof MedicalIncidentControllerExportPdfResponses];
+
+export type MedicalIncidentControllerAutoBatchData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/auto-pdf-batch';
+};
+
+export type MedicalIncidentControllerAutoBatchResponses = {
+    201: PdfExportResponseDto;
+};
+
+export type MedicalIncidentControllerAutoBatchResponse = MedicalIncidentControllerAutoBatchResponses[keyof MedicalIncidentControllerAutoBatchResponses];
+
+export type MedicalIncidentControllerSignPhotoData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query: {
+        s3Key: string;
+    };
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}/photo-url';
+};
+
+export type MedicalIncidentControllerSignPhotoResponses = {
+    200: unknown;
+};
+
+export type MedicalIncidentControllerStreamData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/stream';
+};
+
+export type MedicalIncidentControllerStreamResponses = {
+    200: unknown;
+};
+
+export type MedicalIncidentControllerSignUploadUrlData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/medical-incidents/{id}/photo-upload-url';
+};
+
+export type MedicalIncidentControllerSignUploadUrlResponses = {
+    201: unknown;
+};
+
+export type AwardsControllerGetEligibilityData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/ag-eligibility';
+};
+
+export type AwardsControllerGetEligibilityResponses = {
+    200: AgEligibilityReportDto;
+};
+
+export type AwardsControllerGetEligibilityResponse = AwardsControllerGetEligibilityResponses[keyof AwardsControllerGetEligibilityResponses];
+
+export type AwardsControllerListPodiumData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        courseId?: string;
+        gender?: 'M' | 'F';
+        ageGroup?: string;
+        state?: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/admin/races/{raceId}/awards/ag-podium';
+};
+
+export type AwardsControllerListPodiumResponses = {
+    200: PodiumListResponseDto;
+};
+
+export type AwardsControllerListPodiumResponse = AwardsControllerListPodiumResponses[keyof AwardsControllerListPodiumResponses];
+
+export type AwardsControllerDetailPodiumData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/ag-podium/{id}';
+};
+
+export type AwardsControllerDetailPodiumResponses = {
+    200: PodiumResponseDto;
+};
+
+export type AwardsControllerDetailPodiumResponse = AwardsControllerDetailPodiumResponses[keyof AwardsControllerDetailPodiumResponses];
+
+export type AwardsControllerRecomputeData = {
+    body: RecomputeRequestDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/recompute';
+};
+
+export type AwardsControllerRecomputeResponses = {
+    201: RecomputeResponseDto;
+};
+
+export type AwardsControllerRecomputeResponse = AwardsControllerRecomputeResponses[keyof AwardsControllerRecomputeResponses];
+
+export type AwardsControllerListWarningsData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        courseId?: string;
+        tier?: 1 | 2 | 3;
+        resolution?: 'pending' | 'ignored' | 'fixed' | 'btc_override';
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/admin/races/{raceId}/awards/anomaly-warnings';
+};
+
+export type AwardsControllerListWarningsResponses = {
+    200: AnomalyWarningListResponseDto;
+};
+
+export type AwardsControllerListWarningsResponse = AwardsControllerListWarningsResponses[keyof AwardsControllerListWarningsResponses];
+
+export type AwardsControllerAckWarningData = {
+    body: AckWarningDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/anomaly-warnings/{id}/ack';
+};
+
+export type AwardsControllerAckWarningResponses = {
+    200: AnomalyWarningResponseDto;
+};
+
+export type AwardsControllerAckWarningResponse = AwardsControllerAckWarningResponses[keyof AwardsControllerAckWarningResponses];
+
+export type AwardsControllerResolveWarningData = {
+    body: ResolveWarningDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/anomaly-warnings/{id}/resolve';
+};
+
+export type AwardsControllerResolveWarningResponses = {
+    200: AnomalyWarningResponseDto;
+};
+
+export type AwardsControllerResolveWarningResponse = AwardsControllerResolveWarningResponses[keyof AwardsControllerResolveWarningResponses];
+
+export type AwardsControllerTransitionStateData = {
+    body: PodiumStateUpdateDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/podium/{id}/state';
+};
+
+export type AwardsControllerTransitionStateResponses = {
+    200: PodiumResponseDto;
+};
+
+export type AwardsControllerTransitionStateResponse = AwardsControllerTransitionStateResponses[keyof AwardsControllerTransitionStateResponses];
+
+export type AwardsControllerPredictedRanksData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/predicted-ranks';
+};
+
+export type AwardsControllerPredictedRanksResponses = {
+    200: PredictedRankListResponseDto;
+};
+
+export type AwardsControllerPredictedRanksResponse = AwardsControllerPredictedRanksResponses[keyof AwardsControllerPredictedRanksResponses];
+
+export type AwardsControllerExportPdfData = {
+    body: PdfExportOptionsDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/podium/{id}/pdf';
+};
+
+export type AwardsControllerExportPdfResponses = {
+    201: PodiumPdfResponseDto;
+};
+
+export type AwardsControllerExportPdfResponse = AwardsControllerExportPdfResponses[keyof AwardsControllerExportPdfResponses];
+
+export type AwardsControllerPdfStatusData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/podium/{id}/pdf-status';
+};
+
+export type AwardsControllerPdfStatusResponses = {
+    200: unknown;
+};

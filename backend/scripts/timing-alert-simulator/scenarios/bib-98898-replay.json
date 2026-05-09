@@ -1,0 +1,74 @@
+{
+  "name": "BIB 98898 Replay (race 192 — 02/05/2026 case)",
+  "description": "Synthetic fixture mô phỏng case BIB 98898 miss Finish — Top 2 age group Nam 40-49 → expected severity = CRITICAL",
+  "raceStartIso": "2026-05-15T05:00:00+07:00",
+  "raceDurationSeconds": 21600,
+  "courses": {
+    "42KM": ["Start", "TM1", "TM2", "TM3", "Finish"]
+  },
+  "athletes": [
+    {
+      "bib": "1001",
+      "firstname": "Top",
+      "lastname": "Runner 1",
+      "contest": "42KM",
+      "category": "Nam 40-49",
+      "gender": "Male",
+      "plannedElapsed": { "Start": 0, "TM1": 2400, "TM2": 5400, "TM3": 8400, "Finish": 11400 }
+    },
+    {
+      "bib": "1002",
+      "firstname": "Top",
+      "lastname": "Runner 2",
+      "contest": "42KM",
+      "category": "Nam 40-49",
+      "gender": "Male",
+      "plannedElapsed": { "Start": 0, "TM1": 2700, "TM2": 6000, "TM3": 9300, "Finish": 12600 }
+    },
+    {
+      "bib": "1003",
+      "firstname": "Top",
+      "lastname": "Runner 3",
+      "contest": "42KM",
+      "category": "Nam 40-49",
+      "gender": "Male",
+      "plannedElapsed": { "Start": 0, "TM1": 2900, "TM2": 6300, "TM3": 9700, "Finish": 13100 }
+    },
+    {
+      "bib": "98898",
+      "firstname": "Đặng",
+      "lastname": "Đức",
+      "contest": "42KM",
+      "category": "Nam 40-49",
+      "gender": "Male",
+      "plannedElapsed": { "Start": 0, "TM1": 2800, "TM2": 6100, "TM3": 9500, "Finish": null }
+    },
+    {
+      "bib": "1005",
+      "firstname": "Mid",
+      "lastname": "Pack 1",
+      "contest": "42KM",
+      "category": "Nam 30-39",
+      "gender": "Male",
+      "plannedElapsed": { "Start": 0, "TM1": 3300, "TM2": 7500, "TM3": 11700, "Finish": 15900 }
+    },
+    {
+      "bib": "1006",
+      "firstname": "Mid",
+      "lastname": "Pack 2",
+      "contest": "42KM",
+      "category": "Nam 50+",
+      "gender": "Male",
+      "plannedElapsed": { "Start": 0, "TM1": 3600, "TM2": 8100, "TM3": 12600, "Finish": 17100 }
+    },
+    {
+      "bib": "1007",
+      "firstname": "Slow",
+      "lastname": "Finisher",
+      "contest": "42KM",
+      "category": "Nữ 30-39",
+      "gender": "Female",
+      "plannedElapsed": { "Start": 0, "TM1": 4200, "TM2": 9300, "TM3": 14400, "Finish": 19500 }
+    }
+  ]
+}

@@ -28,6 +28,22 @@ export class AthleteReadonly {
   @Column({ nullable: true, type: 'varchar', length: 255 })
   name: string | null;
 
+  /**
+   * F-019 v2 — Date of Birth.
+   * Source: MySQL `athletes.dob` (DATE), coverage ~95% (92506/97155 toàn DB).
+   *
+   * **PRIVACY (BR-03 PII strict allowlist):**
+   * Đây là PII — bị isolated. Service layer (`AgeComputerService`) đọc field
+   * này → compute `ageOnRaceDay` → persist CHỈ age number vào MongoDB
+   * `race_athletes.ageOnRaceDay`. DOB raw KHÔNG bao giờ rời backend, KHÔNG
+   * bao giờ trả public API. Vẫn trong tinh thần allowlist BR-03 vì
+   * persisted state KHÔNG có raw DOB.
+   *
+   * Format: TypeORM map MySQL DATE → JS Date object UTC midnight.
+   */
+  @Column({ nullable: true, type: 'date' })
+  dob: Date | null;
+
   @Column({ nullable: true, type: 'varchar', length: 32 })
   last_status: string | null;
 

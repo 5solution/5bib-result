@@ -32,7 +32,7 @@ export class CertificateTemplateService {
     private readonly templateModel: Model<CertificateTemplateDocument>,
     @InjectModel(RaceCertificateConfig.name)
     private readonly configModel: Model<RaceCertificateConfigDocument>,
-  ) {}
+  ) { }
 
   private toResponse(
     doc: CertificateTemplateDocument | Record<string, unknown>,
@@ -141,7 +141,7 @@ export class CertificateTemplateService {
       }
     }
     const updated = await this.templateModel
-      .findByIdAndUpdate(id, { $set: dto }, { new: true })
+      .findByIdAndUpdate(id, { $set: dto }, { returnDocument: "after" })
       .lean()
       .exec();
     if (!updated) throw new NotFoundException('Template not found');

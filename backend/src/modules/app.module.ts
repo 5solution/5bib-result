@@ -7,6 +7,7 @@ import { ConfigModule } from '@nestjs/config';
 import { env } from 'src/config';
 import { RacesModule } from './races/races.module';
 import { RaceResultModule } from './race-result/race-result.module';
+// F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
 import { AdminModule } from './admin/admin.module';
 import { LogtoAuthModule } from './logto-auth';
 import { UploadModule } from './upload/upload.module';
@@ -18,6 +19,7 @@ import { CertificatesModule } from './certificates/certificates.module';
 import { UsersModule } from './users/users.module';
 import { AthleteStarsModule } from './athlete-stars/athlete-stars.module';
 import { TimingModule } from './timing/timing.module';
+import { TimingAlertModule } from './timing-alert/timing-alert.module';
 import { EventTrackingModule } from './event-tracking/event-tracking.module';
 import { SponsoredModule } from './sponsored/sponsored.module';
 import { ArticlesModule } from './articles/articles.module';
@@ -28,6 +30,11 @@ import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { Tenant } from './merchant/entities/tenant.entity';
 import { ChipVerificationModule } from './chip-verification/chip-verification.module';
+import { ResultKioskDisplayModule } from './result-kiosk-display/result-kiosk-display.module';
+// F-018 — Medical Incident Tracker (Race Ops Cluster #9 #1, replaces F-015 slot).
+import { MedicalIncidentModule } from './medical-incidents/medical-incident.module';
+// F-019 — Awards Age Group Podium + Warnings (Race Ops Cluster #9 #2).
+import { AwardsModule } from './awards/awards.module';
 import { RaceMasterDataModule } from './race-master-data/race-master-data.module';
 import { AthleteReadonly } from './race-master-data/entities/athlete-readonly.entity';
 import { AthleteSubinfoReadonly } from './race-master-data/entities/athlete-subinfo-readonly.entity';
@@ -97,6 +104,11 @@ const platformDbModules = env.platformDb.host
     ]
   : [];
 
+// Timing Miss Alert v1.0 — Mongo-native, no MySQL dependency.
+// Manager refactor 03/05: drop encryption key (race document apiUrl plaintext).
+// Module always loaded — feature flag qua per-race `enabled` field trong config.
+const timingAlertModules = [TimingAlertModule];
+
 // Conditional: chỉ khởi tạo Volunteer DB + Team Management module nếu VOLUNTEER_DB_HOST được cung cấp
 const volunteerDbModules = env.volunteerDb.host
   ? [
@@ -148,8 +160,10 @@ const volunteerDbModules = env.volunteerDb.host
     }),
     ...platformDbModules,
     ...volunteerDbModules,
+    ...timingAlertModules,
     RacesModule,
     RaceResultModule,
+    // F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
     AdminModule,
     LogtoAuthModule,
     UploadModule,
@@ -166,6 +180,12 @@ const volunteerDbModules = env.volunteerDb.host
     ApiKeysModule,
     ArticlesModule,
     BugReportsModule,
+    // F-017 — Result Kiosk Display Configuration (admin-only CRUD).
+    ResultKioskDisplayModule,
+    // F-018 — Medical Incident Tracker (Race Ops Cluster #9 #1).
+    MedicalIncidentModule,
+    // F-019 — Awards Age Group Podium + Warnings (Race Ops Cluster #9 #2).
+    AwardsModule,
   ],
 })
 export class AppModule {}
