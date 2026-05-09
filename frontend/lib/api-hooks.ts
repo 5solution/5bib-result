@@ -145,17 +145,23 @@ export function useFilterOptions(courseId: string, options?: { enabled?: boolean
   });
 }
 
-export function useCourseStats(courseId: string, options?: { enabled?: boolean; refetchInterval?: number | false }) {
+// FEATURE-021 BR-DISPLAY-07 — endpoint now requires raceId (cross-race
+// isolation). Both raceId and courseId must resolve before the query fires.
+export function useCourseStats(
+  raceId: string | undefined,
+  courseId: string | undefined,
+  options?: { enabled?: boolean; refetchInterval?: number | false },
+) {
   return useQuery({
-    queryKey: ['course-stats', courseId],
+    queryKey: ['course-stats', raceId, courseId],
     queryFn: async () => {
       const result = await raceResultControllerGetCourseStats({
-        path: { courseId },
+        path: { raceId: raceId as string, courseId: courseId as string },
       });
       if (result.error) throw result.error;
       return result.data;
     },
-    enabled: options?.enabled ?? !!courseId,
+    enabled: (options?.enabled ?? true) && !!raceId && !!courseId,
     refetchInterval: options?.refetchInterval,
     staleTime: options?.refetchInterval ? 0 : 60 * 1000,
   });

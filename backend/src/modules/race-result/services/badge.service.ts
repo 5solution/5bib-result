@@ -13,21 +13,41 @@ const LOCK_TTL_SECONDS = 10; // stampede prevention
 /**
  * Parse distance string to kilometers.
  * Handles: "21km", "21 km", "21K", "42.195km", "Marathon", "Half Marathon",
- *          "HM", "FM", "10k", "5K", "100M" (miles).
+ *          "HM", "FM", "10k", "5K", "100mi"/"100miles" (miles), "4800m" (meters).
+ *
+ * BR-DISPLAY-05/06 (FEATURE-021): distinguish lowercase `m` (meters) vs `mi`/`miles`.
+ * Uppercase `M` is documented as miles (Vietnamese vendor convention) — see spec
+ * unit test "100M" → 160.934.
  *
  * WHY regex \b failed: \b between digit↔letter (both word chars) does NOT match.
  * So `/\b21\b/` didn't match "21km". We parse numerically instead.
  */
 export function parseDistanceKm(raw: string): number {
   if (!raw) return 0;
-  const s = raw.toLowerCase().trim();
+  // Preserve original case for the meters/miles disambiguation step (`100M`
+  // uppercase MUST stay uppercase so it does NOT match the lowercase `m`
+  // meters branch — it falls through to miles branch instead).
+  const original = raw.trim();
+  const s = original.toLowerCase();
 
   // Name aliases first (exact aliases, not \b-bound)
   if (/\bfull\s*marathon|marathon|^fm$/i.test(s) && !/half/i.test(s)) return 42;
   if (/\bhalf\s*marathon|^hm$|half/i.test(s)) return 21;
 
-  // Miles → convert to km (100M = 160.93km, 50M = 80.46km)
-  const miMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:mi|miles|m)\b/);
+  // Meters FIRST (BR-DISPLAY-05): "4800m" → 4.8 km.
+  // Match standalone lowercase `m` (case-sensitive on the original string)
+  // when there is no `mi`/`miles`/`km`/`k` token to disambiguate. We exclude
+  // uppercase `M` here on purpose — the existing data convention treats
+  // bare `100M` as miles (BR-DISPLAY-06 unit test contract).
+  const meterMatch = original.match(/^(\d+(?:\.\d+)?)\s*m\b/);
+  if (meterMatch && !/mi|miles|km|k\b/i.test(s)) {
+    return parseFloat(meterMatch[1]) / 1000;
+  }
+
+  // Miles → convert to km (100mi = 160.93 km, 50mi = 80.46 km, 100M = 160.93 km).
+  // After meters branch, any remaining `m`/`mi`/`miles`/`M` token (case-insensitive
+  // on lowercased `s`) is treated as miles.
+  const miMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:miles?|mi|m)\b/);
   if (miMatch && !/km|k$/i.test(s)) {
     return parseFloat(miMatch[1]) * 1.60934;
   }
@@ -43,6 +63,27 @@ export function parseDistanceKm(raw: string): number {
     if (n > 0 && n < 300) return n;
   }
   return 0;
+}
+
+/**
+ * BR-DISPLAY-01 (FEATURE-021): Celebration badges (PODIUM, AG_PODIUM, ULTRA)
+ * MUST only fire when the athlete is a valid finisher.
+ *
+ * A valid finisher has:
+ * - `finished === 1` (vendor RaceResult flag), AND
+ * - a `chipTime` that parses to > 0 seconds.
+ *
+ * Vendor RaceResult assigns `OverallRank: 1` pre-race for the registered
+ * leader, which previously fired fake "Vô địch chung cuộc" badges before the
+ * race even started. This guard plugs that hole.
+ */
+export function isValidFinisher(result: {
+  finished?: number;
+  chipTime?: string;
+}): boolean {
+  if (result.finished !== 1) return false;
+  if (!result.chipTime || parseChipTime(result.chipTime) <= 0) return false;
+  return true;
 }
 
 /**
@@ -242,6 +283,8 @@ export class BadgeService {
   private detectPodium(result: {
     overallRankNumeric?: number;
     overallRank?: string;
+    finished?: number;
+    chipTime?: string;
   }): Badge | null {
     return detectPodiumLogic(result);
   }
@@ -250,6 +293,8 @@ export class BadgeService {
     categoryRankNumeric?: number;
     categoryRank?: string;
     category?: string;
+    finished?: number;
+    chipTime?: string;
   }): Badge | null {
     return detectAgePodiumLogic(result);
   }
@@ -261,7 +306,11 @@ export class BadgeService {
     return detectSubXLogic(result);
   }
 
-  private detectUltra(result: { distance?: string }): Badge | null {
+  private detectUltra(result: {
+    distance?: string;
+    finished?: number;
+    chipTime?: string;
+  }): Badge | null {
     return detectUltraLogic(result);
   }
 
@@ -453,11 +502,16 @@ function sleep(ms: number): Promise<void> {
  */
 // ─── Pure detection helpers (exported for unit testing) ────────
 
-/** Podium = overallRank 1-3. */
+/** Podium = overallRank 1-3 (finisher only — BR-DISPLAY-01). */
 export function detectPodiumLogic(result: {
   overallRankNumeric?: number;
   overallRank?: string;
+  finished?: number;
+  chipTime?: string;
 }): Badge | null {
+  // BR-DISPLAY-01: vendor pre-race rank=1 must NOT fire fake celebration.
+  if (!isValidFinisher(result)) return null;
+
   const rank =
     result.overallRankNumeric ?? parseInt(result.overallRank || '', 10);
   if (isNaN(rank) || rank < 1 || rank > 3) return null;
@@ -481,7 +535,12 @@ export function detectAgePodiumLogic(result: {
   categoryRankNumeric?: number;
   categoryRank?: string;
   category?: string;
+  finished?: number;
+  chipTime?: string;
 }): Badge | null {
+  // BR-DISPLAY-01: only fire for valid finishers.
+  if (!isValidFinisher(result)) return null;
+
   const rank =
     result.categoryRankNumeric ?? parseInt(result.categoryRank || '', 10);
   if (isNaN(rank) || rank < 1 || rank > 3) return null;
@@ -522,8 +581,15 @@ export function detectSubXLogic(result: {
   return [];
 }
 
-/** Ultra = ≥50km or keyword marker (UTMB, ultra, 100M). */
-export function detectUltraLogic(result: { distance?: string }): Badge | null {
+/** Ultra = ≥50km or keyword marker (UTMB, ultra, 100M). Finisher-only. */
+export function detectUltraLogic(result: {
+  distance?: string;
+  finished?: number;
+  chipTime?: string;
+}): Badge | null {
+  // BR-DISPLAY-01: only fire for valid finishers.
+  if (!isValidFinisher(result)) return null;
+
   const distance = result.distance || '';
   const km = parseDistanceKm(distance);
   if (km >= 50 || /ultra|utmb|\b100\s*mi|\b100\s*miles/i.test(distance)) {

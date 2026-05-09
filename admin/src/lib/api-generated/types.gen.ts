@@ -127,7 +127,78 @@ export type SyncLogListDto = {
     total: number;
 };
 
+export type PreflightBatchDto = {
+    /**
+     * Period as YYYY-MM (single month)
+     */
+    period: string;
+    /**
+     * Array of merchant IDs or "all"
+     */
+    merchant_ids: {
+        [key: string]: unknown;
+    };
+};
+
+export type PreflightRangeDto = {
+    /**
+     * MySQL tenant.id
+     */
+    tenant_id: number;
+    /**
+     * MySQL race_course.race_id
+     */
+    mysql_race_id: number;
+    /**
+     * Period start YYYY-MM-DD (must be the 1st of a month)
+     */
+    period_start: string;
+    /**
+     * Period end YYYY-MM-DD (must be the last day of a month, span ≤ 12 months)
+     */
+    period_end: string;
+};
+
+export type AuditPeriodBoundaryItemDto = {
+    id: string;
+    tenant_id: number;
+    tenant_name: string;
+    race_title: string;
+    /**
+     * Stored period_start YYYY-MM-DD
+     */
+    period_start: string;
+    /**
+     * Stored period_end YYYY-MM-DD
+     */
+    period_end: string;
+    /**
+     * Expected period_start (1st of stored start month)
+     */
+    expected_period_start: string;
+    /**
+     * Expected period_end (last day of stored end month)
+     */
+    expected_period_end: string;
+    /**
+     * Diff in days between stored vs expected start
+     */
+    deviation_start_days: number;
+    /**
+     * Diff in days between stored vs expected end
+     */
+    deviation_end_days: number;
+};
+
+export type AuditPeriodBoundaryDto = {
+    total: number;
+    items: Array<AuditPeriodBoundaryItemDto>;
+};
+
 export type BatchCreateReconciliationDto = {
+    /**
+     * Period as YYYY-MM (single month)
+     */
     period: string;
     /**
      * Array of merchant IDs or "all"
@@ -152,11 +223,11 @@ export type PreviewReconciliationDto = {
      */
     race_title?: string;
     /**
-     * Period start date YYYY-MM-DD
+     * Period start date YYYY-MM-DD (must be the 1st of a month)
      */
     period_start: string;
     /**
-     * Period end date YYYY-MM-DD
+     * Period end date YYYY-MM-DD (must be the last day of a month, span ≤ 12 months)
      */
     period_end: string;
     /**
@@ -187,11 +258,11 @@ export type CreateReconciliationDto = {
      */
     race_title?: string;
     /**
-     * Period start date YYYY-MM-DD
+     * Period start date YYYY-MM-DD (must be the 1st of a month)
      */
     period_start: string;
     /**
-     * Period end date YYYY-MM-DD
+     * Period end date YYYY-MM-DD (must be the last day of a month, span ≤ 12 months)
      */
     period_end: string;
     /**
@@ -3649,7 +3720,7 @@ export type ReconciliationControllerPreflightResponses = {
 };
 
 export type ReconciliationControllerPreflightBatchData = {
-    body?: never;
+    body: PreflightBatchDto;
     path?: never;
     query?: never;
     url: '/api/reconciliations/preflight/batch';
@@ -3661,6 +3732,33 @@ export type ReconciliationControllerPreflightBatchResponses = {
      */
     200: unknown;
 };
+
+export type ReconciliationControllerPreflightRangeData = {
+    body: PreflightRangeDto;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/preflight/range';
+};
+
+export type ReconciliationControllerPreflightRangeResponses = {
+    /**
+     * Pre-flight result with overlap warnings
+     */
+    200: unknown;
+};
+
+export type ReconciliationControllerAuditPeriodBoundaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/audit/period-boundary';
+};
+
+export type ReconciliationControllerAuditPeriodBoundaryResponses = {
+    200: AuditPeriodBoundaryDto;
+};
+
+export type ReconciliationControllerAuditPeriodBoundaryResponse = ReconciliationControllerAuditPeriodBoundaryResponses[keyof ReconciliationControllerAuditPeriodBoundaryResponses];
 
 export type ReconciliationControllerBatchCreateData = {
     body: BatchCreateReconciliationDto;
@@ -5992,17 +6090,21 @@ export type RaceResultControllerGetCourseStatsData = {
     body?: never;
     path: {
         /**
+         * Race ID
+         */
+        raceId: string;
+        /**
          * Course ID
          */
         courseId: string;
     };
     query?: never;
-    url: '/api/race-results/stats/{courseId}';
+    url: '/api/race-results/stats/{raceId}/{courseId}';
 };
 
 export type RaceResultControllerGetCourseStatsResponses = {
     /**
-     * Returns aggregated stats for the course
+     * Returns aggregated stats for the course within the race
      */
     200: unknown;
 };

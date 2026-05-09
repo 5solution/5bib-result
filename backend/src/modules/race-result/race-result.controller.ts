@@ -259,15 +259,22 @@ export class RaceResultController {
     return { data: filters, success: true };
   }
 
-  @Get('stats/:courseId')
-  @ApiOperation({ summary: 'Get aggregated course stats (avg time, finishers, etc.)' })
+  @Get('stats/:raceId/:courseId')
+  @ApiOperation({
+    summary:
+      'Get aggregated course stats (avg time, finishers, etc.) scoped per race',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
   @ApiResponse({
     status: 200,
-    description: 'Returns aggregated stats for the course',
+    description: 'Returns aggregated stats for the course within the race',
   })
-  async getCourseStats(@Param('courseId') courseId: string) {
-    const stats = await this.raceResultService.getCourseStats(courseId);
+  async getCourseStats(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+  ) {
+    const stats = await this.raceResultService.getCourseStats(raceId, courseId);
     return { data: stats, success: true };
   }
 
