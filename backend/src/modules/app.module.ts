@@ -33,6 +33,8 @@ import { ChipVerificationModule } from './chip-verification/chip-verification.mo
 import { ResultKioskDisplayModule } from './result-kiosk-display/result-kiosk-display.module';
 // F-018 — Medical Incident Tracker (Race Ops Cluster #9 #1, replaces F-015 slot).
 import { MedicalIncidentModule } from './medical-incidents/medical-incident.module';
+// F-019 — Awards Age Group Podium + Warnings (Race Ops Cluster #9 #2).
+import { AwardsModule } from './awards/awards.module';
 import { RaceMasterDataModule } from './race-master-data/race-master-data.module';
 import { AthleteReadonly } from './race-master-data/entities/athlete-readonly.entity';
 import { AthleteSubinfoReadonly } from './race-master-data/entities/athlete-subinfo-readonly.entity';
@@ -182,6 +184,8 @@ const volunteerDbModules = env.volunteerDb.host
     ResultKioskDisplayModule,
     // F-018 — Medical Incident Tracker (Race Ops Cluster #9 #1).
     MedicalIncidentModule,
+    // F-019 — Awards Age Group Podium + Warnings (Race Ops Cluster #9 #2).
+    AwardsModule,
   ],
 })
 export class AppModule {}

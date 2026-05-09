@@ -955,11 +955,30 @@ export type PodiumCourseDto = {
 };
 
 export type PodiumResponseDto = {
+    id: string;
     raceId: string;
-    raceTitle: string;
-    raceStatus: string;
-    generatedAt: string;
-    courses: Array<PodiumCourseDto>;
+    courseId: string;
+    courseName: string;
+    courseDistanceKm?: number;
+    ageGroup: string;
+    ageGroupKey: string;
+    ageGroupLabel: string;
+    gender: 'M' | 'F';
+    presetKey: string;
+    compoundingMode: 'compounding' | 'mutually_exclusive';
+    agTopN: number;
+    athletes: Array<PodiumAthleteResponseDto>;
+    state: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
+    stateHistory: Array<PodiumStateTransitionResponseDto>;
+    computedAt?: string;
+    lockedAt?: string;
+    publishedAt?: string;
+    disputedAt?: string;
+    finalAt?: string;
+    latestPdfS3Key?: string;
+    latestPdfGeneratedAt?: string;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type SimulationCourseResponseDto = {
@@ -1176,6 +1195,10 @@ export type CreateRaceDto = {
      * Max athletes shown without search when enablePrivateList=true
      */
     privateListLimit?: number;
+    /**
+     * F-019 v2.1 — Compounding mode for podium calc. mutually_exclusive (default VN amateur): top 3 overall excluded from AG buckets. compounding (WA TR9): top 3 overall still counted in AG buckets.
+     */
+    awardsCompoundingMode?: 'mutually_exclusive' | 'compounding';
 };
 
 export type UpdateRaceDto = {
@@ -1279,6 +1302,10 @@ export type UpdateRaceDto = {
      * Max athletes shown without search when enablePrivateList=true
      */
     privateListLimit?: number;
+    /**
+     * F-019 v2.1 — Compounding mode for podium calc. mutually_exclusive (default VN amateur): top 3 overall excluded from AG buckets. compounding (WA TR9): top 3 overall still counted in AG buckets.
+     */
+    awardsCompoundingMode?: 'mutually_exclusive' | 'compounding';
 };
 
 export type UpdateStatusDto = {
@@ -3115,9 +3142,14 @@ export type UpdateIncidentStatusDto = {
 };
 
 export type PdfExportOptionsDto = {
-    incidentIds?: Array<string>;
-    includeAppendix?: boolean;
-    includeSignature?: boolean;
+    /**
+     * Include footer 5BIB watermark (default true).
+     */
+    includeWatermark?: boolean;
+    /**
+     * Include race-organizer signature line (Phase 1 typed name; default true).
+     */
+    includeSignatureLine?: boolean;
 };
 
 export type PdfExportResponseDto = {
@@ -3126,6 +3158,249 @@ export type PdfExportResponseDto = {
     expiresAtIso: string;
     incidentCount: number;
     warning: string;
+};
+
+export type BracketDistributionItemDto = {
+    /**
+     * Bracket key
+     */
+    ageGroup: string;
+    gender: 'M' | 'F';
+    /**
+     * Số athletes trong bracket × gender
+     */
+    count: number;
+};
+
+export type VendorCategoryHealthDto = {
+    /**
+     * Số athletes có vendor Category populated đúng format
+     */
+    populated: number;
+    /**
+     * Số athletes có vendor Category empty/whitespace (Giải Công An bug)
+     */
+    empty: number;
+    /**
+     * Số athletes có vendor Category sai format (regex fail)
+     */
+    malformed: number;
+};
+
+export type AgEligibilityReportDto = {
+    raceId: string;
+    /**
+     * Tổng athletes registered cho race
+     */
+    totalAthletes: number;
+    /**
+     * Số athletes có ageOnRaceDay computed (DOB available)
+     */
+    withDob: number;
+    /**
+     * Số athletes thiếu DOB (cần BTC nhập bù)
+     */
+    withoutDob: number;
+    /**
+     * Coverage ratio (0..1) = withDob/totalAthletes
+     */
+    coverage: number;
+    /**
+     * Threshold based on coverage: ≥95% READY / 80-94% WARNING / <80% NOT_READY
+     */
+    readinessLevel: 'READY' | 'WARNING' | 'NOT_READY';
+    /**
+     * Top 100 BIBs thiếu DOB (cho BTC drilldown export CSV)
+     */
+    missingDobBibs: Array<string>;
+    /**
+     * Preview bracket distribution — help BTC chuẩn bị medal đúng số bracket
+     */
+    bracketDistribution: Array<BracketDistributionItemDto>;
+    /**
+     * Vendor Category sanity check — flag BTC sửa config RaceResult trước race day
+     */
+    vendorCategoryHealth: VendorCategoryHealthDto;
+    /**
+     * Current bracketSource override on race (default 5bib)
+     */
+    bracketSource: '5bib' | 'vendor' | 'hybrid';
+    /**
+     * Last age-sync timestamp (cron T-1 EVERY_DAY_AT_MIDNIGHT or on-demand)
+     */
+    lastSyncedAt: string;
+};
+
+export type PodiumListResponseDto = {
+    items: Array<PodiumResponseDto>;
+    total: number;
+    /**
+     * Distribution by state (banner counts): { RAW_RESULT: 5, PODIUM_LOCKED: 3, ... }
+     */
+    countsByState: {
+        [key: string]: number;
+    };
+};
+
+export type PodiumAthleteResponseDto = {
+    bib: string;
+    name: string;
+    rank: number;
+    chipTimeMs?: number;
+    chipTime?: string;
+    gunTimeMs?: number;
+    gender?: string;
+    ageOnRaceDay?: number;
+    nationality?: string;
+    athleteId?: string;
+    tied?: boolean;
+};
+
+export type PodiumStateTransitionResponseDto = {
+    fromState: string;
+    toState: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
+    actorId: string;
+    at: string;
+    note?: string;
+    evidenceUrl?: string;
+};
+
+export type RecomputeRequestDto = {
+    /**
+     * Optional limit recompute to specific course; nếu không truyền thì recompute toàn race.
+     */
+    courseId?: string;
+};
+
+export type RecomputeResponseDto = {
+    raceId: string;
+    podiumsCreatedOrUpdated: number;
+    warningsCreated: number;
+    durationMs: number;
+    /**
+     * F-019 v2 — bracketSource used in this recompute (race-level override or default 5bib)
+     */
+    bracketSource?: '5bib' | 'vendor' | 'hybrid';
+};
+
+export type WarningTransitionResponseDto = {
+    action: string;
+    actorId: string;
+    at: string;
+    note?: string;
+    evidenceUrl?: string;
+    priorTier?: number;
+    newTier?: number;
+};
+
+export type AnomalyWarningResponseDto = {
+    id: string;
+    raceId: string;
+    courseId: string;
+    bib: string;
+    athleteId?: string;
+    athleteName?: string;
+    pattern: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
+    tier: 1 | 2 | 3;
+    confidence: number;
+    evidence: {
+        [key: string]: unknown;
+    };
+    ackedBy?: string;
+    ackedAt?: string;
+    ackNote?: string;
+    resolution: 'pending' | 'ignored' | 'fixed' | 'btc_override';
+    resolvedBy?: string;
+    resolvedAt?: string;
+    resolutionNote?: string;
+    overrideTier?: number;
+    transitionHistory: Array<WarningTransitionResponseDto>;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AnomalyWarningListResponseDto = {
+    items: Array<AnomalyWarningResponseDto>;
+    total: number;
+    /**
+     * Số lượng theo tier cho banner: { "1": x, "2": y, "3": z }
+     */
+    countsByTier: {
+        [key: string]: number;
+    };
+    /**
+     * Số Mức 1 + Mức 2 đang pending — gate cho podium lock
+     */
+    blockingCount: number;
+};
+
+export type AckWarningDto = {
+    /**
+     * Note bắt buộc khi ack Mức 2
+     */
+    note: string;
+    evidenceUrl?: string;
+};
+
+export type ResolveWarningDto = {
+    resolution: 'ignored' | 'fixed' | 'btc_override';
+    note: string;
+    evidenceUrl?: string;
+    /**
+     * BR-AG-22 — BTC tier override (KHÔNG mutate confidence)
+     */
+    overrideTier?: 1 | 2 | 3;
+};
+
+export type PodiumStateUpdateDto = {
+    toState: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
+    /**
+     * Note bắt buộc cho transitions: PODIUM_DRAFT → PODIUM_LOCKED, PUBLISHED → DISPUTE_OPEN.
+     */
+    note?: string;
+    evidenceUrl?: string;
+};
+
+export type PredictedRankItemDto = {
+    athleteId: string;
+    bib: string;
+    name?: string;
+    courseId: string;
+    ageGroup: string;
+    gender: string;
+    /**
+     * Predicted final rank trong AG
+     */
+    predictedRank: number;
+    estimatedFinishSec: number;
+    /**
+     * Tổng quãng đường từ lastSplit (km)
+     */
+    remainingKm: number;
+    /**
+     * Distance lastSplit (km)
+     */
+    lastSplitDistanceKm: number;
+    /**
+     * Sai số ước lượng theo loại race (phút)
+     */
+    errorMarginMin: number;
+    pattern: string;
+    confidence: number;
+};
+
+export type PredictedRankListResponseDto = {
+    items: Array<PredictedRankItemDto>;
+    total: number;
+};
+
+export type PodiumPdfResponseDto = {
+    s3Key: string;
+    signedUrl: string;
+    expiresAtIso: string;
+    bytes: number;
+    generatedAt: string;
+    warning?: string;
 };
 
 export type MerchantControllerFindAllData = {
@@ -8179,4 +8454,186 @@ export type MedicalIncidentControllerSignUploadUrlData = {
 
 export type MedicalIncidentControllerSignUploadUrlResponses = {
     201: unknown;
+};
+
+export type AwardsControllerGetEligibilityData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/ag-eligibility';
+};
+
+export type AwardsControllerGetEligibilityResponses = {
+    200: AgEligibilityReportDto;
+};
+
+export type AwardsControllerGetEligibilityResponse = AwardsControllerGetEligibilityResponses[keyof AwardsControllerGetEligibilityResponses];
+
+export type AwardsControllerListPodiumData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        courseId?: string;
+        gender?: 'M' | 'F';
+        ageGroup?: string;
+        state?: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/admin/races/{raceId}/awards/ag-podium';
+};
+
+export type AwardsControllerListPodiumResponses = {
+    200: PodiumListResponseDto;
+};
+
+export type AwardsControllerListPodiumResponse = AwardsControllerListPodiumResponses[keyof AwardsControllerListPodiumResponses];
+
+export type AwardsControllerDetailPodiumData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/ag-podium/{id}';
+};
+
+export type AwardsControllerDetailPodiumResponses = {
+    200: PodiumResponseDto;
+};
+
+export type AwardsControllerDetailPodiumResponse = AwardsControllerDetailPodiumResponses[keyof AwardsControllerDetailPodiumResponses];
+
+export type AwardsControllerRecomputeData = {
+    body: RecomputeRequestDto;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/recompute';
+};
+
+export type AwardsControllerRecomputeResponses = {
+    201: RecomputeResponseDto;
+};
+
+export type AwardsControllerRecomputeResponse = AwardsControllerRecomputeResponses[keyof AwardsControllerRecomputeResponses];
+
+export type AwardsControllerListWarningsData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: {
+        courseId?: string;
+        tier?: 1 | 2 | 3;
+        resolution?: 'pending' | 'ignored' | 'fixed' | 'btc_override';
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/admin/races/{raceId}/awards/anomaly-warnings';
+};
+
+export type AwardsControllerListWarningsResponses = {
+    200: AnomalyWarningListResponseDto;
+};
+
+export type AwardsControllerListWarningsResponse = AwardsControllerListWarningsResponses[keyof AwardsControllerListWarningsResponses];
+
+export type AwardsControllerAckWarningData = {
+    body: AckWarningDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/anomaly-warnings/{id}/ack';
+};
+
+export type AwardsControllerAckWarningResponses = {
+    200: AnomalyWarningResponseDto;
+};
+
+export type AwardsControllerAckWarningResponse = AwardsControllerAckWarningResponses[keyof AwardsControllerAckWarningResponses];
+
+export type AwardsControllerResolveWarningData = {
+    body: ResolveWarningDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/anomaly-warnings/{id}/resolve';
+};
+
+export type AwardsControllerResolveWarningResponses = {
+    200: AnomalyWarningResponseDto;
+};
+
+export type AwardsControllerResolveWarningResponse = AwardsControllerResolveWarningResponses[keyof AwardsControllerResolveWarningResponses];
+
+export type AwardsControllerTransitionStateData = {
+    body: PodiumStateUpdateDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/podium/{id}/state';
+};
+
+export type AwardsControllerTransitionStateResponses = {
+    200: PodiumResponseDto;
+};
+
+export type AwardsControllerTransitionStateResponse = AwardsControllerTransitionStateResponses[keyof AwardsControllerTransitionStateResponses];
+
+export type AwardsControllerPredictedRanksData = {
+    body?: never;
+    path: {
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/predicted-ranks';
+};
+
+export type AwardsControllerPredictedRanksResponses = {
+    200: PredictedRankListResponseDto;
+};
+
+export type AwardsControllerPredictedRanksResponse = AwardsControllerPredictedRanksResponses[keyof AwardsControllerPredictedRanksResponses];
+
+export type AwardsControllerExportPdfData = {
+    body: PdfExportOptionsDto;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/podium/{id}/pdf';
+};
+
+export type AwardsControllerExportPdfResponses = {
+    201: PodiumPdfResponseDto;
+};
+
+export type AwardsControllerExportPdfResponse = AwardsControllerExportPdfResponses[keyof AwardsControllerExportPdfResponses];
+
+export type AwardsControllerPdfStatusData = {
+    body?: never;
+    path: {
+        raceId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/admin/races/{raceId}/awards/podium/{id}/pdf-status';
+};
+
+export type AwardsControllerPdfStatusResponses = {
+    200: unknown;
 };

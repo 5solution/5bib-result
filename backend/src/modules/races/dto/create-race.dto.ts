@@ -141,4 +141,14 @@ export class CreateRaceDto {
   @IsInt()
   @Min(1)
   privateListLimit?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'F-019 v2.1 — Compounding mode for podium calc. mutually_exclusive (default VN amateur): top 3 overall excluded from AG buckets. compounding (WA TR9): top 3 overall still counted in AG buckets.',
+    enum: ['mutually_exclusive', 'compounding'],
+    default: 'mutually_exclusive',
+  })
+  @IsOptional()
+  @IsIn(['mutually_exclusive', 'compounding'])
+  awardsCompoundingMode?: 'mutually_exclusive' | 'compounding';
 }

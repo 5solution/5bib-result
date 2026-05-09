@@ -66,6 +66,35 @@ export class RaceCourse {
   gpxSimplifiedUrl?: string;
   @Prop({ type: [CourseCheckpointSchema], default: [] })
   checkpoints: CourseCheckpoint[];
+
+  // F-019 BR-AG-05/37/38 — AG preset config per course (optional, lazy default).
+  // PAUSE-CODER-09: NO migration script needed — service code handles missing
+  // field gracefully (defaultPresetFor(courseType) fallback).
+  @Prop({ type: String })
+  ageGroupPreset?: string; // 'vn_road_default' | 'road_5_year' | 'trail_itra' | 'trail_lite' | 'open_only'
+
+  @Prop({ type: Object })
+  ageGroupOverride?: {
+    bracketsM?: Array<{ key: string; label: string; min: number; max: number }>;
+    bracketsF?: Array<{ key: string; label: string; min: number; max: number }>;
+    boundaryMode?: 'upper' | 'lower';
+  };
+
+  @Prop({ type: Number })
+  paceThresholdOverride?: number; // sec/km lower bound override Pattern G
+
+  /**
+   * F-019 v2 — Race-specific bracket source override (Path B trust mode).
+   *
+   * - `'5bib'` (default): tự tính bracket từ master-data DOB (Path A primary).
+   *   Khi DOB null → exclude athlete khỏi AG bucket.
+   * - `'vendor'`: Path B trust mode — chỉ dùng vendor `Category` string.
+   *   BTC chọn khi DOB coverage < 50% (xem AGEligibilityReport). Risk:
+   *   vendor sai → 5BIB mất uy tín "trọng tài độc lập".
+   * - `'hybrid'`: Path A first, fallback Path B cho athletes thiếu DOB.
+   */
+  @Prop({ enum: ['5bib', 'vendor', 'hybrid'], default: '5bib' })
+  bracketSource?: '5bib' | 'vendor' | 'hybrid';
 }
 
 export const RaceCourseSchema = SchemaFactory.createForClass(RaceCourse);
@@ -164,6 +193,18 @@ export class Race {
   // Optional, lazy-set by admin Settings page; no migration backfill required.
   @Prop({ type: RaceMedicalConfigSchema, default: () => ({}) })
   medicalConfig?: RaceMedicalConfig;
+
+  /**
+   * F-019 v2.1 — Compounding mode cho podium calc.
+   * 'mutually_exclusive' (default VN amateur): top 3 overall EXCLUDED khỏi AG buckets.
+   * 'compounding' (WA TR9): top 3 overall vẫn được tính top AG (cộng dồn).
+   * Admin override per-race qua Race Settings UI.
+   */
+  @Prop({
+    enum: ['mutually_exclusive', 'compounding'],
+    default: 'mutually_exclusive',
+  })
+  awardsCompoundingMode: 'mutually_exclusive' | 'compounding';
 
   // Raw data from 5bib API (preserve all original fields)
   @Prop({ type: Object }) rawData: Record<string, any>;

@@ -166,12 +166,19 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `master:course-map-lock:<raceId>:<courseId>` | F-006 SETNX anti-stampede lock during cache miss compute | 30s |
 | `medical:race:<raceId>:active-count` | F-018 medical-incident tab badge count of incidents NOT in CLOSED/RESOLVED_* states | 60s |
 | `medical:incident-lock:<incidentId>` | F-018 SETNX lock on concurrent state transitions (multi-station Race Director writes) | 5s |
+| `awards:race:<raceId>:podium:<courseId>` | F-019 Awards podium preview cache (DEL on regenerate / state transition) | 60s |
+| `awards:race:<raceId>:anomalies` | F-019 Anomaly count badge (3-tier counts) | 60s |
+| `awards:lock:<raceId>:<courseId>` | F-019 SETNX anti-stampede compute lock during recompute orchestration | 30s |
+| `awards:state-lock:<podiumId>` | F-019 SETNX lock on concurrent podium state transitions (port pattern F-018 medical:incident-lock) | 5s |
+| `awards:eligibility:<raceId>` | F-019 v2 AG Eligibility Report cache (DOB coverage + bracket distribution + vendor health) — DEL on recompute | 60s |
 
 Cache invalidation: any admin write (create/update/publish/unpublish/delete/restore on articles OR categories) flushes ALL `articles:*` keys via `scanStream` + pipeline. Rate-limit keys use a different `ratelimit:*` prefix so they survive cache flushes — view/vote dedup state is preserved across admin edits.
 
 F-006 Course Map invalidation: `master:course-map:<raceId>:<courseId>` is DEL'd directly by `RacesService.updateCourse()` after `$set` succeeds (Clarification 3 — direct redis.del, NOT via CourseMapService injection to avoid circular DI), AND by CourseMapService methods on POST upload / DELETE / PATCH checkpoint-position.
 
 F-018 Medical Incident invalidation: `medical:race:<raceId>:active-count` is DEL'd by `MedicalIncidentService` after every create + state transition + severity change, paired with SSE emit (`incident.created` / `incident.state_changed` / `incident.severity_escalated`). The 5s SETNX lock `medical:incident-lock:<incidentId>` short-circuits concurrent state writes — second writer gets ConflictException 409 with VN message asking to retry.
+
+F-019 Awards invalidation: all `awards:race:<raceId>:*` keys flushed via `scanStream` + pipeline (port articles invalidation pattern) by `AwardsService` after recompute / ack / resolve / state transition. The 5s SETNX lock `awards:state-lock:<podiumId>` short-circuits concurrent podium state transitions (BR-AG-23 forward-only) — second writer gets `ConflictException` 409 with VN message "Bục trao giải đang được cập nhật bởi người khác — thử lại sau vài giây". The 30s SETNX `awards:lock:<raceId>:<courseId>` guards anti-stampede compute spike during race-day batch recompute (BR-AG-36 — admin "Tính lại AG" button). Cron `AwardsAutoFinalCron` (1-min tick) auto-promotes `PODIUM_PUBLISHED → PODIUM_FINAL` 30 phút sau publish nếu không có DISPUTE (BR-AG-26 + WA TR8 30-min appeal window).
 
 Flush pattern (careful — global):
 ```bash
@@ -216,6 +223,14 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - **Audit log**: Sev 4-5 reads by Back-Office Admin role logged via `Logger.log` (BR-MI-32).
 - **CRITICAL**: do NOT mix `medical-attachments/` or `medical-reports/` with `result-images/` 24h TTL — medical evidence must persist for legal audit. Distinct from `courses/` (no PII) and `result-kiosk-sponsors/` (public logos).
 
+### Lifecycle rule 5 — Awards Podium PDF (F-019)
+- **Prefix**: `awards-pdf/`
+- **Expiration**: NONE (legal audit retention — podium PDF là race-day document trao giải vĩnh viễn + bằng chứng dispute resolution).
+- **Path convention**: `awards-pdf/{raceId}/{courseId}/{ts}-podium.pdf` (Phase 1 PNG-as-PDF placeholder per F-018 pattern; Phase 2 swap pdf-lib for true multi-page PDF).
+- **Access**: SIGNED URL ONLY — 5min for upload PUT (Phase 2 evidence flow), 15min for read GET. NO public bucket policy for this prefix.
+- **Reason**: Podium FINAL artifact + dispute hearing evidence. Cần BTC defend tại protest hearing nếu có khiếu nại sau race. Không thể expire 24h như `result-images/` — VĐV thắng AG nhận prize money + cần document FINAL với log truy vết.
+- **CRITICAL**: do NOT mix `awards-pdf/` với `result-images/` (24h TTL) — podium PDF must persist. Distinct từ `courses/` (no PII), `result-kiosk-sponsors/` (public logos), `medical-attachments/` (PII strict).
+
 
 ## Development Rules
 
@@ -230,6 +245,13 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - TanStack Query hooks in `lib/api-hooks.ts` wrap SDK calls for React components
 - Run `pnpm generate:api` to regenerate types after backend API changes
 - Never use raw `fetch()` for API calls — always use generated SDK functions or hooks
+
+### Independent Calc + 2-Layer Verify (F-019 v2 lesson)
+- **Mọi metric phụ thuộc vendor MUST có 2-layer verify.** Ranking, AG bracket, podium, awards — KHÔNG được trust vendor field làm source-of-truth.
+- **Layer 1 (5BIB primary):** tự calc từ raw timing data (`chipTimeMs` ASC sort, DOB-derived bracket, etc.).
+- **Layer 2 (Vendor cross-check):** parse vendor field (`OverallRank`, `Category`, `CatRank`) → so sánh với 5BIB output → emit anomaly warning khi mismatch (Pattern H pattern).
+- **Threshold escalation:** lệch 1 BIB → WARNING/flag publish, lệch 2+ BIB → ALERT/block publish, bracket khác hẳn → CRITICAL/data integrity.
+- **Lý do:** vendor RaceResult đã chứng minh đẩy `Category: " "` whitespace cho 3/4 course race "Giải Công An" 2026 → 0 podium. F-019 v1 silent false-negative ship được 1 lần là một lần quá nhiều.
 
 ## Frontend Design System ("Velocity" — Athletic Editorial)
 - **Theme file**: `frontend/app/globals.css`

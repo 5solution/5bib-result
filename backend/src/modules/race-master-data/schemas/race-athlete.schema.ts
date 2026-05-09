@@ -75,6 +75,22 @@ export class RaceAthlete {
   @Prop({ type: String, default: null })
   last_status: string | null;
 
+  /**
+   * F-019 v2 — Age computed on race day (years). Lazy populated by
+   * `AgeComputerService` cron pre-race T-1 và on-demand. KHÔNG persist DOB
+   * raw vào MongoDB (BR-03 PII strict allowlist preserved).
+   *
+   * `null` trong 3 trường hợp:
+   *   1. Athlete chưa cung cấp DOB trong 5sport platform DB.
+   *   2. MySQL `'platform'` connection down lúc compute → Path B fallback
+   *      vendor `Category` khi recompute.
+   *   3. Race chưa có cron sync (cron `EVERY_DAY_AT_MIDNIGHT` chưa chạy).
+   *
+   * `AGEligibilityReportService` đếm coverage = withDob/totalAthletes.
+   */
+  @Prop({ type: Number, default: null })
+  ageOnRaceDay: number | null;
+
   @Prop({ default: false })
   racekit_received: boolean;
 
