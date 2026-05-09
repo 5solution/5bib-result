@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { S2HeroCanvas } from './s2-hero-canvas';
-import { Counter, Magnetic, dl } from './s2-shared';
+import { Counter, Magnetic, dl, useMascotFrame, mascotSrc } from './s2-shared';
 
 /**
  * Hero with WebGL canvas background + parallax mascot + scroll-driven
@@ -14,36 +14,44 @@ export function S2Hero() {
   const chip1Ref = React.useRef<HTMLDivElement>(null);
   const chip2Ref = React.useRef<HTMLDivElement>(null);
   const chip3Ref = React.useRef<HTMLDivElement>(null);
+  const frame = useMascotFrame(160);
 
   React.useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     let raf = 0;
+    let bobT = 0;
+    let lastNow = performance.now();
+    const animate = (now: number) => {
+      const dt = now - lastNow;
+      lastNow = now;
+      bobT += dt * 0.004;
+      const m = mascotRef.current;
+      if (m) {
+        // Mascot bouncing animation independent of scroll — running stride
+        const bob = Math.abs(Math.sin(bobT)) * 18; // pronounced vertical bob
+        const tilt = Math.sin(bobT) * 5;
+        const y = window.scrollY;
+        m.style.transform = `translate3d(${Math.sin(y * 0.004) * 24}px, ${y * 0.12 - bob}px, 0) rotate(${tilt}deg)`;
+      }
+      raf = requestAnimationFrame(animate);
+    };
+    raf = requestAnimationFrame(animate);
+
     const onScroll = () => {
       const y = window.scrollY;
-      const m = mascotRef.current;
       const h = headlineRef.current;
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        if (m) m.style.transform = `translate3d(${Math.sin(y * 0.004) * 18}px, ${y * 0.18}px, 0) rotate(${Math.sin(y * 0.003) * 4}deg)`;
-        if (h) h.style.transform = `translate3d(0, ${y * 0.32}px, 0)`;
-        if (chip1Ref.current) chip1Ref.current.style.transform = `translate3d(${Math.sin(y * 0.005) * 14}px, ${y * 0.4}px, 0)`;
-        if (chip2Ref.current) chip2Ref.current.style.transform = `translate3d(${Math.cos(y * 0.005) * 14}px, ${y * 0.55}px, 0)`;
-        if (chip3Ref.current) chip3Ref.current.style.transform = `translate3d(${Math.sin(y * 0.006 + 1) * 14}px, ${y * 0.45}px, 0)`;
-      });
+      if (h) h.style.transform = `translate3d(0, ${y * 0.32}px, 0)`;
+      if (chip1Ref.current) chip1Ref.current.style.transform = `translate3d(${Math.sin(y * 0.005) * 14}px, ${y * 0.4}px, 0)`;
+      if (chip2Ref.current) chip2Ref.current.style.transform = `translate3d(${Math.cos(y * 0.005) * 14}px, ${y * 0.55}px, 0)`;
+      if (chip3Ref.current) chip3Ref.current.style.transform = `translate3d(${Math.sin(y * 0.006 + 1) * 14}px, ${y * 0.45}px, 0)`;
     };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
 
-    // Reveal headline lines on mount
-    const lines = headlineRef.current?.querySelectorAll<HTMLSpanElement>('.s2-line-mask > span');
-    lines?.forEach((line, i) => {
-      requestAnimationFrame(() => {
-        line.style.transition = 'transform 1100ms cubic-bezier(0.16, 1, 0.3, 1)';
-        line.style.transitionDelay = `${i * 120 + 200}ms`;
-        line.style.transform = 'translateY(0)';
-      });
-    });
+    // Headline reveal handled by pure CSS keyframe animation in solution.css
+    // (s2-line-reveal). React re-renders won't conflict because no inline
+    // styles are set.
 
     return () => {
       window.removeEventListener('scroll', onScroll);
@@ -68,18 +76,18 @@ export function S2Hero() {
         <span className="s2-chip s2-chip-lime">99.8% uptime</span>
       </div>
 
-      {/* Mascot — centered behind text */}
+      {/* Mascot — frame-cycled running, parallax + bounce */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={mascotRef}
-        src="/solution/mascot/mascot-running.png"
+        src={mascotSrc(frame)}
         alt=""
         className="s2-hero-mascot"
         style={{
-          width: 'min(45vw, 520px)',
-          right: '-3%',
-          bottom: '5%',
-          opacity: 0.92,
+          width: 'min(56vw, 680px)',
+          right: '-4%',
+          bottom: '0%',
+          opacity: 1,
         }}
       />
 

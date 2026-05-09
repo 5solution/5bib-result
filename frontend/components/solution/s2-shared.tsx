@@ -127,6 +127,24 @@ export function Counter({
   );
 }
 
+/** Cycle between 2 mascot frames to simulate a running animation. */
+export function useMascotFrame(intervalMs = 180): 1 | 2 {
+  const [frame, setFrame] = React.useState<1 | 2>(1);
+  React.useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const id = setInterval(() => setFrame((f) => (f === 1 ? 2 : 1)), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return frame;
+}
+
+/** Mascot src path by frame. */
+export function mascotSrc(frame: 1 | 2): string {
+  return frame === 1
+    ? '/solution/mascot/mascot-running.png'
+    : '/solution/mascot/mascot-running-2.png';
+}
+
 /** Magnetic CTA wrapper — element follows cursor within radius. */
 export function Magnetic({
   children,

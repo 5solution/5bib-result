@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Reveal, Counter, Magnetic, dl } from './s2-shared';
+import { Reveal, Counter, Magnetic, dl, useMascotFrame, mascotSrc } from './s2-shared';
+import { S2MascotInline, S2MascotSection } from './s2-mascot-runner';
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  PAIN — 3 cards "3 cách BTC đang làm. Cả 3 đều đau."                       */
@@ -347,7 +348,20 @@ export function S2Process() {
   ];
 
   return (
-    <section id="process" className="s2-section" ref={wrapRef}>
+    <section id="process" className="s2-section" ref={wrapRef} style={{ position: 'relative' }}>
+      {/* Big mascot in the corner cheering on the process */}
+      <div
+        style={{
+          position: 'absolute',
+          right: 'clamp(20px, 5vw, 80px)',
+          top: 'clamp(40px, 6vw, 80px)',
+          zIndex: 1,
+          pointerEvents: 'none',
+        }}
+        aria-hidden="true"
+      >
+        <S2MascotSection width={220} flipX />
+      </div>
       <div className="s2-container">
         <Reveal>
           <div style={{ marginBottom: 64, maxWidth: '54ch' }}>
@@ -419,20 +433,35 @@ export function S2CaseStudy() {
       }}
     >
       <div className="s2-container">
-        <Reveal>
-          <div style={{ marginBottom: 56 }}>
-            <div className="s2-eyebrow" style={{ marginBottom: 16 }}>
-              <span className="dot" /> 05 · case study
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(280px, 1fr) auto',
+            gap: 'clamp(24px, 4vw, 64px)',
+            alignItems: 'center',
+            marginBottom: 56,
+          }}
+        >
+          <Reveal>
+            <div>
+              <div className="s2-eyebrow" style={{ marginBottom: 16 }}>
+                <span className="dot" /> 05 · case study
+              </div>
+              <h2 className="s2-h2" style={{ marginBottom: 16, maxWidth: '14ch' }}>
+                <span className="s2-text-lime">5,000 vé</span> bán hết trong 3 tiếng.
+              </h2>
+              <p className="s2-lead" style={{ maxWidth: '52ch' }}>
+                VTV–LPB Marathon 2026. Mở bán 8h sáng. 11h trưa hết hàng. 0 cuộc gọi
+                support. 82% Zalo OA open rate.
+              </p>
             </div>
-            <h2 className="s2-h2" style={{ marginBottom: 16, maxWidth: '14ch' }}>
-              <span className="s2-text-lime">5,000 vé</span> bán hết trong 3 tiếng.
-            </h2>
-            <p className="s2-lead" style={{ maxWidth: '52ch' }}>
-              VTV–LPB Marathon 2026. Mở bán 8h sáng. 11h trưa hết hàng. 0 cuộc gọi
-              support. 82% Zalo OA open rate.
-            </p>
-          </div>
-        </Reveal>
+          </Reveal>
+          <Reveal>
+            <div className="s2-mascot-cs-wrap" aria-hidden="true">
+              <S2MascotSection width={200} />
+            </div>
+          </Reveal>
+        </div>
 
         <div
           style={{
@@ -803,15 +832,36 @@ export function S2FAQ() {
 /*  FINAL CTA + LEAD FORM (modal)                                               */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+function S2FinalMascot() {
+  const ref = React.useRef<HTMLImageElement>(null);
+  const frame = useMascotFrame(150);
+  React.useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let raf = 0; let t = 0; let last = performance.now();
+    const animate = (now: number) => {
+      const dt = now - last; last = now;
+      t += dt * 0.005;
+      const el = ref.current;
+      if (el) {
+        const bob = Math.abs(Math.sin(t)) * 16;
+        const tilt = Math.sin(t) * 5;
+        el.style.transform = `translateY(${-bob}px) rotate(${tilt}deg)`;
+      }
+      raf = requestAnimationFrame(animate);
+    };
+    raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img ref={ref} src={mascotSrc(frame)} alt="" className="s2-final-mascot" />
+  );
+}
+
 export function S2FinalCTA({ onOpenContact }: { onOpenContact: () => void }) {
   return (
     <section id="contact" className="s2-final s2-section">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/solution/mascot/mascot-running-2.png"
-        alt=""
-        className="s2-final-mascot"
-      />
+      <S2FinalMascot />
       <div className="s2-container" style={{ position: 'relative', zIndex: 2 }}>
         <Reveal>
           <div className="s2-eyebrow" style={{ marginBottom: 20, color: 'rgba(255,255,255,0.7)' }}>

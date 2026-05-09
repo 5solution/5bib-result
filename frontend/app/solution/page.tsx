@@ -18,6 +18,7 @@ import {
   S2Footer,
 } from '@/components/solution/s2-sections';
 import { S2ContactModal } from '@/components/solution/s2-contact-modal';
+import { S2MascotRunner } from '@/components/solution/s2-mascot-runner';
 
 export default function SolutionPage() {
   const [contactOpen, setContactOpen] = React.useState(false);
@@ -25,6 +26,7 @@ export default function SolutionPage() {
   return (
     <LenisProvider>
       <S2Cursor />
+      <S2MascotRunner />
       <S2Header />
       <main>
         <S2Hero />

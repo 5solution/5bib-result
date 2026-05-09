@@ -173,12 +173,22 @@ html.lenis, html.lenis body { height: auto; }
   letter-spacing: -0.04em;
 }
 
-/* Reveal-on-scroll line splitting */
+/* Reveal-on-scroll line splitting — animation handled inline by JS via
+ * data attribute. Default state visible to avoid React re-render conflicts
+ * with line.style.transform. */
 .s2-line-mask { display: block; overflow: hidden; }
 .s2-line-mask > span {
   display: inline-block;
-  transform: translateY(110%);
   will-change: transform;
+  animation: s2-line-reveal 1100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.s2-line-mask:nth-of-type(1) > span { animation-delay: 200ms; }
+.s2-line-mask:nth-of-type(2) > span { animation-delay: 320ms; }
+.s2-line-mask:nth-of-type(3) > span { animation-delay: 440ms; }
+
+@keyframes s2-line-reveal {
+  from { transform: translateY(110%); }
+  to { transform: translateY(0); }
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -299,6 +309,9 @@ html.lenis, html.lenis body { height: auto; }
 .s2-hero-canvas {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
   z-index: 0;
   pointer-events: none;
 }
@@ -518,6 +531,28 @@ html.lenis, html.lenis body { height: auto; }
 }
 .s2-faq-item[data-open='true'] .s2-faq-a { max-height: 600px; padding-top: 16px; }
 
+/* ── Mascot — sticky runner across viewport ─────────────────────────────── */
+.s2-mascot-runner {
+  position: fixed;
+  bottom: 4vh;
+  left: 0;
+  width: clamp(180px, 18vw, 240px);
+  height: auto;
+  pointer-events: none;
+  z-index: 50;
+  filter: drop-shadow(0 20px 40px rgba(29, 73, 255, 0.45));
+  will-change: transform, opacity;
+  opacity: 0;
+}
+@media (max-width: 640px) {
+  .s2-mascot-runner { display: none; }
+}
+
+@keyframes s2-mascot-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
 /* ── Final CTA full-bleed ───────────────────────────────────────────────── */
 .s2-final {
   position: relative;
@@ -526,11 +561,12 @@ html.lenis, html.lenis body { height: auto; }
 }
 .s2-final-mascot {
   position: absolute;
-  bottom: -40px;
-  right: -40px;
-  width: clamp(280px, 40vw, 520px);
-  filter: drop-shadow(0 40px 60px rgba(0, 0, 0, 0.3));
+  bottom: -20px;
+  right: 4%;
+  width: clamp(260px, 36vw, 480px);
+  filter: drop-shadow(0 40px 60px rgba(0, 0, 0, 0.4));
   pointer-events: none;
+  will-change: transform;
 }
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */
