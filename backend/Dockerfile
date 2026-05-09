@@ -3,7 +3,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+RUN npm install -g pnpm@10 && pnpm install --frozen-lockfile
 
 COPY . .
 RUN pnpm build
@@ -13,7 +13,7 @@ FROM node:22-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN npm install -g pnpm && apk add --no-cache curl fontconfig font-noto \
+RUN npm install -g pnpm@10 && apk add --no-cache curl fontconfig font-noto \
     chromium nss freetype harfbuzz ca-certificates
 
 # Tell pdf-renderer.ts to use system Chromium instead of @sparticuz/chromium binary
