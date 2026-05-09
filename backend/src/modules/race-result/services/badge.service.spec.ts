@@ -6,7 +6,12 @@ import {
   detectAgePodiumLogic,
   detectSubXLogic,
   detectUltraLogic,
+  isValidFinisher,
 } from './badge.service';
+
+// FEATURE-021 BR-DISPLAY-01 — convenience finisher fixture so existing tests
+// stay focused on rank/distance behaviour. Override fields per-test as needed.
+const VALID_FINISHER = { finished: 1, chipTime: '1:00:00' } as const;
 
 describe('parseChipTime', () => {
   it('parses H:MM:SS', () => {
@@ -99,7 +104,7 @@ describe('normalizeName', () => {
 
 describe('detectPodiumLogic', () => {
   it('returns gold badge for rank 1', () => {
-    const b = detectPodiumLogic({ overallRankNumeric: 1 });
+    const b = detectPodiumLogic({ ...VALID_FINISHER, overallRankNumeric: 1 });
     expect(b).toMatchObject({
       type: 'PODIUM',
       shortLabel: '#1',
@@ -108,32 +113,41 @@ describe('detectPodiumLogic', () => {
     expect(b?.label).toContain('Vô địch');
   });
   it('returns silver badge for rank 2', () => {
-    const b = detectPodiumLogic({ overallRankNumeric: 2 });
+    const b = detectPodiumLogic({ ...VALID_FINISHER, overallRankNumeric: 2 });
     expect(b?.shortLabel).toBe('#2');
     expect(b?.color).toBe('#94a3b8');
   });
   it('returns bronze badge for rank 3', () => {
-    const b = detectPodiumLogic({ overallRankNumeric: 3 });
+    const b = detectPodiumLogic({ ...VALID_FINISHER, overallRankNumeric: 3 });
     expect(b?.shortLabel).toBe('#3');
   });
   it('returns null for rank > 3', () => {
-    expect(detectPodiumLogic({ overallRankNumeric: 4 })).toBeNull();
-    expect(detectPodiumLogic({ overallRankNumeric: 999 })).toBeNull();
+    expect(
+      detectPodiumLogic({ ...VALID_FINISHER, overallRankNumeric: 4 }),
+    ).toBeNull();
+    expect(
+      detectPodiumLogic({ ...VALID_FINISHER, overallRankNumeric: 999 }),
+    ).toBeNull();
   });
   it('returns null for missing rank', () => {
-    expect(detectPodiumLogic({})).toBeNull();
+    expect(detectPodiumLogic({ ...VALID_FINISHER })).toBeNull();
   });
   it('falls back to string rank if numeric missing', () => {
-    expect(detectPodiumLogic({ overallRank: '2' })?.shortLabel).toBe('#2');
+    expect(
+      detectPodiumLogic({ ...VALID_FINISHER, overallRank: '2' })?.shortLabel,
+    ).toBe('#2');
   });
   it('returns null for non-numeric string', () => {
-    expect(detectPodiumLogic({ overallRank: 'DNF' })).toBeNull();
+    expect(
+      detectPodiumLogic({ ...VALID_FINISHER, overallRank: 'DNF' }),
+    ).toBeNull();
   });
 });
 
 describe('detectAgePodiumLogic', () => {
   it('returns AG podium for rank 1 with category label', () => {
     const b = detectAgePodiumLogic({
+      ...VALID_FINISHER,
       categoryRankNumeric: 1,
       category: 'M40-44',
     });
@@ -142,10 +156,15 @@ describe('detectAgePodiumLogic', () => {
     expect(b?.label).toContain('M40-44');
   });
   it('returns null for rank > 3', () => {
-    expect(detectAgePodiumLogic({ categoryRankNumeric: 4 })).toBeNull();
+    expect(
+      detectAgePodiumLogic({ ...VALID_FINISHER, categoryRankNumeric: 4 }),
+    ).toBeNull();
   });
   it('handles missing category gracefully', () => {
-    const b = detectAgePodiumLogic({ categoryRankNumeric: 1 });
+    const b = detectAgePodiumLogic({
+      ...VALID_FINISHER,
+      categoryRankNumeric: 1,
+    });
     expect(b?.label).toContain('Age Group');
   });
 });
@@ -208,28 +227,232 @@ describe('detectSubXLogic', () => {
 
 describe('detectUltraLogic', () => {
   it('returns ultra for 50K', () => {
-    const b = detectUltraLogic({ distance: '50K' });
+    const b = detectUltraLogic({ ...VALID_FINISHER, distance: '50K' });
     expect(b?.type).toBe('ULTRA');
   });
   it('returns ultra for 100K', () => {
-    expect(detectUltraLogic({ distance: '100km' })?.type).toBe('ULTRA');
+    expect(
+      detectUltraLogic({ ...VALID_FINISHER, distance: '100km' })?.type,
+    ).toBe('ULTRA');
   });
   it('returns ultra for UTMB keyword', () => {
-    expect(detectUltraLogic({ distance: 'UTMB MCC' })?.type).toBe('ULTRA');
+    expect(
+      detectUltraLogic({ ...VALID_FINISHER, distance: 'UTMB MCC' })?.type,
+    ).toBe('ULTRA');
   });
   it('returns ultra for "ultra" keyword', () => {
-    expect(detectUltraLogic({ distance: 'Ultra Trail 80k' })?.type).toBe('ULTRA');
+    expect(
+      detectUltraLogic({ ...VALID_FINISHER, distance: 'Ultra Trail 80k' })?.type,
+    ).toBe('ULTRA');
   });
   it('returns ultra for 100 miles', () => {
-    expect(detectUltraLogic({ distance: '100mi' })?.type).toBe('ULTRA');
+    expect(
+      detectUltraLogic({ ...VALID_FINISHER, distance: '100mi' })?.type,
+    ).toBe('ULTRA');
   });
   it('returns null for marathon (42km — below 50km)', () => {
-    expect(detectUltraLogic({ distance: '42km' })).toBeNull();
+    expect(
+      detectUltraLogic({ ...VALID_FINISHER, distance: '42km' }),
+    ).toBeNull();
   });
   it('returns null for half marathon', () => {
-    expect(detectUltraLogic({ distance: '21km' })).toBeNull();
+    expect(
+      detectUltraLogic({ ...VALID_FINISHER, distance: '21km' }),
+    ).toBeNull();
   });
   it('returns null for missing distance', () => {
-    expect(detectUltraLogic({})).toBeNull();
+    expect(detectUltraLogic({ ...VALID_FINISHER })).toBeNull();
+  });
+});
+
+// ─── FEATURE-021 BR-DISPLAY-01/05/06 — Public Display Celebration BUGFIX ──
+
+describe('FEATURE-021 — parseDistanceKm meters vs miles disambiguation', () => {
+  // BR-DISPLAY-05 — meters
+  it('parses meters: "4800m" → 4.8 (BR-DISPLAY-05)', () => {
+    expect(parseDistanceKm('4800m')).toBeCloseTo(4.8, 3);
+  });
+  it('parses meters: "5000m" → 5', () => {
+    expect(parseDistanceKm('5000m')).toBe(5);
+  });
+  it('parses meters with decimal: "4800.5m" → 4.8005', () => {
+    expect(parseDistanceKm('4800.5m')).toBeCloseTo(4.8005, 4);
+  });
+
+  // BR-DISPLAY-06 — kilometers (no regression)
+  it('parses kilometers lowercase: "5km" → 5', () => {
+    expect(parseDistanceKm('5km')).toBe(5);
+  });
+  it('parses kilometers uppercase: "5K" → 5', () => {
+    expect(parseDistanceKm('5K')).toBe(5);
+  });
+
+  // BR-DISPLAY-06 — miles (no regression)
+  it('parses miles short form: "100mi" → 160.934', () => {
+    expect(parseDistanceKm('100mi')).toBeCloseTo(160.934, 2);
+  });
+  it('parses miles long form: "100miles" → 160.934', () => {
+    expect(parseDistanceKm('100miles')).toBeCloseTo(160.934, 2);
+  });
+
+  // Documented choice for ambiguous uppercase `M`: treat as miles
+  // (Vietnamese vendor convention — original behaviour preserved).
+  it('treats uppercase "100M" as miles → 160.934 (documented choice)', () => {
+    expect(parseDistanceKm('100M')).toBeCloseTo(160.934, 2);
+  });
+
+  // Bare numbers + edge cases
+  it('parses bare number: "42.195" → 42.195', () => {
+    expect(parseDistanceKm('42.195')).toBeCloseTo(42.195, 3);
+  });
+  it('returns 0 for empty string', () => {
+    expect(parseDistanceKm('')).toBe(0);
+  });
+});
+
+describe('FEATURE-021 — isValidFinisher (BR-DISPLAY-01)', () => {
+  it('returns true for finished=1 with valid chipTime', () => {
+    expect(isValidFinisher({ finished: 1, chipTime: '40:47' })).toBe(true);
+    expect(isValidFinisher({ finished: 1, chipTime: '1:23:45' })).toBe(true);
+  });
+  it('returns false for finished=0', () => {
+    expect(isValidFinisher({ finished: 0, chipTime: '40:47' })).toBe(false);
+  });
+  it('returns false for finished=undefined', () => {
+    expect(isValidFinisher({ chipTime: '40:47' })).toBe(false);
+  });
+  it('returns false for chipTime="" even if finished=1', () => {
+    expect(isValidFinisher({ finished: 1, chipTime: '' })).toBe(false);
+  });
+  it('returns false for chipTime="0:00" even if finished=1', () => {
+    expect(isValidFinisher({ finished: 1, chipTime: '0:00' })).toBe(false);
+  });
+  it('returns false for chipTime missing', () => {
+    expect(isValidFinisher({ finished: 1 })).toBe(false);
+  });
+});
+
+describe('FEATURE-021 — detectPodiumLogic finished guard (BR-DISPLAY-01)', () => {
+  it('fires PODIUM for finished=1, chipTime="40:47", rank=1', () => {
+    const b = detectPodiumLogic({
+      finished: 1,
+      chipTime: '40:47',
+      overallRankNumeric: 1,
+    });
+    expect(b?.type).toBe('PODIUM');
+  });
+  it('returns null for finished=0 even if rank=1 (vendor pre-race rank leak)', () => {
+    expect(
+      detectPodiumLogic({
+        finished: 0,
+        chipTime: '',
+        overallRankNumeric: 1,
+      }),
+    ).toBeNull();
+  });
+  it('returns null for chipTime="0:00" even if finished=1', () => {
+    expect(
+      detectPodiumLogic({
+        finished: 1,
+        chipTime: '0:00',
+        overallRankNumeric: 1,
+      }),
+    ).toBeNull();
+  });
+  it('returns null for chipTime="" even if finished=1', () => {
+    expect(
+      detectPodiumLogic({
+        finished: 1,
+        chipTime: '',
+        overallRankNumeric: 1,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('FEATURE-021 — detectAgePodiumLogic finished guard (BR-DISPLAY-01)', () => {
+  it('fires AG_PODIUM for finished=1, chipTime>0, ageGroupRank=2', () => {
+    const b = detectAgePodiumLogic({
+      finished: 1,
+      chipTime: '45:00',
+      categoryRankNumeric: 2,
+      category: 'F35-39',
+    });
+    expect(b?.type).toBe('AG_PODIUM');
+  });
+  it('returns null for finished=0', () => {
+    expect(
+      detectAgePodiumLogic({
+        finished: 0,
+        chipTime: '',
+        categoryRankNumeric: 1,
+      }),
+    ).toBeNull();
+  });
+  it('returns null for chipTime="0:00"', () => {
+    expect(
+      detectAgePodiumLogic({
+        finished: 1,
+        chipTime: '0:00',
+        categoryRankNumeric: 1,
+      }),
+    ).toBeNull();
+  });
+  it('returns null for chipTime=""', () => {
+    expect(
+      detectAgePodiumLogic({
+        finished: 1,
+        chipTime: '',
+        categoryRankNumeric: 1,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('FEATURE-021 — detectUltraLogic finished guard + meters parsing', () => {
+  it('fires ULTRA for finished=1, chipTime>0, distance="50km"', () => {
+    expect(
+      detectUltraLogic({
+        finished: 1,
+        chipTime: '6:30:00',
+        distance: '50km',
+      })?.type,
+    ).toBe('ULTRA');
+  });
+  it('fires ULTRA for finished=1, distance="100mi" (160km)', () => {
+    expect(
+      detectUltraLogic({
+        finished: 1,
+        chipTime: '24:00:00',
+        distance: '100mi',
+      })?.type,
+    ).toBe('ULTRA');
+  });
+  it('returns null for finished=0 even if distance="50km"', () => {
+    expect(
+      detectUltraLogic({
+        finished: 0,
+        chipTime: '',
+        distance: '50km',
+      }),
+    ).toBeNull();
+  });
+  it('returns null for finished=1, distance="4800m" (= 4.8km, NOT ultra — Bug #1 regression)', () => {
+    expect(
+      detectUltraLogic({
+        finished: 1,
+        chipTime: '30:00',
+        distance: '4800m',
+      }),
+    ).toBeNull();
+  });
+  it('returns null for finished=1, distance="42.195km" (= marathon, below 50km)', () => {
+    expect(
+      detectUltraLogic({
+        finished: 1,
+        chipTime: '4:00:00',
+        distance: '42.195km',
+      }),
+    ).toBeNull();
   });
 });

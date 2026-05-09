@@ -252,7 +252,12 @@ export default function CourseRankingPage() {
   );
 
   // Fetch course stats for finishers count
-  const { data: courseStatsRaw } = useCourseStats(courseId, { enabled: !!courseId, refetchInterval: isLive ? 30_000 : false });
+  // FEATURE-021 BR-DISPLAY-07 — passing raceId for cross-race isolation
+  const { data: courseStatsRaw } = useCourseStats(
+    race?.id !== undefined ? String(race.id) : undefined,
+    courseId,
+    { refetchInterval: isLive ? 30_000 : false },
+  );
   const courseStats = useMemo(() => {
     const s = (courseStatsRaw as any)?.data ?? courseStatsRaw;
     return s || null;

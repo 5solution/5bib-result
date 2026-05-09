@@ -878,16 +878,23 @@ export class RaceResultService {
   }
 
   /**
-   * Course stats — aggregated statistics, cached 60s
+   * Course stats — aggregated statistics, cached 60s.
+   *
+   * BR-DISPLAY-07/08 (FEATURE-021): MUST filter by `raceId` to prevent
+   * cross-race data leak. Vendor RaceResult `courseId` (e.g. "5km") is reused
+   * across hundreds of races on the platform, so filtering by `courseId`
+   * alone aggregates athletes from every race that uses that course slug.
+   * Cache key namespaced per-race: `stats:<raceId>:<courseId>`.
    */
-  async getCourseStats(courseId: string) {
-    const cacheKey = `stats:${courseId}`;
+  async getCourseStats(raceId: string, courseId: string) {
+    const cacheKey = `stats:${raceId}:${courseId}`;
     const cached = await this.getFromCache<any>(cacheKey);
     if (cached) return cached;
 
     const pipeline = [
       {
         $match: {
+          raceId,
           courseId,
           overallRankNumeric: { $nin: [999999, null] },
           chipTime: { $nin: ['', null] },
@@ -920,7 +927,13 @@ export class RaceResultService {
 
     const [agg, nationalities] = await Promise.all([
       this.resultModel.aggregate(pipeline).exec().then((r) => r[0]),
-      this.resultModel.distinct('nationality', { courseId, nationality: { $nin: ['', null] } }).exec(),
+      this.resultModel
+        .distinct('nationality', {
+          raceId,
+          courseId,
+          nationality: { $nin: ['', null] },
+        })
+        .exec(),
     ]);
 
     // Classify each doc into ONE mutually-exclusive bucket by inspecting
@@ -932,7 +945,7 @@ export class RaceResultService {
     //     overallRank = "DNF"
     //   - anything else non-Finish                    → dnf (conservative)
     const bucketPipeline = [
-      { $match: { courseId } },
+      { $match: { raceId, courseId } },
       {
         $addFields: {
           _bucket: {
@@ -1012,7 +1025,10 @@ export class RaceResultService {
     // Same per-field policy: prefer vendor count BUT take max with bucket
     // count to avoid stale vendor snapshots (vendor's `finished` observed
     // 4-17 below actual DB count of timingPoint=Finish docs at 10/21KM).
-    const firstDoc = await this.resultModel.findOne({ courseId }).lean().exec();
+    const firstDoc = await this.resultModel
+      .findOne({ raceId, courseId })
+      .lean()
+      .exec();
     const apiFinished = Math.max(
       firstDoc?.finished ?? 0,
       buckets.finished,

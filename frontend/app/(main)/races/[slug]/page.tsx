@@ -13,6 +13,12 @@ import { CourseMapSection } from './components/CourseMapSection';
 
 const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
 
+// FEATURE-021 Bug #4 — encode image URLs to handle Vietnamese diacritics + spaces
+// Pattern mirrors frontend/components/RaceHeroHeader.tsx:101 (existing precedent).
+// Defer full sweep + helper extraction to F-022.
+const safeImageUrl = (url?: string | null): string | undefined =>
+  url ? encodeURI(url) : undefined;
+
 function formatCourseTime(value?: string): string {
   if (!value) return '-';
   const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
@@ -210,7 +216,7 @@ export default function RaceDetailPage() {
             },
           }),
           raceResultControllerGetCourseStats({
-            path: { courseId: course.id },
+            path: { raceId, courseId: course.id },
           }),
         ]);
         const menList = (menRes.data as any)?.data ?? menRes.data;
@@ -311,7 +317,7 @@ export default function RaceDetailPage() {
       <section className="relative pt-[104px] overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${race.imageUrl || 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=1920&q=80'})` }}
+          style={{ backgroundImage: `url(${safeImageUrl(race.imageUrl) || 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=1920&q=80'})` }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-blue-700/90 via-blue-600/70 to-blue-800/90" />
 
@@ -367,7 +373,7 @@ export default function RaceDetailPage() {
 
             {/* Right: logo placeholder */}
             {race.logoUrl && (
-              <img src={race.logoUrl} alt={race.name} className="h-20 md:h-24 w-auto object-contain" />
+              <img src={safeImageUrl(race.logoUrl)} alt={race.name} className="h-20 md:h-24 w-auto object-contain" />
             )}
           </div>
         </div>
@@ -412,7 +418,7 @@ export default function RaceDetailPage() {
                   <div className="relative h-[250px] lg:h-auto overflow-hidden">
                     <div
                       className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                      style={{ backgroundImage: `url(${courseImage})` }}
+                      style={{ backgroundImage: `url(${safeImageUrl(courseImage) || courseImage})` }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
 
@@ -600,7 +606,7 @@ export default function RaceDetailPage() {
                               <div key={r.Bib} className="flex items-center gap-2.5 group/athlete">
                                 <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0 overflow-hidden">
                                   {r.avatarUrl
-                                    ? <img src={r.avatarUrl} alt={r.Name} className="w-full h-full object-cover" />
+                                    ? <img src={safeImageUrl(r.avatarUrl)} alt={r.Name} className="w-full h-full object-cover" />
                                     : r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
                                 </div>
                                 <span className="text-sm font-bold text-slate-700 w-4">{i + 1}</span>
@@ -623,7 +629,7 @@ export default function RaceDetailPage() {
                               <div key={r.Bib} className="flex items-center gap-2.5 group/athlete">
                                 <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0 overflow-hidden">
                                   {r.avatarUrl
-                                    ? <img src={r.avatarUrl} alt={r.Name} className="w-full h-full object-cover" />
+                                    ? <img src={safeImageUrl(r.avatarUrl)} alt={r.Name} className="w-full h-full object-cover" />
                                     : r.Nation ? <span className="text-base leading-none">{r.Nation}</span> : r.Name.charAt(0)}
                                 </div>
                                 <span className="text-sm font-bold text-slate-700 w-4">{i + 1}</span>
@@ -729,7 +735,7 @@ function SubHeader({ race, slug }: { race: RaceInfo; slug: string }) {
         {/* Race logo + name */}
         <div className="flex items-center gap-3 px-4 sm:px-6 flex-1 min-w-0">
           {race.logoUrl && (
-            <img src={race.logoUrl} alt="" className="h-10 w-auto object-contain shrink-0" />
+            <img src={safeImageUrl(race.logoUrl)} alt="" className="h-10 w-auto object-contain shrink-0" />
           )}
           <span className={`text-sm font-bold hidden sm:inline truncate max-w-[220px] lg:max-w-[380px] transition-colors duration-300 ${textColor}`}>
             {race.name || ''}

@@ -6,6 +6,12 @@ import { SyncLog } from '../schemas/sync-log.schema';
 import { ResultClaim } from '../schemas/result-claim.schema';
 import { RacesService } from '../../races/races.service';
 import { TimingAlertConfig } from '../../timing-alert/schemas/timing-alert-config.schema';
+import { TelegramService } from '../../notification/telegram.service';
+import { MailService } from '../../notification/mail.service';
+import { UploadService } from '../../upload/upload.service';
+import { RaceResultApiService } from './race-result-api.service';
+import { ChipConfigService } from '../../chip-verification/services/chip-config.service';
+import { ChipMappingService } from '../../chip-verification/services/chip-mapping.service';
 
 const REDIS_TOKEN = 'default_IORedisModuleConnectionToken';
 
@@ -89,6 +95,8 @@ describe('RaceResultService', () => {
       countDocuments: jest.fn().mockReturnThis(),
       deleteMany: jest.fn().mockReturnThis(),
       aggregate: jest.fn().mockReturnThis(),
+      // FEATURE-021 — getCourseStats() now calls .distinct('nationality', ...)
+      distinct: jest.fn().mockReturnThis(),
       sort: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
@@ -143,6 +151,24 @@ describe('RaceResultService', () => {
       exec: jest.fn().mockResolvedValue(null),
     };
 
+    // FEATURE-021 — minimum no-op mocks for transitive providers so the
+    // testing module compiles. Pre-existing tests skipped these (test infra
+    // debt). F-021 needs getCourseStats() tests to actually run, so add the
+    // mocks here. None of the methods are exercised by the assertions below.
+    const noopAsync = jest.fn().mockResolvedValue(undefined);
+    const mockTelegramService = { sendMessage: noopAsync };
+    const mockMailService = { sendMail: noopAsync };
+    const mockUploadService = { upload: noopAsync, deleteByUrl: noopAsync };
+    const mockApiService = {
+      fetchRaceResults: jest.fn().mockResolvedValue([]),
+    };
+    const mockChipConfigService = {
+      findByMongoId: jest.fn().mockResolvedValue(null),
+    };
+    const mockChipMappingService = {
+      findByChipId: jest.fn().mockResolvedValue(null),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RaceResultService,
@@ -155,6 +181,12 @@ describe('RaceResultService', () => {
           provide: getModelToken(TimingAlertConfig.name),
           useValue: mockTimingAlertConfigModel,
         },
+        { provide: TelegramService, useValue: mockTelegramService },
+        { provide: MailService, useValue: mockMailService },
+        { provide: UploadService, useValue: mockUploadService },
+        { provide: RaceResultApiService, useValue: mockApiService },
+        { provide: ChipConfigService, useValue: mockChipConfigService },
+        { provide: ChipMappingService, useValue: mockChipMappingService },
       ],
     }).compile();
 
@@ -381,7 +413,7 @@ describe('RaceResultService', () => {
         },
       ]);
 
-      const result = await service.getCourseStats('c708');
+      const result = await service.getCourseStats('race1', 'c708');
 
       expect(mockResultModel.aggregate).toHaveBeenCalled();
       expect(result.totalFinishers).toBe(100);
@@ -395,7 +427,7 @@ describe('RaceResultService', () => {
     it('should return empty stats when no results', async () => {
       mockResultModel.exec.mockResolvedValue([]);
 
-      const result = await service.getCourseStats('empty-course');
+      const result = await service.getCourseStats('race1', 'empty-course');
 
       expect(result.totalFinishers).toBe(0);
       expect(result.avgTime).toBeNull();
@@ -405,10 +437,78 @@ describe('RaceResultService', () => {
       const cached = { totalFinishers: 50, avgTime: '04:00:00', minTime: '03:00:00', maxTime: '05:00:00', avgPace: null, maleCount: 30, femaleCount: 20 };
       mockRedis.get.mockResolvedValue(JSON.stringify(cached));
 
-      const result = await service.getCourseStats('c708');
+      const result = await service.getCourseStats('race1', 'c708');
 
       expect(result).toEqual(cached);
       expect(mockResultModel.aggregate).not.toHaveBeenCalled();
+    });
+
+    // ─── FEATURE-021 BR-DISPLAY-07/08 — raceId scoping ────────
+
+    it('FEATURE-021 — uses per-race cache key stats:<raceId>:<courseId>', async () => {
+      mockResultModel.exec.mockResolvedValue([
+        {
+          _id: null,
+          totalFinishers: 15,
+          avgTimeSeconds: 1800,
+          minTimeSeconds: 1500,
+          maxTimeSeconds: 2400,
+          genders: ['Male'],
+        },
+      ]);
+
+      await service.getCourseStats('raceA', '5km');
+
+      // Cache READ probe (getFromCache → redis.get)
+      expect(mockRedis.get).toHaveBeenCalledWith('stats:raceA:5km');
+      // Cache WRITE on miss (setCache → redis.set)
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'stats:raceA:5km',
+        expect.any(String),
+        'EX',
+        60,
+      );
+    });
+
+    it('FEATURE-021 — calls aggregate with raceId in $match (cross-race isolation)', async () => {
+      mockResultModel.exec.mockResolvedValue([
+        {
+          _id: null,
+          totalFinishers: 1,
+          avgTimeSeconds: 1800,
+          minTimeSeconds: 1800,
+          maxTimeSeconds: 1800,
+          genders: ['Male'],
+        },
+      ]);
+
+      await service.getCourseStats('raceA', '5km');
+
+      // First aggregate pipeline must filter by raceId AND courseId
+      const firstAggCall = mockResultModel.aggregate.mock.calls[0]?.[0];
+      expect(firstAggCall).toBeDefined();
+      const firstMatch = firstAggCall[0].$match;
+      expect(firstMatch.raceId).toBe('raceA');
+      expect(firstMatch.courseId).toBe('5km');
+
+      // distinct nationality also filters by raceId
+      expect(mockResultModel.distinct).toHaveBeenCalledWith(
+        'nationality',
+        expect.objectContaining({ raceId: 'raceA', courseId: '5km' }),
+      );
+    });
+
+    it('FEATURE-021 — different raceIds use different cache keys (raceA ≠ raceB)', async () => {
+      mockResultModel.exec.mockResolvedValue([]);
+
+      await service.getCourseStats('raceA', '5km');
+      await service.getCourseStats('raceB', '5km');
+
+      const getCalls = mockRedis.get.mock.calls.map((c: unknown[]) => c[0]);
+      expect(getCalls).toContain('stats:raceA:5km');
+      expect(getCalls).toContain('stats:raceB:5km');
+      // Sanity — keys are distinct
+      expect(getCalls).not.toEqual(['stats:5km', 'stats:5km']);
     });
   });
 
