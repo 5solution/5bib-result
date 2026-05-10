@@ -5,12 +5,10 @@
 import { S2MascotInline } from './s2-mascot-runner';
 
 const RACES = [
-  { name: 'VnExpress Marathon', acc: 'Marathon' },
+  { name: 'Race Jungle', acc: 'Jungle' },
   { name: 'VTV-LPBank Marathon', acc: 'LPBank' },
-  { name: 'Race Jungle Series', acc: 'Jungle' },
-  { name: 'Color Run Vietnam', acc: 'Color' },
-  { name: 'TNG Trail', acc: 'TNG' },
-  { name: 'UBND Cát Hải Run', acc: 'Cát Hải' },
+  { name: 'Thành An Media', acc: 'Thành An' },
+  { name: 'ZAHA', acc: 'ZAHA' },
 ];
 
 export function S2Marquee() {

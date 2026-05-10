@@ -59,10 +59,9 @@ export function S2Header() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/solution/logos/5bib-logo-white.png"
-            alt=""
+            alt="5BIB"
             style={{ height: 28, width: 'auto' }}
           />
-          <span>5BIB</span>
         </a>
 
         <nav
