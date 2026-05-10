@@ -70,13 +70,23 @@ export class DashboardSystemStatusService {
   }
 
   private async checkMyLaps(): Promise<SystemServiceStatusDto> {
-    // Best-effort: kiểm tra xem có cron-lock gần đây trong Redis không.
     try {
-      const keys = await this.withTimeout(
-        this.redis.keys('master:cron-lock:*'),
-        HEALTH_TIMEOUT_MS,
-      );
-      if (keys.length > 0) {
+      let cursor = '0';
+      let found = false;
+      // Scan với COUNT 100 — đủ nhanh, KHÔNG block Redis
+      do {
+        const [next, batch] = await this.withTimeout(
+          this.redis.scan(cursor, 'MATCH', 'master:cron-lock:*', 'COUNT', 100),
+          HEALTH_TIMEOUT_MS,
+        );
+        cursor = next;
+        if (batch.length > 0) {
+          found = true;
+          break; // chỉ cần biết có ít nhất 1 key
+        }
+      } while (cursor !== '0');
+
+      if (found) {
         return {
           key: 'mylaps',
           label: 'Sync MyLaps',

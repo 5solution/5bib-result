@@ -9,7 +9,7 @@ describe('DashboardSystemStatusService', () => {
     get: jest.Mock;
     set: jest.Mock;
     del: jest.Mock;
-    keys: jest.Mock;
+    scan: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -17,7 +17,8 @@ describe('DashboardSystemStatusService', () => {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue('OK'),
       del: jest.fn().mockResolvedValue(1),
-      keys: jest.fn().mockResolvedValue([]),
+      // SCAN signature: scan(cursor, 'MATCH', pattern, 'COUNT', n) -> [nextCursor, keys[]]
+      scan: jest.fn().mockResolvedValue(['0', []]),
     };
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
@@ -61,21 +62,21 @@ describe('DashboardSystemStatusService', () => {
   });
 
   it('MyLaps degraded khi không có cron-lock keys', async () => {
-    mockRedis.keys.mockResolvedValue([]);
+    mockRedis.scan.mockResolvedValue(['0', []]);
     const res = await service.getSystemStatus();
     const mylaps = res.services.find((s) => s.key === 'mylaps');
     expect(mylaps?.status).toBe('degraded');
   });
 
   it('MyLaps OK khi có cron-lock active', async () => {
-    mockRedis.keys.mockResolvedValue(['master:cron-lock:r1']);
+    mockRedis.scan.mockResolvedValue(['0', ['master:cron-lock:r1']]);
     const res = await service.getSystemStatus();
     const mylaps = res.services.find((s) => s.key === 'mylaps');
     expect(mylaps?.status).toBe('ok');
   });
 
   it('BR-DASH-25 circuit breaker: Redis timeout không block (mylaps=down)', async () => {
-    mockRedis.keys.mockImplementation(
+    mockRedis.scan.mockImplementation(
       () => new Promise(() => undefined), // hang forever
     );
     const start = Date.now();

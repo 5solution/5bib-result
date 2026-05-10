@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import "@/lib/api";
 import { authHeaders } from "@/lib/api";
-import { dashboardControllerGetPendingTasks } from "@/lib/dashboard-sdk-shim";
+import { dashboardControllerGetPendingTasks } from "@/lib/api-generated/sdk.gen";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle2 } from "lucide-react";

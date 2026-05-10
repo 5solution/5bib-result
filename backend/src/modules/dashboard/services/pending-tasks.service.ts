@@ -147,10 +147,21 @@ export class DashboardPendingTasksService {
         .find({ status: 'pre_race' })
         .select('_id')
         .lean();
-      let pending = 0;
+      if (races.length === 0) return 0;
+
+      const pipeline = this.redis.pipeline();
       for (const r of races) {
         const raceId = String((r as { _id: unknown })._id);
-        const len = await this.redis.hlen(`master:athlete:bib:${raceId}`);
+        pipeline.hlen(`master:athlete:bib:${raceId}`);
+      }
+      const results = (await pipeline.exec()) as Array<
+        [Error | null, unknown]
+      > | null;
+      if (!results) return races.length; // fail-closed: assume all pending
+
+      let pending = 0;
+      for (const [err, len] of results) {
+        if (err) continue;
         if (!len || Number(len) === 0) pending += 1;
       }
       return pending;

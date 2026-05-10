@@ -352,6 +352,220 @@ export type UpdateReconciliationStatusDto = {
     note?: string;
 };
 
+export type RepeatAthleteTrendPointDto = {
+    /**
+     * Mốc thời gian (YYYY-MM)
+     */
+    bucket: string;
+    /**
+     * % repeat athlete trong tháng
+     */
+    rate: number;
+};
+
+export type RepeatAthleteCompareDto = {
+    rate: number;
+    /**
+     * Delta % so với current
+     */
+    deltaPercent: number | null;
+};
+
+export type RepeatAthleteRateResponseDto = {
+    /**
+     * Tỉ lệ repeat athlete (%)
+     */
+    rate: number;
+    /**
+     * Tổng số athlete unique trong period
+     */
+    totalAthletes: number;
+    /**
+     * Số athlete tham gia ≥2 race
+     */
+    repeatAthletes: number;
+    trend: Array<RepeatAthleteTrendPointDto>;
+    compare: RepeatAthleteCompareDto | null;
+};
+
+export type MerchantStatusEntryDto = {
+    tenantId: number;
+    merchantName: string;
+    /**
+     * Số tháng kể từ race cuối
+     */
+    monthsSinceLastRace: number;
+    /**
+     * Date của race gần nhất ISO
+     */
+    lastRaceDate: string | null;
+    /**
+     * Số race lifetime đã tổ chức
+     */
+    totalRaces: number;
+};
+
+export type MerchantChurnResponseDto = {
+    /**
+     * Tỉ lệ churn (%)
+     */
+    churnRate: number;
+    /**
+     * Tổng số merchant active đã từng tổ chức
+     */
+    totalMerchants: number;
+    /**
+     * Merchant đã churn (≥6 tháng)
+     */
+    churnedCount: number;
+    /**
+     * Merchant nguy cơ churn (4–6 tháng)
+     */
+    atRiskCount: number;
+    atRiskList: Array<MerchantStatusEntryDto>;
+    churnedList: Array<MerchantStatusEntryDto>;
+};
+
+export type TimeToFillCourseDto = {
+    courseId: number;
+    courseName: string;
+    raceId: number;
+    raceName: string;
+    /**
+     * Open at ISO
+     */
+    openAt: string | null;
+    /**
+     * Filled 100% ISO
+     */
+    filledAt: string | null;
+    /**
+     * Số giờ từ open → fill 100%. NULL = chưa fill 100%.
+     */
+    hoursToFill: number | null;
+    /**
+     * Fill rate %
+     */
+    fillRate: number;
+    /**
+     * Trạng thái: OPEN / FILLED / EXPIRED
+     */
+    status: 'OPEN' | 'FILLED' | 'EXPIRED';
+    quota: number;
+    paid: number;
+};
+
+export type TimeToFillResponseDto = {
+    courses: Array<TimeToFillCourseDto>;
+    /**
+     * Median time-to-fill (giờ) — chỉ tính course đã fill
+     */
+    medianHoursToFill: number | null;
+};
+
+export type ClaimRatePerRaceDto = {
+    raceId: string;
+    raceName: string;
+    finishers: number;
+    claims: number;
+    /**
+     * Claim rate %
+     */
+    claimRate: number;
+    /**
+     * Có vượt ngưỡng đỏ 5%
+     */
+    isOverThreshold: boolean;
+};
+
+export type SlaTrendPointDto = {
+    bucket: string;
+    slaPercentage: number;
+};
+
+export type ClaimRateResponseDto = {
+    perRace: Array<ClaimRatePerRaceDto>;
+    /**
+     * Tổng SLA % (resolve trong 24h / total resolve)
+     */
+    slaPercentage: number;
+    totalClaims: number;
+    totalResolved: number;
+    resolvedWithinSla: number;
+    slaTrend: Array<SlaTrendPointDto>;
+};
+
+export type RegionEntryDto = {
+    /**
+     * Mã vùng: HCM / HN / DN / KHAC
+     */
+    region: string;
+    count: number;
+    /**
+     * Tỉ lệ (%)
+     */
+    percent: number;
+};
+
+export type GeographicDto = {
+    regions: Array<RegionEntryDto>;
+    /**
+     * Tỉ lệ user có province (% coverage)
+     */
+    coverage: number;
+};
+
+export type GenderAgeEntryDto = {
+    /**
+     * Gender: MALE / FEMALE / OTHER / UNKNOWN
+     */
+    gender: string;
+    /**
+     * Bucket: <25 / 25-34 / 35-44 / 45-54 / 55+ / UNKNOWN
+     */
+    ageGroup: string;
+    count: number;
+};
+
+export type DemographicDto = {
+    genderAge: Array<GenderAgeEntryDto>;
+    /**
+     * Tỉ lệ user có DOB (% coverage)
+     */
+    dobCoverage: number;
+};
+
+export type GeoDemoResponseDto = {
+    totalAthletes: number;
+    geographic: GeographicDto;
+    demographic: DemographicDto;
+};
+
+export type RateTrendPointDto = {
+    bucket: string;
+    rate: number;
+};
+
+export type RefundCancelResponseDto = {
+    totalOrders: number;
+    refundedOrders: number;
+    cancelledOrders: number;
+    /**
+     * Tỉ lệ refund (%)
+     */
+    refundRate: number;
+    /**
+     * Tỉ lệ cancel (%)
+     */
+    cancelRate: number;
+    /**
+     * Vượt ngưỡng đỏ refund > 3%
+     */
+    refundOverThreshold: boolean;
+    refundTrend: Array<RateTrendPointDto>;
+    cancelTrend: Array<RateTrendPointDto>;
+};
+
 export type ChipConfigLinkResponseDto = {
     mongo_race_id: string;
     mysql_race_id: number;
@@ -560,6 +774,230 @@ export type ChipRecentItemDto = {
 
 export type ChipRecentResponseDto = {
     items: Array<ChipRecentItemDto>;
+};
+
+export type KpiCardDto = {
+    /**
+     * Khoá KPI: gmv | net | athletes | platform_fee
+     */
+    key: string;
+    /**
+     * Nhãn hiển thị tiếng Việt
+     */
+    label: string;
+    /**
+     * Giá trị MTD hiện tại (VND hoặc count)
+     */
+    value: number;
+    /**
+     * Giá trị period trước (prev MTD)
+     */
+    prevValue: number;
+    /**
+     * Phần trăm chênh lệch so với prev MTD. NULL khi không tính được (chia 0 / cùng 0). UI render "—".
+     */
+    deltaPercent?: number | null;
+    /**
+     * Đơn vị: 'vnd' | 'count'
+     */
+    unit: string;
+};
+
+export type KpiResponseDto = {
+    kpis: Array<KpiCardDto>;
+    /**
+     * Period đã apply: 'mtd'
+     */
+    period: string;
+    /**
+     * ISO date của ngày bắt đầu period hiện tại
+     */
+    periodStart: string;
+    /**
+     * ISO date của ngày bắt đầu period trước
+     */
+    prevPeriodStart: string;
+};
+
+export type SparklinePointDto = {
+    /**
+     * Ngày YYYY-MM-DD
+     */
+    date: string;
+    /**
+     * Giá trị daily aggregate
+     */
+    value: number;
+};
+
+export type SparklineSeriesDto = {
+    /**
+     * Khoá metric: gmv | net | athletes | platform_fee
+     */
+    key: string;
+    points: Array<SparklinePointDto>;
+};
+
+export type SparklinesResponseDto = {
+    series: Array<SparklineSeriesDto>;
+    /**
+     * Số ngày được tổng hợp (mặc định 30)
+     */
+    days: number;
+    /**
+     * Thời điểm cron tổng hợp gần nhất (ISO)
+     */
+    generatedAt: string;
+};
+
+export type LiveRaceCardDto = {
+    raceId: string;
+    title: string;
+    slug?: string;
+    province?: string;
+    activeCourseName?: string;
+    /**
+     * % checkpoint trung bình đã qua (0-100)
+     */
+    progressPercent: number;
+    /**
+     * VĐV đang trên course (started - finished)
+     */
+    runnersOnCourse: number;
+    /**
+     * Số alert critical đang mở
+     */
+    alertsCount: number;
+    /**
+     * Border đỏ + dot pulse nhanh khi có alert critical (timing offline / mass DNF / medical sev 4-5)
+     */
+    hasCriticalAlert: boolean;
+};
+
+export type LiveRacesResponseDto = {
+    races: Array<LiveRaceCardDto>;
+};
+
+export type UpcomingRaceCardDto = {
+    raceId: string;
+    title: string;
+    slug?: string;
+    province?: string;
+    /**
+     * Ngày bắt đầu (ISO)
+     */
+    startDate?: string;
+    /**
+     * Số ngày còn lại tới startDate
+     */
+    daysRemaining?: number;
+    /**
+     * Số VĐV đăng ký
+     */
+    athleteCount: number;
+    /**
+     * Readiness % (0-100). NULL khi race chưa cấu hình readiness checklist.
+     */
+    readinessPercent?: number | null;
+};
+
+export type UpcomingRacesResponseDto = {
+    races: Array<UpcomingRaceCardDto>;
+};
+
+export type PendingTaskGroupDto = {
+    /**
+     * Khoá nhóm: claims | recon | master_data | chip
+     */
+    key: string;
+    /**
+     * Nhãn tiếng Việt
+     */
+    label: string;
+    /**
+     * Số task
+     */
+    count: number;
+    /**
+     * Đường dẫn admin để xử lý
+     */
+    href: string;
+};
+
+export type PendingTasksResponseDto = {
+    groups: Array<PendingTaskGroupDto>;
+    /**
+     * Tổng count tất cả nhóm
+     */
+    total: number;
+};
+
+export type RecentActivityActorDto = {
+    userId: string;
+    displayName?: string;
+    role?: string;
+};
+
+export type RecentActivityEntityDto = {
+    type: string;
+    id: string;
+    displayName?: string;
+};
+
+export type RecentActivityItemDto = {
+    id: string;
+    actor: RecentActivityActorDto;
+    action: string;
+    entity: RecentActivityEntityDto;
+    /**
+     * Metadata phụ thuộc action
+     */
+    metadata?: {
+        [key: string]: unknown;
+    };
+    /**
+     * ISO timestamp
+     */
+    createdAt: string;
+};
+
+export type RecentActivityResponseDto = {
+    items: Array<RecentActivityItemDto>;
+};
+
+export type SystemServiceStatusDto = {
+    /**
+     * Khoá service: api | mylaps | email | storage
+     */
+    key: string;
+    /**
+     * Nhãn hiển thị
+     */
+    label: string;
+    /**
+     * 'ok' | 'degraded' | 'down'
+     */
+    status: string;
+    /**
+     * Thông điệp chi tiết (KHÔNG leak credential)
+     */
+    message?: string;
+    /**
+     * ISO timestamp của lần check OK gần nhất (giúp UI tính "down từ X phút")
+     */
+    lastOkAt?: string;
+};
+
+export type SystemStatusResponseDto = {
+    services: Array<SystemServiceStatusDto>;
+    /**
+     * TRUE khi API hoặc MyLaps đỏ liên tục > 5 phút (dùng để show banner đỏ trên cùng dashboard, BR-DASH-20).
+     */
+    systemDown: boolean;
+    /**
+     * ISO timestamp của lần response này
+     */
+    checkedAt: string;
 };
 
 export type CreateTimingAlertConfigDto = {
@@ -784,23 +1222,6 @@ export type CheckpointProgressionDto = {
     distanceKm: number | null;
     startedCount: number;
     points: Array<CheckpointPointDto>;
-};
-
-export type RecentActivityItemDto = {
-    /**
-     * alert.created | alert.resolved | poll.completed
-     */
-    type: string;
-    /**
-     * ISO timestamp
-     */
-    at: string;
-    /**
-     * Type-specific payload
-     */
-    payload: {
-        [key: string]: unknown;
-    };
 };
 
 export type LiveLeaderboardEntryDto = {
@@ -1034,10 +1455,11 @@ export type PodiumResponseDto = {
     ageGroup: string;
     ageGroupKey: string;
     ageGroupLabel: string;
-    gender: 'M' | 'F';
+    gender: 'M' | 'F' | 'mixed';
     presetKey: string;
     compoundingMode: 'compounding' | 'mutually_exclusive';
     agTopN: number;
+    podiumType: 'AG' | 'OVERALL';
     athletes: Array<PodiumAthleteResponseDto>;
     state: 'RAW_RESULT' | 'AG_COMPUTED' | 'WARNINGS_GENERATED' | 'BTC_REVIEW' | 'PODIUM_DRAFT' | 'PODIUM_LOCKED' | 'PODIUM_PUBLISHED' | 'DISPUTE_OPEN' | 'PODIUM_FINAL';
     stateHistory: Array<PodiumStateTransitionResponseDto>;
@@ -4599,6 +5021,145 @@ export type AnalyticsControllerGetFunnelResponses = {
     200: unknown;
 };
 
+export type AnalyticsControllerGetRepeatAthleteRateData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Khoảng thời gian: 7d / 30d / quarter / year / rolling12m / custom
+         */
+        period: '7d' | '30d' | 'quarter' | 'year' | 'rolling12m' | 'custom';
+        /**
+         * Custom from YYYY-MM-DD
+         */
+        from?: string;
+        /**
+         * Custom to YYYY-MM-DD
+         */
+        to?: string;
+        /**
+         * Compare mode
+         */
+        compareWith?: 'prev' | 'yoy' | 'custom' | 'none';
+        /**
+         * Drill-down race id
+         */
+        raceId?: string;
+    };
+    url: '/api/analytics/repeat-athlete-rate';
+};
+
+export type AnalyticsControllerGetRepeatAthleteRateResponses = {
+    200: RepeatAthleteRateResponseDto;
+};
+
+export type AnalyticsControllerGetRepeatAthleteRateResponse = AnalyticsControllerGetRepeatAthleteRateResponses[keyof AnalyticsControllerGetRepeatAthleteRateResponses];
+
+export type AnalyticsControllerGetMerchantChurnData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Period: 7d / 30d / quarter / year / custom
+         */
+        period: '7d' | '30d' | 'quarter' | 'year' | 'rolling12m' | 'custom';
+        from?: string;
+        to?: string;
+    };
+    url: '/api/analytics/merchant-churn';
+};
+
+export type AnalyticsControllerGetMerchantChurnResponses = {
+    200: MerchantChurnResponseDto;
+};
+
+export type AnalyticsControllerGetMerchantChurnResponse = AnalyticsControllerGetMerchantChurnResponses[keyof AnalyticsControllerGetMerchantChurnResponses];
+
+export type AnalyticsControllerGetTimeToFillData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Period: 7d / 30d / quarter / year / custom
+         */
+        period: '7d' | '30d' | 'quarter' | 'year' | 'rolling12m' | 'custom';
+        from?: string;
+        to?: string;
+        raceId?: string;
+        courseId?: string;
+    };
+    url: '/api/analytics/time-to-fill';
+};
+
+export type AnalyticsControllerGetTimeToFillResponses = {
+    200: TimeToFillResponseDto;
+};
+
+export type AnalyticsControllerGetTimeToFillResponse = AnalyticsControllerGetTimeToFillResponses[keyof AnalyticsControllerGetTimeToFillResponses];
+
+export type AnalyticsControllerGetClaimRateData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Period: 7d / 30d / quarter / year / custom
+         */
+        period: '7d' | '30d' | 'quarter' | 'year' | 'rolling12m' | 'custom';
+        from?: string;
+        to?: string;
+        raceId?: string;
+    };
+    url: '/api/analytics/claim-rate';
+};
+
+export type AnalyticsControllerGetClaimRateResponses = {
+    200: ClaimRateResponseDto;
+};
+
+export type AnalyticsControllerGetClaimRateResponse = AnalyticsControllerGetClaimRateResponses[keyof AnalyticsControllerGetClaimRateResponses];
+
+export type AnalyticsControllerGetGeoDemoData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Period: 7d / 30d / quarter / year / custom
+         */
+        period: '7d' | '30d' | 'quarter' | 'year' | 'rolling12m' | 'custom';
+        from?: string;
+        to?: string;
+        raceId?: string;
+    };
+    url: '/api/analytics/geographic-demographic';
+};
+
+export type AnalyticsControllerGetGeoDemoResponses = {
+    200: GeoDemoResponseDto;
+};
+
+export type AnalyticsControllerGetGeoDemoResponse = AnalyticsControllerGetGeoDemoResponses[keyof AnalyticsControllerGetGeoDemoResponses];
+
+export type AnalyticsControllerGetRefundCancelData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Period: 7d / 30d / quarter / year / custom
+         */
+        period: '7d' | '30d' | 'quarter' | 'year' | 'rolling12m' | 'custom';
+        from?: string;
+        to?: string;
+        raceId?: string;
+    };
+    url: '/api/analytics/refund-cancel-rate';
+};
+
+export type AnalyticsControllerGetRefundCancelResponses = {
+    200: RefundCancelResponseDto;
+};
+
+export type AnalyticsControllerGetRefundCancelResponse = AnalyticsControllerGetRefundCancelResponses[keyof AnalyticsControllerGetRefundCancelResponses];
+
 export type ChipVerificationControllerGetConfigByMongoIdData = {
     body?: never;
     path: {
@@ -4859,6 +5420,104 @@ export type ChipVerificationPublicControllerStatsResponses = {
 };
 
 export type ChipVerificationPublicControllerStatsResponse = ChipVerificationPublicControllerStatsResponses[keyof ChipVerificationPublicControllerStatsResponses];
+
+export type DashboardControllerGetKpiData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Hiện chỉ hỗ trợ 'mtd' (mặc định)
+         */
+        period?: unknown;
+    };
+    url: '/api/admin/dashboard/kpi';
+};
+
+export type DashboardControllerGetKpiResponses = {
+    200: KpiResponseDto;
+};
+
+export type DashboardControllerGetKpiResponse = DashboardControllerGetKpiResponses[keyof DashboardControllerGetKpiResponses];
+
+export type DashboardControllerGetSparklinesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/dashboard/sparklines';
+};
+
+export type DashboardControllerGetSparklinesResponses = {
+    200: SparklinesResponseDto;
+};
+
+export type DashboardControllerGetSparklinesResponse = DashboardControllerGetSparklinesResponses[keyof DashboardControllerGetSparklinesResponses];
+
+export type DashboardControllerGetLiveRacesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/dashboard/live-races';
+};
+
+export type DashboardControllerGetLiveRacesResponses = {
+    200: LiveRacesResponseDto;
+};
+
+export type DashboardControllerGetLiveRacesResponse = DashboardControllerGetLiveRacesResponses[keyof DashboardControllerGetLiveRacesResponses];
+
+export type DashboardControllerGetUpcomingRacesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/dashboard/upcoming-races';
+};
+
+export type DashboardControllerGetUpcomingRacesResponses = {
+    200: UpcomingRacesResponseDto;
+};
+
+export type DashboardControllerGetUpcomingRacesResponse = DashboardControllerGetUpcomingRacesResponses[keyof DashboardControllerGetUpcomingRacesResponses];
+
+export type DashboardControllerGetPendingTasksData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/dashboard/pending-tasks';
+};
+
+export type DashboardControllerGetPendingTasksResponses = {
+    200: PendingTasksResponseDto;
+};
+
+export type DashboardControllerGetPendingTasksResponse = DashboardControllerGetPendingTasksResponses[keyof DashboardControllerGetPendingTasksResponses];
+
+export type DashboardControllerGetRecentActivityData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+    };
+    url: '/api/admin/dashboard/recent-activity';
+};
+
+export type DashboardControllerGetRecentActivityResponses = {
+    200: RecentActivityResponseDto;
+};
+
+export type DashboardControllerGetRecentActivityResponse = DashboardControllerGetRecentActivityResponses[keyof DashboardControllerGetRecentActivityResponses];
+
+export type DashboardControllerGetSystemStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/dashboard/system-status';
+};
+
+export type DashboardControllerGetSystemStatusResponses = {
+    200: SystemStatusResponseDto;
+};
+
+export type DashboardControllerGetSystemStatusResponse = DashboardControllerGetSystemStatusResponses[keyof DashboardControllerGetSystemStatusResponses];
 
 export type TimingAlertAdminControllerGetConfigData = {
     body?: never;

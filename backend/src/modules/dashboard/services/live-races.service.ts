@@ -37,78 +37,71 @@ export class DashboardLiveRacesService {
       .select('_id title slug province courses')
       .lean();
 
-    const cards: LiveRaceCardDto[] = [];
-    for (const r of races) {
-      const raceId = String((r as { _id: unknown })._id);
-      const stats = await this.readStats(raceId);
-      const alerts = await this.readAlerts(raceId);
-      const activeCourse = Array.isArray(r.courses) && r.courses.length > 0
-        ? r.courses[0]?.name
-        : undefined;
-      cards.push({
+    if (races.length === 0) return { races: [] };
+
+    const raceIds = races.map((r) => String((r as { _id: unknown })._id));
+
+    // Pipeline: 1 round-trip cho 2N keys
+    const pipeline = this.redis.pipeline();
+    for (const id of raceIds) {
+      pipeline.get(`master:rr-snapshot:${id}`);
+      pipeline.get(`medical:race:${id}:active-count`);
+    }
+    let results: Array<[Error | null, unknown]> | null = null;
+    try {
+      results = (await pipeline.exec()) as Array<[Error | null, unknown]> | null;
+    } catch (e) {
+      this.logger.warn(
+        `live-races pipeline fail err=${(e as Error).message}`,
+      );
+    }
+
+    const cards: LiveRaceCardDto[] = races.map((r, i) => {
+      const raceId = raceIds[i];
+      const snapshotRaw = results?.[i * 2]?.[1] as string | null | undefined;
+      const medicalRaw = results?.[i * 2 + 1]?.[1] as string | null | undefined;
+
+      let progressPercent = 0;
+      let runnersOnCourse = 0;
+      if (snapshotRaw) {
+        try {
+          const parsed = JSON.parse(snapshotRaw) as {
+            progressPercent?: number;
+            runnersOnCourse?: number;
+            started?: number;
+            finished?: number;
+          };
+          progressPercent =
+            typeof parsed.progressPercent === 'number'
+              ? Math.max(0, Math.min(100, parsed.progressPercent))
+              : 0;
+          runnersOnCourse =
+            typeof parsed.runnersOnCourse === 'number'
+              ? parsed.runnersOnCourse
+              : Math.max(0, (parsed.started ?? 0) - (parsed.finished ?? 0));
+        } catch {
+          /* swallow — graceful */
+        }
+      }
+      const alerts = medicalRaw ? Number(medicalRaw) || 0 : 0;
+      const activeCourse =
+        Array.isArray(r.courses) && r.courses.length > 0
+          ? r.courses[0]?.name
+          : undefined;
+
+      return {
         raceId,
         title: r.title,
         slug: r.slug,
         province: r.province,
         activeCourseName: activeCourse,
-        progressPercent: stats.progressPercent,
-        runnersOnCourse: stats.runnersOnCourse,
+        progressPercent,
+        runnersOnCourse,
         alertsCount: alerts,
         hasCriticalAlert: alerts > 0,
-      });
-    }
+      };
+    });
 
     return { races: cards };
-  }
-
-  /**
-   * Đọc snapshot timing-alert hoặc master:stats để lấy số runner / progress.
-   * Snapshot key chung: `master:rr-snapshot:<raceId>` (15s TTL từ TimingAlert).
-   * Nếu fail / miss → trả 0/0 (graceful).
-   */
-  private async readStats(
-    raceId: string,
-  ): Promise<{ progressPercent: number; runnersOnCourse: number }> {
-    try {
-      const raw = await this.redis.get(`master:rr-snapshot:${raceId}`);
-      if (!raw) return { progressPercent: 0, runnersOnCourse: 0 };
-      const parsed = JSON.parse(raw) as {
-        progressPercent?: number;
-        runnersOnCourse?: number;
-        started?: number;
-        finished?: number;
-      };
-      const progressPercent =
-        typeof parsed.progressPercent === 'number'
-          ? Math.max(0, Math.min(100, parsed.progressPercent))
-          : 0;
-      const runnersOnCourse =
-        typeof parsed.runnersOnCourse === 'number'
-          ? parsed.runnersOnCourse
-          : Math.max(
-              0,
-              (parsed.started ?? 0) - (parsed.finished ?? 0),
-            );
-      return { progressPercent, runnersOnCourse };
-    } catch (e) {
-      this.logger.warn(
-        `live-races stats fail race=${raceId} err=${(e as Error).message}`,
-      );
-      return { progressPercent: 0, runnersOnCourse: 0 };
-    }
-  }
-
-  /**
-   * Đếm alert critical: dùng key `medical:race:<raceId>:active-count` (F-018) +
-   * placeholder timing offline (sẽ refine khi Command Center expose key chuẩn).
-   */
-  private async readAlerts(raceId: string): Promise<number> {
-    try {
-      const medical = await this.redis.get(`medical:race:${raceId}:active-count`);
-      const medicalCount = medical ? Number(medical) || 0 : 0;
-      return medicalCount;
-    } catch {
-      return 0;
-    }
   }
 }

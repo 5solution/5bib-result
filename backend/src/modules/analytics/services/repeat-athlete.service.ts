@@ -151,31 +151,39 @@ export class RepeatAthleteService {
     const params: Array<string | number> = [fromIso, toIso];
     if (raceId) params.push(Number(raceId));
 
+    // Per bucket: count distinct athletes_id + count those with race_count >= 2
+    // Subquery: per (bucket, athletes_id) đếm distinct race_id trong CÙNG bucket
     const sql = `
-      SELECT DATE_FORMAT(r.event_start_date, '%Y-%m') AS bucket,
-             COUNT(DISTINCT a.athletes_id) AS total
-      FROM athletes a
-      JOIN races r ON r.race_id = a.race_id
-      WHERE r.status != 'draft'
-        AND r.is_delete = 0
-        AND r.event_start_date >= ?
-        AND r.event_start_date < ?
-        ${raceFilter}
+      SELECT bucket,
+             COUNT(*) AS total,
+             SUM(CASE WHEN race_count >= 2 THEN 1 ELSE 0 END) AS repeat_count
+      FROM (
+        SELECT DATE_FORMAT(r.event_start_date, '%Y-%m') AS bucket,
+               a.athletes_id,
+               COUNT(DISTINCT a.race_id) AS race_count
+        FROM athletes a
+        JOIN races r ON r.race_id = a.race_id
+        WHERE r.status != 'draft'
+          AND r.is_delete = 0
+          AND r.event_start_date >= ?
+          AND r.event_start_date < ?
+          ${raceFilter}
+        GROUP BY bucket, a.athletes_id
+      ) per_bucket
       GROUP BY bucket
       ORDER BY bucket ASC
     `;
 
-    const rows: Array<{ bucket: string; total: number }> = await this.db.query(
-      sql,
-      params,
-    );
+    const rows: Array<{ bucket: string; total: number; repeat_count: number }> =
+      await this.db.query(sql, params);
 
-    // Tính rate theo bucket — repeat / total từng tháng
-    return rows.map((r) => ({
-      bucket: r.bucket,
-      // simple snapshot: gán current rate xấp xỉ — caller dùng làm trend visual
-      rate: Number(r.total) > 0 ? 100 : 0,
-    }));
+    return rows.map((r) => {
+      const total = Number(r.total) || 0;
+      const repeat = Number(r.repeat_count) || 0;
+      const rate =
+        total > 0 ? Math.round((repeat / total) * 10000) / 100 : 0;
+      return { bucket: r.bucket, rate };
+    });
   }
 
   private async readCache<T>(key: string): Promise<T | null> {

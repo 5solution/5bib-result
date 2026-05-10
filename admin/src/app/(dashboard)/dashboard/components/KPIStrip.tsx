@@ -7,7 +7,7 @@ import { authHeaders } from "@/lib/api";
 import {
   dashboardControllerGetKpi,
   dashboardControllerGetSparklines,
-} from "@/lib/dashboard-sdk-shim";
+} from "@/lib/api-generated/sdk.gen";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowDown, ArrowUp } from "lucide-react";

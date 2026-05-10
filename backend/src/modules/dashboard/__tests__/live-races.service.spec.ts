@@ -9,11 +9,17 @@ const REDIS_TOKEN = 'default_IORedisModuleConnectionToken';
 describe('DashboardLiveRacesService', () => {
   let service: DashboardLiveRacesService;
   let mockRaceModel: { find: jest.Mock };
-  let mockRedis: { get: jest.Mock };
+  let mockRedis: { pipeline: jest.Mock };
+  let pipelineExec: jest.Mock;
 
   beforeEach(async () => {
     mockRaceModel = { find: jest.fn() };
-    mockRedis = { get: jest.fn() };
+    pipelineExec = jest.fn();
+    const pipelineObj = {
+      get: jest.fn().mockReturnThis(),
+      exec: pipelineExec,
+    };
+    mockRedis = { pipeline: jest.fn(() => pipelineObj) };
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         DashboardLiveRacesService,
@@ -31,9 +37,13 @@ describe('DashboardLiveRacesService', () => {
     });
   }
 
+  // Pipeline interleaves [snapshot, medical, snapshot, medical, ...] per race.
+  function setPipelineResults(values: Array<string | null>) {
+    pipelineExec.mockResolvedValue(values.map((v) => [null, v]));
+  }
+
   it('Filter status=live (cross-race scoping rule)', async () => {
     mockFindChain([]);
-    mockRedis.get.mockResolvedValue(null);
     await service.getLiveRaces();
     expect(mockRaceModel.find).toHaveBeenCalledWith({ status: 'live' });
   });
@@ -49,11 +59,10 @@ describe('DashboardLiveRacesService', () => {
         courses: [{ courseId: 'c1', name: '42K' }],
       },
     ]);
-    mockRedis.get
-      .mockResolvedValueOnce(
-        JSON.stringify({ progressPercent: 60, runnersOnCourse: 120 }),
-      )
-      .mockResolvedValueOnce('3'); // medical active count
+    setPipelineResults([
+      JSON.stringify({ progressPercent: 60, runnersOnCourse: 120 }),
+      '3',
+    ]);
     const res = await service.getLiveRaces();
     expect(res.races).toHaveLength(1);
     expect(res.races[0].progressPercent).toBe(60);
@@ -66,7 +75,7 @@ describe('DashboardLiveRacesService', () => {
   it('Edge: không có snapshot Redis → progress=0, runners=0', async () => {
     const id = new Types.ObjectId();
     mockFindChain([{ _id: id, title: 'Race B' }]);
-    mockRedis.get.mockResolvedValue(null);
+    setPipelineResults([null, null]);
     const res = await service.getLiveRaces();
     expect(res.races[0].progressPercent).toBe(0);
     expect(res.races[0].runnersOnCourse).toBe(0);
@@ -76,9 +85,10 @@ describe('DashboardLiveRacesService', () => {
   it('Edge: snapshot có started/finished → tự tính runnersOnCourse', async () => {
     const id = new Types.ObjectId();
     mockFindChain([{ _id: id, title: 'Race C' }]);
-    mockRedis.get
-      .mockResolvedValueOnce(JSON.stringify({ started: 200, finished: 50 }))
-      .mockResolvedValueOnce(null);
+    setPipelineResults([
+      JSON.stringify({ started: 200, finished: 50 }),
+      null,
+    ]);
     const res = await service.getLiveRaces();
     expect(res.races[0].runnersOnCourse).toBe(150);
   });
@@ -86,7 +96,7 @@ describe('DashboardLiveRacesService', () => {
   it('Resilient: Redis fail → progress=0 vẫn return', async () => {
     const id = new Types.ObjectId();
     mockFindChain([{ _id: id, title: 'Race D' }]);
-    mockRedis.get.mockRejectedValue(new Error('redis down'));
+    pipelineExec.mockRejectedValue(new Error('redis down'));
     const res = await service.getLiveRaces();
     expect(res.races).toHaveLength(1);
     expect(res.races[0].progressPercent).toBe(0);
