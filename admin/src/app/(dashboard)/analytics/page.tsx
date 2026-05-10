@@ -421,40 +421,6 @@ export default function AnalyticsOverviewPage() {
         </div>
       </div>
 
-      {/* F-026 controls row */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3">
-        <PeriodCompareSelector
-          period={period}
-          compareWith={compareWith}
-          onPeriodChange={setPeriod}
-          onCompareChange={setCompareWith}
-        />
-        <div className="flex items-center gap-2">
-          <RaceDrillDownFilter
-            races={raceOptions}
-            selectedRaceId={selectedRaceId}
-            onChange={setSelectedRaceId}
-          />
-          <ExportButton onExportPdf={handleExportPdf} onExportExcel={handleExportExcel} />
-        </div>
-      </div>
-
-      {/* Drill-down banner */}
-      {selectedRaceId && (
-        <div className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-          <span>
-            Đang xem race <strong>{selectedRaceName ?? selectedRaceId}</strong> — tất cả widget đã re-fetch
-          </span>
-          <button
-            type="button"
-            onClick={() => setSelectedRaceId(null)}
-            className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-blue-700 hover:bg-blue-100"
-          >
-            <X className="size-3.5" /> Bỏ chọn
-          </button>
-        </div>
-      )}
-
       {/* Row 1: KPI cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard
@@ -527,7 +493,42 @@ export default function AnalyticsOverviewPage() {
 
       {/* F-026 — 8 widget grid */}
       <div className="border-t border-stone-200 pt-5">
-        <h2 className="mb-3 text-lg font-semibold">8 chỉ số insight (F-026)</h2>
+        <h2 className="mb-3 text-lg font-semibold">Phân tích vận hành</h2>
+
+        {/* Controls row — period + race filter + export (chỉ áp cho khu này) */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3">
+          <PeriodCompareSelector
+            period={period}
+            compareWith={compareWith}
+            onPeriodChange={setPeriod}
+            onCompareChange={setCompareWith}
+          />
+          <div className="flex items-center gap-2">
+            <RaceDrillDownFilter
+              races={raceOptions}
+              selectedRaceId={selectedRaceId}
+              onChange={setSelectedRaceId}
+            />
+            <ExportButton onExportPdf={handleExportPdf} onExportExcel={handleExportExcel} />
+          </div>
+        </div>
+
+        {/* Drill-down banner */}
+        {selectedRaceId && (
+          <div className="mb-3 flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            <span>
+              Đang xem race <strong>{selectedRaceName ?? selectedRaceId}</strong> — tất cả widget đã re-fetch
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedRaceId(null)}
+              className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-blue-700 hover:bg-blue-100"
+            >
+              <X className="size-3.5" /> Bỏ chọn
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <RepeatAthleteRateCard data={repeatAthlete} loading={loadingF026} />
           <MerchantChurnTable data={merchantChurn} loading={loadingF026} />
