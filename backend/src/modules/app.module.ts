@@ -35,6 +35,9 @@ import { ResultKioskDisplayModule } from './result-kiosk-display/result-kiosk-di
 import { MedicalIncidentModule } from './medical-incidents/medical-incident.module';
 // F-019 — Awards Age Group Podium + Warnings (Race Ops Cluster #9 #2).
 import { AwardsModule } from './awards/awards.module';
+// F-023 — Admin Dashboard Redesign (Audit log + dashboard aggregator endpoints).
+import { AuditModule } from './audit/audit.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { RaceMasterDataModule } from './race-master-data/race-master-data.module';
 import { AthleteReadonly } from './race-master-data/entities/athlete-readonly.entity';
 import { AthleteSubinfoReadonly } from './race-master-data/entities/athlete-subinfo-readonly.entity';
@@ -101,6 +104,9 @@ const platformDbModules = env.platformDb.host
       ReconciliationModule,
       AnalyticsModule,
       ChipVerificationModule,
+      // F-023 DashboardModule cần `@InjectDataSource('platform')` cho KPI/Sparkline
+      // → chỉ load khi platform DB đã cấu hình, đồng nhất với AnalyticsModule.
+      DashboardModule,
     ]
   : [];
 
@@ -186,6 +192,9 @@ const volunteerDbModules = env.volunteerDb.host
     MedicalIncidentModule,
     // F-019 — Awards Age Group Podium + Warnings (Race Ops Cluster #9 #2).
     AwardsModule,
+    // F-023 — Audit log infrastructure (cross-cutting). DashboardModule
+    // được nạp conditional trong `platformDbModules` ở trên.
+    AuditModule,
   ],
 })
 export class AppModule {}
