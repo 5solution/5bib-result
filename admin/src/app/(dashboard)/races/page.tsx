@@ -7,12 +7,11 @@ import "@/lib/api"; // ensure client baseUrl is configured
 import { authHeaders } from "@/lib/api";
 import {
   racesControllerSearchRaces,
-  racesControllerCreateRace,
   racesControllerDeleteRace,
 } from "@/lib/api-generated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+// Label không còn dùng sau khi tách CreateRaceDialog (F-023).
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -40,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { CreateRaceDialog } from "@/components/dialogs/CreateRaceDialog";
 
 type RaceStatus = "draft" | "pre_race" | "live" | "ended";
 
@@ -116,17 +116,6 @@ export default function RacesPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
 
-  // Create dialog
-  const [createOpen, setCreateOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newRace, setNewRace] = useState<Record<string, any>>({
-    title: "",
-    slug: "",
-    status: "draft",
-    raceType: "running",
-    cacheTtlSeconds: 60,
-  });
-
   // Delete dialog
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -170,50 +159,6 @@ export default function RacesPage() {
     fetchRaces();
   }, [fetchRaces]);
 
-  async function handleCreate() {
-    if (!token || !newRace.title) return;
-    setCreating(true);
-    try {
-      const slug =
-        newRace.slug ||
-        newRace.title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, "");
-
-      const { error } = await racesControllerCreateRace({
-        body: {
-          title: newRace.title,
-          slug,
-          status: newRace.status || "draft",
-          raceType: newRace.raceType || "running",
-          province: newRace.province,
-          cacheTtlSeconds: newRace.cacheTtlSeconds ?? 60,
-          enableEcert: false,
-          enableClaim: false,
-          enableLiveTracking: false,
-          enable5pix: false,
-        } as any,
-        ...authHeaders(token),
-      });
-      if (error) throw error;
-      toast.success("Tạo giải thành công!");
-      setCreateOpen(false);
-      setNewRace({
-        title: "",
-        slug: "",
-        status: "draft",
-        raceType: "running",
-        cacheTtlSeconds: 60,
-      });
-      fetchRaces();
-    } catch {
-      toast.error("Tạo giải thất bại");
-    } finally {
-      setCreating(false);
-    }
-  }
-
   async function handleDelete() {
     if (!token || !deleteId) return;
     setDeleting(true);
@@ -244,72 +189,15 @@ export default function RacesPage() {
             {totalItems} giải chạy trong hệ thống
           </p>
         </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger render={<Button size="sm" />}>
-            <Plus className="size-4 mr-1.5" />
-            Tạo giải mới
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Tạo giải chạy mới</DialogTitle>
-              <DialogDescription>
-                Nhập thông tin cơ bản để tạo giải chạy
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="race-title">Tên giải *</Label>
-                <Input
-                  id="race-title"
-                  value={newRace.title ?? ""}
-                  onChange={(e) =>
-                    setNewRace((p) => ({ ...p, title: e.target.value }))
-                  }
-                  placeholder="Vietnam Mountain Marathon 2026"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="race-slug">Đường dẫn SEO</Label>
-                <Input
-                  id="race-slug"
-                  value={newRace.slug ?? ""}
-                  onChange={(e) =>
-                    setNewRace((p) => ({ ...p, slug: e.target.value }))
-                  }
-                  placeholder="vietnam-mountain-marathon-2026"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Loại hình</Label>
-                <Input
-                  value={newRace.raceType ?? ""}
-                  onChange={(e) =>
-                    setNewRace((p) => ({ ...p, raceType: e.target.value }))
-                  }
-                  placeholder="running"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Tỉnh/Thành</Label>
-                <Input
-                  value={newRace.province ?? ""}
-                  onChange={(e) =>
-                    setNewRace((p) => ({ ...p, province: e.target.value }))
-                  }
-                  placeholder="Hà Nội"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={handleCreate}
-                disabled={creating || !newRace.title}
-              >
-                {creating ? "Đang tạo..." : "Tạo giải"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <CreateRaceDialog
+          trigger={
+            <Button size="sm">
+              <Plus className="size-4 mr-1.5" />
+              Tạo giải mới
+            </Button>
+          }
+          onSuccess={() => fetchRaces()}
+        />
       </div>
 
       {/* Filters */}
