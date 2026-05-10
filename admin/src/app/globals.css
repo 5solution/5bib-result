@@ -11,11 +11,14 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 @theme inline {
-  /* Fonts — match frontend exactly */
-  --font-sans: "Plus Jakarta Sans", "Be Vietnam Pro", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Geist Mono", ui-monospace, monospace;
-  --font-display: "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-heading: "Be Vietnam Pro", "Plus Jakarta Sans", system-ui, sans-serif;
+  /* Fonts — FEATURE-022 BR-DESIGN-06/07
+     UI font: Be Vietnam Pro (--font-be-vietnam-pro tu lib/fonts.ts).
+     Data font: JetBrains Mono (--font-jetbrains-mono tu lib/fonts.ts).
+     KHONG dung Plus Jakarta Sans nua — admin va frontend tach design rieng. */
+  --font-sans: var(--font-be-vietnam-pro), "Be Vietnam Pro", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-display: var(--font-be-vietnam-pro), "Be Vietnam Pro", system-ui, sans-serif;
+  --font-heading: var(--font-be-vietnam-pro), "Be Vietnam Pro", system-ui, sans-serif;
 
   /* Semantic color aliases (Tailwind picks these up) */
   --color-background: var(--background);
@@ -45,6 +48,37 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* FEATURE-022 BR-DESIGN-08 — radius co dinh:
+     card 12px, input/pill 8px, badges full pill 99px (qua rounded-full). */
+  --radius-card: 12px;
+  --radius-input: 8px;
+
+  /* FEATURE-022 BR-DESIGN-01 — admin design tokens (doi chieu shell.jsx).
+     Map sang Tailwind utility class qua @theme inline. */
+  --color-admin-bg: var(--admin-bg);
+  --color-admin-surface: var(--admin-surface);
+  --color-admin-surface-2: var(--admin-surface-2);
+  --color-admin-surface-3: var(--admin-surface-3);
+  --color-admin-text: var(--admin-text);
+  --color-admin-text-muted: var(--admin-text-muted);
+  --color-admin-text-dim: var(--admin-text-dim);
+  --color-admin-border: var(--admin-border);
+  --color-admin-border-strong: var(--admin-border-strong);
+  --color-admin-blue: var(--admin-blue);
+  --color-admin-blue-dim: var(--admin-blue-dim);
+  --color-admin-blue-50: var(--admin-blue-50);
+  --color-admin-blue-100: var(--admin-blue-100);
+  --color-admin-magenta: var(--admin-magenta);
+  --color-admin-success: var(--admin-success);
+  --color-admin-success-bg: var(--admin-success-bg);
+  --color-admin-warning: var(--admin-warning);
+  --color-admin-warning-bg: var(--admin-warning-bg);
+  --color-admin-danger: var(--admin-danger);
+  --color-admin-danger-bg: var(--admin-danger-bg);
+  --color-admin-violet: var(--admin-violet);
+  --color-admin-violet-bg: var(--admin-violet-bg);
+  --color-admin-sidebar-bg: var(--admin-sidebar-bg);
 
   /* Sidebar (admin-specific) */
   --color-sidebar: var(--sidebar);
@@ -89,14 +123,16 @@
   --5bib-energy: #c2410c;
   --5bib-trail: #166534;
 
-  /* shadcn semantic tokens — 5BIB warm stone palette */
+  /* shadcn semantic tokens — 5BIB warm stone palette
+     FEATURE-022 BR-DESIGN-03 — primary doi tu magenta sang BLUE.
+     Magenta van duoc giu lam brand accent qua --admin-magenta + --5bib-magenta. */
   --background: #faf8f5;
   --foreground: #1c1917;
   --card: #ffffff;
   --card-foreground: #1c1917;
   --popover: #ffffff;
   --popover-foreground: #1c1917;
-  --primary: #FF0E65;
+  --primary: #1D49FF;
   --primary-foreground: #ffffff;
   --secondary: #f3f0eb;
   --secondary-foreground: #1c1917;
@@ -104,21 +140,47 @@
   --muted-foreground: #78716c;
   --accent: #e8e4dd;
   --accent-foreground: #1c1917;
-  --destructive: #dc2626;
-  --border: #e7e5e4;
-  --input: #e7e5e4;
-  --ring: #FF0E65;
+  --destructive: #b91c1c;
+  --border: #e7e2d9;
+  --input: #d6d3d1;
+  --ring: #1D49FF;
   --radius: 0.625rem;
 
-  /* Sidebar — DARK theme per 5Solution design (slate-900 surface, white text) */
+  /* Sidebar — DARK slate-900 (FEATURE-022 BR-DESIGN-05).
+     Active item dung BLUE tint thay vi magenta tint, blue left bar 3px. */
   --sidebar: #0F172A;
   --sidebar-foreground: rgba(255, 255, 255, 0.78);
-  --sidebar-primary: #FF0E65;
+  --sidebar-primary: #1D49FF;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(255, 14, 101, 0.18);
+  --sidebar-accent: rgba(29, 73, 255, 0.18);
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #FF0E65;
+  --sidebar-ring: #1D49FF;
+
+  /* FEATURE-022 — admin design tokens (doi chieu shell.jsx TOKENS). */
+  --admin-bg: #FAF8F5;
+  --admin-surface: #FFFFFF;
+  --admin-surface-2: #F3F0EB;
+  --admin-surface-3: #E8E4DD;
+  --admin-text: #1C1917;
+  --admin-text-muted: #78716C;
+  --admin-text-dim: #A8A29E;
+  --admin-border: #E7E2D9;
+  --admin-border-strong: #D6D3D1;
+  --admin-blue: #1D49FF;
+  --admin-blue-dim: #0B36E6;
+  --admin-blue-50: #E6ECFF;
+  --admin-blue-100: #CCD9FF;
+  --admin-magenta: #FF0E65;
+  --admin-success: #15803D;
+  --admin-success-bg: #DCFCE7;
+  --admin-warning: #B45309;
+  --admin-warning-bg: #FEF3C7;
+  --admin-danger: #B91C1C;
+  --admin-danger-bg: #FEE2E2;
+  --admin-violet: #5B21B6;
+  --admin-violet-bg: #EDE9FE;
+  --admin-sidebar-bg: #0F172A;
 
   /* Charts */
   --chart-1: #1D49FF;
@@ -168,6 +230,13 @@
 /* ── Command Center keyframes (race-ops) ── */
 @keyframes ro-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }
 @keyframes ro-pulse { 0% { transform: scale(.9); opacity:.5 } 70% { transform: scale(2.1); opacity:0 } 100% { transform: scale(2.1); opacity:0 } }
+
+/* FEATURE-022 BR-DESIGN-13 — magenta live indicator pulse 1.6s.
+   Dung boi <LiveDot /> tren race dang race-day. */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
 
 /* ── Dark mode (keep simple — admin mostly light) ── */
 .dark {

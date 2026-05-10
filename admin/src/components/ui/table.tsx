@@ -53,11 +53,12 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
 }
 
 function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+  // FEATURE-022 — hover sang surface2 cho row hover state ro hon.
   return (
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b transition-colors hover:bg-[var(--admin-surface-2)] data-[state=selected]:bg-[var(--admin-surface-2)]",
         className
       )}
       {...props}
@@ -66,11 +67,12 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
 }
 
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+  // FEATURE-022 — header text muted + uppercase letter-spacing nhe.
   return (
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
+        "h-10 px-2 text-left align-middle text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-[var(--admin-text-muted)] [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
