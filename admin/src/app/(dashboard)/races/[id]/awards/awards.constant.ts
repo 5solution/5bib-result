@@ -61,6 +61,23 @@ export type Resolution = (typeof RESOLUTIONS)[number];
 export const GENDERS = ['M', 'F'] as const;
 export type Gender = (typeof GENDERS)[number];
 
+/**
+ * F-020 BR-AG-43 — discriminator AG vs OVERALL podium.
+ *  - `'AG'` (default): nhóm tuổi (1 doc per ageGroupKey × gender).
+ *  - `'OVERALL'`: top chung cuộc per course, gender = 'mixed'.
+ */
+export const PODIUM_TYPES = ['AG', 'OVERALL'] as const;
+export type PodiumType = (typeof PODIUM_TYPES)[number];
+
+/** F-020 — sentinel `ageGroupKey` cho OVERALL podium. */
+export const OVERALL_AGE_GROUP_KEY = '__OVERALL__';
+
+/**
+ * F-020 — gender mở rộng `'mixed'` cho OVERALL. Frontend filter UI vẫn dùng
+ * `Gender = 'M' | 'F'` (chỉ AG bucket); OVERALL không filter theo gender.
+ */
+export type PodiumGender = Gender | 'mixed';
+
 /** BR-AG-19 LOCKED — confidence → tier mapping. */
 export const TIER_THRESHOLDS = {
   LEVEL_1_BLOCK_MIN: 0.8,

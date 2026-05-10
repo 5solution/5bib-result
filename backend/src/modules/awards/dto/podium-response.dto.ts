@@ -12,8 +12,12 @@ import {
   CompoundingMode,
   GENDERS,
   Gender,
+  PODIUM_GENDERS,
   PODIUM_STATES,
+  PODIUM_TYPES,
+  PodiumGender,
   PodiumState,
+  PodiumType,
 } from '../schemas/podium.schema';
 import { PodiumStateTransitionResponseDto } from './podium-state-update.dto';
 
@@ -41,11 +45,15 @@ export class PodiumResponseDto {
   @ApiProperty() ageGroup: string;
   @ApiProperty() ageGroupKey: string;
   @ApiProperty() ageGroupLabel: string;
-  @ApiProperty({ enum: GENDERS }) gender: Gender;
+  /** F-020 — `'mixed'` cho OVERALL podium, `'M'`/`'F'` cho AG bucket. */
+  @ApiProperty({ enum: PODIUM_GENDERS }) gender: PodiumGender;
   @ApiProperty() presetKey: string;
   @ApiProperty({ enum: COMPOUNDING_MODES })
   compoundingMode: CompoundingMode;
   @ApiProperty() agTopN: number;
+  /** F-020 BR-AG-43 — discriminator AG vs OVERALL podium. */
+  @ApiProperty({ enum: PODIUM_TYPES, default: 'AG' })
+  podiumType: PodiumType;
   @ApiProperty({ type: [PodiumAthleteResponseDto] })
   athletes: PodiumAthleteResponseDto[];
   @ApiProperty({ enum: PODIUM_STATES }) state: PodiumState;

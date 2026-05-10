@@ -29,6 +29,7 @@ import { REDIS_TTL } from '../constants/awards-thresholds';
 import {
   AGBracketCalcService,
   AthleteForRanking,
+  computeOverallTopN,
 } from './ag-bracket-calc.service';
 import { AnomalyDetectorService } from './anomaly-detector.service';
 import {
@@ -305,6 +306,7 @@ export class AwardsService {
               presetKey,
               compoundingMode: raceCompoundingMode,
               agTopN: 3,
+              podiumType: 'AG',
               athletes: bucket.athletes.map((a) => ({
                 bib: a.bib,
                 name: a.name ?? a.bib,
@@ -343,6 +345,78 @@ export class AwardsService {
               podiumId: String((upserted as unknown as { _id: Types.ObjectId })._id),
               ageGroupKey: bucket.ageGroupKey,
               gender: bucket.gender,
+            });
+          }
+        }
+
+        // F-020 BR-AG-41/42/50 — upsert 1 OVERALL podium per course song song
+        // với AG buckets. Persist trong CẢ 2 modes (mutually_exclusive +
+        // compounding) để BTC luôn có chỗ tra cứu top chung cuộc race day.
+        // Tie-break BIB ASC trong helper computeOverallTopN — KHÔNG dùng
+        // tied-tail logic của AG bucket vì OVERALL chỉ trao 3 medal cố định.
+        const overallTop = computeOverallTopN(eligibleAthletes, 3);
+        if (overallTop.length > 0) {
+          const overallFilter = {
+            raceId,
+            courseId: course.courseId,
+            ageGroupKey: '__OVERALL__',
+            gender: 'mixed',
+          };
+          const overallUpdate = {
+            $set: {
+              raceId,
+              mongoRaceId: new Types.ObjectId(race._id as unknown as string),
+              courseId: course.courseId,
+              courseName: course.name,
+              courseDistanceKm,
+              ageGroupKey: '__OVERALL__',
+              ageGroup: 'Overall',
+              ageGroupLabel: 'Top Chung Cuộc',
+              gender: 'mixed',
+              presetKey,
+              compoundingMode: raceCompoundingMode,
+              agTopN: 3,
+              podiumType: 'OVERALL',
+              athletes: overallTop.map((a, idx) => ({
+                bib: a.bib,
+                name: a.name ?? a.bib,
+                rank: idx + 1,
+                chipTimeMs: a.chipTimeMs ?? undefined,
+                chipTime: undefined,
+                gunTimeMs: a.gunTimeMs ?? undefined,
+                gender: a.gender ?? undefined,
+                ageOnRaceDay: a.ageOnRaceDay ?? undefined,
+                nationality: a.nationality,
+                tied: false,
+              })),
+              state: 'AG_COMPUTED' as PodiumState,
+              computedAt: new Date(),
+            },
+            $setOnInsert: {
+              stateHistory: [
+                {
+                  fromState: 'INITIAL',
+                  toState: 'AG_COMPUTED',
+                  actorId,
+                  at: new Date(),
+                  note: 'Initial OVERALL computation (F-020)',
+                },
+              ],
+            },
+          };
+          const overallUpserted = await this.podiumModel.findOneAndUpdate(
+            overallFilter,
+            overallUpdate,
+            { upsert: true, new: true, setDefaultsOnInsert: true },
+          );
+          if (overallUpserted) {
+            podiumsCreatedOrUpdated += 1;
+            this.sse.emit('podium.computed', raceId, {
+              podiumId: String(
+                (overallUpserted as unknown as { _id: Types.ObjectId })._id,
+              ),
+              ageGroupKey: '__OVERALL__',
+              gender: 'mixed',
             });
           }
         }
@@ -776,6 +850,7 @@ export class AwardsService {
       presetKey: d.presetKey,
       compoundingMode: d.compoundingMode,
       agTopN: d.agTopN,
+      podiumType: d.podiumType ?? 'AG',
       athletes: (d.athletes ?? []).map((a) => ({
         bib: a.bib,
         name: a.name,

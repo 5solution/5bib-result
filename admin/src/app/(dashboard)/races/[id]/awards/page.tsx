@@ -21,6 +21,7 @@ import { racesControllerGetRaceById } from '@/lib/api-generated';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHero } from '@/components/race-ops-shell/PageHero';
 import { AGPodiumGrid } from './components/AGPodiumGrid';
+import { OverallPodiumCard } from './components/OverallPodiumCard';
 import { AnomalyWarningsBanner } from './components/AnomalyWarningsBanner';
 import { AnomalyInbox } from './components/AnomalyInbox';
 import { PredictedRankList } from './components/PredictedRankList';
@@ -29,6 +30,8 @@ import { FilterBar } from './components/FilterBar';
 import { BracketSourceBanner } from './components/BracketSourceBanner';
 import { CompoundingModeSelector, type CompoundingMode } from './components/CompoundingModeSelector';
 import { useRecompute } from './hooks/useRecompute';
+import { useAgPodium } from './hooks/useAgPodium';
+import { useAnomalyWarnings } from './hooks/useAnomalyWarnings';
 import { useAgEligibility } from '../readiness/hooks/useAgEligibility';
 import { Button } from '@/components/ui/button';
 import { VN } from './awards.microcopy';
@@ -150,6 +153,8 @@ export default function AwardsPage() {
       ) : (
         <>
           <PredictedRankList raceId={raceId} />
+          {/* F-020 BR-AG-49 — Top Chung Cuộc section render đầu trang. */}
+          <OverallPodiumGrid raceId={raceId} filter={filter} />
           <AGPodiumGrid raceId={raceId} filter={filter} />
         </>
       )}
@@ -170,6 +175,54 @@ export default function AwardsPage() {
           }))}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * F-020 — OverallPodiumGrid inline component (giữ Scope Lock 9 file count).
+ *
+ * Fetch list podium qua hook `useAgPodium` (đã có F-019), filter client-side
+ * `podiumType === 'OVERALL'`, render stack vertical 1 card per course.
+ * Hidden khi không có OVERALL podium nào (khi recompute chưa chạy hoặc race
+ * legacy có podium trước F-020 ship — Mongoose default 'AG' cho doc cũ).
+ */
+function OverallPodiumGrid({
+  raceId,
+  filter,
+}: {
+  raceId: string;
+  filter: { courseId?: string; gender?: 'M' | 'F'; state?: PodiumState };
+}) {
+  // Bỏ qua filter gender ở đây — OVERALL không có gender (mixed).
+  const { data, isLoading } = useAgPodium(raceId, {
+    courseId: filter.courseId,
+    state: filter.state,
+  });
+  const { data: anomalies } = useAnomalyWarnings(raceId, {
+    courseId: filter.courseId,
+  });
+  if (isLoading || !data) return null;
+  const overall = data.items.filter((p) => p.podiumType === 'OVERALL');
+  if (overall.length === 0) return null;
+  const blocking = anomalies?.blockingCount ?? 0;
+  const blockingMessage =
+    blocking > 0 ? VN.LOCK_DISABLED_TIP(blocking) : undefined;
+  return (
+    <div className="space-y-3">
+      <div className="text-xs uppercase tracking-wide text-stone-500">
+        {VN.OVERALL_SECTION_HINT}
+      </div>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {overall.map((p) => (
+          <OverallPodiumCard
+            key={p.id}
+            podium={p}
+            raceId={raceId}
+            blockingMessage={blockingMessage}
+          />
+        ))}
+      </div>
     </div>
   );
 }

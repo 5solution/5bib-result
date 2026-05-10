@@ -44,12 +44,26 @@ export function AGPodiumGrid({ raceId, filter }: Props) {
     );
   }
 
+  // F-020 — exclude OVERALL podium (render bởi OverallPodiumGrid trên page.tsx).
+  const agItems = data.items.filter(
+    (p) => (p.podiumType ?? 'AG') === 'AG',
+  );
+  if (agItems.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-stone-600">
+          {VN.EMPTY_NO_ATHLETES}
+        </CardContent>
+      </Card>
+    );
+  }
+
   const blocking = anomalies?.blockingCount ?? 0;
   const blockingMessage = blocking > 0 ? VN.LOCK_DISABLED_TIP(blocking) : undefined;
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {data.items.map((p) => (
+      {agItems.map((p) => (
         <AGPodiumCard
           key={p.id}
           podium={p}

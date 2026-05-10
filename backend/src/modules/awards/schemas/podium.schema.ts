@@ -23,6 +23,26 @@ export type PodiumState = (typeof PODIUM_STATES)[number];
 export const GENDERS = ['M', 'F'] as const;
 export type Gender = (typeof GENDERS)[number];
 
+/**
+ * F-020 — `PODIUM_GENDERS` mở rộng `GENDERS` để chấp nhận `'mixed'` cho OVERALL
+ * podium (top chung cuộc — không chia M/F). KHÔNG đụng `Gender` type chính
+ * (giữ tương thích cho AG bucket calc + vendor mismatch detector chỉ làm việc
+ * trên AG = M/F). Schema field `gender` dùng enum mở rộng này.
+ */
+export const PODIUM_GENDERS = ['M', 'F', 'mixed'] as const;
+export type PodiumGender = (typeof PODIUM_GENDERS)[number];
+
+/**
+ * F-020 BR-AG-43 — discriminator field cho Podium docs.
+ *  - `'AG'` (default): podium nhóm tuổi (giữ nguyên từ F-019).
+ *  - `'OVERALL'`: top chung cuộc per course (BR-AG-41/42, persist trong cả 2 modes).
+ */
+export const PODIUM_TYPES = ['AG', 'OVERALL'] as const;
+export type PodiumType = (typeof PODIUM_TYPES)[number];
+
+/** F-020 — sentinel ageGroupKey cho OVERALL podium (distinct với AG buckets). */
+export const OVERALL_AGE_GROUP_KEY = '__OVERALL__';
+
 export const COMPOUNDING_MODES = [
   'compounding',
   'mutually_exclusive',
@@ -86,7 +106,19 @@ export class Podium {
   @Prop({ required: true }) ageGroup: string; // e.g. "30-39"
   @Prop({ required: true }) ageGroupKey: string; // e.g. "M_30-39"
   @Prop({ required: true }) ageGroupLabel: string; // e.g. "Nam 30-39"
-  @Prop({ required: true, enum: GENDERS }) gender: Gender;
+  /**
+   * F-020 — gender mở rộng `'mixed'` cho OVERALL podium. AG bucket vẫn dùng
+   * 'M'/'F'. Type là `PodiumGender` (superset của `Gender`).
+   */
+  @Prop({ required: true, enum: PODIUM_GENDERS }) gender: PodiumGender;
+
+  /**
+   * F-020 BR-AG-43 — discriminator giữa AG bucket vs OVERALL podium (top chung cuộc).
+   * Default `'AG'` để 39 docs hiện trường (F-019 ship) tự apply giá trị cũ —
+   * KHÔNG cần migration script (theo pattern F-019 v2 lazy default).
+   */
+  @Prop({ enum: PODIUM_TYPES, default: 'AG', index: true })
+  podiumType: PodiumType;
 
   // Preset reference (ageGroupOverride snapshot if applicable)
   @Prop({ required: true }) presetKey: string;

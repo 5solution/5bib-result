@@ -10,7 +10,9 @@ import type {
   AnomalyPattern,
   CompoundingMode,
   Gender,
+  PodiumGender,
   PodiumState,
+  PodiumType,
   Resolution,
   Tier,
 } from './awards.constant';
@@ -48,10 +50,13 @@ export interface PodiumResponse {
   ageGroup: string;
   ageGroupKey: string;
   ageGroupLabel: string;
-  gender: Gender;
+  /** F-020 — `'mixed'` cho OVERALL, `'M'`/`'F'` cho AG bucket. */
+  gender: PodiumGender;
   presetKey: string;
   compoundingMode: CompoundingMode;
   agTopN: number;
+  /** F-020 BR-AG-43 — discriminator AG vs OVERALL. Optional vì SDK old có thể chưa expose. */
+  podiumType?: PodiumType;
   athletes: PodiumAthlete[];
   state: PodiumState;
   stateHistory: PodiumStateTransition[];

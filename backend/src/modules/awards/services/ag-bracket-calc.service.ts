@@ -112,6 +112,39 @@ export interface CalcOptions {
 const VENDOR_AG_REGEX = /(\d{1,2})\s*[-–]\s*(\d{1,2})|(\d{1,2})\s*\+/;
 
 /**
+ * F-020 BR-AG-50 — pure helper compute Top N chung cuộc theo chipTimeMs.
+ *
+ * Tách từ logic exclude (line 290-298 cũ) để awards.service tái sử dụng khi
+ * persist OVERALL podium doc (per course) song song với AG buckets.
+ *
+ * Quy ước:
+ *  - Lọc chipTimeMs null / 0 / âm (vendor sentinel `-1`) — KHÔNG đưa vào ranking.
+ *  - Sort chipTimeMs ASC; tie-break BIB ASC (numeric ưu tiên, fallback string compare)
+ *    để stable sort khi 2 athlete cùng chipTime.
+ *  - Trả về tối đa `topN` athletes (KHÔNG dùng tied-tail logic của AG bucket — vì
+ *    OVERALL chỉ trao 3 medal cố định BR-AG-50, tie-break BIB là quyết định cuối).
+ */
+export function computeOverallTopN(
+  athletes: AthleteForRanking[],
+  topN: number,
+): AthleteForRanking[] {
+  const eligible = athletes.filter(
+    (a) => a.chipTimeMs != null && a.chipTimeMs > 0,
+  );
+  eligible.sort((a, b) => {
+    const ct = (a.chipTimeMs ?? Infinity) - (b.chipTimeMs ?? Infinity);
+    if (ct !== 0) return ct;
+    const gt = (a.gunTimeMs ?? Infinity) - (b.gunTimeMs ?? Infinity);
+    if (gt !== 0) return gt;
+    const bibA = parseInt(a.bib, 10);
+    const bibB = parseInt(b.bib, 10);
+    if (!Number.isNaN(bibA) && !Number.isNaN(bibB)) return bibA - bibB;
+    return a.bib.localeCompare(b.bib);
+  });
+  return eligible.slice(0, Math.max(0, topN));
+}
+
+/**
  * F-019 BR-AG-01..10 — pure function AG bracket calc.
  *
  * Path A (Phase 2): athlete.dateOfBirth available → compute age WA-style.

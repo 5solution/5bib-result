@@ -107,4 +107,34 @@ export const VN = {
   TOAST_RESOLVE_OK: 'Đã resolve cảnh báo',
   TOAST_TRANSITION_OK: 'Đã chuyển trạng thái',
   TOAST_TRANSITION_CONFLICT: 'Trạng thái đã thay đổi — refresh và thử lại',
+
+  // ── F-020 — Top Chung Cuộc + State Action UI ──────────────────────────
+  OVERALL_SECTION_TITLE: 'Top Chung Cuộc',
+  OVERALL_SECTION_HINT:
+    'Top 3 chung cuộc per cự ly (BR-AG-50) — BTC chuẩn bị medal/cup vinh danh ngày trao giải.',
+  OVERALL_BADGE_LABEL: 'Overall',
+  OVERALL_TOP_LABELS: ['🥇 Hạng Nhất', '🥈 Hạng Nhì', '🥉 Hạng Ba'] as const,
+  OVERALL_EMPTY: 'Chưa có dữ liệu Top Chung Cuộc — bấm Tính lại AG để compute.',
+
+  TRANSITION_CONFIRM_TITLE: 'Xác nhận chuyển trạng thái',
+  TRANSITION_CONFIRM_BODY: (from: PodiumState, to: PodiumState) =>
+    `Bạn sắp chuyển podium từ ${from} sang ${to}.`,
+  TRANSITION_CONFIRM_NOTE:
+    'Ghi chú (tuỳ chọn ≥5 ký tự) — sẽ lưu vào lịch sử state machine.',
+  TRANSITION_CONFIRM_OK: 'Xác nhận',
+  TRANSITION_CONFIRM_CANCEL: 'Hủy',
+
+  /** Cảnh báo phụ trên modal — body content thay đổi theo target state. */
+  TRANSITION_WARN_BY_TARGET: {
+    PODIUM_LOCKED: 'Sau khi khoá, recompute sẽ bị block — chỉ unlock qua DISPUTE_OPEN.',
+    PODIUM_PUBLISHED:
+      'Cờ trạng thái nội bộ admin đánh dấu BTC đã chốt podium. KHÔNG tự động đẩy ra public website.',
+    PODIUM_FINAL:
+      'Đánh dấu FINAL — coi như không còn khiếu nại. Vẫn có thể quay lại DISPUTE_OPEN nếu phát hiện sai sau đó.',
+    DISPUTE_OPEN:
+      'Mở khiếu nại — sẽ quay về AG_COMPUTED để recompute lại lần nữa.',
+  } as Partial<Record<PodiumState, string>>,
+
+  PROGRESS_DOT_TOOLTIP: (state: PodiumState, at?: string) =>
+    at ? `${state} — ${at}` : state,
 } as const;
