@@ -69,7 +69,7 @@ export function ContractDetailSections({ contract }: { contract: ContractView })
             <Item label="Tên giải" value={contract.raceName} />
             <Item
               label="Ngày tổ chức"
-              value={formatVNDate(contract.raceDate)}
+              value={formatRaceDate(contract.raceDate)}
             />
             <Item label="Địa điểm" value={contract.raceLocation} />
           </dl>
@@ -162,6 +162,21 @@ export function ContractDetailSections({ contract }: { contract: ContractView })
       </Section>
     </div>
   );
+}
+
+/**
+ * F-024 Fix 1 — raceDate là free-format string.
+ * Nếu là ISO 8601 (vd "2026-06-15T...") → format DD/MM/YYYY.
+ * Nếu là free-text (vd "06:00 ngày 15/06/2026 đến 12:00 ngày 16/06/2026")
+ * → hiển thị nguyên văn.
+ */
+function formatRaceDate(raw?: string | null): string {
+  if (!raw) return "—";
+  // Heuristic: ISO date (YYYY-MM-DD prefix) → format. Else passthrough.
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    return formatVNDate(raw);
+  }
+  return raw;
 }
 
 function Section({

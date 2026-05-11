@@ -106,7 +106,13 @@ export class CreateContractDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() raceId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() raceName?: string;
-  @ApiPropertyOptional() @IsOptional() @IsDateString() raceDate?: string;
+  /**
+   * F-024 race manual input — raceDate là free-format string.
+   * Chấp nhận cả ISO date ("2026-06-15") khi pick race từ DB, lẫn free-format
+   * ("06:00 ngày 15/06/2026 đến 12:00 ngày 16/06/2026") khi admin nhập thủ công.
+   * KHÔNG dùng @IsDateString() — block trường hợp race nhiều ngày (Danny chốt B).
+   */
+  @ApiPropertyOptional() @IsOptional() @IsString() raceDate?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() raceLocation?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsDateString() signDate?: string;

@@ -198,7 +198,16 @@ export class Contract {
 
   @Prop({ index: true }) raceId: string;
   @Prop() raceName: string;
-  @Prop() raceDate: Date;
+  /**
+   * F-024 race manual input — raceDate là FREE-FORMAT STRING.
+   * Khi pick race từ DB: lưu ISO date string (vd "2026-06-15").
+   * Khi manual input: admin nhập tự do (vd "06:00 ngày 15/06/2026 đến 12:00 ngày 16/06/2026").
+   * Templates DOCX substitute {raceDate} as-is — KHÔNG format lại để giữ semantics
+   * race nhiều ngày (Danny chốt B 2026-05-11).
+   * Schema String (KHÔNG Date) để chấp nhận free-format. Backward compat: existing
+   * Date documents → Mongoose cast về ISO string khi đọc.
+   */
+  @Prop() raceDate: string;
   @Prop() raceLocation: string;
 
   @Prop() signDate: Date;

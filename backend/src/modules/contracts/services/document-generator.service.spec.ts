@@ -155,7 +155,7 @@ describe('DocumentGeneratorService — integration with real template', () => {
         bankName: 'TCB',
       },
       raceName: 'Test Race 2026',
-      raceDate: new Date(2026, 5, 1),
+      raceDate: '2026-06-01',
       raceLocation: 'Da Nang',
       lineItems: [
         {

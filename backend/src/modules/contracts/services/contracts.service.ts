@@ -291,9 +291,12 @@ export class ContractsService {
     }
 
     // Race auto-fill (US-06)
+    // F-024 race manual input: raceDate là free-format string. Khi pick race
+    // từ DB → convert Date (startDate) → ISO string. Khi admin nhập thủ công
+    // → lưu nguyên string (vd "06:00 ngày 15/06/2026 đến 12:00 ngày 16/06/2026").
     let raceFill: {
       raceName?: string;
-      raceDate?: Date;
+      raceDate?: string;
       raceLocation?: string;
     } = {};
     if (dto.raceId) {
@@ -303,11 +306,12 @@ export class ContractsService {
           .select('title startDate location')
           .lean();
         if (race) {
+          const fromDb = (race as any).startDate;
           raceFill = {
             raceName: dto.raceName ?? (race as any).title,
-            raceDate: dto.raceDate
-              ? new Date(dto.raceDate)
-              : (race as any).startDate,
+            raceDate:
+              dto.raceDate ??
+              (fromDb instanceof Date ? fromDb.toISOString() : fromDb ?? undefined),
             raceLocation: dto.raceLocation ?? (race as any).location,
           };
         }
@@ -413,7 +417,7 @@ export class ContractsService {
       client: clientInfo,
       raceId: dto.raceId,
       raceName: raceFill.raceName ?? dto.raceName,
-      raceDate: raceFill.raceDate ?? (dto.raceDate ? new Date(dto.raceDate) : undefined),
+      raceDate: raceFill.raceDate ?? dto.raceDate,
       raceLocation: raceFill.raceLocation ?? dto.raceLocation,
       signDate: dto.signDate ? new Date(dto.signDate) : undefined,
       effectiveDate: dto.effectiveDate ? new Date(dto.effectiveDate) : undefined,
@@ -560,10 +564,31 @@ export class ContractsService {
   async update(id: string, dto: UpdateContractDto): Promise<Contract> {
     const current = await this.model.findOne({ _id: id, deletedAt: null });
     if (!current) throw new NotFoundException('Contract not found');
-    if (TERMINAL_STATES.includes(current.status)) {
+    // F-024 Fix 2: chỉ DRAFT mới sửa được (BR-CM-07 lifecycle guard).
+    // Lý do: HĐ đã ACTIVE = có số HĐ chính thức + signed by đối tác → sửa
+    // = break legal integrity. Admin muốn sửa phải CANCEL HĐ rồi tạo HĐ mới.
+    // Cho phép cập nhật trạng thái (CANCELLED) qua updateContract — không
+    // qua activation flow — để giữ backward compat cho cancel action.
+    const isCancelOnlyUpdate =
+      dto.status === 'CANCELLED' && Object.keys(dto).length === 1;
+    if (current.status !== 'DRAFT' && !isCancelOnlyUpdate) {
+      throw new BadRequestException(
+        'Chỉ DRAFT mới sửa được — HĐ đã kích hoạt không thể chỉnh sửa',
+      );
+    }
+    if (TERMINAL_STATES.includes(current.status) && !isCancelOnlyUpdate) {
       throw new BadRequestException(
         'Không thể chỉnh sửa hợp đồng ở trạng thái terminal (COMPLETED/CANCELLED/...)',
       );
+    }
+
+    // Status-only cancel update — early exit.
+    if (isCancelOnlyUpdate) {
+      current.status = 'CANCELLED';
+      await current.save();
+      await this.invalidateContractsCache();
+      await this.emitAudit('contract.cancel', current, 'admin');
+      return current.toObject();
     }
 
     if (dto.lineItems) {
@@ -604,20 +629,43 @@ export class ContractsService {
     }
 
     // Apply other simple field updates
+    // F-024 race manual input: raceDate là free-format string → lưu thẳng,
+    // không qua new Date(). signDate/effectiveDate/endDate vẫn là Date.
     const simpleFields: (keyof UpdateContractDto)[] = [
       'client',
       'raceId',
       'raceName',
+      'raceDate',
       'raceLocation',
       'templateOverrides',
     ];
     for (const f of simpleFields) {
       if (dto[f] !== undefined) (current as any)[f] = dto[f];
     }
-    if (dto.raceDate) current.raceDate = new Date(dto.raceDate);
     if (dto.signDate) current.signDate = new Date(dto.signDate);
     if (dto.effectiveDate) current.effectiveDate = new Date(dto.effectiveDate);
     if (dto.endDate) current.endDate = new Date(dto.endDate);
+
+    // Handle revenueShare update (TICKET_SALES only).
+    if (dto.revenueShare && current.contractType === 'TICKET_SALES') {
+      const avgTicketPrice =
+        dto.revenueShare.avgTicketPrice && dto.revenueShare.avgTicketPrice > 0
+          ? dto.revenueShare.avgTicketPrice
+          : DEFAULT_AVG_TICKET_PRICE;
+      const estimatedFee = ContractsService.calcRevenueShareEstimatedFee({
+        estimatedAthletes: dto.revenueShare.estimatedAthletes,
+        feePerAthlete: dto.revenueShare.feePerAthlete,
+        feePercentage: dto.revenueShare.feePercentage,
+        avgTicketPrice,
+      });
+      current.revenueShare = {
+        feePercentage: dto.revenueShare.feePercentage,
+        feePerAthlete: dto.revenueShare.feePerAthlete,
+        estimatedAthletes: dto.revenueShare.estimatedAthletes,
+        avgTicketPrice,
+        estimatedFee,
+      } as any;
+    }
 
     await current.save();
     await this.invalidateContractsCache();

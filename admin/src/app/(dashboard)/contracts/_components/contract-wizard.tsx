@@ -525,14 +525,17 @@ export function ContractWizard() {
               </p>
               <RacePicker value={state.race} onChange={(v) => patch("race", v)} />
             </div>
-            {state.race && (
+            {state.race && state.race.raceId && (
               <div className="rounded-md bg-[#F3F0EB] p-3 text-sm">
                 <div>
                   <strong>Tên race:</strong> {state.race.raceName}
                 </div>
                 {state.race.raceDate && (
                   <div>
-                    <strong>Ngày:</strong> {state.race.raceDate.slice(0, 10)}
+                    <strong>Ngày:</strong>{" "}
+                    {/^\d{4}-\d{2}-\d{2}/.test(state.race.raceDate)
+                      ? state.race.raceDate.slice(0, 10)
+                      : state.race.raceDate}
                   </div>
                 )}
                 {state.race.raceLocation && (
@@ -858,12 +861,22 @@ function ReviewStep({
       {state.race && (
         <div>
           <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted,#78716C)]">
-            Giải đấu
+            Giải đấu {state.race.raceId ? "(từ DB)" : "(nhập thủ công)"}
           </div>
           <div>
             {state.race.raceName}
-            {state.race.raceDate && ` · ${state.race.raceDate.slice(0, 10)}`}
+            {state.race.raceDate &&
+              ` · ${
+                /^\d{4}-\d{2}-\d{2}/.test(state.race.raceDate)
+                  ? state.race.raceDate.slice(0, 10)
+                  : state.race.raceDate
+              }`}
           </div>
+          {state.race.raceLocation && (
+            <div className="text-xs text-[var(--text-muted,#78716C)]">
+              {state.race.raceLocation}
+            </div>
+          )}
         </div>
       )}
       <div>

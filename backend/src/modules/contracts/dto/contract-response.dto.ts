@@ -12,7 +12,7 @@ export class ContractResponseDto {
   @ApiProperty({ type: Object }) client: any;
   @ApiPropertyOptional() raceId?: string;
   @ApiPropertyOptional() raceName?: string;
-  @ApiPropertyOptional() raceDate?: Date;
+  @ApiPropertyOptional() raceDate?: string;
   @ApiPropertyOptional() raceLocation?: string;
   @ApiPropertyOptional() signDate?: Date;
   @ApiPropertyOptional() effectiveDate?: Date;

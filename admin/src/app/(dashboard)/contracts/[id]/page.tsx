@@ -25,10 +25,11 @@ import {
   updateContract,
   type ContractView,
 } from "@/lib/contracts-api";
-import { CheckCircle2, FileSignature, ReceiptText, Trash2, Repeat, ChevronLeft } from "lucide-react";
+import { CheckCircle2, FileSignature, Pencil, ReceiptText, Trash2, Repeat, ChevronLeft } from "lucide-react";
 import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
 import { useConfirm } from "@/components/confirm-dialog";
 import { DetailSkeleton } from "../_components/detail-skeleton";
+import { ContractEditDialog } from "../_components/contract-edit-dialog";
 
 export default function ContractDetailPage({
   params,
@@ -42,6 +43,8 @@ export default function ContractDetailPage({
   const [contract, setContract] = useState<ContractView | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // F-024 Fix 2 — edit dialog open state
+  const [editOpen, setEditOpen] = useState(false);
 
   // UX-01/UX-04: dynamic breadcrumb + browser tab title từ contractNumber
   const crumbLabel = contract?.contractNumber ?? (loading ? null : "Hợp đồng nháp");
@@ -173,8 +176,28 @@ export default function ContractDetailPage({
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           {isDraft && (
-            <Button onClick={activate} disabled={busy} data-testid="btn-activate">
-              <CheckCircle2 className="size-4" /> Kích hoạt
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setEditOpen(true)}
+                disabled={busy}
+                data-testid="btn-edit"
+              >
+                <Pencil className="size-4" /> Chỉnh sửa
+              </Button>
+              <Button onClick={activate} disabled={busy} data-testid="btn-activate">
+                <CheckCircle2 className="size-4" /> Kích hoạt
+              </Button>
+            </>
+          )}
+          {!isDraft && (
+            <Button
+              variant="outline"
+              disabled
+              title="Chỉ DRAFT mới sửa được — hợp đồng đã kích hoạt"
+              aria-label="Chỉnh sửa (chỉ DRAFT mới sửa được)"
+            >
+              <Pencil className="size-4" /> Chỉnh sửa
             </Button>
           )}
           {isQuotation && (
@@ -238,6 +261,16 @@ export default function ContractDetailPage({
       </div>
 
       <ContractDetailSections contract={contract} />
+
+      {/* F-024 Fix 2 — edit dialog (DRAFT only). */}
+      {editOpen && contract && (
+        <ContractEditDialog
+          contract={contract}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={(next) => setContract(next)}
+        />
+      )}
     </div>
   );
 }
