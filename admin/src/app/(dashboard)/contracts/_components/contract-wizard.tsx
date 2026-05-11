@@ -51,6 +51,7 @@ import {
 } from "@/lib/contracts-api";
 import { ChevronLeft, ChevronRight, CheckCircle2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/confirm-dialog";
 
 const STEPS = [
   "Loại & Provider",
@@ -123,6 +124,7 @@ function defaultLatePenaltyFor(type: ContractType): {
 
 export function ContractWizard() {
   const router = useRouter();
+  const confirm = useConfirm();
   const [step, setStep] = useState(1);
   const [state, setState] = useState<State>(DEFAULT_STATE);
   const [submitting, setSubmitting] = useState(false);
@@ -259,12 +261,17 @@ export function ContractWizard() {
         // Trigger activate via subsequent call — keeps API surface clean.
         const { activateContract } = await import("@/lib/contracts-api");
         const next = await activateContract(c._id);
+        // UX-03 toast post-navigate: id + duration 2500ms để clear nhanh.
         toast.success(
           `Đã tạo + kích hoạt: ${next.contractNumber ?? next._id}`,
+          { id: "create-contract", duration: 2500 },
         );
         router.push(`/contracts/${next._id}`);
       } else {
-        toast.success(`Đã tạo nháp: ${c.contractNumber ?? c._id}`);
+        toast.success(`Đã tạo nháp: ${c.contractNumber ?? c._id}`, {
+          id: "create-contract",
+          duration: 2500,
+        });
         router.push(`/contracts/${c._id}`);
       }
     } catch (err) {
@@ -274,13 +281,20 @@ export function ContractWizard() {
     }
   }
 
-  function cancel() {
+  async function cancel() {
     if (
       state.client.entityName ||
       state.lineItems.length > 0 ||
       state.revenueShare.feePercentage
     ) {
-      if (!confirm("Huỷ tạo hợp đồng? Dữ liệu sẽ mất.")) return;
+      const ok = await confirm({
+        title: "Huỷ tạo hợp đồng?",
+        description: "Dữ liệu chưa lưu sẽ bị mất. Tiếp tục huỷ?",
+        confirmText: "Huỷ tạo",
+        cancelText: "Tiếp tục soạn",
+        variant: "destructive",
+      });
+      if (!ok) return;
     }
     router.push("/contracts");
   }

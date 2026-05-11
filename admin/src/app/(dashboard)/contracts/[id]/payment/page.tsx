@@ -24,7 +24,9 @@ import {
 } from "@/lib/contracts-api";
 import { DocumentDownloadBtn } from "../../_components/document-download-btn";
 import { PaymentStatusBadge } from "../../_components/payment-status-badge";
+import { DetailSkeleton } from "../../_components/detail-skeleton";
 import { ChevronLeft } from "lucide-react";
+import { useConfirm } from "@/components/confirm-dialog";
 
 export default function PaymentPage({
   params,
@@ -32,6 +34,7 @@ export default function PaymentPage({
   params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const { id } = use(params);
   const [contract, setContract] = useState<ContractView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +101,13 @@ export default function PaymentPage({
 
   async function markPaid() {
     if (!contract) return;
-    if (!confirm("Đánh dấu đã thanh toán? Hợp đồng chuyển sang COMPLETED.")) return;
+    const ok = await confirm({
+      title: "Xác nhận thanh toán?",
+      description:
+        "Đánh dấu đã thanh toán? Hợp đồng sẽ chuyển sang trạng thái COMPLETED và không thể chỉnh sửa.",
+      confirmText: "Đã thanh toán",
+    });
+    if (!ok) return;
     setPaying(true);
     try {
       await save();
@@ -112,7 +121,7 @@ export default function PaymentPage({
     }
   }
 
-  if (loading) return <div className="p-6">Đang tải...</div>;
+  if (loading) return <DetailSkeleton sections={2} />;
   if (!contract || !auto)
     return <div className="p-6">Không tìm thấy hợp đồng</div>;
 
@@ -219,7 +228,7 @@ export default function PaymentPage({
       </div>
 
       {!isPaid && (
-        <div className="flex justify-end gap-2">
+        <div className="sticky bottom-0 -mx-6 flex justify-end gap-2 border-t border-[var(--border,#E7E2D9)] bg-white/95 px-6 py-3 backdrop-blur">
           <Button variant="outline" onClick={save} disabled={saving}>
             {saving ? "Đang lưu..." : "Lưu nháp"}
           </Button>

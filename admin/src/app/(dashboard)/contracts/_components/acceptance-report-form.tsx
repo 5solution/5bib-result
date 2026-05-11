@@ -37,6 +37,7 @@ import {
   type ContractView,
   type LineItemInput,
 } from "@/lib/contracts-api";
+import { useConfirm } from "@/components/confirm-dialog";
 
 type Props = {
   contract: ContractView;
@@ -45,6 +46,7 @@ type Props = {
 };
 
 export function AcceptanceReportForm({ contract, onUpdated }: Props) {
+  const confirm = useConfirm();
   const existing = contract.acceptanceReport;
   const isFinalized = existing?.status === "FINALIZED";
 
@@ -117,7 +119,13 @@ export function AcceptanceReportForm({ contract, onUpdated }: Props) {
   }
 
   async function finalize() {
-    if (!confirm("Hoàn thành biên bản nghiệm thu? Sẽ không thể chỉnh sửa.")) return;
+    const ok = await confirm({
+      title: "Hoàn thành biên bản nghiệm thu?",
+      description:
+        "Sau khi hoàn thành, biên bản sẽ KHÔNG thể chỉnh sửa. Tiếp tục?",
+      confirmText: "Hoàn thành",
+    });
+    if (!ok) return;
     setFinalizing(true);
     try {
       await save();
@@ -242,7 +250,7 @@ export function AcceptanceReportForm({ contract, onUpdated }: Props) {
       </div>
 
       {!isFinalized && (
-        <div className="flex justify-end gap-2">
+        <div className="sticky bottom-0 -mx-6 flex justify-end gap-2 border-t border-[var(--border,#E7E2D9)] bg-white/95 px-6 py-3 backdrop-blur">
           <Button variant="outline" onClick={save} disabled={saving}>
             {saving ? "Đang lưu..." : "Lưu nháp"}
           </Button>

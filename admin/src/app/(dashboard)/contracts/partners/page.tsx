@@ -17,14 +17,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import {
   deletePartner,
   listPartners,
   type PartnerView,
 } from "@/lib/contracts-api";
+import { useConfirm } from "@/components/confirm-dialog";
+import { SearchInput } from "../_components/search-input";
+import { EmptyState } from "../_components/empty-state";
 
 function useDebounced<T>(value: T, delay = 300): T {
   const [debounced, setDebounced] = useState(value);
@@ -37,6 +39,7 @@ function useDebounced<T>(value: T, delay = 300): T {
 
 export default function PartnersPage() {
   const router = useRouter();
+  const confirm = useConfirm();
   const [items, setItems] = useState<PartnerView[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -62,7 +65,13 @@ export default function PartnersPage() {
   }, [load]);
 
   async function handleDelete(p: PartnerView) {
-    if (!confirm(`Xoá đối tác "${p.entityName}"?`)) return;
+    const ok = await confirm({
+      title: "Xoá đối tác?",
+      description: `Xoá đối tác "${p.entityName}"? Hành động này không thể hoàn tác.`,
+      confirmText: "Xoá",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await deletePartner(p._id);
       toast.success("Đã xoá");
@@ -83,13 +92,12 @@ export default function PartnersPage() {
         </Button>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted,#78716C)]" />
-        <Input
+      <div className="max-w-md">
+        <SearchInput
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={setQ}
           placeholder="Tìm theo tên / MST"
-          className="pl-8"
+          ariaLabel="Tìm đối tác"
         />
       </div>
 
@@ -121,11 +129,25 @@ export default function PartnersPage() {
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-12 text-center text-[var(--text-muted,#78716C)]"
-                >
-                  Chưa có đối tác nào — bấm "Thêm đối tác" để bắt đầu
+                <TableCell colSpan={6} className="py-0">
+                  <EmptyState
+                    icon={Users}
+                    title="Chưa có đối tác nào"
+                    description={
+                      q
+                        ? "Không tìm thấy đối tác khớp tìm kiếm."
+                        : "Tạo đối tác đầu tiên để bắt đầu quản lý hợp đồng."
+                    }
+                    cta={
+                      !q && (
+                        <Button
+                          onClick={() => router.push("/contracts/partners/new")}
+                        >
+                          <Plus className="size-4" /> Thêm đối tác
+                        </Button>
+                      )
+                    }
+                  />
                 </TableCell>
               </TableRow>
             )}

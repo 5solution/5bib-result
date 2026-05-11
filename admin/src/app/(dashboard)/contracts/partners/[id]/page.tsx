@@ -20,6 +20,7 @@ import {
   type CreatePartnerInput,
 } from "@/lib/contracts-api";
 import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
+import { DetailSkeleton } from "../../_components/detail-skeleton";
 
 const BLANK: CreatePartnerInput = {
   entityName: "",
@@ -100,11 +101,19 @@ export default function PartnerEditPage({
     try {
       if (isNew) {
         const p = await createPartner(form);
-        toast.success("Đã tạo");
+        // UX-02: dùng id + duration 2500ms để toast tự clear trước khi user
+        // kịp click Cập nhật ở detail page mới.
+        toast.success("Đã tạo đối tác", {
+          id: "create-partner",
+          duration: 2500,
+        });
         router.push(`/contracts/partners/${p._id}`);
       } else {
         await updatePartner(id, form);
-        toast.success("Đã cập nhật");
+        toast.success("Đã cập nhật", {
+          id: "update-partner",
+          duration: 2500,
+        });
       }
     } catch (err) {
       toast.error(`Lỗi: ${(err as Error).message}`);
@@ -113,7 +122,7 @@ export default function PartnerEditPage({
     }
   }
 
-  if (loading) return <div className="p-6">Đang tải...</div>;
+  if (loading) return <DetailSkeleton sections={2} />;
 
   return (
     <div className="space-y-4 p-6">
@@ -236,11 +245,19 @@ export default function PartnerEditPage({
             />
           </div>
         </div>
-        <div className="mt-6 flex justify-end">
-          <Button onClick={submit} disabled={saving || !form.entityName.trim()}>
-            {saving ? "Đang lưu..." : isNew ? "Tạo đối tác" : "Cập nhật"}
-          </Button>
-        </div>
+      </div>
+      {/* UX-13 sticky bottom save (form dài có thể vượt 1 màn) */}
+      <div className="sticky bottom-0 -mx-6 flex justify-end gap-2 border-t border-[var(--border,#E7E2D9)] bg-white/95 px-6 py-3 backdrop-blur">
+        <Button
+          variant="outline"
+          onClick={() => router.push("/contracts/partners")}
+          disabled={saving}
+        >
+          Huỷ
+        </Button>
+        <Button onClick={submit} disabled={saving || !form.entityName.trim()}>
+          {saving ? "Đang lưu..." : isNew ? "Tạo đối tác" : "Cập nhật"}
+        </Button>
       </div>
     </div>
   );

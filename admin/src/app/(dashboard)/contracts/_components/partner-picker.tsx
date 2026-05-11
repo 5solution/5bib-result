@@ -159,7 +159,10 @@ function CreatePartnerForm({
     setSaving(true);
     try {
       const p = await createPartner(form);
-      toast.success("Đã tạo đối tác");
+      toast.success("Đã tạo đối tác", {
+        id: "create-partner",
+        duration: 2500,
+      });
       onCreated(p);
     } catch (err) {
       toast.error(`Lỗi: ${(err as Error).message}`);

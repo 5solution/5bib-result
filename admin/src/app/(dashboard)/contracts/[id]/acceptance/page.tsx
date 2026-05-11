@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AcceptanceReportForm } from "../../_components/acceptance-report-form";
 import { DocumentDownloadBtn } from "../../_components/document-download-btn";
+import { DetailSkeleton } from "../../_components/detail-skeleton";
 import { getContract, type ContractView } from "@/lib/contracts-api";
 import { ChevronLeft } from "lucide-react";
 
@@ -44,7 +45,7 @@ export default function AcceptancePage({
       .finally(() => setLoading(false));
   }, [id, router]);
 
-  if (loading) return <div className="p-6">Đang tải...</div>;
+  if (loading) return <DetailSkeleton sections={3} />;
   if (!contract) return <div className="p-6">Không tìm thấy hợp đồng</div>;
 
   return (

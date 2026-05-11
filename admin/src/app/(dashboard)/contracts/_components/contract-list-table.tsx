@@ -19,7 +19,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -29,13 +28,15 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContractStatusBadge } from "./contract-status-badge";
+import { SearchInput } from "./search-input";
+import { EmptyState } from "./empty-state";
 import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Search,
   RefreshCw,
   Eye,
+  FileText,
 } from "lucide-react";
 import {
   listContracts,
@@ -115,17 +116,15 @@ export function ContractListTable() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-64 flex-1 sm:max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted,#78716C)]" />
-          <Input
+        <div className="min-w-64 flex-1 sm:max-w-sm">
+          <SearchInput
             value={searchInput}
-            onChange={(e) => {
+            onChange={(next) => {
               setPage(1);
-              setSearchInput(e.target.value);
+              setSearchInput(next);
             }}
             placeholder="Tìm theo số HĐ / đối tác / race"
-            className="pl-8"
-            aria-label="Tìm hợp đồng"
+            ariaLabel="Tìm hợp đồng"
           />
         </div>
         <Select
@@ -203,11 +202,23 @@ export function ContractListTable() {
             )}
             {!loading && data && data.items.length === 0 && (
               <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="py-12 text-center text-[var(--text-muted,#78716C)]"
-                >
-                  Chưa có hợp đồng nào — bấm "Tạo hợp đồng mới" để bắt đầu
+                <TableCell colSpan={8} className="py-0">
+                  <EmptyState
+                    icon={FileText}
+                    title="Chưa có hợp đồng nào"
+                    description={
+                      debouncedSearch || filterType !== "ALL" || filterStatus !== "ALL"
+                        ? "Không tìm thấy HĐ khớp filter — thử bỏ filter hoặc đổi từ khoá."
+                        : "Tạo hợp đồng đầu tiên để bắt đầu quản lý."
+                    }
+                    cta={
+                      !debouncedSearch && filterType === "ALL" && filterStatus === "ALL" && (
+                        <Button onClick={() => router.push("/contracts/create")}>
+                          <Plus className="size-4" /> Tạo hợp đồng
+                        </Button>
+                      )
+                    }
+                  />
                 </TableCell>
               </TableRow>
             )}

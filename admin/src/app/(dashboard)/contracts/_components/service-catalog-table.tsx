@@ -35,8 +35,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, Pencil, Trash2, Package } from "lucide-react";
 import { toast } from "sonner";
+import { SearchInput } from "./search-input";
+import { EmptyState } from "./empty-state";
+import { useConfirm } from "@/components/confirm-dialog";
 import {
   createServiceCatalogItem,
   deleteServiceCatalogItem,
@@ -66,6 +70,7 @@ const BLANK: CreateServiceCatalogInput = {
 };
 
 export function ServiceCatalogTable() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<ServiceCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<ServiceCategory | "ALL">("ALL");
@@ -94,7 +99,13 @@ export function ServiceCatalogTable() {
   }, [category, q]);
 
   async function handleDelete(it: ServiceCatalogItem) {
-    if (!confirm(`Xoá "${it.name}"?`)) return;
+    const ok = await confirm({
+      title: "Xoá dịch vụ?",
+      description: `Xoá "${it.name}" khỏi danh mục? Các hợp đồng đã reference vẫn giữ snapshot, không bị ảnh hưởng.`,
+      confirmText: "Xoá",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await deleteServiceCatalogItem(it._id);
       toast.success("Đã xoá");
@@ -139,13 +150,12 @@ export function ServiceCatalogTable() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-64 flex-1 sm:max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted,#78716C)]" />
-          <Input
+        <div className="min-w-64 flex-1 sm:max-w-sm">
+          <SearchInput
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={setQ}
             placeholder="Tìm tên dịch vụ"
-            className="pl-8"
+            ariaLabel="Tìm dịch vụ"
           />
         </div>
         <Select
@@ -179,19 +189,30 @@ export function ServiceCatalogTable() {
           </TableHeader>
           <TableBody>
             {loading && (
-              <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center">
-                  Đang tải...
-                </TableCell>
-              </TableRow>
+              <>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 6 }).map((__, j) => (
+                      <TableCell key={j}>
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </>
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-8 text-center text-[var(--text-muted,#78716C)]"
-                >
-                  Chưa có dịch vụ nào trong danh mục
+                <TableCell colSpan={6} className="py-0">
+                  <EmptyState
+                    icon={Package}
+                    title="Chưa có dịch vụ nào"
+                    description={
+                      q || category !== "ALL"
+                        ? "Không khớp filter — thử bỏ filter / từ khoá."
+                        : 'Thêm dịch vụ đầu tiên để dùng làm reference khi tạo HĐ.'
+                    }
+                  />
                 </TableCell>
               </TableRow>
             )}

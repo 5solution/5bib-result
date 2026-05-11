@@ -25,8 +25,10 @@ import {
   updateContract,
   type ContractView,
 } from "@/lib/contracts-api";
-import { CheckCircle2, FileSignature, ReceiptText, Trash2, Repeat } from "lucide-react";
+import { CheckCircle2, FileSignature, ReceiptText, Trash2, Repeat, ChevronLeft } from "lucide-react";
 import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
+import { useConfirm } from "@/components/confirm-dialog";
+import { DetailSkeleton } from "../_components/detail-skeleton";
 
 export default function ContractDetailPage({
   params,
@@ -34,6 +36,7 @@ export default function ContractDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const { id } = use(params);
 
   const [contract, setContract] = useState<ContractView | null>(null);
@@ -81,7 +84,13 @@ export default function ContractDetailPage({
 
   async function cancelContract() {
     if (!contract) return;
-    if (!confirm("Huỷ hợp đồng này?")) return;
+    const ok = await confirm({
+      title: "Huỷ hợp đồng?",
+      description: `Huỷ HĐ ${contract.contractNumber ?? "này"}? Hành động này không thể hoàn tác.`,
+      confirmText: "Huỷ HĐ",
+      variant: "destructive",
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const next = await updateContract(contract._id, { status: "CANCELLED" } as any);
@@ -96,7 +105,13 @@ export default function ContractDetailPage({
 
   async function softDelete() {
     if (!contract) return;
-    if (!confirm("Xoá (soft) hợp đồng này?")) return;
+    const ok = await confirm({
+      title: "Xoá hợp đồng?",
+      description: `Xoá HĐ ${contract.contractNumber ?? "này"}? Có thể khôi phục từ trang admin.`,
+      confirmText: "Xoá",
+      variant: "destructive",
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await deleteContract(contract._id);
@@ -123,7 +138,7 @@ export default function ContractDetailPage({
     }
   }
 
-  if (loading) return <div className="p-6">Đang tải...</div>;
+  if (loading) return <DetailSkeleton sections={4} />;
   if (!contract) return <div className="p-6">Không tìm thấy hợp đồng</div>;
 
   const isDraft = contract.status === "DRAFT";
@@ -142,6 +157,16 @@ export default function ContractDetailPage({
 
   return (
     <div className="space-y-6 p-6">
+      {/* UX-11 back button — consistent với partner edit / acceptance / payment */}
+      <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push("/contracts")}
+        >
+          <ChevronLeft className="size-4" /> Danh sách hợp đồng
+        </Button>
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         {isDraft && (
           <Button onClick={activate} disabled={busy} data-testid="btn-activate">
