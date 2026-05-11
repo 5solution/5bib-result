@@ -113,16 +113,14 @@ export default function SolutionLayout({ children }: { children: React.ReactNode
         gtag('config', 'G-ND6VCY2B57', { send_page_view: true });
       `}</Script>
 
-      <div className="s2-root">
-        <noscript>
-          <iframe
-            src="https://www.googletagmanager.com/ns.html?id=GTM-WNJV5PD9"
-            height="0" width="0"
-            style={{ display: 'none', visibility: 'hidden' }}
-          />
-        </noscript>
-        {children}
-      </div>
+      <noscript>
+        <iframe
+          src="https://www.googletagmanager.com/ns.html?id=GTM-WNJV5PD9"
+          height="0" width="0"
+          style={{ display: 'none', visibility: 'hidden' }}
+        />
+      </noscript>
+      <div className="solution-page-root">{children}</div>
     </>
   );
 }

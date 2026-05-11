@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Reveal, Counter, Magnetic, dl, useMascotFrame, mascotSrc } from './s2-shared';
 import { S2MascotInline, S2MascotSection } from './s2-mascot-runner';
+import { MagneticText } from '@/components/ui/morphing-cursor';
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  PAIN — 3 cards "3 cách BTC đang làm. Cả 3 đều đau."                       */
@@ -40,7 +41,14 @@ export function S2Pain() {
             <h2 className="s2-h2" style={{ marginBottom: 16 }}>
               3 cách BTC đang làm hiện tại.
               <br />
-              <span className="s2-text-magenta">cả 3 đều đau.</span>
+              <MagneticText
+                text="cả 3 đều đau."
+                hoverText="5BIB fix luôn."
+                textClassName="s2-h2-magnetic"
+                hoverTextClassName="s2-h2-magnetic s2-h2-magnetic-reveal"
+                circleClassName="s2-h2-magnetic-circle"
+                circleSize={200}
+              />
             </h2>
             <p className="s2-lead">
               Mỗi mùa giải lại lặp lại cùng một câu chuyện. 5BIB sinh ra để cắt
