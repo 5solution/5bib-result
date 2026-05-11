@@ -1,0 +1,195 @@
+"use client";
+
+/**
+ * F-024 Contract detail page (PRD Screen 3).
+ *
+ * Actions:
+ *   - Activate (DRAFT → ACTIVE)
+ *   - Create acceptance report (only if ACTIVE)
+ *   - Create payment request (only if acceptance FINALIZED)
+ *   - Export DOCX / PDF
+ *   - Cancel contract
+ *   - Soft delete
+ */
+import { use, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { ContractDetailSections } from "../_components/contract-detail-sections";
+import { DocumentDownloadBtn } from "../_components/document-download-btn";
+import {
+  activateContract,
+  convertQuotation,
+  deleteContract,
+  getContract,
+  updateContract,
+  type ContractView,
+} from "@/lib/contracts-api";
+import { CheckCircle2, FileSignature, ReceiptText, Trash2, Repeat } from "lucide-react";
+
+export default function ContractDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const router = useRouter();
+  const { id } = use(params);
+
+  const [contract, setContract] = useState<ContractView | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const c = await getContract(id);
+      setContract(c);
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function activate() {
+    if (!contract) return;
+    setBusy(true);
+    try {
+      const next = await activateContract(contract._id);
+      toast.success(`Đã kích hoạt: ${next.contractNumber}`);
+      setContract(next);
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelContract() {
+    if (!contract) return;
+    if (!confirm("Huỷ hợp đồng này?")) return;
+    setBusy(true);
+    try {
+      const next = await updateContract(contract._id, { status: "CANCELLED" } as any);
+      toast.success("Đã huỷ");
+      setContract(next);
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function softDelete() {
+    if (!contract) return;
+    if (!confirm("Xoá (soft) hợp đồng này?")) return;
+    setBusy(true);
+    try {
+      await deleteContract(contract._id);
+      toast.success("Đã xoá");
+      router.push("/contracts");
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function convert() {
+    if (!contract) return;
+    setBusy(true);
+    try {
+      const next = await convertQuotation(contract._id);
+      toast.success(`Đã chuyển sang HĐ: ${next.contractNumber}`);
+      router.push(`/contracts/${next._id}`);
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) return <div className="p-6">Đang tải...</div>;
+  if (!contract) return <div className="p-6">Không tìm thấy hợp đồng</div>;
+
+  const isDraft = contract.status === "DRAFT";
+  const isActive = contract.status === "ACTIVE";
+  const acceptanceFinalized =
+    contract.acceptanceReport?.status === "FINALIZED";
+  const isQuotation =
+    contract.documentType === "QUOTATION" && contract.status === "ACCEPTED";
+  const docType = contract.documentType === "QUOTATION" ? "QUOTATION" : "CONTRACT";
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="flex flex-wrap items-center gap-2">
+        {isDraft && (
+          <Button onClick={activate} disabled={busy} data-testid="btn-activate">
+            <CheckCircle2 className="size-4" /> Kích hoạt
+          </Button>
+        )}
+        {isQuotation && (
+          <Button onClick={convert} disabled={busy}>
+            <Repeat className="size-4" /> Chuyển thành hợp đồng
+          </Button>
+        )}
+        {isActive && (
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/contracts/${contract._id}/acceptance`)}
+            data-testid="btn-create-acceptance"
+          >
+            <FileSignature className="size-4" /> Tạo biên bản nghiệm thu
+          </Button>
+        )}
+        {acceptanceFinalized && (
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/contracts/${contract._id}/payment`)}
+            data-testid="btn-create-payment"
+          >
+            <ReceiptText className="size-4" /> Tạo đề nghị thanh toán
+          </Button>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <DocumentDownloadBtn contractId={contract._id} docType={docType} />
+          {acceptanceFinalized && (
+            <DocumentDownloadBtn
+              contractId={contract._id}
+              docType="ACCEPTANCE_REPORT"
+            />
+          )}
+          {contract.paymentRequest && (
+            <DocumentDownloadBtn
+              contractId={contract._id}
+              docType="PAYMENT_REQUEST"
+            />
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={cancelContract}
+            disabled={busy || !isActive}
+          >
+            Huỷ HĐ
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={softDelete}
+            disabled={busy}
+            aria-label="Xoá"
+          >
+            <Trash2 className="size-4 text-red-600" />
+          </Button>
+        </div>
+      </div>
+
+      <ContractDetailSections contract={contract} />
+    </div>
+  );
+}

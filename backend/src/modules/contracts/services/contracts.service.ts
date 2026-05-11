@@ -38,6 +38,7 @@ import {
 } from '../constants/provider-entities';
 import { AuditLogService } from '../../audit/services/audit-log.service';
 import { Race } from '../../races/schemas/race.schema';
+import { vndAmountInWords } from '../utils/vn-num-to-words';
 
 /** Default late penalty per contract type (BR-CM-06). */
 const DEFAULT_LATE_PENALTY: Record<
@@ -758,7 +759,12 @@ export class ContractsService {
       vatRate: contract.vatRate,
       vatAmount: contract.vatAmount,
       totalAmount: contract.totalAmount,
+      // Phase 2B: VN số → chữ helper. Templates dùng {totalAmountInWords}
+      // placeholder cho cụm "(Bằng chữ: ... đồng)".
+      totalAmountInWords: vndAmountInWords(contract.totalAmount),
       paymentTerms: contract.paymentTerms,
+      // Phase 2B: `articles` array có { key, title, body } để template
+      // docxtemplater dùng loop `{#articles}{title}{body}{/articles}`.
       articles,
       acceptanceReport: contract.acceptanceReport ?? null,
       paymentRequest: contract.paymentRequest ?? null,

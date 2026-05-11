@@ -33,6 +33,10 @@ import {
   KeyRound,
   RefreshCw,
   Film,
+  FileSignature,
+  Building2,
+  Package,
+  ScrollText,
 } from "lucide-react";
 
 export type NavItem = {
@@ -84,6 +88,15 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "banner", href: "/sponsored", label: "Banner Zone", icon: Megaphone },
       { id: "certificates", href: "/certificates", label: "Certificates", icon: Award },
       { id: "result-images", href: "/result-image-stats", label: "Ảnh kết quả", icon: ImageIcon },
+    ],
+  },
+  {
+    label: "Hợp đồng",
+    items: [
+      { id: "contracts", href: "/contracts", label: "Danh sách hợp đồng", icon: FileSignature, badge: "NEW" },
+      { id: "contracts-partners", href: "/contracts/partners", label: "Đối tác", icon: Building2 },
+      { id: "contracts-services", href: "/contracts/services", label: "Danh mục dịch vụ", icon: Package },
+      { id: "contracts-templates", href: "/contracts/templates", label: "Mẫu hợp đồng", icon: ScrollText },
     ],
   },
   {
