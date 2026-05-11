@@ -625,6 +625,20 @@ export function getContractTemplateDefaults(
   );
 }
 
+/**
+ * F-024 UX-39 v2 — Reset DB override → return default content.
+ * Backend `POST /api/contract-templates/:type/reset` deletes the override doc;
+ * subsequent `getContractTemplate` will fall back to defaults.
+ */
+export function resetContractTemplate(
+  type: ContractType,
+): Promise<{ success: true }> {
+  return jsonFetch<{ success: true }>(
+    `/api/contract-templates/${encodeURIComponent(type)}/reset`,
+    { method: "POST" },
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers — pure VND format + line item calc (mirror backend BR-CM-04)
 // ────────────────────────────────────────────────────────────────────────────
