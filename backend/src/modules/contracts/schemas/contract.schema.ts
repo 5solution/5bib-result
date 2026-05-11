@@ -148,7 +148,7 @@ export const PaymentRequestSchema =
 export class Contract {
   _id: Types.ObjectId;
 
-  @Prop({ index: true, sparse: true, unique: false })
+  @Prop({ index: true, sparse: true, unique: true })
   contractNumber: string;
 
   @Prop({

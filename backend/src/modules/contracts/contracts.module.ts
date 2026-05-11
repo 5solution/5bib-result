@@ -13,6 +13,7 @@ import {
 import { ContractsController } from './contracts.controller';
 import { PartnersController } from './partners.controller';
 import { ServiceCatalogController } from './service-catalog.controller';
+import { ContractTemplatesController } from './contract-templates.controller';
 import { ContractsService } from './services/contracts.service';
 import { PartnersService } from './services/partners.service';
 import { ServiceCatalogService } from './services/service-catalog.service';
@@ -45,6 +46,7 @@ import { AuditModule } from '../audit/audit.module';
     ContractsController,
     PartnersController,
     ServiceCatalogController,
+    ContractTemplatesController,
   ],
   providers: [
     ContractsService,
