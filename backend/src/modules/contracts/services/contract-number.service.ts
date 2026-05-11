@@ -48,8 +48,12 @@ export class ContractNumberService {
       .toUpperCase()
       .slice(0, 16) || 'CLIENT';
     const provider = providerId === '5SOLUTION' ? '5SOLUTION' : '5BIB';
+    // F-024 BUG-002 fix — disambiguate khi 2 HĐ cùng ngày + cùng client + cùng
+    // provider. Sequence > 1 → append "-N" suffix sau provider tag. seq=1
+    // giữ format gốc để backward compat với HĐ đầu tiên trong ngày.
+    const seqSuffix = sequence > 1 ? `-${sequence}` : '';
     return {
-      contractNumber: `${dd}.${mm}/${yyyy}/HDDV/${clean}-${provider}`,
+      contractNumber: `${dd}.${mm}/${yyyy}/HDDV/${clean}-${provider}${seqSuffix}`,
       sequence,
     };
   }

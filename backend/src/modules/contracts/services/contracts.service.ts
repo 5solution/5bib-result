@@ -715,12 +715,43 @@ export class ContractsService {
           .replace(/[^A-Za-z0-9]/g, '')
           .toUpperCase()
           .slice(0, 8) || 'CLIENT';
-      const { contractNumber } = await this.numberService.generateNumber(
-        signDate,
-        clientShort,
-        c.providerId,
-      );
-      c.contractNumber = contractNumber;
+      // F-024 BUG-002 fix — retry tối đa 5 lần nếu Redis sequence + seq
+      // suffix vẫn collide với HĐ cũ trong DB (e.g. dev/test data residue).
+      // Pre-check uniqueness via model.exists() khi available (production).
+      // Trong jest unit tests mock model không expose .exists, skip pre-check
+      // và rely trên seq suffix uniqueness (Redis INCR atomic đảm bảo).
+      let attempts = 0;
+      while (attempts < 5) {
+        const { contractNumber } = await this.numberService.generateNumber(
+          signDate,
+          clientShort,
+          c.providerId,
+        );
+        let collides = false;
+        if (typeof (this.model as any).exists === 'function') {
+          try {
+            const found = await (this.model as any).exists({ contractNumber });
+            collides = !!found;
+          } catch {
+            collides = false;
+          }
+        }
+        if (!collides) {
+          c.contractNumber = contractNumber;
+          break;
+        }
+        this.logger.warn(
+          `[contracts] contractNumber collision ${contractNumber} — retry ${
+            attempts + 1
+          }/5`,
+        );
+        attempts++;
+      }
+      if (!c.contractNumber) {
+        throw new BadRequestException(
+          'Không tạo được số HĐ unique sau 5 lần thử — vui lòng thử lại',
+        );
+      }
     }
     c.status = 'ACTIVE';
     await c.save();
@@ -729,6 +760,55 @@ export class ContractsService {
       contractNumber: c.contractNumber,
     });
     return c.toObject();
+  }
+
+  /**
+   * F-024 BUG-001 fix — BR-CM-08: đối tác chấp nhận Quotation (DRAFT → ACCEPTED).
+   * Chỉ Quotation status DRAFT mới accept được. Sau ACCEPTED có thể
+   * convertQuotation → tạo HĐ DRAFT mới.
+   */
+  async acceptQuotation(id: string, actorId = 'admin'): Promise<Contract> {
+    const q = await this.model.findOne({ _id: id, deletedAt: null });
+    if (!q) throw new NotFoundException('Quotation not found');
+    if (q.documentType !== 'QUOTATION') {
+      throw new BadRequestException('Chỉ áp dụng cho QUOTATION');
+    }
+    if (q.status !== 'DRAFT') {
+      throw new BadRequestException(
+        `Chỉ DRAFT Quotation mới chấp nhận được — current status=${q.status}`,
+      );
+    }
+    q.status = 'ACCEPTED';
+    await q.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('quotation.accept', q, actorId);
+    return q.toObject();
+  }
+
+  /**
+   * F-024 BUG-001 fix — đối tác từ chối Quotation (DRAFT → REJECTED).
+   * Terminal state — không thể uncoverged.
+   */
+  async rejectQuotation(
+    id: string,
+    actorId = 'admin',
+    reason?: string,
+  ): Promise<Contract> {
+    const q = await this.model.findOne({ _id: id, deletedAt: null });
+    if (!q) throw new NotFoundException('Quotation not found');
+    if (q.documentType !== 'QUOTATION') {
+      throw new BadRequestException('Chỉ áp dụng cho QUOTATION');
+    }
+    if (q.status !== 'DRAFT') {
+      throw new BadRequestException(
+        `Chỉ DRAFT Quotation mới từ chối được — current status=${q.status}`,
+      );
+    }
+    q.status = 'REJECTED';
+    await q.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('quotation.reject', q, actorId, { reason });
+    return q.toObject();
   }
 
   /**
@@ -954,6 +1034,18 @@ export class ContractsService {
       contract.templateOverrides ?? {},
     );
     const signDate = contract.signDate ?? new Date();
+    // F-024 BUG-003 fix — TICKET_SALES template đã có sẵn cụm "Giải chạy "
+    // ở label "BÊN A: ...", nếu raceName cũng có prefix "Giải chạy" sẽ
+    // render thành "Giải chạy Giải chạy XYZ". Strip leading variants.
+    const stripGiaiChayPrefix = (name: string): string =>
+      (name ?? '')
+        .replace(/^\s*Giải\s+chạy\s+/i, '')
+        .replace(/^\s*Race\s+/i, '')
+        .trim();
+    const raceName =
+      contract.contractType === 'TICKET_SALES'
+        ? stripGiaiChayPrefix(contract.raceName ?? '')
+        : contract.raceName ?? '';
     return {
       contractNumber: contract.contractNumber ?? '',
       contractType: contract.contractType,
@@ -961,12 +1053,15 @@ export class ContractsService {
       signDate,
       signDay: String(signDate.getDate()).padStart(2, '0'),
       signMonth: String(signDate.getMonth() + 1).padStart(2, '0'),
-      signYear: signDate.getFullYear(),
+      // F-024 BUG-005 fix — year là 4-digit string nguyên raw (KHÔNG dùng
+      // toLocaleString vi-VN vì sanitizeContext sẽ format `2026` thành
+      // `2.026`). Pass string thì sanitizeContext giữ nguyên (không re-format).
+      signYear: String(signDate.getFullYear()),
       effectiveDate: contract.effectiveDate,
       endDate: contract.endDate,
       provider: contract.provider,
       client: contract.client,
-      raceName: contract.raceName ?? '',
+      raceName,
       raceDate: contract.raceDate,
       raceLocation: contract.raceLocation ?? '',
       lineItems: contract.lineItems ?? [],
@@ -1007,7 +1102,7 @@ export class ContractsService {
         ? String(new Date(contract.paymentRequest.requestDate).getMonth() + 1).padStart(2, '0')
         : '',
       requestYear: contract.paymentRequest
-        ? new Date(contract.paymentRequest.requestDate).getFullYear()
+        ? String(new Date(contract.paymentRequest.requestDate).getFullYear())
         : '',
       generatedAt: new Date(),
     };
@@ -1032,6 +1127,24 @@ export class ContractsService {
       c.contractType === 'TICKET_SALES'
     ) {
       throw new BadRequestException(TICKET_SALES_NO_ACCEPTANCE_MESSAGE);
+    }
+
+    // F-024 BUG-006 fix — pre-condition checks per docType. Block sớm
+    // tránh render template thiếu data → output blank fields.
+    if (docType === 'ACCEPTANCE_REPORT' && !c.acceptanceReport) {
+      throw new BadRequestException(
+        'Chưa có Biên bản nghiệm thu — vui lòng tạo trước khi xuất tài liệu',
+      );
+    }
+    if (docType === 'PAYMENT_REQUEST' && !c.paymentRequest) {
+      throw new BadRequestException(
+        'Chưa có Đề nghị thanh toán — vui lòng tạo trước khi xuất tài liệu',
+      );
+    }
+    if (docType === 'CONTRACT' && c.status === 'DRAFT') {
+      throw new BadRequestException(
+        'HĐ ở trạng thái DRAFT — vui lòng kích hoạt (ACTIVE) trước khi xuất bản chính thức',
+      );
     }
 
     const templateName =

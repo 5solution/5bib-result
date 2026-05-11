@@ -18,14 +18,16 @@ import { Button } from "@/components/ui/button";
 import { ContractDetailSections } from "../_components/contract-detail-sections";
 import { DocumentDownloadBtn } from "../_components/document-download-btn";
 import {
+  acceptQuotation,
   activateContract,
   convertQuotation,
   deleteContract,
   getContract,
+  rejectQuotation,
   updateContract,
   type ContractView,
 } from "@/lib/contracts-api";
-import { CheckCircle2, FileSignature, Pencil, ReceiptText, Trash2, Repeat, ChevronLeft } from "lucide-react";
+import { CheckCircle2, FileSignature, Pencil, ReceiptText, Trash2, Repeat, ChevronLeft, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
 import { useConfirm } from "@/components/confirm-dialog";
 import { DetailSkeleton } from "../_components/detail-skeleton";
@@ -141,6 +143,50 @@ export default function ContractDetailPage({
     }
   }
 
+  // F-024 BUG-001 — đối tác chấp nhận báo giá (Quotation DRAFT → ACCEPTED)
+  async function handleAcceptQuotation() {
+    if (!contract) return;
+    const ok = await confirm({
+      title: "Đối tác chấp nhận báo giá?",
+      description:
+        "Xác nhận đối tác đã chấp nhận báo giá. Sau khi chấp nhận có thể chuyển thành Hợp đồng.",
+      confirmText: "Chấp nhận",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const next = await acceptQuotation(contract._id);
+      toast.success("Đã ghi nhận đối tác chấp nhận báo giá");
+      setContract(next);
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRejectQuotation() {
+    if (!contract) return;
+    const ok = await confirm({
+      title: "Đối tác từ chối báo giá?",
+      description:
+        "Xác nhận đối tác đã từ chối. Báo giá sẽ chuyển sang REJECTED và KHÔNG thể chuyển thành hợp đồng.",
+      confirmText: "Từ chối",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const next = await rejectQuotation(contract._id);
+      toast.success("Đã ghi nhận đối tác từ chối báo giá");
+      setContract(next);
+    } catch (err) {
+      toast.error(`Lỗi: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) return <DetailSkeleton sections={4} />;
   if (!contract) return <div className="p-6">Không tìm thấy hợp đồng</div>;
 
@@ -148,8 +194,12 @@ export default function ContractDetailPage({
   const isActive = contract.status === "ACTIVE";
   const acceptanceFinalized =
     contract.acceptanceReport?.status === "FINALIZED";
-  const isQuotation =
-    contract.documentType === "QUOTATION" && contract.status === "ACCEPTED";
+  // F-024 BUG-009 — phân biệt Quotation states để hiển thị button đúng:
+  //  - DRAFT (mới tạo) → đối tác chấp nhận / từ chối
+  //  - ACCEPTED → admin chuyển thành Hợp đồng
+  const isQuotationDoc = contract.documentType === "QUOTATION";
+  const isQuotationDraft = isQuotationDoc && contract.status === "DRAFT";
+  const isQuotation = isQuotationDoc && contract.status === "ACCEPTED";
   const docType = contract.documentType === "QUOTATION" ? "QUOTATION" : "CONTRACT";
   // F-024 Phase 3 finalize: TICKET_SALES dùng đối soát doanh thu (BR-CM-08),
   // KHÔNG dùng Biên bản nghiệm thu → ẩn toàn bộ flow acceptance.
@@ -185,9 +235,32 @@ export default function ContractDetailPage({
               >
                 <Pencil className="size-4" /> Chỉnh sửa
               </Button>
-              <Button onClick={activate} disabled={busy} data-testid="btn-activate">
-                <CheckCircle2 className="size-4" /> Kích hoạt
-              </Button>
+              {/* F-024 BUG-009 — "Kích hoạt" chỉ áp dụng cho CONTRACT, không cho QUOTATION.
+                  QUOTATION DRAFT phải đi qua flow accept/reject của đối tác. */}
+              {!isQuotationDoc && (
+                <Button onClick={activate} disabled={busy} data-testid="btn-activate">
+                  <CheckCircle2 className="size-4" /> Kích hoạt
+                </Button>
+              )}
+              {isQuotationDraft && (
+                <>
+                  <Button
+                    onClick={handleAcceptQuotation}
+                    disabled={busy}
+                    data-testid="btn-accept-quotation"
+                  >
+                    <ThumbsUp className="size-4" /> Đối tác chấp nhận báo giá
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleRejectQuotation}
+                    disabled={busy}
+                    data-testid="btn-reject-quotation"
+                  >
+                    <ThumbsDown className="size-4" /> Đối tác từ chối
+                  </Button>
+                </>
+              )}
             </>
           )}
           {!isDraft && (

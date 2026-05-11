@@ -423,6 +423,25 @@ export function convertQuotation(id: string): Promise<ContractView> {
   );
 }
 
+/** F-024 BUG-001 — đối tác chấp nhận báo giá (Quotation DRAFT → ACCEPTED) */
+export function acceptQuotation(id: string): Promise<ContractView> {
+  return jsonFetch<ContractView>(
+    `/api/contracts/${encodeURIComponent(id)}/accept-quotation`,
+    { method: "POST" },
+  );
+}
+
+/** F-024 BUG-001 — đối tác từ chối báo giá (Quotation DRAFT → REJECTED) */
+export function rejectQuotation(
+  id: string,
+  reason?: string,
+): Promise<ContractView> {
+  return jsonFetch<ContractView>(
+    `/api/contracts/${encodeURIComponent(id)}/reject-quotation`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+  );
+}
+
 export interface AcceptanceReportInput {
   reportDate?: string;
   actualValues: Omit<AcceptanceActualItem, "amount">[];

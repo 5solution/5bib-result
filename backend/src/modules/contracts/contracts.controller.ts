@@ -87,6 +87,32 @@ export class ContractsController {
     return this.contracts.activate(id);
   }
 
+  @Post(':id/accept-quotation')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Đối tác chấp nhận báo giá — Quotation DRAFT → ACCEPTED',
+  })
+  @ApiResponse({ status: 200, type: ContractResponseDto })
+  async acceptQuotation(@Param('id') id: string, @Req() req: any) {
+    const userId = req?.user?.sub ?? req?.user?.email ?? 'admin';
+    return this.contracts.acceptQuotation(id, userId);
+  }
+
+  @Post(':id/reject-quotation')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Đối tác từ chối báo giá — Quotation DRAFT → REJECTED',
+  })
+  @ApiResponse({ status: 200, type: ContractResponseDto })
+  async rejectQuotation(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() req: any,
+  ) {
+    const userId = req?.user?.sub ?? req?.user?.email ?? 'admin';
+    return this.contracts.rejectQuotation(id, userId, body?.reason);
+  }
+
   @Post(':id/convert')
   @HttpCode(200)
   @ApiOperation({ summary: 'Convert ACCEPTED quotation → new contract' })
