@@ -1,17 +1,17 @@
 "use client";
 
 /**
- * F-024 Templates page — UX-39 v2 REWRITE.
+ * F-024 Templates page — UX-39 v3 REWRITE (Phương án 3).
  *
- * Rich text editor giống Team Management contract editor:
- *   - TipTap toolbar (B/I/U, H1/H2, align, font, size, list, table, insert variable, HTML view)
- *   - 2-column layout: editor (left) + live preview (right)
- *   - Toggle "Xem với dữ liệu mẫu" cho preview
- *   - 4 tab contract type × 11 article per tab (accordion expandable)
- *   - Per-article "Hoàn tác Điều này" + global "Reset toàn bộ"
- *   - Save flow: diff vs default → omit identical, PATCH overrides only
+ * Layout 2 tầng:
+ *   Tier 1: 4 tab contract type (Tính giờ / Racekit / Vận hành / Bán vé)
+ *   Tier 2: 2 tab content
+ *     - "Xem mẫu"  → Audit Viewer mammoth (Task 1) + Upload DOCX btn (Task 2)
+ *     - "Sửa nội dung" → Rich Editor articles (UX-39 v2 KEEP) + Phụ lục table
+ *                        editor (Task 3)
  *
- * Replaces v1 (commit adbc507 textarea version).
+ * Phương án B (mammoth roundtrip) chỉ đạt 88% fidelity, KHÔNG đạt 95%+ yêu
+ * cầu → switch sang viewer mode (fidelity 100% vì KHÔNG roundtrip).
  */
 
 import dynamic from "next/dynamic";
@@ -45,6 +45,9 @@ import {
 import ContractTemplatePreview, {
   type PreviewArticle,
 } from "../_components/contract-template-preview";
+import TemplatePreviewViewer from "../_components/template-preview-viewer";
+import TemplateUploadBtn from "../_components/template-upload-btn";
+import TemplateLineItemsEditor from "../_components/template-line-items-editor";
 
 // Editor is TipTap — must be client-only.
 const ContractTemplateRichEditor = dynamic(
@@ -72,9 +75,9 @@ export default function TemplatesPage(): React.ReactElement {
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Mẫu hợp đồng</h1>
         <p className="text-sm text-[var(--text-muted,#78716C)]">
-          Soạn thảo điều khoản với rich editor — chèn placeholder dạng{" "}
-          <code className="rounded bg-[#F3F0EB] px-1">{"{varName}"}</code> để
-          render động khi xuất DOCX. Preview bên phải xem trước với dữ liệu mẫu.
+          Audit Viewer hiển thị nguyên bản DOCX (fidelity 100%) — upload mẫu
+          mới qua Word desktop. Editor articles + Phụ lục để override khi
+          tạo HĐ.
         </p>
       </header>
       <Tabs defaultValue="TIMING">
@@ -87,7 +90,7 @@ export default function TemplatesPage(): React.ReactElement {
         </TabsList>
         {TYPES.map((t) => (
           <TabsContent key={t.id} value={t.id}>
-            <TemplateEditor type={t.id} />
+            <TypeTabContent type={t.id} />
           </TabsContent>
         ))}
       </Tabs>
@@ -95,22 +98,58 @@ export default function TemplatesPage(): React.ReactElement {
   );
 }
 
-function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
+function TypeTabContent({ type }: { type: ContractType }): React.ReactElement {
+  // refreshKey bumps after a successful upload → audit viewer reload.
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+
+  return (
+    <Tabs defaultValue="preview" className="mt-3">
+      <TabsList>
+        <TabsTrigger value="preview">Xem mẫu (DOCX nguyên bản)</TabsTrigger>
+        <TabsTrigger value="edit">Sửa nội dung (override)</TabsTrigger>
+      </TabsList>
+      <TabsContent value="preview" className="space-y-3">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border,#E7E2D9)] bg-white px-4 py-2.5">
+          <div>
+            <p className="text-sm font-semibold">
+              Audit Viewer — fidelity 100% so DOCX gốc
+            </p>
+            <p className="text-xs text-[var(--text-muted,#78716C)]">
+              Tải lên file .docx (max 10MB) sau khi sửa header/footer/Bên
+              A/B/signature ở Word desktop. Mẫu cũ tự động backup.
+            </p>
+          </div>
+          <TemplateUploadBtn
+            type={type}
+            onUploaded={() => setPreviewRefreshKey((k) => k + 1)}
+          />
+        </div>
+        <div className="overflow-hidden rounded-lg border border-[var(--border,#E7E2D9)] bg-white shadow-sm">
+          <TemplatePreviewViewer type={type} refreshKey={previewRefreshKey} />
+        </div>
+      </TabsContent>
+      <TabsContent value="edit" className="space-y-4">
+        <ArticlesEditor type={type} />
+        <TemplateLineItemsEditor type={type} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+/**
+ * UX-39 v2 — rich editor articles section (kept). Renamed from TemplateEditor
+ * → ArticlesEditor để rõ scope chỉ articles, không phải toàn template page.
+ */
+function ArticlesEditor({ type }: { type: ContractType }): React.ReactElement {
   const confirm = useConfirm();
   const [defaults, setDefaults] = useState<DefaultArticleSection[]>([]);
   const [loading, setLoading] = useState(true);
-  /** Per-article current content (plain text — DB format). */
   const [editorValues, setEditorValues] = useState<Record<string, string>>({});
-  /** Trigger forced reload of editor content (revert button). Increment to fire. */
   const [resetSignals, setResetSignals] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [withSampleData, setWithSampleData] = useState(true);
-  /** Which article is currently being edited. Default: first one expanded. */
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
-  // ────────────────────────────────────────────────────────────────────────
-  // Load defaults + DB override on tab mount.
-  // ────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     setLoading(true);
     Promise.all([
@@ -125,7 +164,6 @@ function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
           initial[art.key] = overrides[art.key] ?? art.body;
         }
         setEditorValues(initial);
-        // Auto-expand first article so admin sees editor immediately.
         if (def.articles.length > 0) setActiveKey(def.articles[0].key);
       })
       .catch((err) => toast.error(`Lỗi tải: ${(err as Error).message}`))
@@ -144,9 +182,6 @@ function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
 
   const dirtyCount = Object.keys(editorValues).filter((k) => isDirty(k)).length;
 
-  // ────────────────────────────────────────────────────────────────────────
-  // Save: diff vs default → only PATCH non-identical (BR-CM-11 storage rule).
-  // ────────────────────────────────────────────────────────────────────────
   async function save(): Promise<void> {
     setSaving(true);
     try {
@@ -175,7 +210,7 @@ function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
 
   async function resetAll(): Promise<void> {
     const ok = await confirm({
-      title: "Reset toàn bộ?",
+      title: "Reset toàn bộ điều khoản?",
       description:
         "Tất cả tùy chỉnh trên 11 điều khoản của loại hợp đồng này sẽ bị xóa khỏi DB và quay về mặc định. Không thể hoàn tác.",
       confirmText: "Xác nhận reset",
@@ -187,7 +222,6 @@ function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
       const fresh: Record<string, string> = {};
       for (const art of defaults) fresh[art.key] = art.body;
       setEditorValues(fresh);
-      // Bump ALL reset signals so every editor reloads default content.
       const sigs: Record<string, number> = {};
       for (const art of defaults) {
         sigs[art.key] = (resetSignals[art.key] ?? 0) + 1;
@@ -199,9 +233,6 @@ function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
     }
   }
 
-  // ────────────────────────────────────────────────────────────────────────
-  // Build preview articles using current editor values.
-  // ────────────────────────────────────────────────────────────────────────
   const previewArticles: PreviewArticle[] = useMemo(
     () =>
       defaults.map((art) => ({
@@ -223,9 +254,9 @@ function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
 
   return (
     <div className="space-y-3">
-      {/* Sticky action bar */}
       <div className="sticky top-2 z-10 flex items-center justify-between gap-3 rounded-lg border border-[var(--border,#E7E2D9)] bg-white/95 px-4 py-2 shadow-sm backdrop-blur">
         <div>
+          <p className="text-sm font-semibold">11 điều khoản hợp đồng</p>
           <p className="text-xs text-[var(--text-muted,#78716C)]">
             Sửa rich editor — để trống = giữ mặc định.{" "}
             {dirtyCount > 0 ? (
@@ -250,7 +281,6 @@ function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* ─────────── Left: editor list (accordion) ─────────── */}
         <div className="space-y-2">
           {defaults.map((art) => {
             const dirty = isDirty(art.key);
@@ -315,12 +345,11 @@ function TemplateEditor({ type }: { type: ContractType }): React.ReactElement {
           })}
         </div>
 
-        {/* ─────────── Right: live preview pane ─────────── */}
         <aside className="space-y-2 lg:sticky lg:top-20 lg:max-h-[calc(100vh-7rem)]">
           <div className="flex items-center justify-between rounded-lg border border-[var(--border,#E7E2D9)] bg-white px-3 py-2">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Eye className="size-4 text-muted-foreground" />
-              Xem trước (toàn bộ {defaults.length} điều khoản)
+              Xem trước override (toàn bộ {defaults.length} điều khoản)
             </div>
             <label className="flex cursor-pointer items-center gap-2 text-xs">
               <Switch

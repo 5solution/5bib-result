@@ -320,8 +320,38 @@ export class ContractsService {
       }
     }
 
+    // F-024 UX-39 v3 Task 3 — Pre-fill từ template defaultLineItems khi
+    // DTO không có lineItems hoặc empty. Admin có thể sửa per HĐ sau đó.
+    let sourceLineItems = dto.lineItems ?? [];
+    if (sourceLineItems.length === 0) {
+      try {
+        const defaults = await this.templateService.getLineItems(contractType);
+        if (defaults && defaults.length > 0) {
+          sourceLineItems = defaults.map((d, idx) => ({
+            stt: idx + 1,
+            description: d.description,
+            unit: d.unit,
+            quantity: d.quantity,
+            unitPrice: d.unitPrice,
+            discount: d.discount ?? 0,
+            note: d.note ?? '',
+            selected: true,
+          }));
+          this.logger.log(
+            `[contracts] Pre-filled ${sourceLineItems.length} line items from template defaults for ${contractType}`,
+          );
+        }
+      } catch (err) {
+        this.logger.warn(
+          `[contracts] Pre-fill default line items failed: ${
+            (err as Error).message
+          }`,
+        );
+      }
+    }
+
     // Compute line item amounts + totals
-    const lineItems = (dto.lineItems ?? []).map((li) => ({
+    const lineItems = sourceLineItems.map((li) => ({
       stt: li.stt,
       description: li.description,
       unit: li.unit ?? '',

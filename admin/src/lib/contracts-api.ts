@@ -640,6 +640,119 @@ export function resetContractTemplate(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// F-024 UX-39 v3 Task 1 — Preview HTML (Audit Viewer)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface TemplatePreviewHtmlResponse {
+  html: string;
+  cached: boolean;
+  templateFile: string;
+}
+
+export function getContractTemplatePreviewHtml(
+  type: ContractType,
+): Promise<TemplatePreviewHtmlResponse> {
+  return jsonFetch<TemplatePreviewHtmlResponse>(
+    `/api/contract-templates/${encodeURIComponent(type)}/preview-html`,
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// F-024 UX-39 v3 Task 2 — Upload DOCX + Versions
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface TemplateUploadResponse {
+  success: true;
+  backup?: { filename: string; size: number };
+  newFilename: string;
+  newSize: number;
+}
+
+export async function uploadContractTemplateDocx(
+  type: ContractType,
+  file: File,
+): Promise<TemplateUploadResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(
+    `/api/contract-templates/${encodeURIComponent(type)}/upload`,
+    { method: "POST", body: form, credentials: "include" },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try {
+      const json = JSON.parse(text);
+      msg = json?.message ?? json?.error ?? text;
+    } catch {
+      // not JSON
+    }
+    throw new Error(`Upload thất bại (${res.status}): ${msg}`);
+  }
+  return res.json() as Promise<TemplateUploadResponse>;
+}
+
+export interface TemplateVersion {
+  filename: string;
+  size: number;
+  createdAt: string; // ISO
+}
+
+export function listContractTemplateVersions(
+  type: ContractType,
+): Promise<{ versions: TemplateVersion[] }> {
+  return jsonFetch<{ versions: TemplateVersion[] }>(
+    `/api/contract-templates/${encodeURIComponent(type)}/versions`,
+  );
+}
+
+export function restoreContractTemplateVersion(
+  type: ContractType,
+  filename: string,
+): Promise<{ success: true; restoredFrom: string }> {
+  return jsonFetch<{ success: true; restoredFrom: string }>(
+    `/api/contract-templates/${encodeURIComponent(
+      type,
+    )}/restore/${encodeURIComponent(filename)}`,
+    { method: "POST" },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// F-024 UX-39 v3 Task 3 — Default Line Items
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface DefaultLineItem {
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  note?: string;
+}
+
+export function getContractTemplateLineItems(
+  type: ContractType,
+): Promise<{ defaultLineItems: DefaultLineItem[] }> {
+  return jsonFetch<{ defaultLineItems: DefaultLineItem[] }>(
+    `/api/contract-templates/${encodeURIComponent(type)}/line-items`,
+  );
+}
+
+export function updateContractTemplateLineItems(
+  type: ContractType,
+  defaultLineItems: DefaultLineItem[],
+): Promise<{ contractType: string; defaultLineItems: DefaultLineItem[] }> {
+  return jsonFetch<{
+    contractType: string;
+    defaultLineItems: DefaultLineItem[];
+  }>(`/api/contract-templates/${encodeURIComponent(type)}/line-items`, {
+    method: "PATCH",
+    body: JSON.stringify({ defaultLineItems }),
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Helpers — pure VND format + line item calc (mirror backend BR-CM-04)
 // ────────────────────────────────────────────────────────────────────────────
 
