@@ -135,6 +135,53 @@ describe('ContractsService — acceptance report (BR-CM-09)', () => {
     });
   });
 
+  describe('F-024 Phase 3 finalize: TICKET_SALES disable Acceptance Report', () => {
+    it('upsertAcceptanceReport throws BadRequestException for TICKET_SALES', async () => {
+      const c = buildContract({ contractType: 'TICKET_SALES' });
+      mockModel.findOne.mockResolvedValue(c);
+      await expect(
+        svc.upsertAcceptanceReport('contract-123', {
+          actualValues: [
+            { stt: 1, description: 'x', quantity: 1, unitPrice: 1_000_000 },
+          ],
+        }),
+      ).rejects.toThrow(
+        /TICKET_SALES không sử dụng Biên bản nghiệm thu/,
+      );
+    });
+
+    it('finalizeAcceptanceReport throws BadRequestException for TICKET_SALES', async () => {
+      const c = buildContract({
+        contractType: 'TICKET_SALES',
+        acceptanceReport: {
+          status: 'DRAFT',
+          actualValues: [],
+          actualSubtotal: 0,
+          actualVatAmount: 0,
+          actualTotalWithVat: 0,
+          contractSubtotal: 0,
+          diffAmount: 0,
+          advancePaid: 0,
+          remainingBalance: 0,
+          verdict: 'ACCEPTED',
+          notes: '',
+        },
+      });
+      mockModel.findOne.mockResolvedValue(c);
+      await expect(svc.finalizeAcceptanceReport('contract-123')).rejects.toThrow(
+        /TICKET_SALES không sử dụng Biên bản nghiệm thu/,
+      );
+    });
+
+    it('generateDocument throws BadRequestException for ACCEPTANCE_REPORT + TICKET_SALES', async () => {
+      const c = buildContract({ contractType: 'TICKET_SALES' });
+      mockModel.findOne.mockResolvedValue(c);
+      await expect(
+        svc.generateDocument('contract-123', 'ACCEPTANCE_REPORT'),
+      ).rejects.toThrow(/TICKET_SALES không sử dụng Biên bản nghiệm thu/);
+    });
+  });
+
   describe('BR-CM-09: remainingBalance < 0 (excess advance — provider owes client)', () => {
     it('flagged when actual << contract advance paid', async () => {
       // contract: subtotal 33.5M, advance 18.09M

@@ -50,16 +50,21 @@ export function DocumentDownloadBtn({
 }: Props) {
   const [busy, setBusy] = useState(false);
 
-  async function trigger(format: "DOCX" | "PDF") {
+  // F-024 Phase 3 finalize: QUOTATION = Excel (.xlsx); PDF không tồn tại
+  // (Excel template-based render, không qua LibreOffice). Các docType khác
+  // vẫn DOCX + optional PDF.
+  const isQuotation = docType === "QUOTATION";
+
+  async function trigger(format: "DOCX" | "PDF" | "XLSX") {
     setBusy(true);
     try {
       const res = await generateDocument(contractId, docType);
-      const key = format === "DOCX" ? res.docxKey : res.pdfKey;
+      const key = format === "PDF" ? res.pdfKey : res.docxKey;
       if (!key) {
         toast.error(
           format === "PDF"
             ? "Server không tạo được PDF (LibreOffice fail). Hãy tải DOCX."
-            : "Lỗi server — không có DOCX key",
+            : "Lỗi server — không có file key",
         );
         return;
       }
@@ -78,6 +83,24 @@ export function DocumentDownloadBtn({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (isQuotation) {
+    // Quotation = Excel only, không cần dropdown.
+    return (
+      <Button
+        variant={variant === "primary" ? "default" : "outline"}
+        disabled={busy}
+        onClick={() => trigger("XLSX")}
+      >
+        {busy ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <FileText className="size-4" />
+        )}
+        Xuất {DOCTYPE_LABEL[docType]} (Excel)
+      </Button>
+    );
   }
 
   return (

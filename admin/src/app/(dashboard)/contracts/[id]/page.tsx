@@ -123,6 +123,12 @@ export default function ContractDetailPage({
   const isQuotation =
     contract.documentType === "QUOTATION" && contract.status === "ACCEPTED";
   const docType = contract.documentType === "QUOTATION" ? "QUOTATION" : "CONTRACT";
+  // F-024 Phase 3 finalize: TICKET_SALES dùng đối soát doanh thu (BR-CM-08),
+  // KHÔNG dùng Biên bản nghiệm thu → ẩn toàn bộ flow acceptance.
+  const supportsAcceptance = contract.contractType !== "TICKET_SALES";
+  // Payment Request flow của TICKET_SALES (nếu có) sẽ pass-through theo
+  // acceptance hiện tại (Phase 3 không thay đổi). Hiển thị download Payment
+  // theo paymentRequest có hay không như cũ.
 
   return (
     <div className="space-y-6 p-6">
@@ -137,7 +143,7 @@ export default function ContractDetailPage({
             <Repeat className="size-4" /> Chuyển thành hợp đồng
           </Button>
         )}
-        {isActive && (
+        {isActive && supportsAcceptance && (
           <Button
             variant="outline"
             onClick={() => router.push(`/contracts/${contract._id}/acceptance`)}
@@ -146,7 +152,7 @@ export default function ContractDetailPage({
             <FileSignature className="size-4" /> Tạo biên bản nghiệm thu
           </Button>
         )}
-        {acceptanceFinalized && (
+        {acceptanceFinalized && supportsAcceptance && (
           <Button
             variant="outline"
             onClick={() => router.push(`/contracts/${contract._id}/payment`)}
@@ -157,7 +163,7 @@ export default function ContractDetailPage({
         )}
         <div className="ml-auto flex items-center gap-2">
           <DocumentDownloadBtn contractId={contract._id} docType={docType} />
-          {acceptanceFinalized && (
+          {acceptanceFinalized && supportsAcceptance && (
             <DocumentDownloadBtn
               contractId={contract._id}
               docType="ACCEPTANCE_REPORT"

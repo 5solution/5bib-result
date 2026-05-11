@@ -27,10 +27,22 @@ export default function AcceptancePage({
 
   useEffect(() => {
     getContract(id)
-      .then(setContract)
+      .then((c) => {
+        // F-024 Phase 3 finalize: TICKET_SALES không có Biên bản nghiệm thu
+        // (dùng đối soát doanh thu BR-CM-08). Defense-in-depth — redirect về
+        // detail page tránh user mở trực tiếp URL.
+        if (c.contractType === "TICKET_SALES") {
+          toast.error(
+            "TICKET_SALES không sử dụng Biên bản nghiệm thu — dùng quy trình đối soát thay thế",
+          );
+          router.replace(`/contracts/${c._id}`);
+          return;
+        }
+        setContract(c);
+      })
       .catch((err) => toast.error(`Lỗi: ${err.message}`))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, router]);
 
   if (loading) return <div className="p-6">Đang tải...</div>;
   if (!contract) return <div className="p-6">Không tìm thấy hợp đồng</div>;

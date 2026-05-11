@@ -90,7 +90,8 @@ export class GeneratedDocument {
   docType: string;
   @Prop({ required: true }) generatedAt: Date;
   @Prop({ required: true }) s3Key: string;
-  @Prop({ required: true, enum: ['DOCX', 'PDF'] }) format: string;
+  // F-024 Phase 3 finalize: XLSX cho Quotation (Excel template).
+  @Prop({ required: true, enum: ['DOCX', 'PDF', 'XLSX'] }) format: string;
   @Prop({ default: 1 }) version: number;
 }
 export const GeneratedDocumentSchema =

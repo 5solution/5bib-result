@@ -95,7 +95,9 @@ const TEMPLATE_FILE_MAP: Record<
     TIMING: 'acceptance-timing.docx',
     RACEKIT: 'acceptance-racekit.docx',
     OPERATIONS: 'acceptance-operations.docx',
-    TICKET_SALES: 'acceptance-timing.docx', // fallback
+    // TICKET_SALES: KHÔNG có template — TICKET_SALES dùng quy trình đối soát
+    // doanh thu theo kỳ (BR-CM-08), KHÔNG nghiệm thu hạng mục như fixed-price.
+    // Block tại upsertAcceptanceReport + generateDocument bằng pre-check.
   },
   PAYMENT_REQUEST: {
     TIMING: 'payment-request.docx',
@@ -104,6 +106,10 @@ const TEMPLATE_FILE_MAP: Record<
     TICKET_SALES: 'payment-request.docx',
   },
 };
+
+/** Error message dùng chung khi block Acceptance Report cho TICKET_SALES. */
+const TICKET_SALES_NO_ACCEPTANCE_MESSAGE =
+  'TICKET_SALES không sử dụng Biên bản nghiệm thu — dùng quy trình đối soát thay thế';
 
 @Injectable()
 export class ContractsService {
@@ -723,6 +729,11 @@ export class ContractsService {
   ): Promise<Contract> {
     const c = await this.model.findOne({ _id: id, deletedAt: null });
     if (!c) throw new NotFoundException('Contract not found');
+    // F-024 Phase 3 finalize: TICKET_SALES dùng đối soát doanh thu (BR-CM-08),
+    // KHÔNG dùng Biên bản nghiệm thu. Block ngay tại entry-point.
+    if (c.contractType === 'TICKET_SALES') {
+      throw new BadRequestException(TICKET_SALES_NO_ACCEPTANCE_MESSAGE);
+    }
     if (c.status !== 'ACTIVE') {
       throw new BadRequestException(
         'Contract must be ACTIVE to create acceptance report',
@@ -776,6 +787,10 @@ export class ContractsService {
   async finalizeAcceptanceReport(id: string): Promise<Contract> {
     const c = await this.model.findOne({ _id: id, deletedAt: null });
     if (!c) throw new NotFoundException('Contract not found');
+    // F-024 Phase 3 finalize: TICKET_SALES không có Acceptance Report.
+    if (c.contractType === 'TICKET_SALES') {
+      throw new BadRequestException(TICKET_SALES_NO_ACCEPTANCE_MESSAGE);
+    }
     if (!c.acceptanceReport) {
       throw new BadRequestException('Acceptance report chưa tạo');
     }
@@ -895,7 +910,27 @@ export class ContractsService {
       // docxtemplater dùng loop `{#articles}{title}{body}{/articles}`.
       articles,
       acceptanceReport: contract.acceptanceReport ?? null,
-      paymentRequest: contract.paymentRequest ?? null,
+      paymentRequest: contract.paymentRequest
+        ? {
+            ...contract.paymentRequest,
+            // VN số → chữ helper cho placeholder "(Bằng chữ: ... đồng)" trong DNTT.
+            amountDueInWords: vndAmountInWords(
+              contract.paymentRequest.amountDue ?? 0,
+            ),
+          }
+        : null,
+      // Payment Request — DNTT Mẫu cần requestDay/Month/Year tách rời để render
+      // "Hà Nội, ngày X tháng Y năm Z" (không gộp vào 1 chuỗi format vì layout
+      // DOCX khoảng cách giữa các từ là cố định).
+      requestDay: contract.paymentRequest
+        ? String(new Date(contract.paymentRequest.requestDate).getDate()).padStart(2, '0')
+        : '',
+      requestMonth: contract.paymentRequest
+        ? String(new Date(contract.paymentRequest.requestDate).getMonth() + 1).padStart(2, '0')
+        : '',
+      requestYear: contract.paymentRequest
+        ? new Date(contract.paymentRequest.requestDate).getFullYear()
+        : '',
       generatedAt: new Date(),
     };
   }
@@ -911,6 +946,15 @@ export class ContractsService {
   ): Promise<{ docxUrl: string; pdfUrl?: string; docxKey: string; pdfKey?: string }> {
     const c = await this.model.findOne({ _id: contractId, deletedAt: null });
     if (!c) throw new NotFoundException('Contract not found');
+
+    // F-024 Phase 3 finalize: block ACCEPTANCE_REPORT cho TICKET_SALES
+    // ở doc-gen layer (defense in depth — controller cũng đã filter UI).
+    if (
+      docType === 'ACCEPTANCE_REPORT' &&
+      c.contractType === 'TICKET_SALES'
+    ) {
+      throw new BadRequestException(TICKET_SALES_NO_ACCEPTANCE_MESSAGE);
+    }
 
     const templateName =
       TEMPLATE_FILE_MAP[docType]?.[c.contractType as ContractType];
@@ -928,9 +972,14 @@ export class ContractsService {
       docType,
     );
 
-    // Push entries vào generatedDocuments + tăng version
-    const existingDocx = (c.generatedDocuments ?? []).filter(
-      (g) => g.docType === docType && g.format === 'DOCX',
+    // F-024 Phase 3 finalize: QUOTATION → XLSX (Excel), others → DOCX [+ PDF].
+    // docGenerator.renderAndUpload trả về result.docxKey với extension
+    // .xlsx khi docType === 'QUOTATION' (renderQuotationExcel branch).
+    const isQuotationXlsx =
+      docType === 'QUOTATION' && result.docxKey.endsWith('.xlsx');
+    const primaryFormat: 'DOCX' | 'XLSX' = isQuotationXlsx ? 'XLSX' : 'DOCX';
+    const existingPrimary = (c.generatedDocuments ?? []).filter(
+      (g) => g.docType === docType && g.format === primaryFormat,
     );
     const existingPdf = (c.generatedDocuments ?? []).filter(
       (g) => g.docType === docType && g.format === 'PDF',
@@ -940,8 +989,8 @@ export class ContractsService {
       docType,
       generatedAt: now,
       s3Key: result.docxKey,
-      format: 'DOCX',
-      version: existingDocx.length + 1,
+      format: primaryFormat,
+      version: existingPrimary.length + 1,
     } as any);
     if (result.pdfKey) {
       c.generatedDocuments.push({
@@ -982,7 +1031,8 @@ export class ContractsService {
     // L-03 QC fix: defense-in-depth filename whitelist — chỉ chấp nhận
     // safe-chars + extension docx/pdf. Strip path components, fallback 'document'.
     const rawName = s3Key.split('/').pop() ?? 'document';
-    const filename = /^[\w.-]+\.(docx|pdf)$/i.test(rawName) ? rawName : 'document';
+    // F-024 Phase 3 finalize: thêm xlsx (Quotation Excel) vào whitelist.
+    const filename = /^[\w.-]+\.(docx|pdf|xlsx)$/i.test(rawName) ? rawName : 'document';
     return { body, contentType, filename };
   }
 
