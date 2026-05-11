@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -104,6 +105,14 @@ export class DocumentGeneratorService {
     templateName: string,
     context: RenderContext,
   ): Promise<Buffer> {
+    // L-03 QC fix: defense-in-depth filename whitelist. Caller chỉ pass
+    // server-side static TEMPLATE_FILE_MAP value; assert format tránh
+    // path traversal ngay cả khi caller bug đẩy user input vào đây.
+    if (!/^[\w-]+\.docx$/.test(templateName)) {
+      throw new BadRequestException(
+        `Invalid template name: ${templateName}`,
+      );
+    }
     const templatePath = path.join(this.templatesDir, templateName);
     if (!fs.existsSync(templatePath)) {
       throw new Error(`Template not found: ${templatePath}`);

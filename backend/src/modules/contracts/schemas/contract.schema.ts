@@ -60,6 +60,11 @@ export class RevenueShare {
   @Prop({ default: 0, min: 0, max: 100 }) feePercentage: number;
   @Prop({ default: 0, min: 0 }) feePerAthlete: number;
   @Prop({ default: 0, min: 0 }) estimatedAthletes: number;
+  // M-03 QC fix: BR-CM-15 — server-side compute estimatedFee at create/update
+  // Formula: estimatedAthletes × feePerAthlete + estimatedAthletes × avgTicketPrice × feePercentage / 100
+  @Prop({ default: 0, min: 0 }) estimatedFee: number;
+  // M-03 — snapshot avgTicketPrice used in compute (for audit trace)
+  @Prop({ default: 0, min: 0 }) avgTicketPrice: number;
 }
 export const RevenueShareSchema = SchemaFactory.createForClass(RevenueShare);
 

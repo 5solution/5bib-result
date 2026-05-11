@@ -13,6 +13,7 @@ import {
   CreateServiceCatalogDto,
   UpdateServiceCatalogDto,
 } from '../dto/service-catalog.dto';
+import { escapeRegex } from '../utils/escape-regex';
 
 /**
  * F-024 BR-CM-16: Service Catalog (danh mục dịch vụ).
@@ -37,7 +38,9 @@ export class ServiceCatalogService {
   async findAll(opts: { category?: string; search?: string } = {}) {
     const filter: any = { deletedAt: null };
     if (opts.category) filter.category = opts.category;
-    if (opts.search) filter.name = { $regex: opts.search, $options: 'i' };
+    // M-01 QC fix: escape regex special chars (defense vs ReDoS)
+    if (opts.search)
+      filter.name = { $regex: escapeRegex(opts.search), $options: 'i' };
     return this.model.find(filter).sort({ category: 1, sortOrder: 1, name: 1 }).lean();
   }
 

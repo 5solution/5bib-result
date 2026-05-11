@@ -42,6 +42,13 @@ export class RevenueShareInputDto {
   feePercentage: number;
   @ApiProperty() @IsNumber() @Min(0) feePerAthlete: number;
   @ApiProperty() @IsNumber() @Min(0) estimatedAthletes: number;
+  // M-03 QC fix: optional override avg ticket price (admin may set explicit)
+  // Server falls back to DEFAULT_AVG_TICKET_PRICE if omitted/zero.
+  @ApiPropertyOptional({ description: 'Average ticket price in VND (default 200,000)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  avgTicketPrice?: number;
 }
 
 export class ClientInfoInputDto {

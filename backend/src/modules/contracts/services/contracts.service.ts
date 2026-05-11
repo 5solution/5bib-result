@@ -10,6 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import type { Redis } from 'ioredis';
 import { Model, Types } from 'mongoose';
+import { createHash } from 'crypto';
 import {
   Contract,
   ContractDocument,
@@ -39,6 +40,21 @@ import {
 import { AuditLogService } from '../../audit/services/audit-log.service';
 import { Race } from '../../races/schemas/race.schema';
 import { vndAmountInWords } from '../utils/vn-num-to-words';
+import { escapeRegex } from '../utils/escape-regex';
+
+/**
+ * M-03 QC fix — BR-CM-15: default average ticket price (VND) khi race
+ * data không có. Admin có thể override per-contract qua revenueShare.avgTicketPrice.
+ */
+const DEFAULT_AVG_TICKET_PRICE = 200_000;
+
+/**
+ * M-02 QC fix — PRD Section 4 cache spec.
+ * - `contracts:list:<filterHash>` TTL 60s
+ * - `contracts:detail:<contractId>` TTL 300s
+ */
+const CACHE_LIST_TTL_SECONDS = 60;
+const CACHE_DETAIL_TTL_SECONDS = 300;
 
 /** Default late penalty per contract type (BR-CM-06). */
 const DEFAULT_LATE_PENALTY: Record<
@@ -192,6 +208,31 @@ export class ContractsService {
     return { subtotal, vatAmount, totalAmount };
   }
 
+  /**
+   * BR-CM-15 (M-03 QC fix): Revenue-share estimated fee for TICKET_SALES contracts.
+   *
+   * Formula:
+   *   estimatedFee = estimatedAthletes × feePerAthlete
+   *                + estimatedAthletes × avgTicketPrice × feePercentage / 100
+   *
+   * Server-side compute snapshot so admin UI client-side value never diverges.
+   * Rounded to nearest VND (no fractional currency).
+   */
+  static calcRevenueShareEstimatedFee(input: {
+    estimatedAthletes?: number;
+    feePerAthlete?: number;
+    feePercentage?: number;
+    avgTicketPrice?: number;
+  }): number {
+    const athletes = input.estimatedAthletes ?? 0;
+    const perAthlete = input.feePerAthlete ?? 0;
+    const pct = input.feePercentage ?? 0;
+    const avgPrice = input.avgTicketPrice ?? DEFAULT_AVG_TICKET_PRICE;
+    const flatPart = athletes * perAthlete;
+    const pctPart = (athletes * avgPrice * pct) / 100;
+    return Math.round(flatPart + pctPart);
+  }
+
   /** Recompute payment terms (advance/remainder amounts) from totalAmount. */
   static calcPaymentTerms(totalAmount: number, advancePct = 50) {
     const advanceAmount = Math.round((totalAmount * advancePct) / 100);
@@ -301,6 +342,29 @@ export class ContractsService {
     );
     const defaultPenalty = DEFAULT_LATE_PENALTY[contractType];
 
+    // M-03 QC fix: BR-CM-15 server-side compute estimatedFee snapshot
+    // cho TICKET_SALES (revenue-share). Lưu cùng record để audit trail.
+    let revenueShare = undefined;
+    if (contractType === 'TICKET_SALES' && dto.revenueShare) {
+      const avgTicketPrice =
+        dto.revenueShare.avgTicketPrice && dto.revenueShare.avgTicketPrice > 0
+          ? dto.revenueShare.avgTicketPrice
+          : DEFAULT_AVG_TICKET_PRICE;
+      const estimatedFee = ContractsService.calcRevenueShareEstimatedFee({
+        estimatedAthletes: dto.revenueShare.estimatedAthletes,
+        feePerAthlete: dto.revenueShare.feePerAthlete,
+        feePercentage: dto.revenueShare.feePercentage,
+        avgTicketPrice,
+      });
+      revenueShare = {
+        feePercentage: dto.revenueShare.feePercentage,
+        feePerAthlete: dto.revenueShare.feePerAthlete,
+        estimatedAthletes: dto.revenueShare.estimatedAthletes,
+        avgTicketPrice,
+        estimatedFee,
+      };
+    }
+
     const created = await this.model.create({
       contractType,
       documentType,
@@ -319,8 +383,7 @@ export class ContractsService {
       effectiveDate: dto.effectiveDate ? new Date(dto.effectiveDate) : undefined,
       endDate: dto.endDate ? new Date(dto.endDate) : undefined,
       lineItems,
-      revenueShare:
-        contractType === 'TICKET_SALES' ? dto.revenueShare : undefined,
+      revenueShare,
       subtotal: totals.subtotal,
       vatRate,
       vatAmount: totals.vatAmount,
@@ -347,7 +410,28 @@ export class ContractsService {
     return created;
   }
 
+  /** M-02 helper: stable md5(8 char) hash for filter cache key */
+  private hashFilter(filter: ContractFilterDto): string {
+    return createHash('md5')
+      .update(JSON.stringify(filter ?? {}))
+      .digest('hex')
+      .slice(0, 8);
+  }
+
   async findAll(filter: ContractFilterDto) {
+    // M-02 QC fix: read-through cache `contracts:list:<hash>` TTL 60s
+    const cacheKey = `contracts:list:${this.hashFilter(filter)}`;
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (err) {
+        this.logger.warn(
+          `[contracts] cache GET ${cacheKey} failed: ${(err as Error).message}`,
+        );
+      }
+    }
+
     const page = filter.page ?? 1;
     const limit = filter.limit ?? 20;
     const q: any = {};
@@ -360,10 +444,12 @@ export class ContractsService {
     }
     if (filter.raceId) q.raceId = filter.raceId;
     if (filter.search) {
+      // M-01 QC fix: escape regex special chars to prevent DoS catastrophic backtracking
+      const safeSearch = escapeRegex(filter.search);
       q.$or = [
-        { contractNumber: { $regex: filter.search, $options: 'i' } },
-        { 'client.entityName': { $regex: filter.search, $options: 'i' } },
-        { raceName: { $regex: filter.search, $options: 'i' } },
+        { contractNumber: { $regex: safeSearch, $options: 'i' } },
+        { 'client.entityName': { $regex: safeSearch, $options: 'i' } },
+        { raceName: { $regex: safeSearch, $options: 'i' } },
       ];
     }
     const [items, total] = await Promise.all([
@@ -375,21 +461,63 @@ export class ContractsService {
         .lean(),
       this.model.countDocuments(q),
     ]);
-    return {
+    const result = {
       items,
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit) || 1,
     };
+
+    if (this.redis) {
+      try {
+        await this.redis.set(
+          cacheKey,
+          JSON.stringify(result),
+          'EX',
+          CACHE_LIST_TTL_SECONDS,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `[contracts] cache SET ${cacheKey} failed: ${(err as Error).message}`,
+        );
+      }
+    }
+    return result;
   }
 
   async findOne(id: string): Promise<Contract> {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Invalid contract id');
     }
+    // M-02 QC fix: read-through cache `contracts:detail:<id>` TTL 300s
+    const cacheKey = `contracts:detail:${id}`;
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return JSON.parse(cached) as Contract;
+      } catch (err) {
+        this.logger.warn(
+          `[contracts] cache GET ${cacheKey} failed: ${(err as Error).message}`,
+        );
+      }
+    }
     const c = await this.model.findOne({ _id: id, deletedAt: null }).lean();
     if (!c) throw new NotFoundException('Contract not found');
+    if (this.redis) {
+      try {
+        await this.redis.set(
+          cacheKey,
+          JSON.stringify(c),
+          'EX',
+          CACHE_DETAIL_TTL_SECONDS,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `[contracts] cache SET ${cacheKey} failed: ${(err as Error).message}`,
+        );
+      }
+    }
     return c as Contract;
   }
 
@@ -851,7 +979,10 @@ export class ContractsService {
       throw new NotFoundException('Document not found in this contract');
     }
     const { body, contentType } = await this.docGenerator.getFileBody(s3Key);
-    const filename = s3Key.split('/').pop() ?? 'document';
+    // L-03 QC fix: defense-in-depth filename whitelist — chỉ chấp nhận
+    // safe-chars + extension docx/pdf. Strip path components, fallback 'document'.
+    const rawName = s3Key.split('/').pop() ?? 'document';
+    const filename = /^[\w.-]+\.(docx|pdf)$/i.test(rawName) ? rawName : 'document';
     return { body, contentType, filename };
   }
 

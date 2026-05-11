@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsOptional, IsString } from 'class-validator';
 
 export class CreatePartnerDto {
   @ApiProperty() @IsString() entityName: string;
@@ -11,7 +11,8 @@ export class CreatePartnerDto {
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccount?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() phone?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() email?: string;
+  // L-02 QC fix: enforce email format (was @IsString)
+  @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
 }
 

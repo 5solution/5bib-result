@@ -8,6 +8,7 @@ import { Model, Types } from 'mongoose';
 import { Partner, PartnerDocument } from '../schemas/partner.schema';
 import { Contract, ContractDocument } from '../schemas/contract.schema';
 import { CreatePartnerDto, UpdatePartnerDto } from '../dto/partner.dto';
+import { escapeRegex } from '../utils/escape-regex';
 
 @Injectable()
 export class PartnersService {
@@ -26,9 +27,11 @@ export class PartnersService {
     const limit = opts.limit ?? 50;
     const filter: any = { deletedAt: null };
     if (opts.search) {
+      // M-01 QC fix: escape regex special chars (defense vs ReDoS)
+      const safeSearch = escapeRegex(opts.search);
       filter.$or = [
-        { entityName: { $regex: opts.search, $options: 'i' } },
-        { taxId: { $regex: opts.search, $options: 'i' } },
+        { entityName: { $regex: safeSearch, $options: 'i' } },
+        { taxId: { $regex: safeSearch, $options: 'i' } },
       ];
     }
     const [items, total] = await Promise.all([

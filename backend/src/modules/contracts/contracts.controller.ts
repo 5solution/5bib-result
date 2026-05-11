@@ -218,8 +218,14 @@ export class ContractsController {
       id,
       s3Key,
     );
+    // L-01 QC fix: escape filename theo RFC 5987 — UTF-8 + percent-encoded
+    // (defense-in-depth khi filename chứa ký tự đặc biệt / non-ASCII / quote).
+    const safeFilename = encodeURIComponent(filename).replace(/['()]/g, escape);
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${safeFilename}"; filename*=UTF-8''${safeFilename}`,
+    );
     res.setHeader('Content-Length', String(body.length));
     res.send(body);
   }
