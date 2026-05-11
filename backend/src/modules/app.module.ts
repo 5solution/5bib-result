@@ -152,7 +152,6 @@ const volunteerDbModules = env.volunteerDb.host
         },
       }),
       TeamManagementModule,
-      ContractsModule,
     ]
   : [];
 
@@ -169,6 +168,7 @@ const volunteerDbModules = env.volunteerDb.host
     ...platformDbModules,
     ...volunteerDbModules,
     ...timingAlertModules,
+    ContractsModule,
     RacesModule,
     RaceResultModule,
     // F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
