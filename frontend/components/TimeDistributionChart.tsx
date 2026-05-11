@@ -73,7 +73,11 @@ export function TimeDistributionChart({
     );
   }
 
-  if (error || !data || data.buckets.length === 0) {
+  // Defensive guard PROD incident 2026-05-11 — backend route collision có thể
+  // trả course-stats shape (KHÔNG có buckets) thay vì time-distribution shape
+  // → `data.buckets.length` undefined → TypeError client-side crash. Check
+  // `data.buckets` tồn tại + là array trước khi đọc length.
+  if (error || !data || !Array.isArray(data.buckets) || data.buckets.length === 0) {
     return null; // quiet no-render if no data
   }
 

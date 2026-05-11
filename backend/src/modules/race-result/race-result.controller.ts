@@ -259,26 +259,19 @@ export class RaceResultController {
     return { data: filters, success: true };
   }
 
-  @Get('stats/:raceId/:courseId')
-  @ApiOperation({
-    summary:
-      'Get aggregated course stats (avg time, finishers, etc.) scoped per race',
-  })
-  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
-  @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns aggregated stats for the course within the race',
-  })
-  async getCourseStats(
-    @Param('raceId') raceId: string,
-    @Param('courseId') courseId: string,
-  ) {
-    const stats = await this.raceResultService.getCourseStats(raceId, courseId);
-    return { data: stats, success: true };
-  }
+  // ── ROUTE ORDERING — PROD INCIDENT 2026-05-11 ─────────────────
+  //
+  // NestJS/Express matches routes in declaration order. `stats/:raceId/:courseId`
+  // catches ANY 2-segment path under stats/ (kể cả stats/5km/distribution +
+  // stats/5km/countries) khiến literal-suffix routes bên dưới bị shadow →
+  // backend trả course-stats shape thay vì distribution buckets → frontend
+  // `data.buckets.length` undefined → TypeError client-side crash.
+  //
+  // Fix: declare literal-suffix routes (stats/:courseId/distribution,
+  // stats/:courseId/countries) TRƯỚC generic 2-param `stats/:raceId/:courseId`.
+  // Express sẽ try literal match trước, fall back generic sau.
 
-  // ─── F-03: Time Distribution ──────────────────────────────────
+  // ─── F-03: Time Distribution (DECLARE TRƯỚC stats/:raceId/:courseId) ──
 
   @Get('stats/:courseId/distribution')
   @ApiOperation({
@@ -297,7 +290,7 @@ export class RaceResultController {
     return { data, success: true };
   }
 
-  // ─── F-04: Country Stats ──────────────────────────────────────
+  // ─── F-04: Country Stats (DECLARE TRƯỚC stats/:raceId/:courseId) ──
 
   @Get('stats/:courseId/countries')
   @ApiOperation({
@@ -314,6 +307,28 @@ export class RaceResultController {
   ): Promise<CountryStatsResponseDto> {
     const data = await this.raceResultService.getCountryStats(courseId);
     return { data, success: true };
+  }
+
+  // ─── Course stats per race (FEATURE-021 BR-DISPLAY-07 cross-race isolation) ──
+  // PHẢI declare SAU literal-suffix routes ở trên.
+
+  @Get('stats/:raceId/:courseId')
+  @ApiOperation({
+    summary:
+      'Get aggregated course stats (avg time, finishers, etc.) scoped per race',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
+  @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns aggregated stats for the course within the race',
+  })
+  async getCourseStats(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+  ) {
+    const stats = await this.raceResultService.getCourseStats(raceId, courseId);
+    return { data: stats, success: true };
   }
 
   @Get('athlete/:raceId/:bib/country-rank')
