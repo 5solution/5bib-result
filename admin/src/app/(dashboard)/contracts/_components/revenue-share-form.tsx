@@ -14,6 +14,7 @@ import type { RevenueShare } from "@/lib/contracts-api";
 import { formatVND } from "@/lib/contracts-api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "./money-input";
 
 type Props = {
   value: RevenueShare;
@@ -52,15 +53,10 @@ export function RevenueShareForm({ value, onChange, disabled }: Props) {
         </div>
         <div>
           <Label htmlFor="fee-per-athlete">Phí cố định / VĐV (VND)</Label>
-          <Input
+          <MoneyInput
             id="fee-per-athlete"
-            type="number"
-            min={0}
-            step={1000}
             value={value.feePerAthlete}
-            onChange={(e) =>
-              set("feePerAthlete", Number(e.target.value) || 0)
-            }
+            onChange={(v) => set("feePerAthlete", v)}
             disabled={disabled}
           />
         </div>

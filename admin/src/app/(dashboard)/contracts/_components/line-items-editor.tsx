@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2, Package } from "lucide-react";
+import { MoneyInput } from "./money-input";
 
 type Props = {
   items: LineItemInput[];
@@ -134,14 +135,9 @@ export function LineItemsEditor({
                   />
                 </td>
                 <td className="px-1 py-1">
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1000}
+                  <MoneyInput
                     value={it.unitPrice}
-                    onChange={(e) =>
-                      setRow(idx, { unitPrice: Number(e.target.value) || 0 })
-                    }
+                    onChange={(v) => setRow(idx, { unitPrice: v })}
                     className="text-right font-mono"
                     disabled={disabled}
                     aria-label={`Đơn giá dòng ${it.stt}`}

@@ -47,6 +47,7 @@ import {
   type ServiceCatalogItem,
   type ServiceCategory,
 } from "@/lib/contracts-api";
+import { MoneyInput } from "./money-input";
 
 const CATEGORY_LABEL: Record<ServiceCategory, string> = {
   TIMING: "Tính giờ",
@@ -330,13 +331,11 @@ function CatalogForm({
       </div>
       <div>
         <Label htmlFor="sc-price">Giá tham khảo (VND)</Label>
-        <Input
+        <MoneyInput
           id="sc-price"
-          type="number"
-          min={0}
-          step={1000}
-          value={form.referencePrice ?? 0}
-          onChange={(e) => set("referencePrice", Number(e.target.value) || 0)}
+          value={(form.referencePrice as number | undefined) ?? 0}
+          onChange={(v) => set("referencePrice", v)}
+          placeholder="vd: 15.000.000"
         />
       </div>
       <div>

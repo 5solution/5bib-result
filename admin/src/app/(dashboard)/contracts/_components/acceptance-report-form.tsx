@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { LineItemsEditor } from "./line-items-editor";
 import { DiffTable } from "./diff-table";
 import { FinancialSummary } from "./financial-summary";
+import { MoneyInput } from "./money-input";
 import {
   calcLineAmount,
   calcTotals,
@@ -194,14 +195,10 @@ export function AcceptanceReportForm({ contract, onUpdated }: Props) {
           <div className="space-y-3">
             <div>
               <Label htmlFor="advance-paid">Đã tạm ứng (VND)</Label>
-              <Input
+              <MoneyInput
                 id="advance-paid"
-                type="number"
-                min={0}
                 value={advancePaid}
-                onChange={(e) =>
-                  setAdvancePaid(Number(e.target.value) || 0)
-                }
+                onChange={(v) => setAdvancePaid(v)}
                 disabled={isFinalized}
               />
               {remainingBalance < 0 && (
