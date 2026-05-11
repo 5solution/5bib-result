@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Model } from 'mongoose';
@@ -27,12 +27,14 @@ import { PreviewReconciliationDto } from './dto/preview-reconciliation.dto';
 import { CreateReconciliationDto } from './dto/create-reconciliation.dto';
 import { UpdateReconciliationStatusDto } from './dto/update-reconciliation-status.dto';
 import { BatchCreateReconciliationDto } from './dto/batch-create-reconciliation.dto';
+import { DeleteBatchResponseDto } from './dto/delete-batch.dto';
 
 const BUCKET_NAME = env.s3.bucket;
 const REGION = env.s3.region;
 
 @Injectable()
 export class ReconciliationService {
+  private readonly logger = new Logger(ReconciliationService.name);
   private s3Client: S3Client;
 
   constructor(
@@ -453,6 +455,33 @@ export class ReconciliationService {
   async delete(id: string): Promise<void> {
     const result = await this.reconciliationModel.deleteOne({ _id: id });
     if (result.deletedCount === 0) throw new NotFoundException(`Reconciliation ${id} not found`);
+  }
+
+  /**
+   * FEATURE-025 — Bulk delete reconciliations by IDs.
+   *
+   * - Uses Mongoose `deleteMany({_id:{$in:ids}})` — 1 RTT MongoDB regardless N.
+   * - Admin trust philosophy (PAUSE-25-02): KHÔNG block bất kỳ status nào.
+   * - Idempotent: IDs không tồn tại counted vào `not_found`, KHÔNG throw 404
+   *   (khác `delete(id)` single — bulk semantics đặc biệt cho UX bulk action).
+   * - Audit via `Logger.warn` (PAUSE-25-03): KHÔNG cần MongoDB audit collection.
+   * - DTO `DeleteBatchDto` đã enforce 1≤N≤50 + valid ObjectId hex tại layer
+   *   validation, nên KHÔNG có CastError tại service layer.
+   */
+  async deleteMany(ids: string[]): Promise<DeleteBatchResponseDto> {
+    const result = await this.reconciliationModel.deleteMany({
+      _id: { $in: ids },
+    });
+    const deleted = result.deletedCount;
+    const not_found = ids.length - deleted;
+
+    this.logger.warn('reconciliation_bulk_delete', {
+      ids_count: ids.length,
+      deleted_count: deleted,
+      not_found_count: not_found,
+    });
+
+    return { deleted, not_found };
   }
 
   async getCronLogs(limit = 12) {

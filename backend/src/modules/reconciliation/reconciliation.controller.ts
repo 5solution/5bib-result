@@ -30,6 +30,10 @@ import { ExportZipByIdsDto, ExportZipByPeriodDto } from './dto/export-zip.dto';
 import { PreflightRangeDto } from './dto/preflight-range.dto';
 import { PreflightBatchDto } from './dto/preflight-batch.dto';
 import { AuditPeriodBoundaryDto } from './dto/audit-period-boundary.dto';
+import {
+  DeleteBatchDto,
+  DeleteBatchResponseDto,
+} from './dto/delete-batch.dto';
 
 function fmtDate(s: string): string {
   if (!s) return '';
@@ -239,6 +243,27 @@ export class ReconciliationController {
       dto.periodEnd,
       dto.label,
     );
+  }
+
+  // ── Bulk delete (FEATURE-025) ─────────────────────────────────────────
+  // Đặt TRƯỚC @Delete(':id') để literal "delete-batch" KHÔNG bị nuốt
+  // bởi :id param (POST vs DELETE method khác nhau nên thực ra không
+  // xung đột, nhưng giữ đặt cùng vùng các bulk-by-ids endpoint cho readable).
+
+  @Post('delete-batch')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Bulk delete reconciliations by IDs (FEATURE-025)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk delete result',
+    type: DeleteBatchResponseDto,
+  })
+  deleteBatch(
+    @Body() dto: DeleteBatchDto,
+  ): Promise<DeleteBatchResponseDto> {
+    return this.reconciliationService.deleteMany(dto.ids);
   }
 
   @Get('export-jobs/:jobId')

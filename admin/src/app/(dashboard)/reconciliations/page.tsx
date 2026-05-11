@@ -181,6 +181,10 @@ export default function ReconciliationsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Reconciliation | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // FEATURE-025 — Bulk delete state
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+
   // Export ZIP state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportOpen, setExportOpen] = useState(false);
@@ -477,6 +481,41 @@ export default function ReconciliationsPage() {
     }
   }
 
+  // FEATURE-025 — Bulk delete by IDs
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    setBulkDeleteLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await fetch(`/api/reconciliations/delete-batch`, {
+        method: "POST",
+        headers: {
+          ...authHeaders(token!).headers,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`HTTP ${res.status}: ${body || "unknown"}`);
+      }
+      const result = (await res.json()) as { deleted: number; not_found: number };
+      toast.success(`Đã xóa ${result.deleted} đối soát`);
+      if (result.not_found > 0) {
+        toast.message(
+          `${result.not_found} đối soát không tìm thấy (có thể đã bị xóa trước đó)`,
+        );
+      }
+      setBulkDeleteOpen(false);
+      setSelectedIds(new Set());
+      fetchItems();
+    } catch (err: any) {
+      toast.error(`Xóa hàng loạt thất bại: ${err.message}`);
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  }
+
   function toggleBatchSelect(tenantId: number) {
     setBatchSelected((prev) => {
       const next = new Set(prev);
@@ -565,6 +604,15 @@ export default function ReconciliationsPage() {
           <p className="text-sm text-muted-foreground">{total} bản ghi đối soát</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* FEATURE-025 — Bulk delete */}
+          <Button
+            variant="destructive"
+            disabled={selectedIds.size === 0}
+            onClick={() => setBulkDeleteOpen(true)}
+          >
+            <Trash2 className="mr-2 size-4" />
+            Xóa hàng loạt ({selectedIds.size})
+          </Button>
           {/* ZIP Export buttons */}
           <Button
             variant="outline"
@@ -904,6 +952,59 @@ export default function ReconciliationsPage() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* FEATURE-025 — Bulk delete dialog */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={(open) => { if (!open) setBulkDeleteOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="size-5" />
+              Xóa {selectedIds.size} bản đối soát
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Bạn có chắc muốn xóa {selectedIds.size} bản đối soát đã chọn không? Hành động này không thể hoàn tác.
+            </p>
+            <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm flex flex-col gap-1 max-h-40 overflow-y-auto">
+              {items
+                .filter((it) => selectedIds.has(it._id))
+                .slice(0, 5)
+                .map((it) => (
+                  <span key={it._id} className="text-muted-foreground">
+                    • {it.tenant_name} — {it.race_title}
+                  </span>
+                ))}
+              {selectedIds.size > 5 && (
+                <span className="italic text-muted-foreground">
+                  ... và {selectedIds.size - 5} bản khác
+                </span>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setBulkDeleteOpen(false)}
+                disabled={bulkDeleteLoading}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleteLoading}
+              >
+                {bulkDeleteLoading ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 size-4" />
+                )}
+                Xóa {selectedIds.size}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
