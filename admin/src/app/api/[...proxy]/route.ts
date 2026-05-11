@@ -80,7 +80,16 @@ async function proxyRequest(req: NextRequest) {
   const disposition = res.headers.get("Content-Disposition");
   if (disposition) responseHeaders["Content-Disposition"] = disposition;
 
-  return new NextResponse(data, {
+  // HTTP spec: status 204 (No Content), 205 (Reset Content), 304 (Not Modified)
+  // MUST NOT have a body. Web Fetch Response constructor enforces this and throws
+  // `TypeError: Invalid response status code` if we pass body (even empty
+  // ArrayBuffer). That TypeError surfaces to clients as a 500. Backend trả 204
+  // cho DELETE success (RFC 7231) → proxy phải forward null body, không pass
+  // arrayBuffer (always non-null sau await).
+  const isNullBodyStatus =
+    res.status === 204 || res.status === 205 || res.status === 304;
+
+  return new NextResponse(isNullBodyStatus ? null : data, {
     status: res.status,
     headers: responseHeaders,
   });

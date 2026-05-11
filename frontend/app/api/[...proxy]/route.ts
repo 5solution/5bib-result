@@ -43,7 +43,13 @@ async function proxyRequest(req: NextRequest) {
   const res = await fetch(targetUrl, init);
   const data = await res.arrayBuffer();
 
-  return new NextResponse(data, {
+  // HTTP spec: 204/205/304 MUST NOT have a body. Web Response constructor throws
+  // TypeError nếu pass body (kể cả empty ArrayBuffer) → Next.js bắn 500. Forward
+  // null body cho null-body status codes.
+  const isNullBodyStatus =
+    res.status === 204 || res.status === 205 || res.status === 304;
+
+  return new NextResponse(isNullBodyStatus ? null : data, {
     status: res.status,
     headers: {
       "Content-Type": res.headers.get("Content-Type") || "application/json",
