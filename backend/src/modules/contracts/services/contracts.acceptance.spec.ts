@@ -18,6 +18,10 @@ import { ContractNumberService } from './contract-number.service';
 describe('ContractsService — acceptance report (BR-CM-09)', () => {
   let svc: ContractsService;
   let mockModel: any;
+  let mockPartnerModel: any;
+  let mockRaceModel: any;
+  let mockTemplateService: any;
+  let mockDocGenerator: any;
   let numberService: ContractNumberService;
 
   const buildContract = (overrides: any = {}) => {
@@ -44,8 +48,25 @@ describe('ContractsService — acceptance report (BR-CM-09)', () => {
       countDocuments: jest.fn(),
       updateOne: jest.fn(),
     };
+    mockPartnerModel = { findOne: jest.fn() };
+    mockRaceModel = { findById: jest.fn() };
+    mockTemplateService = { getArticles: jest.fn().mockResolvedValue([]) };
+    mockDocGenerator = {
+      renderAndUpload: jest.fn(),
+      getSignedDownloadUrl: jest.fn(),
+      getFileBody: jest.fn(),
+    };
     numberService = new ContractNumberService(undefined);
-    svc = new ContractsService(mockModel, numberService);
+    svc = new ContractsService(
+      mockModel,
+      mockPartnerModel,
+      mockRaceModel,
+      numberService,
+      mockTemplateService,
+      mockDocGenerator,
+      undefined, // auditLog optional
+      undefined, // redis optional
+    );
   });
 
   describe('HP-06: actual = contract', () => {

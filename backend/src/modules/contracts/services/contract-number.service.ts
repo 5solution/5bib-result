@@ -1,4 +1,5 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { InjectRedis } from '@nestjs-modules/ioredis';
 import type { Redis } from 'ioredis';
 
 /**
@@ -25,7 +26,13 @@ import type { Redis } from 'ioredis';
  */
 @Injectable()
 export class ContractNumberService {
-  constructor(@Optional() @Inject('REDIS_CLIENT') private readonly redis?: Redis) {}
+  private readonly logger = new Logger(ContractNumberService.name);
+
+  constructor(
+    // Spec unit-test instantiates với new ContractNumberService(mockRedis) trực tiếp
+    // nên cần Optional fallback. Production wire qua RedisModule (@InjectRedis).
+    @Optional() @InjectRedis() private readonly redis?: Redis,
+  ) {}
 
   async generateNumber(
     signDate: Date,
@@ -50,7 +57,10 @@ export class ContractNumberService {
   /** Atomic per-year sequence. Returns 1 on Jan 1 first call. */
   async nextSequence(year: number): Promise<number> {
     if (!this.redis) {
-      // Fallback for unit tests / dev no-redis
+      // Fallback for unit tests / dev no-redis. Production luôn có Redis.
+      this.logger.warn(
+        `[contract-number] No Redis client — using random fallback (test/dev only)`,
+      );
       return Math.floor(Math.random() * 1_000_000);
     }
     const key = `contracts:sequence:${year}`;

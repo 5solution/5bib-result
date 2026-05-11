@@ -1,9 +1,14 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import type { Redis } from 'ioredis';
 import { Model, Types } from 'mongoose';
 import {
   Contract,
@@ -12,6 +17,7 @@ import {
   ContractType,
   LineItem,
 } from '../schemas/contract.schema';
+import { Partner, PartnerDocument } from '../schemas/partner.schema';
 import { CreateContractDto } from '../dto/create-contract.dto';
 import { UpdateContractDto } from '../dto/update-contract.dto';
 import { ContractFilterDto } from '../dto/contract-filter.dto';
@@ -20,11 +26,18 @@ import {
   CreatePaymentRequestDto,
 } from '../dto/acceptance-payment.dto';
 import { ContractNumberService } from './contract-number.service';
+import { ContractTemplateService } from './contract-template.service';
+import {
+  DocumentGeneratorService,
+  GeneratedDocType,
+} from './document-generator.service';
 import {
   DEFAULT_PROVIDER_BY_TYPE,
   getProviderEntity,
   ProviderId,
 } from '../constants/provider-entities';
+import { AuditLogService } from '../../audit/services/audit-log.service';
+import { Race } from '../../races/schemas/race.schema';
 
 /** Default late penalty per contract type (BR-CM-06). */
 const DEFAULT_LATE_PENALTY: Record<
@@ -44,12 +57,107 @@ const TERMINAL_STATES: ContractStatus[] = [
   'REJECTED',
 ];
 
+/** Template file lookup by contract type + doc type (BR-CM-12 mapping). */
+const TEMPLATE_FILE_MAP: Record<
+  GeneratedDocType,
+  Partial<Record<ContractType, string>>
+> = {
+  CONTRACT: {
+    TIMING: 'contract-timing.docx',
+    RACEKIT: 'contract-racekit.docx',
+    OPERATIONS: 'contract-operations.docx',
+    TICKET_SALES: 'contract-ticket-sales.docx',
+  },
+  QUOTATION: {
+    TIMING: 'quotation.docx',
+    RACEKIT: 'quotation.docx',
+    OPERATIONS: 'quotation.docx',
+    TICKET_SALES: 'quotation.docx',
+  },
+  ACCEPTANCE_REPORT: {
+    TIMING: 'acceptance-timing.docx',
+    RACEKIT: 'acceptance-racekit.docx',
+    OPERATIONS: 'acceptance-operations.docx',
+    TICKET_SALES: 'acceptance-timing.docx', // fallback
+  },
+  PAYMENT_REQUEST: {
+    TIMING: 'payment-request.docx',
+    RACEKIT: 'payment-request.docx',
+    OPERATIONS: 'payment-request.docx',
+    TICKET_SALES: 'payment-request.docx',
+  },
+};
+
 @Injectable()
 export class ContractsService {
+  private readonly logger = new Logger(ContractsService.name);
+
   constructor(
     @InjectModel(Contract.name) private model: Model<ContractDocument>,
+    @InjectModel(Partner.name) private partnerModel: Model<PartnerDocument>,
+    @InjectModel(Race.name) private raceModel: Model<any>,
     private readonly numberService: ContractNumberService,
+    private readonly templateService: ContractTemplateService,
+    private readonly docGenerator: DocumentGeneratorService,
+    @Optional() private readonly auditLog?: AuditLogService,
+    @Optional() @InjectRedis() private readonly redis?: Redis,
   ) {}
+
+  // ────────────────────────────────────────────────────────────────
+  // Cache invalidation (pattern from articles.service.ts)
+  // ────────────────────────────────────────────────────────────────
+
+  /** Flush all `contracts:*` keys via scanStream + pipeline DEL. Best-effort. */
+  private async invalidateContractsCache(): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const stream = this.redis.scanStream({
+        match: 'contracts:*',
+        count: 200,
+      });
+      const pipeline = this.redis.pipeline();
+      let count = 0;
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (keys: string[]) => {
+          for (const k of keys) {
+            // Don't flush sequence counter — it's permanent per-year
+            if (!k.startsWith('contracts:sequence:')) {
+              pipeline.del(k);
+              count++;
+            }
+          }
+        });
+        stream.on('end', () => resolve());
+        stream.on('error', (err) => reject(err));
+      });
+      if (count > 0) await pipeline.exec();
+    } catch (err) {
+      this.logger.warn(
+        `[contracts] Cache invalidation failed: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** Emit audit log (best-effort). */
+  private async emitAudit(
+    action: string,
+    contract: { _id: any; contractNumber?: string; contractType?: string },
+    actorId: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.auditLog) return;
+    await this.auditLog.emit({
+      actor: { userId: actorId },
+      action,
+      entity: {
+        type: 'contract',
+        id: String(contract._id),
+        displayName:
+          contract.contractNumber ?? `${contract.contractType ?? 'CONTRACT'}`,
+      },
+      metadata,
+    });
+  }
 
   // ────────────────────────────────────────────────────────────────
   // BR-CM-04: Calculation helpers (PURE — no IO)
@@ -111,6 +219,59 @@ export class ContractsService {
     const documentType = dto.documentType ?? 'CONTRACT';
     const vatRate = dto.vatRate ?? 8;
 
+    // ─── Cross-module DI auto-fill (read-only) ───
+    // BR-CM-10 US-06: nếu DTO có partnerId → đọc Partner, fill client info
+    // (DTO client fields override partner data when both present)
+    let clientInfo = dto.client;
+    if (dto.partnerId && Types.ObjectId.isValid(dto.partnerId)) {
+      const partner = await this.partnerModel
+        .findOne({ _id: dto.partnerId, deletedAt: null })
+        .lean();
+      if (partner) {
+        clientInfo = {
+          entityName: dto.client?.entityName ?? partner.entityName,
+          taxId: dto.client?.taxId ?? partner.taxId,
+          address: dto.client?.address ?? partner.address,
+          representative: dto.client?.representative ?? partner.representative,
+          position: dto.client?.position ?? partner.position,
+          bankAccount: dto.client?.bankAccount ?? partner.bankAccount,
+          bankName: dto.client?.bankName ?? partner.bankName,
+          phone: dto.client?.phone ?? partner.phone,
+          email: dto.client?.email ?? partner.email,
+        };
+      }
+    }
+
+    // Race auto-fill (US-06)
+    let raceFill: {
+      raceName?: string;
+      raceDate?: Date;
+      raceLocation?: string;
+    } = {};
+    if (dto.raceId) {
+      try {
+        const race = await this.raceModel
+          .findById(dto.raceId)
+          .select('title startDate location')
+          .lean();
+        if (race) {
+          raceFill = {
+            raceName: dto.raceName ?? (race as any).title,
+            raceDate: dto.raceDate
+              ? new Date(dto.raceDate)
+              : (race as any).startDate,
+            raceLocation: dto.raceLocation ?? (race as any).location,
+          };
+        }
+      } catch (err) {
+        this.logger.warn(
+          `[contracts] Race auto-fill failed raceId=${dto.raceId}: ${
+            (err as Error).message
+          }`,
+        );
+      }
+    }
+
     // Compute line item amounts + totals
     const lineItems = (dto.lineItems ?? []).map((li) => ({
       stt: li.stt,
@@ -148,11 +309,11 @@ export class ContractsService {
       partnerId: dto.partnerId
         ? new Types.ObjectId(dto.partnerId)
         : undefined,
-      client: dto.client,
+      client: clientInfo,
       raceId: dto.raceId,
-      raceName: dto.raceName,
-      raceDate: dto.raceDate ? new Date(dto.raceDate) : undefined,
-      raceLocation: dto.raceLocation,
+      raceName: raceFill.raceName ?? dto.raceName,
+      raceDate: raceFill.raceDate ?? (dto.raceDate ? new Date(dto.raceDate) : undefined),
+      raceLocation: raceFill.raceLocation ?? dto.raceLocation,
       signDate: dto.signDate ? new Date(dto.signDate) : undefined,
       effectiveDate: dto.effectiveDate ? new Date(dto.effectiveDate) : undefined,
       endDate: dto.endDate ? new Date(dto.endDate) : undefined,
@@ -174,6 +335,14 @@ export class ContractsService {
       templateOverrides: dto.templateOverrides ?? {},
       createdBy,
     });
+
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.create', created, createdBy ?? 'admin', {
+      contractType,
+      documentType,
+      totalAmount: totals.totalAmount,
+    });
+
     return created;
   }
 
@@ -286,10 +455,12 @@ export class ContractsService {
     if (dto.endDate) current.endDate = new Date(dto.endDate);
 
     await current.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.update', current, 'admin');
     return current.toObject();
   }
 
-  async remove(id: string): Promise<{ success: true }> {
+  async remove(id: string, actorId = 'admin'): Promise<{ success: true }> {
     const result = await this.model.updateOne(
       { _id: id, deletedAt: null },
       { $set: { deletedAt: new Date() } },
@@ -297,6 +468,8 @@ export class ContractsService {
     if (result.matchedCount === 0) {
       throw new NotFoundException('Contract not found');
     }
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.delete', { _id: id }, actorId);
     return { success: true };
   }
 
@@ -338,6 +511,10 @@ export class ContractsService {
     }
     c.status = 'ACTIVE';
     await c.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.activate', c, 'admin', {
+      contractNumber: c.contractNumber,
+    });
     return c.toObject();
   }
 
@@ -399,6 +576,11 @@ export class ContractsService {
     quotation.status = 'CONVERTED_TO_CONTRACT';
     await quotation.save();
 
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.convertFromQuotation', newContract, createdBy ?? 'admin', {
+      sourceQuotationId: String(quotation._id),
+    });
+
     return newContract.toObject();
   }
 
@@ -454,6 +636,11 @@ export class ContractsService {
       finalizedAt: c.acceptanceReport?.finalizedAt ?? null,
     } as any;
     await c.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.acceptanceReportUpsert', c, 'admin', {
+      diffAmount,
+      remainingBalance,
+    });
     return c.toObject();
   }
 
@@ -469,6 +656,8 @@ export class ContractsService {
     c.acceptanceReport.status = 'FINALIZED';
     c.acceptanceReport.finalizedAt = new Date();
     await c.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.acceptanceReportFinalize', c, 'admin');
     return c.toObject();
   }
 
@@ -503,6 +692,8 @@ export class ContractsService {
       notes: dto.notes ?? '',
     } as any;
     await c.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.paymentRequestUpsert', c, 'admin');
     return c.toObject();
   }
 
@@ -516,6 +707,156 @@ export class ContractsService {
     c.paymentRequest.paidAt = new Date();
     c.status = 'COMPLETED';
     await c.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.markPaid', c, 'admin', {
+      totalAmount: c.paymentRequest.totalAmount,
+    });
     return c.toObject();
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // BR-CM-12: Document Generation
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * Build placeholder context cho docxtemplater từ contract data.
+   * Reads articles từ ContractTemplateService (applies template overrides).
+   * Spec: docs/F-024-placeholder-spec.md
+   */
+  async buildRenderContext(
+    contract: Contract,
+    docType: GeneratedDocType,
+  ): Promise<Record<string, any>> {
+    const articles = await this.templateService.getArticles(
+      contract.contractType,
+      contract.templateOverrides ?? {},
+    );
+    const signDate = contract.signDate ?? new Date();
+    return {
+      contractNumber: contract.contractNumber ?? '',
+      contractType: contract.contractType,
+      documentType: contract.documentType,
+      signDate,
+      signDay: String(signDate.getDate()).padStart(2, '0'),
+      signMonth: String(signDate.getMonth() + 1).padStart(2, '0'),
+      signYear: signDate.getFullYear(),
+      effectiveDate: contract.effectiveDate,
+      endDate: contract.endDate,
+      provider: contract.provider,
+      client: contract.client,
+      raceName: contract.raceName ?? '',
+      raceDate: contract.raceDate,
+      raceLocation: contract.raceLocation ?? '',
+      lineItems: contract.lineItems ?? [],
+      revenueShare: contract.revenueShare ?? {
+        feePercentage: 0,
+        feePerAthlete: 0,
+        estimatedAthletes: 0,
+      },
+      ticketFeePercent: contract.revenueShare?.feePercentage ?? 0,
+      subtotal: contract.subtotal,
+      vatRate: contract.vatRate,
+      vatAmount: contract.vatAmount,
+      totalAmount: contract.totalAmount,
+      paymentTerms: contract.paymentTerms,
+      articles,
+      acceptanceReport: contract.acceptanceReport ?? null,
+      paymentRequest: contract.paymentRequest ?? null,
+      generatedAt: new Date(),
+    };
+  }
+
+  /**
+   * Generate DOCX + PDF cho 1 contract + doc type.
+   * Upload S3 → push entry vào contract.generatedDocuments → return signed URLs.
+   */
+  async generateDocument(
+    contractId: string,
+    docType: GeneratedDocType,
+    actorId = 'admin',
+  ): Promise<{ docxUrl: string; pdfUrl?: string; docxKey: string; pdfKey?: string }> {
+    const c = await this.model.findOne({ _id: contractId, deletedAt: null });
+    if (!c) throw new NotFoundException('Contract not found');
+
+    const templateName =
+      TEMPLATE_FILE_MAP[docType]?.[c.contractType as ContractType];
+    if (!templateName) {
+      throw new BadRequestException(
+        `Không có template cho ${docType}/${c.contractType}`,
+      );
+    }
+
+    const context = await this.buildRenderContext(c.toObject(), docType);
+    const result = await this.docGenerator.renderAndUpload(
+      templateName,
+      context,
+      String(c._id),
+      docType,
+    );
+
+    // Push entries vào generatedDocuments + tăng version
+    const existingDocx = (c.generatedDocuments ?? []).filter(
+      (g) => g.docType === docType && g.format === 'DOCX',
+    );
+    const existingPdf = (c.generatedDocuments ?? []).filter(
+      (g) => g.docType === docType && g.format === 'PDF',
+    );
+    const now = new Date();
+    c.generatedDocuments.push({
+      docType,
+      generatedAt: now,
+      s3Key: result.docxKey,
+      format: 'DOCX',
+      version: existingDocx.length + 1,
+    } as any);
+    if (result.pdfKey) {
+      c.generatedDocuments.push({
+        docType,
+        generatedAt: now,
+        s3Key: result.pdfKey,
+        format: 'PDF',
+        version: existingPdf.length + 1,
+      } as any);
+    }
+    await c.save();
+    await this.invalidateContractsCache();
+    await this.emitAudit('contract.generateDocument', c, actorId, {
+      docType,
+      docxKey: result.docxKey,
+      pdfKey: result.pdfKey,
+    });
+
+    return result;
+  }
+
+  /**
+   * Download generated document by s3Key. Returns body + content type.
+   * Security: only return file nếu s3Key thuộc về contract đang được request
+   * (defense vs IDOR — attacker không thể guess random S3 key).
+   */
+  async downloadDocument(
+    contractId: string,
+    s3Key: string,
+  ): Promise<{ body: Buffer; contentType: string; filename: string }> {
+    const c = await this.model.findOne({ _id: contractId, deletedAt: null }).lean();
+    if (!c) throw new NotFoundException('Contract not found');
+    const doc = (c.generatedDocuments ?? []).find((g) => g.s3Key === s3Key);
+    if (!doc) {
+      throw new NotFoundException('Document not found in this contract');
+    }
+    const { body, contentType } = await this.docGenerator.getFileBody(s3Key);
+    const filename = s3Key.split('/').pop() ?? 'document';
+    return { body, contentType, filename };
+  }
+
+  /** Get signed URL for direct browser download. */
+  async getDownloadUrl(contractId: string, s3Key: string): Promise<string> {
+    const c = await this.model.findOne({ _id: contractId, deletedAt: null }).lean();
+    if (!c) throw new NotFoundException('Contract not found');
+    const doc = (c.generatedDocuments ?? []).find((g) => g.s3Key === s3Key);
+    if (!doc) {
+      throw new NotFoundException('Document not found in this contract');
+    }
+    return this.docGenerator.getSignedDownloadUrl(s3Key);
   }
 }
