@@ -36,6 +36,9 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { ExternalLink, Package } from "lucide-react";
+import Link from "next/link";
+import { EmptyState } from "./empty-state";
 
 const TYPE_TO_CATEGORY: Record<ContractType, ServiceCategory> = {
   TIMING: "TIMING",
@@ -129,9 +132,26 @@ export function ServiceCatalogPicker({
                 <Skeleton className="h-8 w-full" />
               </div>
             ) : items.length === 0 ? (
-              <div className="p-6 text-center text-sm text-[var(--text-muted,#78716C)]">
-                Chưa có dịch vụ trong danh mục — vào "Danh mục dịch vụ" để thêm
-              </div>
+              <EmptyState
+                icon={Package}
+                title="Chưa có dịch vụ trong danh mục"
+                description={
+                  q || category !== "ALL"
+                    ? "Không khớp filter — thử bỏ filter hoặc đổi từ khoá."
+                    : "Thêm dịch vụ vào catalog để pick reference từ wizard."
+                }
+                cta={
+                  // UX-21: Link + button styling — mở tab mới giữ wizard state.
+                  <Link
+                    href="/contracts/services"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-md border border-[var(--border,#E7E2D9)] bg-white px-3 py-1.5 text-sm font-medium hover:bg-[#F3F0EB]"
+                  >
+                    <ExternalLink className="size-4" /> Mở Danh mục dịch vụ
+                  </Link>
+                }
+              />
             ) : (
               <ul>
                 {items.map((it) => (

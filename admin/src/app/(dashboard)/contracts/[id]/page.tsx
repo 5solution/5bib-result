@@ -167,36 +167,60 @@ export default function ContractDetailPage({
           <ChevronLeft className="size-4" /> Danh sách hợp đồng
         </Button>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {isDraft && (
-          <Button onClick={activate} disabled={busy} data-testid="btn-activate">
-            <CheckCircle2 className="size-4" /> Kích hoạt
-          </Button>
-        )}
-        {isQuotation && (
-          <Button onClick={convert} disabled={busy}>
-            <Repeat className="size-4" /> Chuyển thành hợp đồng
-          </Button>
-        )}
-        {isActive && supportsAcceptance && (
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/contracts/${contract._id}/acceptance`)}
-            data-testid="btn-create-acceptance"
-          >
-            <FileSignature className="size-4" /> Tạo biên bản nghiệm thu
-          </Button>
-        )}
-        {acceptanceFinalized && supportsAcceptance && (
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/contracts/${contract._id}/payment`)}
-            data-testid="btn-create-payment"
-          >
-            <ReceiptText className="size-4" /> Tạo đề nghị thanh toán
-          </Button>
-        )}
-        <div className="ml-auto flex items-center gap-2">
+      {/* UX-32 actions group 2 row trên màn hẹp:
+          Row 1 primary lifecycle actions (left) + destructive (right)
+          Row 2 download buttons (right) — riêng row tránh wrap lung tung */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isDraft && (
+            <Button onClick={activate} disabled={busy} data-testid="btn-activate">
+              <CheckCircle2 className="size-4" /> Kích hoạt
+            </Button>
+          )}
+          {isQuotation && (
+            <Button onClick={convert} disabled={busy}>
+              <Repeat className="size-4" /> Chuyển thành hợp đồng
+            </Button>
+          )}
+          {isActive && supportsAcceptance && (
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/contracts/${contract._id}/acceptance`)}
+              data-testid="btn-create-acceptance"
+            >
+              <FileSignature className="size-4" /> Tạo biên bản nghiệm thu
+            </Button>
+          )}
+          {acceptanceFinalized && supportsAcceptance && (
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/contracts/${contract._id}/payment`)}
+              data-testid="btn-create-payment"
+            >
+              <ReceiptText className="size-4" /> Tạo đề nghị thanh toán
+            </Button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={cancelContract}
+              disabled={busy || !isActive}
+            >
+              Huỷ HĐ
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={softDelete}
+              disabled={busy}
+              aria-label="Xoá"
+            >
+              <Trash2 className="size-4 text-red-600" />
+            </Button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <DocumentDownloadBtn contractId={contract._id} docType={docType} />
           {acceptanceFinalized && supportsAcceptance && (
             <DocumentDownloadBtn
@@ -210,23 +234,6 @@ export default function ContractDetailPage({
               docType="PAYMENT_REQUEST"
             />
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={cancelContract}
-            disabled={busy || !isActive}
-          >
-            Huỷ HĐ
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={softDelete}
-            disabled={busy}
-            aria-label="Xoá"
-          >
-            <Trash2 className="size-4 text-red-600" />
-          </Button>
         </div>
       </div>
 

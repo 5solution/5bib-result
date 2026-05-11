@@ -376,6 +376,17 @@ export function ContractWizard() {
               <Label className="text-sm font-semibold">
                 Thông tin đối tác (có thể chỉnh sửa sau khi auto-fill)
               </Label>
+              {/* UX-19: warning khi user sửa entityName khác với partner đã pick.
+                  Backend snapshot client info → contract dùng tên mới này khi sinh
+                  số HĐ, KHÔNG dùng partner.entityName gốc. Set expectation rõ. */}
+              {state.partner &&
+                state.partner.entityName !== state.client.entityName && (
+                  <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Bạn đã sửa tên đơn vị khác với đối tác đã chọn ("
+                    {state.partner.entityName}"). Số HĐ + DOCX sẽ dùng tên mới
+                    này, KHÔNG dùng tên gốc. Tiếp tục nếu đó là chủ đích.
+                  </p>
+                )}
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <FormField
                   label="Tên đơn vị *"
@@ -703,20 +714,37 @@ function FormField({
   );
 }
 
+/**
+ * F-024 UX-07: Wizard preview KHỚP backend ContractsService.activate() logic:
+ *   1) split entityName theo whitespace
+ *   2) take first char of each word (KHÔNG strip diacritic trước)
+ *   3) join → replace non-alphanumeric (strip diacritics + Vietnamese đ/Đ)
+ *   4) uppercase + slice 8
+ *
+ * Trước đây frontend strip non-ASCII TRƯỚC split → "Đại Việt" → "i Vit" → "iV"
+ * trong khi backend split TRƯỚC → ["Đại","Việt"] → ["Đ","V"] → strip → "V".
+ * Mismatch khiến user thấy preview lệch với số HĐ thật khi activate.
+ *
+ * Note: Phase 3 nếu cần handle diacritic accurately (vd "Đại" → "D" thay vì
+ * mất), backend cần thêm normalizeToAscii() trước replace.
+ */
 function formatContractNumberPreview(state: State): string {
   if (!state.signDate || !state.client.entityName) return "—";
   const d = new Date(state.signDate);
+  if (Number.isNaN(d.getTime())) return "—";
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yyyy = d.getFullYear();
-  const clientShort = state.client.entityName
-    .replace(/[^a-zA-Z0-9 ]/g, "")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 3)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
-  return `${dd}.${mm}/${yyyy}/HDDV/${clientShort || "X"}-${state.providerId === "5BIB" ? "5BIB" : "5SOLUTION"}`;
+  const clientShort =
+    state.client.entityName
+      .split(/\s+/)
+      .map((w) => w[0] ?? "")
+      .join("")
+      .replace(/[^A-Za-z0-9]/g, "")
+      .toUpperCase()
+      .slice(0, 8) || "CLIENT";
+  const provider = state.providerId === "5SOLUTION" ? "5SOLUTION" : "5BIB";
+  return `${dd}.${mm}/${yyyy}/HDDV/${clientShort}-${provider}`;
 }
 
 function ReviewStep({

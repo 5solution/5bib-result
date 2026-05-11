@@ -103,6 +103,9 @@ export function DocumentDownloadBtn({
     );
   }
 
+  // F-024 UX-18: DOCX là primary action (ổn định). PDF graceful degrade tới
+  // LibreOffice — có thể fail. Dropdown highlight DOCX với "khuyến nghị" +
+  // PDF kèm note "thử — fail thì dùng DOCX" để set expectation rõ ràng.
   return (
     <DropdownActionMenu
       label={
@@ -119,10 +122,18 @@ export function DocumentDownloadBtn({
       variant={variant}
     >
       <DropdownActionTrigger onSelect={() => trigger("DOCX")}>
-        <FileText className="size-4" /> DOCX
+        <FileText className="size-4" />
+        <span className="flex-1">DOCX</span>
+        <span className="text-[10px] font-semibold text-emerald-700">
+          khuyến nghị
+        </span>
       </DropdownActionTrigger>
       <DropdownActionTrigger onSelect={() => trigger("PDF")}>
-        <FileType2 className="size-4" /> PDF
+        <FileType2 className="size-4" />
+        <span className="flex-1">PDF</span>
+        <span className="text-[10px] text-[var(--text-muted,#78716C)]">
+          thử — fail dùng DOCX
+        </span>
       </DropdownActionTrigger>
     </DropdownActionMenu>
   );

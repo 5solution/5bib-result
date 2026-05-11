@@ -16,8 +16,9 @@ import {
 } from "@/lib/contracts-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Package } from "lucide-react";
+import { Plus, Trash2, Package, ListPlus } from "lucide-react";
 import { MoneyInput } from "./money-input";
+import { EmptyState } from "./empty-state";
 
 type Props = {
   items: LineItemInput[];
@@ -80,18 +81,28 @@ export function LineItemsEditor({
               <th className="px-2 py-2 text-right w-20">SL</th>
               <th className="px-2 py-2 text-right w-32">Đơn giá</th>
               <th className="px-2 py-2 text-right w-20">Giảm (%)</th>
-              <th className="px-2 py-2 text-right w-36">Thành tiền</th>
+              <th
+                className="px-2 py-2 text-right w-36"
+                title="Thành tiền chưa bao gồm VAT — VAT tính ở Financial Summary bên dưới"
+              >
+                Thành tiền (chưa VAT)
+              </th>
               <th className="px-2 py-2 w-20" aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
             {computed.length === 0 && (
               <tr>
-                <td
-                  colSpan={8}
-                  className="py-8 text-center text-[var(--text-muted,#78716C)]"
-                >
-                  Chưa có hạng mục — nhấn "Thêm dòng" hoặc "Chọn từ danh mục"
+                <td colSpan={8} className="p-0">
+                  <EmptyState
+                    icon={ListPlus}
+                    title="Chưa có hạng mục"
+                    description={`Bấm "Thêm dòng" để nhập tự do${
+                      onPickFromCatalog
+                        ? ' hoặc "Chọn từ danh mục" để pick reference từ catalog'
+                        : ""
+                    }.`}
+                  />
                 </td>
               </tr>
             )}
