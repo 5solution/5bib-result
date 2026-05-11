@@ -15,6 +15,7 @@ import { ChevronRight, Bell } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { GlobalSearch } from "./GlobalSearch";
+import { useBreadcrumbOverrides } from "./breadcrumb-context";
 
 /**
  * Mapping route segment chinh → label tieng Viet.
@@ -51,18 +52,53 @@ const ROUTE_LABEL_MAP: Record<string, string> = {
   results: "Kết quả",
   readiness: "Readiness",
   settings: "Cài đặt",
+  // F-024 contracts module
+  contracts: "Hợp đồng",
+  partners: "Đối tác",
+  services: "Danh mục dịch vụ",
+  templates: "Mẫu hợp đồng",
+  create: "Tạo mới",
+  acceptance: "Nghiệm thu",
+  payment: "Đề nghị thanh toán",
+  new: "Thêm mới",
 };
+
+/**
+ * Detect "dynamic ID" segment (Mongo ObjectId / UUID / numeric ID / random hex).
+ * Used to fallback to "Chi tiết" thay vì show raw ID khi không có override.
+ */
+function looksLikeId(seg: string): boolean {
+  if (/^[a-f0-9]{24}$/i.test(seg)) return true; // Mongo ObjectId
+  if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(seg))
+    return true; // UUID
+  if (/^\d+$/.test(seg) && seg.length >= 4) return true; // numeric id
+  if (/^[a-f0-9]{12,}$/i.test(seg)) return true; // long hex
+  return false;
+}
 
 type Crumb = { label: string; href?: string };
 
-function buildBreadcrumbs(pathname: string): Crumb[] {
+function buildBreadcrumbs(
+  pathname: string,
+  overrides: Record<string, string>,
+): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return [{ label: "Tổng quan" }];
   const crumbs: Crumb[] = [];
   let acc = "";
   segments.forEach((seg, idx) => {
     acc += `/${seg}`;
-    const label = ROUTE_LABEL_MAP[seg] ?? seg;
+    let label: string;
+    if (overrides[seg]) {
+      label = overrides[seg];
+    } else if (ROUTE_LABEL_MAP[seg]) {
+      label = ROUTE_LABEL_MAP[seg];
+    } else if (looksLikeId(seg)) {
+      // Never expose raw ObjectId/UUID. Fallback "Chi tiết" until page registers override.
+      label = "Chi tiết";
+    } else {
+      label = seg;
+    }
     crumbs.push({
       label,
       href: idx < segments.length - 1 ? acc : undefined,
@@ -81,7 +117,8 @@ export function Topbar({
   pageActions?: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const crumbs = buildBreadcrumbs(pathname);
+  const overrides = useBreadcrumbOverrides();
+  const crumbs = buildBreadcrumbs(pathname, overrides);
 
   return (
     <header

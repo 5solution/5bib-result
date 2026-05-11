@@ -7,7 +7,7 @@
  * Payment terms / Generated docs. Caller (page) responsible cho actions.
  */
 import type { ContractView } from "@/lib/contracts-api";
-import { formatVND } from "@/lib/contracts-api";
+import { formatVND, formatVNDate } from "@/lib/contracts-api";
 import { ContractStatusBadge } from "./contract-status-badge";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -69,7 +69,7 @@ export function ContractDetailSections({ contract }: { contract: ContractView })
             <Item label="Tên giải" value={contract.raceName} />
             <Item
               label="Ngày tổ chức"
-              value={contract.raceDate?.slice(0, 10)}
+              value={formatVNDate(contract.raceDate)}
             />
             <Item label="Địa điểm" value={contract.raceLocation} />
           </dl>
@@ -125,12 +125,12 @@ export function ContractDetailSections({ contract }: { contract: ContractView })
             label="Phạt chậm thanh toán"
             value={`${contract.paymentTerms.latePenaltyRate}%/${contract.paymentTerms.latePenaltyUnit === "PER_DAY" ? "ngày" : "năm"}`}
           />
-          <Item label="Ngày ký" value={contract.signDate?.slice(0, 10)} />
+          <Item label="Ngày ký" value={formatVNDate(contract.signDate)} />
           <Item
             label="Hiệu lực từ"
-            value={contract.effectiveDate?.slice(0, 10)}
+            value={formatVNDate(contract.effectiveDate)}
           />
-          <Item label="Đến hạn" value={contract.endDate?.slice(0, 10)} />
+          <Item label="Đến hạn" value={formatVNDate(contract.endDate)} />
         </dl>
       </Section>
 

@@ -19,6 +19,7 @@ import {
   updatePartner,
   type CreatePartnerInput,
 } from "@/lib/contracts-api";
+import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
 
 const BLANK: CreatePartnerInput = {
   entityName: "",
@@ -46,6 +47,20 @@ export default function PartnerEditPage({
   const [form, setForm] = useState<CreatePartnerInput>(BLANK);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+
+  // UX-01/UX-05: dynamic crumb cho segment id — không bao giờ show raw ObjectId.
+  useSetCrumb(id, isNew ? "Thêm mới" : form.entityName || "Chi tiết");
+
+  // UX-04: set tab title (browser tab) theo tên partner
+  useEffect(() => {
+    if (isNew) {
+      document.title = "Thêm đối tác · 5BIB Admin";
+      return;
+    }
+    if (form.entityName) {
+      document.title = `${form.entityName} · Đối tác · 5BIB Admin`;
+    }
+  }, [isNew, form.entityName]);
 
   useEffect(() => {
     if (isNew) return;
@@ -102,17 +117,26 @@ export default function PartnerEditPage({
 
   return (
     <div className="space-y-4 p-6">
-      <div className="flex items-center gap-2">
+      {/* UX-06: stacked layout matching acceptance/payment pattern — button + 2-line title */}
+      <div className="flex items-center gap-4">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => router.push("/contracts/partners")}
         >
-          <ChevronLeft className="size-4" /> Quay lại
+          <ChevronLeft className="size-4" /> Danh sách đối tác
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {isNew ? "Thêm đối tác" : form.entityName}
-        </h1>
+        <div>
+          {/* UX-05: title FIXED — không phụ thuộc input value */}
+          <h1 className="text-2xl font-bold tracking-tight">
+            {isNew ? "Thêm đối tác" : "Chỉnh sửa đối tác"}
+          </h1>
+          {!isNew && (
+            <p className="font-mono text-xs text-[var(--text-muted,#78716C)]">
+              {form.entityName || "—"} · ID: {id.slice(-8)}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border border-[var(--border,#E7E2D9)] bg-white p-6">
@@ -171,6 +195,7 @@ export default function PartnerEditPage({
               id="bank-acc"
               value={form.bankAccount ?? ""}
               onChange={(e) => set("bankAccount", e.target.value)}
+              placeholder="Tuỳ chọn — vd: 1234567890"
             />
           </div>
           <div>
@@ -179,6 +204,7 @@ export default function PartnerEditPage({
               id="bank-name"
               value={form.bankName ?? ""}
               onChange={(e) => set("bankName", e.target.value)}
+              placeholder="Tuỳ chọn — vd: Vietcombank CN HN"
             />
           </div>
           <div>
@@ -187,6 +213,7 @@ export default function PartnerEditPage({
               id="phone"
               value={form.phone ?? ""}
               onChange={(e) => set("phone", e.target.value)}
+              placeholder="Tuỳ chọn — vd: 0987654321"
             />
           </div>
           <div>
@@ -196,6 +223,7 @@ export default function PartnerEditPage({
               type="email"
               value={form.email ?? ""}
               onChange={(e) => set("email", e.target.value)}
+              placeholder="Tuỳ chọn — vd: lien.he@partner.vn"
             />
           </div>
           <div className="sm:col-span-2">

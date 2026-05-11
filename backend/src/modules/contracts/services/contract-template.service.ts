@@ -73,4 +73,15 @@ export class ContractTemplateService {
     await this.model.deleteOne({ contractType });
     return { success: true };
   }
+
+  /**
+   * F-024 UX-39 — Expose default article boilerplate cho admin editor.
+   *
+   * Trả về RAW defaults (KHÔNG apply DB override) — admin UI cần biết text
+   * mặc định để populate textarea defaultValue + diff vs override hiện tại.
+   * Pure read từ constants/default-templates.ts, không DB query.
+   */
+  getDefaultsForType(contractType: ContractType): ArticleSection[] {
+    return getDefaultArticles(contractType);
+  }
 }

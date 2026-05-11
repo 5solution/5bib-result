@@ -23,6 +23,7 @@ import {
   type ContractView,
 } from "@/lib/contracts-api";
 import { DocumentDownloadBtn } from "../../_components/document-download-btn";
+import { PaymentStatusBadge } from "../../_components/payment-status-badge";
 import { ChevronLeft } from "lucide-react";
 
 export default function PaymentPage({
@@ -167,12 +168,8 @@ export default function PaymentPage({
           </div>
           <div>
             <Label>Trạng thái</Label>
-            <div className="mt-2 text-sm font-semibold">
-              {isPaid ? (
-                <span className="text-green-700">ĐÃ THANH TOÁN</span>
-              ) : (
-                contract.paymentRequest?.status ?? "DRAFT"
-              )}
+            <div className="mt-2">
+              <PaymentStatusBadge status={contract.paymentRequest?.status} />
             </div>
           </div>
         </div>

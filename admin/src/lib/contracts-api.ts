@@ -611,6 +611,20 @@ export function updateContractTemplate(
   );
 }
 
+export interface DefaultArticleSection {
+  key: string;
+  heading: string;
+  body: string;
+}
+
+export function getContractTemplateDefaults(
+  type: ContractType,
+): Promise<{ articles: DefaultArticleSection[] }> {
+  return jsonFetch<{ articles: DefaultArticleSection[] }>(
+    `/api/contract-templates/${encodeURIComponent(type)}/default-articles`,
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers — pure VND format + line item calc (mirror backend BR-CM-04)
 // ────────────────────────────────────────────────────────────────────────────
@@ -622,6 +636,21 @@ export function formatVND(n: number | null | undefined): string {
     currency: "VND",
     maximumFractionDigits: 0,
   }).format(n);
+}
+
+/**
+ * F-024 UX-14 — VN date display helper.
+ *
+ * Convert ISO date / datetime → `DD/MM/YYYY`. Returns "—" cho null/empty/invalid.
+ * KHÔNG dùng cho `<input type="date">` value (cần giữ ISO YYYY-MM-DD).
+ */
+export function formatVNDate(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
 export function calcLineAmount(

@@ -26,6 +26,7 @@ import {
   type ContractView,
 } from "@/lib/contracts-api";
 import { CheckCircle2, FileSignature, ReceiptText, Trash2, Repeat } from "lucide-react";
+import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
 
 export default function ContractDetailPage({
   params,
@@ -38,6 +39,15 @@ export default function ContractDetailPage({
   const [contract, setContract] = useState<ContractView | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  // UX-01/UX-04: dynamic breadcrumb + browser tab title từ contractNumber
+  const crumbLabel = contract?.contractNumber ?? (loading ? null : "Hợp đồng nháp");
+  useSetCrumb(id, crumbLabel);
+  useEffect(() => {
+    if (!contract) return;
+    const cn = contract.contractNumber ?? "Hợp đồng nháp";
+    document.title = `${cn} · Hợp đồng · 5BIB Admin`;
+  }, [contract]);
 
   const load = useCallback(async () => {
     setLoading(true);

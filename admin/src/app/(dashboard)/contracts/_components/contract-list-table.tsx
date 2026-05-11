@@ -40,6 +40,7 @@ import {
 import {
   listContracts,
   formatVND,
+  formatVNDate,
   type ContractType,
   type ContractStatus,
   type PaginatedContracts,
@@ -164,6 +165,7 @@ export function ContractListTable() {
             <SelectItem value="SENT">Đã gửi báo giá</SelectItem>
             <SelectItem value="ACCEPTED">Báo giá chấp nhận</SelectItem>
             <SelectItem value="REJECTED">Từ chối</SelectItem>
+            <SelectItem value="CONVERTED_TO_CONTRACT">Đã chuyển HĐ</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" size="icon" onClick={load} aria-label="Tải lại">
@@ -234,7 +236,7 @@ export function ContractListTable() {
                     {formatVND(c.totalAmount)}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {c.signDate?.slice(0, 10) || "—"}
+                    {formatVNDate(c.signDate)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

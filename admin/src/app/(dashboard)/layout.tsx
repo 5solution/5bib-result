@@ -31,6 +31,7 @@ import {
   SidebarUserCard,
 } from "@/components/admin-shell/Sidebar";
 import { Topbar } from "@/components/admin-shell/Topbar";
+import { BreadcrumbProvider } from "@/components/admin-shell/breadcrumb-context";
 
 export default function DashboardLayout({
   children,
@@ -90,6 +91,7 @@ export default function DashboardLayout({
     userInfo?.name ?? userInfo?.username ?? userInfo?.email ?? "Admin";
 
   return (
+    <BreadcrumbProvider>
     <div className="flex min-h-screen bg-[var(--admin-bg)]">
       {/* Desktop Sidebar — 240px dark slate, sticky.
           F-011 BR-PB-01: data-admin-sidebar enables Command Center fullscreen
@@ -152,5 +154,6 @@ export default function DashboardLayout({
         </main>
       </div>
     </div>
+    </BreadcrumbProvider>
   );
 }

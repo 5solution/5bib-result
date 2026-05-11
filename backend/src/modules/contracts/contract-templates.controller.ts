@@ -61,6 +61,20 @@ export class ContractTemplatesController {
     return this.templates.getByType(type);
   }
 
+  @Get(':type/default-articles')
+  @ApiOperation({
+    summary:
+      'F-024 UX-39: Get RAW default article boilerplate cho admin editor (key/heading/body, không apply DB override)',
+  })
+  @ApiParam({
+    name: 'type',
+    enum: ['TICKET_SALES', 'TIMING', 'RACEKIT', 'OPERATIONS'],
+  })
+  @ApiResponse({ status: 200 })
+  async getDefaultArticles(@Param('type') type: ContractType) {
+    return { articles: this.templates.getDefaultsForType(type) };
+  }
+
   @Patch(':type')
   @ApiOperation({
     summary:
