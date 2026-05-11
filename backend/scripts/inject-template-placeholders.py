@@ -52,6 +52,7 @@ COMMON_REPLACEMENTS = [
     # --- Client (Bên A — CTY CP THÀNH AN MEDIA mẫu trong gốc) ---
     ("CÔNG TY CỔ PHẦN THÀNH AN MEDIA", "{client.entityName}"),
     ("CÔNG TY CP THÀNH AN MEDIA", "{client.entityName}"),
+    ("Thành An Media", "{client.entityName}"),
     ("TM01-22, Tòa W1, Vinhomes West Point, đường Đỗ Đức Dục, Phường Từ Liêm, Thành phố Hà Nội",
      "{client.address}"),
     ("TM01-22, Tòa W1, Vinhomes West Point, đường Đỗ Đức Dục, Phường Từ Liêm, Hà Nội",
@@ -64,11 +65,24 @@ COMMON_REPLACEMENTS = [
     # bởi thường client gọi trước; provider sẽ được phục hồi bằng explicit pass-2 ở
     # function inject_per_file (nếu khác).
     ("0985 737 168", "{client.phone}"),
+    ("0985737168", "{client.phone}"),
+    # F-024 BUG-002 fix — client bank info (Tcchcombank typo trong ticket-sales
+    # mẫu). Inject để admin nhập đầy đủ qua Partner bank fields.
+    ("883636666 tại Ngân hàng Tcchcombank",
+     "{client.bankAccount} tại Ngân hàng {client.bankName}"),
+    ("883636666 tại Ngân hàng Techcombank",
+     "{client.bankAccount} tại Ngân hàng {client.bankName}"),
 
     # --- Provider (Bên B / 5BIB / 5SOLUTION) ---
     ("CÔNG TY CỔ PHẦN 5BIB", "{provider.entityName}"),
     ("5SOLUTION TECHNOLOGY JOINT STOCK COMPANY", "{provider.entityName}"),
+    # Provider address — 5BIB / 5SOLUTION variants (LO normalize bỏ "TP. Hà Nội"
+    # có thể có dot, dùng exact match cho từng variant).
     ("VP905, Tầng 9 (Sàn văn phòng), Khối C, Tòa nhà Hồ Gươm Plaza, Số 102 Phố Trần Phú, Phường Hà Đông, Thành phố Hà Nội",
+     "{provider.address}"),
+    ("VP905, Tầng 9 (Sàn văn phòng), Khối C, Tòa nhà Hồ Gươm Plaza, Số 102 Phố Trần Phú, Phường Hà Đông, TP. Hà Nội",
+     "{provider.address}"),
+    ("VP905, Tầng 9 (Sàn văn phòng), Khối C, Tòa nhà Hồ Gươm Plaza, Số 102 Phố Trần Phú, Phường Hà Đông",
      "{provider.address}"),
     ("Tầng 9, Tòa nhà Hồ Gươm Plaza (tòa văn phòng), Số 102 Phố Trần Phú, Phường Hà Đông",
      "{provider.address}"),
@@ -77,7 +91,12 @@ COMMON_REPLACEMENTS = [
     ("0110398986", "{provider.taxId}"),
     ("Ông Nguyễn Bình Minh", "{provider.representative}"),
     ("Nguyễn Bình Minh", "{provider.representative}"),
+    # NEW-3 fix — uppercase variant in signature blocks (ticket-sales mẫu).
+    ("NGUYỄN BÌNH MINH", "{provider.representative}"),
     ("Giám đốc", "{provider.position}"),
+    ("Giám Đốc", "{provider.position}"),
+    # Provider phone — variant in ticket-sales (different from client number).
+    ("0373398986", "{provider.phone}"),
     # Bank info
     ("110398986  - tại ngân hàng MB Bank chi nhánh Thụy Khuê",
      "{provider.bankAccount} - tại ngân hàng {provider.bankName}"),
@@ -85,19 +104,38 @@ COMMON_REPLACEMENTS = [
      "{provider.bankAccount} - tại ngân hàng {provider.bankName}"),
 
     # --- Race info ---
+    # NEW-1 fix — prefix "Sự kiện" trong operations contract mẫu.
+    # Operations mẫu có double-space variant `... Bác  - Vì ...`.
+    ("Sự kiện Hành Trình Theo Chân Bác  - Vì An Ninh Tổ Quốc", "{raceName}"),
+    ("Sự kiện Hành Trình Theo Chân Bác - Vì An Ninh Tổ Quốc", "{raceName}"),
+    ("Hành Trình Theo Chân Bác  - Vì An Ninh Tổ Quốc", "{raceName}"),
     ("Hành Trình Theo Chân Bác - Vì An Ninh Tổ Quốc", "{raceName}"),
     ("Hành Trình Theo Chân Bác – Vì An Ninh Tổ Quốc 2026", "{raceName}"),
     ("Hành Trình Theo Chân Bác – Vì An Ninh Tổ Quốc", "{raceName}"),
 
     # --- Contract metadata ---
+    # NEW-1 + NEW-2 fix — inject {contractNumber} cho operations + ticket-sales
+    # mẫu (vendor 5SOLUTION dùng suffix `-5S`, 5BIB dùng `-5BIB`).
+    ("Số: 14.04/2026/HĐDV/TAM-5S",
+     "Số: {contractNumber}"),
+    ("Số: 14.04/2026/HDDV/TAM-5S",
+     "Số: {contractNumber}"),
+    ("14.04/2026/HĐDV/TAM-5S", "{contractNumber}"),
+    ("14.04/2026/HDDV/TAM-5S", "{contractNumber}"),
     ("11.04/2026/HĐDV/TAM-5BIB", "{contractNumber}"),
     ("11.04/2026/HDDV/TAM-5BIB", "{contractNumber}"),
     ("Hôm nay, ngày    tháng    năm 2026",
      "Hôm nay, ngày {signDay} tháng {signMonth} năm {signYear}"),
     ("Năm 2026", "Năm {signYear}"),
+    # Operations mẫu — "ký ngày 13/03/2026 và Phụ lục số 01" pattern bám
+    # vào contractNumber/date hardcoded. Replace ngày để dùng signDate.
+    ("ký ngày 13/03/2026", "ký ngày {signDay}/{signMonth}/{signYear}"),
+    ("ký ngày 11/04/2026", "ký ngày {signDay}/{signMonth}/{signYear}"),
 
     # --- Financial summary ---
     ("164.160.000 VND", "{totalAmount} VND"),
+    ("164.160.000 ₫", "{totalAmount} ₫"),
+    ("164.160.000", "{totalAmount}"),
     ("Một trăm sáu mươi tư triệu một trăm sáu mươi ngàn đồng",
      "{totalAmountInWords}"),
 
@@ -260,6 +298,41 @@ def wrap_line_items_loop(doc, table_index, header_row_count=1, columns=None):
     # Xóa các data row khác (sau template row)
     for row in data_rows[1:]:
         row._element.getparent().remove(row._element)
+
+
+def strip_embedded_fonts(docx_path):
+    """Strip embedded font files (.odttf / .ttf in word/fonts/) which LibreOffice
+    aggressively embeds during DOCX round-trip — bloats file by ~30MB per font.
+
+    Render-time docxtemplater + libreoffice-convert (in container) can use system
+    fonts (Times New Roman from msttcorefonts). Removing embedded fonts is safe
+    for our use case and keeps templates under 1MB.
+
+    Cũng strip <w:embedRegular>/<w:embedBold>/... refs trong fontTable.xml + xoá
+    word/_rels/fontTable.xml.rels entry tránh dangling references gây LO PDF
+    convert thất bại.
+    """
+    import zipfile, os, shutil, re
+    tmp = docx_path + '.stripped'
+    with zipfile.ZipFile(docx_path, 'r') as zin:
+        with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for n in zin.namelist():
+                if n.startswith('word/fonts/'):
+                    continue  # drop embedded font binaries
+                data = zin.read(n)
+                # Strip embed refs from fontTable.xml (covers all embed* elements).
+                if n == 'word/fontTable.xml':
+                    xml = data.decode('utf-8')
+                    xml = re.sub(r'<w:embed(Regular|Bold|Italic|BoldItalic)[^/]*/>', '', xml)
+                    xml = re.sub(r'<w:embed(Regular|Bold|Italic|BoldItalic)[^>]*>.*?</w:embed(Regular|Bold|Italic|BoldItalic)>', '', xml)
+                    data = xml.encode('utf-8')
+                # Strip relationships pointing to deleted .odttf files.
+                if n == 'word/_rels/fontTable.xml.rels':
+                    xml = data.decode('utf-8')
+                    xml = re.sub(r'<Relationship[^>]*Target="fonts/[^"]+"[^/]*/>', '', xml)
+                    data = xml.encode('utf-8')
+                zout.writestr(n, data)
+    shutil.move(tmp, docx_path)
 
 
 def libreoffice_normalize(src_path, dst_path):
@@ -533,6 +606,10 @@ def process_one(cfg):
         print(f"  ⚠️  Could not wrap line-items loop: {e}")
     doc.save(intermediate)
     libreoffice_normalize(intermediate, final)
+    # F-024 Phase 5 fix — strip embedded fonts (LO adds 30MB+ of .odttf
+    # per file). Templates render at runtime in container có system fonts
+    # (Times New Roman). Keep templates <1MB.
+    strip_embedded_fonts(final)
     size = os.path.getsize(final)
     print(f"  ✓ Saved {final} ({size:,} bytes)")
     return True
