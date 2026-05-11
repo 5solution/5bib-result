@@ -24,7 +24,11 @@ const PROVIDERS: { id: ProviderId; name: string; mst: string }[] = [
 
 export function ProviderPicker({ value, onChange }: Props) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div
+      role="radiogroup"
+      aria-label="Chọn provider"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+    >
       {PROVIDERS.map((p) => {
         const active = value === p.id;
         return (
@@ -32,6 +36,9 @@ export function ProviderPicker({ value, onChange }: Props) {
             key={p.id}
             type="button"
             onClick={() => onChange(p.id)}
+            role="radio"
+            aria-checked={active}
+            aria-label={`Chọn provider ${p.name} (MST ${p.mst})`}
             className={cn(
               "flex flex-col rounded-lg border-2 p-4 text-left transition-colors",
               active

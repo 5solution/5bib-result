@@ -30,7 +30,7 @@ export function MoneyInput({
         const raw = e.target.value.replace(/[^\d]/g, "");
         onChange(raw ? Number(raw) : 0);
       }}
-      placeholder={placeholder ?? "vd: 15.000.000"}
+      placeholder={placeholder ?? "Nhập số (vd 15000000)"}
     />
   );
 }

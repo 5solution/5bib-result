@@ -17,7 +17,7 @@
  *
  * Cancel: confirm dialog → router.back().
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ import {
   type ProviderId,
   type RevenueShare,
 } from "@/lib/contracts-api";
-import { ChevronLeft, ChevronRight, CheckCircle2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, X, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/confirm-dialog";
 
@@ -122,6 +122,11 @@ function defaultLatePenaltyFor(type: ContractType): {
   return { rate: 0.02, unit: "PER_DAY" };
 }
 
+/**
+ * F-024 UX-22 wizard draft auto-save key. Bump version để invalidate stale state.
+ */
+const WIZARD_DRAFT_KEY = "f024:wizard-draft:v1";
+
 export function ContractWizard() {
   const router = useRouter();
   const confirm = useConfirm();
@@ -129,6 +134,43 @@ export function ContractWizard() {
   const [state, setState] = useState<State>(DEFAULT_STATE);
   const [submitting, setSubmitting] = useState(false);
   const [catalogPickerOpen, setCatalogPickerOpen] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const restoredRef = useRef(false);
+
+  // UX-22: restore draft on mount (once).
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const raw = localStorage.getItem(WIZARD_DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { state: State; step: number };
+      if (parsed?.state) {
+        setState(parsed.state);
+        setStep(parsed.step || 1);
+      }
+    } catch {
+      // Ignore parse error — start fresh.
+    }
+  }, []);
+
+  // UX-22: debounce save state to localStorage 3s sau mỗi thay đổi.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          WIZARD_DRAFT_KEY,
+          JSON.stringify({ state, step }),
+        );
+        setLastSavedAt(new Date());
+      } catch {
+        // Quota / disabled — silent.
+      }
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [state, step]);
+
+  // UX-22: clear draft khi submit thành công (handled trong submit() qua finally).
 
   const isRevenueShare = state.contractType === "TICKET_SALES";
 
@@ -257,6 +299,10 @@ export function ContractWizard() {
           : { lineItems: state.lineItems }),
       };
       const c = await createContract(input);
+      // UX-22 clear draft after successful submit.
+      try {
+        localStorage.removeItem(WIZARD_DRAFT_KEY);
+      } catch {}
       if (activate && c.status === "DRAFT") {
         // Trigger activate via subsequent call — keeps API surface clean.
         const { activateContract } = await import("@/lib/contracts-api");
@@ -296,6 +342,10 @@ export function ContractWizard() {
       });
       if (!ok) return;
     }
+    // UX-22 clear draft on cancel.
+    try {
+      localStorage.removeItem(WIZARD_DRAFT_KEY);
+    } catch {}
     router.push("/contracts");
   }
 
@@ -308,6 +358,15 @@ export function ContractWizard() {
           </h1>
           <p className="text-sm text-[var(--text-muted,#78716C)]">
             Bước {step} / {STEPS.length}: {STEPS[step - 1]}
+            {lastSavedAt && (
+              <span className="ml-3 text-xs italic">
+                · Đã lưu nháp tự động lúc{" "}
+                {lastSavedAt.toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
           </p>
         </div>
         <Button variant="ghost" onClick={cancel}>
@@ -315,7 +374,7 @@ export function ContractWizard() {
         </Button>
       </div>
 
-      <Stepper current={step} />
+      <Stepper current={step} onJump={(n) => setStep(n)} />
 
       <div className="rounded-lg border border-[var(--border,#E7E2D9)] bg-white p-6">
         {step === 1 && (
@@ -669,25 +728,46 @@ export function ContractWizard() {
   );
 }
 
-function Stepper({ current }: { current: number }) {
+function Stepper({
+  current,
+  onJump,
+}: {
+  current: number;
+  /** UX-28 click-back only — caller phải block jump-forward (PRD "cannot skip forward"). */
+  onJump?: (step: number) => void;
+}) {
   return (
     <ol className="flex flex-wrap gap-2 text-xs">
       {STEPS.map((label, idx) => {
         const stepNum = idx + 1;
         const active = stepNum === current;
         const done = stepNum < current;
+        const canJump = done && onJump !== undefined;
+        const className = cn(
+          "flex items-center gap-2 rounded-full border px-3 py-1.5 transition-colors",
+          active && "border-[var(--admin-blue,#1D49FF)] bg-[#E6ECFF] font-semibold",
+          done && "border-green-600 bg-green-50 text-green-700",
+          !active && !done && "border-[var(--border,#E7E2D9)] text-[var(--text-muted,#78716C)]",
+          canJump && "cursor-pointer hover:bg-green-100",
+        );
         return (
-          <li
-            key={label}
-            className={cn(
-              "flex items-center gap-2 rounded-full border px-3 py-1.5",
-              active && "border-[var(--admin-blue,#1D49FF)] bg-[#E6ECFF] font-semibold",
-              done && "border-green-600 bg-green-50 text-green-700",
-              !active && !done && "border-[var(--border,#E7E2D9)] text-[var(--text-muted,#78716C)]",
+          <li key={label}>
+            {canJump ? (
+              <button
+                type="button"
+                onClick={() => onJump(stepNum)}
+                className={className}
+                aria-label={`Quay lại bước ${stepNum}: ${label}`}
+              >
+                <span className="font-mono">{stepNum}</span>
+                <span>{label}</span>
+              </button>
+            ) : (
+              <span className={className} aria-current={active ? "step" : undefined}>
+                <span className="font-mono">{stepNum}</span>
+                <span>{label}</span>
+              </span>
             )}
-          >
-            <span className="font-mono">{stepNum}</span>
-            <span>{label}</span>
           </li>
         );
       })}
@@ -817,10 +897,46 @@ function ReviewStep({
         <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--text-muted,#78716C)]">
           Số HĐ dự kiến
         </div>
-        <div className="font-mono font-semibold">
-          {formatContractNumberPreview(state)}
+        <div className="flex items-center gap-2">
+          <div className="font-mono font-semibold">
+            {formatContractNumberPreview(state)}
+          </div>
+          <CopyButton text={formatContractNumberPreview(state)} />
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * F-024 UX-34/UX-35: small copy-to-clipboard button reused by wizard preview
+ * (số HĐ dự kiến) và payment page (số TK provider).
+ */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    if (!text || text === "—") return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success("Đã copy", { id: "copy-clipboard", duration: 1500 });
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Trình duyệt chặn clipboard");
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label="Copy"
+      className="inline-flex size-6 items-center justify-center rounded text-[var(--text-muted,#78716C)] hover:bg-[#F3F0EB] hover:text-[var(--text,#1C1917)]"
+    >
+      {copied ? (
+        <CheckCircle2 className="size-3.5 text-emerald-600" />
+      ) : (
+        <Copy className="size-3.5" />
+      )}
+    </button>
   );
 }

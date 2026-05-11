@@ -229,7 +229,10 @@ export function ServiceCatalogTable() {
                   <TableCell className="text-right font-mono">
                     {formatVND(it.referencePrice ?? 0)}
                   </TableCell>
-                  <TableCell className="max-w-md truncate">
+                  <TableCell
+                    className="max-w-md truncate"
+                    title={it.description || undefined}
+                  >
                     {it.description || "—"}
                   </TableCell>
                   <TableCell className="text-right">
@@ -269,6 +272,7 @@ function CatalogForm({
   initial: ServiceCatalogItem | null;
   onSaved: () => void;
 }) {
+  const confirm = useConfirm();
   const [form, setForm] = useState<CreateServiceCatalogInput>(
     initial
       ? {
@@ -294,6 +298,16 @@ function CatalogForm({
     if (!form.name.trim()) {
       toast.error("Tên dịch vụ bắt buộc");
       return;
+    }
+    // UX-26: warning nếu price = 0 → admin phải gõ tay khi pick từ catalog.
+    if (!form.referencePrice || form.referencePrice === 0) {
+      const ok = await confirm({
+        title: "Lưu với giá tham khảo = 0?",
+        description:
+          "Admin sẽ phải gõ giá tay mỗi lần pick item này từ catalog vào HĐ. Bạn có chắc?",
+        confirmText: "Lưu",
+      });
+      if (!ok) return;
     }
     setSaving(true);
     try {
@@ -356,7 +370,7 @@ function CatalogForm({
           id="sc-price"
           value={(form.referencePrice as number | undefined) ?? 0}
           onChange={(v) => set("referencePrice", v)}
-          placeholder="vd: 15.000.000"
+          placeholder="Nhập số (vd 15000000)"
         />
       </div>
       <div>

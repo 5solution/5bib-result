@@ -7,11 +7,11 @@
  * from generated SDK (this controller already exists pre-Phase 2B).
  */
 import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Search, X } from "lucide-react";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 import "@/lib/api";
 import { racesControllerSearchRaces } from "@/lib/api-generated";
+import { SearchInput } from "./search-input";
 
 export type RacePickerValue = {
   raceId: string;
@@ -40,15 +40,14 @@ export function RacePicker({ value, onChange }: Props) {
   const [list, setList] = useState<RaceLite[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // UX-23: nếu q rỗng → load 10 race gần đây nhất để user pick mà không cần gõ.
   useEffect(() => {
-    if (!q.trim()) {
-      setList([]);
-      return;
-    }
     let alive = true;
     setLoading(true);
     const timer = setTimeout(() => {
-      racesControllerSearchRaces({ query: { q, limit: 10 } as any })
+      racesControllerSearchRaces({
+        query: { q: q.trim() || undefined, limit: 10 } as any,
+      })
         .then((res: any) => {
           if (!alive) return;
           const items: RaceLite[] = Array.isArray(res?.data)
@@ -92,27 +91,28 @@ export function RacePicker({ value, onChange }: Props) {
 
   return (
     <div className="space-y-2">
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted,#78716C)]" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Tìm giải đấu (optional)"
-          className="pl-8"
-        />
-      </div>
-      {q && (
-        <div className="max-h-60 overflow-y-auto rounded-md border border-[var(--border,#E7E2D9)] bg-white">
-          {loading && (
-            <div className="p-3 text-center text-sm text-[var(--text-muted,#78716C)]">
-              Đang tìm...
-            </div>
-          )}
-          {!loading && list.length === 0 && (
-            <div className="p-3 text-center text-sm text-[var(--text-muted,#78716C)]">
-              Không có kết quả
-            </div>
-          )}
+      <SearchInput
+        value={q}
+        onChange={setQ}
+        placeholder="Tìm giải đấu (optional)"
+        ariaLabel="Tìm giải đấu"
+      />
+      <div className="max-h-60 overflow-y-auto rounded-md border border-[var(--border,#E7E2D9)] bg-white">
+        {!q && !loading && list.length > 0 && (
+          <div className="border-b border-[var(--border,#E7E2D9)] bg-[#FAF8F5] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted,#78716C)]">
+            Race gần đây
+          </div>
+        )}
+        {loading && (
+          <div className="p-3 text-center text-sm text-[var(--text-muted,#78716C)]">
+            Đang tìm...
+          </div>
+        )}
+        {!loading && list.length === 0 && (
+          <div className="p-3 text-center text-sm text-[var(--text-muted,#78716C)]">
+            {q ? "Không có kết quả" : "Chưa có race nào"}
+          </div>
+        )}
           {!loading &&
             list.map((r) => {
               const id = r._id || r.id || "";
@@ -141,8 +141,7 @@ export function RacePicker({ value, onChange }: Props) {
                 </button>
               );
             })}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

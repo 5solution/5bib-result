@@ -30,7 +30,7 @@ export function ContractDetailSections({ contract }: { contract: ContractView })
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ContractStatusBadge status={contract.status} />
+          <ContractStatusBadge status={contract.status} prominence="lg" />
           <span className="rounded-full border px-2 py-0.5 text-xs">
             {TYPE_LABEL[contract.contractType] ?? contract.contractType}
           </span>

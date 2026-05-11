@@ -25,7 +25,7 @@ import {
 import { DocumentDownloadBtn } from "../../_components/document-download-btn";
 import { PaymentStatusBadge } from "../../_components/payment-status-badge";
 import { DetailSkeleton } from "../../_components/detail-skeleton";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Copy, CheckCircle2 } from "lucide-react";
 import { useConfirm } from "@/components/confirm-dialog";
 
 export default function PaymentPage({
@@ -208,7 +208,10 @@ export default function PaymentPage({
           <div className="text-[var(--text-muted,#78716C)]">
             Thanh toán vào tài khoản:
           </div>
-          <div className="font-mono">{contract.provider.bankAccount}</div>
+          <div className="flex items-center gap-2">
+            <div className="font-mono">{contract.provider.bankAccount}</div>
+            <CopyAccountBtn value={contract.provider.bankAccount ?? ""} />
+          </div>
           <div>{contract.provider.bankName}</div>
           <div className="text-xs text-[var(--text-muted,#78716C)]">
             {contract.provider.entityName}
@@ -238,5 +241,38 @@ export default function PaymentPage({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * F-024 UX-35: copy số TK provider — flow phổ biến admin gửi info ngân hàng
+ * qua chat / email khi không phải lúc xuất DOCX.
+ */
+function CopyAccountBtn({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      toast.success("Đã copy số TK", { id: "copy-acc", duration: 1500 });
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Trình duyệt chặn clipboard");
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label="Copy số tài khoản"
+      className="inline-flex size-6 items-center justify-center rounded text-[var(--text-muted,#78716C)] hover:bg-[#F3F0EB] hover:text-[var(--text,#1C1917)]"
+    >
+      {copied ? (
+        <CheckCircle2 className="size-3.5 text-emerald-600" />
+      ) : (
+        <Copy className="size-3.5" />
+      )}
+    </button>
   );
 }

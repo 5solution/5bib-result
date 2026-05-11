@@ -33,6 +33,23 @@ export function DiffTable({ contractItems, actualItems }: Props) {
     <div className="rounded-lg border border-[var(--border,#E7E2D9)] bg-white">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
+          {/* UX-25: legend caption màu code */}
+          <caption className="caption-top px-2 py-2 text-left text-xs text-[var(--text-muted,#78716C)]">
+            <span className="inline-flex items-center gap-3">
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block size-2 rounded-sm bg-green-600" />
+                <span className="text-green-700">Xanh = giảm so với HĐ</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block size-2 rounded-sm bg-red-600" />
+                <span className="text-red-700">Đỏ = tăng</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block size-2 rounded-sm bg-stone-400" />
+                <span>Xám = không đổi</span>
+              </span>
+            </span>
+          </caption>
           <thead className="bg-[#F3F0EB] text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-muted,#78716C)]">
             <tr>
               <th className="px-2 py-2 text-left">STT</th>

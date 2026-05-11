@@ -31,6 +31,7 @@ import { MoneyInput } from "./money-input";
 import {
   calcLineAmount,
   calcTotals,
+  formatVND,
   upsertAcceptanceReport,
   finalizeAcceptanceReport,
   type AcceptanceReportInput,
@@ -91,7 +92,24 @@ export function AcceptanceReportForm({ contract, onUpdated }: Props) {
   );
   const remainingBalance = totals.totalAmount - (advancePaid || 0);
 
+  /**
+   * UX-29: validate advancePaid trước save / finalize.
+   * - Block âm: rule pháp lý đơn giản (tiền tạm ứng không thể âm).
+   * - Block > 120% total: defensive cap (typo case admin gõ thừa 0).
+   */
+  function validateAdvance(): string | null {
+    if (advancePaid < 0) return "Tiền tạm ứng không thể âm";
+    if (advancePaid > totals.totalAmount * 1.2)
+      return `Tiền tạm ứng vượt 120% tổng HĐ (max ~${formatVND(Math.round(totals.totalAmount * 1.2))}). Vui lòng kiểm tra.`;
+    return null;
+  }
+
   async function save() {
+    const err = validateAdvance();
+    if (err) {
+      toast.error(err);
+      return;
+    }
     setSaving(true);
     try {
       const input: AcceptanceReportInput = {
@@ -119,6 +137,11 @@ export function AcceptanceReportForm({ contract, onUpdated }: Props) {
   }
 
   async function finalize() {
+    const err = validateAdvance();
+    if (err) {
+      toast.error(err);
+      return;
+    }
     const ok = await confirm({
       title: "Hoàn thành biên bản nghiệm thu?",
       description:
