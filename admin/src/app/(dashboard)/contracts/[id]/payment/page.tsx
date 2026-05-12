@@ -209,12 +209,12 @@ export default function PaymentPage({
             Thanh toán vào tài khoản:
           </div>
           <div className="flex items-center gap-2">
-            <div className="font-mono">{contract.provider.bankAccount}</div>
+            <div className="font-mono">{contract.provider.bankAccount || "—"}</div>
             <CopyAccountBtn value={contract.provider.bankAccount ?? ""} />
           </div>
-          <div>{contract.provider.bankName}</div>
+          <div>{contract.provider.bankName || "—"}</div>
           <div className="text-xs text-[var(--text-muted,#78716C)]">
-            {contract.provider.entityName}
+            {contract.provider.entityName || "—"}
           </div>
         </div>
       </div>

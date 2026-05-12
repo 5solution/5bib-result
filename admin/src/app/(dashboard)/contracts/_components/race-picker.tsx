@@ -19,7 +19,11 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import "@/lib/api";
-import { racesControllerSearchRaces } from "@/lib/api-generated";
+import {
+  racesControllerSearchRaces,
+  type RacesControllerSearchRacesData,
+  type RacesControllerSearchRacesResponses,
+} from "@/lib/api-generated";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchInput } from "./search-input";
@@ -66,21 +70,29 @@ export function RacePicker({ value, onChange, allowManual = true }: Props) {
   });
 
   // UX-23: nếu q rỗng → load 10 race gần đây nhất để user pick mà không cần gõ.
+  // SDK schema: `title` cho search keyword, `pageSize` cho limit (không có `q` / `limit`).
   useEffect(() => {
     let alive = true;
     setLoading(true);
     const timer = setTimeout(() => {
-      racesControllerSearchRaces({
-        query: { q: q.trim() || undefined, limit: 10 } as any,
-      })
-        .then((res: any) => {
+      const query: NonNullable<RacesControllerSearchRacesData["query"]> = {
+        title: q.trim() || undefined,
+        pageSize: 10,
+      };
+      racesControllerSearchRaces({ query })
+        .then((res) => {
           if (!alive) return;
-          const items: RaceLite[] = Array.isArray(res?.data)
-            ? res.data
-            : res?.data?.items ?? [];
+          // SDK trả về `{ data: { data: { list: [...] } } }`.
+          // `list` items là `Record<string, unknown>` (vendor race shape không
+          // được codegen vào schema chi tiết) — narrow xuống RaceLite tại đây.
+          const payload = res.data as
+            | RacesControllerSearchRacesResponses[200]
+            | undefined;
+          const rawList = payload?.data?.list ?? [];
+          const items: RaceLite[] = rawList.map((r) => r as RaceLite);
           setList(items);
         })
-        .catch((err) => {
+        .catch((err: Error) => {
           if (alive) toast.error(`Không tìm được race: ${err.message}`);
         })
         .finally(() => alive && setLoading(false));

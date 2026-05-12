@@ -199,7 +199,14 @@ export interface CreateContractInput {
   sourceQuotationId?: string;
 }
 
-export type UpdateContractInput = Partial<CreateContractInput>;
+/**
+ * F-024 Update payload — allow status update CHỈ cho CANCELLED
+ * (backend enforce: dto.status === 'CANCELLED' && Object.keys(dto).length === 1).
+ * Type này khớp với backend UpdateContractDto field literal 'CANCELLED'.
+ */
+export type UpdateContractInput = Partial<CreateContractInput> & {
+  status?: "CANCELLED";
+};
 
 export interface ContractFilterInput {
   contractType?: ContractType;

@@ -15,6 +15,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -71,16 +72,26 @@ export function useBreadcrumbOverrides(): CrumbMap {
  */
 export function useSetCrumb(segment: string, label: string | null | undefined) {
   const ctx = useContext(Ctx);
+  // F-024 fix infinite loop: KHÔNG đưa `ctx` vào deps của useEffect.
+  // Mỗi lần `setOverride` call → provider re-render → ctx object mới
+  // → effect re-run → setOverride lại → loop infinite ("Maximum update
+  // depth exceeded"). Dùng ref để effect luôn point tới ctx mới nhất
+  // mà KHÔNG retrigger effect.
+  const ctxRef = useRef(ctx);
+  ctxRef.current = ctx;
+
   useEffect(() => {
-    if (!ctx) return;
+    const c = ctxRef.current;
+    if (!c) return;
     if (!segment) return;
     if (label && label.trim().length > 0) {
-      ctx.setOverride(segment, label.trim());
+      c.setOverride(segment, label.trim());
     } else {
-      ctx.setOverride(segment, null);
+      c.setOverride(segment, null);
     }
     return () => {
-      ctx.setOverride(segment, null);
+      c.setOverride(segment, null);
     };
-  }, [ctx, segment, label]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ctx truy cập qua ref intentionally
+  }, [segment, label]);
 }

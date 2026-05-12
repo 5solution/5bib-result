@@ -98,7 +98,7 @@ export default function ContractDetailPage({
     if (!ok) return;
     setBusy(true);
     try {
-      const next = await updateContract(contract._id, { status: "CANCELLED" } as any);
+      const next = await updateContract(contract._id, { status: "CANCELLED" });
       toast.success("Đã huỷ");
       setContract(next);
     } catch (err) {
