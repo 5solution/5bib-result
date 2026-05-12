@@ -346,6 +346,42 @@ export function exportDashboardExcel(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// F-028 Phase 3 — Cost suggestions từ Service Catalog (HĐ line items)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface CostSuggestion {
+  catalogItemId: string;
+  description: string;
+  category: CostCategory;
+  quantity: number;
+  unit?: string;
+  costPerUnit: number;
+  suggestedAmount: number;
+  contractLineItemStt: number;
+}
+
+export function getCostSuggestions(
+  contractId: string,
+): Promise<CostSuggestion[]> {
+  return jsonFetch<CostSuggestion[]>(
+    `/api/finance/contracts/${encodeURIComponent(contractId)}/cost-suggestions`,
+  );
+}
+
+export function bulkCreateCostItems(
+  contractId: string,
+  items: CostItemInput[],
+): Promise<CostItemView[]> {
+  return jsonFetch<CostItemView[]>(
+    `/api/finance/contracts/${encodeURIComponent(contractId)}/cost-items/bulk`,
+    {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Formatting helpers
 // ────────────────────────────────────────────────────────────────────────────
 

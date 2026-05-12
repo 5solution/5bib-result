@@ -6,6 +6,10 @@ import {
   Contract,
   ContractSchema,
 } from '../contracts/schemas/contract.schema';
+import {
+  ServiceCatalog,
+  ServiceCatalogSchema,
+} from '../contracts/schemas/service-catalog.schema';
 import { OrderReadonly } from './entities/order-readonly.entity';
 import { Tenant } from '../merchant/entities/tenant.entity';
 import { AuditModule } from '../audit/audit.module';
@@ -13,11 +17,13 @@ import { CostItemsService } from './services/cost-items.service';
 import { PnLService } from './services/pnl.service';
 import { FeeService } from './services/fee.service';
 import { PnLExcelService } from './services/pnl-excel.service';
+import { CostSuggestionsService } from './services/cost-suggestions.service';
 import { CostItemsController } from './controllers/cost-items.controller';
 import { PnLController } from './controllers/pnl.controller';
 import { PnLExportController } from './controllers/pnl-export.controller';
 import { PnLDashboardController } from './controllers/pnl-dashboard.controller';
 import { MysqlLookupController } from './controllers/mysql-lookup.controller';
+import { CostSuggestionsController } from './controllers/cost-suggestions.controller';
 
 /**
  * F-028 Finance / Deal P&L Tracking module.
@@ -43,6 +49,8 @@ import { MysqlLookupController } from './controllers/mysql-lookup.controller';
       { name: CostItem.name, schema: CostItemSchema },
       // Read-only Contract — compute revenue + cross-module read
       { name: Contract.name, schema: ContractSchema },
+      // Phase 3 — Read-only ServiceCatalog cho cost-suggestions endpoint
+      { name: ServiceCatalog.name, schema: ServiceCatalogSchema },
     ]),
     TypeOrmModule.forFeature([OrderReadonly, Tenant], 'platform'),
     AuditModule,
@@ -53,8 +61,15 @@ import { MysqlLookupController } from './controllers/mysql-lookup.controller';
     PnLExportController,
     PnLDashboardController,
     MysqlLookupController,
+    CostSuggestionsController,
   ],
-  providers: [CostItemsService, PnLService, FeeService, PnLExcelService],
+  providers: [
+    CostItemsService,
+    PnLService,
+    FeeService,
+    PnLExcelService,
+    CostSuggestionsService,
+  ],
   exports: [PnLService, CostItemsService],
 })
 export class FinanceModule {}

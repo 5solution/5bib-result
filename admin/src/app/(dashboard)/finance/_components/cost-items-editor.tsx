@@ -19,9 +19,10 @@ import {
 } from "@/lib/finance-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { CostItemDialog } from "./cost-item-dialog";
 import { CostItemDeleteConfirm } from "./cost-item-delete-confirm";
+import { CostSuggestionsDialog } from "./cost-suggestions-dialog";
 
 interface Props {
   contractId: string;
@@ -41,6 +42,8 @@ export function CostItemsEditor({ contractId }: Props) {
   const [editTarget, setEditTarget] = useState<CostItemView | undefined>();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CostItemView | null>(null);
+  // F-028 Phase 3 — cost suggestions từ Service Catalog (HĐ line items)
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
 
   function handleSaved() {
     qc.invalidateQueries({ queryKey: ["finance", "cost-items", contractId] });
@@ -78,10 +81,21 @@ export function CostItemsEditor({ contractId }: Props) {
             </span>
           )}
         </h2>
-        <Button onClick={openCreate} size="sm">
-          <Plus className="mr-1 size-4" aria-hidden />
-          Thêm chi phí
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSuggestionsOpen(true)}
+            title="Gợi ý chi phí từ line items HĐ pick từ Service Catalog"
+          >
+            <Sparkles className="mr-1 size-4" aria-hidden />
+            Gợi ý từ HĐ
+          </Button>
+          <Button onClick={openCreate} size="sm">
+            <Plus className="mr-1 size-4" aria-hidden />
+            Thêm chi phí
+          </Button>
+        </div>
       </div>
 
       {isLoading && <Skeleton className="h-32 w-full" />}
@@ -180,6 +194,12 @@ export function CostItemsEditor({ contractId }: Props) {
           setDeleteTarget(null);
         }}
         onDeleted={handleSaved}
+      />
+      <CostSuggestionsDialog
+        contractId={contractId}
+        open={suggestionsOpen}
+        onOpenChange={setSuggestionsOpen}
+        onCreated={handleSaved}
       />
     </div>
   );
