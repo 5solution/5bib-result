@@ -91,6 +91,9 @@ export function ServiceCatalogPicker({
       discount: 0,
       selected: true,
       note: it.description,
+      // F-028 Phase 3 — snapshot catalog._id để cost-suggestions endpoint
+      // lookup ServiceCatalog.referenceCost × quantity → gợi ý chi phí P&L.
+      catalogItemId: it._id,
     });
     onClose();
   }

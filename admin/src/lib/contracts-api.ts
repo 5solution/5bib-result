@@ -71,6 +71,12 @@ export interface LineItemInput {
   discount?: number;
   selected?: boolean;
   note?: string;
+  /**
+   * F-028 Phase 3 — `ServiceCatalog._id` snapshot khi line item được pick
+   * từ Service Catalog. Optional — line item nhập tay sẽ undefined.
+   * Backend lưu để cost-suggestions endpoint match HĐ ↔ catalog.
+   */
+  catalogItemId?: string;
 }
 
 export interface LineItemView extends LineItemInput {
@@ -166,6 +172,9 @@ export interface ContractView {
   generatedDocuments: GeneratedDocumentEntry[];
   acceptanceReport?: AcceptanceReportView | null;
   paymentRequest?: PaymentRequestView | null;
+  /** F-028 — MySQL platform linkage (TICKET_SALES only). */
+  linkedTenantId?: number | null;
+  linkedMysqlRaceId?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -206,6 +215,12 @@ export interface CreateContractInput {
  */
 export type UpdateContractInput = Partial<CreateContractInput> & {
   status?: "CANCELLED";
+  /**
+   * F-028 — link/unlink MySQL platform (TICKET_SALES only).
+   * Truyền `null` explicit để UNLINK (omit key → keep current).
+   */
+  linkedTenantId?: number | null;
+  linkedMysqlRaceId?: number | null;
 };
 
 export interface ContractFilterInput {
@@ -282,6 +297,8 @@ export interface ServiceCatalogItem {
   category: ServiceCategory;
   unit?: string;
   referencePrice?: number;
+  /** F-024 — Giá vốn tham khảo (VND). Dùng pre-compute P&L cost item ở F-028. */
+  referenceCost?: number;
   description?: string;
   sortOrder?: number;
   createdAt: string;
@@ -293,6 +310,8 @@ export interface CreateServiceCatalogInput {
   category: ServiceCategory;
   unit?: string;
   referencePrice?: number;
+  /** F-024 — Giá vốn tham khảo (VND). Optional + default 0. */
+  referenceCost?: number;
   description?: string;
   sortOrder?: number;
 }

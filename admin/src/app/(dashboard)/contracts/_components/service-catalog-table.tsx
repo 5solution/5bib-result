@@ -60,11 +60,51 @@ const CATEGORY_LABEL: Record<ServiceCategory, string> = {
   GENERAL: "Chung",
 };
 
+/**
+ * F-028 Phase 3 — compute lãi gộp % từ giá bán × giá vốn (admin glance KPI).
+ *
+ * Tier thresholds:
+ *   - high  (xanh)   margin > 40%  → lãi tốt
+ *   - mid   (vàng)   20% ≤ m ≤ 40% → trung bình
+ *   - low   (đỏ)     m < 20% (incl. negative loss)
+ *   - unknown        price=0 hoặc cost=0 → không tính được
+ *
+ * Pure compute — KHÔNG call API, render trực tiếp trong row map.
+ */
+type MarginTier = "high" | "mid" | "low" | "unknown";
+type MarginResult = { value: number; tier: MarginTier };
+
+function computeMargin(price: number, cost: number): MarginResult {
+  if (!price || price <= 0 || !cost || cost <= 0) {
+    return { value: 0, tier: "unknown" };
+  }
+  const margin = ((price - cost) / price) * 100;
+  let tier: MarginTier = "low";
+  if (margin > 40) tier = "high";
+  else if (margin >= 20) tier = "mid";
+  return { value: Math.round(margin), tier };
+}
+
+const MARGIN_TIER_CLASS: Record<Exclude<MarginTier, "unknown">, string> = {
+  high: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  mid: "border-amber-300 bg-amber-50 text-amber-800",
+  low: "border-rose-300 bg-rose-50 text-rose-800",
+};
+
+const MARGIN_TIER_DOT: Record<Exclude<MarginTier, "unknown">, string> = {
+  high: "🟢",
+  mid: "🟡",
+  low: "🔴",
+};
+
+type SortKey = "default" | "margin-desc" | "margin-asc";
+
 const BLANK: CreateServiceCatalogInput = {
   name: "",
   category: "GENERAL",
   unit: "",
   referencePrice: 0,
+  referenceCost: 0,
   description: "",
   sortOrder: 0,
 };
@@ -77,6 +117,8 @@ export function ServiceCatalogTable() {
   const [q, setQ] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<ServiceCatalogItem | null>(null);
+  // F-028 Phase 3 — sort by margin (default order = backend sort by sortOrder)
+  const [sortKey, setSortKey] = useState<SortKey>("default");
 
   async function load() {
     setLoading(true);
@@ -173,6 +215,19 @@ export function ServiceCatalogTable() {
             <SelectItem value="GENERAL">Chung</SelectItem>
           </SelectContent>
         </Select>
+        <Select
+          value={sortKey}
+          onValueChange={(v) => setSortKey(v as SortKey)}
+        >
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Sắp xếp mặc định</SelectItem>
+            <SelectItem value="margin-desc">Lãi gộp cao → thấp</SelectItem>
+            <SelectItem value="margin-asc">Lãi gộp thấp → cao</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="rounded-lg border border-[var(--border,#E7E2D9)] bg-white">
@@ -183,6 +238,10 @@ export function ServiceCatalogTable() {
               <TableHead>Nhóm</TableHead>
               <TableHead>ĐVT</TableHead>
               <TableHead className="text-right">Giá tham khảo</TableHead>
+              <TableHead className="text-right">Giá vốn</TableHead>
+              <TableHead className="text-right" title="Lãi gộp ước tính = (giá tham khảo - giá vốn) / giá tham khảo × 100%">
+                Lãi gộp
+              </TableHead>
               <TableHead>Mô tả</TableHead>
               <TableHead aria-label="Actions" />
             </TableRow>
@@ -192,7 +251,7 @@ export function ServiceCatalogTable() {
               <>
                 {Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 6 }).map((__, j) => (
+                    {Array.from({ length: 8 }).map((__, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -203,7 +262,7 @@ export function ServiceCatalogTable() {
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-0">
+                <TableCell colSpan={8} className="py-0">
                   <EmptyState
                     icon={Package}
                     title="Chưa có dịch vụ nào"
@@ -217,52 +276,100 @@ export function ServiceCatalogTable() {
               </TableRow>
             )}
             {!loading &&
-              items.map((it) => (
-                <TableRow key={it._id}>
-                  <TableCell className="font-medium">{it.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {CATEGORY_LABEL[it.category]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{it.unit || "—"}</TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatVND(it.referencePrice ?? 0)}
-                  </TableCell>
-                  <TableCell
-                    className="max-w-md truncate"
-                    title={it.description || undefined}
-                  >
-                    {it.description || "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setEditing(it);
-                        setEditOpen(true);
-                      }}
-                      aria-label={`Sửa ${it.name}`}
+              sortItems(items, sortKey).map((it) => {
+                const m = computeMargin(
+                  it.referencePrice ?? 0,
+                  it.referenceCost ?? 0,
+                );
+                return (
+                  <TableRow key={it._id}>
+                    <TableCell className="font-medium">{it.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {CATEGORY_LABEL[it.category]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{it.unit || "—"}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatVND(it.referencePrice ?? 0)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      {it.referenceCost == null
+                        ? "—"
+                        : formatVND(it.referenceCost)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.tier === "unknown" ? (
+                        <span
+                          className="text-muted-foreground"
+                          title="Cần nhập cả Giá tham khảo và Giá vốn để tính"
+                        >
+                          —
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs font-semibold ${MARGIN_TIER_CLASS[m.tier]}`}
+                          title="Lãi gộp ước tính"
+                        >
+                          <span aria-hidden>{MARGIN_TIER_DOT[m.tier]}</span>
+                          {m.value}%
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className="max-w-md truncate"
+                      title={it.description || undefined}
                     >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(it)}
-                      aria-label={`Xoá ${it.name}`}
-                    >
-                      <Trash2 className="size-4 text-red-600" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      {it.description || "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditing(it);
+                          setEditOpen(true);
+                        }}
+                        aria-label={`Sửa ${it.name}`}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(it)}
+                        aria-label={`Xoá ${it.name}`}
+                      >
+                        <Trash2 className="size-4 text-red-600" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
           </TableBody>
         </Table>
       </div>
     </div>
   );
+}
+
+/**
+ * Client-side sort theo margin. Default giữ nguyên server-side sort
+ * (category + sortOrder + name). Unknown tier (price=0 hoặc cost=0) đẩy
+ * xuống cuối để admin focus vào dòng có data.
+ */
+function sortItems(items: ServiceCatalogItem[], key: SortKey): ServiceCatalogItem[] {
+  if (key === "default") return items;
+  const sign = key === "margin-desc" ? -1 : 1;
+  return [...items].sort((a, b) => {
+    const ma = computeMargin(a.referencePrice ?? 0, a.referenceCost ?? 0);
+    const mb = computeMargin(b.referencePrice ?? 0, b.referenceCost ?? 0);
+    // Unknown tier về cuối
+    if (ma.tier === "unknown" && mb.tier !== "unknown") return 1;
+    if (mb.tier === "unknown" && ma.tier !== "unknown") return -1;
+    if (ma.tier === "unknown" && mb.tier === "unknown") return 0;
+    return sign * (ma.value - mb.value);
+  });
 }
 
 function CatalogForm({
@@ -280,6 +387,7 @@ function CatalogForm({
           category: initial.category,
           unit: initial.unit ?? "",
           referencePrice: initial.referencePrice ?? 0,
+          referenceCost: initial.referenceCost ?? 0,
           description: initial.description ?? "",
           sortOrder: initial.sortOrder ?? 0,
         }
@@ -364,14 +472,31 @@ function CatalogForm({
           />
         </div>
       </div>
-      <div>
-        <Label htmlFor="sc-price">Giá tham khảo (VND)</Label>
-        <MoneyInput
-          id="sc-price"
-          value={(form.referencePrice as number | undefined) ?? 0}
-          onChange={(v) => set("referencePrice", v)}
-          placeholder="Nhập số (vd 15000000)"
-        />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="sc-price">Giá tham khảo (VND)</Label>
+          <MoneyInput
+            id="sc-price"
+            value={(form.referencePrice as number | undefined) ?? 0}
+            onChange={(v) => set("referencePrice", v)}
+            placeholder="Nhập số (vd 15000000)"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Giá BÁN — auto-fill khi pick item vào HĐ
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="sc-cost">Giá vốn (VND)</Label>
+          <MoneyInput
+            id="sc-cost"
+            value={(form.referenceCost as number | undefined) ?? 0}
+            onChange={(v) => set("referenceCost", v)}
+            placeholder="Nhập số (vd 6000000)"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Giá VỐN — pre-fill P&L cost item (có thể override khi tạo HĐ)
+          </p>
+        </div>
       </div>
       <div>
         <Label htmlFor="sc-desc">Mô tả</Label>

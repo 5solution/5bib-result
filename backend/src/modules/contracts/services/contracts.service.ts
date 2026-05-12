@@ -165,6 +165,43 @@ export class ContractsService {
     }
   }
 
+  /**
+   * F-028 HIGH-01 QC carryover — flush `pnl:dashboard:*` (mọi filterHash).
+   *
+   * Khi link/unlink TICKET_SALES contract với MySQL race → revenue source
+   * chuyển từ Estimated → Actual (hoặc ngược lại). Dashboard P&L Phase 2
+   * aggregate `totalRevenue` + `byMonth` + `byType` qua nhiều contract nên
+   * MỌI filterHash đều có thể stale. Clone pattern từ
+   * `cost-items.service.ts#flushDashboardCache` (BR-PNL-14) + articles
+   * invalidation. Best-effort — fail log warn, KHÔNG throw.
+   */
+  private async flushPnlDashboardCache(): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const stream = this.redis.scanStream({
+        match: 'pnl:dashboard:*',
+        count: 200,
+      });
+      const pipeline = this.redis.pipeline();
+      let count = 0;
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (keys: string[]) => {
+          for (const k of keys) {
+            pipeline.del(k);
+            count++;
+          }
+        });
+        stream.on('end', () => resolve());
+        stream.on('error', (err) => reject(err));
+      });
+      if (count > 0) await pipeline.exec();
+    } catch (err) {
+      this.logger.warn(
+        `[contracts] flush pnl:dashboard:* fail: ${(err as Error).message}`,
+      );
+    }
+  }
+
   /** Emit audit log (best-effort). */
   private async emitAudit(
     action: string,
@@ -373,6 +410,11 @@ export class ContractsService {
       ),
       selected: li.selected ?? true,
       note: li.note ?? '',
+      // F-028 Phase 3 — preserve catalog reference khi pick từ Service Catalog
+      // picker. Optional → omit nếu line item nhập tay.
+      ...((li as any).catalogItemId
+        ? { catalogItemId: (li as any).catalogItemId }
+        : {}),
     }));
 
     const totals = ContractsService.calcTotals(lineItems, vatRate);
@@ -568,6 +610,17 @@ export class ContractsService {
   async update(id: string, dto: UpdateContractDto): Promise<Contract> {
     const current = await this.model.findOne({ _id: id, deletedAt: null });
     if (!current) throw new NotFoundException('Contract not found');
+
+    // F-028 Q3.A — `linkedTenantId` + `linkedMysqlRaceId` là **metadata** liên
+    // kết MySQL platform, KHÔNG affect business amount. Cho phép edit anytime
+    // (kể cả ACTIVE/COMPLETED) → tách path xử lý riêng vs DRAFT-only fields.
+    const dtoKeys = Object.keys(dto);
+    const isLinkOnlyUpdate =
+      dtoKeys.length > 0 &&
+      dtoKeys.every(
+        (k) => k === 'linkedTenantId' || k === 'linkedMysqlRaceId',
+      );
+
     // F-024 Fix 2: chỉ DRAFT mới sửa được (BR-CM-07 lifecycle guard).
     // Lý do: HĐ đã ACTIVE = có số HĐ chính thức + signed by đối tác → sửa
     // = break legal integrity. Admin muốn sửa phải CANCEL HĐ rồi tạo HĐ mới.
@@ -575,12 +628,20 @@ export class ContractsService {
     // qua activation flow — để giữ backward compat cho cancel action.
     const isCancelOnlyUpdate =
       dto.status === 'CANCELLED' && Object.keys(dto).length === 1;
-    if (current.status !== 'DRAFT' && !isCancelOnlyUpdate) {
+    if (
+      current.status !== 'DRAFT' &&
+      !isCancelOnlyUpdate &&
+      !isLinkOnlyUpdate
+    ) {
       throw new BadRequestException(
         'Chỉ DRAFT mới sửa được — HĐ đã kích hoạt không thể chỉnh sửa',
       );
     }
-    if (TERMINAL_STATES.includes(current.status) && !isCancelOnlyUpdate) {
+    if (
+      TERMINAL_STATES.includes(current.status) &&
+      !isCancelOnlyUpdate &&
+      !isLinkOnlyUpdate
+    ) {
       throw new BadRequestException(
         'Không thể chỉnh sửa hợp đồng ở trạng thái terminal (COMPLETED/CANCELLED/...)',
       );
@@ -593,6 +654,64 @@ export class ContractsService {
       await this.invalidateContractsCache();
       await this.emitAudit('contract.cancel', current, 'admin');
       return current.toObject();
+    }
+
+    // F-028 — link/unlink MySQL platform (TICKET_SALES only validate).
+    // Apply regardless of status (Q3.A).
+    if (
+      'linkedTenantId' in dto ||
+      'linkedMysqlRaceId' in dto
+    ) {
+      if (current.contractType !== 'TICKET_SALES') {
+        throw new BadRequestException(
+          'Liên kết MySQL chỉ áp dụng cho hợp đồng TICKET_SALES',
+        );
+      }
+      if ('linkedTenantId' in dto) {
+        (current as any).linkedTenantId =
+          dto.linkedTenantId === null ? undefined : dto.linkedTenantId;
+      }
+      if ('linkedMysqlRaceId' in dto) {
+        (current as any).linkedMysqlRaceId =
+          dto.linkedMysqlRaceId === null ? undefined : dto.linkedMysqlRaceId;
+      }
+
+      // Link-only fast path: persist + emit audit + invalidate P&L cache.
+      if (isLinkOnlyUpdate) {
+        await current.save();
+        await this.invalidateContractsCache();
+        // BR-PNL-09 — flush P&L cache cho contract này để revenue source
+        // refresh ngay sau khi link. HIGH-01 QC carryover: ngoài key per-contract
+        // còn phải scan + DEL `pnl:dashboard:*` (mọi filterHash) vì Phase 2
+        // dashboard aggregate revenue qua nhiều contract → 1 contract đổi
+        // Estimated↔Actual ảnh hưởng totalRevenue/byMonth/byType của filter
+        // bất kỳ. Pattern: clone cost-items.service.ts flushDashboardCache().
+        if (this.redis) {
+          try {
+            await this.redis.del(`pnl:contract:${String(current._id)}`);
+            await this.redis.del(
+              `pnl:ticket-sales-fee:${String(current._id)}`,
+            );
+          } catch (err) {
+            this.logger.warn(
+              `[contracts] flush P&L cache fail: ${(err as Error).message}`,
+            );
+          }
+          await this.flushPnlDashboardCache();
+        }
+        await this.emitAudit(
+          dto.linkedTenantId == null && dto.linkedMysqlRaceId == null
+            ? 'contract.unlinkMysql'
+            : 'contract.linkMysql',
+          current,
+          'admin',
+          {
+            linkedTenantId: (current as any).linkedTenantId ?? null,
+            linkedMysqlRaceId: (current as any).linkedMysqlRaceId ?? null,
+          },
+        );
+        return current.toObject();
+      }
     }
 
     if (dto.lineItems) {
@@ -610,6 +729,11 @@ export class ContractsService {
         ),
         selected: li.selected ?? true,
         note: li.note ?? '',
+        // F-028 Phase 3 — preserve catalog reference khi pick từ Service Catalog
+        // picker. Optional → omit nếu line item nhập tay.
+        ...((li as any).catalogItemId
+          ? { catalogItemId: (li as any).catalogItemId }
+          : {}),
       }));
       const vatRate = dto.vatRate ?? current.vatRate;
       const totals = ContractsService.calcTotals(items, vatRate);

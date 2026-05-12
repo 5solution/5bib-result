@@ -52,6 +52,19 @@ export class LineItem {
   @Prop({ required: true, min: 0 }) amount: number;
   @Prop({ default: true }) selected: boolean;
   @Prop() note: string;
+  /**
+   * F-028 Phase 3 — reference tới `ServiceCatalog._id` khi line item được
+   * pick từ catalog picker. Optional: line item nhập tay (chưa có catalog)
+   * vẫn hợp lệ với `catalogItemId === undefined`.
+   *
+   * Dùng để cost-suggestions endpoint match HĐ ↔ catalog → tính
+   * `referenceCost × quantity` đưa vào P&L pre-compute.
+   *
+   * String thay vì Types.ObjectId vì line item là snapshot — nếu catalog
+   * bị soft delete, query lookup vẫn trả null → suggestion skip (KHÔNG
+   * crash). Pattern: `Contract.raceId` (string) thay vì ObjectId ref.
+   */
+  @Prop() catalogItemId?: string;
 }
 export const LineItemSchema = SchemaFactory.createForClass(LineItem);
 
@@ -198,6 +211,24 @@ export class Contract {
 
   @Prop({ index: true }) raceId: string;
   @Prop() raceName: string;
+
+  /**
+   * F-028 — MySQL platform linkage for TICKET_SALES revenue pull.
+   *
+   * Optional, sparse-indexed: chỉ HĐ TICKET_SALES mới cần link để FeeService
+   * cross-DB SUM(total_price). 3 contract types khác (TIMING/RACEKIT/OPERATIONS)
+   * KHÔNG cần — fallback estimatedFee + acceptance report.
+   *
+   * Validation rule (ContractsService.update):
+   *   - chỉ allow set khi contractType === 'TICKET_SALES' (else 400)
+   *   - allow edit anytime (kể cả ACTIVE/COMPLETED) vì là metadata,
+   *     KHÔNG affect contract business amount (Danny chốt Q3.A 2026-05-12)
+   */
+  @Prop({ index: true, sparse: true })
+  linkedTenantId?: number;
+
+  @Prop({ index: true, sparse: true })
+  linkedMysqlRaceId?: number;
   /**
    * F-024 race manual input — raceDate là FREE-FORMAT STRING.
    * Khi pick race từ DB: lưu ISO date string (vd "2026-06-15").

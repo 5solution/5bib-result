@@ -6,6 +6,7 @@ import {
   IsDateString,
   IsEnum,
   IsIn,
+  IsMongoId,
   IsNumber,
   IsOptional,
   IsString,
@@ -32,6 +33,16 @@ export class LineItemInputDto {
   discount?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() selected?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsString() note?: string;
+  /**
+   * F-028 Phase 3 — reference `ServiceCatalog._id` khi line item pick
+   * từ catalog picker. Optional + Mongo ObjectId format (validate strict).
+   * Server lưu thẳng vào snapshot LineItem để cost-suggestions endpoint
+   * lookup catalog → tính `referenceCost × quantity` cho P&L.
+   */
+  @ApiPropertyOptional({ description: 'ServiceCatalog._id reference' })
+  @IsOptional()
+  @IsMongoId()
+  catalogItemId?: string;
 }
 
 export class RevenueShareInputDto {

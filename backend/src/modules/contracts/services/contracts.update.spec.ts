@@ -186,6 +186,152 @@ describe('ContractsService — F-024 update + manual race input', () => {
     });
   });
 
+  // ───────────────────────────────────────────────────────────────
+  // F-028 — MySQL platform linking (linkedTenantId + linkedMysqlRaceId)
+  // Q3.A: edit anytime kể cả ACTIVE/COMPLETED (metadata, không affect amount).
+  // Q2: chỉ TICKET_SALES mới được set.
+  // ───────────────────────────────────────────────────────────────
+
+  describe('update() — F-028 MySQL linking', () => {
+    it('happy: TICKET_SALES DRAFT — set linkedTenantId + linkedMysqlRaceId', async () => {
+      const c = buildContract({ status: 'DRAFT', contractType: 'TICKET_SALES' });
+      mockModel.findOne.mockResolvedValue(c);
+      const result = await svc.update('contract-123', {
+        linkedTenantId: 12,
+        linkedMysqlRaceId: 148,
+      } as any);
+      expect((result as any).linkedTenantId).toBe(12);
+      expect((result as any).linkedMysqlRaceId).toBe(148);
+      expect(c.save).toHaveBeenCalled();
+    });
+
+    it('happy: TICKET_SALES ACTIVE — set link works (Q3.A edit anytime)', async () => {
+      const c = buildContract({ status: 'ACTIVE', contractType: 'TICKET_SALES' });
+      mockModel.findOne.mockResolvedValue(c);
+      const result = await svc.update('contract-123', {
+        linkedTenantId: 12,
+        linkedMysqlRaceId: 148,
+      } as any);
+      expect((result as any).linkedTenantId).toBe(12);
+      expect((result as any).linkedMysqlRaceId).toBe(148);
+      expect(c.save).toHaveBeenCalled();
+    });
+
+    it('happy: TICKET_SALES COMPLETED — set link works (Q3.A terminal state OK)', async () => {
+      const c = buildContract({
+        status: 'COMPLETED',
+        contractType: 'TICKET_SALES',
+      });
+      mockModel.findOne.mockResolvedValue(c);
+      const result = await svc.update('contract-123', {
+        linkedTenantId: 12,
+        linkedMysqlRaceId: 148,
+      } as any);
+      expect((result as any).linkedTenantId).toBe(12);
+      expect((result as any).linkedMysqlRaceId).toBe(148);
+    });
+
+    it('happy: unlink (null) khi đã linked', async () => {
+      const c = buildContract({
+        status: 'ACTIVE',
+        contractType: 'TICKET_SALES',
+        linkedTenantId: 12,
+        linkedMysqlRaceId: 148,
+      });
+      mockModel.findOne.mockResolvedValue(c);
+      const result = await svc.update('contract-123', {
+        linkedTenantId: null,
+        linkedMysqlRaceId: null,
+      } as any);
+      expect((result as any).linkedTenantId).toBeUndefined();
+      expect((result as any).linkedMysqlRaceId).toBeUndefined();
+    });
+
+    it('unhappy: non-TICKET_SALES contract type → BadRequestException', async () => {
+      const c = buildContract({ status: 'DRAFT', contractType: 'TIMING' });
+      mockModel.findOne.mockResolvedValue(c);
+      await expect(
+        svc.update('contract-123', {
+          linkedTenantId: 12,
+          linkedMysqlRaceId: 148,
+        } as any),
+      ).rejects.toThrow(/TICKET_SALES/);
+      expect(c.save).not.toHaveBeenCalled();
+    });
+
+    it('unhappy: RACEKIT contract → reject link', async () => {
+      const c = buildContract({ status: 'DRAFT', contractType: 'RACEKIT' });
+      mockModel.findOne.mockResolvedValue(c);
+      await expect(
+        svc.update('contract-123', { linkedTenantId: 12 } as any),
+      ).rejects.toThrow(/TICKET_SALES/);
+    });
+
+    it('unhappy: OPERATIONS contract → reject link', async () => {
+      const c = buildContract({ status: 'DRAFT', contractType: 'OPERATIONS' });
+      mockModel.findOne.mockResolvedValue(c);
+      await expect(
+        svc.update('contract-123', {
+          linkedMysqlRaceId: 148,
+        } as any),
+      ).rejects.toThrow(/TICKET_SALES/);
+    });
+
+    it('emits audit log "contract.linkMysql" khi set link', async () => {
+      const auditMock = { emit: jest.fn().mockResolvedValue(undefined) };
+      svc = new ContractsService(
+        mockModel,
+        mockPartnerModel,
+        mockRaceModel,
+        numberService,
+        mockTemplateService,
+        mockDocGenerator,
+        auditMock as any,
+        undefined,
+      );
+      const c = buildContract({
+        status: 'ACTIVE',
+        contractType: 'TICKET_SALES',
+      });
+      mockModel.findOne.mockResolvedValue(c);
+      await svc.update('contract-123', {
+        linkedTenantId: 12,
+        linkedMysqlRaceId: 148,
+      } as any);
+      expect(auditMock.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'contract.linkMysql' }),
+      );
+    });
+
+    it('emits audit log "contract.unlinkMysql" khi cả 2 null', async () => {
+      const auditMock = { emit: jest.fn().mockResolvedValue(undefined) };
+      svc = new ContractsService(
+        mockModel,
+        mockPartnerModel,
+        mockRaceModel,
+        numberService,
+        mockTemplateService,
+        mockDocGenerator,
+        auditMock as any,
+        undefined,
+      );
+      const c = buildContract({
+        status: 'ACTIVE',
+        contractType: 'TICKET_SALES',
+        linkedTenantId: 12,
+        linkedMysqlRaceId: 148,
+      });
+      mockModel.findOne.mockResolvedValue(c);
+      await svc.update('contract-123', {
+        linkedTenantId: null,
+        linkedMysqlRaceId: null,
+      } as any);
+      expect(auditMock.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'contract.unlinkMysql' }),
+      );
+    });
+  });
+
   describe('create() — Fix 1 manual race input', () => {
     it('happy: create contract without raceId saves raceName/raceDate/raceLocation from DTO', async () => {
       const created: any = {
