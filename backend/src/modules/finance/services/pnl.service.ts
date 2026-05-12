@@ -44,30 +44,40 @@ export class PnLService {
   ) {}
 
   /**
-   * Resolve tenantId + mysqlRaceId từ contract (Phase 1: chấp nhận field
-   * KHÔNG có → fallback estimatedFee + warning UI).
+   * Resolve tenantId + mysqlRaceId từ contract.
    *
-   * Contract schema KHÔNG có `tenantId` / `mysqlRaceId` field native — F-024
-   * MVP track race string ID + race name only. Cho TICKET_SALES Phase 1
-   * pull metadata từ `templateOverrides` hoặc note convention. Tới khi
-   * Phase 2 thêm field, fallback estimatedFee ổn.
+   * F-028 Phase 1B (Danny chốt 2026-05-12 Q3.A): Contract schema có
+   * `linkedTenantId` + `linkedMysqlRaceId` fields (sparse-indexed) populated
+   * qua admin picker UI. Trước đây dùng `templateOverrides` convention
+   * (`__platformTenantId` / `__platformMysqlRaceId`) — vẫn được respect
+   * làm fallback để KHÔNG break HĐ legacy đã set qua override path.
    */
   private extractPlatformLinkage(contract: ContractDocument): {
     tenantId: number | null;
     mysqlRaceId: number | null;
   } {
-    // Phase 1: Contract schema chưa có field — best-effort lookup
-    // templateOverrides có thể chứa { __platformTenantId: "123" } convention.
-    const overrides =
-      (contract.templateOverrides as Record<string, string> | undefined) ?? {};
-    const tenantStr = overrides.__platformTenantId;
-    const raceStr = overrides.__platformMysqlRaceId;
-    const tenantId = tenantStr ? Number(tenantStr) : null;
-    const mysqlRaceId = raceStr ? Number(raceStr) : null;
-    return {
-      tenantId: Number.isFinite(tenantId) ? tenantId : null,
-      mysqlRaceId: Number.isFinite(mysqlRaceId) ? mysqlRaceId : null,
-    };
+    const c = contract as any;
+    let tenantId =
+      typeof c.linkedTenantId === 'number' ? c.linkedTenantId : null;
+    let mysqlRaceId =
+      typeof c.linkedMysqlRaceId === 'number' ? c.linkedMysqlRaceId : null;
+
+    // Backward compat: legacy `templateOverrides` convention.
+    if (tenantId === null || mysqlRaceId === null) {
+      const overrides =
+        (contract.templateOverrides as Record<string, string> | undefined) ??
+        {};
+      if (tenantId === null && overrides.__platformTenantId) {
+        const v = Number(overrides.__platformTenantId);
+        tenantId = Number.isFinite(v) ? v : null;
+      }
+      if (mysqlRaceId === null && overrides.__platformMysqlRaceId) {
+        const v = Number(overrides.__platformMysqlRaceId);
+        mysqlRaceId = Number.isFinite(v) ? v : null;
+      }
+    }
+
+    return { tenantId, mysqlRaceId };
   }
 
   /**

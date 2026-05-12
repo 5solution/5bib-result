@@ -7,6 +7,7 @@ import {
   ContractSchema,
 } from '../contracts/schemas/contract.schema';
 import { OrderReadonly } from './entities/order-readonly.entity';
+import { Tenant } from '../merchant/entities/tenant.entity';
 import { AuditModule } from '../audit/audit.module';
 import { CostItemsService } from './services/cost-items.service';
 import { PnLService } from './services/pnl.service';
@@ -15,6 +16,7 @@ import { PnLExcelService } from './services/pnl-excel.service';
 import { CostItemsController } from './controllers/cost-items.controller';
 import { PnLController } from './controllers/pnl.controller';
 import { PnLExportController } from './controllers/pnl-export.controller';
+import { MysqlLookupController } from './controllers/mysql-lookup.controller';
 
 /**
  * F-028 Finance / Deal P&L Tracking module.
@@ -41,10 +43,15 @@ import { PnLExportController } from './controllers/pnl-export.controller';
       // Read-only Contract — compute revenue + cross-module read
       { name: Contract.name, schema: ContractSchema },
     ]),
-    TypeOrmModule.forFeature([OrderReadonly], 'platform'),
+    TypeOrmModule.forFeature([OrderReadonly, Tenant], 'platform'),
     AuditModule,
   ],
-  controllers: [CostItemsController, PnLController, PnLExportController],
+  controllers: [
+    CostItemsController,
+    PnLController,
+    PnLExportController,
+    MysqlLookupController,
+  ],
   providers: [CostItemsService, PnLService, FeeService, PnLExcelService],
   exports: [PnLService, CostItemsService],
 })

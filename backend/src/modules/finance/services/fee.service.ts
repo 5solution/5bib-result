@@ -1,9 +1,14 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import type { Redis } from 'ioredis';
 import { Repository } from 'typeorm';
 import { OrderReadonly } from '../entities/order-readonly.entity';
+import { Tenant } from '../../merchant/entities/tenant.entity';
+import {
+  RaceSearchResultDto,
+  TenantSearchResultDto,
+} from '../dto/mysql-lookup.dto';
 
 /**
  * F-028 BR-PNL-04 + BR-PNL-22 — cross-DB MySQL platform pull cho TICKET_SALES.
@@ -45,7 +50,149 @@ export class FeeService {
     @InjectRepository(OrderReadonly, 'platform')
     private readonly orderRepo: Repository<OrderReadonly> | null,
     @Optional() @InjectRedis() private readonly redis?: Redis,
+    @Optional()
+    @InjectRepository(Tenant, 'platform')
+    private readonly tenantRepo?: Repository<Tenant> | null,
   ) {}
+
+  // ────────────────────────────────────────────────────────────────────
+  // F-028 — MySQL Tenant + Race picker (admin UI link TICKET_SALES → MySQL)
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * Search MySQL `tenant` table by name or tax_id (col `vat`). Max 20 rows.
+   * Empty query → 20 most-recent tenants (UX: show defaults instead of empty).
+   * Redis cache 60s (`mysql-lookup:tenant:<q>`).
+   */
+  async searchTenants(q: string | undefined): Promise<TenantSearchResultDto[]> {
+    if (!this.tenantRepo) return [];
+    const query = (q ?? '').trim();
+    const cacheKey = `mysql-lookup:tenant:${query.toLowerCase()}`;
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return JSON.parse(cached) as TenantSearchResultDto[];
+      } catch (e) {
+        this.logger.warn(
+          `[finance] redis get ${cacheKey} fail: ${(e as Error).message}`,
+        );
+      }
+    }
+
+    try {
+      const qb = this.tenantRepo
+        .createQueryBuilder('t')
+        .select(['t.id AS id', 't.name AS name', 't.vat AS vat'])
+        .where('t.deleted = 0 OR t.deleted IS NULL');
+      if (query.length > 0) {
+        const like = `%${query}%`;
+        qb.andWhere('(t.name LIKE :like OR t.vat LIKE :like)', { like });
+      }
+      qb.orderBy('t.name', 'ASC').limit(20);
+
+      const rows: Array<{ id: number; name: string; vat: string | null }> =
+        await qb.getRawMany();
+      const result: TenantSearchResultDto[] = rows.map((r) => ({
+        id: Number(r.id),
+        name: r.name ?? '',
+        taxId: r.vat ?? null,
+      }));
+
+      if (this.redis) {
+        try {
+          await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 60);
+        } catch (e) {
+          this.logger.warn(
+            `[finance] redis set ${cacheKey} fail: ${(e as Error).message}`,
+          );
+        }
+      }
+      return result;
+    } catch (err) {
+      this.logger.warn(
+        `[finance] searchTenants fail q="${query}": ${(err as Error).message}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Search MySQL `races` table cho 1 tenant. Optional substring filter trên
+   * title. Max 30 rows ORDER BY created_on DESC (most-recent first).
+   * Redis cache 60s (`mysql-lookup:races:<tenantId>:<q>`).
+   *
+   * @throws BadRequestException khi tenantId invalid (<= 0)
+   */
+  async searchRaces(
+    tenantId: number,
+    q?: string,
+  ): Promise<RaceSearchResultDto[]> {
+    if (!Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new BadRequestException('tenantId không hợp lệ');
+    }
+    if (!this.tenantRepo) return [];
+    const query = (q ?? '').trim();
+    const cacheKey = `mysql-lookup:races:${tenantId}:${query.toLowerCase()}`;
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return JSON.parse(cached) as RaceSearchResultDto[];
+      } catch (e) {
+        this.logger.warn(
+          `[finance] redis get ${cacheKey} fail: ${(e as Error).message}`,
+        );
+      }
+    }
+
+    try {
+      // Raw SQL — `races` table không có TypeORM entity mapped (pattern
+      // F-016 ReconciliationQueryService line 174-180).
+      let sql = `
+        SELECT r.race_id AS raceId, r.title AS title, r.created_on AS createdOn
+        FROM races r
+        WHERE r.tenant_id = ?
+      `;
+      const params: any[] = [tenantId];
+      if (query.length > 0) {
+        sql += ' AND r.title LIKE ?';
+        params.push(`%${query}%`);
+      }
+      sql += ' ORDER BY r.created_on DESC LIMIT 30';
+
+      const rows: Array<{
+        raceId: number;
+        title: string;
+        createdOn: Date | null;
+      }> = await this.tenantRepo.manager.query(sql, params);
+
+      const result: RaceSearchResultDto[] = rows.map((r) => ({
+        raceId: Number(r.raceId),
+        title: r.title ?? '',
+        createdOn:
+          r.createdOn instanceof Date
+            ? r.createdOn.toISOString()
+            : r.createdOn ?? null,
+      }));
+
+      if (this.redis) {
+        try {
+          await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 60);
+        } catch (e) {
+          this.logger.warn(
+            `[finance] redis set ${cacheKey} fail: ${(e as Error).message}`,
+          );
+        }
+      }
+      return result;
+    } catch (err) {
+      this.logger.warn(
+        `[finance] searchRaces tenant=${tenantId} q="${query}" fail: ${
+          (err as Error).message
+        }`,
+      );
+      return [];
+    }
+  }
 
   /**
    * Pull SUM(total_price) cho TICKET_SALES contract. Trả null nếu không pull

@@ -231,6 +231,37 @@ export function exportPnLExcel(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// F-028 — MySQL Tenant + Race picker (link TICKET_SALES → platform)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface TenantSearchResult {
+  id: number;
+  name: string;
+  taxId: string | null;
+}
+
+export interface RaceSearchResult {
+  raceId: number;
+  title: string;
+  createdOn: string | null;
+}
+
+export function searchMysqlTenants(q: string): Promise<TenantSearchResult[]> {
+  return jsonFetch<TenantSearchResult[]>(
+    `/api/finance/mysql/tenants/search${toQs({ q })}`,
+  );
+}
+
+export function searchMysqlRaces(
+  tenantId: number,
+  q?: string,
+): Promise<RaceSearchResult[]> {
+  return jsonFetch<RaceSearchResult[]>(
+    `/api/finance/mysql/races${toQs({ tenantId, q })}`,
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Formatting helpers
 // ────────────────────────────────────────────────────────────────────────────
 

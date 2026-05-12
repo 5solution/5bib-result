@@ -568,6 +568,17 @@ export class ContractsService {
   async update(id: string, dto: UpdateContractDto): Promise<Contract> {
     const current = await this.model.findOne({ _id: id, deletedAt: null });
     if (!current) throw new NotFoundException('Contract not found');
+
+    // F-028 Q3.A — `linkedTenantId` + `linkedMysqlRaceId` là **metadata** liên
+    // kết MySQL platform, KHÔNG affect business amount. Cho phép edit anytime
+    // (kể cả ACTIVE/COMPLETED) → tách path xử lý riêng vs DRAFT-only fields.
+    const dtoKeys = Object.keys(dto);
+    const isLinkOnlyUpdate =
+      dtoKeys.length > 0 &&
+      dtoKeys.every(
+        (k) => k === 'linkedTenantId' || k === 'linkedMysqlRaceId',
+      );
+
     // F-024 Fix 2: chỉ DRAFT mới sửa được (BR-CM-07 lifecycle guard).
     // Lý do: HĐ đã ACTIVE = có số HĐ chính thức + signed by đối tác → sửa
     // = break legal integrity. Admin muốn sửa phải CANCEL HĐ rồi tạo HĐ mới.
@@ -575,12 +586,20 @@ export class ContractsService {
     // qua activation flow — để giữ backward compat cho cancel action.
     const isCancelOnlyUpdate =
       dto.status === 'CANCELLED' && Object.keys(dto).length === 1;
-    if (current.status !== 'DRAFT' && !isCancelOnlyUpdate) {
+    if (
+      current.status !== 'DRAFT' &&
+      !isCancelOnlyUpdate &&
+      !isLinkOnlyUpdate
+    ) {
       throw new BadRequestException(
         'Chỉ DRAFT mới sửa được — HĐ đã kích hoạt không thể chỉnh sửa',
       );
     }
-    if (TERMINAL_STATES.includes(current.status) && !isCancelOnlyUpdate) {
+    if (
+      TERMINAL_STATES.includes(current.status) &&
+      !isCancelOnlyUpdate &&
+      !isLinkOnlyUpdate
+    ) {
       throw new BadRequestException(
         'Không thể chỉnh sửa hợp đồng ở trạng thái terminal (COMPLETED/CANCELLED/...)',
       );
@@ -593,6 +612,59 @@ export class ContractsService {
       await this.invalidateContractsCache();
       await this.emitAudit('contract.cancel', current, 'admin');
       return current.toObject();
+    }
+
+    // F-028 — link/unlink MySQL platform (TICKET_SALES only validate).
+    // Apply regardless of status (Q3.A).
+    if (
+      'linkedTenantId' in dto ||
+      'linkedMysqlRaceId' in dto
+    ) {
+      if (current.contractType !== 'TICKET_SALES') {
+        throw new BadRequestException(
+          'Liên kết MySQL chỉ áp dụng cho hợp đồng TICKET_SALES',
+        );
+      }
+      if ('linkedTenantId' in dto) {
+        (current as any).linkedTenantId =
+          dto.linkedTenantId === null ? undefined : dto.linkedTenantId;
+      }
+      if ('linkedMysqlRaceId' in dto) {
+        (current as any).linkedMysqlRaceId =
+          dto.linkedMysqlRaceId === null ? undefined : dto.linkedMysqlRaceId;
+      }
+
+      // Link-only fast path: persist + emit audit + invalidate P&L cache.
+      if (isLinkOnlyUpdate) {
+        await current.save();
+        await this.invalidateContractsCache();
+        // BR-PNL-09 — flush P&L cache cho contract này để revenue source
+        // refresh ngay sau khi link.
+        if (this.redis) {
+          try {
+            await this.redis.del(`pnl:contract:${String(current._id)}`);
+            await this.redis.del(
+              `pnl:ticket-sales-fee:${String(current._id)}`,
+            );
+          } catch (err) {
+            this.logger.warn(
+              `[contracts] flush P&L cache fail: ${(err as Error).message}`,
+            );
+          }
+        }
+        await this.emitAudit(
+          dto.linkedTenantId == null && dto.linkedMysqlRaceId == null
+            ? 'contract.unlinkMysql'
+            : 'contract.linkMysql',
+          current,
+          'admin',
+          {
+            linkedTenantId: (current as any).linkedTenantId ?? null,
+            linkedMysqlRaceId: (current as any).linkedMysqlRaceId ?? null,
+          },
+        );
+        return current.toObject();
+      }
     }
 
     if (dto.lineItems) {

@@ -46,6 +46,12 @@ import {
 import { RacePicker, type RacePickerValue } from "./race-picker";
 import { LineItemsEditor } from "./line-items-editor";
 import { FinancialSummary } from "./financial-summary";
+import { TenantPicker } from "./tenant-picker";
+import { RaceMysqlPicker } from "./race-mysql-picker";
+import type {
+  RaceSearchResult,
+  TenantSearchResult,
+} from "@/lib/finance-api";
 
 type Props = {
   contract: ContractView;
@@ -66,6 +72,11 @@ type EditState = {
   signDate: string;
   effectiveDate: string;
   endDate: string;
+  /** F-028 — MySQL platform linkage (TICKET_SALES only). */
+  linkedTenantId: number | null;
+  linkedMysqlRaceId: number | null;
+  linkedTenantLabel: string | null;
+  linkedRaceLabel: string | null;
 };
 
 function buildInitialState(c: ContractView): EditState {
@@ -97,6 +108,10 @@ function buildInitialState(c: ContractView): EditState {
     signDate: c.signDate ? c.signDate.slice(0, 10) : "",
     effectiveDate: c.effectiveDate ? c.effectiveDate.slice(0, 10) : "",
     endDate: c.endDate ? c.endDate.slice(0, 10) : "",
+    linkedTenantId: c.linkedTenantId ?? null,
+    linkedMysqlRaceId: c.linkedMysqlRaceId ?? null,
+    linkedTenantLabel: null,
+    linkedRaceLabel: null,
   };
 }
 
@@ -111,7 +126,12 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
   useEffect(() => {
     if (open) {
       setState(buildInitialState(contract));
-      setTab("client");
+      // Non-DRAFT chỉ edit được link MySQL → auto-focus tab đó.
+      const defaultTab =
+        contract.status !== "DRAFT" && contract.contractType === "TICKET_SALES"
+          ? "mysql-link"
+          : "client";
+      setTab(defaultTab);
     }
   }, [open, contract]);
 
@@ -124,7 +144,37 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
     setState((s) => ({ ...s, [k]: v }));
   }
 
+  // F-028 — detect link-only change (non-DRAFT contract can update link anytime).
+  const isDraft = contract.status === "DRAFT";
+  const linkChanged =
+    state.linkedTenantId !== (contract.linkedTenantId ?? null) ||
+    state.linkedMysqlRaceId !== (contract.linkedMysqlRaceId ?? null);
+
   async function save() {
+    // F-028 Q3.A: non-DRAFT chỉ được lưu link fields (metadata MySQL).
+    // Backend route reject các field khác via DRAFT-only gate.
+    if (!isDraft) {
+      if (!linkChanged) {
+        toast.info("Không có thay đổi liên kết MySQL");
+        return;
+      }
+      setSaving(true);
+      try {
+        const updated = await updateContract(contract._id, {
+          linkedTenantId: state.linkedTenantId,
+          linkedMysqlRaceId: state.linkedMysqlRaceId,
+        });
+        toast.success("Đã cập nhật liên kết MySQL");
+        onSaved(updated);
+        onClose();
+      } catch (err) {
+        toast.error(`Lỗi: ${(err as Error).message}`);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (!state.client.entityName?.trim()) {
       toast.error("Tên đơn vị Bên A bắt buộc");
       setTab("client");
@@ -161,8 +211,22 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
         endDate: state.endDate || undefined,
       };
       const updated = await updateContract(contract._id, input);
+
+      // F-028 — link fields phải PATCH riêng (link-only path qua backend
+      // bypass DRAFT-only gate). Nếu đổi link trong cùng dialog DRAFT → 2nd PATCH.
+      let finalUpdated = updated;
+      if (
+        contract.contractType === "TICKET_SALES" &&
+        linkChanged
+      ) {
+        finalUpdated = await updateContract(contract._id, {
+          linkedTenantId: state.linkedTenantId,
+          linkedMysqlRaceId: state.linkedMysqlRaceId,
+        });
+      }
+
       toast.success("Đã lưu thay đổi");
-      onSaved(updated);
+      onSaved(finalUpdated);
       onClose();
     } catch (err) {
       const msg = (err as Error).message;
@@ -182,7 +246,7 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Chỉnh sửa hợp đồng nháp
+            {isDraft ? "Chỉnh sửa hợp đồng nháp" : "Cập nhật liên kết MySQL"}
             {contract.contractNumber && (
               <span className="ml-2 font-mono text-xs text-[var(--text-muted,#78716C)]">
                 · {contract.contractNumber}
@@ -199,6 +263,9 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
               <TabsTrigger value="lineItems">Hạng mục</TabsTrigger>
             )}
             <TabsTrigger value="payment">Thanh toán</TabsTrigger>
+            {contract.contractType === "TICKET_SALES" && (
+              <TabsTrigger value="mysql-link">Liên kết MySQL</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="client" className="space-y-3 pt-3">
@@ -416,6 +483,62 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
               </p>
             )}
           </TabsContent>
+
+          {contract.contractType === "TICKET_SALES" && (
+            <TabsContent value="mysql-link" className="space-y-4 pt-3">
+              <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                Liên kết hợp đồng với MySQL platform để báo cáo P&amp;L pull
+                doanh thu thực từ vé bán. Optional — nếu chưa link, P&amp;L
+                fallback{" "}
+                <code className="rounded bg-blue-100 px-1">estimatedFee</code>{" "}
+                (banner warning hiển thị).
+                {!isDraft && (
+                  <span className="mt-1 block font-medium text-blue-800">
+                    HĐ đã{" "}
+                    {contract.status === "ACTIVE" ? "kích hoạt" : "kết thúc"} —
+                    chỉ liên kết MySQL được cập nhật ở đây (metadata, không
+                    đổi business amount).
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <Label className="mb-2 block">1. Chọn tenant (Bên B)</Label>
+                <TenantPicker
+                  value={state.linkedTenantId}
+                  initialLabel={state.linkedTenantLabel ?? undefined}
+                  onChange={(id, t: TenantSearchResult | null = null) => {
+                    setState((s) => ({
+                      ...s,
+                      linkedTenantId: id,
+                      linkedTenantLabel: t?.name ?? null,
+                      // Reset race khi đổi tenant.
+                      linkedMysqlRaceId:
+                        id === s.linkedTenantId ? s.linkedMysqlRaceId : null,
+                      linkedRaceLabel:
+                        id === s.linkedTenantId ? s.linkedRaceLabel : null,
+                    }));
+                  }}
+                />
+              </div>
+
+              <div>
+                <Label className="mb-2 block">2. Chọn race (MySQL)</Label>
+                <RaceMysqlPicker
+                  tenantId={state.linkedTenantId}
+                  value={state.linkedMysqlRaceId}
+                  initialLabel={state.linkedRaceLabel ?? undefined}
+                  onChange={(id, r: RaceSearchResult | null = null) =>
+                    setState((s) => ({
+                      ...s,
+                      linkedMysqlRaceId: id,
+                      linkedRaceLabel: r?.title ?? null,
+                    }))
+                  }
+                />
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
 
         <DialogFooter>

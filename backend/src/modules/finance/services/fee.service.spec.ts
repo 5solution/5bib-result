@@ -29,6 +29,22 @@ function buildRepo(rawOneResult: any) {
   };
 }
 
+function buildTenantRepo(rawManyResult: any[], rawSqlResult: any[] = []) {
+  const qb: any = {};
+  qb.select = jest.fn().mockReturnValue(qb);
+  qb.where = jest.fn().mockReturnValue(qb);
+  qb.andWhere = jest.fn().mockReturnValue(qb);
+  qb.orderBy = jest.fn().mockReturnValue(qb);
+  qb.limit = jest.fn().mockReturnValue(qb);
+  qb.getRawMany = jest.fn().mockResolvedValue(rawManyResult);
+  return {
+    createQueryBuilder: jest.fn().mockReturnValue(qb),
+    manager: {
+      query: jest.fn().mockResolvedValue(rawSqlResult),
+    },
+  };
+}
+
 describe('F-028 FeeService.getActualRevenueForRace', () => {
   it('Happy path — SUM(total_price)=12_500_000 returned + cache set', async () => {
     const repo = buildRepo({ total: '12500000' });
@@ -116,5 +132,131 @@ describe('F-028 FeeService.getActualRevenueForRace', () => {
       'CODE_TRANSFER',
     ]);
     expect(cats).not.toContain('MANUAL');
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// F-028 MySQL Tenant + Race picker (link Contract TICKET_SALES → MySQL)
+// ────────────────────────────────────────────────────────────────────
+
+describe('F-028 FeeService — searchTenants', () => {
+  it('happy: empty q → 20 latest tenants (no LIKE filter)', async () => {
+    const tenantRepo = buildTenantRepo([
+      { id: 12, name: '5BIB Sport Co.', vat: '0123456789' },
+      { id: 13, name: 'Run Vietnam JSC', vat: null },
+    ]);
+    const svc = new FeeService(null as any, undefined, tenantRepo as any);
+    const r = await svc.searchTenants(undefined);
+    expect(r).toHaveLength(2);
+    expect(r[0]).toEqual({ id: 12, name: '5BIB Sport Co.', taxId: '0123456789' });
+    expect(r[1].taxId).toBeNull();
+    // No LIKE filter when q empty
+    const qb = tenantRepo.createQueryBuilder.mock.results[0].value;
+    expect(qb.andWhere).not.toHaveBeenCalled();
+  });
+
+  it('happy: q non-empty → LIKE filter on name OR vat', async () => {
+    const tenantRepo = buildTenantRepo([
+      { id: 12, name: '5BIB Sport Co.', vat: '0123456789' },
+    ]);
+    const svc = new FeeService(null as any, undefined, tenantRepo as any);
+    await svc.searchTenants('5BIB');
+    const qb = tenantRepo.createQueryBuilder.mock.results[0].value;
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('LIKE'),
+      { like: '%5BIB%' },
+    );
+  });
+
+  it('tenantRepo unset (platform DB chưa cấu hình) → []', async () => {
+    const svc = new FeeService(null as any, undefined, null);
+    const r = await svc.searchTenants('anything');
+    expect(r).toEqual([]);
+  });
+
+  it('cache hit → bypass MySQL', async () => {
+    const tenantRepo = buildTenantRepo([]);
+    const cached = JSON.stringify([
+      { id: 42, name: 'Cached Tenant', taxId: '999' },
+    ]);
+    const redis = {
+      get: jest.fn().mockResolvedValue(cached),
+      set: jest.fn(),
+    };
+    const svc = new FeeService(null as any, redis as any, tenantRepo as any);
+    const r = await svc.searchTenants('foo');
+    expect(r).toEqual([{ id: 42, name: 'Cached Tenant', taxId: '999' }]);
+    expect(tenantRepo.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('MySQL throws → log warn + return [] (graceful)', async () => {
+    const tenantRepo: any = {
+      createQueryBuilder: jest.fn(() => {
+        throw new Error('ECONNREFUSED');
+      }),
+      manager: { query: jest.fn() },
+    };
+    const svc = new FeeService(null as any, undefined, tenantRepo);
+    const r = await svc.searchTenants('foo');
+    expect(r).toEqual([]);
+  });
+});
+
+describe('F-028 FeeService — searchRaces', () => {
+  it('happy: tenantId + q empty → ORDER BY created_on DESC LIMIT 30', async () => {
+    const tenantRepo = buildTenantRepo([], [
+      { raceId: 148, title: 'Vietnam Trail 2026', createdOn: new Date('2026-03-15T00:00:00Z') },
+      { raceId: 100, title: 'Marathon HCMC 2025', createdOn: new Date('2025-12-01T00:00:00Z') },
+    ]);
+    const svc = new FeeService(null as any, undefined, tenantRepo as any);
+    const r = await svc.searchRaces(12, undefined);
+    expect(r).toHaveLength(2);
+    expect(r[0].raceId).toBe(148);
+    expect(r[0].title).toBe('Vietnam Trail 2026');
+    expect(r[0].createdOn).toBe('2026-03-15T00:00:00.000Z');
+    expect(tenantRepo.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('WHERE r.tenant_id = ?'),
+      [12],
+    );
+  });
+
+  it('happy: tenantId + q non-empty → LIKE filter on title', async () => {
+    const tenantRepo = buildTenantRepo([], []);
+    const svc = new FeeService(null as any, undefined, tenantRepo as any);
+    await svc.searchRaces(12, 'Trail');
+    expect(tenantRepo.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('AND r.title LIKE ?'),
+      [12, '%Trail%'],
+    );
+  });
+
+  it('tenantId invalid (0) → BadRequestException', async () => {
+    const tenantRepo = buildTenantRepo([], []);
+    const svc = new FeeService(null as any, undefined, tenantRepo as any);
+    await expect(svc.searchRaces(0)).rejects.toThrow(/tenantId/);
+  });
+
+  it('tenantId invalid (NaN) → BadRequestException', async () => {
+    const tenantRepo = buildTenantRepo([], []);
+    const svc = new FeeService(null as any, undefined, tenantRepo as any);
+    await expect(svc.searchRaces(NaN as any)).rejects.toThrow(/tenantId/);
+  });
+
+  it('tenantRepo unset → []', async () => {
+    const svc = new FeeService(null as any, undefined, null);
+    const r = await svc.searchRaces(12);
+    expect(r).toEqual([]);
+  });
+
+  it('MySQL throws → graceful []', async () => {
+    const tenantRepo: any = {
+      createQueryBuilder: jest.fn(),
+      manager: {
+        query: jest.fn().mockRejectedValue(new Error('SQL fail')),
+      },
+    };
+    const svc = new FeeService(null as any, undefined, tenantRepo);
+    const r = await svc.searchRaces(12, 'q');
+    expect(r).toEqual([]);
   });
 });

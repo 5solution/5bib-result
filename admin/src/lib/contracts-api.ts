@@ -166,6 +166,9 @@ export interface ContractView {
   generatedDocuments: GeneratedDocumentEntry[];
   acceptanceReport?: AcceptanceReportView | null;
   paymentRequest?: PaymentRequestView | null;
+  /** F-028 — MySQL platform linkage (TICKET_SALES only). */
+  linkedTenantId?: number | null;
+  linkedMysqlRaceId?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -206,6 +209,12 @@ export interface CreateContractInput {
  */
 export type UpdateContractInput = Partial<CreateContractInput> & {
   status?: "CANCELLED";
+  /**
+   * F-028 — link/unlink MySQL platform (TICKET_SALES only).
+   * Truyền `null` explicit để UNLINK (omit key → keep current).
+   */
+  linkedTenantId?: number | null;
+  linkedMysqlRaceId?: number | null;
 };
 
 export interface ContractFilterInput {

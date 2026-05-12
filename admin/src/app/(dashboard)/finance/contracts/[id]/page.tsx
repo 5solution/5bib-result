@@ -14,13 +14,15 @@ import { useAuth } from "@/lib/auth-context";
 import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { Button } from "@/components/ui/button";
 import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
-import { ChevronLeft, Download, ExternalLink } from "lucide-react";
+import { CheckCircle2, ChevronLeft, Download, Link2 } from "lucide-react";
 import {
   exportPnLExcel,
   getPnLSummary,
 } from "@/lib/finance-api";
+import { getContract } from "@/lib/contracts-api";
 import { PnLSummaryCard } from "../../_components/pnl-summary-card";
 import { CostItemsEditor } from "../../_components/cost-items-editor";
+import { ContractEditDialog } from "../../../contracts/_components/contract-edit-dialog";
 
 export default function FinancePerContractGate({
   params,
@@ -45,6 +47,7 @@ function FinancePerContractPage({
   const { id } = use(params);
   const qc = useQueryClient();
   const [exporting, setExporting] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
 
   useSetCrumb(id, "P&L theo HĐ");
 
@@ -57,6 +60,19 @@ function FinancePerContractPage({
     queryFn: () => getPnLSummary(id),
     staleTime: 30_000,
   });
+
+  // F-028 — fetch contract để biết contractType + link state
+  // (UI banner "Liên kết MySQL ngay" chỉ show cho TICKET_SALES chưa link).
+  const { data: contract } = useQuery({
+    queryKey: ["contracts", "detail", id],
+    queryFn: () => getContract(id),
+    staleTime: 30_000,
+  });
+
+  const isTicketSales = contract?.contractType === "TICKET_SALES";
+  const isLinked =
+    contract?.linkedTenantId != null &&
+    contract?.linkedMysqlRaceId != null;
 
   async function onExportExcel() {
     setExporting(true);
@@ -112,32 +128,113 @@ function FinancePerContractPage({
         <CostItemsEditor contractId={id} />
       </div>
 
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        <p className="flex items-start gap-2">
-          <ExternalLink
-            className="mt-0.5 size-4 shrink-0"
-            aria-hidden
-          />
-          <span>
-            Lưu ý: P&amp;L cập nhật tự động sau mỗi mutation chi phí (cache
-            60s). Doanh thu từ TICKET_SALES cần link tenant + race MySQL trong{" "}
-            <code>templateOverrides</code> mới pull được thật — chưa link sẽ
-            dùng <code>estimatedFee</code>.
-          </span>
-        </p>
-        <div className="mt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              qc.invalidateQueries({ queryKey: ["finance"] });
-              toast.info("Đã làm mới P&L");
-            }}
-          >
-            Làm mới P&amp;L
-          </Button>
+      {isTicketSales && isLinked && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="flex items-start gap-2">
+            <CheckCircle2
+              className="mt-0.5 size-4 shrink-0 text-emerald-700"
+              aria-hidden
+            />
+            <span>
+              <strong>Đã liên kết MySQL platform</strong> — P&amp;L đang dùng
+              doanh thu THẬT pull từ vé bán (tenantId={" "}
+              <code className="rounded bg-emerald-100 px-1">
+                {contract?.linkedTenantId}
+              </code>
+              , raceId{" "}
+              <code className="rounded bg-emerald-100 px-1">
+                {contract?.linkedMysqlRaceId}
+              </code>
+              ).
+            </span>
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLinkDialogOpen(true)}
+            >
+              <Link2 className="mr-1 size-4" aria-hidden />
+              Cập nhật liên kết
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ["finance"] });
+                qc.invalidateQueries({ queryKey: ["contracts"] });
+                toast.info("Đã làm mới P&L");
+              }}
+            >
+              Làm mới P&amp;L
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {isTicketSales && !isLinked && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="flex items-start gap-2">
+            <Link2 className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden />
+            <span>
+              <strong>Chưa liên kết MySQL platform</strong> — P&amp;L đang
+              dùng{" "}
+              <code className="rounded bg-amber-100 px-1">estimatedFee</code>{" "}
+              (ước tính). Link tenant + race để pull doanh thu THẬT từ vé bán.
+            </span>
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" onClick={() => setLinkDialogOpen(true)}>
+              <Link2 className="mr-1 size-4" aria-hidden />
+              Liên kết MySQL ngay
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ["finance"] });
+                toast.info("Đã làm mới P&L");
+              }}
+            >
+              Làm mới P&amp;L
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!isTicketSales && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          <p>
+            Lưu ý: P&amp;L cập nhật tự động sau mỗi mutation chi phí (cache
+            60s). Doanh thu HĐ này (TIMING/RACEKIT/OPERATIONS) lấy từ Acceptance
+            Report khi FINALIZED, fallback contract.totalAmount.
+          </p>
+          <div className="mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ["finance"] });
+                toast.info("Đã làm mới P&L");
+              }}
+            >
+              Làm mới P&amp;L
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {contract && (
+        <ContractEditDialog
+          contract={contract}
+          open={linkDialogOpen}
+          onClose={() => setLinkDialogOpen(false)}
+          onSaved={(updated) => {
+            qc.setQueryData(["contracts", "detail", id], updated);
+            qc.invalidateQueries({ queryKey: ["finance", "pnl", id] });
+          }}
+        />
+      )}
     </div>
   );
 }
