@@ -47,6 +47,8 @@ import { RaceCourseReadonly } from './race-master-data/entities/race-course-read
 import { CodeReadonly } from './race-master-data/entities/code-readonly.entity';
 import { TeamManagementModule } from './team-management/team-management.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { FinanceModule } from './finance/finance.module';
+import { OrderReadonly } from './finance/entities/order-readonly.entity';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
 import { VolRegistration } from './team-management/entities/vol-registration.entity';
@@ -88,6 +90,8 @@ const platformDbModules = env.platformDb.host
           TicketTypeReadonly,
           RaceCourseReadonly,
           CodeReadonly,
+          // F-028 Finance — cross-DB cost MySQL pull cho TICKET_SALES
+          OrderReadonly,
         ],
         synchronize: false, // KHÔNG auto-sync — DB là readonly
         logging: env.env === 'local' || env.env === 'development',
@@ -108,6 +112,11 @@ const platformDbModules = env.platformDb.host
       // F-023 DashboardModule cần `@InjectDataSource('platform')` cho KPI/Sparkline
       // → chỉ load khi platform DB đã cấu hình, đồng nhất với AnalyticsModule.
       DashboardModule,
+      // F-028 Finance — cross-DB MySQL pull cho TICKET_SALES revenue (FeeService).
+      // Load conditional theo platform DB. Khi PLATFORM_DB_HOST unset, FinanceModule
+      // KHÔNG load → endpoint /finance/* return 404 chứ không 500. Acceptable
+      // vì F-028 chỉ cần thiết khi production có race revenue thật.
+      FinanceModule,
     ]
   : [];
 
