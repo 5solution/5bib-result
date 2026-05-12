@@ -16,6 +16,12 @@ import { CostItemsService } from './cost-items.service';
 import { PnLService } from './pnl.service';
 import { ExcelExportResponseDto } from '../dto/excel-export.dto';
 import { buildDocumentFilename } from '../../contracts/utils/build-filename';
+import { PnLDashboardFilterDto } from '../dto/dashboard-filter.dto';
+import {
+  DashboardContractItemDto,
+  DashboardGroupBucketDto,
+  PnLDashboardResponseDto,
+} from '../dto/dashboard-response.dto';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const ExcelJS = require('exceljs');
@@ -286,5 +292,188 @@ export class PnLExcelService {
       filename,
       bytes: body.length,
     };
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // F-028 Phase 2 — Aggregated dashboard Excel (5 sheets)
+  // ────────────────────────────────────────────────────────────────────────
+
+  private addContractsSheet(
+    wb: any,
+    name: string,
+    items: DashboardContractItemDto[],
+  ): void {
+    const sh = wb.addWorksheet(name);
+    sh.columns = [
+      { header: 'STT', key: 'stt', width: 6 },
+      { header: 'Mã HĐ', key: 'contractNumber', width: 20 },
+      { header: 'Đối tác', key: 'partnerName', width: 30 },
+      { header: 'Race', key: 'raceName', width: 24 },
+      { header: 'Loại HĐ', key: 'contractType', width: 14 },
+      { header: 'Trạng thái', key: 'status', width: 14 },
+      { header: 'Tháng', key: 'anchorMonth', width: 10 },
+      { header: 'Doanh thu', key: 'revenue', width: 16 },
+      { header: 'Nguồn DT', key: 'revenueSource', width: 10 },
+      { header: 'Tổng CP', key: 'totalCost', width: 16 },
+      { header: 'Lãi/Lỗ', key: 'profit', width: 16 },
+      { header: 'Margin %', key: 'margin', width: 10 },
+      { header: 'Phân loại', key: 'marginTier', width: 12 },
+    ];
+    sh.getRow(1).font = { bold: true };
+    sh.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E7FF' },
+    };
+    items.forEach((i, idx) => {
+      sh.addRow({
+        stt: idx + 1,
+        contractNumber: i.contractNumber ?? '(DRAFT)',
+        partnerName: i.partnerName ?? '',
+        raceName: i.raceName ?? '',
+        contractType: i.contractType,
+        status: i.status,
+        anchorMonth: i.anchorMonth ?? '',
+        revenue: i.revenue,
+        revenueSource: i.revenueSource,
+        totalCost: i.totalCost,
+        profit: i.profit,
+        margin: i.margin ?? '',
+        marginTier:
+          i.marginTier === 'loss'
+            ? 'LỖ'
+            : i.marginTier === 'thin'
+              ? 'Mỏng'
+              : i.marginTier === 'healthy'
+                ? 'Healthy'
+                : 'Trung tính',
+      });
+    });
+    sh.getColumn('revenue').numFmt = '#,##0';
+    sh.getColumn('totalCost').numFmt = '#,##0';
+    sh.getColumn('profit').numFmt = '#,##0';
+    sh.getColumn('margin').numFmt = '0.0';
+  }
+
+  private addGroupSheet(
+    wb: any,
+    name: string,
+    groupHeader: string,
+    buckets: DashboardGroupBucketDto[],
+  ): void {
+    const sh = wb.addWorksheet(name);
+    sh.columns = [
+      { header: 'STT', key: 'stt', width: 6 },
+      { header: groupHeader, key: 'label', width: 32 },
+      { header: 'Số HĐ', key: 'cnt', width: 10 },
+      { header: 'Tổng DT', key: 'rev', width: 18 },
+      { header: 'Tổng CP', key: 'cost', width: 18 },
+      { header: 'Tổng Lãi/Lỗ', key: 'profit', width: 18 },
+      { header: 'Margin TB %', key: 'margin', width: 12 },
+    ];
+    sh.getRow(1).font = { bold: true };
+    sh.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E7FF' },
+    };
+    buckets.forEach((b, idx) => {
+      sh.addRow({
+        stt: idx + 1,
+        label: b.label,
+        cnt: b.contractCount,
+        rev: b.totalRevenue,
+        cost: b.totalCost,
+        profit: b.totalProfit,
+        margin: b.avgMargin ?? '',
+      });
+    });
+    sh.getColumn('rev').numFmt = '#,##0';
+    sh.getColumn('cost').numFmt = '#,##0';
+    sh.getColumn('profit').numFmt = '#,##0';
+    sh.getColumn('margin').numFmt = '0.0';
+  }
+
+  async exportAggregated(
+    filter: PnLDashboardFilterDto,
+    actorId: string,
+  ): Promise<ExcelExportResponseDto> {
+    const data: PnLDashboardResponseDto =
+      await this.pnlService.getDashboardData(filter);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '5BIB Finance F-028 (Phase 2 Aggregated)';
+    wb.created = new Date();
+
+    // ── Sheet 1: Tổng quan ──────────────────────────────────────────────
+    const sOverview = wb.addWorksheet('Tổng quan');
+    sOverview.columns = [
+      { header: 'Mục', key: 'k', width: 32 },
+      { header: 'Giá trị', key: 'v', width: 30 },
+    ];
+    sOverview.getRow(1).font = { bold: true };
+    sOverview.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E7FF' },
+    };
+    sOverview.addRow({ k: 'Period', v: data.period });
+    sOverview.addRow({ k: 'Từ ngày', v: data.dateFrom });
+    sOverview.addRow({ k: 'Đến ngày', v: data.dateTo });
+    sOverview.addRow({ k: 'Generated at', v: data.generatedAt });
+    sOverview.addRow({ k: '', v: '' });
+    sOverview.addRow({ k: 'Số HĐ', v: data.totals.contractCount });
+    sOverview.addRow({ k: 'Tổng doanh thu', v: this.fmtVnd(data.totals.totalRevenue) });
+    sOverview.addRow({ k: 'Tổng chi phí', v: this.fmtVnd(data.totals.totalCost) });
+    sOverview.addRow({ k: 'Tổng Lãi/Lỗ', v: this.fmtVnd(data.totals.totalProfit) });
+    sOverview.addRow({ k: 'Margin TB', v: this.fmtPct(data.totals.avgMargin) });
+    sOverview.addRow({ k: '', v: '' });
+    const breakdownRow = sOverview.addRow({
+      k: 'Phân bổ chi phí theo nhóm',
+      v: '',
+    });
+    breakdownRow.font = { bold: true };
+    for (const [cat, amt] of Object.entries(data.totals.costByCategory)) {
+      sOverview.addRow({ k: `  ${cat}`, v: this.fmtVnd(amt) });
+    }
+
+    // ── Sheet 2: Top lãi ────────────────────────────────────────────────
+    this.addContractsSheet(wb, 'Top lãi', data.topProfit);
+
+    // ── Sheet 3: Lỗ ─────────────────────────────────────────────────────
+    this.addContractsSheet(wb, 'Lỗ', data.lossMaking);
+
+    // ── Sheet 4: Theo loại HĐ ───────────────────────────────────────────
+    this.addGroupSheet(wb, 'Theo loại HĐ', 'Loại HĐ', data.byType);
+
+    // ── Sheet 5: Theo đối tác ───────────────────────────────────────────
+    this.addGroupSheet(wb, 'Theo đối tác', 'Đối tác', data.byPartner);
+
+    // ── Write + Upload S3 ──────────────────────────────────────────────
+    const buf: ArrayBuffer = await wb.xlsx.writeBuffer();
+    const body = Buffer.from(buf);
+
+    const ts = Date.now();
+    const s3Key = `finance-pnl-exports/dashboard/${actorId}/${ts}.xlsx`;
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: s3Key,
+        Body: body,
+        ContentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    );
+    const signedUrl = await getSignedUrl(
+      this.s3,
+      new GetObjectCommand({ Bucket: this.bucket, Key: s3Key }),
+      { expiresIn: SIGNED_URL_TTL },
+    );
+
+    const filename = `PnL-Tong-hop-${data.dateFrom}_${data.dateTo}-${ts}.xlsx`;
+    this.logger.log(
+      `[finance] PnL Dashboard Excel exported period=${data.period} contracts=${data.totals.contractCount} bytes=${body.length}`,
+    );
+    return { s3Key, signedUrl, filename, bytes: body.length };
   }
 }

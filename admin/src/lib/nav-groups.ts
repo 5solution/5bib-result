@@ -109,12 +109,19 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Tài chính",
     items: [
       {
+        id: "finance-pnl-dashboard",
+        href: "/finance",
+        label: "Tổng quan P&L",
+        icon: BarChart2,
+        requireRole: "admin",
+        badge: "NEW",
+      },
+      {
         id: "finance-pnl-contract",
         href: "/finance/contracts",
         label: "P&L theo HĐ",
         icon: Coins,
         requireRole: "admin",
-        badge: "NEW",
       },
     ],
   },

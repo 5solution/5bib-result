@@ -197,6 +197,61 @@ export class CostItemsService {
       .exec();
   }
 
+  /**
+   * F-028 Phase 2 — bulk aggregator for dashboard.
+   *
+   * Trả mỗi contractId → { totalCost, costByCategory } trong 1 query để
+   * KHÔNG N+1 (vì dashboard có thể có hàng trăm HĐ).
+   */
+  async aggregateByContractIds(
+    contractIds: Types.ObjectId[],
+  ): Promise<
+    Map<string, { totalCost: number; costByCategory: Record<string, number> }>
+  > {
+    const result = new Map<
+      string,
+      { totalCost: number; costByCategory: Record<string, number> }
+    >();
+    if (contractIds.length === 0) return result;
+
+    const rows = await this.model.aggregate<{
+      _id: { contractId: Types.ObjectId; category: string };
+      sum: number;
+    }>([
+      {
+        $match: {
+          contractId: { $in: contractIds },
+          deletedAt: null,
+        },
+      },
+      {
+        $group: {
+          _id: { contractId: '$contractId', category: '$category' },
+          sum: { $sum: '$amount' },
+        },
+      },
+    ]);
+
+    for (const row of rows) {
+      const cid = row._id.contractId.toString();
+      const entry = result.get(cid) ?? {
+        totalCost: 0,
+        costByCategory: {
+          LABOR: 0,
+          MATERIAL: 0,
+          VENDOR: 0,
+          OUTSOURCE: 0,
+          OTHER: 0,
+        },
+      };
+      entry.totalCost += row.sum;
+      entry.costByCategory[row._id.category] =
+        (entry.costByCategory[row._id.category] ?? 0) + row.sum;
+      result.set(cid, entry);
+    }
+    return result;
+  }
+
   async findOne(
     contractId: string,
     id: string,

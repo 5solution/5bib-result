@@ -262,6 +262,90 @@ export function searchMysqlRaces(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// F-028 Phase 2 — Aggregated Dashboard
+// ────────────────────────────────────────────────────────────────────────────
+
+export type DashboardPeriod =
+  | "current_month"
+  | "last_3_months"
+  | "last_6_months"
+  | "last_12_months"
+  | "ytd"
+  | "custom";
+
+export type DashboardGroupBy = "type" | "partner" | "month";
+
+export interface DashboardFilter {
+  period?: DashboardPeriod;
+  groupBy?: DashboardGroupBy;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export interface DashboardContractItem {
+  contractId: string;
+  contractNumber: string | null;
+  partnerName: string | null;
+  raceName: string | null;
+  contractType: "TICKET_SALES" | "TIMING" | "RACEKIT" | "OPERATIONS";
+  status: string;
+  revenue: number;
+  revenueSource: RevenueSource;
+  totalCost: number;
+  profit: number;
+  margin: number | null;
+  marginTier: MarginTier;
+  anchorMonth: string | null;
+}
+
+export interface DashboardGroupBucket {
+  key: string;
+  label: string;
+  contractCount: number;
+  totalRevenue: number;
+  totalCost: number;
+  totalProfit: number;
+  avgMargin: number | null;
+}
+
+export interface DashboardTotals {
+  contractCount: number;
+  totalRevenue: number;
+  totalCost: number;
+  totalProfit: number;
+  avgMargin: number | null;
+  costByCategory: Record<string, number>;
+}
+
+export interface PnLDashboardResponse {
+  period: string;
+  dateFrom: string;
+  dateTo: string;
+  generatedAt: string;
+  totals: DashboardTotals;
+  byType: DashboardGroupBucket[];
+  byPartner: DashboardGroupBucket[];
+  byMonth: DashboardGroupBucket[];
+  topProfit: DashboardContractItem[];
+  lossMaking: DashboardContractItem[];
+}
+
+export function getDashboardData(
+  filter: DashboardFilter = {},
+): Promise<PnLDashboardResponse> {
+  return jsonFetch<PnLDashboardResponse>(`/api/finance/dashboard${toQs(filter)}`);
+}
+
+export function exportDashboardExcel(
+  filter: DashboardFilter = {},
+): Promise<ExcelExportResponse> {
+  return jsonFetch<ExcelExportResponse>(`/api/finance/dashboard/export/excel`, {
+    method: "POST",
+    body: JSON.stringify(filter),
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Formatting helpers
 // ────────────────────────────────────────────────────────────────────────────
 

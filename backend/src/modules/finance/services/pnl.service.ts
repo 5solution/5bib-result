@@ -17,6 +17,16 @@ import {
   RevenueSource,
 } from '../utils/pnl-compute';
 import { PnLSummaryDto } from '../dto/pnl-response.dto';
+import {
+  PnLDashboardFilterDto,
+  DashboardPeriod,
+} from '../dto/dashboard-filter.dto';
+import {
+  DashboardContractItemDto,
+  DashboardGroupBucketDto,
+  PnLDashboardResponseDto,
+} from '../dto/dashboard-response.dto';
+import * as crypto from 'crypto';
 
 /**
  * F-028 — compute P&L per contract.
@@ -182,6 +192,270 @@ export class PnLService {
       }
     }
 
+    return result;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // F-028 Phase 2 — Dashboard aggregated
+  // ────────────────────────────────────────────────────────────────────────
+
+  private readonly CONTRACT_TYPE_LABELS: Record<string, string> = {
+    TICKET_SALES: 'Vé / Đăng ký',
+    TIMING: 'Bấm giờ',
+    RACEKIT: 'Racekit',
+    OPERATIONS: 'Vận hành',
+  };
+
+  /**
+   * BR-PNL-19 — resolve period preset → ISO range. UTC+7 anchor (giờ VN).
+   *
+   * C.1 (Danny chốt 2026-05-12): scope includes DRAFT, exclude CANCELLED +
+   * REJECTED. Status whitelist whitelist enforced ở aggregation stage.
+   */
+  private resolveDateRange(filter: PnLDashboardFilterDto): {
+    period: DashboardPeriod;
+    dateFrom: Date;
+    dateTo: Date;
+  } {
+    const period: DashboardPeriod = filter.period ?? 'last_3_months';
+    const now = new Date();
+
+    if (period === 'custom') {
+      const from = filter.dateFrom
+        ? new Date(`${filter.dateFrom}T00:00:00+07:00`)
+        : new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      const to = filter.dateTo
+        ? new Date(`${filter.dateTo}T23:59:59+07:00`)
+        : now;
+      return { period, dateFrom: from, dateTo: to };
+    }
+
+    const dateTo = now;
+    let dateFrom: Date;
+    switch (period) {
+      case 'current_month':
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'last_3_months':
+        dateFrom = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        break;
+      case 'last_6_months':
+        dateFrom = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        break;
+      case 'last_12_months':
+        dateFrom = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+        break;
+      case 'ytd':
+        dateFrom = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        dateFrom = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    }
+    return { period, dateFrom, dateTo };
+  }
+
+  private hashFilter(filter: PnLDashboardFilterDto): string {
+    const norm = JSON.stringify({
+      p: filter.period ?? 'last_3_months',
+      g: filter.groupBy ?? 'month',
+      f: filter.dateFrom ?? '',
+      t: filter.dateTo ?? '',
+    });
+    return crypto.createHash('md5').update(norm).digest('hex').slice(0, 12);
+  }
+
+  private isoMonth(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+
+  private avg(values: Array<number | null>): number | null {
+    const filtered = values.filter((v): v is number => v !== null);
+    if (filtered.length === 0) return null;
+    const sum = filtered.reduce((s, v) => s + v, 0);
+    return Math.round((sum / filtered.length) * 10) / 10;
+  }
+
+  async getDashboardData(
+    filter: PnLDashboardFilterDto,
+  ): Promise<PnLDashboardResponseDto> {
+    const { period, dateFrom, dateTo } = this.resolveDateRange(filter);
+
+    const cacheKey = `pnl:dashboard:${this.hashFilter({ ...filter, period })}`;
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return JSON.parse(cached) as PnLDashboardResponseDto;
+      } catch (e) {
+        this.logger.warn(
+          `[finance] dashboard cache get fail: ${(e as Error).message}`,
+        );
+      }
+    }
+
+    // ── 1. Pull contracts in scope (C.1: include DRAFT, exclude
+    //       CANCELLED + REJECTED). Date anchor: signDate fallback createdAt.
+    const contracts = await this.contractModel
+      .find({
+        deletedAt: null,
+        status: { $nin: ['CANCELLED', 'REJECTED'] },
+        $or: [
+          { signDate: { $gte: dateFrom, $lte: dateTo } },
+          {
+            signDate: { $exists: false },
+            createdAt: { $gte: dateFrom, $lte: dateTo },
+          },
+          {
+            signDate: null,
+            createdAt: { $gte: dateFrom, $lte: dateTo },
+          },
+        ],
+      })
+      .lean()
+      .exec();
+
+    const contractIds = contracts.map((c) => c._id as Types.ObjectId);
+
+    // ── 2. Aggregate cost items bulk (1 query — no N+1)
+    const costMap = await this.costItems.aggregateByContractIds(contractIds);
+
+    // ── 3. Resolve revenue per contract (TICKET_SALES → MySQL, else BBNT)
+    const items: DashboardContractItemDto[] = [];
+    const totalCostByCategory: Record<string, number> = {
+      LABOR: 0,
+      MATERIAL: 0,
+      VENDOR: 0,
+      OUTSOURCE: 0,
+      OTHER: 0,
+    };
+    for (const c of contracts) {
+      const id = (c._id as Types.ObjectId).toString();
+      const { revenue, source } = await this.resolveRevenue(c as any);
+      const cost = costMap.get(id) ?? {
+        totalCost: 0,
+        costByCategory: {
+          LABOR: 0,
+          MATERIAL: 0,
+          VENDOR: 0,
+          OUTSOURCE: 0,
+          OTHER: 0,
+        },
+      };
+      for (const k of Object.keys(totalCostByCategory)) {
+        totalCostByCategory[k] += cost.costByCategory[k] ?? 0;
+      }
+
+      const profit = revenue - cost.totalCost;
+      const margin =
+        revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : null;
+      const marginTier: DashboardContractItemDto['marginTier'] =
+        margin === null
+          ? 'neutral'
+          : margin < 0
+            ? 'loss'
+            : margin <= 10
+              ? 'thin'
+              : 'healthy';
+
+      const anchorDate = c.signDate ?? c.createdAt;
+      items.push({
+        contractId: id,
+        contractNumber: c.contractNumber ?? null,
+        partnerName: (c.client as any)?.entityName ?? null,
+        raceName: c.raceName ?? null,
+        contractType: c.contractType as any,
+        status: c.status as string,
+        revenue,
+        revenueSource: source as 'ESTIMATED' | 'ACTUAL',
+        totalCost: cost.totalCost,
+        profit,
+        margin,
+        marginTier,
+        anchorMonth: anchorDate ? this.isoMonth(new Date(anchorDate)) : null,
+      });
+    }
+
+    // ── 4. Totals
+    const totalRevenue = items.reduce((s, i) => s + i.revenue, 0);
+    const totalCost = items.reduce((s, i) => s + i.totalCost, 0);
+    const totalProfit = totalRevenue - totalCost;
+    const avgMargin = this.avg(items.map((i) => i.margin));
+
+    // ── 5. Group by type / partner / month
+    const groupedReduce = (
+      keyFn: (i: DashboardContractItemDto) => string,
+      labelFn: (key: string) => string,
+    ): DashboardGroupBucketDto[] => {
+      const map = new Map<string, DashboardContractItemDto[]>();
+      for (const i of items) {
+        const k = keyFn(i);
+        if (!k) continue;
+        const arr = map.get(k) ?? [];
+        arr.push(i);
+        map.set(k, arr);
+      }
+      return Array.from(map.entries()).map(([key, group]) => ({
+        key,
+        label: labelFn(key),
+        contractCount: group.length,
+        totalRevenue: group.reduce((s, g) => s + g.revenue, 0),
+        totalCost: group.reduce((s, g) => s + g.totalCost, 0),
+        totalProfit: group.reduce((s, g) => s + g.profit, 0),
+        avgMargin: this.avg(group.map((g) => g.margin)),
+      }));
+    };
+
+    const byType = groupedReduce(
+      (i) => i.contractType,
+      (k) => this.CONTRACT_TYPE_LABELS[k] ?? k,
+    );
+    const byPartner = groupedReduce(
+      (i) => i.partnerName ?? '(Chưa có)',
+      (k) => k,
+    ).sort((a, b) => b.totalProfit - a.totalProfit);
+    const byMonth = groupedReduce(
+      (i) => i.anchorMonth ?? '',
+      (k) => k,
+    ).sort((a, b) => a.key.localeCompare(b.key));
+
+    // ── 6. Top profit + Loss-making
+    const topProfit = [...items]
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 10);
+    const lossMaking = items
+      .filter((i) => i.margin !== null && i.margin < 0)
+      .sort((a, b) => a.margin! - b.margin!); // worst margin first
+
+    const result: PnLDashboardResponseDto = {
+      period,
+      dateFrom: dateFrom.toISOString().slice(0, 10),
+      dateTo: dateTo.toISOString().slice(0, 10),
+      generatedAt: new Date().toISOString(),
+      totals: {
+        contractCount: items.length,
+        totalRevenue,
+        totalCost,
+        totalProfit,
+        avgMargin,
+        costByCategory: totalCostByCategory,
+      },
+      byType,
+      byPartner,
+      byMonth,
+      topProfit,
+      lossMaking,
+    };
+
+    if (this.redis) {
+      try {
+        await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 120);
+      } catch (e) {
+        this.logger.warn(
+          `[finance] dashboard cache set fail: ${(e as Error).message}`,
+        );
+      }
+    }
     return result;
   }
 }

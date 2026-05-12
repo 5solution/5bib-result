@@ -160,6 +160,260 @@ describe('F-028 PnLService.getSummary', () => {
     ).rejects.toThrow(/không tồn tại/);
   });
 
+  // ────────────────────────────────────────────────────────────────────
+  // F-028 Phase 2 — getDashboardData
+  // ────────────────────────────────────────────────────────────────────
+
+  function setupDashboardService(opts: {
+    contracts: any[];
+    costMap?: Map<
+      string,
+      { totalCost: number; costByCategory: Record<string, number> }
+    >;
+    feeResult?: { revenue: number | null; warning?: string };
+    redisGetReturn?: string | null;
+  }) {
+    const contractModel = {
+      find: jest.fn(() => ({
+        lean: jest.fn(() => ({
+          exec: jest.fn().mockResolvedValue(opts.contracts),
+        })),
+      })),
+      findById: jest.fn(),
+    };
+    const costItemsService = {
+      findAllActiveByContract: jest.fn().mockResolvedValue([]),
+      aggregateByContractIds: jest
+        .fn()
+        .mockResolvedValue(opts.costMap ?? new Map()),
+    };
+    const feeService = {
+      getActualRevenueForRace: jest
+        .fn()
+        .mockResolvedValue(opts.feeResult ?? { revenue: null }),
+    };
+    const redis: any = {
+      get: jest.fn().mockResolvedValue(opts.redisGetReturn ?? null),
+      set: jest.fn().mockResolvedValue('OK'),
+    };
+    const service = new PnLService(
+      contractModel as any,
+      costItemsService as any,
+      feeService as any,
+      redis as any,
+    );
+    return { service, contractModel, costItemsService, feeService, redis };
+  }
+
+  function makeC(overrides: Partial<any> = {}) {
+    return {
+      _id: new Types.ObjectId(),
+      contractType: 'TIMING',
+      status: 'ACTIVE',
+      totalAmount: 100_000_000,
+      acceptanceReport: undefined,
+      revenueShare: undefined,
+      templateOverrides: {},
+      raceName: 'Race A',
+      contractNumber: 'CN-X',
+      client: { entityName: 'Partner A' },
+      deletedAt: null,
+      signDate: new Date('2026-04-15T00:00:00Z'),
+      createdAt: new Date('2026-04-10T00:00:00Z'),
+      ...overrides,
+    };
+  }
+
+  describe('Phase 2 getDashboardData', () => {
+    it('Happy path — 3 contracts aggregated correctly', async () => {
+      const c1 = makeC({ totalAmount: 100_000_000 });
+      const c2 = makeC({
+        totalAmount: 50_000_000,
+        contractType: 'RACEKIT',
+        client: { entityName: 'Partner B' },
+      });
+      const c3 = makeC({
+        totalAmount: 200_000_000,
+        contractType: 'TIMING',
+        client: { entityName: 'Partner A' },
+      });
+
+      const costMap = new Map<
+        string,
+        { totalCost: number; costByCategory: Record<string, number> }
+      >();
+      costMap.set(c1._id.toString(), {
+        totalCost: 30_000_000,
+        costByCategory: { LABOR: 30_000_000, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+      });
+      costMap.set(c2._id.toString(), {
+        totalCost: 60_000_000,
+        costByCategory: { LABOR: 0, MATERIAL: 60_000_000, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+      });
+      const { service } = setupDashboardService({
+        contracts: [c1, c2, c3],
+        costMap,
+      });
+
+      const result = await service.getDashboardData({});
+      expect(result.totals.contractCount).toBe(3);
+      expect(result.totals.totalRevenue).toBe(350_000_000);
+      expect(result.totals.totalCost).toBe(90_000_000);
+      expect(result.totals.totalProfit).toBe(260_000_000);
+    });
+
+    it('GroupBy contractType — buckets aggregate correctly', async () => {
+      const c1 = makeC({ totalAmount: 100_000_000, contractType: 'TIMING' });
+      const c2 = makeC({ totalAmount: 200_000_000, contractType: 'TIMING' });
+      const c3 = makeC({ totalAmount: 50_000_000, contractType: 'RACEKIT' });
+      const { service } = setupDashboardService({ contracts: [c1, c2, c3] });
+
+      const result = await service.getDashboardData({});
+      const timing = result.byType.find((b) => b.key === 'TIMING');
+      expect(timing).toBeDefined();
+      expect(timing!.contractCount).toBe(2);
+      expect(timing!.totalRevenue).toBe(300_000_000);
+      const racekit = result.byType.find((b) => b.key === 'RACEKIT');
+      expect(racekit!.contractCount).toBe(1);
+    });
+
+    it('GroupBy partner — sorted by profit DESC', async () => {
+      const c1 = makeC({
+        totalAmount: 100_000_000,
+        client: { entityName: 'Partner A' },
+      });
+      const c2 = makeC({
+        totalAmount: 500_000_000,
+        client: { entityName: 'Partner B' },
+      });
+      const { service } = setupDashboardService({ contracts: [c1, c2] });
+
+      const result = await service.getDashboardData({});
+      expect(result.byPartner[0].key).toBe('Partner B');
+      expect(result.byPartner[1].key).toBe('Partner A');
+    });
+
+    it('GroupBy month — sorted ASC by YYYY-MM key', async () => {
+      const c1 = makeC({ signDate: new Date('2026-02-15T00:00:00Z') });
+      const c2 = makeC({ signDate: new Date('2026-04-20T00:00:00Z') });
+      const c3 = makeC({ signDate: new Date('2026-03-10T00:00:00Z') });
+      const { service } = setupDashboardService({ contracts: [c1, c2, c3] });
+
+      const result = await service.getDashboardData({});
+      const keys = result.byMonth.map((b) => b.key);
+      expect(keys).toEqual([...keys].sort());
+      expect(keys).toContain('2026-02');
+      expect(keys).toContain('2026-03');
+      expect(keys).toContain('2026-04');
+    });
+
+    it('C.1 — exclude CANCELLED + REJECTED via Mongo $nin filter', async () => {
+      // We mock contractModel.find — verify call params include status $nin
+      const { service, contractModel } = setupDashboardService({
+        contracts: [],
+      });
+      await service.getDashboardData({});
+      const calls = contractModel.find.mock.calls as any[];
+      const arg = calls[0][0] as { status: { $nin: string[] } };
+      expect(arg.status.$nin).toEqual(['CANCELLED', 'REJECTED']);
+    });
+
+    it('Top profit — limit 10 sort DESC', async () => {
+      const contracts = Array.from({ length: 15 }, (_, i) =>
+        makeC({ totalAmount: (i + 1) * 10_000_000 }),
+      );
+      const { service } = setupDashboardService({ contracts });
+      const result = await service.getDashboardData({});
+      expect(result.topProfit).toHaveLength(10);
+      // profit DESC: first item is highest totalAmount (15 × 10M = 150M)
+      expect(result.topProfit[0].revenue).toBe(150_000_000);
+      expect(result.topProfit[9].revenue).toBe(60_000_000);
+    });
+
+    it('Loss-making — margin < 0', async () => {
+      const c1 = makeC({ totalAmount: 100_000_000 });
+      const c2 = makeC({ totalAmount: 50_000_000 });
+      const costMap = new Map<
+        string,
+        { totalCost: number; costByCategory: Record<string, number> }
+      >();
+      // c1 profit, c2 loss
+      costMap.set(c1._id.toString(), {
+        totalCost: 30_000_000,
+        costByCategory: { LABOR: 30_000_000, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+      });
+      costMap.set(c2._id.toString(), {
+        totalCost: 80_000_000,
+        costByCategory: { LABOR: 80_000_000, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+      });
+      const { service } = setupDashboardService({
+        contracts: [c1, c2],
+        costMap,
+      });
+      const result = await service.getDashboardData({});
+      expect(result.lossMaking).toHaveLength(1);
+      expect(result.lossMaking[0].contractId).toBe(c2._id.toString());
+      expect(result.lossMaking[0].margin).toBeLessThan(0);
+    });
+
+    it('Cache hit 120s — second call returns cached payload, no DB hit', async () => {
+      const cachedPayload = JSON.stringify({
+        period: 'last_3_months',
+        dateFrom: '2026-02-01',
+        dateTo: '2026-05-12',
+        generatedAt: '2026-05-12T00:00:00.000Z',
+        totals: {
+          contractCount: 1,
+          totalRevenue: 1,
+          totalCost: 0,
+          totalProfit: 1,
+          avgMargin: 100,
+          costByCategory: { LABOR: 0, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+        },
+        byType: [],
+        byPartner: [],
+        byMonth: [],
+        topProfit: [],
+        lossMaking: [],
+      });
+      const { service, contractModel } = setupDashboardService({
+        contracts: [],
+        redisGetReturn: cachedPayload,
+      });
+      const result = await service.getDashboardData({});
+      expect(result.totals.contractCount).toBe(1);
+      expect(contractModel.find).not.toHaveBeenCalled();
+    });
+
+    it('Empty dashboard — 0 contracts → safe empty result', async () => {
+      const { service } = setupDashboardService({ contracts: [] });
+      const result = await service.getDashboardData({});
+      expect(result.totals.contractCount).toBe(0);
+      expect(result.totals.totalRevenue).toBe(0);
+      expect(result.totals.avgMargin).toBeNull();
+      expect(result.byType).toEqual([]);
+      expect(result.byPartner).toEqual([]);
+      expect(result.byMonth).toEqual([]);
+      expect(result.topProfit).toEqual([]);
+      expect(result.lossMaking).toEqual([]);
+    });
+
+    it('Cache key changes when filter changes (period custom vs last_3_months)', async () => {
+      const { service, redis } = setupDashboardService({ contracts: [] });
+      await service.getDashboardData({ period: 'last_3_months' });
+      await service.getDashboardData({
+        period: 'custom',
+        dateFrom: '2026-01-01',
+        dateTo: '2026-03-01',
+      });
+      const setKey1 = redis.set.mock.calls[0][0];
+      const setKey2 = redis.set.mock.calls[1][0];
+      expect(setKey1).not.toEqual(setKey2);
+      // Both should be 120s TTL
+      expect(redis.set.mock.calls[0][3]).toBe(120);
+    });
+  });
+
   it('Cache hit — Redis cached JSON returned without DB hit', async () => {
     const cached = {
       contractId: 'abc',

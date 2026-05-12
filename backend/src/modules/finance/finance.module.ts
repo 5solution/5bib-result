@@ -16,6 +16,7 @@ import { PnLExcelService } from './services/pnl-excel.service';
 import { CostItemsController } from './controllers/cost-items.controller';
 import { PnLController } from './controllers/pnl.controller';
 import { PnLExportController } from './controllers/pnl-export.controller';
+import { PnLDashboardController } from './controllers/pnl-dashboard.controller';
 import { MysqlLookupController } from './controllers/mysql-lookup.controller';
 
 /**
@@ -50,6 +51,7 @@ import { MysqlLookupController } from './controllers/mysql-lookup.controller';
     CostItemsController,
     PnLController,
     PnLExportController,
+    PnLDashboardController,
     MysqlLookupController,
   ],
   providers: [CostItemsService, PnLService, FeeService, PnLExcelService],
