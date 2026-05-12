@@ -37,7 +37,7 @@ export const COST_CATEGORY_LABELS: Record<CostCategory, string> = {
   LABOR: "Nhân công",
   MATERIAL: "Vật tư",
   VENDOR: "Nhà cung cấp",
-  OUTSOURCE: "Outsource",
+  OUTSOURCE: "Thuê ngoài",
   OTHER: "Khác",
 };
 

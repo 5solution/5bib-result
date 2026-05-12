@@ -10,15 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { DashboardPeriod } from "@/lib/finance-api";
-
-const PERIOD_LABELS: Record<DashboardPeriod, string> = {
-  current_month: "Tháng này",
-  last_3_months: "3 tháng gần nhất",
-  last_6_months: "6 tháng gần nhất",
-  last_12_months: "12 tháng gần nhất",
-  ytd: "Năm hiện tại (YTD)",
-  custom: "Tùy chỉnh…",
-};
+import { PERIOD_LABEL } from "@/lib/finance-labels";
 
 export function PeriodFilter({
   period,
@@ -42,12 +34,14 @@ export function PeriodFilter({
           }
         >
           <SelectTrigger className="w-[200px]">
-            <SelectValue />
+            <SelectValue placeholder="Chọn khoảng">
+              {PERIOD_LABEL[period] ?? period}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {(Object.keys(PERIOD_LABELS) as DashboardPeriod[]).map((k) => (
+            {(Object.keys(PERIOD_LABEL) as DashboardPeriod[]).map((k) => (
               <SelectItem key={k} value={k}>
-                {PERIOD_LABELS[k]}
+                {PERIOD_LABEL[k]}
               </SelectItem>
             ))}
           </SelectContent>

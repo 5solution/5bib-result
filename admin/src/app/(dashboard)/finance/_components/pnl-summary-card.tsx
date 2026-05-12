@@ -20,6 +20,10 @@ import {
   type PnLSummary,
   type RevenueSource,
 } from "@/lib/finance-api";
+import {
+  MARGIN_TIER_LABEL,
+  REVENUE_SOURCE_LABEL,
+} from "@/lib/finance-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -41,13 +45,15 @@ function RevenueBadge({ source }: { source: RevenueSource }) {
   if (source === "ACTUAL") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">
-        <CheckCircle2 className="size-3" aria-hidden /> Actual
+        <CheckCircle2 className="size-3" aria-hidden />{" "}
+        {REVENUE_SOURCE_LABEL.ACTUAL}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-      <Hourglass className="size-3" aria-hidden /> Estimated
+      <Hourglass className="size-3" aria-hidden />{" "}
+      {REVENUE_SOURCE_LABEL.ESTIMATED}
     </span>
   );
 }
@@ -59,16 +65,16 @@ function MarginBadge({
   tier: MarginTier;
   margin: number | null;
 }) {
-  const map: Record<MarginTier, { label: string; cls: string }> = {
-    loss: { label: "Lỗ", cls: "bg-rose-100 text-rose-800" },
-    thin: { label: "Mỏng", cls: "bg-amber-100 text-amber-800" },
-    healthy: { label: "Healthy", cls: "bg-green-100 text-green-800" },
-    neutral: { label: "—", cls: "bg-stone-100 text-stone-700" },
+  const cls: Record<MarginTier, string> = {
+    loss: "bg-rose-100 text-rose-800",
+    thin: "bg-amber-100 text-amber-800",
+    healthy: "bg-green-100 text-green-800",
+    neutral: "bg-stone-100 text-stone-700",
   };
-  const { label, cls } = map[tier];
+  const label = MARGIN_TIER_LABEL[tier];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${cls[tier]}`}
     >
       {label} · {formatMargin(margin)}
     </span>

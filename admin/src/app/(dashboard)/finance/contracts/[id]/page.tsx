@@ -19,6 +19,7 @@ import {
   exportPnLExcel,
   getPnLSummary,
 } from "@/lib/finance-api";
+import { joinNonTicketContractTypes } from "@/lib/finance-labels";
 import { getContract } from "@/lib/contracts-api";
 import { PnLSummaryCard } from "../../_components/pnl-summary-card";
 import { CostItemsEditor } from "../../_components/cost-items-editor";
@@ -229,8 +230,8 @@ function FinancePerContractPage({
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           <p>
             Lưu ý: P&amp;L cập nhật tự động sau mỗi mutation chi phí (cache
-            60s). Doanh thu HĐ này (TIMING/RACEKIT/OPERATIONS) lấy từ Acceptance
-            Report khi FINALIZED, fallback contract.totalAmount.
+            60s). Doanh thu HĐ này ({joinNonTicketContractTypes()}) lấy từ
+            Biên bản nghiệm thu khi đã chốt, fallback về tổng giá trị HĐ.
           </p>
           <div className="mt-2">
             <Button

@@ -256,6 +256,30 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - Run `pnpm generate:api` to regenerate types after backend API changes
 - Never use raw `fetch()` for API calls — always use generated SDK functions or hooks
 
+### Display Convention — KHÔNG render raw enum/snake_case cho user
+
+**Rule:** Mọi value technical (enum status, snake_case key, English label, contract type code,
+provider code, …) PHẢI map qua dictionary tiếng Việt trước khi render UI cho user. Backend
+giữ enum gốc — KHÔNG đổi.
+
+**Pattern dùng:**
+- Backend trả enum: `{ status: 'DRAFT', contractType: 'TIMING', period: 'last_3_months' }`.
+- Frontend dictionary tập trung trong `*-labels.ts` (vd `admin/src/lib/finance-labels.ts`).
+- Render: `<Badge>{STATUS_LABEL[status] ?? status}</Badge>` (fallback raw để dev nhận biết).
+
+**Anti-pattern (KHÔNG được):**
+- `<span>{status}</span>` render raw enum `DRAFT`.
+- `<option value="last_3_months">last_3_months</option>` (label = value).
+- Mixed VN + English UI: `"Chọn loại: TICKET_SALES"` / `"Healthy · 12%"`.
+- Dictionary inline duplicate ở từng component (drift) — phải centralize.
+
+**Cho phép giữ English:** field code trong `<code>` block, JWT scope/role, acronym thông
+dụng (YTD/MTD/P&L/BIB/HĐ), brand name (5BIB, 5Solution, UTMB, ITRA).
+
+**Enforcement:** sau mỗi feature mới có UI, Coder MUST grep `\b[A-Z_]{3,}\b` + `last_*` +
+`_months` + enum keys trong JSX. Toàn bộ matches phải nằm trong `value=` / type decl /
+comparison — KHÔNG nằm trong JSX text. Chi tiết + dictionary registry: `docs/conventions.md`.
+
 ### Independent Calc + 2-Layer Verify (F-019 v2 lesson)
 - **Mọi metric phụ thuộc vendor MUST có 2-layer verify.** Ranking, AG bracket, podium, awards — KHÔNG được trust vendor field làm source-of-truth.
 - **Layer 1 (5BIB primary):** tự calc từ raw timing data (`chipTimeMs` ASC sort, DOB-derived bracket, etc.).

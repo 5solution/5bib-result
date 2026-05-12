@@ -63,7 +63,7 @@ export function LossMakingTable({
                         href={`/finance/contracts/${it.contractId}`}
                         className="font-medium text-blue-700 hover:underline"
                       >
-                        {it.contractNumber ?? "(DRAFT)"}
+                        {it.contractNumber ?? "(Nháp)"}
                       </Link>
                     </td>
                     <td className="py-2 pr-2 max-w-[180px] truncate text-stone-700">
