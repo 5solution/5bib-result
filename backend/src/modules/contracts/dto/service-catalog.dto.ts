@@ -14,6 +14,13 @@ export class CreateServiceCatalogDto {
   @ApiProperty({ enum: CATEGORIES }) @IsIn(CATEGORIES) category: string;
   @ApiPropertyOptional() @IsOptional() @IsString() unit?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) referencePrice?: number;
+  @ApiPropertyOptional({
+    description: 'Giá vốn tham khảo (VND) — dùng pre-compute P&L cost item',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  referenceCost?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() sortOrder?: number;
 }
@@ -26,6 +33,10 @@ export class ServiceCatalogResponseDto {
   @ApiProperty() category: string;
   @ApiPropertyOptional() unit?: string;
   @ApiProperty() referencePrice: number;
+  @ApiProperty({
+    description: 'Giá vốn tham khảo (VND) — default 0 nếu chưa nhập',
+  })
+  referenceCost: number;
   @ApiPropertyOptional() description?: string;
   @ApiProperty() sortOrder: number;
   @ApiProperty() createdAt: Date;

@@ -53,6 +53,52 @@ describe('ServiceCatalogService', () => {
       const r = await svc.update(id, { referencePrice: 30_000 });
       expect(r.referencePrice).toBe(30_000);
     });
+
+    it('creates catalog item với cả referencePrice + referenceCost (P&L pre-compute)', async () => {
+      mockModel.create.mockResolvedValue({
+        toObject: () => ({
+          _id: new Types.ObjectId(),
+          name: 'In BIB khổ A5',
+          category: 'RACEKIT',
+          unit: 'Cái',
+          referencePrice: 10_000,
+          referenceCost: 6_000,
+        }),
+      });
+      const r = await svc.create({
+        name: 'In BIB khổ A5',
+        category: 'RACEKIT',
+        unit: 'Cái',
+        referencePrice: 10_000,
+        referenceCost: 6_000,
+      });
+      expect(r.referencePrice).toBe(10_000);
+      expect(r.referenceCost).toBe(6_000);
+      expect(mockModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ referenceCost: 6_000 }),
+      );
+    });
+
+    it('updates referenceCost giữ nguyên referencePrice', async () => {
+      const id = new Types.ObjectId().toString();
+      mockModel.findOneAndUpdate.mockReturnValue({
+        lean: () =>
+          Promise.resolve({
+            _id: id,
+            name: 'Cho thuê chip',
+            referencePrice: 28_000,
+            referenceCost: 18_000,
+          }),
+      });
+      const r = await svc.update(id, { referenceCost: 18_000 });
+      expect(r.referenceCost).toBe(18_000);
+      expect(r.referencePrice).toBe(28_000);
+      expect(mockModel.findOneAndUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ _id: id, deletedAt: null }),
+        expect.objectContaining({ referenceCost: 18_000 }),
+        expect.objectContaining({ new: true }),
+      );
+    });
   });
 
   describe('Soft delete', () => {

@@ -21,6 +21,12 @@ export class ServiceCatalog {
   category: ServiceCategory;
   @Prop() unit: string;
   @Prop({ default: 0, min: 0 }) referencePrice: number;
+  /**
+   * F-024 — Giá vốn tham khảo (VND).
+   * Optional + default 0 (backward compat với items đã tạo trước update này).
+   * Dùng làm default khi pre-compute P&L cost item ở F-028 (Phase 2 integration).
+   */
+  @Prop({ default: 0, min: 0 }) referenceCost: number;
   @Prop() description: string;
   @Prop({ default: 0 }) sortOrder: number;
   @Prop() createdBy: string;

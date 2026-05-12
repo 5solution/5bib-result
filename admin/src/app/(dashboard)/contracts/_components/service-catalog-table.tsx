@@ -65,6 +65,7 @@ const BLANK: CreateServiceCatalogInput = {
   category: "GENERAL",
   unit: "",
   referencePrice: 0,
+  referenceCost: 0,
   description: "",
   sortOrder: 0,
 };
@@ -183,6 +184,7 @@ export function ServiceCatalogTable() {
               <TableHead>Nhóm</TableHead>
               <TableHead>ĐVT</TableHead>
               <TableHead className="text-right">Giá tham khảo</TableHead>
+              <TableHead className="text-right">Giá vốn</TableHead>
               <TableHead>Mô tả</TableHead>
               <TableHead aria-label="Actions" />
             </TableRow>
@@ -192,7 +194,7 @@ export function ServiceCatalogTable() {
               <>
                 {Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 6 }).map((__, j) => (
+                    {Array.from({ length: 7 }).map((__, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -203,7 +205,7 @@ export function ServiceCatalogTable() {
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-0">
+                <TableCell colSpan={7} className="py-0">
                   <EmptyState
                     icon={Package}
                     title="Chưa có dịch vụ nào"
@@ -228,6 +230,11 @@ export function ServiceCatalogTable() {
                   <TableCell>{it.unit || "—"}</TableCell>
                   <TableCell className="text-right font-mono">
                     {formatVND(it.referencePrice ?? 0)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-muted-foreground">
+                    {it.referenceCost == null
+                      ? "—"
+                      : formatVND(it.referenceCost)}
                   </TableCell>
                   <TableCell
                     className="max-w-md truncate"
@@ -280,6 +287,7 @@ function CatalogForm({
           category: initial.category,
           unit: initial.unit ?? "",
           referencePrice: initial.referencePrice ?? 0,
+          referenceCost: initial.referenceCost ?? 0,
           description: initial.description ?? "",
           sortOrder: initial.sortOrder ?? 0,
         }
@@ -364,14 +372,31 @@ function CatalogForm({
           />
         </div>
       </div>
-      <div>
-        <Label htmlFor="sc-price">Giá tham khảo (VND)</Label>
-        <MoneyInput
-          id="sc-price"
-          value={(form.referencePrice as number | undefined) ?? 0}
-          onChange={(v) => set("referencePrice", v)}
-          placeholder="Nhập số (vd 15000000)"
-        />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="sc-price">Giá tham khảo (VND)</Label>
+          <MoneyInput
+            id="sc-price"
+            value={(form.referencePrice as number | undefined) ?? 0}
+            onChange={(v) => set("referencePrice", v)}
+            placeholder="Nhập số (vd 15000000)"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Giá BÁN — auto-fill khi pick item vào HĐ
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="sc-cost">Giá vốn (VND)</Label>
+          <MoneyInput
+            id="sc-cost"
+            value={(form.referenceCost as number | undefined) ?? 0}
+            onChange={(v) => set("referenceCost", v)}
+            placeholder="Nhập số (vd 6000000)"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Giá VỐN — pre-fill P&L cost item (có thể override khi tạo HĐ)
+          </p>
+        </div>
       </div>
       <div>
         <Label htmlFor="sc-desc">Mô tả</Label>

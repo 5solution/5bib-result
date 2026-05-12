@@ -291,6 +291,8 @@ export interface ServiceCatalogItem {
   category: ServiceCategory;
   unit?: string;
   referencePrice?: number;
+  /** F-024 — Giá vốn tham khảo (VND). Dùng pre-compute P&L cost item ở F-028. */
+  referenceCost?: number;
   description?: string;
   sortOrder?: number;
   createdAt: string;
@@ -302,6 +304,8 @@ export interface CreateServiceCatalogInput {
   category: ServiceCategory;
   unit?: string;
   referencePrice?: number;
+  /** F-024 — Giá vốn tham khảo (VND). Optional + default 0. */
+  referenceCost?: number;
   description?: string;
   sortOrder?: number;
 }
