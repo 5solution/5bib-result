@@ -209,8 +209,11 @@ export class PnLService {
   /**
    * BR-PNL-19 — resolve period preset → ISO range. UTC+7 anchor (giờ VN).
    *
-   * C.1 (Danny chốt 2026-05-12): scope includes DRAFT, exclude CANCELLED +
-   * REJECTED. Status whitelist whitelist enforced ở aggregation stage.
+   * BR-PNL-08 (Danny chốt 2026-05-12 — revision): scope STRICT whitelist
+   * `ACTIVE` + `COMPLETED` only (HĐ đã chốt). Loại bỏ DRAFT (chưa ký), toàn
+   * bộ quotation pipeline (SENT/ACCEPTED/CONVERTED_TO_CONTRACT), CANCELLED,
+   * REJECTED. Lý do: HĐ chưa chốt KHÔNG được đưa vào P&L tổng hợp vì revenue
+   * commitment chưa lock.
    */
   private resolveDateRange(filter: PnLDashboardFilterDto): {
     period: DashboardPeriod;
@@ -294,12 +297,15 @@ export class PnLService {
       }
     }
 
-    // ── 1. Pull contracts in scope (C.1: include DRAFT, exclude
-    //       CANCELLED + REJECTED). Date anchor: signDate fallback createdAt.
+    // ── 1. Pull contracts in scope (BR-PNL-08 — Danny chốt 2026-05-12:
+    //       STRICT whitelist ACTIVE + COMPLETED only — HĐ đã chốt).
+    //       Loại bỏ DRAFT + quotation pipeline (SENT/ACCEPTED/
+    //       CONVERTED_TO_CONTRACT) + CANCELLED + REJECTED.
+    //       Date anchor: signDate fallback createdAt.
     const contracts = await this.contractModel
       .find({
         deletedAt: null,
-        status: { $nin: ['CANCELLED', 'REJECTED'] },
+        status: { $in: ['ACTIVE', 'COMPLETED'] },
         $or: [
           { signDate: { $gte: dateFrom, $lte: dateTo } },
           {

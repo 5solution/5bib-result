@@ -307,15 +307,57 @@ describe('F-028 PnLService.getSummary', () => {
       expect(keys).toContain('2026-04');
     });
 
-    it('C.1 — exclude CANCELLED + REJECTED via Mongo $nin filter', async () => {
-      // We mock contractModel.find — verify call params include status $nin
+    it('BR-PNL-08 — STRICT whitelist ACTIVE + COMPLETED via Mongo $in filter (Danny chốt 2026-05-12)', async () => {
+      // We mock contractModel.find — verify call params include status $in
+      // whitelist ['ACTIVE', 'COMPLETED']. HĐ chưa chốt (DRAFT + quotation
+      // pipeline + CANCELLED + REJECTED) phải bị loại khỏi dashboard P&L.
       const { service, contractModel } = setupDashboardService({
         contracts: [],
       });
       await service.getDashboardData({});
       const calls = contractModel.find.mock.calls as any[];
-      const arg = calls[0][0] as { status: { $nin: string[] } };
-      expect(arg.status.$nin).toEqual(['CANCELLED', 'REJECTED']);
+      const arg = calls[0][0] as { status: { $in: string[] } };
+      expect(arg.status.$in).toEqual(['ACTIVE', 'COMPLETED']);
+      // Defense in depth — KHÔNG được dùng $nin pattern cũ
+      expect((arg.status as any).$nin).toBeUndefined();
+    });
+
+    it('BR-PNL-08 — filter loại DRAFT + quotation pipeline + CANCELLED + REJECTED', async () => {
+      // Verify whitelist không chứa các status sau:
+      const excludedStatuses = [
+        'DRAFT',
+        'SENT',
+        'ACCEPTED',
+        'CONVERTED_TO_CONTRACT',
+        'CANCELLED',
+        'REJECTED',
+      ];
+      const { service, contractModel } = setupDashboardService({
+        contracts: [],
+      });
+      await service.getDashboardData({});
+      const arg = (contractModel.find.mock.calls as any[])[0][0] as {
+        status: { $in: string[] };
+      };
+      for (const excluded of excludedStatuses) {
+        expect(arg.status.$in).not.toContain(excluded);
+      }
+    });
+
+    it('BR-PNL-08 — include ACTIVE + COMPLETED contracts only in aggregation', async () => {
+      // Functional test: nếu Mongo $in filter chạy đúng thì những contract
+      // ACTIVE / COMPLETED truyền vào sẽ được aggregate. Ở unit test ta mock
+      // contractModel.find trả về thẳng list nên không re-test filter Mongo
+      // (đã cover ở test trên), mà verify pipeline xử lý đúng các status hợp lệ.
+      const c1 = makeC({ status: 'ACTIVE', totalAmount: 100_000_000 });
+      const c2 = makeC({ status: 'COMPLETED', totalAmount: 200_000_000 });
+      const { service } = setupDashboardService({ contracts: [c1, c2] });
+      const result = await service.getDashboardData({});
+      expect(result.totals.contractCount).toBe(2);
+      expect(result.totals.totalRevenue).toBe(300_000_000);
+      // Both statuses appear in items
+      const statuses = result.topProfit.map((i) => i.status).sort();
+      expect(statuses).toEqual(['ACTIVE', 'COMPLETED']);
     });
 
     it('Top profit — limit 10 sort DESC', async () => {
