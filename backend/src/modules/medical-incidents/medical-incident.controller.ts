@@ -32,7 +32,7 @@ import { Model } from 'mongoose';
 import { Observable } from 'rxjs';
 import { env } from 'src/config';
 import { CurrentUser } from '../logto-auth/current-user.decorator';
-import { LogtoAdminGuard } from '../logto-auth/logto-admin.guard';
+import { LogtoStaffGuard } from '../logto-auth';
 import { LogtoUser } from '../logto-auth/types';
 import { Race, RaceDocument } from '../races/schemas/race.schema';
 import { CreateIncidentDto } from './dto/create-incident.dto';
@@ -57,14 +57,14 @@ const READ_URL_TTL = 15 * 60; // 15min for GET
 /**
  * F-018 — Medical Incident Tracker (Race Ops Cluster #9 #1).
  *
- * 10 endpoints, all `@UseGuards(LogtoAdminGuard)` (BTC-only MVP per BR-MI-09).
+ * 10 endpoints, all `@UseGuards(LogtoStaffGuard)` (BTC-only MVP per BR-MI-09).
  * SSE endpoint excluded from admin guard's role check via parent class —
  * EventSource cannot send Authorization header so we rely on session cookie
  * via the same proxy that protects the rest of the admin app.
  */
 @ApiTags('Medical Incidents')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('admin/races/:raceId/medical-incidents')
 export class MedicalIncidentController {
   private readonly s3: S3Client;

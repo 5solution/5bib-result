@@ -35,10 +35,14 @@ export class LogtoAdminGuard extends LogtoAuthGuard implements CanActivate {
     const roles: string[] = req.logto?.roles ?? [];
     const scopes: string[] = req.logto?.scopes ?? [];
 
+    // Permission hierarchy: `admin` and `all` (super admin) pass.
+    // `staff` does NOT pass — staff routes use LogtoStaffGuard instead.
     const isAdmin =
       roles.includes('admin') ||
+      roles.includes('super_admin') ||
       scopes.includes('admin') ||
-      scopes.includes('admin:all');
+      scopes.includes('admin:all') ||
+      scopes.includes('all');
 
     if (!isAdmin) {
       throw new ForbiddenException(

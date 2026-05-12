@@ -17,7 +17,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth/logto-admin.guard';
+import { LogtoStaffGuard } from '../../logto-auth';
 import type { AuthenticatedRequest } from '../../logto-auth/types';
 import { SimulatorService } from '../services/simulator.service';
 import {
@@ -41,7 +41,7 @@ import {
  */
 @ApiTags('Timing Alert Simulator (Admin)')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('admin/timing-alert/simulator')
 export class TimingAlertSimulatorAdminController {
   constructor(private readonly simulator: SimulatorService) {}

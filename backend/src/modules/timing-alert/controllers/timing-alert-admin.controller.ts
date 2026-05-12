@@ -19,7 +19,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth/logto-admin.guard';
+import { LogtoStaffGuard } from '../../logto-auth';
 import type { AuthenticatedRequest } from '../../logto-auth/types';
 import { TimingAlertConfigService } from '../services/timing-alert-config.service';
 import { TimingAlertPollService } from '../services/timing-alert-poll.service';
@@ -49,14 +49,14 @@ import { ForceRefreshResponseDto } from '../dto/force-refresh-response.dto';
  * stream sẽ implement Phase 1B/1C/2.
  *
  * **Security:**
- * - All endpoints behind `LogtoAdminGuard` — Logto JWT bắt buộc.
+ * - All endpoints behind `LogtoStaffGuard` — Logto JWT bắt buộc.
  * - `triggered_by` / `enabled_by_user_id` luôn lấy từ JWT `req.user.sub`,
  *   KHÔNG từ body (chống spoof audit).
  * - Response NEVER trả plaintext API key — masked qua `ApiKeyCrypto.mask()`.
  */
 @ApiTags('Timing Alert (Admin)')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('admin/races/:raceId/timing-alert')
 export class TimingAlertAdminController {
   constructor(

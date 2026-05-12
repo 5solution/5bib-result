@@ -54,7 +54,7 @@ import { RaceResultModule } from '../race-result/race-result.module';
  * - DROP crypto (race document đã có apiUrl plaintext, race-result module
  *   đã dùng OK 2 năm)
  * - DI: import `RaceResultModule` để reuse `RaceResultApiService` shared HTTP
- * - Auth: `LogtoAdminGuard` cho mọi admin endpoint
+ * - Auth: `LogtoStaffGuard` cho mọi admin endpoint
  */
 @Module({
   imports: [

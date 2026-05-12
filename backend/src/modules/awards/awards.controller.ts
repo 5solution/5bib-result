@@ -16,7 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from '../logto-auth/current-user.decorator';
-import { LogtoAdminGuard } from '../logto-auth/logto-admin.guard';
+import { LogtoStaffGuard } from '../logto-auth';
 import { LogtoUser } from '../logto-auth/types';
 import { AwardsService } from './services/awards.service';
 import { PodiumStateMachineService } from './services/podium-state-machine.service';
@@ -51,16 +51,16 @@ import { AGEligibilityReportDto } from './dto/ag-eligibility-response.dto';
 /**
  * F-019 — Awards Age Group Podium + Warnings.
  *
- * 10 endpoints, all `@UseGuards(LogtoAdminGuard)` (admin-only per Manager Plan §6).
+ * 10 endpoints, all `@UseGuards(LogtoStaffGuard)` (admin-only per Manager Plan §6).
  * Note: PRD Section 5.2 mentions JwtAuthGuard but codebase convention uses
- * LogtoAdminGuard (consistent với F-013, F-014, F-018). Reconciled in 03-impl.
+ * LogtoStaffGuard (consistent với F-013, F-014, F-018). Reconciled in 03-impl.
  *
  * SSE endpoint NOT exposed Phase 1 (admin manual refresh + 60s Redis TTL đủ).
  * AwardsSseService remains DI-ready for Phase 2.
  */
 @ApiTags('Awards')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('admin/races/:raceId/awards')
 export class AwardsController {
   constructor(

@@ -46,6 +46,7 @@ import { TicketTypeReadonly } from './race-master-data/entities/ticket-type-read
 import { RaceCourseReadonly } from './race-master-data/entities/race-course-readonly.entity';
 import { CodeReadonly } from './race-master-data/entities/code-readonly.entity';
 import { TeamManagementModule } from './team-management/team-management.module';
+import { ContractsModule } from './contracts/contracts.module';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
 import { VolRegistration } from './team-management/entities/vol-registration.entity';
@@ -167,6 +168,7 @@ const volunteerDbModules = env.volunteerDb.host
     ...platformDbModules,
     ...volunteerDbModules,
     ...timingAlertModules,
+    ContractsModule,
     RacesModule,
     RaceResultModule,
     // F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.

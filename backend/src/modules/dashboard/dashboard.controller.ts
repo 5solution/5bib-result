@@ -13,7 +13,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../logto-auth/logto-admin.guard';
+import { LogtoStaffGuard } from '../logto-auth';
 import {
   KpiResponseDto,
   LiveRacesResponseDto,
@@ -33,11 +33,11 @@ import { DashboardUpcomingRacesService } from './services/upcoming-races.service
 
 /**
  * F-023 — Admin Dashboard endpoints. 7 endpoint dưới prefix
- * `/api/admin/dashboard/*`. Tất cả gated bởi `LogtoAdminGuard`.
+ * `/api/admin/dashboard/*`. Tất cả gated bởi `LogtoStaffGuard`.
  */
 @ApiTags('admin-dashboard')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('admin/dashboard')
 export class DashboardController {
   constructor(

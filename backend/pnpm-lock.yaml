@@ -104,6 +104,9 @@ importers:
       docx:
         specifier: ^9.6.1
         version: 9.6.1
+      docxtemplater:
+        specifier: ^3.68.7
+        version: 3.68.7
       dotenv:
         specifier: ^17.2.1
         version: 17.2.1
@@ -134,6 +137,9 @@ importers:
       jose:
         specifier: ^6.2.2
         version: 6.2.2
+      libreoffice-convert:
+        specifier: ^1.8.1
+        version: 1.8.1
       mammoth:
         specifier: ^1.12.0
         version: 1.12.0
@@ -167,6 +173,9 @@ importers:
       pg:
         specifier: ^8.13.3
         version: 8.16.3
+      pizzip:
+        specifier: ^3.2.0
+        version: 3.2.0
       puppeteer-core:
         specifier: ^24.41.0
         version: 24.41.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
@@ -2972,6 +2981,10 @@ packages:
     resolution: {integrity: sha512-ZJja9/KBUuFC109sCMzovoq2GR2wCG/AuxivjA+OHj/q0TEgJIm3S7yrlUxIy3B+bV8YDj/BiHfWyrRFmyWpDQ==}
     engines: {node: '>=10'}
 
+  docxtemplater@3.68.7:
+    resolution: {integrity: sha512-FwgeAKqY2vc9eVm2V2XGg8bq25B0OQjtSDITGi9zNnvu5GbtR4WvGjM5QNld/ALB6ZbsSuHskBPK9SvPpKhsbA==}
+    engines: {node: '>=0.10'}
+
   dom-serializer@2.0.0:
     resolution: {integrity: sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==}
 
@@ -3932,6 +3945,10 @@ packages:
   libphonenumber-js@1.12.10:
     resolution: {integrity: sha512-E91vHJD61jekHHR/RF/E83T/CMoaLXT7cwYA75T4gim4FZjnM6hbJjVIGg7chqlSqRsSvQ3izGmOjHy1SQzcGQ==}
 
+  libreoffice-convert@1.8.1:
+    resolution: {integrity: sha512-iZ1DD/EMTlPvol8G++QQ/0w4pVecSwRuhMLXRm7nRim/gcaSscSXuTO9Tgbkieyw5UdJg7UXD+lkFT8SCi51Dw==}
+    engines: {node: '>=6'}
+
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
@@ -4382,6 +4399,9 @@ packages:
   pako@1.0.11:
     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
 
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+
   papaparse@5.5.3:
     resolution: {integrity: sha512-5QvjGxYVjxO59MGU2lHVYpRWBBtKHnlIAcSe1uNFCkkptUh63NFRj0FJQm7nR67puEruUci/ZkjmEFrjCAyP4A==}
 
@@ -4499,6 +4519,9 @@ packages:
   pirates@4.0.7:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
+
+  pizzip@3.2.0:
+    resolution: {integrity: sha512-X4NPNICxCfIK8VYhF6wbksn81vTiziyLbvKuORVAmolvnUzl1A1xmz9DAWKxPRq9lZg84pJOOAMq3OE61bD8IQ==}
 
   pkg-dir@4.2.0:
     resolution: {integrity: sha512-HRDzbaKjC+AOWVXxAU/x54COGeIv9eb+6CkDSQoNTt4XyWoIJvuPsXizxu/Fr23EiekbtZwmh1IcIG/l/a10GQ==}
@@ -9781,6 +9804,10 @@ snapshots:
       xml: 1.0.1
       xml-js: 1.6.11
 
+  docxtemplater@3.68.7:
+    dependencies:
+      '@xmldom/xmldom': 0.9.10
+
   dom-serializer@2.0.0:
     dependencies:
       domelementtype: 2.3.0
@@ -11044,6 +11071,11 @@ snapshots:
 
   libphonenumber-js@1.12.10: {}
 
+  libreoffice-convert@1.8.1:
+    dependencies:
+      async: 3.2.6
+      tmp: 0.2.5
+
   lie@3.3.0:
     dependencies:
       immediate: 3.0.6
@@ -11454,6 +11486,8 @@ snapshots:
 
   pako@1.0.11: {}
 
+  pako@2.1.0: {}
+
   papaparse@5.5.3: {}
 
   parent-module@1.0.1:
@@ -11555,6 +11589,10 @@ snapshots:
   picomatch@4.0.1: {}
 
   pirates@4.0.7: {}
+
+  pizzip@3.2.0:
+    dependencies:
+      pako: 2.1.0
 
   pkg-dir@4.2.0:
     dependencies:

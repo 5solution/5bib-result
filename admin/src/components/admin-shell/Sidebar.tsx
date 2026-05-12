@@ -18,6 +18,7 @@ import { LogOut } from "lucide-react";
 import Logo5bib from "@/components/Logo5bib";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav-groups";
+import { useAuth } from "@/lib/auth-context";
 
 type SidebarProps = {
   /** Goi khi click item (dong mobile drawer). */
@@ -82,9 +83,20 @@ function NavLink({
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { isAdmin } = useAuth();
+
+  // RBAC filter — bỏ item requireRole="admin" khỏi sidebar nếu user không phải admin.
+  // Đồng thời ẩn group hoàn toàn nếu sau filter không còn item nào.
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter(
+      (item) => !item.requireRole || (item.requireRole === "admin" && isAdmin),
+    ),
+  })).filter((g) => g.items.length > 0);
+
   return (
     <div className="flex flex-col gap-5">
-      {NAV_GROUPS.map((group) => (
+      {visibleGroups.map((group) => (
         <div key={group.label} className="flex flex-col gap-1">
           <div className="px-3 pb-1 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/45">
             {group.label}
