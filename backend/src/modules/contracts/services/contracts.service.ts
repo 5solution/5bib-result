@@ -165,6 +165,43 @@ export class ContractsService {
     }
   }
 
+  /**
+   * F-028 HIGH-01 QC carryover — flush `pnl:dashboard:*` (mọi filterHash).
+   *
+   * Khi link/unlink TICKET_SALES contract với MySQL race → revenue source
+   * chuyển từ Estimated → Actual (hoặc ngược lại). Dashboard P&L Phase 2
+   * aggregate `totalRevenue` + `byMonth` + `byType` qua nhiều contract nên
+   * MỌI filterHash đều có thể stale. Clone pattern từ
+   * `cost-items.service.ts#flushDashboardCache` (BR-PNL-14) + articles
+   * invalidation. Best-effort — fail log warn, KHÔNG throw.
+   */
+  private async flushPnlDashboardCache(): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const stream = this.redis.scanStream({
+        match: 'pnl:dashboard:*',
+        count: 200,
+      });
+      const pipeline = this.redis.pipeline();
+      let count = 0;
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (keys: string[]) => {
+          for (const k of keys) {
+            pipeline.del(k);
+            count++;
+          }
+        });
+        stream.on('end', () => resolve());
+        stream.on('error', (err) => reject(err));
+      });
+      if (count > 0) await pipeline.exec();
+    } catch (err) {
+      this.logger.warn(
+        `[contracts] flush pnl:dashboard:* fail: ${(err as Error).message}`,
+      );
+    }
+  }
+
   /** Emit audit log (best-effort). */
   private async emitAudit(
     action: string,
@@ -639,7 +676,11 @@ export class ContractsService {
         await current.save();
         await this.invalidateContractsCache();
         // BR-PNL-09 — flush P&L cache cho contract này để revenue source
-        // refresh ngay sau khi link.
+        // refresh ngay sau khi link. HIGH-01 QC carryover: ngoài key per-contract
+        // còn phải scan + DEL `pnl:dashboard:*` (mọi filterHash) vì Phase 2
+        // dashboard aggregate revenue qua nhiều contract → 1 contract đổi
+        // Estimated↔Actual ảnh hưởng totalRevenue/byMonth/byType của filter
+        // bất kỳ. Pattern: clone cost-items.service.ts flushDashboardCache().
         if (this.redis) {
           try {
             await this.redis.del(`pnl:contract:${String(current._id)}`);
@@ -651,6 +692,7 @@ export class ContractsService {
               `[contracts] flush P&L cache fail: ${(err as Error).message}`,
             );
           }
+          await this.flushPnlDashboardCache();
         }
         await this.emitAudit(
           dto.linkedTenantId == null && dto.linkedMysqlRaceId == null

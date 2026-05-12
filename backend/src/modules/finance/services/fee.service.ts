@@ -235,27 +235,14 @@ export class FeeService {
     }
 
     try {
-      const row = await this.orderRepo
-        .createQueryBuilder('o')
-        .innerJoin(
-          'order_line_item',
-          'oli',
-          'oli.order_id = o.id',
-        )
-        .innerJoin('ticket_type', 'tt', 'tt.id = oli.ticket_type_id')
-        .innerJoin('race_course', 'rc', 'rc.id = tt.race_course_id')
-        .select('SUM(o.total_price)', 'total')
-        .where('rc.race_id = :raceId', { raceId: mysqlRaceId })
-        .andWhere('o.tenant_id = :tenantId', { tenantId })
-        .andWhere("o.internal_status = 'COMPLETE'")
-        .andWhere('o.deleted = 0')
-        .andWhere('o.order_category IN (:...cats)', {
-          cats: FeeService.FIVE_BIB_CATEGORIES,
-        })
-        .getRawOne<{ total: string | null }>();
-
-      // Mỗi line item lặp đơn — DISTINCT cần thiết khi 1 order có 2 LI
-      // → fallback: query simpler theo order_metadata trực tiếp tránh nhân bản.
+      // F-028 HIGH-02 QC carryover — chỉ 1 query DISTINCT subquery.
+      //
+      // Previously: 2 queries sequential await (~400ms waste). Query 1 inner
+      // join order_line_item → nhân bản total khi 1 order có ≥2 line items.
+      // Query 2 dùng `o.id IN (SELECT DISTINCT ...)` subquery → 1 order chỉ
+      // sum 1 lần dù có nhiều LI. Query 2 = source-of-truth, query 1 chưa
+      // bao giờ được dùng (logic `orderRow ?? row` luôn ưu tiên orderRow).
+      // → Bỏ query 1.
       const orderRow = await this.orderRepo
         .createQueryBuilder('o')
         .select('SUM(o.total_price)', 'total')
@@ -277,8 +264,7 @@ export class FeeService {
         )
         .getRawOne<{ total: string | null }>();
 
-      // Prefer distinct-order based total để tránh nhân bản join (line items)
-      const revenue = Number(orderRow?.total ?? row?.total ?? 0);
+      const revenue = Number(orderRow?.total ?? 0);
 
       if (this.redis) {
         try {
