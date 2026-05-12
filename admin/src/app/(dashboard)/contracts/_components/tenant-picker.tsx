@@ -60,7 +60,9 @@ export function TenantPicker({ value, initialLabel, onChange }: Props) {
   // Display label: prefer matched item from list; fallback initialLabel
   // (admin opened dialog với existing link nhưng list chưa load tenant đó).
   const selectedLabel = selected
-    ? `${selected.name}${selected.taxId ? ` — ${selected.taxId}` : ""}`
+    ? selected.taxId
+      ? `${selected.name} — MST: ${selected.taxId}`
+      : selected.name
     : value != null
       ? (initialLabel ?? `Tenant #${value}`)
       : null;
@@ -79,10 +81,10 @@ export function TenantPicker({ value, initialLabel, onChange }: Props) {
       </div>
 
       {value != null && (
-        <div className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm">
-          <div>
+        <div className="flex w-full items-start justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm">
+          <div className="min-w-0 flex-1 break-words">
             <span className="font-medium text-blue-900">Đã chọn:</span>{" "}
-            <span className="text-blue-800">{selectedLabel}</span>
+            <span className="break-words text-blue-800">{selectedLabel}</span>
             <span className="ml-2 font-mono text-xs text-blue-600">
               (id={value})
             </span>
@@ -90,7 +92,7 @@ export function TenantPicker({ value, initialLabel, onChange }: Props) {
           <button
             type="button"
             onClick={() => onChange(null, null)}
-            className="text-xs text-red-600 hover:underline"
+            className="shrink-0 text-xs text-red-600 hover:underline"
           >
             Bỏ chọn
           </button>
@@ -126,7 +128,12 @@ export function TenantPicker({ value, initialLabel, onChange }: Props) {
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{t.name}</div>
                       <div className="font-mono text-xs text-[var(--text-muted,#78716C)]">
-                        {t.taxId || "—"} · id={t.id}
+                        {t.taxId ? (
+                          <>MST: {t.taxId}</>
+                        ) : (
+                          <span className="italic">Chưa có MST</span>
+                        )}
+                        <span className="mx-1">·</span>id={t.id}
                       </div>
                     </div>
                     {isSelected && (

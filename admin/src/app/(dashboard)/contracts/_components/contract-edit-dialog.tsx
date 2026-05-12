@@ -243,12 +243,14 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {isDraft ? "Chỉnh sửa hợp đồng nháp" : "Cập nhật liên kết MySQL"}
+      <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-x-hidden overflow-y-auto sm:max-w-2xl lg:max-w-3xl">
+        <DialogHeader className="pr-10">
+          <DialogTitle className="flex flex-wrap items-baseline gap-x-2 gap-y-1 break-words">
+            <span>
+              {isDraft ? "Chỉnh sửa hợp đồng nháp" : "Cập nhật liên kết MySQL"}
+            </span>
             {contract.contractNumber && (
-              <span className="ml-2 font-mono text-xs text-[var(--text-muted,#78716C)]">
+              <span className="block max-w-full truncate font-mono text-xs font-normal text-[var(--text-muted,#78716C)]">
                 · {contract.contractNumber}
               </span>
             )}
@@ -256,7 +258,7 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
+          <TabsList className="flex h-auto flex-wrap gap-1 pr-10">
             <TabsTrigger value="client">Bên A</TabsTrigger>
             <TabsTrigger value="race">Giải đấu</TabsTrigger>
             {!contract.revenueShare && (
@@ -486,14 +488,14 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
 
           {contract.contractType === "TICKET_SALES" && (
             <TabsContent value="mysql-link" className="space-y-4 pt-3">
-              <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              <div className="w-full rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed break-words whitespace-normal text-blue-900">
                 Liên kết hợp đồng với MySQL platform để báo cáo P&amp;L pull
-                doanh thu thực từ vé bán. Optional — nếu chưa link, P&amp;L
+                doanh thu thực từ vé bán. Tuỳ chọn — nếu chưa link, P&amp;L
                 fallback{" "}
                 <code className="rounded bg-blue-100 px-1">estimatedFee</code>{" "}
-                (banner warning hiển thị).
+                (banner cảnh báo sẽ hiển thị).
                 {!isDraft && (
-                  <span className="mt-1 block font-medium text-blue-800">
+                  <span className="mt-1 block font-medium break-words whitespace-normal text-blue-800">
                     HĐ đã{" "}
                     {contract.status === "ACTIVE" ? "kích hoạt" : "kết thúc"} —
                     chỉ liên kết MySQL được cập nhật ở đây (metadata, không
@@ -502,7 +504,7 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
                 )}
               </div>
 
-              <div>
+              <div className="w-full">
                 <Label className="mb-2 block">1. Chọn tenant (Bên B)</Label>
                 <TenantPicker
                   value={state.linkedTenantId}
@@ -522,7 +524,7 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
                 />
               </div>
 
-              <div>
+              <div className="w-full">
                 <Label className="mb-2 block">2. Chọn race (MySQL)</Label>
                 <RaceMysqlPicker
                   tenantId={state.linkedTenantId}
