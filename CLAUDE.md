@@ -231,6 +231,16 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - **Reason**: Podium FINAL artifact + dispute hearing evidence. Cần BTC defend tại protest hearing nếu có khiếu nại sau race. Không thể expire 24h như `result-images/` — VĐV thắng AG nhận prize money + cần document FINAL với log truy vết.
 - **CRITICAL**: do NOT mix `awards-pdf/` với `result-images/` (24h TTL) — podium PDF must persist. Distinct từ `courses/` (no PII), `result-kiosk-sponsors/` (public logos), `medical-attachments/` (PII strict).
 
+### Lifecycle rule 6 — Contract Management (F-024)
+- **Prefixes**: `contracts/` (generated DOCX/PDF/Excel) + `contract-templates/backups/` (uploaded template DOCX history)
+- **Expiration**: **5 năm** (Danny chốt 2026-05-11 — chuẩn Luật quản lý thuế 38/2019 Art. 41 lưu chứng từ kế toán).
+- **Path convention**:
+  - Generated documents: `contracts/{contractId}/{docType}_{ts}.{docx|pdf|xlsx}` per BR-CM-12
+  - Template backups: `contract-templates/backups/{type}-{ts}.docx` (F-024 UX-39 v3 upload feature)
+- **Access**: SIGNED URL ONLY — 5min upload PUT, 15min read GET. NO public bucket policy.
+- **Reason**: HĐ dịch vụ là chứng từ kế toán + bằng chứng pháp lý cho merchant/partner relationship. Sau 5 năm pii-anonymization cron strip client.taxId/representative/bankAccount nhưng giữ contractNumber/totalAmount/contractType cho audit analytics.
+- **CRITICAL**: do NOT mix `contracts/` với `result-images/` (24h TTL) — HĐ artifact phải persist 5y. Distinct từ `medical-attachments/` (7y strict PII) và `awards-pdf/` (no expire).
+
 
 ## Development Rules
 
