@@ -71,6 +71,12 @@ export interface LineItemInput {
   discount?: number;
   selected?: boolean;
   note?: string;
+  /**
+   * F-028 Phase 3 — `ServiceCatalog._id` snapshot khi line item được pick
+   * từ Service Catalog. Optional — line item nhập tay sẽ undefined.
+   * Backend lưu để cost-suggestions endpoint match HĐ ↔ catalog.
+   */
+  catalogItemId?: string;
 }
 
 export interface LineItemView extends LineItemInput {

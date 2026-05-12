@@ -52,6 +52,19 @@ export class LineItem {
   @Prop({ required: true, min: 0 }) amount: number;
   @Prop({ default: true }) selected: boolean;
   @Prop() note: string;
+  /**
+   * F-028 Phase 3 — reference tới `ServiceCatalog._id` khi line item được
+   * pick từ catalog picker. Optional: line item nhập tay (chưa có catalog)
+   * vẫn hợp lệ với `catalogItemId === undefined`.
+   *
+   * Dùng để cost-suggestions endpoint match HĐ ↔ catalog → tính
+   * `referenceCost × quantity` đưa vào P&L pre-compute.
+   *
+   * String thay vì Types.ObjectId vì line item là snapshot — nếu catalog
+   * bị soft delete, query lookup vẫn trả null → suggestion skip (KHÔNG
+   * crash). Pattern: `Contract.raceId` (string) thay vì ObjectId ref.
+   */
+  @Prop() catalogItemId?: string;
 }
 export const LineItemSchema = SchemaFactory.createForClass(LineItem);
 

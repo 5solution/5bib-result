@@ -410,6 +410,11 @@ export class ContractsService {
       ),
       selected: li.selected ?? true,
       note: li.note ?? '',
+      // F-028 Phase 3 — preserve catalog reference khi pick từ Service Catalog
+      // picker. Optional → omit nếu line item nhập tay.
+      ...((li as any).catalogItemId
+        ? { catalogItemId: (li as any).catalogItemId }
+        : {}),
     }));
 
     const totals = ContractsService.calcTotals(lineItems, vatRate);
@@ -724,6 +729,11 @@ export class ContractsService {
         ),
         selected: li.selected ?? true,
         note: li.note ?? '',
+        // F-028 Phase 3 — preserve catalog reference khi pick từ Service Catalog
+        // picker. Optional → omit nếu line item nhập tay.
+        ...((li as any).catalogItemId
+          ? { catalogItemId: (li as any).catalogItemId }
+          : {}),
       }));
       const vatRate = dto.vatRate ?? current.vatRate;
       const totals = ContractsService.calcTotals(items, vatRate);
