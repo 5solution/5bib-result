@@ -37,6 +37,7 @@ import {
   Building2,
   Package,
   ScrollText,
+  Coins,
 } from "lucide-react";
 
 export type NavItem = {
@@ -102,6 +103,19 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "contracts-partners", href: "/contracts/partners", label: "Đối tác", icon: Building2 },
       { id: "contracts-services", href: "/contracts/services", label: "Danh mục dịch vụ", icon: Package },
       { id: "contracts-templates", href: "/contracts/templates", label: "Mẫu hợp đồng", icon: ScrollText },
+    ],
+  },
+  {
+    label: "Tài chính",
+    items: [
+      {
+        id: "finance-pnl-contract",
+        href: "/finance/contracts",
+        label: "P&L theo HĐ",
+        icon: Coins,
+        requireRole: "admin",
+        badge: "NEW",
+      },
     ],
   },
   {

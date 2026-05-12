@@ -32,6 +32,9 @@ import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
 import { useConfirm } from "@/components/confirm-dialog";
 import { DetailSkeleton } from "../_components/detail-skeleton";
 import { ContractEditDialog } from "../_components/contract-edit-dialog";
+// F-028 — embed P&L summary card (admin-only defense-in-depth).
+import { useAuth } from "@/lib/auth-context";
+import { PnLSummaryCard } from "../../finance/_components/pnl-summary-card";
 
 export default function ContractDetailPage({
   params,
@@ -41,6 +44,7 @@ export default function ContractDetailPage({
   const router = useRouter();
   const confirm = useConfirm();
   const { id } = use(params);
+  const { isAdmin } = useAuth();
 
   const [contract, setContract] = useState<ContractView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -334,6 +338,20 @@ export default function ContractDetailPage({
       </div>
 
       <ContractDetailSections contract={contract} />
+
+      {/* F-028 — Lãi/Lỗ Deal section, admin-only defense-in-depth. */}
+      {isAdmin && (
+        <section
+          data-testid="pnl-deal-section"
+          className="space-y-3"
+          aria-label="Lãi lỗ Deal"
+        >
+          <h2 className="text-base font-semibold text-stone-900">
+            💰 Lãi/Lỗ Deal
+          </h2>
+          <PnLSummaryCard contractId={contract._id} compact />
+        </section>
+      )}
 
       {/* F-024 Fix 2 — edit dialog (DRAFT only). */}
       {editOpen && contract && (
