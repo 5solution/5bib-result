@@ -56,6 +56,11 @@ export type NavItem = {
   count?: number;
   /** Route chua co page → render placeholder Coming soon (BR-DESIGN-10). */
   isComingSoon?: boolean;
+  /**
+   * RBAC gate — neu set "admin" thi chi admin/super_admin xem duoc.
+   * Default undefined = staff tro len thay duoc (hau het muc).
+   */
+  requireRole?: "admin";
 };
 
 export type NavGroup = {
@@ -73,7 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "races", href: "/races", label: "Giải đấu", icon: Trophy },
       { id: "merchants", href: "/merchants", label: "Merchant", icon: Store },
       { id: "reconciliations", href: "/reconciliations", label: "Đối soát", icon: ReceiptText },
-      { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart2 },
+      { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart2, requireRole: "admin" },
       { id: "team", href: "/team-management", label: "Quản lý nhân sự", icon: Users },
       { id: "claims", href: "/claims", label: "Khiếu nại", icon: FileWarning, dot: true },
       { id: "timing-leads", href: "/timing-leads", label: "Timing Leads", icon: Timer },

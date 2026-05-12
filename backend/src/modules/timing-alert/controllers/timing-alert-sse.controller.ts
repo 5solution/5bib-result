@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Observable } from 'rxjs';
-import { LogtoAdminGuard } from '../../logto-auth/logto-admin.guard';
+import { LogtoStaffGuard } from '../../logto-auth';
 import { TimingAlertSseService } from '../services/timing-alert-sse.service';
 
 /**
@@ -26,7 +26,7 @@ import { TimingAlertSseService } from '../services/timing-alert-sse.service';
  */
 @ApiTags('Timing Alert SSE')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('admin/races/:raceId/timing-alerts')
 export class TimingAlertSseController {
   constructor(private readonly sseService: TimingAlertSseService) {}

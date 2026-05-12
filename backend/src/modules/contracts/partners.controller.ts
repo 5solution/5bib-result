@@ -22,11 +22,11 @@ import {
   PartnerResponseDto,
   UpdatePartnerDto,
 } from './dto/partner.dto';
-import { LogtoAdminGuard } from '../logto-auth';
+import { LogtoStaffGuard } from '../logto-auth';
 
 @ApiTags('Partners')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('partners')
 export class PartnersController {
   constructor(private readonly partners: PartnersService) {}

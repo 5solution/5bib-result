@@ -18,6 +18,7 @@ interface LogtoUserInfo {
   picture?: string;
   username?: string;
   roles?: string[];
+  scopes?: string[];
   custom_data?: Record<string, unknown>;
 }
 
@@ -33,6 +34,17 @@ interface AuthContextType {
   userRole: string | null;
   /** Logto userInfo response (claims + custom_data). */
   userInfo: LogtoUserInfo | null;
+  /**
+   * Check user có scope cụ thể không. `all` (super admin) luôn pass mọi check.
+   * Hierarchy: `staff` < `admin` < `all`.
+   */
+  hasScope: (scope: string) => boolean;
+  /** Check user có role cụ thể không. `super_admin` luôn pass mọi check. */
+  hasRole: (role: string) => boolean;
+  /** True khi user là admin hoặc cao hơn (admin / super_admin / scope `admin`+`all`). */
+  isAdmin: boolean;
+  /** True khi user là staff hoặc cao hơn (bao gồm admin / super_admin). */
+  isStaff: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -68,7 +80,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!data?.isAuthenticated;
   const userInfo = data?.userInfo ?? data?.claims ?? null;
   const roles = (userInfo?.roles as string[] | undefined) ?? [];
-  const userRole = roles.includes("admin") ? "admin" : roles[0] ?? null;
+  const scopes = (userInfo?.scopes as string[] | undefined) ?? [];
+  const userRole = roles.includes("admin")
+    ? "admin"
+    : roles.includes("staff")
+      ? "staff"
+      : roles[0] ?? null;
+
+  // Permission hierarchy: staff < admin < all (super admin).
+  const hasScope = (scope: string): boolean =>
+    scopes.includes(scope) || scopes.includes("all");
+  const hasRole = (role: string): boolean =>
+    roles.includes(role) || roles.includes("super_admin");
+  const isAdmin =
+    hasScope("admin") || hasScope("all") || hasRole("admin") || hasRole("super_admin");
+  const isStaff =
+    isAdmin || hasScope("staff") || hasRole("staff");
 
   useEffect(() => {
     // Legacy LOCAL_STORAGE token cleanup — remove on first mount
@@ -97,6 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     userRole,
     userInfo,
+    hasScope,
+    hasRole,
+    isAdmin,
+    isStaff,
   };
 
   return <AuthContext value={value}>{children}</AuthContext>;

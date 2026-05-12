@@ -33,11 +33,11 @@ import {
   CreateAcceptanceReportDto,
   CreatePaymentRequestDto,
 } from './dto/acceptance-payment.dto';
-import { LogtoAdminGuard } from '../logto-auth';
+import { LogtoStaffGuard } from '../logto-auth';
 
 @ApiTags('Contracts')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('contracts')
 export class ContractsController {
   constructor(private readonly contracts: ContractsService) {}

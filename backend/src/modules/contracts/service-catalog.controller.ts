@@ -22,11 +22,11 @@ import {
   ServiceCatalogResponseDto,
   UpdateServiceCatalogDto,
 } from './dto/service-catalog.dto';
-import { LogtoAdminGuard } from '../logto-auth';
+import { LogtoStaffGuard } from '../logto-auth';
 
 @ApiTags('Service Catalog')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 @Controller('service-catalog')
 export class ServiceCatalogController {
   constructor(private readonly catalog: ServiceCatalogService) {}

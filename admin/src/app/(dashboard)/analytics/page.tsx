@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -165,7 +166,24 @@ function KpiCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function AnalyticsOverviewPage() {
+/**
+ * RBAC page-level gate — Analytics (F-026) chỉ admin xem được.
+ * Backend cũng enforce qua LogtoAdminGuard (defense-in-depth).
+ * Gate phải đứng NGOÀI component chính để tránh vi phạm Rules of Hooks
+ * khi early-return giữa các useState.
+ */
+export default function AnalyticsPageGate() {
+  const { isAdmin, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!isAdmin) {
+    return (
+      <RestrictedAccess message="Trang Analytics chỉ dành cho admin — bạn không có quyền truy cập. Liên hệ quản trị hệ thống nếu cần cấp quyền." />
+    );
+  }
+  return <AnalyticsOverviewPage />;
+}
+
+function AnalyticsOverviewPage() {
   const { token } = useAuth();
   const [month, setMonth] = useState(currentMonthStr());
 

@@ -19,7 +19,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth/logto-admin.guard';
+import { LogtoStaffGuard } from '../../logto-auth';
 import type { AuthenticatedRequest } from '../../logto-auth/types';
 import { RaceAthleteLookupService } from '../services/race-athlete-lookup.service';
 import { RaceAthleteAdminDto } from '../dto/race-athlete-admin.dto';
@@ -39,7 +39,7 @@ import { RaceMasterSyncLogDocument } from '../schemas/race-master-sync-log.schem
 /**
  * Admin endpoints for race master data overview + manual sync trigger.
  *
- * All endpoints scoped by `:raceId` URL param. Guard `LogtoAdminGuard`
+ * All endpoints scoped by `:raceId` URL param. Guard `LogtoStaffGuard`
  * enforces JWT — same pattern as chip-verification admin controller.
  *
  * Path: `/admin/races/:raceId/master-data/...` for consistency với
@@ -48,7 +48,7 @@ import { RaceMasterSyncLogDocument } from '../schemas/race-master-sync-log.schem
 @ApiTags('race-master-data (admin)')
 @ApiBearerAuth()
 @Controller('admin/races/:raceId/master-data')
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoStaffGuard)
 export class RaceMasterDataAdminController {
   private readonly logger = new Logger(RaceMasterDataAdminController.name);
 
