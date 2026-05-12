@@ -9,7 +9,11 @@
  *
  * Catalog items lọc theo category — wizard pass contract type → mapping
  * TICKET_SALES→GENERAL, TIMING→TIMING, RACEKIT→RACEKIT, OPERATIONS→OPERATIONS.
- * Admin có thể switch sang "Tất cả" trong modal.
+ * Admin có thể switch sang "Tất cả nhóm" trong modal.
+ *
+ * F-024 UI consistency fix (2026-05-12): align picker với Service Catalog
+ * table style — VN labels (Display Convention từ f18da46) + table-like
+ * columns (Tên | Nhóm badge VN | ĐVT | Giá bán | Giá vốn | Lãi gộp badge).
  */
 import { useEffect, useState } from "react";
 import {
@@ -35,6 +39,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ExternalLink, Package } from "lucide-react";
 import Link from "next/link";
@@ -45,6 +58,44 @@ const TYPE_TO_CATEGORY: Record<ContractType, ServiceCategory> = {
   RACEKIT: "RACEKIT",
   OPERATIONS: "OPERATIONS",
   TICKET_SALES: "GENERAL",
+};
+
+// Đồng bộ với ServiceCatalogTable CATEGORY_LABEL (Display Convention f18da46).
+const CATEGORY_LABEL: Record<ServiceCategory, string> = {
+  TIMING: "Tính giờ",
+  RACEKIT: "Racekit",
+  OPERATIONS: "Vận hành",
+  GENERAL: "Chung",
+};
+
+/**
+ * F-028 Phase 3 — compute lãi gộp % từ giá bán × giá vốn (port từ
+ * ServiceCatalogTable để picker hiển thị KPI giống y catalog page).
+ */
+type MarginTier = "high" | "mid" | "low" | "unknown";
+type MarginResult = { value: number; tier: MarginTier };
+
+function computeMargin(price: number, cost: number): MarginResult {
+  if (!price || price <= 0 || !cost || cost <= 0) {
+    return { value: 0, tier: "unknown" };
+  }
+  const margin = ((price - cost) / price) * 100;
+  let tier: MarginTier = "low";
+  if (margin > 40) tier = "high";
+  else if (margin >= 20) tier = "mid";
+  return { value: Math.round(margin), tier };
+}
+
+const MARGIN_TIER_CLASS: Record<Exclude<MarginTier, "unknown">, string> = {
+  high: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  mid: "border-amber-300 bg-amber-50 text-amber-800",
+  low: "border-rose-300 bg-rose-50 text-rose-800",
+};
+
+const MARGIN_TIER_DOT: Record<Exclude<MarginTier, "unknown">, string> = {
+  high: "🟢",
+  mid: "🟡",
+  low: "🔴",
 };
 
 type Props = {
@@ -100,7 +151,7 @@ export function ServiceCatalogPicker({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Chọn dịch vụ từ danh mục</DialogTitle>
         </DialogHeader>
@@ -114,8 +165,8 @@ export function ServiceCatalogPicker({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả</SelectItem>
-                <SelectItem value="TIMING">Timing</SelectItem>
+                <SelectItem value="ALL">Tất cả nhóm</SelectItem>
+                <SelectItem value="TIMING">Tính giờ</SelectItem>
                 <SelectItem value="RACEKIT">Racekit</SelectItem>
                 <SelectItem value="OPERATIONS">Vận hành</SelectItem>
                 <SelectItem value="GENERAL">Chung</SelectItem>
@@ -127,7 +178,7 @@ export function ServiceCatalogPicker({
               placeholder="Tìm tên dịch vụ"
             />
           </div>
-          <div className="max-h-96 overflow-y-auto rounded-md border border-[var(--border,#E7E2D9)] bg-white">
+          <div className="max-h-[28rem] overflow-y-auto rounded-md border border-[var(--border,#E7E2D9)] bg-white">
             {loading ? (
               <div className="space-y-2 p-3">
                 <Skeleton className="h-8 w-full" />
@@ -156,29 +207,88 @@ export function ServiceCatalogPicker({
                 }
               />
             ) : (
-              <ul>
-                {items.map((it) => (
-                  <li key={it._id}>
-                    <button
-                      type="button"
-                      onClick={() => pick(it)}
-                      className="flex w-full items-center justify-between gap-3 border-b border-[var(--border,#E7E2D9)] px-3 py-2 text-left last:border-b-0 hover:bg-[#F3F0EB]"
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tên dịch vụ</TableHead>
+                    <TableHead>Nhóm</TableHead>
+                    <TableHead>ĐVT</TableHead>
+                    <TableHead className="text-right">Giá bán</TableHead>
+                    <TableHead className="text-right">Giá vốn</TableHead>
+                    <TableHead
+                      className="text-right"
+                      title="Lãi gộp ước tính = (giá bán - giá vốn) / giá bán × 100%"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">
-                          {it.name}
-                        </div>
-                        <div className="truncate text-xs text-[var(--text-muted,#78716C)]">
-                          {it.category} · {it.unit || "—"}
-                        </div>
-                      </div>
-                      <div className="font-mono text-sm">
-                        {formatVND(it.referencePrice ?? 0)}
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                      Lãi gộp
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((it) => {
+                    const m = computeMargin(
+                      it.referencePrice ?? 0,
+                      it.referenceCost ?? 0,
+                    );
+                    return (
+                      <TableRow
+                        key={it._id}
+                        onClick={() => pick(it)}
+                        className="cursor-pointer hover:bg-[#F3F0EB]"
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Chọn ${it.name}`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            pick(it);
+                          }
+                        }}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="truncate">{it.name}</div>
+                          {it.description ? (
+                            <div className="truncate text-xs text-[var(--text-muted,#78716C)]">
+                              {it.description}
+                            </div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {CATEGORY_LABEL[it.category]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{it.unit || "—"}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatVND(it.referencePrice ?? 0)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">
+                          {it.referenceCost == null
+                            ? "—"
+                            : formatVND(it.referenceCost)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {m.tier === "unknown" ? (
+                            <span
+                              className="text-muted-foreground"
+                              title="Cần nhập cả Giá bán và Giá vốn để tính"
+                            >
+                              —
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs font-semibold ${MARGIN_TIER_CLASS[m.tier]}`}
+                              title="Lãi gộp ước tính"
+                            >
+                              <span aria-hidden>{MARGIN_TIER_DOT[m.tier]}</span>
+                              {m.value}%
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             )}
           </div>
         </div>
