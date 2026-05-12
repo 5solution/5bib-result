@@ -6,7 +6,7 @@
  * RBAC: FinancePageGate enforce `isAdmin` (UI defense-in-depth). Backend
  * cũng enforce qua LogtoAdminGuard.
  */
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -49,8 +49,6 @@ function FinancePerContractPage({
   const [exporting, setExporting] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
 
-  useSetCrumb(id, "P&L theo HĐ");
-
   const {
     data: pnl,
     isLoading,
@@ -73,6 +71,27 @@ function FinancePerContractPage({
   const isLinked =
     contract?.linkedTenantId != null &&
     contract?.linkedMysqlRaceId != null;
+
+  // F-028 UX — KHÔNG bao giờ expose raw ObjectId. Hiển thị contractNumber
+  // (status ACTIVE/COMPLETED) hoặc fallback "Nháp · {entityName}" cho DRAFT.
+  const displayLabel = contract?.contractNumber
+    ? contract.contractNumber
+    : contract?.client?.entityName
+      ? `Nháp · ${contract.client.entityName}`
+      : "Chi tiết";
+
+  // Inject label tiếng Việt vào breadcrumb override (Topbar đọc qua useBreadcrumbOverrides).
+  useSetCrumb(id, `Lãi/Lỗ Deal — ${displayLabel}`);
+
+  // Tab document.title cho khớp với label đang xem.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const prev = document.title;
+    document.title = `Lãi/Lỗ Deal — ${displayLabel} · 5BIB Admin`;
+    return () => {
+      document.title = prev;
+    };
+  }, [displayLabel]);
 
   async function onExportExcel() {
     setExporting(true);
@@ -112,7 +131,11 @@ function FinancePerContractPage({
           <h1 className="text-xl font-bold text-stone-900">
             Lãi/Lỗ Deal{" "}
             <span className="text-stone-400">
-              · {error ? "(lỗi)" : isLoading ? "..." : id.slice(-6)}
+              {error
+                ? "· (lỗi)"
+                : isLoading && !contract
+                  ? "· ..."
+                  : `— ${displayLabel}`}
             </span>
           </h1>
         </div>
