@@ -30,8 +30,13 @@ export class OrderReadonly {
   @PrimaryColumn({ type: 'bigint' })
   id: number;
 
-  @Column({ type: 'bigint', nullable: true })
-  tenant_id: number | null;
+  // NOTE F-028 BUG fix 2026-05-12: column `tenant_id` KHÔNG tồn tại trên
+  // `order_metadata` MySQL prod (đã verify bằng error log "Unknown column
+  // 'o.tenant_id' in 'where clause'"). Tenant scoping ở MySQL platform đi
+  // qua `races.tenant_id` (filter join `race_course → race`), KHÔNG filter
+  // trực tiếp `order_metadata`. Bỏ @Column decorator để TypeORM KHÔNG đụng
+  // column này trong query autogen — chỉ giữ thuộc tính lúc cần phân tích
+  // future-compat. Pattern F-016 ReconciliationQueryService line 67-77.
 
   @Column({ name: 'internal_status', type: 'varchar', nullable: true })
   internalStatus: string | null;

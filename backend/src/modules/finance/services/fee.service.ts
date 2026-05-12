@@ -14,8 +14,10 @@ import {
  * F-028 BR-PNL-04 + BR-PNL-22 — cross-DB MySQL platform pull cho TICKET_SALES.
  *
  * Compute "actual revenue" của 1 race-deal bằng SUM total_price của orders:
- *   - tenant_id match contract.tenantId (BIGINT từ MySQL platform)
- *   - mysql_race_id match (BIGINT)
+ *   - mysql_race_id match qua join race_course → race_id (BIGINT)
+ *     (race_id đã unique per tenant — KHÔNG filter `o.tenant_id` vì column
+ *     này KHÔNG tồn tại trên `order_metadata` MySQL prod — F-028 BUG fix
+ *     2026-05-12, pattern F-016 line 67-77)
  *   - internal_status = 'COMPLETE' (5BIB platform convention — equivalent
  *     "paid" trong PRD ban đầu — confirm qua F-016 ReconciliationQueryService
  *     line 73)
@@ -235,19 +237,23 @@ export class FeeService {
     }
 
     try {
-      // F-028 HIGH-02 QC carryover — chỉ 1 query DISTINCT subquery.
+      // F-028 BUG fix — `order_metadata` table KHÔNG có column `tenant_id`
+      // trên MySQL prod (entity OrderReadonly map column này là tài liệu
+      // schema cũ — KHÔNG dùng làm filter). Pattern chuẩn F-016
+      // ReconciliationQueryService line 67-77: filter qua `rc.race_id`
+      // (race_course.race_id) — race_id đã unique per tenant (mỗi race
+      // chỉ thuộc 1 tenant trên platform DB).
       //
-      // Previously: 2 queries sequential await (~400ms waste). Query 1 inner
-      // join order_line_item → nhân bản total khi 1 order có ≥2 line items.
-      // Query 2 dùng `o.id IN (SELECT DISTINCT ...)` subquery → 1 order chỉ
-      // sum 1 lần dù có nhiều LI. Query 2 = source-of-truth, query 1 chưa
-      // bao giờ được dùng (logic `orderRow ?? row` luôn ưu tiên orderRow).
-      // → Bỏ query 1.
+      // Lý do `tenantId` vẫn nhận làm param: defence-in-depth cho future
+      // analytics + để cache key + warning đầy đủ context, KHÔNG filter SQL.
+      //
+      // Single query DISTINCT subquery (HIGH-02 QC carryover preserved):
+      // dùng `o.id IN (SELECT DISTINCT ...)` để 1 order có ≥2 line items
+      // chỉ sum total_price 1 lần.
       const orderRow = await this.orderRepo
         .createQueryBuilder('o')
         .select('SUM(o.total_price)', 'total')
-        .where('o.tenant_id = :tenantId', { tenantId })
-        .andWhere("o.internal_status = 'COMPLETE'")
+        .where("o.internal_status = 'COMPLETE'")
         .andWhere('o.deleted = 0')
         .andWhere('o.order_category IN (:...cats)', {
           cats: FeeService.FIVE_BIB_CATEGORIES,

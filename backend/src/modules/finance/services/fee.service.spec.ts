@@ -64,6 +64,38 @@ describe('F-028 FeeService.getActualRevenueForRace', () => {
     );
   });
 
+  it('F-028 BUG fix — query KHÔNG filter `o.tenant_id` (column không tồn tại MySQL prod)', async () => {
+    // Regression test for "Unknown column 'o.tenant_id' in 'where clause'"
+    // Verify chain: only WHERE internal_status='COMPLETE', no tenant_id where clause.
+    const qb: any = {};
+    qb.select = jest.fn().mockReturnValue(qb);
+    qb.where = jest.fn().mockReturnValue(qb);
+    qb.andWhere = jest.fn().mockReturnValue(qb);
+    qb.getRawOne = jest.fn().mockResolvedValue({ total: '0' });
+    const repo = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
+
+    const svc = new FeeService(repo as any, undefined);
+    await svc.getActualRevenueForRace(12, 148, 'c-regression');
+
+    // First `.where(...)` should be `internal_status = 'COMPLETE'` (NOT tenant_id)
+    const firstWhereCall = qb.where.mock.calls[0]?.[0];
+    expect(firstWhereCall).toContain("internal_status = 'COMPLETE'");
+    expect(firstWhereCall).not.toContain('tenant_id');
+
+    // None of the andWhere clauses should reference `tenant_id`
+    for (const call of qb.andWhere.mock.calls) {
+      const clause = String(call[0] ?? '');
+      expect(clause).not.toContain('o.tenant_id');
+    }
+
+    // Filter by race must still happen via race_course join subquery
+    const raceJoinClause = qb.andWhere.mock.calls.find((c: any[]) =>
+      String(c[0]).includes('rc2.race_id'),
+    );
+    expect(raceJoinClause).toBeDefined();
+    expect(raceJoinClause?.[1]).toEqual({ raceId2: 148 });
+  });
+
   it('UP-07 — race chưa có order paid → revenue=0 (KHÔNG 500 crash)', async () => {
     const repo = buildRepo({ total: null });
     const svc = new FeeService(repo as any, undefined);
