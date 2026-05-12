@@ -41,6 +41,10 @@ import { AuditLogService } from '../../audit/services/audit-log.service';
 import { Race } from '../../races/schemas/race.schema';
 import { vndAmountInWords } from '../utils/vn-num-to-words';
 import { escapeRegex } from '../utils/escape-regex';
+import {
+  buildDocumentFilename,
+  DocFormat,
+} from '../utils/build-filename';
 
 /**
  * M-03 QC fix — BR-CM-15: default average ticket price (VND) khi race
@@ -1219,11 +1223,27 @@ export class ContractsService {
       throw new NotFoundException('Document not found in this contract');
     }
     const { body, contentType } = await this.docGenerator.getFileBody(s3Key);
-    // L-03 QC fix: defense-in-depth filename whitelist — chỉ chấp nhận
-    // safe-chars + extension docx/pdf. Strip path components, fallback 'document'.
-    const rawName = s3Key.split('/').pop() ?? 'document';
-    // F-024 Phase 3 finalize: thêm xlsx (Quotation Excel) vào whitelist.
-    const filename = /^[\w.-]+\.(docx|pdf|xlsx)$/i.test(rawName) ? rawName : 'document';
+    // F-024 — build human-readable filename:
+    //   `[Provider] [Partner] - [DocType] [Service] - [DD.MM.YYYY].ext`
+    // Thay vì raw S3 key `{docType}_{ts}.{ext}` (không meaningful).
+    // RFC 5987 escape đã handle Unicode/space ở controller layer.
+    // Extract extension từ s3Key — defense-in-depth: chỉ accept docx/pdf/xlsx.
+    const rawExt = (s3Key.split('.').pop() ?? '').toLowerCase();
+    const format: DocFormat = (
+      rawExt === 'docx' || rawExt === 'pdf' || rawExt === 'xlsx'
+        ? rawExt
+        : 'docx'
+    ) as DocFormat;
+    const filename = buildDocumentFilename({
+      providerId: c.providerId,
+      partnerName: c.client?.entityName ?? '',
+      docType: doc.docType as any,
+      contractType: c.contractType,
+      signDate: c.signDate ?? null,
+      // Fallback: dùng generatedAt của document entry; nếu null → createdAt của contract.
+      fallbackDate: doc.generatedAt ?? c.createdAt ?? null,
+      format,
+    });
     return { body, contentType, filename };
   }
 
