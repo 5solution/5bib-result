@@ -172,11 +172,11 @@ export default function NewContractTemplatePage(): React.ReactElement {
   // avoid hammering the API on every keystroke.
   useEffect(() => {
     const handle = setTimeout(() => void runValidation(html), 600);
-    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
-  if (!isStaff) return <RestrictedAccess />;
-
-  return () => clearTimeout(handle);
+    return () => clearTimeout(handle);
   }, [html, runValidation]);
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   async function handleImport(file: File): Promise<void> {
     if (!token) return;

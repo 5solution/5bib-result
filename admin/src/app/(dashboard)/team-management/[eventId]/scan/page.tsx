@@ -162,10 +162,7 @@ export default function ScanPage(): React.ReactElement {
       }
     })();
 
-    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
-  if (!isStaff) return <RestrictedAccess />;
-
-  return () => {
+    return () => {
       cancelled = true;
       const scanner = scannerRef.current;
       if (scanner) {
@@ -220,6 +217,9 @@ export default function ScanPage(): React.ReactElement {
     }, 300);
     return () => clearTimeout(handle);
   }, [searchInput, eventId, token]);
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   async function refreshLookup(): Promise<void> {
     if (!token) return;

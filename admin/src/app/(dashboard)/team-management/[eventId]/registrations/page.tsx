@@ -212,10 +212,7 @@ export default function RegistrationsListPage(): React.ReactElement {
     const next = new Set(rowBusy);
     next.add(id);
     setRowBusy(next);
-    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
-  if (!isStaff) return <RestrictedAccess />;
-
-  return () => {
+    return () => {
       const done = new Set(next);
       done.delete(id);
       setRowBusy(done);
@@ -574,6 +571,9 @@ export default function RegistrationsListPage(): React.ReactElement {
   }
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   const pendingCount = byStatus.pending_approval ?? 0;
 

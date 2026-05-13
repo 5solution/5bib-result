@@ -59,11 +59,11 @@ export default function DashboardPage(): React.ReactElement {
     const timer = setInterval(() => {
       void load();
     }, 30_000);
-    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
-  if (!isStaff) return <RestrictedAccess />;
-
-  return () => clearInterval(timer);
+    return () => clearInterval(timer);
   }, [token, load]);
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   if (authLoading || !isAuthenticated || !data) {
     return <Skeleton className="h-96" />;
