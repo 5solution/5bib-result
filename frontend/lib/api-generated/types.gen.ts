@@ -2114,6 +2114,258 @@ export type UpdateServiceCatalogDto = {
     sortOrder?: number;
 };
 
+export type SectionScheduleDto = {
+    enabled: boolean;
+    startDate?: string;
+    endDate?: string;
+};
+
+export type SectionResponseDto = {
+    /**
+     * Optional ID — for edit operations preserve existing section _id.
+     */
+    _id?: string;
+    type: 'hero' | 'race_calendar' | 'featured_races' | 'promo_banner' | 'cta_buttons' | 'sponsors' | 'stats' | 'rich_text' | 'recent_results' | 'link_grid' | 'social_links' | 'faq' | 'countdown' | 'video_embed' | 'image_gallery' | 'testimonial' | 'map_embed' | 'schedule_timeline' | 'form_embed';
+    order: number;
+    visible: boolean;
+    /**
+     * Type-specific config payload (shape varies by section type)
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    schedule?: SectionScheduleDto;
+};
+
+export type PromoHubSeoResponseDto = {
+    metaTitle?: string;
+    metaDescription?: string;
+    ogImage?: string;
+    canonicalUrl?: string;
+    structuredData?: {
+        [key: string]: unknown;
+    };
+};
+
+export type PromoHubThemeResponseDto = {
+    primaryColor: string;
+    secondaryColor: string;
+    fontFamily: string;
+    layout: 'standard' | 'compact' | 'wide';
+    customCss?: string;
+};
+
+export type PromoHubResponseDto = {
+    id: string;
+    slug: string;
+    title: string;
+    description?: string;
+    status: 'draft' | 'published' | 'archived';
+    sections: Array<SectionResponseDto>;
+    seo: PromoHubSeoResponseDto;
+    theme: PromoHubThemeResponseDto;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type SectionInputDto = {
+    /**
+     * Optional ID — for edit operations preserve existing section _id.
+     */
+    _id?: string;
+    type: 'hero' | 'race_calendar' | 'featured_races' | 'promo_banner' | 'cta_buttons' | 'sponsors' | 'stats' | 'rich_text' | 'recent_results' | 'link_grid' | 'social_links' | 'faq' | 'countdown' | 'video_embed' | 'image_gallery' | 'testimonial' | 'map_embed' | 'schedule_timeline' | 'form_embed';
+    order: number;
+    visible: boolean;
+    /**
+     * Type-specific config payload (shape varies by section type)
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    schedule?: SectionScheduleDto;
+};
+
+export type PromoHubSeoInputDto = {
+    metaTitle?: string;
+    metaDescription?: string;
+    /**
+     * S3 URL for OpenGraph image
+     */
+    ogImage?: string;
+    canonicalUrl?: string;
+    /**
+     * JSON-LD structured data
+     */
+    structuredData?: {
+        [key: string]: unknown;
+    };
+};
+
+export type PromoHubThemeInputDto = {
+    primaryColor?: string;
+    secondaryColor?: string;
+    fontFamily?: string;
+    layout?: 'standard' | 'compact' | 'wide';
+    /**
+     * Custom CSS injected into page <style> tag. Sanitized server-side via sanitize-html (strip <script>, javascript: URIs, event handlers).
+     */
+    customCss?: string;
+};
+
+export type CreatePromoHubDto = {
+    /**
+     * URL-friendly slug. Lowercase alphanumeric + hyphens. Public path 5bib.com/hub/<slug>.
+     */
+    slug: string;
+    title: string;
+    description?: string;
+    status?: 'draft' | 'published' | 'archived';
+    sections?: Array<SectionInputDto>;
+    seo?: PromoHubSeoInputDto;
+    theme?: PromoHubThemeInputDto;
+};
+
+export type PromoHubListItemDto = {
+    id: string;
+    slug: string;
+    title: string;
+    status: 'draft' | 'published' | 'archived';
+    /**
+     * Section count (computed)
+     */
+    sectionCount: number;
+    /**
+     * View count in last 7 days (aggregated)
+     */
+    views7d: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PromoHubListResponseDto = {
+    data: Array<PromoHubListItemDto>;
+    total: number;
+    pageNo: number;
+    pageSize: number;
+    totalPages: number;
+};
+
+export type UpdatePromoHubDto = {
+    /**
+     * URL-friendly slug. Lowercase alphanumeric + hyphens. Public path 5bib.com/hub/<slug>.
+     */
+    slug?: string;
+    title?: string;
+    description?: string;
+    status?: 'draft' | 'published' | 'archived';
+    sections?: Array<SectionInputDto>;
+    seo?: PromoHubSeoInputDto;
+    theme?: PromoHubThemeInputDto;
+};
+
+export type ReorderSectionsDto = {
+    /**
+     * Ordered array of section _id strings — new order applied as index in array. Length must match current sections.length; all IDs must exist.
+     */
+    sectionIds: Array<string>;
+};
+
+export type TrackClickDto = {
+    /**
+     * Promo hub _id (24-char Mongo ObjectId)
+     */
+    hubId: string;
+    /**
+     * Section _id where the clicked element rendered
+     */
+    sectionId: string;
+    /**
+     * Human-readable label (button text / link anchor text)
+     */
+    label: string;
+    /**
+     * Destination URL (absolute or relative)
+     */
+    url: string;
+    /**
+     * Referer URL (optional — server still reads from `Referer` header as authoritative source)
+     */
+    referer?: string;
+};
+
+export type TrackViewDto = {
+    /**
+     * Promo hub _id (24-char Mongo ObjectId)
+     */
+    hubId: string;
+    slug?: string;
+    referer?: string;
+};
+
+export type TimeSeriesDataPointDto = {
+    /**
+     * ISO date string YYYY-MM-DD
+     */
+    date: string;
+    count: number;
+};
+
+export type TopSectionDto = {
+    sectionId: string;
+    clicks: number;
+};
+
+export type TopLabelDto = {
+    label: string;
+    clicks: number;
+};
+
+export type TopRefererDto = {
+    referer: string;
+    views: number;
+};
+
+export type AnalyticsSummaryDto = {
+    hubId: string;
+    /**
+     * Total views in last 30 days (also reflects TTL window)
+     */
+    totalViews: number;
+    /**
+     * Total clicks in last 30 days
+     */
+    totalClicks: number;
+    /**
+     * Click-through rate = totalClicks / totalViews (0 if no views). Range 0.0-N (>1 possible if multiple clicks per view).
+     */
+    ctr: number;
+    /**
+     * Views per day, last 30 days
+     */
+    viewsByDay: Array<TimeSeriesDataPointDto>;
+    /**
+     * Clicks per day, last 30 days
+     */
+    clicksByDay: Array<TimeSeriesDataPointDto>;
+    /**
+     * Top 10 sections by click count
+     */
+    topSections: Array<TopSectionDto>;
+    /**
+     * Top 10 CTA labels by click count
+     */
+    topLabels: Array<TopLabelDto>;
+    /**
+     * Top 10 referer URLs by view count (traffic sources)
+     */
+    topReferers: Array<TopRefererDto>;
+    /**
+     * ISO timestamp when summary was generated
+     */
+    generatedAt: string;
+};
+
 export type CreateRaceDto = {
     /**
      * Race title
@@ -7348,6 +7600,207 @@ export type ContractTemplatesControllerUpdateLineItemsResponses = {
     200: unknown;
 };
 
+export type PromoHubControllerFindBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/promo-hubs/slug/{slug}';
+};
+
+export type PromoHubControllerFindBySlugErrors = {
+    /**
+     * Hub does not exist OR status != "published"
+     */
+    404: unknown;
+};
+
+export type PromoHubControllerFindBySlugResponses = {
+    200: PromoHubResponseDto;
+};
+
+export type PromoHubControllerFindBySlugResponse = PromoHubControllerFindBySlugResponses[keyof PromoHubControllerFindBySlugResponses];
+
+export type PromoHubControllerListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'draft' | 'published' | 'archived' | 'all';
+        pageNo?: number;
+        pageSize?: number;
+        q?: string;
+    };
+    url: '/api/promo-hubs';
+};
+
+export type PromoHubControllerListResponses = {
+    200: PromoHubListResponseDto;
+};
+
+export type PromoHubControllerListResponse = PromoHubControllerListResponses[keyof PromoHubControllerListResponses];
+
+export type PromoHubControllerCreateData = {
+    body: CreatePromoHubDto;
+    path?: never;
+    query?: never;
+    url: '/api/promo-hubs';
+};
+
+export type PromoHubControllerCreateErrors = {
+    /**
+     * Slug already exists
+     */
+    409: unknown;
+};
+
+export type PromoHubControllerCreateResponses = {
+    201: PromoHubResponseDto;
+};
+
+export type PromoHubControllerCreateResponse = PromoHubControllerCreateResponses[keyof PromoHubControllerCreateResponses];
+
+export type PromoHubControllerDeleteData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/promo-hubs/{id}';
+};
+
+export type PromoHubControllerDeleteErrors = {
+    /**
+     * Hub not found
+     */
+    404: unknown;
+};
+
+export type PromoHubControllerDeleteResponses = {
+    200: unknown;
+};
+
+export type PromoHubControllerFindByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/promo-hubs/{id}';
+};
+
+export type PromoHubControllerFindByIdErrors = {
+    /**
+     * Hub not found
+     */
+    404: unknown;
+};
+
+export type PromoHubControllerFindByIdResponses = {
+    200: PromoHubResponseDto;
+};
+
+export type PromoHubControllerFindByIdResponse = PromoHubControllerFindByIdResponses[keyof PromoHubControllerFindByIdResponses];
+
+export type PromoHubControllerUpdateData = {
+    body: UpdatePromoHubDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/promo-hubs/{id}';
+};
+
+export type PromoHubControllerUpdateErrors = {
+    /**
+     * Hub not found
+     */
+    404: unknown;
+    /**
+     * Slug conflict on update
+     */
+    409: unknown;
+};
+
+export type PromoHubControllerUpdateResponses = {
+    200: PromoHubResponseDto;
+};
+
+export type PromoHubControllerUpdateResponse = PromoHubControllerUpdateResponses[keyof PromoHubControllerUpdateResponses];
+
+export type PromoHubControllerReorderSectionsData = {
+    body: ReorderSectionsDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/promo-hubs/{id}/sections/reorder';
+};
+
+export type PromoHubControllerReorderSectionsErrors = {
+    /**
+     * sectionIds set does not match current sections
+     */
+    400: unknown;
+};
+
+export type PromoHubControllerReorderSectionsResponses = {
+    200: PromoHubResponseDto;
+};
+
+export type PromoHubControllerReorderSectionsResponse = PromoHubControllerReorderSectionsResponses[keyof PromoHubControllerReorderSectionsResponses];
+
+export type PromoHubAnalyticsControllerTrackClickData = {
+    body: TrackClickDto;
+    path?: never;
+    query?: never;
+    url: '/api/promo-hub-analytics/track-click';
+};
+
+export type PromoHubAnalyticsControllerTrackClickErrors = {
+    /**
+     * Validation error
+     */
+    400: unknown;
+};
+
+export type PromoHubAnalyticsControllerTrackClickResponses = {
+    200: unknown;
+};
+
+export type PromoHubAnalyticsControllerTrackViewData = {
+    body: TrackViewDto;
+    path?: never;
+    query?: never;
+    url: '/api/promo-hub-analytics/track-view';
+};
+
+export type PromoHubAnalyticsControllerTrackViewResponses = {
+    200: unknown;
+};
+
+export type PromoHubAnalyticsControllerGetSummaryData = {
+    body?: never;
+    path: {
+        hubId: string;
+    };
+    query?: never;
+    url: '/api/promo-hub-analytics/{hubId}/summary';
+};
+
+export type PromoHubAnalyticsControllerGetSummaryErrors = {
+    /**
+     * Invalid hubId format
+     */
+    400: unknown;
+};
+
+export type PromoHubAnalyticsControllerGetSummaryResponses = {
+    200: AnalyticsSummaryDto;
+};
+
+export type PromoHubAnalyticsControllerGetSummaryResponse = PromoHubAnalyticsControllerGetSummaryResponses[keyof PromoHubAnalyticsControllerGetSummaryResponses];
+
 export type RacesControllerSearchRacesData = {
     body?: never;
     path?: never;
@@ -7930,6 +8383,13 @@ export type RaceResultControllerGetLeaderboardData = {
     url: '/api/race-results/leaderboard/{courseId}';
 };
 
+export type RaceResultControllerGetLeaderboardErrors = {
+    /**
+     * Course not found OR parent race is draft + caller is anonymous
+     */
+    404: unknown;
+};
+
 export type RaceResultControllerGetLeaderboardResponses = {
     /**
      * Returns top results for the course
@@ -7951,6 +8411,13 @@ export type RaceResultControllerGetAthleteDetailData = {
     };
     query?: never;
     url: '/api/race-results/athlete/{raceId}/{bib}';
+};
+
+export type RaceResultControllerGetAthleteDetailErrors = {
+    /**
+     * Race not found OR race is draft + caller is anonymous
+     */
+    404: unknown;
 };
 
 export type RaceResultControllerGetAthleteDetailResponses = {
@@ -7996,7 +8463,7 @@ export type RaceResultControllerGetCertificateData = {
 
 export type RaceResultControllerGetCertificateErrors = {
     /**
-     * Athlete or certificate not found
+     * Athlete or certificate not found OR race is draft + caller is anonymous
      */
     404: unknown;
 };
@@ -8025,6 +8492,13 @@ export type RaceResultControllerCompareAthletesData = {
     url: '/api/race-results/compare/{raceId}';
 };
 
+export type RaceResultControllerCompareAthletesErrors = {
+    /**
+     * Race not found OR race is draft + caller is anonymous
+     */
+    404: unknown;
+};
+
 export type RaceResultControllerCompareAthletesResponses = {
     /**
      * Returns results for multiple athletes
@@ -8042,6 +8516,13 @@ export type RaceResultControllerGetFilterOptionsData = {
     };
     query?: never;
     url: '/api/race-results/filters/{courseId}';
+};
+
+export type RaceResultControllerGetFilterOptionsErrors = {
+    /**
+     * Course not found OR parent race is draft + caller is anonymous
+     */
+    404: unknown;
 };
 
 export type RaceResultControllerGetFilterOptionsResponses = {
@@ -8063,6 +8544,13 @@ export type RaceResultControllerGetTimeDistributionData = {
     url: '/api/race-results/stats/{courseId}/distribution';
 };
 
+export type RaceResultControllerGetTimeDistributionErrors = {
+    /**
+     * Course not found OR parent race is draft + caller is anonymous
+     */
+    404: unknown;
+};
+
 export type RaceResultControllerGetTimeDistributionResponses = {
     /**
      * Returns histogram buckets + summary stats
@@ -8082,6 +8570,13 @@ export type RaceResultControllerGetCountryStatsData = {
     };
     query?: never;
     url: '/api/race-results/stats/{courseId}/countries';
+};
+
+export type RaceResultControllerGetCountryStatsErrors = {
+    /**
+     * Course not found OR parent race is draft + caller is anonymous
+     */
+    404: unknown;
 };
 
 export type RaceResultControllerGetCountryStatsResponses = {
@@ -8109,6 +8604,13 @@ export type RaceResultControllerGetCourseStatsData = {
     url: '/api/race-results/stats/{raceId}/{courseId}';
 };
 
+export type RaceResultControllerGetCourseStatsErrors = {
+    /**
+     * Race not found OR race is draft + caller is anonymous
+     */
+    404: unknown;
+};
+
 export type RaceResultControllerGetCourseStatsResponses = {
     /**
      * Returns aggregated stats for the course within the race
@@ -8130,6 +8632,13 @@ export type RaceResultControllerGetCountryRankData = {
     };
     query?: never;
     url: '/api/race-results/athlete/{raceId}/{bib}/country-rank';
+};
+
+export type RaceResultControllerGetCountryRankErrors = {
+    /**
+     * Race not found OR race is draft + caller is anonymous
+     */
+    404: unknown;
 };
 
 export type RaceResultControllerGetCountryRankResponses = {
@@ -8155,6 +8664,13 @@ export type RaceResultControllerGetPercentileData = {
     };
     query?: never;
     url: '/api/race-results/athlete/{raceId}/{bib}/percentile';
+};
+
+export type RaceResultControllerGetPercentileErrors = {
+    /**
+     * Race not found OR race is draft + caller is anonymous
+     */
+    404: unknown;
 };
 
 export type RaceResultControllerGetPercentileResponses = {
@@ -8323,7 +8839,7 @@ export type RaceResultControllerPreviewResultImageData = {
 
 export type RaceResultControllerPreviewResultImageErrors = {
     /**
-     * Athlete not found
+     * Athlete not found OR race is draft + caller is anonymous
      */
     404: unknown;
 };
@@ -8413,6 +8929,13 @@ export type RaceResultControllerGetAthleteBadgesData = {
     url: '/api/race-results/badges/{raceId}/{bib}';
 };
 
+export type RaceResultControllerGetAthleteBadgesErrors = {
+    /**
+     * Athlete not found OR race is draft + caller is anonymous
+     */
+    404: unknown;
+};
+
 export type RaceResultControllerGetAthleteBadgesResponses = {
     /**
      * Returns badge list
@@ -8430,6 +8953,13 @@ export type RaceResultControllerGetShareCountData = {
     };
     query?: never;
     url: '/api/race-results/share-count/{raceId}';
+};
+
+export type RaceResultControllerGetShareCountErrors = {
+    /**
+     * Race not found OR race is draft + caller is anonymous
+     */
+    404: unknown;
 };
 
 export type RaceResultControllerGetShareCountResponses = {

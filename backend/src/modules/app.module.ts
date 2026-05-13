@@ -48,6 +48,9 @@ import { CodeReadonly } from './race-master-data/entities/code-readonly.entity';
 import { TeamManagementModule } from './team-management/team-management.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { FinanceModule } from './finance/finance.module';
+// FEATURE-027 — Promo Hub (configurable marketing landing pages) + Analytics.
+import { PromoHubModule } from './promo-hub/promo-hub.module';
+import { PromoHubAnalyticsModule } from './promo-hub-analytics/promo-hub-analytics.module';
 import { OrderReadonly } from './finance/entities/order-readonly.entity';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
@@ -178,6 +181,10 @@ const volunteerDbModules = env.volunteerDb.host
     ...volunteerDbModules,
     ...timingAlertModules,
     ContractsModule,
+    // FEATURE-027 — Promo Hub modules. Independent — no cross-module DI
+    // to other 5BIB business modules. Pure Mongo + Redis.
+    PromoHubModule,
+    PromoHubAnalyticsModule,
     RacesModule,
     RaceResultModule,
     // F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
