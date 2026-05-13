@@ -38,6 +38,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EventFeatureModeBadge } from "@/components/EventFeatureModeBadge";
 import { useConfirm } from "@/components/confirm-dialog";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 const STATUS_COLORS: Record<TeamEvent["status"], string> = {
   draft: "bg-yellow-500/20 text-yellow-400",
@@ -55,7 +56,7 @@ const STATUS_LABELS: Record<TeamEvent["status"], string> = {
 
 export default function TeamManagementPage(): React.ReactElement {
   const router = useRouter();
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
   const [events, setEvents] = useState<TeamEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -126,6 +127,9 @@ export default function TeamManagementPage(): React.ReactElement {
   }
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6">

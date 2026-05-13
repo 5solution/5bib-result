@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { useConfirm } from "@/components/confirm-dialog";
 import {
   getContractTemplate,
@@ -43,7 +44,7 @@ export default function EditContractTemplatePage({
   const templateId = Number(id);
 
   const router = useRouter();
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
   const confirm = useConfirm();
   const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -166,6 +167,8 @@ export default function EditContractTemplatePage({
   }
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-96" />;
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (!isStaff) return <RestrictedAccess />;
   if (loadFailed) {
     return (
       <div className="rounded-md border border-red-300 bg-red-50 p-6 text-sm text-red-900">

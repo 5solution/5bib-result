@@ -28,6 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { TIMING_SIMULATOR_STATUS_LABEL } from '@/lib/timing-labels';
 import { simulatorApi, type SimulationStatus } from '@/lib/timing-alert-simulator-api';
 
 const STATUS_COLORS: Record<SimulationStatus, string> = {
@@ -100,7 +101,7 @@ export default function SimulatorListPage() {
                   <CardTitle className="flex items-center justify-between text-base">
                     <span className="truncate">{sim.name}</span>
                     <Badge className={STATUS_COLORS[sim.status]}>
-                      {sim.status}
+                      {TIMING_SIMULATOR_STATUS_LABEL[sim.status] ?? sim.status}
                     </Badge>
                   </CardTitle>
                 </CardHeader>

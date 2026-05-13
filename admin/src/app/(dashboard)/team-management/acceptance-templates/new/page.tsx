@@ -20,6 +20,7 @@ import {
 } from "@/lib/team-api";
 import ContractPreview from "@/components/ContractPreview";
 import { type VariableGroup } from "@/components/ContractEditor";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 const ContractEditor = dynamic(() => import("@/components/ContractEditor"), {
   ssr: false,
@@ -151,7 +152,7 @@ function partyAToOverrides(cfg: PartyAConfig): Record<string, string> {
 
 export default function NewAcceptanceTemplatePage(): React.ReactElement {
   const router = useRouter();
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
   const [name, setName] = useState("");
   const [html, setHtml] = useState(BLANK_ACCEPTANCE_TEMPLATE);
   const [isDefault, setIsDefault] = useState(false);
@@ -200,6 +201,9 @@ export default function NewAcceptanceTemplatePage(): React.ReactElement {
   }, [token, name, html, isDefault, router]);
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col gap-0">

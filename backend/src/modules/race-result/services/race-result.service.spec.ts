@@ -129,7 +129,13 @@ describe('RaceResultService', () => {
 
     mockRacesService = {
       getRacesWithApiUrls: jest.fn().mockResolvedValue([]),
-      getRaceById: jest.fn(),
+      // F-029 — default: race exists + non-draft status so existing tests
+      // continue to pass through new draft filter. Per-test override for
+      // F-029 draft-filter spec block below.
+      getRaceById: jest.fn().mockResolvedValue({
+        success: true,
+        data: { _id: 'test-race', status: 'live' },
+      }),
     };
 
     mockRedis = {
@@ -319,6 +325,350 @@ describe('RaceResultService', () => {
 
       expect(result).toEqual(cachedPayload);
       expect(mockResultModel.find).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── F-029 HIGH-RR-01 draft filter ────────────────────────────
+
+  describe('getRaceResults — F-029 HIGH-RR-01 draft filter', () => {
+    const baseDto = {
+      raceId: 'race-draft',
+      course_id: 'c100',
+      pageNo: 1,
+      pageSize: 10,
+      sortField: 'OverallRank',
+      sortDirection: 'ASC',
+    } as const;
+
+    it('allows anonymous caller for race status=live (200 results)', async () => {
+      mockRacesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: { _id: 'race-live', status: 'live' },
+      });
+      mockResultModel.exec.mockResolvedValue([mockDoc]);
+
+      const result = await service.getRaceResults(
+        { ...baseDto, raceId: 'race-live' },
+        // user undefined = anonymous
+      );
+
+      expect(mockRacesService.getRaceById).toHaveBeenCalledWith(
+        'race-live',
+        false, // isPrivileged=false for anon
+      );
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('allows anonymous caller for race status=pre_race', async () => {
+      mockRacesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: { _id: 'race-pre', status: 'pre_race' },
+      });
+      mockResultModel.exec.mockResolvedValue([mockDoc]);
+
+      const result = await service.getRaceResults({
+        ...baseDto,
+        raceId: 'race-pre',
+      });
+
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('allows anonymous caller for race status=ended', async () => {
+      mockRacesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: { _id: 'race-end', status: 'ended' },
+      });
+      mockResultModel.exec.mockResolvedValue([mockDoc]);
+
+      const result = await service.getRaceResults({
+        ...baseDto,
+        raceId: 'race-end',
+      });
+
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('THROWS 404 for anonymous caller hitting race status=draft', async () => {
+      // RacesService.getRaceById returns success=false when race is draft + caller not privileged.
+      mockRacesService.getRaceById.mockResolvedValue({
+        success: false,
+        message: 'Race not found',
+      });
+
+      await expect(service.getRaceResults(baseDto)).rejects.toThrow(
+        'Không tìm thấy giải',
+      );
+      expect(mockRacesService.getRaceById).toHaveBeenCalledWith(
+        'race-draft',
+        false,
+      );
+      // Critical: should NOT proceed to results query when race is blocked.
+      expect(mockResultModel.find).not.toHaveBeenCalled();
+    });
+
+    it('ALLOWS admin (Logto role=admin) to preview draft race', async () => {
+      // RacesService receives isPrivileged=true → returns success=true even for draft.
+      mockRacesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: { _id: 'race-draft', status: 'draft' },
+      });
+      mockResultModel.exec.mockResolvedValue([mockDoc]);
+
+      const adminUser = {
+        userId: 'u1',
+        sub: 'u1',
+        email: 'admin@5bib.com',
+        role: 'admin',
+        roles: ['admin'],
+        scopes: [],
+      };
+      const result = await service.getRaceResults(baseDto, adminUser);
+
+      expect(mockRacesService.getRaceById).toHaveBeenCalledWith(
+        'race-draft',
+        true, // isPrivileged=true via roles.includes('admin')
+      );
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('ALLOWS staff (Logto scope=staff) to preview draft race per Q1=B', async () => {
+      mockRacesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: { _id: 'race-draft', status: 'draft' },
+      });
+      mockResultModel.exec.mockResolvedValue([mockDoc]);
+
+      const staffUser = {
+        userId: 'u2',
+        sub: 'u2',
+        email: 'staff@5bib.com',
+        role: 'user',
+        roles: ['user'],
+        scopes: ['staff'], // dual-check: scopes alone is enough
+      };
+      const result = await service.getRaceResults(baseDto, staffUser);
+
+      expect(mockRacesService.getRaceById).toHaveBeenCalledWith(
+        'race-draft',
+        true, // isPrivileged=true via scopes.includes('staff')
+      );
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('THROWS 404 for authenticated user without staff/admin role', async () => {
+      mockRacesService.getRaceById.mockResolvedValue({
+        success: false,
+        message: 'Race not found',
+      });
+
+      const lowPrivUser = {
+        userId: 'u3',
+        sub: 'u3',
+        email: 'viewer@5bib.com',
+        role: 'user',
+        roles: ['user', 'viewer'], // neither admin nor staff
+        scopes: ['profile', 'email'],
+      };
+
+      await expect(
+        service.getRaceResults(baseDto, lowPrivUser),
+      ).rejects.toThrow('Không tìm thấy giải');
+      expect(mockRacesService.getRaceById).toHaveBeenCalledWith(
+        'race-draft',
+        false, // isPrivileged=false — neither role nor scope match
+      );
+    });
+
+    it('THROWS 404 when race does not exist (anon AND privileged identical response — no existence leak)', async () => {
+      mockRacesService.getRaceById.mockResolvedValue({
+        success: false,
+        message: 'Race not found',
+      });
+
+      // Same 404 for anon AND admin when race truly missing — verify no existence leak.
+      await expect(
+        service.getRaceResults({ ...baseDto, raceId: 'nonexistent' }),
+      ).rejects.toThrow('Không tìm thấy giải');
+
+      const adminUser = {
+        userId: 'u1',
+        sub: 'u1',
+        email: 'admin@5bib.com',
+        role: 'admin',
+        roles: ['admin'],
+        scopes: [],
+      };
+      await expect(
+        service.getRaceResults(
+          { ...baseDto, raceId: 'nonexistent' },
+          adminUser,
+        ),
+      ).rejects.toThrow('Không tìm thấy giải');
+    });
+  });
+
+  // ─── F-029 Phase 1.1 — HIGH-RR-01 sibling endpoints ───────────
+
+  describe('F-029 Phase 1.1 — HIGH-RR-01 sibling endpoints', () => {
+    const adminUser = {
+      userId: 'u-admin',
+      sub: 'u-admin',
+      email: 'admin@5bib.com',
+      role: 'admin',
+      roles: ['admin'],
+      scopes: [],
+    };
+    const draftLookupBlocked = { success: false, message: 'Race not found' };
+    const liveLookupPass = {
+      success: true,
+      data: { _id: 'race-live', status: 'live' },
+    };
+    const draftLookupAdmin = {
+      success: true,
+      data: { _id: 'race-draft', status: 'draft' },
+    };
+
+    beforeEach(() => {
+      // Reset to live by default — per-test override for draft scenarios.
+      mockRacesService.getRaceById.mockResolvedValue(liveLookupPass);
+      // Provide getRacesWithApiUrls for course → raceId resolution.
+      mockRacesService.getRacesWithApiUrls.mockResolvedValue([
+        {
+          _id: 'race-live',
+          status: 'live',
+          courses: [{ courseId: 'course-live' }],
+        },
+        {
+          _id: 'race-draft',
+          status: 'draft',
+          courses: [{ courseId: 'course-draft' }],
+        },
+      ]);
+    });
+
+    // ── Helper tests ──
+
+    it('Helper enforceRaceVisibility — anon + race draft → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (service as any).enforceRaceVisibility('race-draft', undefined),
+      ).rejects.toThrow('Không tìm thấy giải');
+    });
+
+    it('Helper enforceRaceVisibility — admin + race draft → resolves (no throw)', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupAdmin);
+      await expect(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (service as any).enforceRaceVisibility('race-draft', adminUser),
+      ).resolves.toBeUndefined();
+    });
+
+    it('Helper resolveRaceIdFromCourseId — found → returns race._id string', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (service as any).resolveRaceIdFromCourseId('course-live');
+      expect(result).toBe('race-live');
+    });
+
+    it('Helper resolveRaceIdFromCourseId — not found → returns null', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (service as any).resolveRaceIdFromCourseId('course-nonexistent');
+      expect(result).toBeNull();
+    });
+
+    // ── 13 sibling endpoint blocks ──
+
+    it('getLeaderboard — anon + course of draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(service.getLeaderboard('course-draft', 10)).rejects.toThrow(
+        'Không tìm thấy giải',
+      );
+    });
+
+    it('getLeaderboard — admin + course of draft race → succeeds', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupAdmin);
+      mockResultModel.exec.mockResolvedValue([mockDoc]);
+      const result = await service.getLeaderboard('course-draft', 10, adminUser);
+      expect(Array.isArray(result)).toBe(true);
+    });
+
+    it('getLeaderboard — course not found → throws 404 (same VN message, no existence leak)', async () => {
+      await expect(
+        service.getLeaderboard('course-nonexistent', 10),
+      ).rejects.toThrow('Không tìm thấy giải');
+    });
+
+    it('getAthleteDetail — anon + draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(service.getAthleteDetail('race-draft', '1001')).rejects.toThrow(
+        'Không tìm thấy giải',
+      );
+    });
+
+    it('compareAthletes — anon + draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(
+        service.compareAthletes('race-draft', ['1001', '1002']),
+      ).rejects.toThrow('Không tìm thấy giải');
+    });
+
+    it('getCourseStats — anon + draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(
+        service.getCourseStats('race-draft', 'c708'),
+      ).rejects.toThrow('Không tìm thấy giải');
+    });
+
+    it('getFilterOptions — anon + course of draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(service.getFilterOptions('course-draft')).rejects.toThrow(
+        'Không tìm thấy giải',
+      );
+    });
+
+    it('getTimeDistribution — anon + course of draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(service.getTimeDistribution('course-draft')).rejects.toThrow(
+        'Không tìm thấy giải',
+      );
+    });
+
+    it('getCountryStats — anon + course of draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(service.getCountryStats('course-draft')).rejects.toThrow(
+        'Không tìm thấy giải',
+      );
+    });
+
+    it('getCountryRank — anon + draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(
+        service.getCountryRank('race-draft', '1001'),
+      ).rejects.toThrow('Không tìm thấy giải');
+    });
+
+    it('getPercentile — anon + draft race → throws 404', async () => {
+      mockRacesService.getRaceById.mockResolvedValue(draftLookupBlocked);
+      await expect(
+        service.getPercentile('race-draft', '1001'),
+      ).rejects.toThrow('Không tìm thấy giải');
+    });
+
+    it('All sibling methods — happy path live race + anon → proceed normally (NO 404)', async () => {
+      // Smoke: when race is live, no helper-throw should fire — service proceeds
+      // to actual logic (Mongo query). Mock returns empty array safely.
+      mockResultModel.exec.mockResolvedValue([]);
+      mockResultModel.aggregate.mockReturnThis();
+      mockResultModel.distinct.mockReturnThis();
+
+      // Verify each method does NOT throw when race is live.
+      await expect(
+        service.getAthleteDetail('race-live', '1001'),
+      ).resolves.not.toThrow();
+      await expect(
+        service.compareAthletes('race-live', ['1001']),
+      ).resolves.not.toThrow();
     });
   });
 

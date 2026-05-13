@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 export default function ExportPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{
@@ -42,6 +43,9 @@ export default function ExportPage(): React.ReactElement {
   }
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-5">

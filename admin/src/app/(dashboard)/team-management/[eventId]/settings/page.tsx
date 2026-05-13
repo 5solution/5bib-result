@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Settings, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // v1.8 — Full event edit page. Covers everything the create dialog exposes
 // plus status, description, lat/lng, contact, T&C, min work hours, benefits
@@ -109,7 +110,7 @@ const STATUS_OPTIONS: Array<{ value: Status; label: string }> = [
 export default function EventSettingsPage(): React.ReactElement {
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token } = useAuth();
+  const { token, isStaff } = useAuth();
 
   const [event, setEvent] = useState<TeamEvent | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -281,6 +282,9 @@ export default function EventSettingsPage(): React.ReactElement {
   })();
 
   if (!form || !event) return <Skeleton className="h-96" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6 max-w-3xl pb-24">

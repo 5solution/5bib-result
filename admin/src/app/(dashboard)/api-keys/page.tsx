@@ -38,6 +38,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/confirm-dialog";
+import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import {
   Plus,
   Pencil,
@@ -69,6 +71,7 @@ const EMPTY_FORM: FormState = {
 
 export default function ApiKeysPage() {
   const confirm = useConfirm();
+  const { isAdmin, isLoading: authLoading } = useAuth();
   const [items, setItems] = useState<ApiKeyResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -191,6 +194,10 @@ export default function ApiKeysPage() {
       toast.error("Không copy được — chọn text rồi Cmd+C thủ công");
     }
   };
+
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (authLoading) return null;
+  if (!isAdmin) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6">

@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // v1.8 — Roles inside this Team. Filter listTeamRoles by category_id === teamId.
 
@@ -22,7 +23,7 @@ export default function TeamRolesPage(): React.ReactElement {
   const params = useParams<{ eventId: string; teamId: string }>();
   const eventId = Number(params.eventId);
   const teamId = Number(params.teamId);
-  const { token } = useAuth();
+  const { token, isStaff } = useAuth();
 
   const [roles, setRoles] = useState<TeamRole[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +55,10 @@ export default function TeamRolesPage(): React.ReactElement {
   }, [roles]);
 
   if (error) {
-    return (
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return (
       <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
         {error}
       </div>

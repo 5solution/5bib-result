@@ -16,6 +16,8 @@ import {
 import { GetRaceResultsDto } from '../dto/get-race-results.dto';
 import { SubmitClaimDto } from '../dto/submit-claim.dto';
 import { RacesService } from '../../races/races.service';
+import { LogtoUser } from '../../logto-auth/types';
+import { isStaffOrHigher } from '../../logto-auth/permissions.helper';
 import { TelegramService } from '../../notification/telegram.service';
 import { MailService } from '../../notification/mail.service';
 import { UploadService } from '../../upload/upload.service';
@@ -61,6 +63,83 @@ export class RaceResultService {
     private readonly chipConfigService: ChipConfigService,
     private readonly chipMappingService: ChipMappingService,
   ) { }
+
+  // ─── F-029 HIGH-RR-01 helpers (Phase 1.1) ──────────────────────
+  // BR-HD-01.3 + BR-HD-01.4 — extracted helper methods cho draft race
+  // visibility enforcement. Reused by ALL public race-result endpoints
+  // (Phase 1.1 sweep 13 endpoints) per Plan Endpoint coverage matrix.
+
+  /**
+   * F-029 BR-HD-01.3 — Enforce that caller can see this race.
+   *
+   * Anonymous (no user) AND race.status='draft' → throw NotFoundException
+   * with VN message identical to "race not found" (no existence leak).
+   *
+   * Privileged callers (admin/staff/super_admin via Logto roles OR scopes)
+   * bypass and can preview pre-launch results (Q1=B Danny chốt 2026-05-12).
+   *
+   * Reuses `RacesService.getRaceById(id, isPrivileged)` which has built-in
+   * 5min Redis cache (`race:id:<id>`) + DEL invalidation on race mutation.
+   *
+   * Usage: ALL public race-result service/controller methods that touch a
+   * specific race MUST call this BEFORE doing the actual read. Throws =
+   * controller returns 404 to caller automatically.
+   *
+   * Public scope: also reusable from controller directly for endpoints
+   * that bypass race-result public service methods (e.g. result-image,
+   * badges, share-count — controllers compose multiple services).
+   */
+  async enforceRaceVisibility(
+    raceId: string,
+    user?: LogtoUser,
+  ): Promise<void> {
+    const isPrivileged = isStaffOrHigher(user);
+    const raceLookup = await this.racesService.getRaceById(raceId, isPrivileged);
+    if (!raceLookup.success) {
+      throw new NotFoundException('Không tìm thấy giải');
+    }
+  }
+
+  /**
+   * F-029 BR-HD-01.4 — Resolve raceId from courseId for endpoints that
+   * only receive `:courseId` in path (leaderboard, filters,
+   * stats/distribution, stats/countries). Returns null if course not
+   * found anywhere — caller throws 404 with same VN message.
+   *
+   * Uses `RacesService.getRacesWithApiUrls()` (cached, existing pattern)
+   * to enumerate races + their courses[].courseId. Returns Mongo
+   * race._id (string) on match. For 195 races scale this is in-memory
+   * scan O(N×M) which is trivial; if scale > 1000 races, consider
+   * dedicated index by courseId.
+   */
+  private async resolveRaceIdFromCourseId(
+    courseId: string,
+  ): Promise<string | null> {
+    const races = await this.racesService.getRacesWithApiUrls();
+    const race = races.find((r) =>
+      r.courses.some((c) => c.courseId === courseId),
+    );
+    if (!race) return null;
+    const raceIdValue = (race as unknown as { _id?: { toString(): string } | string })._id;
+    if (!raceIdValue) return null;
+    return typeof raceIdValue === 'string' ? raceIdValue : raceIdValue.toString();
+  }
+
+  /**
+   * F-029 BR-HD-01.2 — Combined helper: resolve raceId từ courseId rồi
+   * enforce visibility. Throws NotFoundException nếu course not found
+   * (same VN message — no existence leak).
+   */
+  private async enforceCourseVisibility(
+    courseId: string,
+    user?: LogtoUser,
+  ): Promise<void> {
+    const raceId = await this.resolveRaceIdFromCourseId(courseId);
+    if (!raceId) {
+      throw new NotFoundException('Không tìm thấy giải');
+    }
+    await this.enforceRaceVisibility(raceId, user);
+  }
 
   /**
    * F-017 BR-RK-CHIP — Resolve chip → bib → athlete envelope.
@@ -525,7 +604,15 @@ export class RaceResultService {
 
   // ─── Read endpoints ───────────────────────────────────────────
 
-  async getRaceResults(dto: GetRaceResultsDto) {
+  async getRaceResults(dto: GetRaceResultsDto, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 (Phase 1.1 refactor) — use shared
+    // `enforceRaceVisibility` helper. Same behavior as Phase 1 inline check
+    // (anon + draft → 404, staff/admin bypass), now DRY across 13 sibling
+    // endpoints in Phase 1.1 sweep.
+    if (dto.raceId) {
+      await this.enforceRaceVisibility(dto.raceId, user);
+    }
+
     // Try cache
     const cacheKey = `results:${dto.raceId}:${dto.course_id || 'all'}:${dto.pageNo}:${this.filtersHash(dto)}`;
     const cached = await this.getFromCache<any>(cacheKey);
@@ -761,7 +848,9 @@ export class RaceResultService {
   /**
    * Get available filter options (genders, categories) for a course
    */
-  async getFilterOptions(courseId: string) {
+  async getFilterOptions(courseId: string, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1 — block draft race results
+    await this.enforceCourseVisibility(courseId, user);
     const cacheKey = `filters:${courseId}`;
     const cached = await this.getFromCache<any>(cacheKey);
     if (cached) return cached;
@@ -783,7 +872,10 @@ export class RaceResultService {
   /**
    * Get leaderboard: top N results for a course, cached in Redis (60s)
    */
-  async getLeaderboard(courseId: string, limit: number = 10) {
+  async getLeaderboard(courseId: string, limit: number = 10, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1
+    await this.enforceCourseVisibility(courseId, user);
+
     const cacheKey = `leaderboard:${courseId}`;
     const cached = await this.getFromCache<any[]>(cacheKey);
     if (cached) return cached;
@@ -804,7 +896,10 @@ export class RaceResultService {
    * Get athlete detail by bib + race.
    * Computes rankDelta + isPaceAlert on splits (BR-01, BR-02).
    */
-  async getAthleteDetail(raceId: string, bib: string) {
+  async getAthleteDetail(raceId: string, bib: string, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1 — most damaging direct-PII endpoint
+    await this.enforceRaceVisibility(raceId, user);
+
     const cacheKey = `athlete:${raceId}:${bib}`;
     const cached = await this.getFromCache<any>(cacheKey);
     if (cached) return cached;
@@ -868,7 +963,10 @@ export class RaceResultService {
   /**
    * Compare multiple athletes by bibs
    */
-  async compareAthletes(raceId: string, bibs: string[]) {
+  async compareAthletes(raceId: string, bibs: string[], user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1
+    await this.enforceRaceVisibility(raceId, user);
+
     const results = await this.resultModel
       .find({ raceId, bib: { $in: bibs } })
       .lean()
@@ -886,7 +984,10 @@ export class RaceResultService {
    * alone aggregates athletes from every race that uses that course slug.
    * Cache key namespaced per-race: `stats:<raceId>:<courseId>`.
    */
-  async getCourseStats(raceId: string, courseId: string) {
+  async getCourseStats(raceId: string, courseId: string, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1
+    await this.enforceRaceVisibility(raceId, user);
+
     const cacheKey = `stats:${raceId}:${courseId}`;
     const cached = await this.getFromCache<any>(cacheKey);
     if (cached) return cached;
@@ -1236,7 +1337,10 @@ export class RaceResultService {
    * F-03 — Time distribution histogram for a course's finishers.
    * Buckets auto-sized to 7–10 based on count. Cached 120s.
    */
-  async getTimeDistribution(courseId: string) {
+  async getTimeDistribution(courseId: string, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1
+    await this.enforceCourseVisibility(courseId, user);
+
     const cacheKey = `time-distribution:${courseId}`;
     const cached = await this.getFromCache<any>(cacheKey);
     if (cached) return cached;
@@ -1342,7 +1446,10 @@ export class RaceResultService {
   /**
    * F-04 — Top countries aggregated for a course. Cached 120s.
    */
-  async getCountryStats(courseId: string) {
+  async getCountryStats(courseId: string, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1
+    await this.enforceCourseVisibility(courseId, user);
+
     const cacheKey = `country-stats:${courseId}`;
     const cached = await this.getFromCache<any>(cacheKey);
     if (cached) return cached;
@@ -1395,7 +1502,10 @@ export class RaceResultService {
    * Returns rank among same-nationality finishers (null if athlete not a finisher).
    * Cached 300s per athlete.
    */
-  async getCountryRank(raceId: string, bib: string) {
+  async getCountryRank(raceId: string, bib: string, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1
+    await this.enforceRaceVisibility(raceId, user);
+
     const cacheKey = `country-rank:${raceId}:${bib}`;
     const cached = await this.getFromCache<any>(cacheKey);
     if (cached) return cached;
@@ -1489,7 +1599,10 @@ export class RaceResultService {
    * Cache key is versioned (`percentile:v2:`) so rolling deploys don't
    * serve v1-cached numbers under v2 semantics.
    */
-  async getPercentile(raceId: string, bib: string) {
+  async getPercentile(raceId: string, bib: string, user?: LogtoUser) {
+    // F-029 HIGH-RR-01 Phase 1.1
+    await this.enforceRaceVisibility(raceId, user);
+
     // v3 — v2 still had a Mongo inline parser that couldn't handle
     // "MM:SS" (short races), so avg/min/slower counts were wildly off.
     // Bumping the key prefix orphans any bad-cached v2 entries.

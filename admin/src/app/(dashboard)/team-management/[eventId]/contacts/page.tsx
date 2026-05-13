@@ -22,12 +22,13 @@ import {
   type UpsertContactInput,
 } from "./_types";
 import ContactDialog from "./_contact-dialog";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 export default function ContactsPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const [contacts, setContacts] = useState<EventContact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +117,9 @@ export default function ContactsPage(): React.ReactElement {
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
 
   const total = contacts?.length ?? 0;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6">

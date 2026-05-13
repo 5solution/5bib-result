@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { getSupplyPlanByCategory } from "@/lib/team-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Package, ExternalLink } from "lucide-react";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // v1.8 — Per-team supply view. Read-only snapshot; full edit on event-wide
 // "Kế hoạch vật tư" tab. Uses supply-overview filtered to this category.
@@ -26,7 +27,7 @@ export default function TeamSupplyPage(): React.ReactElement {
   const params = useParams<{ eventId: string; teamId: string }>();
   const eventId = Number(params.eventId);
   const teamId = Number(params.teamId);
-  const { token } = useAuth();
+  const { token, isStaff } = useAuth();
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +47,10 @@ export default function TeamSupplyPage(): React.ReactElement {
   }, [load]);
 
   if (error) {
-    return (
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return (
       <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
         {error}
       </div>

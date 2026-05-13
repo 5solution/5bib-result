@@ -47,6 +47,7 @@ import {
 import { toast } from "sonner";
 import { AssignPersonnelModal } from "./_assign-personnel-modal";
 import { useConfirm } from "@/components/confirm-dialog";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // v1.8 — Stations now belong to Team (category), not role. assignment_role
 // (crew/volunteer) removed — supervisor/worker derives from role.is_leader_role.
@@ -65,7 +66,7 @@ export default function TeamStationsPage(): React.ReactElement {
   const params = useParams<{ eventId: string; teamId: string }>();
   const eventId = Number(params.eventId);
   const teamId = Number(params.teamId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const confirm = useConfirm();
   const [stations, setStations] = useState<Station[] | null>(null);
@@ -145,6 +146,9 @@ export default function TeamStationsPage(): React.ReactElement {
   }
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-4">

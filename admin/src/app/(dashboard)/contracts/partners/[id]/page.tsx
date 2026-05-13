@@ -20,6 +20,8 @@ import {
   type CreatePartnerInput,
 } from "@/lib/contracts-api";
 import { useSetCrumb } from "@/components/admin-shell/breadcrumb-context";
+import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { DetailSkeleton } from "../../_components/detail-skeleton";
 
 const BLANK: CreatePartnerInput = {
@@ -44,6 +46,8 @@ export default function PartnerEditPage({
   const router = useRouter();
   const { id } = use(params);
   const isNew = id === "new";
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  const { isStaff, isLoading: authLoading } = useAuth();
 
   const [form, setForm] = useState<CreatePartnerInput>(BLANK);
   const [loading, setLoading] = useState(!isNew);
@@ -122,6 +126,8 @@ export default function PartnerEditPage({
     }
   }
 
+  if (authLoading) return null;
+  if (!isStaff) return <RestrictedAccess />;
   if (loading) return <DetailSkeleton sections={2} />;
 
   return (
@@ -142,7 +148,7 @@ export default function PartnerEditPage({
           </h1>
           {!isNew && (
             <p className="font-mono text-xs text-[var(--text-muted,#78716C)]">
-              {form.entityName || "—"} · ID: {id.slice(-8)}
+              {form.entityName || "—"}
             </p>
           )}
         </div>

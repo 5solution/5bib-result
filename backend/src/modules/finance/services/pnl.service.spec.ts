@@ -191,6 +191,12 @@ describe('F-028 PnLService.getSummary', () => {
       getActualRevenueForRace: jest
         .fn()
         .mockResolvedValue(opts.feeResult ?? { revenue: null }),
+      // F-029 HIGH-PERF-01 — bulk version used by getDashboardData batch.
+      // Default: empty Map (no MySQL revenue) → fallback to estimatedFee
+      // semantic identical with previous single-race revenue=null path.
+      getActualRevenueForRaces: jest
+        .fn()
+        .mockResolvedValue(new Map<number, number>()),
     };
     const redis: any = {
       get: jest.fn().mockResolvedValue(opts.redisGetReturn ?? null),
@@ -453,6 +459,159 @@ describe('F-028 PnLService.getSummary', () => {
       expect(setKey1).not.toEqual(setKey2);
       // Both should be 120s TTL
       expect(redis.set.mock.calls[0][3]).toBe(120);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // F-029 HIGH-PERF-01 — Batch refactor (N+1 elimination)
+  // ────────────────────────────────────────────────────────────────────
+
+  describe('F-029 HIGH-PERF-01 batch refactor', () => {
+    it('0 contracts → skip MySQL bulk call entirely (no N+1, no chunks)', async () => {
+      const { service, feeService } = setupDashboardService({ contracts: [] });
+      const result = await service.getDashboardData({});
+      expect(feeService.getActualRevenueForRaces).not.toHaveBeenCalled();
+      expect(feeService.getActualRevenueForRace).not.toHaveBeenCalled();
+      expect(result.totals.contractCount).toBe(0);
+    });
+
+    it('Only BBNT contracts (TIMING/RACEKIT/OPERATIONS) → 0 MySQL queries', async () => {
+      const c1 = makeC({ contractType: 'TIMING', totalAmount: 100_000_000 });
+      const c2 = makeC({ contractType: 'RACEKIT', totalAmount: 50_000_000 });
+      const { service, feeService } = setupDashboardService({
+        contracts: [c1, c2],
+      });
+      await service.getDashboardData({});
+      // No TICKET_SALES → no MySQL bulk call needed.
+      expect(feeService.getActualRevenueForRaces).not.toHaveBeenCalled();
+      expect(feeService.getActualRevenueForRace).not.toHaveBeenCalled();
+    });
+
+    it('TICKET_SALES with linkage → 1 bulk MySQL call (not N calls)', async () => {
+      const c1 = makeC({
+        contractType: 'TICKET_SALES',
+        linkedTenantId: 10,
+        linkedMysqlRaceId: 100,
+        revenueShare: { estimatedFee: 1_000_000 },
+      });
+      const c2 = makeC({
+        contractType: 'TICKET_SALES',
+        linkedTenantId: 10,
+        linkedMysqlRaceId: 200,
+        revenueShare: { estimatedFee: 2_000_000 },
+      });
+      const c3 = makeC({
+        contractType: 'TICKET_SALES',
+        linkedTenantId: 11,
+        linkedMysqlRaceId: 300,
+        revenueShare: { estimatedFee: 3_000_000 },
+      });
+
+      const { service, feeService } = setupDashboardService({
+        contracts: [c1, c2, c3],
+      });
+      // Pre-populate Map for 2/3 races; 3rd race fallbacks to estimatedFee.
+      feeService.getActualRevenueForRaces.mockResolvedValue(
+        new Map<number, number>([
+          [100, 10_000_000],
+          [200, 20_000_000],
+        ]),
+      );
+
+      const result = await service.getDashboardData({});
+
+      // ASSERTION: exactly 1 bulk call (N+1 eliminated).
+      expect(feeService.getActualRevenueForRaces).toHaveBeenCalledTimes(1);
+      // Per-race-id single-race method should NOT be called by batch flow.
+      expect(feeService.getActualRevenueForRace).not.toHaveBeenCalled();
+      // Verify race_ids array passed to bulk (raceId 100 + 200 + 300).
+      const calledRaceIds = feeService.getActualRevenueForRaces.mock.calls[0][0];
+      expect(calledRaceIds).toEqual(expect.arrayContaining([100, 200, 300]));
+      expect(calledRaceIds).toHaveLength(3);
+
+      // Revenue resolution: c1 + c2 ACTUAL from Map, c3 fallback estimated.
+      expect(result.totals.totalRevenue).toBe(
+        10_000_000 + 20_000_000 + 3_000_000,
+      );
+    });
+
+    it('Mixed TICKET_SALES + BBNT → 1 bulk call covering only TICKET_SALES race_ids', async () => {
+      const cTicket = makeC({
+        contractType: 'TICKET_SALES',
+        linkedTenantId: 10,
+        linkedMysqlRaceId: 100,
+        revenueShare: { estimatedFee: 1_000_000 },
+      });
+      const cBbnt = makeC({
+        contractType: 'TIMING',
+        totalAmount: 50_000_000,
+      });
+
+      const { service, feeService } = setupDashboardService({
+        contracts: [cTicket, cBbnt],
+      });
+      feeService.getActualRevenueForRaces.mockResolvedValue(
+        new Map<number, number>([[100, 5_000_000]]),
+      );
+
+      const result = await service.getDashboardData({});
+
+      expect(feeService.getActualRevenueForRaces).toHaveBeenCalledTimes(1);
+      // Only race_id 100 (TICKET_SALES) in bulk call — BBNT NOT included.
+      expect(
+        feeService.getActualRevenueForRaces.mock.calls[0][0],
+      ).toEqual([100]);
+      expect(result.totals.totalRevenue).toBe(5_000_000 + 50_000_000);
+    });
+
+    it('TICKET_SALES with missing linkage (linkedMysqlRaceId=null) → fallback estimatedFee, NOT in bulk call', async () => {
+      const cNoLinkage = makeC({
+        contractType: 'TICKET_SALES',
+        linkedTenantId: null,
+        linkedMysqlRaceId: null,
+        revenueShare: { estimatedFee: 7_000_000 },
+      });
+
+      const { service, feeService } = setupDashboardService({
+        contracts: [cNoLinkage],
+      });
+
+      const result = await service.getDashboardData({});
+
+      // No race_id to query → bulk call skipped entirely (raceIds.length === 0).
+      expect(feeService.getActualRevenueForRaces).not.toHaveBeenCalled();
+      // Revenue = estimatedFee with ESTIMATED source.
+      // Verify via topProfit list (1 contract → appears in top 10).
+      expect(result.totals.totalRevenue).toBe(7_000_000);
+      expect(result.topProfit[0].revenue).toBe(7_000_000);
+      expect(result.topProfit[0].revenueSource).toBe('ESTIMATED');
+    });
+
+    it('Snapshot equivalence — TICKET_SALES revenue values match pre-refactor semantics', async () => {
+      // Setup same fixture as pre-refactor: 1 contract TICKET_SALES with
+      // mysqlRaceId mapping to 12_345_000 VND actual revenue. Verify the
+      // batch flow result matches what the legacy single-race resolveRevenue
+      // would have produced (revenue=12_345_000, source=ACTUAL).
+      const c = makeC({
+        contractType: 'TICKET_SALES',
+        linkedTenantId: 10,
+        linkedMysqlRaceId: 500,
+        revenueShare: { estimatedFee: 0 },
+      });
+
+      const { service, feeService } = setupDashboardService({
+        contracts: [c],
+      });
+      feeService.getActualRevenueForRaces.mockResolvedValue(
+        new Map<number, number>([[500, 12_345_000]]),
+      );
+
+      const result = await service.getDashboardData({});
+
+      // Same revenue + source as legacy single-race resolveRevenue would emit.
+      expect(result.totals.totalRevenue).toBe(12_345_000);
+      expect(result.topProfit[0].revenue).toBe(12_345_000);
+      expect(result.topProfit[0].revenueSource).toBe('ACTUAL');
     });
   });
 

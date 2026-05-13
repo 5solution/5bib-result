@@ -62,7 +62,12 @@ import {
 } from './dto/share-event.dto';
 import { RacesService } from '../races/races.service';
 import { UploadService } from '../upload/upload.service';
-import { LogtoAdminGuard } from '../logto-auth';
+import {
+  LogtoAdminGuard,
+  OptionalLogtoAuthGuard,
+  CurrentUser,
+  LogtoUser,
+} from '../logto-auth';
 
 @ApiTags('Race Results')
 @Controller('race-results')
@@ -87,14 +92,29 @@ export class RaceResultController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get race results with filters and pagination' })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({
+    summary: 'Get race results with filters and pagination',
+    description:
+      'Public endpoint. Anonymous callers see only races with status pre_race/live/ended. ' +
+      'Staff/admin/super_admin (Logto roles or scopes) can additionally preview results of races ' +
+      'still in `draft` status — used by Back-Office before BTC publish (F-029 HIGH-RR-01).',
+  })
   @ApiResponse({
     status: 200,
     description: 'Returns paginated race results',
     type: RaceResultsPaginatedDto,
   })
-  async getRaceResults(@Query() dto: GetRaceResultsDto) {
-    return this.raceResultService.getRaceResults(dto);
+  @ApiResponse({
+    status: 404,
+    description:
+      'Race not found OR race is in `draft` status and caller is anonymous (no leak of existence).',
+  })
+  async getRaceResults(
+    @Query() dto: GetRaceResultsDto,
+    @CurrentUser() user?: LogtoUser,
+  ) {
+    return this.raceResultService.getRaceResults(dto, user);
   }
 
   @Get('search')
@@ -110,7 +130,8 @@ export class RaceResultController {
   }
 
   @Get('leaderboard/:courseId')
-  @ApiOperation({ summary: 'Get top N results for a course' })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get top N results for a course (F-029 Phase 1.1 — draft race blocked for anon)' })
   @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
   @ApiQuery({
     name: 'limit',
@@ -118,30 +139,29 @@ export class RaceResultController {
     type: Number,
     description: 'Number of top results (default 10)',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns top results for the course',
-  })
+  @ApiResponse({ status: 200, description: 'Returns top results for the course' })
+  @ApiResponse({ status: 404, description: 'Course not found OR parent race is draft + caller is anonymous' })
   async getLeaderboard(
     @Param('courseId') courseId: string,
     @Query('limit') limit?: number,
+    @CurrentUser() user?: LogtoUser,
   ) {
-    return this.raceResultService.getLeaderboard(courseId, limit || 10);
+    return this.raceResultService.getLeaderboard(courseId, limit || 10, user);
   }
 
   @Get('athlete/:raceId/:bib')
-  @ApiOperation({ summary: 'Get athlete detail by race and bib' })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get athlete detail by race and bib (F-029 Phase 1.1 — draft race blocked for anon)' })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns athlete result detail with splits',
-  })
+  @ApiResponse({ status: 200, description: 'Returns athlete result detail with splits' })
+  @ApiResponse({ status: 404, description: 'Race not found OR race is draft + caller is anonymous' })
   async getAthleteDetail(
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
+    @CurrentUser() user?: LogtoUser,
   ) {
-    const result = await this.raceResultService.getAthleteDetail(raceId, bib);
+    const result = await this.raceResultService.getAthleteDetail(raceId, bib, user);
     if (!result) {
       return { data: null, success: false, message: 'Athlete not found' };
     }
@@ -181,17 +201,20 @@ export class RaceResultController {
   }
 
   @Get('certificate/:raceId/:bib')
-  @ApiOperation({ summary: 'Get certificate as PNG image for an athlete' })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get certificate as PNG image for an athlete (F-029 Phase 1.1 — draft race blocked for anon)' })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
   @ApiResponse({ status: 200, description: 'Returns certificate as PNG image' })
-  @ApiResponse({ status: 404, description: 'Athlete or certificate not found' })
+  @ApiResponse({ status: 404, description: 'Athlete or certificate not found OR race is draft + caller is anonymous' })
   async getCertificate(
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
     @Res() res: Response,
+    @CurrentUser() user?: LogtoUser,
   ) {
-    const athlete = await this.raceResultService.getAthleteDetail(raceId, bib);
+    // F-029 Phase 1.1 — getAthleteDetail now enforces visibility internally; user param propagates.
+    const athlete = await this.raceResultService.getAthleteDetail(raceId, bib, user);
     if (!athlete || !athlete.Certificate) {
       throw new NotFoundException('Certificate not found');
     }
@@ -227,35 +250,33 @@ export class RaceResultController {
   }
 
   @Get('compare/:raceId')
-  @ApiOperation({ summary: 'Compare multiple athletes by bibs' })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Compare multiple athletes by bibs (F-029 Phase 1.1)' })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
-  @ApiQuery({
-    name: 'bibs',
-    type: String,
-    description: 'Comma-separated bib numbers',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns results for multiple athletes',
-  })
+  @ApiQuery({ name: 'bibs', type: String, description: 'Comma-separated bib numbers' })
+  @ApiResponse({ status: 200, description: 'Returns results for multiple athletes' })
+  @ApiResponse({ status: 404, description: 'Race not found OR race is draft + caller is anonymous' })
   async compareAthletes(
     @Param('raceId') raceId: string,
     @Query('bibs') bibs: string,
+    @CurrentUser() user?: LogtoUser,
   ) {
     const bibList = bibs ? bibs.split(',').map((b) => b.trim()) : [];
-    const results = await this.raceResultService.compareAthletes(
-      raceId,
-      bibList,
-    );
+    const results = await this.raceResultService.compareAthletes(raceId, bibList, user);
     return { data: results, success: true };
   }
 
   @Get('filters/:courseId')
-  @ApiOperation({ summary: 'Get available filter options (genders, categories) for a course' })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get available filter options (genders, categories) for a course (F-029 Phase 1.1)' })
   @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
   @ApiResponse({ status: 200, description: 'Returns distinct genders and categories' })
-  async getFilterOptions(@Param('courseId') courseId: string) {
-    const filters = await this.raceResultService.getFilterOptions(courseId);
+  @ApiResponse({ status: 404, description: 'Course not found OR parent race is draft + caller is anonymous' })
+  async getFilterOptions(
+    @Param('courseId') courseId: string,
+    @CurrentUser() user?: LogtoUser,
+  ) {
+    const filters = await this.raceResultService.getFilterOptions(courseId, user);
     return { data: filters, success: true };
   }
 
@@ -274,38 +295,32 @@ export class RaceResultController {
   // ─── F-03: Time Distribution (DECLARE TRƯỚC stats/:raceId/:courseId) ──
 
   @Get('stats/:courseId/distribution')
-  @ApiOperation({
-    summary: 'Get finish time distribution histogram for a course (F-03)',
-  })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get finish time distribution histogram for a course (F-03 + F-029 Phase 1.1)' })
   @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns histogram buckets + summary stats',
-    type: TimeDistributionResponseDto,
-  })
+  @ApiResponse({ status: 200, description: 'Returns histogram buckets + summary stats', type: TimeDistributionResponseDto })
+  @ApiResponse({ status: 404, description: 'Course not found OR parent race is draft + caller is anonymous' })
   async getTimeDistribution(
     @Param('courseId') courseId: string,
+    @CurrentUser() user?: LogtoUser,
   ): Promise<TimeDistributionResponseDto> {
-    const data = await this.raceResultService.getTimeDistribution(courseId);
+    const data = await this.raceResultService.getTimeDistribution(courseId, user);
     return { data, success: true };
   }
 
   // ─── F-04: Country Stats (DECLARE TRƯỚC stats/:raceId/:courseId) ──
 
   @Get('stats/:courseId/countries')
-  @ApiOperation({
-    summary: 'Get per-country stats (count + best time) for a course (F-04)',
-  })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get per-country stats (count + best time) for a course (F-04 + F-029 Phase 1.1)' })
   @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns top countries with finisher count + best chip time',
-    type: CountryStatsResponseDto,
-  })
+  @ApiResponse({ status: 200, description: 'Returns top countries with finisher count + best chip time', type: CountryStatsResponseDto })
+  @ApiResponse({ status: 404, description: 'Course not found OR parent race is draft + caller is anonymous' })
   async getCountryStats(
     @Param('courseId') courseId: string,
+    @CurrentUser() user?: LogtoUser,
   ): Promise<CountryStatsResponseDto> {
-    const data = await this.raceResultService.getCountryStats(courseId);
+    const data = await this.raceResultService.getCountryStats(courseId, user);
     return { data, success: true };
   }
 
@@ -313,62 +328,52 @@ export class RaceResultController {
   // PHẢI declare SAU literal-suffix routes ở trên.
 
   @Get('stats/:raceId/:courseId')
-  @ApiOperation({
-    summary:
-      'Get aggregated course stats (avg time, finishers, etc.) scoped per race',
-  })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get aggregated course stats scoped per race (F-029 Phase 1.1)' })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'courseId', type: 'string', description: 'Course ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns aggregated stats for the course within the race',
-  })
+  @ApiResponse({ status: 200, description: 'Returns aggregated stats for the course within the race' })
+  @ApiResponse({ status: 404, description: 'Race not found OR race is draft + caller is anonymous' })
   async getCourseStats(
     @Param('raceId') raceId: string,
     @Param('courseId') courseId: string,
+    @CurrentUser() user?: LogtoUser,
   ) {
-    const stats = await this.raceResultService.getCourseStats(raceId, courseId);
+    const stats = await this.raceResultService.getCourseStats(raceId, courseId, user);
     return { data: stats, success: true };
   }
 
   @Get('athlete/:raceId/:bib/country-rank')
-  @ApiOperation({
-    summary: 'Get athlete rank among same-nationality finishers (F-04)',
-  })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get athlete rank among same-nationality finishers (F-04 + F-029 Phase 1.1)' })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Returns rank (null if DNF) + total same-nationality finishers',
-    type: CountryRankResponseDto,
-  })
+  @ApiResponse({ status: 200, description: 'Returns rank (null if DNF) + total same-nationality finishers', type: CountryRankResponseDto })
+  @ApiResponse({ status: 404, description: 'Race not found OR race is draft + caller is anonymous' })
   async getCountryRank(
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
+    @CurrentUser() user?: LogtoUser,
   ): Promise<CountryRankResponseDto> {
-    const data = await this.raceResultService.getCountryRank(raceId, bib);
+    const data = await this.raceResultService.getCountryRank(raceId, bib, user);
     return { data, success: true };
   }
 
   // ─── F-06: Performance Percentile ─────────────────────────────
 
   @Get('athlete/:raceId/:bib/percentile')
-  @ApiOperation({
-    summary: "Get athlete's performance percentile on this course (F-06)",
-  })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: "Get athlete's performance percentile on this course (F-06 + F-029 Phase 1.1)" })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns percentile + comparison metrics',
-    type: PercentileResponseDto,
-  })
+  @ApiResponse({ status: 200, description: 'Returns percentile + comparison metrics', type: PercentileResponseDto })
+  @ApiResponse({ status: 404, description: 'Race not found OR race is draft + caller is anonymous' })
   async getPercentile(
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
+    @CurrentUser() user?: LogtoUser,
   ): Promise<PercentileResponseDto> {
-    const data = await this.raceResultService.getPercentile(raceId, bib);
+    const data = await this.raceResultService.getPercentile(raceId, bib, user);
     return { data, success: true };
   }
 
@@ -556,26 +561,30 @@ export class RaceResultController {
   }
 
   @Get('result-image/:raceId/:bib')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(ThrottlerGuard, OptionalLogtoAuthGuard)
   // Generous limit — a single modal open = 7 preview requests (6 thumbs + 1
   // main), and toggling gradient/template bumps the token → fresh requests.
   // 120/min allows ~15 modal interactions per minute per IP before throttling.
   // @Throttle({ default: { ttl: 60_000, limit: 120 } })
   @ApiOperation({
-    summary: 'Preview result image (lowres, ~480px, no cache) — for template picker',
+    summary: 'Preview result image (lowres, ~480px, no cache) — for template picker (F-029 Phase 1.1)',
   })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
   @ApiResponse({ status: 200, description: 'Returns preview PNG' })
-  @ApiResponse({ status: 404, description: 'Athlete not found' })
+  @ApiResponse({ status: 404, description: 'Athlete not found OR race is draft + caller is anonymous' })
   async previewResultImage(
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
     @Query() query: ResultImageQueryDto,
     @Res() res: Response,
+    @CurrentUser() user?: LogtoUser,
   ) {
     this.assertSafePathParam(raceId, 'raceId');
     this.assertSafePathParam(bib, 'bib');
+
+    // F-029 Phase 1.1 — block draft race image gen for anon (no leak via image)
+    await this.raceResultService.enforceRaceVisibility(raceId, user);
 
     // Same parallel-prefetch pattern as the POST endpoint — kick off badges +
     // DB queries concurrently so renderImage doesn't sit waiting for any of them.
@@ -784,23 +793,27 @@ export class RaceResultController {
   }
 
   @Get('badges/:raceId/:bib')
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(ThrottlerGuard, OptionalLogtoAuthGuard)
   // @Throttle({ default: { ttl: 60_000, limit: 60 } })
   @ApiOperation({
-    summary: 'Get badges (PB / Podium / Sub-X / Ultra / Streak) for an athlete',
+    summary: 'Get badges (PB / Podium / Sub-X / Ultra / Streak) for an athlete (F-029 Phase 1.1)',
   })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiParam({ name: 'bib', type: 'string', description: 'Bib number' })
   @ApiResponse({ status: 200, description: 'Returns badge list' })
+  @ApiResponse({ status: 404, description: 'Athlete not found OR race is draft + caller is anonymous' })
   async getAthleteBadges(
     @Param('raceId') raceId: string,
     @Param('bib') bib: string,
+    @CurrentUser() user?: LogtoUser,
   ) {
     this.assertSafePathParam(raceId, 'raceId');
     this.assertSafePathParam(bib, 'bib');
 
-    // Confirm athlete exists before running badge detection
-    const athlete = await this.raceResultService.getAthleteDetail(raceId, bib);
+    // F-029 Phase 1.1 — getAthleteDetail enforces visibility internally;
+    // pass user through. If race is draft + anon → service throws 404
+    // before athlete lookup proceeds.
+    const athlete = await this.raceResultService.getAthleteDetail(raceId, bib, user);
     if (!athlete) {
       throw new NotFoundException('Athlete not found');
     }
@@ -809,11 +822,19 @@ export class RaceResultController {
   }
 
   @Get('share-count/:raceId')
-  @ApiOperation({ summary: 'Get current share counter for a race' })
+  @UseGuards(OptionalLogtoAuthGuard)
+  @ApiOperation({ summary: 'Get current share counter for a race (F-029 Phase 1.1)' })
   @ApiParam({ name: 'raceId', type: 'string', description: 'Race ID' })
   @ApiResponse({ status: 200, description: 'Returns share count' })
-  async getShareCount(@Param('raceId') raceId: string) {
+  @ApiResponse({ status: 404, description: 'Race not found OR race is draft + caller is anonymous' })
+  async getShareCount(
+    @Param('raceId') raceId: string,
+    @CurrentUser() user?: LogtoUser,
+  ) {
     this.assertSafePathParam(raceId, 'raceId');
+    // F-029 Phase 1.1 — share-count is technically low-sensitivity but
+    // consistency requires same gate (no draft race counter leak).
+    await this.raceResultService.enforceRaceVisibility(raceId, user);
     const count = await this.resultImageService.getShareCount(raceId);
     return { data: { raceId, count }, success: true };
   }

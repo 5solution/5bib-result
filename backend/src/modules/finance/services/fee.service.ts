@@ -296,4 +296,108 @@ export class FeeService {
       };
     }
   }
+
+  /**
+   * F-029 HIGH-PERF-01 — Bulk version của `getActualRevenueForRace`.
+   * Trả `Map<raceId, revenue>` cho mọi raceId chỉ định trong 1 (hoặc nhiều,
+   * chunked) MySQL query thay vì N queries individual. Dùng bởi
+   * `PnlService.getDashboardData()` để fix N+1 cross-DB query khi BTC có
+   * nhiều TICKET_SALES contracts.
+   *
+   * SQL pattern: subquery DISTINCT order_id (preserve F-016 + F-028
+   * single-race semantics — 1 order có ≥2 line items same race chỉ sum
+   * total_price 1 lần). Outer JOIN race_course để aggregate `SUM(...)
+   * GROUP BY rc.race_id`.
+   *
+   * Chunk size default 100 race_id per query — defense against MySQL plan
+   * optimizer degradation khi `IN (:list)` quá lớn (BR-HD-12 Danny chốt
+   * 2026-05-13).
+   *
+   * Edge cases:
+   *   - raceIds rỗng → return empty Map (no query fired)
+   *   - orderRepo null (platform DB unset) → return empty Map + log warn
+   *   - 1 chunk SQL throw → log warn + skip chunk, các chunk khác tiếp tục
+   *   - race nào không có order paid → KHÔNG xuất hiện trong Map (caller
+   *     fallback 0 khi `map.get(raceId) ?? 0`)
+   *
+   * **Cache (BR-HD-14):** KHÔNG đổi schema cache hiện tại. Nếu caller muốn
+   * write-through `pnl:ticket-sales-fee:<contractId>` thì làm sau khi
+   * resolve revenue (caller controls cache key per-contract semantics).
+   */
+  async getActualRevenueForRaces(
+    raceIds: number[],
+    options?: { chunkSize?: number },
+  ): Promise<Map<number, number>> {
+    const result = new Map<number, number>();
+    if (raceIds.length === 0) return result;
+
+    if (!this.orderRepo) {
+      this.logger.warn(
+        `[finance] getActualRevenueForRaces skipped (platform DB unset) — ${raceIds.length} races requested`,
+      );
+      return result;
+    }
+
+    // Dedup raceIds to avoid wasted IN-list slots.
+    const uniqueRaceIds = Array.from(new Set(raceIds.filter((id) => id > 0)));
+    const chunkSize = options?.chunkSize ?? 100;
+
+    for (let i = 0; i < uniqueRaceIds.length; i += chunkSize) {
+      const chunk = uniqueRaceIds.slice(i, i + chunkSize);
+      try {
+        // GROUP BY rc.race_id + DISTINCT subquery to keep single-race
+        // semantics when 1 order has ≥2 line items pointing same race.
+        const rows: Array<{ raceId: number | string; total: string | null }> =
+          await this.orderRepo
+            .createQueryBuilder('o')
+            .select('rc.race_id', 'raceId')
+            .addSelect('SUM(o.total_price)', 'total')
+            .innerJoin(
+              'order_line_item',
+              'oli',
+              'oli.order_id = o.id',
+            )
+            .innerJoin('ticket_type', 'tt', 'tt.id = oli.ticket_type_id')
+            .innerJoin('race_course', 'rc', 'rc.id = tt.race_course_id')
+            .where("o.internal_status = 'COMPLETE'")
+            .andWhere('o.deleted = 0')
+            .andWhere('o.order_category IN (:...cats)', {
+              cats: FeeService.FIVE_BIB_CATEGORIES,
+            })
+            .andWhere('rc.race_id IN (:...raceIds)', { raceIds: chunk })
+            .andWhere(
+              `o.id IN (
+                SELECT DISTINCT oli2.order_id
+                FROM order_line_item oli2
+                INNER JOIN ticket_type tt2 ON tt2.id = oli2.ticket_type_id
+                INNER JOIN race_course rc2 ON rc2.id = tt2.race_course_id
+                WHERE rc2.race_id IN (:...raceIdsInner)
+              )`,
+              { raceIdsInner: chunk },
+            )
+            .groupBy('rc.race_id')
+            .getRawMany();
+
+        for (const row of rows) {
+          const raceId = Number(row.raceId);
+          const revenue = Number(row.total ?? 0);
+          if (raceId > 0 && !Number.isNaN(revenue)) {
+            result.set(raceId, revenue);
+          }
+        }
+      } catch (err) {
+        this.logger.warn(
+          `[finance] getActualRevenueForRaces chunk ${i / chunkSize + 1}/${Math.ceil(
+            uniqueRaceIds.length / chunkSize,
+          )} fail (${chunk.length} races, ids[0..2]=${chunk
+            .slice(0, 3)
+            .join(',')}): ${(err as Error).message}`,
+        );
+        // Continue to next chunk — partial result acceptable, caller
+        // gets `map.get(raceId) ?? 0` for missing entries (graceful degrade).
+      }
+    }
+
+    return result;
+  }
 }

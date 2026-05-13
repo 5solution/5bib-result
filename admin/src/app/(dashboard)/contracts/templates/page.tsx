@@ -27,6 +27,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import {
   Tabs,
   TabsContent,
@@ -70,6 +72,10 @@ const TYPES: { id: ContractType; label: string }[] = [
 ];
 
 export default function TemplatesPage(): React.ReactElement {
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  const { isStaff, isLoading } = useAuth();
+  if (isLoading) return <></>;
+  if (!isStaff) return <RestrictedAccess />;
   return (
     <div className="space-y-4 p-6">
       <header>

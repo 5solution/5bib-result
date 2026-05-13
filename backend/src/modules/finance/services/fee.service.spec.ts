@@ -15,9 +15,12 @@ function buildQB(rawOneResult: any) {
   const qb: any = {};
   qb.innerJoin = jest.fn().mockReturnValue(qb);
   qb.select = jest.fn().mockReturnValue(qb);
+  qb.addSelect = jest.fn().mockReturnValue(qb);
   qb.where = jest.fn().mockReturnValue(qb);
   qb.andWhere = jest.fn().mockReturnValue(qb);
+  qb.groupBy = jest.fn().mockReturnValue(qb);
   qb.getRawOne = jest.fn().mockResolvedValue(rawOneResult);
+  qb.getRawMany = jest.fn().mockResolvedValue([]);
   return qb;
 }
 
@@ -26,6 +29,33 @@ function buildRepo(rawOneResult: any) {
   // result. service prefers second (orderRow). Tests handle either.
   return {
     createQueryBuilder: jest.fn().mockReturnValue(buildQB(rawOneResult)),
+  };
+}
+
+/**
+ * F-029 — buildBulkRepo: builds repo with chained QB whose `.getRawMany()`
+ * returns rows for the bulk getActualRevenueForRaces flow. `rawManyByCallIndex`
+ * allows different rows per chunk call (for chunkSize tests).
+ */
+function buildBulkRepo(
+  rawManyByCallIndex: Array<Array<{ raceId: number | string; total: string | null }>>,
+) {
+  let callIndex = 0;
+  return {
+    createQueryBuilder: jest.fn().mockImplementation(() => {
+      const qb: any = {};
+      qb.innerJoin = jest.fn().mockReturnValue(qb);
+      qb.select = jest.fn().mockReturnValue(qb);
+      qb.addSelect = jest.fn().mockReturnValue(qb);
+      qb.where = jest.fn().mockReturnValue(qb);
+      qb.andWhere = jest.fn().mockReturnValue(qb);
+      qb.groupBy = jest.fn().mockReturnValue(qb);
+      const rows = rawManyByCallIndex[callIndex] ?? [];
+      callIndex += 1;
+      qb.getRawMany = jest.fn().mockResolvedValue(rows);
+      qb.getRawOne = jest.fn().mockResolvedValue(null);
+      return qb;
+    }),
   };
 }
 
@@ -170,6 +200,140 @@ describe('F-028 FeeService.getActualRevenueForRace', () => {
 // ────────────────────────────────────────────────────────────────────
 // F-028 MySQL Tenant + Race picker (link Contract TICKET_SALES → MySQL)
 // ────────────────────────────────────────────────────────────────────
+
+// ────────────────────────────────────────────────────────────────────
+// F-029 HIGH-PERF-01 — Bulk variant (getActualRevenueForRaces)
+// ────────────────────────────────────────────────────────────────────
+
+describe('F-029 FeeService.getActualRevenueForRaces (bulk N+1 fix)', () => {
+  it('Empty raceIds → return empty Map, NO MySQL query fired', async () => {
+    const repo = buildBulkRepo([]);
+    const svc = new FeeService(repo as any);
+    const result = await svc.getActualRevenueForRaces([]);
+    expect(result.size).toBe(0);
+    expect(repo.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('Single chunk (3 race_ids ≤ 100) → 1 MySQL query, returns Map', async () => {
+    const repo = buildBulkRepo([
+      [
+        { raceId: 100, total: '10000000' },
+        { raceId: 200, total: '20000000' },
+        { raceId: 300, total: '0' },
+      ],
+    ]);
+    const svc = new FeeService(repo as any);
+    const result = await svc.getActualRevenueForRaces([100, 200, 300]);
+
+    expect(repo.createQueryBuilder).toHaveBeenCalledTimes(1);
+    expect(result.size).toBe(3);
+    expect(result.get(100)).toBe(10_000_000);
+    expect(result.get(200)).toBe(20_000_000);
+    expect(result.get(300)).toBe(0);
+  });
+
+  it('Chunk split — 150 race_ids → 2 MySQL queries (100 + 50 with default chunkSize)', async () => {
+    const raceIds = Array.from({ length: 150 }, (_, i) => i + 1);
+    // Chunk 1: race_ids 1-100 → rows for 50 of them
+    // Chunk 2: race_ids 101-150 → rows for 25 of them
+    const repo = buildBulkRepo([
+      Array.from({ length: 50 }, (_, i) => ({
+        raceId: i + 1,
+        total: String((i + 1) * 1000),
+      })),
+      Array.from({ length: 25 }, (_, i) => ({
+        raceId: 100 + i + 1,
+        total: String((100 + i + 1) * 1000),
+      })),
+    ]);
+    const svc = new FeeService(repo as any);
+    const result = await svc.getActualRevenueForRaces(raceIds);
+
+    expect(repo.createQueryBuilder).toHaveBeenCalledTimes(2);
+    expect(result.size).toBe(75); // 50 + 25
+    expect(result.get(1)).toBe(1000);
+    expect(result.get(101)).toBe(101_000);
+  });
+
+  it('Custom chunkSize=10 with 25 race_ids → 3 MySQL queries (10 + 10 + 5)', async () => {
+    const raceIds = Array.from({ length: 25 }, (_, i) => i + 1);
+    const repo = buildBulkRepo([[], [], []]); // 3 empty result chunks
+    const svc = new FeeService(repo as any);
+    await svc.getActualRevenueForRaces(raceIds, { chunkSize: 10 });
+    expect(repo.createQueryBuilder).toHaveBeenCalledTimes(3);
+  });
+
+  it('Dedup race_ids — duplicate IDs collapsed before query', async () => {
+    const repo = buildBulkRepo([[{ raceId: 100, total: '5000000' }]]);
+    const svc = new FeeService(repo as any);
+    // Pass [100, 100, 100] → should dedup to single race in query.
+    const result = await svc.getActualRevenueForRaces([100, 100, 100]);
+    expect(result.size).toBe(1);
+    expect(result.get(100)).toBe(5_000_000);
+  });
+
+  it('Platform DB unset (orderRepo null) → graceful empty Map + log warn', async () => {
+    const svc = new FeeService(null as any);
+    const result = await svc.getActualRevenueForRaces([1, 2, 3]);
+    expect(result.size).toBe(0);
+  });
+
+  it('MySQL throw in chunk → log warn + skip chunk, partial result returned for other chunks', async () => {
+    const failingRepo = {
+      createQueryBuilder: jest
+        .fn()
+        // First call throws
+        .mockImplementationOnce(() => {
+          const qb: any = {};
+          qb.innerJoin = jest.fn().mockReturnValue(qb);
+          qb.select = jest.fn().mockReturnValue(qb);
+          qb.addSelect = jest.fn().mockReturnValue(qb);
+          qb.where = jest.fn().mockReturnValue(qb);
+          qb.andWhere = jest.fn().mockReturnValue(qb);
+          qb.groupBy = jest.fn().mockReturnValue(qb);
+          qb.getRawMany = jest
+            .fn()
+            .mockRejectedValue(new Error('MySQL connection timeout'));
+          return qb;
+        })
+        // Second call returns data
+        .mockImplementationOnce(() => {
+          const qb: any = {};
+          qb.innerJoin = jest.fn().mockReturnValue(qb);
+          qb.select = jest.fn().mockReturnValue(qb);
+          qb.addSelect = jest.fn().mockReturnValue(qb);
+          qb.where = jest.fn().mockReturnValue(qb);
+          qb.andWhere = jest.fn().mockReturnValue(qb);
+          qb.groupBy = jest.fn().mockReturnValue(qb);
+          qb.getRawMany = jest
+            .fn()
+            .mockResolvedValue([{ raceId: 200, total: '7000000' }]);
+          return qb;
+        }),
+    };
+
+    // Force chunkSize=1 so 2 chunks of 1 race each.
+    const svc = new FeeService(failingRepo as any);
+    const result = await svc.getActualRevenueForRaces([100, 200], {
+      chunkSize: 1,
+    });
+    // Chunk 1 (raceId=100) threw → absent from Map.
+    // Chunk 2 (raceId=200) succeeded → present.
+    expect(result.size).toBe(1);
+    expect(result.has(100)).toBe(false);
+    expect(result.get(200)).toBe(7_000_000);
+  });
+
+  it('Negative/zero race_ids filtered out before query', async () => {
+    const repo = buildBulkRepo([[{ raceId: 100, total: '1000' }]]);
+    const svc = new FeeService(repo as any);
+    const result = await svc.getActualRevenueForRaces([100, 0, -5, 200]);
+    // 0 and -5 filtered out → only 100 and 200 queried.
+    // (200 not in mock result → absent from Map, acceptable.)
+    expect(result.has(0)).toBe(false);
+    expect(result.has(-5)).toBe(false);
+  });
+});
 
 describe('F-028 FeeService — searchTenants', () => {
   it('happy: empty q → 20 latest tenants (no LIKE filter)', async () => {

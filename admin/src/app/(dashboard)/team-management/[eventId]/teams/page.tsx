@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Users as UsersIcon, MapPin, Package } from "lucide-react";
 import { toast } from "sonner";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // v1.8 — Team (category) list page. Teams group roles + own stations + supply.
 // Click a card → /teams/:teamId → sub-tabs (overview / roles / stations / supply / config).
@@ -32,7 +33,7 @@ export default function TeamsPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const [teams, setTeams] = useState<TeamCategory[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +58,9 @@ export default function TeamsPage(): React.ReactElement {
   }, [token, load]);
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6">

@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -549,7 +550,7 @@ function StatsBar({ slots }: { slots: SponsoredSlot[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SponsoredPage() {
-  const { token } = useAuth();
+  const { token, isAdmin, isLoading: authLoading } = useAuth();
   const [slots, setSlots] = useState<SponsoredSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -795,6 +796,10 @@ export default function SponsoredPage() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (authLoading) return null;
+  if (!isAdmin) return <RestrictedAccess />;
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl">

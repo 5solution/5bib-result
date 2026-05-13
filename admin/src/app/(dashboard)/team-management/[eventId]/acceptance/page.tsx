@@ -41,6 +41,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { DisputeDialog } from "../registrations/_dispute-dialog";
 import { AlertTriangle, CheckCircle2, Clock, Send } from "lucide-react";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 /**
  * v2.0 — Acceptance (Biên bản nghiệm thu) management page.
@@ -62,7 +63,7 @@ import { AlertTriangle, CheckCircle2, Clock, Send } from "lucide-react";
 export default function AcceptancePage(): React.ReactElement {
   const { eventId: rawId } = useParams<{ eventId: string }>();
   const eventId = Number(rawId);
-  const { token } = useAuth();
+  const { token, isStaff } = useAuth();
 
   const [rows, setRows] = useState<RegistrationListRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -197,7 +198,10 @@ export default function AcceptancePage(): React.ReactElement {
   }
 
   if (err) {
-    return (
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return (
       <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
         {err}
       </div>

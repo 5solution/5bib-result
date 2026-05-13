@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { authHeaders } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +43,7 @@ type AuditResponse = {
 };
 
 export default function ReconciliationAuditPage() {
-  const { token } = useAuth();
+  const { token, isStaff, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AuditResponse | null>(null);
   const [hasRun, setHasRun] = useState(false);
@@ -64,6 +65,10 @@ export default function ReconciliationAuditPage() {
       setLoading(false);
     }
   }
+
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (authLoading) return null;
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -112,14 +117,14 @@ export default function ReconciliationAuditPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.items.map((item) => (
+                    {data.items.map((item, index) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-mono text-xs">
                           <Link
                             className="text-blue-600 hover:underline"
                             href={`/reconciliations/${item.id}`}
                           >
-                            {item.id.slice(-6)}
+                            {`Audit #${index + 1}`}
                           </Link>
                         </TableCell>
                         <TableCell>{item.tenant_name}</TableCell>

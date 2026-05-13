@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart3, Save, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // Key for the dirty-cell map: `${role_id}:${item_id}` → fulfilled_qty
 type DirtyMap = Record<string, number>;
@@ -21,7 +22,7 @@ export default function SupplyPlanPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const [overview, setOverview] = useState<EventSupplyOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +82,9 @@ export default function SupplyPlanPage(): React.ReactElement {
   }
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-5">

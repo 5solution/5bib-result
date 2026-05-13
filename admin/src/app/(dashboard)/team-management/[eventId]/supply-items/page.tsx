@@ -38,12 +38,13 @@ import {
 import { Plus, Pencil, Trash2, Package, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 export default function SupplyItemsPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const confirm = useConfirm();
   const [items, setItems] = useState<SupplyItem[] | null>(null);
@@ -106,6 +107,9 @@ export default function SupplyItemsPage(): React.ReactElement {
   }
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6">

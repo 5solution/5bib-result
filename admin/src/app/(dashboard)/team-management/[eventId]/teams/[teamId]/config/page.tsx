@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Settings, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // v1.8 — Team config tab. Edit name/slug/color/sort_order/description + delete.
 // Delete returns 409 if team still has stations or supply_plan rows attached.
@@ -44,7 +45,7 @@ export default function TeamConfigPage(): React.ReactElement {
   const params = useParams<{ eventId: string; teamId: string }>();
   const eventId = params.eventId;
   const teamId = Number(params.teamId);
-  const { token } = useAuth();
+  const { token, isStaff } = useAuth();
   const openConfirm = useConfirm();
 
   const [team, setTeam] = useState<TeamCategory | null>(null);
@@ -114,6 +115,9 @@ export default function TeamConfigPage(): React.ReactElement {
   if (!form || !team) return <Skeleton className="h-64" />;
 
   const slugLocked = team.role_count > 0;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6 max-w-2xl">

@@ -8,18 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "lucide-react";
 import { RegistrationDetailView } from "../_registration-detail";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 export default function PersonnelDetailPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string; regId: string }>();
   const regId = Number(params.regId);
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.replace("/sign-in");
   }, [authLoading, isAuthenticated, router]);
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-96" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-5">

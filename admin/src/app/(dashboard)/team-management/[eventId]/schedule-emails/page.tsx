@@ -22,12 +22,13 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import ScheduleEmailConfigSheet from "./_config-sheet";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 export default function ScheduleEmailsPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const [rows, setRows] = useState<ScheduleEmailRoleSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +79,10 @@ export default function ScheduleEmailsPage(): React.ReactElement {
   }
 
   if (!token) {
-    return (
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return (
       <div className="space-y-2">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-32 w-full" />

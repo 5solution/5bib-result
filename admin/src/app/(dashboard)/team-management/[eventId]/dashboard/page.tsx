@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 const SHIRT_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 type ShirtSize = (typeof SHIRT_SIZES)[number];
@@ -28,7 +29,7 @@ export default function DashboardPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
@@ -58,7 +59,10 @@ export default function DashboardPage(): React.ReactElement {
     const timer = setInterval(() => {
       void load();
     }, 30_000);
-    return () => clearInterval(timer);
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return () => clearInterval(timer);
   }, [token, load]);
 
   if (authLoading || !isAuthenticated || !data) {

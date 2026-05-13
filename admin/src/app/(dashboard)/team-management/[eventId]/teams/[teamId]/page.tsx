@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { getTeamCategory, type TeamCategory } from "@/lib/team-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, MapPin, Package } from "lucide-react";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // v1.8 — Team overview: stats tiles + description + quick links into sub-tabs.
 
@@ -14,7 +15,7 @@ export default function TeamOverviewPage(): React.ReactElement {
   const params = useParams<{ eventId: string; teamId: string }>();
   const eventId = params.eventId;
   const teamId = Number(params.teamId);
-  const { token } = useAuth();
+  const { token, isStaff } = useAuth();
 
   const [team, setTeam] = useState<TeamCategory | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +35,10 @@ export default function TeamOverviewPage(): React.ReactElement {
   }, [load]);
 
   if (error) {
-    return (
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return (
       <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
         {error}
       </div>

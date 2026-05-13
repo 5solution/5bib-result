@@ -8,6 +8,7 @@ import { listRegistrations, type RegistrationListRow } from "@/lib/team-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Users, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 const PAGE_SIZE = 20;
 
@@ -28,7 +29,7 @@ export default function RoleOverviewPage(): React.ReactElement {
   const params   = useParams<{ eventId: string; roleId: string }>();
   const eventId  = Number(params.eventId);
   const roleId   = Number(params.roleId);
-  const { token } = useAuth();
+  const { token, isStaff } = useAuth();
 
   const [rows,        setRows]        = useState<RegistrationListRow[] | null>(null);
   const [total,       setTotal]       = useState(0);
@@ -91,7 +92,10 @@ export default function RoleOverviewPage(): React.ReactElement {
   // ---- render ----
 
   if (error) {
-    return (
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return (
       <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
         {error}
       </div>

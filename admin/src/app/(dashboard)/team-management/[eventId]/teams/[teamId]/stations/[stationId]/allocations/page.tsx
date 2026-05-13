@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Package, Lock, LockOpen, Save } from "lucide-react";
 import { toast } from "sonner";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 /**
  * Station allocation page — shows which supply items are allocated to this
@@ -37,7 +38,7 @@ export default function StationAllocationsPage(): React.ReactElement {
   const eventId = Number(params.eventId);
   const teamId = Number(params.teamId);
   const stationId = Number(params.stationId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const [allocations, setAllocations] = useState<AllocationRow[] | null>(null);
   const [items, setItems] = useState<SupplyItem[]>([]);
@@ -127,6 +128,9 @@ export default function StationAllocationsPage(): React.ReactElement {
   if (authLoading) return <Skeleton className="h-64" />;
 
   const stationName = station?.station_name ?? `Trạm #${stationId}`;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-4">

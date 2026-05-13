@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import "@/lib/api"; // ensure client baseUrl is configured
 import { authHeaders } from "@/lib/api";
 import {
@@ -172,7 +173,7 @@ const emptySponsor: Partial<{ name: string; logoUrl: string; website: string; le
 };
 
 export default function SponsorsPage() {
-  const { token } = useAuth();
+  const { token, isAdmin, isLoading: authLoading } = useAuth();
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -302,6 +303,10 @@ export default function SponsorsPage() {
   }
 
   const deleteSponsor = sponsors.find((s) => s._id === deleteId);
+
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (authLoading) return null;
+  if (!isAdmin) return <RestrictedAccess />;
 
   return (
     <div className="flex flex-col gap-6">

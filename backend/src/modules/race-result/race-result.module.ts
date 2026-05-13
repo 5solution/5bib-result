@@ -16,6 +16,9 @@ import { ShareEventService } from './services/share-event.service';
 import { ShareNurtureCron } from './services/share-nurture.cron';
 import { RacesModule } from '../races/races.module';
 import { UploadModule } from '../upload/upload.module';
+// F-029 — OptionalLogtoAuthGuard cho public race-result endpoint nhằm extract
+// user role/scope (anon vẫn pass, nhưng staff/admin được unlock draft preview).
+import { LogtoAuthModule } from '../logto-auth';
 // F-017 — cross-module DI for chip lookup (ChipMappingService + ChipConfigService).
 // Imports ChipVerificationModule which already exports both services. Race-day
 // flow is MongoDB-only: ChipConfigService.findByMongoId → ChipMappingService.findByChipId
@@ -57,6 +60,8 @@ import {
     // F-017 — cross-module DI ChipMappingService + ChipConfigService.
     // ChipVerificationModule exports both per existing chip-verification.module.ts:61-62.
     ChipVerificationModule,
+    // F-029 HIGH-RR-01 — OptionalLogtoAuthGuard cho GET /race-results.
+    LogtoAuthModule,
   ],
   controllers: [RaceResultController],
   providers: [

@@ -25,6 +25,8 @@ import {
   type PartnerView,
 } from "@/lib/contracts-api";
 import { useConfirm } from "@/components/confirm-dialog";
+import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { SearchInput } from "../_components/search-input";
 import { EmptyState } from "../_components/empty-state";
 
@@ -40,6 +42,8 @@ function useDebounced<T>(value: T, delay = 300): T {
 export default function PartnersPage() {
   const router = useRouter();
   const confirm = useConfirm();
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  const { isStaff, isLoading: authLoading } = useAuth();
   const [items, setItems] = useState<PartnerView[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -80,6 +84,9 @@ export default function PartnersPage() {
       toast.error(`Lỗi: ${(err as Error).message}`);
     }
   }
+
+  if (authLoading) return null;
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-4 p-6">

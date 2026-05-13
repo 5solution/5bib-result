@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import "@/lib/api";
 import {
   bugReportsAdminControllerList,
@@ -76,6 +78,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 export default function BugReportsListPage() {
+  const { isAdmin, isLoading: authLoading } = useAuth();
   const [data, setData] = useState<PaginatedBugReportsAdminDto | null>(null);
   const [stats, setStats] = useState<BugReportStatsDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +121,10 @@ export default function BugReportsListPage() {
   }, [page, statusFilter, severityFilter, categoryFilter, search]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
+
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (authLoading) return null;
+  if (!isAdmin) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6 p-6">

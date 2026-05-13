@@ -91,7 +91,44 @@ export class PnLService {
   }
 
   /**
+   * F-029 HIGH-PERF-01 — Synchronous variant của `resolveRevenue` cho
+   * dashboard batch flow. Caller PRE-FETCH `revenueByRaceId` Map qua
+   * `feeService.getActualRevenueForRaces(raceIds)` rồi pass vào — eliminate
+   * N+1 cross-DB query khi process N contracts. Race nào không có order
+   * paid → Map.get trả undefined → fallback estimatedFee (giữ semantic
+   * BR-PNL-04 edge case identical với async version).
+   */
+  private resolveRevenueSync(
+    contract: ContractDocument,
+    revenueByRaceId: Map<number, number>,
+  ): { revenue: number; source: RevenueSource } {
+    if (contract.contractType === 'TICKET_SALES') {
+      const { tenantId, mysqlRaceId } = this.extractPlatformLinkage(contract);
+      if (tenantId !== null && mysqlRaceId !== null) {
+        const pulledRevenue = revenueByRaceId.get(mysqlRaceId);
+        if (pulledRevenue !== undefined && pulledRevenue > 0) {
+          return { revenue: pulledRevenue, source: 'ACTUAL' };
+        }
+      }
+      // Fallback estimatedFee (mirrors `resolveRevenue` BR-PNL-04 edge case).
+      const estimated = contract.revenueShare?.estimatedFee ?? 0;
+      return { revenue: estimated, source: 'ESTIMATED' };
+    }
+
+    // Non-TICKET_SALES (TIMING / RACEKIT / OPERATIONS) — same as
+    // `resolveRevenue` non-TICKET_SALES branch (already sync).
+    const ar = contract.acceptanceReport;
+    if (ar && ar.status === 'FINALIZED' && ar.actualTotalWithVat > 0) {
+      return { revenue: ar.actualTotalWithVat, source: 'ACTUAL' };
+    }
+    return { revenue: contract.totalAmount ?? 0, source: 'ESTIMATED' };
+  }
+
+  /**
    * Compute revenue + source per BR-PNL-01 / BR-PNL-04.
+   * **Used by per-contract `getSummary(contractId)` only** (1 MySQL query
+   * acceptable). For batch dashboard, use `resolveRevenueSync` with
+   * pre-fetched `revenueByRaceId` Map to avoid N+1 (F-029 HIGH-PERF-01).
    */
   private async resolveRevenue(
     contract: ContractDocument,
@@ -326,7 +363,32 @@ export class PnLService {
     // ── 2. Aggregate cost items bulk (1 query — no N+1)
     const costMap = await this.costItems.aggregateByContractIds(contractIds);
 
-    // ── 3. Resolve revenue per contract (TICKET_SALES → MySQL, else BBNT)
+    // ── 2b. F-029 HIGH-PERF-01 — Pre-fetch bulk TICKET_SALES revenue from
+    //        MySQL platform. Eliminates N+1 cross-DB queries (was
+    //        `for (c of contracts) await resolveRevenue(c)` → 50 contracts =
+    //        50 MySQL RTT). Bulk version chunks 100 race_id/query, GROUP BY
+    //        rc.race_id, preserves DISTINCT semantics (1 order ≥2 line items
+    //        same race → 1 sum).
+    //
+    //        Per-race revenue lookup downstream is now O(1) Map.get instead
+    //        of awaited MySQL call. Per-contract `resolveRevenue` no longer
+    //        async cho TICKET_SALES path (BBNT path was already sync).
+    const ticketSalesRaceIds: number[] = [];
+    for (const c of contracts) {
+      if (c.contractType === 'TICKET_SALES') {
+        const linkage = this.extractPlatformLinkage(c as ContractDocument);
+        if (linkage.tenantId !== null && linkage.mysqlRaceId !== null) {
+          ticketSalesRaceIds.push(linkage.mysqlRaceId);
+        }
+      }
+    }
+    const revenueByRaceId =
+      ticketSalesRaceIds.length > 0
+        ? await this.feeService.getActualRevenueForRaces(ticketSalesRaceIds)
+        : new Map<number, number>();
+
+    // ── 3. Resolve revenue per contract (TICKET_SALES → bulk Map lookup,
+    //       BBNT → sync compute). Pure synchronous loop after pre-fetch.
     const items: DashboardContractItemDto[] = [];
     const totalCostByCategory: Record<string, number> = {
       LABOR: 0,
@@ -337,7 +399,10 @@ export class PnLService {
     };
     for (const c of contracts) {
       const id = (c._id as Types.ObjectId).toString();
-      const { revenue, source } = await this.resolveRevenue(c as any);
+      const { revenue, source } = this.resolveRevenueSync(
+        c as ContractDocument,
+        revenueByRaceId,
+      );
       const cost = costMap.get(id) ?? {
         totalCost: 0,
         costByCategory: {

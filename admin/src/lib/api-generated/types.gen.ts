@@ -329,6 +329,24 @@ export type ExportZipByPeriodDto = {
     label?: string;
 };
 
+export type DeleteBatchDto = {
+    /**
+     * Array of reconciliation MongoDB ObjectId strings (max 50)
+     */
+    ids: Array<string>;
+};
+
+export type DeleteBatchResponseDto = {
+    /**
+     * Number of reconciliations actually deleted
+     */
+    deleted: number;
+    /**
+     * Number of IDs requested but not found (idempotent — already deleted or never existed)
+     */
+    not_found: number;
+};
+
 export type UpdateReconciliationStatusDto = {
     /**
      * New status
@@ -1000,6 +1018,251 @@ export type SystemStatusResponseDto = {
     checkedAt: string;
 };
 
+export type CreateCostItemDto = {
+    description: string;
+    category: 'LABOR' | 'MATERIAL' | 'VENDOR' | 'OUTSOURCE' | 'OTHER';
+    /**
+     * VND, include VAT (BR-PNL-02). Min 0, max 10^12.
+     */
+    amount: number;
+    note?: string;
+    /**
+     * Free-format theo precedent F-024 raceDate
+     */
+    incurredDate?: string;
+};
+
+export type CostItemResponseDto = {
+    /**
+     * Hex ObjectId (alias _id)
+     */
+    id: string;
+    contractId: string;
+    description: string;
+    category: 'LABOR' | 'MATERIAL' | 'VENDOR' | 'OUTSOURCE' | 'OTHER';
+    amount: number;
+    note?: string;
+    incurredDate?: string;
+    createdBy: string;
+    updatedBy?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PaginatedCostItemsDto = {
+    items: Array<CostItemResponseDto>;
+    total: number;
+    page: number;
+    limit: number;
+};
+
+export type UpdateCostItemDto = {
+    description?: string;
+    category?: 'LABOR' | 'MATERIAL' | 'VENDOR' | 'OUTSOURCE' | 'OTHER';
+    amount?: number;
+    note?: string;
+    incurredDate?: string;
+};
+
+export type PnLSummaryDto = {
+    contractId: string;
+    /**
+     * Revenue VND (include VAT — BR-PNL-02)
+     */
+    revenue: number;
+    revenueSource: 'ESTIMATED' | 'ACTUAL';
+    /**
+     * Tổng chi phí VND (BR-PNL-05)
+     */
+    totalCost: number;
+    /**
+     * Lãi/Lỗ VND (BR-PNL-06)
+     */
+    profit: number;
+    /**
+     * Margin % rounded 1 decimal; null khi revenue=0 (BR-PNL-07)
+     */
+    margin: number | null;
+    marginTier: 'loss' | 'thin' | 'healthy' | 'neutral';
+    costItemCount: number;
+    /**
+     * Tổng chi phí theo nhóm (donut chart Screen 3)
+     */
+    costByCategory: {
+        [key: string]: number;
+    };
+    /**
+     * Thông báo warning UI (vd contract chưa link tenant/race, MySQL down)
+     */
+    warning?: string;
+};
+
+export type ExcelExportResponseDto = {
+    s3Key: string;
+    /**
+     * Pre-signed URL valid 15 phút (BR-PNL-16)
+     */
+    signedUrl: string;
+    /**
+     * Suggested download filename (Content-Disposition convention)
+     */
+    filename: string;
+    /**
+     * Bytes file rendered (sanity check)
+     */
+    bytes: number;
+};
+
+export type DashboardTotalsDto = {
+    contractCount: number;
+    totalRevenue: number;
+    totalCost: number;
+    totalProfit: number;
+    avgMargin: number | null;
+    /**
+     * Cost by category aggregated cho donut chart
+     */
+    costByCategory: {
+        [key: string]: number;
+    };
+};
+
+export type DashboardGroupBucketDto = {
+    /**
+     * Group key — contractType | partnerName | YYYY-MM
+     */
+    key: string;
+    /**
+     * Display label tiếng Việt (vd "Vé/đăng ký")
+     */
+    label: string;
+    contractCount: number;
+    totalRevenue: number;
+    totalCost: number;
+    totalProfit: number;
+    avgMargin: number | null;
+};
+
+export type DashboardContractItemDto = {
+    contractId: string;
+    contractNumber: string | null;
+    partnerName: string | null;
+    raceName: string | null;
+    contractType: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    status: string;
+    revenue: number;
+    revenueSource: 'ESTIMATED' | 'ACTUAL';
+    totalCost: number;
+    profit: number;
+    margin: number | null;
+    marginTier: 'loss' | 'thin' | 'healthy' | 'neutral';
+    /**
+     * Anchor month YYYY-MM (signDate fallback createdAt)
+     */
+    anchorMonth: string | null;
+};
+
+export type PnLDashboardResponseDto = {
+    period: string;
+    dateFrom: string;
+    dateTo: string;
+    generatedAt: string;
+    totals: DashboardTotalsDto;
+    byType: Array<DashboardGroupBucketDto>;
+    byPartner: Array<DashboardGroupBucketDto>;
+    /**
+     * Sort ASC by key YYYY-MM
+     */
+    byMonth: Array<DashboardGroupBucketDto>;
+    /**
+     * Top 10 profit DESC
+     */
+    topProfit: Array<DashboardContractItemDto>;
+    /**
+     * margin < 0
+     */
+    lossMaking: Array<DashboardContractItemDto>;
+};
+
+export type PnLDashboardFilterDto = {
+    period?: 'current_month' | 'last_3_months' | 'last_6_months' | 'last_12_months' | 'ytd' | 'custom';
+    /**
+     * Default tab focus phía UI — server vẫn trả cả 3 chiều
+     */
+    groupBy?: 'type' | 'partner' | 'month';
+    /**
+     * ISO YYYY-MM-DD — chỉ dùng khi period=custom
+     */
+    dateFrom?: string;
+    /**
+     * ISO YYYY-MM-DD — chỉ dùng khi period=custom
+     */
+    dateTo?: string;
+};
+
+export type TenantSearchResultDto = {
+    /**
+     * tenants.id (BIGINT)
+     */
+    id: number;
+    /**
+     * tenant.name
+     */
+    name: string;
+    /**
+     * tax code (col `vat`)
+     */
+    taxId: string | null;
+};
+
+export type RaceSearchResultDto = {
+    /**
+     * races.race_id (BIGINT)
+     */
+    raceId: number;
+    /**
+     * races.title
+     */
+    title: string;
+    /**
+     * races.created_on
+     */
+    createdOn: string | null;
+};
+
+export type CostSuggestionDto = {
+    /**
+     * ServiceCatalog._id reference của line item
+     */
+    catalogItemId: string;
+    /**
+     * Tên gợi ý (lấy từ ServiceCatalog.name)
+     */
+    description: string;
+    category: 'LABOR' | 'MATERIAL' | 'VENDOR' | 'OUTSOURCE' | 'OTHER';
+    /**
+     * Số lượng từ line item
+     */
+    quantity: number;
+    unit?: string;
+    /**
+     * Giá vốn tham khảo / đơn vị (VND)
+     */
+    costPerUnit: number;
+    /**
+     * quantity × costPerUnit (VND, include VAT — BR-PNL-02)
+     */
+    suggestedAmount: number;
+    /**
+     * STT line item trong HĐ (giúp admin trace)
+     */
+    contractLineItemStt: number;
+};
+
+export type BulkCreateCostItemsDto = {
+    items: Array<CreateCostItemDto>;
+};
+
 export type CreateTimingAlertConfigDto = {
     /**
      * Polling interval (60-300s)
@@ -1585,6 +1848,270 @@ export type UpdateScenarioDto = {
     shiftMinutes?: number;
     scopeSimCourseId?: string;
     description?: string;
+};
+
+export type ClientInfoInputDto = {
+    entityName: string;
+    taxId?: string;
+    address?: string;
+    representative?: string;
+    position?: string;
+    bankAccount?: string;
+    bankName?: string;
+    phone?: string;
+    email?: string;
+};
+
+export type LineItemInputDto = {
+    stt: number;
+    description: string;
+    unit?: string;
+    quantity: number;
+    unitPrice: number;
+    discount?: number;
+    selected?: boolean;
+    note?: string;
+    /**
+     * ServiceCatalog._id reference
+     */
+    catalogItemId?: string;
+};
+
+export type RevenueShareInputDto = {
+    feePercentage: number;
+    feePerAthlete: number;
+    estimatedAthletes: number;
+    /**
+     * Average ticket price in VND (default 200,000)
+     */
+    avgTicketPrice?: number;
+};
+
+export type PaymentTermsInputDto = {
+    advancePercentage?: number;
+    latePenaltyRate?: number;
+    latePenaltyUnit?: 'PER_DAY' | 'PER_YEAR';
+    paymentDeadlineDays?: number;
+};
+
+export type CreateContractDto = {
+    contractType: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    documentType?: 'QUOTATION' | 'CONTRACT';
+    providerId?: '5BIB' | '5SOLUTION';
+    partnerId?: string;
+    client: ClientInfoInputDto;
+    raceId?: string;
+    raceName?: string;
+    raceDate?: string;
+    raceLocation?: string;
+    signDate?: string;
+    effectiveDate?: string;
+    endDate?: string;
+    lineItems?: Array<LineItemInputDto>;
+    revenueShare?: RevenueShareInputDto;
+    vatRate?: 0 | 8 | 10;
+    paymentTerms?: PaymentTermsInputDto;
+    templateOverrides?: {
+        [key: string]: unknown;
+    };
+};
+
+export type ContractResponseDto = {
+    id: string;
+    contractNumber?: string;
+    contractType: string;
+    documentType: string;
+    status: string;
+    providerId: string;
+    provider: {
+        [key: string]: unknown;
+    };
+    partnerId?: string;
+    client: {
+        [key: string]: unknown;
+    };
+    raceId?: string;
+    raceName?: string;
+    raceDate?: string;
+    raceLocation?: string;
+    signDate?: string;
+    effectiveDate?: string;
+    endDate?: string;
+    lineItems: Array<{
+        [key: string]: unknown;
+    }>;
+    revenueShare?: {
+        [key: string]: unknown;
+    };
+    subtotal: number;
+    vatRate: number;
+    vatAmount: number;
+    totalAmount: number;
+    paymentTerms: {
+        [key: string]: unknown;
+    };
+    templateOverrides?: {
+        [key: string]: unknown;
+    };
+    generatedDocuments?: Array<{
+        [key: string]: unknown;
+    }>;
+    acceptanceReport?: {
+        [key: string]: unknown;
+    };
+    paymentRequest?: {
+        [key: string]: unknown;
+    };
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type PaginatedContractsDto = {
+    items: Array<ContractResponseDto>;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+};
+
+export type UpdateContractDto = {
+    contractType?: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    documentType?: 'QUOTATION' | 'CONTRACT';
+    providerId?: '5BIB' | '5SOLUTION';
+    partnerId?: string;
+    client?: ClientInfoInputDto;
+    raceId?: string;
+    raceName?: string;
+    raceDate?: string;
+    raceLocation?: string;
+    signDate?: string;
+    effectiveDate?: string;
+    endDate?: string;
+    lineItems?: Array<LineItemInputDto>;
+    revenueShare?: RevenueShareInputDto;
+    vatRate?: 0 | 8 | 10;
+    paymentTerms?: PaymentTermsInputDto;
+    templateOverrides?: {
+        [key: string]: unknown;
+    };
+    status?: 'CANCELLED';
+    /**
+     * MySQL platform tenants.id (TICKET_SALES only)
+     */
+    linkedTenantId?: number;
+    /**
+     * MySQL platform races.race_id (TICKET_SALES only)
+     */
+    linkedMysqlRaceId?: number;
+};
+
+export type ActualLineItemInputDto = {
+    stt: number;
+    description: string;
+    unit?: string;
+    quantity: number;
+    unitPrice: number;
+    amount?: number;
+};
+
+export type CreateAcceptanceReportDto = {
+    reportDate?: string;
+    actualValues: Array<ActualLineItemInputDto>;
+    advancePaid?: number;
+    verdict?: 'ACCEPTED' | 'ACCEPTED_WITH_NOTES' | 'REJECTED';
+    notes?: string;
+};
+
+export type CreatePaymentRequestDto = {
+    requestDate?: string;
+    notes?: string;
+};
+
+export type CreatePartnerDto = {
+    entityName: string;
+    shortName?: string;
+    taxId?: string;
+    address?: string;
+    representative?: string;
+    position?: string;
+    bankAccount?: string;
+    bankName?: string;
+    phone?: string;
+    email?: string;
+    notes?: string;
+};
+
+export type PartnerResponseDto = {
+    id: string;
+    entityName: string;
+    shortName?: string;
+    taxId?: string;
+    address?: string;
+    representative?: string;
+    position?: string;
+    bankAccount?: string;
+    bankName?: string;
+    phone?: string;
+    email?: string;
+    notes?: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type UpdatePartnerDto = {
+    entityName?: string;
+    shortName?: string;
+    taxId?: string;
+    address?: string;
+    representative?: string;
+    position?: string;
+    bankAccount?: string;
+    bankName?: string;
+    phone?: string;
+    email?: string;
+    notes?: string;
+};
+
+export type CreateServiceCatalogDto = {
+    name: string;
+    category: 'TIMING' | 'RACEKIT' | 'OPERATIONS' | 'GENERAL';
+    unit?: string;
+    referencePrice?: number;
+    /**
+     * Giá vốn tham khảo (VND) — dùng pre-compute P&L cost item
+     */
+    referenceCost?: number;
+    description?: string;
+    sortOrder?: number;
+};
+
+export type ServiceCatalogResponseDto = {
+    id: string;
+    name: string;
+    category: string;
+    unit?: string;
+    referencePrice: number;
+    /**
+     * Giá vốn tham khảo (VND) — default 0 nếu chưa nhập
+     */
+    referenceCost: number;
+    description?: string;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type UpdateServiceCatalogDto = {
+    name?: string;
+    category?: 'TIMING' | 'RACEKIT' | 'OPERATIONS' | 'GENERAL';
+    unit?: string;
+    referencePrice?: number;
+    /**
+     * Giá vốn tham khảo (VND) — dùng pre-compute P&L cost item
+     */
+    referenceCost?: number;
+    description?: string;
+    sortOrder?: number;
 };
 
 export type CreateRaceDto = {
@@ -4317,6 +4844,22 @@ export type ReconciliationControllerExportByPeriodResponses = {
     201: unknown;
 };
 
+export type ReconciliationControllerDeleteBatchData = {
+    body: DeleteBatchDto;
+    path?: never;
+    query?: never;
+    url: '/api/reconciliations/delete-batch';
+};
+
+export type ReconciliationControllerDeleteBatchResponses = {
+    /**
+     * Bulk delete result
+     */
+    200: DeleteBatchResponseDto;
+};
+
+export type ReconciliationControllerDeleteBatchResponse = ReconciliationControllerDeleteBatchResponses[keyof ReconciliationControllerDeleteBatchResponses];
+
 export type ReconciliationControllerGetExportJobData = {
     body?: never;
     path: {
@@ -5519,6 +6062,209 @@ export type DashboardControllerGetSystemStatusResponses = {
 
 export type DashboardControllerGetSystemStatusResponse = DashboardControllerGetSystemStatusResponses[keyof DashboardControllerGetSystemStatusResponses];
 
+export type CostItemsControllerListData = {
+    body?: never;
+    path: {
+        contractId: string;
+    };
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/finance/contracts/{contractId}/cost-items';
+};
+
+export type CostItemsControllerListResponses = {
+    200: PaginatedCostItemsDto;
+};
+
+export type CostItemsControllerListResponse = CostItemsControllerListResponses[keyof CostItemsControllerListResponses];
+
+export type CostItemsControllerCreateData = {
+    body: CreateCostItemDto;
+    path: {
+        contractId: string;
+    };
+    query?: never;
+    url: '/api/finance/contracts/{contractId}/cost-items';
+};
+
+export type CostItemsControllerCreateResponses = {
+    201: CostItemResponseDto;
+};
+
+export type CostItemsControllerCreateResponse = CostItemsControllerCreateResponses[keyof CostItemsControllerCreateResponses];
+
+export type CostItemsControllerRemoveData = {
+    body?: never;
+    path: {
+        contractId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/finance/contracts/{contractId}/cost-items/{id}';
+};
+
+export type CostItemsControllerRemoveResponses = {
+    200: unknown;
+};
+
+export type CostItemsControllerUpdateData = {
+    body: UpdateCostItemDto;
+    path: {
+        contractId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/finance/contracts/{contractId}/cost-items/{id}';
+};
+
+export type CostItemsControllerUpdateResponses = {
+    200: CostItemResponseDto;
+};
+
+export type CostItemsControllerUpdateResponse = CostItemsControllerUpdateResponses[keyof CostItemsControllerUpdateResponses];
+
+export type PnLControllerSummaryData = {
+    body?: never;
+    path: {
+        contractId: string;
+    };
+    query?: never;
+    url: '/api/finance/contracts/{contractId}/pnl';
+};
+
+export type PnLControllerSummaryResponses = {
+    200: PnLSummaryDto;
+};
+
+export type PnLControllerSummaryResponse = PnLControllerSummaryResponses[keyof PnLControllerSummaryResponses];
+
+export type PnLExportControllerExportExcelData = {
+    body?: never;
+    path: {
+        contractId: string;
+    };
+    query?: never;
+    url: '/api/finance/contracts/{contractId}/export/excel';
+};
+
+export type PnLExportControllerExportExcelResponses = {
+    200: ExcelExportResponseDto;
+};
+
+export type PnLExportControllerExportExcelResponse = PnLExportControllerExportExcelResponses[keyof PnLExportControllerExportExcelResponses];
+
+export type PnLDashboardControllerGetDashboardData = {
+    body?: never;
+    path?: never;
+    query?: {
+        period?: 'current_month' | 'last_3_months' | 'last_6_months' | 'last_12_months' | 'ytd' | 'custom';
+        /**
+         * Default tab focus phía UI — server vẫn trả cả 3 chiều
+         */
+        groupBy?: 'type' | 'partner' | 'month';
+        /**
+         * ISO YYYY-MM-DD — chỉ dùng khi period=custom
+         */
+        dateFrom?: string;
+        /**
+         * ISO YYYY-MM-DD — chỉ dùng khi period=custom
+         */
+        dateTo?: string;
+    };
+    url: '/api/finance/dashboard';
+};
+
+export type PnLDashboardControllerGetDashboardResponses = {
+    200: PnLDashboardResponseDto;
+};
+
+export type PnLDashboardControllerGetDashboardResponse = PnLDashboardControllerGetDashboardResponses[keyof PnLDashboardControllerGetDashboardResponses];
+
+export type PnLDashboardControllerExportAggregatedData = {
+    body: PnLDashboardFilterDto;
+    path?: never;
+    query?: never;
+    url: '/api/finance/dashboard/export/excel';
+};
+
+export type PnLDashboardControllerExportAggregatedResponses = {
+    200: ExcelExportResponseDto;
+};
+
+export type PnLDashboardControllerExportAggregatedResponse = PnLDashboardControllerExportAggregatedResponses[keyof PnLDashboardControllerExportAggregatedResponses];
+
+export type MysqlLookupControllerSearchTenantsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Search substring (name OR tax_id)
+         */
+        q?: string;
+    };
+    url: '/api/finance/mysql/tenants/search';
+};
+
+export type MysqlLookupControllerSearchTenantsResponses = {
+    200: Array<TenantSearchResultDto>;
+};
+
+export type MysqlLookupControllerSearchTenantsResponse = MysqlLookupControllerSearchTenantsResponses[keyof MysqlLookupControllerSearchTenantsResponses];
+
+export type MysqlLookupControllerSearchRacesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * tenants.id (BIGINT)
+         */
+        tenantId: number;
+        /**
+         * Optional title substring
+         */
+        q?: string;
+    };
+    url: '/api/finance/mysql/races';
+};
+
+export type MysqlLookupControllerSearchRacesResponses = {
+    200: Array<RaceSearchResultDto>;
+};
+
+export type MysqlLookupControllerSearchRacesResponse = MysqlLookupControllerSearchRacesResponses[keyof MysqlLookupControllerSearchRacesResponses];
+
+export type CostSuggestionsControllerGetSuggestionsData = {
+    body?: never;
+    path: {
+        contractId: string;
+    };
+    query?: never;
+    url: '/api/finance/contracts/{contractId}/cost-suggestions';
+};
+
+export type CostSuggestionsControllerGetSuggestionsResponses = {
+    200: Array<CostSuggestionDto>;
+};
+
+export type CostSuggestionsControllerGetSuggestionsResponse = CostSuggestionsControllerGetSuggestionsResponses[keyof CostSuggestionsControllerGetSuggestionsResponses];
+
+export type CostSuggestionsControllerBulkCreateData = {
+    body: BulkCreateCostItemsDto;
+    path: {
+        contractId: string;
+    };
+    query?: never;
+    url: '/api/finance/contracts/{contractId}/cost-items/bulk';
+};
+
+export type CostSuggestionsControllerBulkCreateResponses = {
+    201: Array<CostItemResponseDto>;
+};
+
+export type CostSuggestionsControllerBulkCreateResponse = CostSuggestionsControllerBulkCreateResponses[keyof CostSuggestionsControllerBulkCreateResponses];
+
 export type TimingAlertAdminControllerGetConfigData = {
     body?: never;
     path: {
@@ -6049,6 +6795,559 @@ export type TimingAlertSimulatorPublicControllerServeResponses = {
     200: unknown;
 };
 
+export type ContractsControllerListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        contractType?: string;
+        documentType?: string;
+        status?: string;
+        partnerId?: string;
+        raceId?: string;
+        search?: string;
+        page?: number;
+        limit?: number;
+        /**
+         * Include soft-deleted contracts
+         */
+        includeDeleted?: boolean;
+    };
+    url: '/api/contracts';
+};
+
+export type ContractsControllerListResponses = {
+    200: PaginatedContractsDto;
+};
+
+export type ContractsControllerListResponse = ContractsControllerListResponses[keyof ContractsControllerListResponses];
+
+export type ContractsControllerCreateData = {
+    body: CreateContractDto;
+    path?: never;
+    query?: never;
+    url: '/api/contracts';
+};
+
+export type ContractsControllerCreateResponses = {
+    201: ContractResponseDto;
+};
+
+export type ContractsControllerCreateResponse = ContractsControllerCreateResponses[keyof ContractsControllerCreateResponses];
+
+export type ContractsControllerRemoveData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}';
+};
+
+export type ContractsControllerRemoveResponses = {
+    200: unknown;
+};
+
+export type ContractsControllerDetailData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}';
+};
+
+export type ContractsControllerDetailResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerDetailResponse = ContractsControllerDetailResponses[keyof ContractsControllerDetailResponses];
+
+export type ContractsControllerUpdateData = {
+    body: UpdateContractDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}';
+};
+
+export type ContractsControllerUpdateResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerUpdateResponse = ContractsControllerUpdateResponses[keyof ContractsControllerUpdateResponses];
+
+export type ContractsControllerActivateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}/activate';
+};
+
+export type ContractsControllerActivateResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerActivateResponse = ContractsControllerActivateResponses[keyof ContractsControllerActivateResponses];
+
+export type ContractsControllerAcceptQuotationData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}/accept-quotation';
+};
+
+export type ContractsControllerAcceptQuotationResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerAcceptQuotationResponse = ContractsControllerAcceptQuotationResponses[keyof ContractsControllerAcceptQuotationResponses];
+
+export type ContractsControllerRejectQuotationData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}/reject-quotation';
+};
+
+export type ContractsControllerRejectQuotationResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerRejectQuotationResponse = ContractsControllerRejectQuotationResponses[keyof ContractsControllerRejectQuotationResponses];
+
+export type ContractsControllerConvertData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}/convert';
+};
+
+export type ContractsControllerConvertResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerConvertResponse = ContractsControllerConvertResponses[keyof ContractsControllerConvertResponses];
+
+export type ContractsControllerUpsertAcceptanceData = {
+    body: CreateAcceptanceReportDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}/acceptance-report';
+};
+
+export type ContractsControllerUpsertAcceptanceResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerUpsertAcceptanceResponse = ContractsControllerUpsertAcceptanceResponses[keyof ContractsControllerUpsertAcceptanceResponses];
+
+export type ContractsControllerFinalizeAcceptanceData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}/acceptance-report/finalize';
+};
+
+export type ContractsControllerFinalizeAcceptanceResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerFinalizeAcceptanceResponse = ContractsControllerFinalizeAcceptanceResponses[keyof ContractsControllerFinalizeAcceptanceResponses];
+
+export type ContractsControllerUpsertPaymentData = {
+    body: CreatePaymentRequestDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}/payment-request';
+};
+
+export type ContractsControllerUpsertPaymentResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerUpsertPaymentResponse = ContractsControllerUpsertPaymentResponses[keyof ContractsControllerUpsertPaymentResponses];
+
+export type ContractsControllerMarkPaidData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/contracts/{id}/payment-request/mark-paid';
+};
+
+export type ContractsControllerMarkPaidResponses = {
+    200: ContractResponseDto;
+};
+
+export type ContractsControllerMarkPaidResponse = ContractsControllerMarkPaidResponses[keyof ContractsControllerMarkPaidResponses];
+
+export type ContractsControllerGenerateDocumentData = {
+    body?: never;
+    path: {
+        id: string;
+        docType: 'CONTRACT' | 'QUOTATION' | 'ACCEPTANCE_REPORT' | 'PAYMENT_REQUEST';
+    };
+    query?: never;
+    url: '/api/contracts/{id}/generate/{docType}';
+};
+
+export type ContractsControllerGenerateDocumentResponses = {
+    /**
+     * Generated document signed URLs (15min TTL)
+     */
+    200: {
+        docxKey?: string;
+        docxUrl?: string;
+        pdfKey?: string | null;
+        pdfUrl?: string | null;
+    };
+};
+
+export type ContractsControllerGenerateDocumentResponse = ContractsControllerGenerateDocumentResponses[keyof ContractsControllerGenerateDocumentResponses];
+
+export type ContractsControllerGetDownloadUrlData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        s3Key: string;
+    };
+    url: '/api/contracts/{id}/download';
+};
+
+export type ContractsControllerGetDownloadUrlResponses = {
+    200: {
+        url?: string;
+    };
+};
+
+export type ContractsControllerGetDownloadUrlResponse = ContractsControllerGetDownloadUrlResponses[keyof ContractsControllerGetDownloadUrlResponses];
+
+export type ContractsControllerStreamDownloadData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        s3Key: string;
+    };
+    url: '/api/contracts/{id}/download/stream';
+};
+
+export type ContractsControllerStreamDownloadResponses = {
+    200: unknown;
+};
+
+export type PartnersControllerListData = {
+    body?: never;
+    path?: never;
+    query: {
+        search: string;
+        page: string;
+        limit: string;
+    };
+    url: '/api/partners';
+};
+
+export type PartnersControllerListResponses = {
+    200: unknown;
+};
+
+export type PartnersControllerCreateData = {
+    body: CreatePartnerDto;
+    path?: never;
+    query?: never;
+    url: '/api/partners';
+};
+
+export type PartnersControllerCreateResponses = {
+    201: PartnerResponseDto;
+};
+
+export type PartnersControllerCreateResponse = PartnersControllerCreateResponses[keyof PartnersControllerCreateResponses];
+
+export type PartnersControllerRemoveData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/partners/{id}';
+};
+
+export type PartnersControllerRemoveResponses = {
+    200: unknown;
+};
+
+export type PartnersControllerDetailData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/partners/{id}';
+};
+
+export type PartnersControllerDetailResponses = {
+    200: PartnerResponseDto;
+};
+
+export type PartnersControllerDetailResponse = PartnersControllerDetailResponses[keyof PartnersControllerDetailResponses];
+
+export type PartnersControllerUpdateData = {
+    body: UpdatePartnerDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/partners/{id}';
+};
+
+export type PartnersControllerUpdateResponses = {
+    200: PartnerResponseDto;
+};
+
+export type PartnersControllerUpdateResponse = PartnersControllerUpdateResponses[keyof PartnersControllerUpdateResponses];
+
+export type ServiceCatalogControllerListData = {
+    body?: never;
+    path?: never;
+    query: {
+        category: string;
+        search: string;
+    };
+    url: '/api/service-catalog';
+};
+
+export type ServiceCatalogControllerListResponses = {
+    200: Array<ServiceCatalogResponseDto>;
+};
+
+export type ServiceCatalogControllerListResponse = ServiceCatalogControllerListResponses[keyof ServiceCatalogControllerListResponses];
+
+export type ServiceCatalogControllerCreateData = {
+    body: CreateServiceCatalogDto;
+    path?: never;
+    query?: never;
+    url: '/api/service-catalog';
+};
+
+export type ServiceCatalogControllerCreateResponses = {
+    201: ServiceCatalogResponseDto;
+};
+
+export type ServiceCatalogControllerCreateResponse = ServiceCatalogControllerCreateResponses[keyof ServiceCatalogControllerCreateResponses];
+
+export type ServiceCatalogControllerRemoveData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/service-catalog/{id}';
+};
+
+export type ServiceCatalogControllerRemoveResponses = {
+    200: unknown;
+};
+
+export type ServiceCatalogControllerDetailData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/service-catalog/{id}';
+};
+
+export type ServiceCatalogControllerDetailResponses = {
+    200: ServiceCatalogResponseDto;
+};
+
+export type ServiceCatalogControllerDetailResponse = ServiceCatalogControllerDetailResponses[keyof ServiceCatalogControllerDetailResponses];
+
+export type ServiceCatalogControllerUpdateData = {
+    body: UpdateServiceCatalogDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/service-catalog/{id}';
+};
+
+export type ServiceCatalogControllerUpdateResponses = {
+    200: ServiceCatalogResponseDto;
+};
+
+export type ServiceCatalogControllerUpdateResponse = ServiceCatalogControllerUpdateResponses[keyof ServiceCatalogControllerUpdateResponses];
+
+export type ContractTemplatesControllerListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/contract-templates';
+};
+
+export type ContractTemplatesControllerListResponses = {
+    200: unknown;
+};
+
+export type ContractTemplatesControllerGetByTypeData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}';
+};
+
+export type ContractTemplatesControllerGetByTypeResponses = {
+    200: unknown;
+};
+
+export type ContractTemplatesControllerUpsertData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}';
+};
+
+export type ContractTemplatesControllerUpsertResponses = {
+    200: unknown;
+};
+
+export type ContractTemplatesControllerGetDefaultArticlesData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}/default-articles';
+};
+
+export type ContractTemplatesControllerGetDefaultArticlesResponses = {
+    200: unknown;
+};
+
+export type ContractTemplatesControllerResetData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}/reset';
+};
+
+export type ContractTemplatesControllerResetResponses = {
+    200: unknown;
+};
+
+export type ContractTemplatesControllerPreviewHtmlData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}/preview-html';
+};
+
+export type ContractTemplatesControllerPreviewHtmlResponses = {
+    /**
+     * HTML render từ DOCX template + flag cached
+     */
+    200: unknown;
+};
+
+export type ContractTemplatesControllerUploadTemplateData = {
+    body: {
+        /**
+         * DOCX file (max 10MB)
+         */
+        file?: Blob | File;
+    };
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}/upload';
+};
+
+export type ContractTemplatesControllerUploadTemplateResponses = {
+    201: unknown;
+};
+
+export type ContractTemplatesControllerListVersionsData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}/versions';
+};
+
+export type ContractTemplatesControllerListVersionsResponses = {
+    200: unknown;
+};
+
+export type ContractTemplatesControllerRestoreVersionData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+        filename: string;
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}/restore/{filename}';
+};
+
+export type ContractTemplatesControllerRestoreVersionResponses = {
+    200: unknown;
+};
+
+export type ContractTemplatesControllerGetLineItemsData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}/line-items';
+};
+
+export type ContractTemplatesControllerGetLineItemsResponses = {
+    200: unknown;
+};
+
+export type ContractTemplatesControllerUpdateLineItemsData = {
+    body?: never;
+    path: {
+        type: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
+    };
+    query?: never;
+    url: '/api/contract-templates/{type}/line-items';
+};
+
+export type ContractTemplatesControllerUpdateLineItemsResponses = {
+    200: unknown;
+};
+
 export type RacesControllerSearchRacesData = {
     body?: never;
     path?: never;
@@ -6575,6 +7874,13 @@ export type RaceResultControllerGetRaceResultsData = {
     url: '/api/race-results';
 };
 
+export type RaceResultControllerGetRaceResultsErrors = {
+    /**
+     * Race not found OR race is in `draft` status and caller is anonymous (no leak of existence).
+     */
+    404: unknown;
+};
+
 export type RaceResultControllerGetRaceResultsResponses = {
     /**
      * Returns paginated race results
@@ -6745,29 +8051,6 @@ export type RaceResultControllerGetFilterOptionsResponses = {
     200: unknown;
 };
 
-export type RaceResultControllerGetCourseStatsData = {
-    body?: never;
-    path: {
-        /**
-         * Race ID
-         */
-        raceId: string;
-        /**
-         * Course ID
-         */
-        courseId: string;
-    };
-    query?: never;
-    url: '/api/race-results/stats/{raceId}/{courseId}';
-};
-
-export type RaceResultControllerGetCourseStatsResponses = {
-    /**
-     * Returns aggregated stats for the course within the race
-     */
-    200: unknown;
-};
-
 export type RaceResultControllerGetTimeDistributionData = {
     body?: never;
     path: {
@@ -6809,6 +8092,29 @@ export type RaceResultControllerGetCountryStatsResponses = {
 };
 
 export type RaceResultControllerGetCountryStatsResponse = RaceResultControllerGetCountryStatsResponses[keyof RaceResultControllerGetCountryStatsResponses];
+
+export type RaceResultControllerGetCourseStatsData = {
+    body?: never;
+    path: {
+        /**
+         * Race ID
+         */
+        raceId: string;
+        /**
+         * Course ID
+         */
+        courseId: string;
+    };
+    query?: never;
+    url: '/api/race-results/stats/{raceId}/{courseId}';
+};
+
+export type RaceResultControllerGetCourseStatsResponses = {
+    /**
+     * Returns aggregated stats for the course within the race
+     */
+    200: unknown;
+};
 
 export type RaceResultControllerGetCountryRankData = {
     body?: never;

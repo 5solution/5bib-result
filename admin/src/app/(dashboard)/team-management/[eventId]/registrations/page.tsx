@@ -85,6 +85,7 @@ import { RejectDialog } from "./_reject-dialog";
 import { RegistrationImportDialog } from "./_import-dialog";
 import { useConfirm } from "@/components/confirm-dialog";
 import { usePrompt } from "@/components/prompt-dialog";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // Status badges + row styles come from @/lib/status-style.
 
@@ -112,7 +113,7 @@ export default function RegistrationsListPage(): React.ReactElement {
   const router = useRouter();
   const params = useParams<{ eventId: string }>();
   const eventId = Number(params.eventId);
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
 
   const [roles, setRoles] = useState<TeamRole[]>([]);
   const [rows, setRows] = useState<RegistrationListRow[]>([]);
@@ -211,7 +212,10 @@ export default function RegistrationsListPage(): React.ReactElement {
     const next = new Set(rowBusy);
     next.add(id);
     setRowBusy(next);
-    return () => {
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return () => {
       const done = new Set(next);
       done.delete(id);
       setRowBusy(done);

@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import {
   getAcceptanceTemplate,
   updateAcceptanceTemplate,
@@ -48,7 +49,7 @@ export default function EditAcceptanceTemplatePage({
   const templateId = Number(id);
 
   const router = useRouter();
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
   const [template, setTemplate] = useState<AcceptanceTemplate | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [name, setName] = useState("");
@@ -123,6 +124,8 @@ export default function EditAcceptanceTemplatePage({
   }, [token, templateId, name, html, isDefault, isActive, router]);
 
   if (authLoading || !isAuthenticated) return <Skeleton className="h-64" />;
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (!isStaff) return <RestrictedAccess />;
   if (loadFailed)
     return (
       <div className="p-8 text-destructive">

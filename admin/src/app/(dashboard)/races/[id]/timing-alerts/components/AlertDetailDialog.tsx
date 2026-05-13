@@ -17,6 +17,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ALERT_STATUS_LABEL } from '@/lib/timing-labels';
 import {
   Dialog,
   DialogContent,
@@ -394,7 +395,7 @@ function ActionFooter({
     return (
       <div className="flex items-center justify-between gap-3 border-t border-stone-200 bg-stone-50 px-6 py-3">
         <div className="text-xs text-stone-600">
-          Status: <strong>{alert.status}</strong>
+          Status: <strong>{ALERT_STATUS_LABEL[alert.status] ?? alert.status}</strong>
           {alert.resolved_by && ` · by ${alert.resolved_by}`}
         </div>
         <Button

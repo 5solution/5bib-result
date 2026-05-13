@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -442,7 +443,7 @@ export default function NewReconciliationPage() {
             <div className="flex flex-col gap-1.5">
               <Label>Merchant</Label>
               {merchantsLoading ? (
-                <div className="text-sm text-muted-foreground">Đang tải...</div>
+                <Skeleton className="h-9 w-full" />
               ) : (
                 <Select value={selectedMerchantId} onValueChange={v => { if (v) setSelectedMerchantId(v); }}>
                   <SelectTrigger className="w-full">

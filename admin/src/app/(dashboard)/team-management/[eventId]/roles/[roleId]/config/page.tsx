@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Settings } from "lucide-react";
 import { toast } from "sonner";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 // v1.7 — per-team Config sub-tab. Inline edit (not modal) to match tab UX.
 // Subset of fields from the original EditRoleDialog; the form-fields schema
@@ -65,7 +66,7 @@ export default function RoleConfigPage(): React.ReactElement {
   const params = useParams<{ eventId: string; roleId: string }>();
   const eventId = Number(params.eventId);
   const roleId = Number(params.roleId);
-  const { token } = useAuth();
+  const { token, isStaff } = useAuth();
 
   const [allRoles, setAllRoles] = useState<TeamRole[]>([]);
   const [role, setRole] = useState<TeamRole | null>(null);
@@ -126,6 +127,9 @@ export default function RoleConfigPage(): React.ReactElement {
   }
 
   if (!form || !role) return <Skeleton className="h-64" />;
+
+  // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="space-y-6 max-w-2xl">

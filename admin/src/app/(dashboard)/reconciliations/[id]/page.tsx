@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { authHeaders } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -230,7 +231,7 @@ function StatusStepper({ currentStatus }: { currentStatus: string }) {
 
 export default function ReconciliationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { token } = useAuth();
+  const { token, isStaff, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
   const [data, setData] = useState<ReconciliationDetail | null>(null);
@@ -319,6 +320,10 @@ export default function ReconciliationDetailPage() {
       setRegenLoading(false);
     }
   }
+
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (authLoading) return null;
+  if (!isStaff) return <RestrictedAccess />;
 
   if (loading) {
     return (

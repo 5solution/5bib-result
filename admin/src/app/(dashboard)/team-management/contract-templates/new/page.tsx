@@ -21,6 +21,7 @@ import {
   type PartyAConfig,
 } from "@/lib/team-api";
 import ContractPreview from "@/components/ContractPreview";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 
 const ContractEditor = dynamic(() => import("@/components/ContractEditor"), {
   ssr: false,
@@ -130,7 +131,7 @@ const BLANK_TEMPLATE = `<div style="font-family: Times New Roman, serif; font-si
 
 export default function NewContractTemplatePage(): React.ReactElement {
   const router = useRouter();
-  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authLoading, isStaff } = useAuth();
   const confirm = useConfirm();
   const [name, setName] = useState("");
   const [html, setHtml] = useState(BLANK_TEMPLATE);
@@ -171,7 +172,10 @@ export default function NewContractTemplatePage(): React.ReactElement {
   // avoid hammering the API on every keystroke.
   useEffect(() => {
     const handle = setTimeout(() => void runValidation(html), 600);
-    return () => clearTimeout(handle);
+    // F-029 BR-HD-30 — page-level RBAC gate (defense-in-depth; backend cũng enforce via LogtoStaffGuard).
+  if (!isStaff) return <RestrictedAccess />;
+
+  return () => clearTimeout(handle);
   }, [html, runValidation]);
 
   async function handleImport(file: File): Promise<void> {

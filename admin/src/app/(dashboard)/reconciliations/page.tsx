@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { authHeaders } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -162,7 +163,7 @@ function isRecentPeriod(period: string): boolean {
 }
 
 export default function ReconciliationsPage() {
-  const { token } = useAuth();
+  const { token, isStaff, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
   const [items, setItems] = useState<Reconciliation[]>([]);
@@ -552,6 +553,10 @@ export default function ReconciliationsPage() {
         return `T${m}/${y}`;
       })()
     : "";
+
+  // F-029 BR-HD-30 — page-level RBAC gate.
+  if (authLoading) return null;
+  if (!isStaff) return <RestrictedAccess />;
 
   return (
     <div className="flex flex-col gap-6">
