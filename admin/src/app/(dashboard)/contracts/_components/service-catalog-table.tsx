@@ -36,7 +36,8 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, FileSpreadsheet } from "lucide-react";
+import { ServiceCatalogImportDialog } from "./service-catalog-import-dialog";
 import { toast } from "sonner";
 import { SearchInput } from "./search-input";
 import { EmptyState } from "./empty-state";
@@ -117,6 +118,9 @@ export function ServiceCatalogTable() {
   const [q, setQ] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<ServiceCatalogItem | null>(null);
+
+  // FEATURE-031 — Import Excel state
+  const [importOpen, setImportOpen] = useState(false);
   // F-028 Phase 3 — sort by margin (default order = backend sort by sortOrder)
   const [sortKey, setSortKey] = useState<SortKey>("default");
 
@@ -159,37 +163,56 @@ export function ServiceCatalogTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-bold tracking-tight">Danh mục dịch vụ</h1>
-        <Dialog
-          open={editOpen}
-          onOpenChange={(o) => {
-            setEditOpen(o);
-            if (!o) setEditing(null);
-          }}
-        >
-          <DialogTrigger
-            render={<Button onClick={() => setEditing(null)} />}
+        <div className="flex items-center gap-2">
+          {/* FEATURE-031 — Import Excel button */}
+          <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
           >
-            <Plus className="size-4" /> Thêm dịch vụ
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editing ? "Sửa dịch vụ" : "Thêm dịch vụ"}
-              </DialogTitle>
-            </DialogHeader>
-            <CatalogForm
-              initial={editing}
-              onSaved={() => {
-                setEditOpen(false);
-                setEditing(null);
-                load();
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+            <FileSpreadsheet className="size-4" /> Import Excel
+          </Button>
+          <Dialog
+            open={editOpen}
+            onOpenChange={(o) => {
+              setEditOpen(o);
+              if (!o) setEditing(null);
+            }}
+          >
+            <DialogTrigger
+              render={<Button onClick={() => setEditing(null)} />}
+            >
+              <Plus className="size-4" /> Thêm dịch vụ
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {editing ? "Sửa dịch vụ" : "Thêm dịch vụ"}
+                </DialogTitle>
+              </DialogHeader>
+              <CatalogForm
+                initial={editing}
+                onSaved={() => {
+                  setEditOpen(false);
+                  setEditing(null);
+                  load();
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      {/* FEATURE-031 — Import Dialog */}
+      <ServiceCatalogImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={() => {
+          setImportOpen(false);
+          load();
+        }}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-64 flex-1 sm:max-w-sm">

@@ -74,4 +74,26 @@ export class ServiceCatalogService {
     }
     return { success: true };
   }
+
+  /**
+   * FEATURE-031 — Batch check duplicate (name, category) pairs in 1 query.
+   * Returns subset of input pairs that ALREADY EXIST trong collection (active items,
+   * deletedAt=null). Used by ImportService cho duplicate detection — Skip + report
+   * per PAUSE-31-02. KHÔNG check soft-deleted items.
+   */
+  async findByNameCategoryPairs(
+    pairs: Array<{ name: string; category: string }>,
+  ): Promise<Array<{ name: string; category: string }>> {
+    if (pairs.length === 0) return [];
+    const items = await this.model
+      .find(
+        {
+          deletedAt: null,
+          $or: pairs.map((p) => ({ name: p.name, category: p.category })),
+        },
+        { name: 1, category: 1, _id: 0 },
+      )
+      .lean();
+    return items.map((i) => ({ name: i.name, category: i.category }));
+  }
 }

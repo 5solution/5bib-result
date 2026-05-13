@@ -631,6 +631,75 @@ export function deleteServiceCatalogItem(id: string): Promise<{ success: true }>
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// FEATURE-031 — Service Catalog Excel Import
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface ParsedServiceCatalogRow {
+  rowNum: number;
+  name: string;
+  category: ServiceCategory;
+  unit?: string;
+  referencePrice?: number;
+  referenceCost?: number;
+  description?: string;
+  sortOrder?: number;
+}
+
+export interface InvalidServiceCatalogRow {
+  rowNum: number;
+  errors: string[];
+  raw: Record<string, unknown>;
+}
+
+export interface ServiceCatalogImportPreview {
+  total: number;
+  valid: ParsedServiceCatalogRow[];
+  duplicate: ParsedServiceCatalogRow[];
+  invalid: InvalidServiceCatalogRow[];
+}
+
+export interface ServiceCatalogImportResult {
+  inserted: number;
+  skipped_duplicate: number;
+  failed: number;
+}
+
+/**
+ * Step 1: Upload Excel + parse + validate (preview, KHÔNG insert).
+ * Multipart/form-data — KHÔNG dùng jsonFetch helper vì Content-Type khác.
+ */
+export async function previewServiceCatalogImport(
+  file: File,
+): Promise<ServiceCatalogImportPreview> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/service-catalog/import-excel/preview", {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ContractsApiError(res.status, extractMessage(body, res.status));
+  }
+  return (await res.json()) as ServiceCatalogImportPreview;
+}
+
+/** Step 2: Confirm import — bulk insert validated rows. */
+export function confirmServiceCatalogImport(
+  rows: ParsedServiceCatalogRow[],
+): Promise<ServiceCatalogImportResult> {
+  return jsonFetch<ServiceCatalogImportResult>(
+    `/api/service-catalog/import-excel/confirm`,
+    { method: "POST", body: JSON.stringify({ rows }) },
+  );
+}
+
+/** Download Excel template — opens new tab / triggers browser download. */
+export function getServiceCatalogTemplateUrl(): string {
+  return "/api/service-catalog/import-template";
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Contract Templates
 // ────────────────────────────────────────────────────────────────────────────
 
