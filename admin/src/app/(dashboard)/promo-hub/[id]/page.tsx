@@ -21,14 +21,12 @@ import "@/lib/api";
 import {
   promoHubControllerFindById,
   promoHubControllerUpdate,
-  promoHubAnalyticsControllerGetSummary,
 } from "@/lib/api-generated";
 import type {
   PromoHubResponseDto,
   UpdatePromoHubDto,
   PromoHubThemeInputDto,
   PromoHubSeoInputDto,
-  AnalyticsSummaryDto,
 } from "@/lib/api-generated";
 import { useAuth } from "@/lib/auth-context";
 import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
@@ -51,7 +49,6 @@ import {
   Save,
   Eye,
   ChevronRight,
-  BarChart3,
   Loader2,
 } from "lucide-react";
 import { PromoHubEditor } from "@/components/promo-hub/PromoHubEditor";
@@ -60,6 +57,7 @@ import {
   ThemeConfigurator,
   SeoConfigurator,
 } from "@/components/promo-hub/ThemeConfigurator";
+import { PromoHubAnalytics } from "@/components/promo-hub/PromoHubAnalytics";
 import type { EditorSection } from "@/components/promo-hub/SectionCard";
 import type { SectionType } from "@/components/promo-hub/section-types";
 
@@ -83,10 +81,6 @@ export default function PromoHubEditPage() {
   const [sections, setSections] = useState<EditorSection[]>([]);
   const [theme, setTheme] = useState<PromoHubThemeInputDto>({});
   const [seo, setSeo] = useState<PromoHubSeoInputDto>({});
-
-  // Analytics summary
-  const [analytics, setAnalytics] = useState<AnalyticsSummaryDto | null>(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const loadHub = useCallback(async () => {
     try {
@@ -137,20 +131,6 @@ export default function PromoHubEditPage() {
     }
   }, [hubId, router]);
 
-  const loadAnalytics = useCallback(async () => {
-    try {
-      setAnalyticsLoading(true);
-      const res = await promoHubAnalyticsControllerGetSummary({
-        path: { hubId },
-      });
-      setAnalytics(res.data as AnalyticsSummaryDto);
-    } catch {
-      /* silent — analytics optional */
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  }, [hubId]);
-
   useEffect(() => {
     if (isAdmin) loadHub();
   }, [loadHub, isAdmin]);
@@ -181,6 +161,15 @@ export default function PromoHubEditPage() {
       await promoHubControllerUpdate({
         path: { id: hubId },
         body,
+      });
+      // Fire-and-forget cross-app revalidation. KHÔNG await — UX không cần
+      // chờ frontend cache flush. Failure silently ignored — fallback ISR 60s.
+      fetch("/api/revalidate-hub", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      }).catch(() => {
+        /* silent */
       });
       toast.success("Đã lưu");
       await loadHub();
@@ -260,9 +249,7 @@ export default function PromoHubEditPage() {
           <TabsTrigger value="content">Nội dung</TabsTrigger>
           <TabsTrigger value="design">Thiết kế</TabsTrigger>
           <TabsTrigger value="seo">SEO</TabsTrigger>
-          <TabsTrigger value="analytics" onClick={() => !analytics && loadAnalytics()}>
-            Analytics
-          </TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         {/* TAB: Nội dung */}
@@ -358,34 +345,7 @@ export default function PromoHubEditPage() {
 
         {/* TAB: Analytics */}
         <TabsContent value="analytics" className="mt-4">
-          <div className="rounded-xl border bg-card p-4 shadow-xs">
-            <div className="mb-3 flex items-center gap-2">
-              <BarChart3 className="size-5 text-[var(--admin-blue)]" />
-              <h2 className="font-bold">Tổng quan analytics (30 ngày)</h2>
-            </div>
-            {analyticsLoading ? (
-              <Skeleton className="h-24 w-full" />
-            ) : analytics ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <AnalyticsCard
-                  label="Tổng lượt xem"
-                  value={analytics.totalViews.toLocaleString("vi-VN")}
-                />
-                <AnalyticsCard
-                  label="Tổng lượt click"
-                  value={analytics.totalClicks.toLocaleString("vi-VN")}
-                />
-                <AnalyticsCard
-                  label="CTR"
-                  value={`${(analytics.ctr * 100).toFixed(2)}%`}
-                />
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">
-                Bấm tab Analytics để tải dữ liệu.
-              </div>
-            )}
-          </div>
+          <PromoHubAnalytics hubId={hubId} sections={sections} />
         </TabsContent>
       </Tabs>
     </div>
@@ -405,13 +365,3 @@ function StatusBadge({ status }: { status: HubStatus }) {
   );
 }
 
-function AnalyticsCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border bg-muted/30 p-3">
-      <div className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className="mt-1 font-mono text-2xl font-bold">{value}</div>
-    </div>
-  );
-}

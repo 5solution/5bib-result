@@ -151,6 +151,14 @@ export default function PromoHubListPage() {
     if (!ok) return;
     try {
       await promoHubControllerDelete({ path: { id: hub.id } });
+      // Cross-app revalidate — remove from sitemap + bust hub cache
+      fetch("/api/revalidate-hub", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: hub.slug }),
+      }).catch(() => {
+        /* silent */
+      });
       toast.success("Đã xóa");
       await loadList();
     } catch (err) {
