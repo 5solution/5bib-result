@@ -97,4 +97,37 @@ export class PartnersService {
     }
     return { success: true };
   }
+
+  /**
+   * FEATURE-032 — Dual-key batch dedup check for Excel import.
+   * - Rows có taxId → check by `taxId` (MST stable, sparse unique candidate)
+   * - Rows không taxId → check by `entityName` exact match
+   * Returns subset of input pairs that ALREADY EXIST trong active partners.
+   */
+  async findByTaxIdsOrNames(
+    pairs: Array<{ taxId?: string; entityName: string }>,
+  ): Promise<Array<{ taxId?: string; entityName: string }>> {
+    if (pairs.length === 0) return [];
+    const taxIds = pairs.filter((p) => p.taxId).map((p) => p.taxId!);
+    const namesNoTax = pairs
+      .filter((p) => !p.taxId)
+      .map((p) => p.entityName);
+
+    const orConditions: Array<Record<string, unknown>> = [];
+    if (taxIds.length > 0) orConditions.push({ taxId: { $in: taxIds } });
+    if (namesNoTax.length > 0)
+      orConditions.push({ entityName: { $in: namesNoTax } });
+    if (orConditions.length === 0) return [];
+
+    const items = await this.partnerModel
+      .find(
+        { deletedAt: null, $or: orConditions },
+        { entityName: 1, taxId: 1, _id: 0 },
+      )
+      .lean();
+    return items.map((i) => ({
+      entityName: i.entityName,
+      taxId: i.taxId,
+    }));
+  }
 }

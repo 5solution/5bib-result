@@ -16,6 +16,7 @@ import { ServiceCatalogController } from './service-catalog.controller';
 import { ContractTemplatesController } from './contract-templates.controller';
 import { ContractsService } from './services/contracts.service';
 import { PartnersService } from './services/partners.service';
+import { PartnersImportService } from './services/partners-import.service';
 import { ServiceCatalogService } from './services/service-catalog.service';
 import { ServiceCatalogImportService } from './services/service-catalog-import.service';
 import { ContractNumberService } from './services/contract-number.service';
@@ -52,6 +53,7 @@ import { AuditModule } from '../audit/audit.module';
   providers: [
     ContractsService,
     PartnersService,
+    PartnersImportService,
     ServiceCatalogService,
     ServiceCatalogImportService,
     ContractNumberService,

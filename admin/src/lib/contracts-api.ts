@@ -913,3 +913,76 @@ export function calcTotals(
   const vatAmount = Math.round((subtotal * vatRate) / 100);
   return { subtotal, vatAmount, totalAmount: subtotal + vatAmount };
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// FEATURE-032 — Partner Excel Import (mirror F-031 ServiceCatalog pattern)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface ParsedPartnerRow {
+  rowNum: number;
+  entityName: string;
+  shortName?: string;
+  taxId?: string;
+  address?: string;
+  representative?: string;
+  position?: string;
+  bankAccount?: string;
+  bankName?: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+}
+
+export interface InvalidPartnerRow {
+  rowNum: number;
+  errors: string[];
+  raw: Record<string, unknown>;
+}
+
+export interface PartnerImportPreview {
+  total: number;
+  valid: ParsedPartnerRow[];
+  duplicate: ParsedPartnerRow[];
+  invalid: InvalidPartnerRow[];
+}
+
+export interface PartnerImportResult {
+  inserted: number;
+  skipped_duplicate: number;
+  failed: number;
+}
+
+/**
+ * Step 1: Upload Excel + parse + validate (preview, KHÔNG insert).
+ * Multipart/form-data — KHÔNG dùng jsonFetch vì Content-Type khác.
+ */
+export async function previewPartnerImport(
+  file: File,
+): Promise<PartnerImportPreview> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/partners/import-excel/preview", {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ContractsApiError(res.status, extractMessage(body, res.status));
+  }
+  return (await res.json()) as PartnerImportPreview;
+}
+
+/** Step 2: Confirm import — bulk insert validated rows. */
+export function confirmPartnerImport(
+  rows: ParsedPartnerRow[],
+): Promise<PartnerImportResult> {
+  return jsonFetch<PartnerImportResult>(`/api/partners/import-excel/confirm`, {
+    method: "POST",
+    body: JSON.stringify({ rows }),
+  });
+}
+
+/** Download Excel template — opens new tab / triggers browser download. */
+export function getPartnerTemplateUrl(): string {
+  return "/api/partners/import-template";
+}

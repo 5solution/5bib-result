@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, Users } from "lucide-react";
+import { FileSpreadsheet, Plus, Trash2, Users } from "lucide-react";
 import {
   deletePartner,
   listPartners,
@@ -29,6 +29,7 @@ import { useAuth } from "@/lib/auth-context";
 import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { SearchInput } from "../_components/search-input";
 import { EmptyState } from "../_components/empty-state";
+import { PartnerImportDialog } from "../_components/partner-import-dialog";
 
 function useDebounced<T>(value: T, delay = 300): T {
   const [debounced, setDebounced] = useState(value);
@@ -47,6 +48,7 @@ export default function PartnersPage() {
   const [items, setItems] = useState<PartnerView[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
   const debouncedQ = useDebounced(q, 300);
 
   const load = useCallback(async () => {
@@ -94,10 +96,24 @@ export default function PartnersPage() {
         <h1 className="text-2xl font-bold tracking-tight">
           Đối tác hợp đồng
         </h1>
-        <Button onClick={() => router.push("/contracts/partners/new")}>
-          <Plus className="size-4" /> Thêm đối tác
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="size-4" /> Import Excel
+          </Button>
+          <Button onClick={() => router.push("/contracts/partners/new")}>
+            <Plus className="size-4" /> Thêm đối tác
+          </Button>
+        </div>
       </div>
+
+      <PartnerImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={() => {
+          setImportOpen(false);
+          load();
+        }}
+      />
 
       <div className="max-w-md">
         <SearchInput
