@@ -18,6 +18,7 @@ import {
   WidthType,
 } from 'docx';
 import { ReconciliationDocument } from '../schemas/reconciliation.schema';
+import { env } from 'src/config';
 import { renderPeriodLabel } from './period-label.helper';
 
 /* ------------------------------------------------------------------ */
@@ -525,22 +526,29 @@ export class DocxService {
           ],
         }),
         // BÊN B header
+        // FEATURE-030 — provider info đọc từ env config (replace hardcoded
+        // legacy commit `205a1c1` với địa chỉ cũ Tôn Thất Thuyết). Defaults
+        // trong Joi schema match Danny chốt 2026-05-13.
         new TableRow({
           children: [
             tCell([{ text: 'BÊN B', bold: true }], { width: labelW }),
             tCell([{ text: ':' }], { width: colonW, align: AlignmentType.CENTER }),
             tCell(
-              [{ text: 'CÔNG TY CỔ PHẦN 5BIB', bold: true }],
+              [{ text: env.provider.companyName, bold: true }],
               { width: valueW, colspan: 4 },
             ),
           ],
         }),
-        infoRow('Địa chỉ', 'Số 8 Tôn Thất Thuyết, Phường Mỹ Đình 2, Quận Nam Từ Liêm, TP. Hà Nội'),
-        infoRow('Mã số thuế', '0110398986'),
-        infoRow('Điện thoại', '1900 636 997'),
-        infoRow('Người đại diện', 'Ông NGUYỄN BÌNH MINH       Chức vụ: Giám Đốc', true),
-        infoRow('Tài khoản số', '34110001234567'),
-        infoRow('Mở tại NH', 'BIDV - Chi nhánh Hà Nội'),
+        infoRow('Địa chỉ', env.provider.address),
+        infoRow('Mã số thuế', env.provider.taxCode),
+        infoRow('Điện thoại', env.provider.phone),
+        infoRow(
+          'Người đại diện',
+          `Ông ${env.provider.representativeName}       Chức vụ: ${env.provider.representativeTitle}`,
+          true,
+        ),
+        infoRow('Tài khoản số', env.provider.bankAccount),
+        infoRow('Mở tại NH', env.provider.bankName),
         new TableRow({
           children: [
             tCell(
@@ -654,9 +662,33 @@ export class DocxService {
         }),
     );
 
+    // FEATURE-030 — Bottom row "Vật phẩm bổ sung" hiển thị tổng add_on
+    // (áo, vật phẩm khác) — Option A trong Manager Plan. Render conditional
+    // chỉ khi có add-on, KHÔNG redesign table 6-col → 7-col (low-risk).
+    // Tổng cộng (1) = per-row subtotal + add_on = gross_revenue (Section 1).
+    const totalAddOnPrice = rec.line_items.reduce(
+      (s, li) => s + li.add_on_price,
+      0,
+    );
+    const addOnRow: TableRow | null =
+      totalAddOnPrice > 0
+        ? new TableRow({
+            children: [
+              tCell(
+                [{ text: 'Vật phẩm bổ sung (áo, ...)' }],
+                { colspan: 5 },
+              ),
+              tCell([{ text: fmtVnd(totalAddOnPrice) }], {
+                align: AlignmentType.RIGHT,
+              }),
+            ],
+          })
+        : null;
+
     // Summary rows
     const summaryRows: TableRow[] = [
-      // Tổng cộng (1)
+      ...(addOnRow ? [addOnRow] : []),
+      // Tổng cộng (1) — gross_revenue = sum(line subtotal) + sum(add_on)
       new TableRow({
         children: [
           tCell([{ text: 'Tổng cộng (1)', bold: true }], {
@@ -758,7 +790,7 @@ export class DocxService {
                   bold: true,
                   align: AlignmentType.CENTER,
                 }),
-                para('CÔNG TY CỔ PHẦN 5BIB', {
+                para(env.provider.companyName, {
                   bold: true,
                   align: AlignmentType.CENTER,
                   spacingAfter: 60,
@@ -797,11 +829,11 @@ export class DocxService {
               },
               children: [
                 para('', { spacingAfter: 1200 }),
-                para('NGUYỄN BÌNH MINH', {
+                para(env.provider.representativeName.toUpperCase(), {
                   bold: true,
                   align: AlignmentType.CENTER,
                 }),
-                para('Giám Đốc', {
+                para(env.provider.representativeTitle, {
                   align: AlignmentType.CENTER,
                 }),
               ],

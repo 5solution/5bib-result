@@ -69,6 +69,20 @@ const envVarsSchema = Joi.object()
     // resolve — Phase 1A em accept default empty, Phase 1C sẽ block khởi
     // động poll cron nếu vẫn empty.
     TIMING_ALERT_TELEGRAM_CHAT_ID: Joi.string().optional().allow(''),
+    // FEATURE-030 — 5BIB provider info hiển thị trong reconciliation DOCX/XLSX.
+    // Defensive `.default()` thay vì `.required()` → fail-soft khi PROD env unset
+    // (dev/local có defaults luôn match info thực, KHÔNG outage container restart).
+    // Override qua env nếu Danny tương lai đổi địa chỉ / bank account.
+    PROVIDER_COMPANY_NAME: Joi.string().default('CÔNG TY CỔ PHẦN 5BIB'),
+    PROVIDER_ADDRESS: Joi.string().default(
+      'Tầng 9, Tòa nhà Hồ Gươm Plaza (tòa văn phòng), Số 102 Phố Trần Phú, Phường Hà Đông, TP Hà Nội, Việt Nam',
+    ),
+    PROVIDER_TAX_CODE: Joi.string().default('0110398986'),
+    PROVIDER_PHONE: Joi.string().default('0373398986'),
+    PROVIDER_REPRESENTATIVE_NAME: Joi.string().default('Nguyễn Bình Minh'),
+    PROVIDER_REPRESENTATIVE_TITLE: Joi.string().default('Giám Đốc'),
+    PROVIDER_BANK_ACCOUNT: Joi.string().default('110398986'),
+    PROVIDER_BANK_NAME: Joi.string().default('Ngân hàng Quân Đội MB'),
   })
   .unknown();
 
@@ -147,5 +161,18 @@ export const env = {
     defaultPollIntervalSeconds:
       envVars.TIMING_ALERT_DEFAULT_POLL_INTERVAL as number,
     telegramChatId: (envVars.TIMING_ALERT_TELEGRAM_CHAT_ID as string) || '',
+  },
+  // FEATURE-030 — 5BIB provider info dùng trong reconciliation DOCX/XLSX
+  // render (replace hardcoded values từ legacy commit `205a1c1`). Defaults
+  // safe nếu env unset → KHÔNG outage. Override qua env nếu cần.
+  provider: {
+    companyName: envVars.PROVIDER_COMPANY_NAME as string,
+    address: envVars.PROVIDER_ADDRESS as string,
+    taxCode: envVars.PROVIDER_TAX_CODE as string,
+    phone: envVars.PROVIDER_PHONE as string,
+    representativeName: envVars.PROVIDER_REPRESENTATIVE_NAME as string,
+    representativeTitle: envVars.PROVIDER_REPRESENTATIVE_TITLE as string,
+    bankAccount: envVars.PROVIDER_BANK_ACCOUNT as string,
+    bankName: envVars.PROVIDER_BANK_NAME as string,
   },
 };

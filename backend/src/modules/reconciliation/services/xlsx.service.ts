@@ -211,6 +211,7 @@ export class XlsxService {
     // Data rows — one per line_item
     let totalQty = 0;
     let totalDiscount = 0;
+    let totalAddOnPrice = 0;
     let grandTotal = 0;
 
     for (const li of rec.line_items) {
@@ -218,17 +219,24 @@ export class XlsxService {
       styleCell(row.getCell(1), li.distance_name);
       styleCell(row.getCell(2), li.unit_price, { numFmt: VND_FMT });
       styleCell(row.getCell(3), li.quantity, { numFmt: VND_FMT });
-      styleCell(row.getCell(4), 0, { numFmt: VND_FMT }); // add-on qty
-      styleCell(row.getCell(5), 0, { numFmt: VND_FMT }); // add-on price
-      styleCell(row.getCell(6), 0, { numFmt: VND_FMT }); // add-on total
+      // FEATURE-030: render add-on per-line. Backend chỉ track tổng
+      // `total_add_on_price` per order (Shopify schema) — KHÔNG track qty/unit
+      // riêng. Col 4/5 hiển thị '—' khi có add-on, 0 khi không. Col 6 = total value.
+      const hasAddOn = li.add_on_price > 0;
+      styleCell(row.getCell(4), hasAddOn ? '—' : 0, { numFmt: VND_FMT });
+      styleCell(row.getCell(5), hasAddOn ? '—' : 0, { numFmt: VND_FMT });
+      styleCell(row.getCell(6), li.add_on_price, { numFmt: VND_FMT });
       styleCell(row.getCell(7), li.discount_amount, { numFmt: VND_FMT });
-      styleCell(row.getCell(8), li.subtotal, { numFmt: VND_FMT });
+      // Col 8 "Tổng cộng" per-line: [(1) × (2) + (5)] − (6) per header formula
+      // = unit_price × qty + add_on_price − discount = li.subtotal + li.add_on_price
+      styleCell(row.getCell(8), li.subtotal + li.add_on_price, { numFmt: VND_FMT });
       // Col 9: ticket type name (no border)
       styleCell(row.getCell(9), li.ticket_type_name, { border: false });
 
       totalQty += li.quantity;
       totalDiscount += li.discount_amount;
-      grandTotal += li.subtotal;
+      totalAddOnPrice += li.add_on_price;
+      grandTotal += li.subtotal + li.add_on_price;
       r++;
     }
 
@@ -237,9 +245,9 @@ export class XlsxService {
     styleCell(totRow.getCell(1), 'Tổng', { font: FONT_BOLD });
     styleCell(totRow.getCell(2), '', { font: FONT_BOLD });
     styleCell(totRow.getCell(3), totalQty, { font: FONT_BOLD, numFmt: VND_FMT });
-    styleCell(totRow.getCell(4), 0, { font: FONT_BOLD, numFmt: VND_FMT });
+    styleCell(totRow.getCell(4), '', { font: FONT_BOLD });
     styleCell(totRow.getCell(5), '', { font: FONT_BOLD });
-    styleCell(totRow.getCell(6), 0, { font: FONT_BOLD, numFmt: VND_FMT });
+    styleCell(totRow.getCell(6), totalAddOnPrice, { font: FONT_BOLD, numFmt: VND_FMT });
     styleCell(totRow.getCell(7), totalDiscount, { font: FONT_BOLD, numFmt: VND_FMT });
     styleCell(totRow.getCell(8), grandTotal, { font: FONT_BOLD, numFmt: VND_FMT });
     r++;
