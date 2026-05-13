@@ -5,9 +5,9 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
-  IsMongoId,
   IsObject,
   IsOptional,
+  IsString,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -31,10 +31,14 @@ export class SectionScheduleDto {
 
 export class SectionInputDto {
   @ApiPropertyOptional({
-    description: 'Optional ID — for edit operations preserve existing section _id.',
+    description:
+      'Optional ID. For edit operations: pass existing ObjectId hex (24 chars) to preserve. ' +
+      'For new sections: omit OR pass any client-side temp ID (UUID v4 from ' +
+      'crypto.randomUUID(), "tmp-*", etc.) — service layer auto-detects non-ObjectId ' +
+      'and assigns fresh ObjectId. Validator accepts ANY string.',
   })
   @IsOptional()
-  @IsMongoId()
+  @IsString()
   _id?: string;
 
   @ApiProperty({ enum: SECTION_TYPES })

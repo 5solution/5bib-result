@@ -421,8 +421,14 @@ export class PromoHubService {
    * lets Mongoose auto-generate (create path).
    */
   private toSectionDoc(s: SectionInputDto): Section {
+    // Accept any client-supplied _id but only PRESERVE if it's a valid
+    // 24-char hex ObjectId. Non-ObjectId values (UUID v4 from
+    // crypto.randomUUID(), "tmp-*", any other string) trigger fresh
+    // ObjectId assignment. Fixes BUGFIX-F027-HOTFIX-01.
+    const isValidObjectId =
+      typeof s._id === 'string' && Types.ObjectId.isValid(s._id) && s._id.length === 24;
     return {
-      _id: s._id ? new Types.ObjectId(s._id) : new Types.ObjectId(),
+      _id: isValidObjectId ? new Types.ObjectId(s._id as string) : new Types.ObjectId(),
       type: s.type,
       order: s.order,
       visible: s.visible,

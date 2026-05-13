@@ -138,9 +138,14 @@ export default function PromoHubEditPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Re-index order trước khi gửi (defensive)
+      // Re-index order trước khi gửi (defensive).
+      // Strip _id cho new sections (crypto.randomUUID() = UUID v4 OR "tmp-*" fallback)
+      // — chỉ giữ _id nếu là real Mongo ObjectId (24-char hex). Backend service
+      // auto-assigns fresh ObjectId cho non-ObjectId values.
+      // Fixes BUGFIX-F027-HOTFIX-01 ("Save section không lưu được" — Danny PROD report).
+      const OBJECT_ID_RE = /^[a-f0-9]{24}$/i;
       const sectionsPayload = sections.map((s, i) => ({
-        _id: s._id.startsWith("tmp-") ? undefined : s._id,
+        _id: OBJECT_ID_RE.test(s._id) ? s._id : undefined,
         type: s.type,
         order: i,
         visible: s.visible,
