@@ -21,10 +21,21 @@ import {
   BarChart3,
   FileText,
   Medal,
+  LayoutGrid,
+  Share2,
+  HelpCircle,
+  Clock,
+  PlayCircle,
+  Images,
+  Quote,
+  MapPin,
+  ListChecks,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 
 export type SectionType =
+  // Phase A1 — core (9)
   | "hero"
   | "race_calendar"
   | "featured_races"
@@ -33,7 +44,18 @@ export type SectionType =
   | "sponsors"
   | "stats"
   | "rich_text"
-  | "recent_results";
+  | "recent_results"
+  // Phase B — landing-page expansion (10)
+  | "link_grid"
+  | "social_links"
+  | "faq"
+  | "countdown"
+  | "video_embed"
+  | "image_gallery"
+  | "testimonial"
+  | "map_embed"
+  | "schedule_timeline"
+  | "form_embed";
 
 export const SECTION_TYPES: SectionType[] = [
   "hero",
@@ -45,6 +67,16 @@ export const SECTION_TYPES: SectionType[] = [
   "stats",
   "rich_text",
   "recent_results",
+  "link_grid",
+  "social_links",
+  "faq",
+  "countdown",
+  "video_embed",
+  "image_gallery",
+  "testimonial",
+  "map_embed",
+  "schedule_timeline",
+  "form_embed",
 ];
 
 export type SectionTypeMeta = {
@@ -156,6 +188,130 @@ export const SECTION_TYPE_META: Record<SectionType, SectionTypeMeta> = {
       title: "Kết quả mới",
       limit: 5,
       raceId: "",
+    },
+  },
+
+  /* ─────────── Phase B — Landing-page expansion ─────────── */
+
+  link_grid: {
+    type: "link_grid",
+    label: "Lưới liên kết",
+    description: "Grid card (ảnh + tiêu đề + URL) cho sản phẩm / shop / link ngoài.",
+    icon: LayoutGrid,
+    defaultConfig: {
+      title: "",
+      columns: 3,
+      items: [
+        { imageUrl: "", title: "", url: "" },
+      ],
+    },
+  },
+  social_links: {
+    type: "social_links",
+    label: "Mạng xã hội",
+    description: "Hàng icon Facebook / TikTok / YouTube / Instagram / link tuỳ chỉnh.",
+    icon: Share2,
+    defaultConfig: {
+      title: "",
+      align: "center",
+      links: [
+        { platform: "facebook", url: "" },
+      ],
+    },
+  },
+  faq: {
+    type: "faq",
+    label: "Câu hỏi thường gặp",
+    description: "Accordion Q&A — rules, refund, transport, BIB pickup.",
+    icon: HelpCircle,
+    defaultConfig: {
+      title: "Câu hỏi thường gặp",
+      items: [
+        { question: "", answer: "" },
+      ],
+    },
+  },
+  countdown: {
+    type: "countdown",
+    label: "Đếm ngược",
+    description: "Đếm ngược tới ngày race day / sự kiện.",
+    icon: Clock,
+    defaultConfig: {
+      title: "Đếm ngược đến giờ G",
+      targetDate: "",
+      message: "Sự kiện đã bắt đầu!",
+    },
+  },
+  video_embed: {
+    type: "video_embed",
+    label: "Video nhúng",
+    description: "Nhúng YouTube / Vimeo cho promo video / recap.",
+    icon: PlayCircle,
+    defaultConfig: {
+      title: "",
+      provider: "youtube",
+      videoId: "",
+      caption: "",
+    },
+  },
+  image_gallery: {
+    type: "image_gallery",
+    label: "Thư viện ảnh",
+    description: "Grid ảnh kỷ niệm race / sự kiện trước.",
+    icon: Images,
+    defaultConfig: {
+      title: "",
+      columns: 3,
+      images: [
+        { url: "", alt: "" },
+      ],
+    },
+  },
+  testimonial: {
+    type: "testimonial",
+    label: "Cảm nhận",
+    description: "Quote từ VĐV / Influencer / KOL.",
+    icon: Quote,
+    defaultConfig: {
+      title: "",
+      items: [
+        { quote: "", author: "", role: "", avatarUrl: "" },
+      ],
+    },
+  },
+  map_embed: {
+    type: "map_embed",
+    label: "Bản đồ",
+    description: "Nhúng Google Maps — địa điểm race start / venue.",
+    icon: MapPin,
+    defaultConfig: {
+      title: "Địa điểm",
+      embedUrl: "",
+      address: "",
+    },
+  },
+  schedule_timeline: {
+    type: "schedule_timeline",
+    label: "Lịch trình",
+    description: "Timeline race day (4h00 mat-bib → 6h00 start → 14h00 award).",
+    icon: ListChecks,
+    defaultConfig: {
+      title: "Lịch trình race day",
+      items: [
+        { time: "", title: "", description: "" },
+      ],
+    },
+  },
+  form_embed: {
+    type: "form_embed",
+    label: "Form nhúng",
+    description: "Form thu thập email / lead (Google Form / Tally / Form 5BIB).",
+    icon: Mail,
+    defaultConfig: {
+      title: "Đăng ký nhận tin",
+      description: "",
+      provider: "iframe",
+      embedUrl: "",
     },
   },
 };

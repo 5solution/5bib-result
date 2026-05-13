@@ -20,6 +20,17 @@ import { SponsorsSection } from "./sections/SponsorsSection";
 import { StatsSection } from "./sections/StatsSection";
 import { RichTextSection } from "./sections/RichTextSection";
 import { RecentResultsSection } from "./sections/RecentResultsSection";
+// Phase B — landing-page expansion (10)
+import { LinkGridSection } from "./sections/LinkGridSection";
+import { SocialLinksSection } from "./sections/SocialLinksSection";
+import { FaqSection } from "./sections/FaqSection";
+import { CountdownSection } from "./sections/CountdownSection";
+import { VideoEmbedSection } from "./sections/VideoEmbedSection";
+import { ImageGallerySection } from "./sections/ImageGallerySection";
+import { TestimonialSection } from "./sections/TestimonialSection";
+import { MapEmbedSection } from "./sections/MapEmbedSection";
+import { ScheduleTimelineSection } from "./sections/ScheduleTimelineSection";
+import { FormEmbedSection } from "./sections/FormEmbedSection";
 
 export function PromoHubRenderer({ sections }: { sections: SectionResponseDto[] }) {
   return (
@@ -45,6 +56,27 @@ export function PromoHubRenderer({ sections }: { sections: SectionResponseDto[] 
             return <RichTextSection key={key} section={section} />;
           case "recent_results":
             return <RecentResultsSection key={key} section={section} />;
+          // Phase B
+          case "link_grid":
+            return <LinkGridSection key={key} section={section} />;
+          case "social_links":
+            return <SocialLinksSection key={key} section={section} />;
+          case "faq":
+            return <FaqSection key={key} section={section} />;
+          case "countdown":
+            return <CountdownSection key={key} section={section} />;
+          case "video_embed":
+            return <VideoEmbedSection key={key} section={section} />;
+          case "image_gallery":
+            return <ImageGallerySection key={key} section={section} />;
+          case "testimonial":
+            return <TestimonialSection key={key} section={section} />;
+          case "map_embed":
+            return <MapEmbedSection key={key} section={section} />;
+          case "schedule_timeline":
+            return <ScheduleTimelineSection key={key} section={section} />;
+          case "form_embed":
+            return <FormEmbedSection key={key} section={section} />;
           default:
             return null;
         }

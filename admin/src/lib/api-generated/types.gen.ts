@@ -2125,7 +2125,7 @@ export type SectionResponseDto = {
      * Optional ID — for edit operations preserve existing section _id.
      */
     _id?: string;
-    type: 'hero' | 'race_calendar' | 'featured_races' | 'promo_banner' | 'cta_buttons' | 'sponsors' | 'stats' | 'rich_text' | 'recent_results';
+    type: 'hero' | 'race_calendar' | 'featured_races' | 'promo_banner' | 'cta_buttons' | 'sponsors' | 'stats' | 'rich_text' | 'recent_results' | 'link_grid' | 'social_links' | 'faq' | 'countdown' | 'video_embed' | 'image_gallery' | 'testimonial' | 'map_embed' | 'schedule_timeline' | 'form_embed';
     order: number;
     visible: boolean;
     /**
@@ -2174,7 +2174,7 @@ export type SectionInputDto = {
      * Optional ID — for edit operations preserve existing section _id.
      */
     _id?: string;
-    type: 'hero' | 'race_calendar' | 'featured_races' | 'promo_banner' | 'cta_buttons' | 'sponsors' | 'stats' | 'rich_text' | 'recent_results';
+    type: 'hero' | 'race_calendar' | 'featured_races' | 'promo_banner' | 'cta_buttons' | 'sponsors' | 'stats' | 'rich_text' | 'recent_results' | 'link_grid' | 'social_links' | 'faq' | 'countdown' | 'video_embed' | 'image_gallery' | 'testimonial' | 'map_embed' | 'schedule_timeline' | 'form_embed';
     order: number;
     visible: boolean;
     /**

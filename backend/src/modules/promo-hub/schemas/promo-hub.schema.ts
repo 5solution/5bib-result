@@ -28,6 +28,7 @@ import { Document, Types } from 'mongoose';
  */
 
 export type SectionType =
+  // Phase A1 — core (9)
   | 'hero'
   | 'race_calendar'
   | 'featured_races'
@@ -36,7 +37,18 @@ export type SectionType =
   | 'sponsors'
   | 'stats'
   | 'rich_text'
-  | 'recent_results';
+  | 'recent_results'
+  // Phase B — landing-page expansion (10) — addendum 2026-05-13
+  | 'link_grid'
+  | 'social_links'
+  | 'faq'
+  | 'countdown'
+  | 'video_embed'
+  | 'image_gallery'
+  | 'testimonial'
+  | 'map_embed'
+  | 'schedule_timeline'
+  | 'form_embed';
 
 export const SECTION_TYPES: ReadonlyArray<SectionType> = [
   'hero',
@@ -48,6 +60,17 @@ export const SECTION_TYPES: ReadonlyArray<SectionType> = [
   'stats',
   'rich_text',
   'recent_results',
+  // Phase B
+  'link_grid',
+  'social_links',
+  'faq',
+  'countdown',
+  'video_embed',
+  'image_gallery',
+  'testimonial',
+  'map_embed',
+  'schedule_timeline',
+  'form_embed',
 ] as const;
 
 export type PromoHubStatus = 'draft' | 'published' | 'archived';

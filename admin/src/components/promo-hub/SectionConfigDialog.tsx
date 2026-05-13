@@ -566,6 +566,607 @@ function TypeSpecificForm({
         </div>
       );
 
+    /* ────────── Phase B — Landing-page expansion ────────── */
+
+    case "link_grid": {
+      const items =
+        (c.items as Array<{ imageUrl: string; title: string; url: string }>) ?? [];
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề khối">
+            <Input
+              value={(c.title as string) ?? ""}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <Field label="Số cột">
+            <Select
+              value={String((c.columns as number) ?? 3)}
+              onValueChange={(v) => v && onChange({ columns: Number(v) })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2">2 cột</SelectItem>
+                <SelectItem value="3">3 cột</SelectItem>
+                <SelectItem value="4">4 cột</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="space-y-2">
+            <Label>Các liên kết</Label>
+            {items.map((it, i) => (
+              <div key={i} className="space-y-2 rounded border bg-muted/30 p-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={it.title}
+                    onChange={(e) => {
+                      const next = [...items];
+                      next[i] = { ...it, title: e.target.value };
+                      onChange({ items: next });
+                    }}
+                    placeholder="Tiêu đề"
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onChange({ items: items.filter((_, j) => j !== i) })}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+                <Input
+                  value={it.imageUrl}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = { ...it, imageUrl: e.target.value };
+                    onChange({ items: next });
+                  }}
+                  placeholder="URL ảnh"
+                />
+                <Input
+                  value={it.url}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = { ...it, url: e.target.value };
+                    onChange({ items: next });
+                  }}
+                  placeholder="URL đích khi click"
+                />
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                onChange({ items: [...items, { imageUrl: "", title: "", url: "" }] })
+              }
+            >
+              <Plus className="mr-1 size-4" /> Thêm liên kết
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    case "social_links": {
+      const links =
+        (c.links as Array<{ platform: string; url: string }>) ?? [];
+      const PLATFORMS = [
+        "facebook",
+        "instagram",
+        "tiktok",
+        "youtube",
+        "twitter",
+        "linkedin",
+        "telegram",
+        "zalo",
+        "email",
+        "custom",
+      ];
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề (tùy chọn)">
+            <Input
+              value={(c.title as string) ?? ""}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <Field label="Căn lề">
+            <Select
+              value={(c.align as string) ?? "center"}
+              onValueChange={(v) => v && onChange({ align: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="left">Trái</SelectItem>
+                <SelectItem value="center">Giữa</SelectItem>
+                <SelectItem value="right">Phải</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="space-y-2">
+            <Label>Liên kết mạng xã hội</Label>
+            {links.map((l, i) => (
+              <div key={i} className="flex gap-2">
+                <Select
+                  value={l.platform}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    const next = [...links];
+                    next[i] = { ...l, platform: v };
+                    onChange({ links: next });
+                  }}
+                >
+                  <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PLATFORMS.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={l.url}
+                  onChange={(e) => {
+                    const next = [...links];
+                    next[i] = { ...l, url: e.target.value };
+                    onChange({ links: next });
+                  }}
+                  placeholder="URL"
+                  className="flex-1"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onChange({ links: links.filter((_, j) => j !== i) })}
+                  className="text-destructive"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                onChange({ links: [...links, { platform: "facebook", url: "" }] })
+              }
+            >
+              <Plus className="mr-1 size-4" /> Thêm liên kết
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    case "faq": {
+      const items = (c.items as Array<{ question: string; answer: string }>) ?? [];
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề khối">
+            <Input
+              value={(c.title as string) ?? "Câu hỏi thường gặp"}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <div className="space-y-2">
+            <Label>Danh sách câu hỏi</Label>
+            {items.map((q, i) => (
+              <div key={i} className="space-y-2 rounded border bg-muted/30 p-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={q.question}
+                    onChange={(e) => {
+                      const next = [...items];
+                      next[i] = { ...q, question: e.target.value };
+                      onChange({ items: next });
+                    }}
+                    placeholder="Câu hỏi"
+                    className="flex-1 font-semibold"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onChange({ items: items.filter((_, j) => j !== i) })}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+                <Textarea
+                  rows={3}
+                  value={q.answer}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = { ...q, answer: e.target.value };
+                    onChange({ items: next });
+                  }}
+                  placeholder="Trả lời"
+                />
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onChange({ items: [...items, { question: "", answer: "" }] })}
+            >
+              <Plus className="mr-1 size-4" /> Thêm câu hỏi
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    case "countdown":
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề khối">
+            <Input
+              value={(c.title as string) ?? ""}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <Field label="Thời điểm đếm tới">
+            <Input
+              type="datetime-local"
+              value={((c.targetDate as string) ?? "").slice(0, 16)}
+              onChange={(e) =>
+                onChange({
+                  targetDate: e.target.value
+                    ? new Date(e.target.value).toISOString()
+                    : "",
+                })
+              }
+            />
+          </Field>
+          <Field label="Thông điệp khi hết hạn">
+            <Input
+              value={(c.message as string) ?? ""}
+              onChange={(e) => onChange({ message: e.target.value })}
+              placeholder="Sự kiện đã bắt đầu!"
+            />
+          </Field>
+        </div>
+      );
+
+    case "video_embed":
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề (tùy chọn)">
+            <Input
+              value={(c.title as string) ?? ""}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <Field label="Nhà cung cấp">
+            <Select
+              value={(c.provider as string) ?? "youtube"}
+              onValueChange={(v) => v && onChange({ provider: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="youtube">YouTube</SelectItem>
+                <SelectItem value="vimeo">Vimeo</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field
+            label="Video ID hoặc URL"
+            hint="VD: dQw4w9WgXcQ (YouTube ID) hoặc paste full URL"
+          >
+            <Input
+              value={(c.videoId as string) ?? ""}
+              onChange={(e) => onChange({ videoId: e.target.value })}
+              placeholder="dQw4w9WgXcQ"
+            />
+          </Field>
+          <Field label="Chú thích dưới video">
+            <Input
+              value={(c.caption as string) ?? ""}
+              onChange={(e) => onChange({ caption: e.target.value })}
+            />
+          </Field>
+        </div>
+      );
+
+    case "image_gallery": {
+      const images = (c.images as Array<{ url: string; alt: string }>) ?? [];
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề khối">
+            <Input
+              value={(c.title as string) ?? ""}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <Field label="Số cột">
+            <Select
+              value={String((c.columns as number) ?? 3)}
+              onValueChange={(v) => v && onChange({ columns: Number(v) })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2">2 cột</SelectItem>
+                <SelectItem value="3">3 cột</SelectItem>
+                <SelectItem value="4">4 cột</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="space-y-2">
+            <Label>Ảnh</Label>
+            {images.map((img, i) => (
+              <div key={i} className="flex gap-2">
+                <Input
+                  value={img.url}
+                  onChange={(e) => {
+                    const next = [...images];
+                    next[i] = { ...img, url: e.target.value };
+                    onChange({ images: next });
+                  }}
+                  placeholder="URL ảnh"
+                  className="flex-1"
+                />
+                <Input
+                  value={img.alt}
+                  onChange={(e) => {
+                    const next = [...images];
+                    next[i] = { ...img, alt: e.target.value };
+                    onChange({ images: next });
+                  }}
+                  placeholder="Alt text"
+                  className="flex-1"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onChange({ images: images.filter((_, j) => j !== i) })}
+                  className="text-destructive"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onChange({ images: [...images, { url: "", alt: "" }] })}
+            >
+              <Plus className="mr-1 size-4" /> Thêm ảnh
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    case "testimonial": {
+      const items =
+        (c.items as Array<{ quote: string; author: string; role: string; avatarUrl: string }>) ?? [];
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề (tùy chọn)">
+            <Input
+              value={(c.title as string) ?? ""}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <div className="space-y-2">
+            <Label>Cảm nhận</Label>
+            {items.map((it, i) => (
+              <div key={i} className="space-y-2 rounded border bg-muted/30 p-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={it.author}
+                    onChange={(e) => {
+                      const next = [...items];
+                      next[i] = { ...it, author: e.target.value };
+                      onChange({ items: next });
+                    }}
+                    placeholder="Tên người chia sẻ"
+                    className="flex-1"
+                  />
+                  <Input
+                    value={it.role}
+                    onChange={(e) => {
+                      const next = [...items];
+                      next[i] = { ...it, role: e.target.value };
+                      onChange({ items: next });
+                    }}
+                    placeholder="Vai trò (VĐV / KOL / ...)"
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onChange({ items: items.filter((_, j) => j !== i) })}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+                <Input
+                  value={it.avatarUrl}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = { ...it, avatarUrl: e.target.value };
+                    onChange({ items: next });
+                  }}
+                  placeholder="URL avatar (tùy chọn)"
+                />
+                <Textarea
+                  rows={3}
+                  value={it.quote}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = { ...it, quote: e.target.value };
+                    onChange({ items: next });
+                  }}
+                  placeholder='"Trải nghiệm tuyệt vời..."'
+                />
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                onChange({
+                  items: [
+                    ...items,
+                    { quote: "", author: "", role: "", avatarUrl: "" },
+                  ],
+                })
+              }
+            >
+              <Plus className="mr-1 size-4" /> Thêm cảm nhận
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    case "map_embed":
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề khối">
+            <Input
+              value={(c.title as string) ?? "Địa điểm"}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <Field
+            label="Google Maps embed URL"
+            hint="Lấy từ Google Maps → Share → Embed a map → copy src của iframe"
+          >
+            <Textarea
+              rows={3}
+              value={(c.embedUrl as string) ?? ""}
+              onChange={(e) => onChange({ embedUrl: e.target.value })}
+              placeholder="https://www.google.com/maps/embed?pb=..."
+              className="font-mono text-xs"
+            />
+          </Field>
+          <Field label="Địa chỉ hiển thị">
+            <Input
+              value={(c.address as string) ?? ""}
+              onChange={(e) => onChange({ address: e.target.value })}
+              placeholder="Mộc Châu, Sơn La"
+            />
+          </Field>
+        </div>
+      );
+
+    case "schedule_timeline": {
+      const items =
+        (c.items as Array<{ time: string; title: string; description: string }>) ?? [];
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề khối">
+            <Input
+              value={(c.title as string) ?? "Lịch trình race day"}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <div className="space-y-2">
+            <Label>Các mốc thời gian</Label>
+            {items.map((it, i) => (
+              <div key={i} className="space-y-2 rounded border bg-muted/30 p-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={it.time}
+                    onChange={(e) => {
+                      const next = [...items];
+                      next[i] = { ...it, time: e.target.value };
+                      onChange({ items: next });
+                    }}
+                    placeholder="04:00"
+                    className="w-[100px] font-mono"
+                  />
+                  <Input
+                    value={it.title}
+                    onChange={(e) => {
+                      const next = [...items];
+                      next[i] = { ...it, title: e.target.value };
+                      onChange({ items: next });
+                    }}
+                    placeholder="Tiêu đề mốc"
+                    className="flex-1 font-semibold"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onChange({ items: items.filter((_, j) => j !== i) })}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+                <Input
+                  value={it.description}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = { ...it, description: e.target.value };
+                    onChange({ items: next });
+                  }}
+                  placeholder="Mô tả chi tiết (tùy chọn)"
+                />
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                onChange({
+                  items: [...items, { time: "", title: "", description: "" }],
+                })
+              }
+            >
+              <Plus className="mr-1 size-4" /> Thêm mốc
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    case "form_embed":
+      return (
+        <div className="space-y-3">
+          <Field label="Tiêu đề khối">
+            <Input
+              value={(c.title as string) ?? "Đăng ký nhận tin"}
+              onChange={(e) => onChange({ title: e.target.value })}
+            />
+          </Field>
+          <Field label="Mô tả ngắn">
+            <Textarea
+              rows={2}
+              value={(c.description as string) ?? ""}
+              onChange={(e) => onChange({ description: e.target.value })}
+            />
+          </Field>
+          <Field label="Nhà cung cấp">
+            <Select
+              value={(c.provider as string) ?? "iframe"}
+              onValueChange={(v) => v && onChange({ provider: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="iframe">iframe (Google Form / Tally)</SelectItem>
+                <SelectItem value="link">Link bên ngoài (CTA button)</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Embed URL / Link form">
+            <Input
+              value={(c.embedUrl as string) ?? ""}
+              onChange={(e) => onChange({ embedUrl: e.target.value })}
+              placeholder="https://docs.google.com/forms/.../viewform?embedded=true"
+            />
+          </Field>
+        </div>
+      );
+
     default:
       return (
         <div className="text-sm text-muted-foreground">
