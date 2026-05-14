@@ -54,6 +54,27 @@ const TYPE_LABEL: Record<ContractType, string> = {
   OPERATIONS: "Vận hành",
 };
 
+/**
+ * Filter-trigger labels (ALL + 4 ContractType). Base UI Select.Value cần
+ * render prop để hiển thị VN label (Display Convention f18da46).
+ */
+const TYPE_FILTER_LABEL: Record<ContractType | "ALL", string> = {
+  ALL: "Tất cả loại",
+  ...TYPE_LABEL,
+};
+
+const STATUS_FILTER_LABEL: Record<ContractStatus | "ALL", string> = {
+  ALL: "Tất cả trạng thái",
+  DRAFT: "Nháp",
+  SENT: "Đã gửi báo giá",
+  ACCEPTED: "Báo giá chấp nhận",
+  CONVERTED_TO_CONTRACT: "Đã chuyển HĐ",
+  REJECTED: "Từ chối",
+  ACTIVE: "Đang hiệu lực",
+  COMPLETED: "Hoàn thành",
+  CANCELLED: "Huỷ",
+};
+
 const PAGE_SIZE = 20;
 
 function useDebounced<T>(value: T, delay = 300): T {
@@ -135,7 +156,11 @@ export function ContractListTable() {
           }}
         >
           <SelectTrigger className="w-40">
-            <SelectValue />
+            <SelectValue>
+              {(v: string) =>
+                TYPE_FILTER_LABEL[v as ContractType | "ALL"] ?? v
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Tất cả loại</SelectItem>
@@ -153,7 +178,11 @@ export function ContractListTable() {
           }}
         >
           <SelectTrigger className="w-44">
-            <SelectValue />
+            <SelectValue>
+              {(v: string) =>
+                STATUS_FILTER_LABEL[v as ContractStatus | "ALL"] ?? v
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Tất cả trạng thái</SelectItem>

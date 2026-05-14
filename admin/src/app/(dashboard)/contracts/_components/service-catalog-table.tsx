@@ -61,6 +61,19 @@ const CATEGORY_LABEL: Record<ServiceCategory, string> = {
   GENERAL: "Chung",
 };
 
+/** Filter trigger map (ALL + 4 categories). Base UI render prop bắt buộc. */
+const CATEGORY_FILTER_LABEL: Record<ServiceCategory | "ALL", string> = {
+  ALL: "Tất cả nhóm",
+  ...CATEGORY_LABEL,
+};
+
+const SORT_KEY_LABEL: Record<"default" | "margin-desc" | "margin-asc", string> =
+  {
+    default: "Sắp xếp mặc định",
+    "margin-desc": "Lãi gộp cao → thấp",
+    "margin-asc": "Lãi gộp thấp → cao",
+  };
+
 /**
  * F-028 Phase 3 — compute lãi gộp % từ giá bán × giá vốn (admin glance KPI).
  *
@@ -228,7 +241,11 @@ export function ServiceCatalogTable() {
           onValueChange={(v) => setCategory(v as ServiceCategory | "ALL")}
         >
           <SelectTrigger className="w-44">
-            <SelectValue />
+            <SelectValue>
+              {(v: string) =>
+                CATEGORY_FILTER_LABEL[v as ServiceCategory | "ALL"] ?? v
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Tất cả nhóm</SelectItem>
@@ -243,7 +260,9 @@ export function ServiceCatalogTable() {
           onValueChange={(v) => setSortKey(v as SortKey)}
         >
           <SelectTrigger className="w-48">
-            <SelectValue />
+            <SelectValue>
+              {(v: string) => SORT_KEY_LABEL[v as SortKey] ?? v}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="default">Sắp xếp mặc định</SelectItem>
@@ -475,7 +494,11 @@ function CatalogForm({
             onValueChange={(v) => set("category", v as ServiceCategory)}
           >
             <SelectTrigger id="sc-cat">
-              <SelectValue />
+              <SelectValue>
+                {(v: string) =>
+                  CATEGORY_LABEL[v as ServiceCategory] ?? v
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="TIMING">Tính giờ</SelectItem>

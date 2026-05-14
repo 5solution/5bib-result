@@ -69,6 +69,20 @@ const CATEGORY_LABEL: Record<ServiceCategory, string> = {
 };
 
 /**
+ * Extended map cho Select trigger (gồm "ALL"). Vì `@base-ui/react/select`
+ * v1.x không auto-render matched item children theo value → phải truyền
+ * render prop trong `<SelectValue>{(v) => LABEL[v]}</SelectValue>` để hiển
+ * thị VN. Display Convention F-028 `f18da46`.
+ */
+const CATEGORY_FILTER_LABEL: Record<ServiceCategory | "ALL", string> = {
+  ALL: "Tất cả nhóm",
+  TIMING: "Tính giờ",
+  RACEKIT: "Racekit",
+  OPERATIONS: "Vận hành",
+  GENERAL: "Chung",
+};
+
+/**
  * F-028 Phase 3 — compute lãi gộp % từ giá bán × giá vốn (port từ
  * ServiceCatalogTable để picker hiển thị KPI giống y catalog page).
  */
@@ -151,18 +165,22 @@ export function ServiceCatalogPicker({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="!max-w-5xl sm:!max-w-5xl !w-[min(95vw,1080px)] sm:!w-[min(95vw,1080px)] max-h-[90vh] overflow-hidden flex flex-col !p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
           <DialogTitle>Chọn dịch vụ từ danh mục</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 px-6 py-4 overflow-y-auto flex-1 min-h-0">
           <div className="flex gap-2">
             <Select
               value={category}
               onValueChange={(v) => setCategory(v as ServiceCategory | "ALL")}
             >
               <SelectTrigger className="w-44">
-                <SelectValue />
+                <SelectValue>
+                  {(v: string) =>
+                    CATEGORY_FILTER_LABEL[v as ServiceCategory | "ALL"] ?? v
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả nhóm</SelectItem>
@@ -178,7 +196,7 @@ export function ServiceCatalogPicker({
               placeholder="Tìm tên dịch vụ"
             />
           </div>
-          <div className="max-h-[28rem] overflow-y-auto rounded-md border border-[var(--border,#E7E2D9)] bg-white">
+          <div className="max-h-[28rem] overflow-auto rounded-md border border-[var(--border,#E7E2D9)] bg-white">
             {loading ? (
               <div className="space-y-2 p-3">
                 <Skeleton className="h-8 w-full" />
@@ -207,16 +225,16 @@ export function ServiceCatalogPicker({
                 }
               />
             ) : (
-              <Table>
-                <TableHeader>
+              <Table className="table-fixed w-full">
+                <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
-                    <TableHead>Tên dịch vụ</TableHead>
-                    <TableHead>Nhóm</TableHead>
-                    <TableHead>ĐVT</TableHead>
-                    <TableHead className="text-right">Giá bán</TableHead>
-                    <TableHead className="text-right">Giá vốn</TableHead>
+                    <TableHead className="min-w-[280px]">Tên dịch vụ</TableHead>
+                    <TableHead className="w-[100px]">Nhóm</TableHead>
+                    <TableHead className="w-[70px]">ĐVT</TableHead>
+                    <TableHead className="text-right w-[120px]">Giá bán</TableHead>
+                    <TableHead className="text-right w-[120px]">Giá vốn</TableHead>
                     <TableHead
-                      className="text-right"
+                      className="text-right w-[90px]"
                       title="Lãi gộp ước tính = (giá bán - giá vốn) / giá bán × 100%"
                     >
                       Lãi gộp
@@ -245,9 +263,14 @@ export function ServiceCatalogPicker({
                         }}
                       >
                         <TableCell className="font-medium">
-                          <div className="truncate">{it.name}</div>
+                          <div className="truncate" title={it.name}>
+                            {it.name}
+                          </div>
                           {it.description ? (
-                            <div className="truncate text-xs text-[var(--text-muted,#78716C)]">
+                            <div
+                              className="truncate text-xs text-[var(--text-muted,#78716C)]"
+                              title={it.description}
+                            >
                               {it.description}
                             </div>
                           ) : null}
@@ -257,11 +280,13 @@ export function ServiceCatalogPicker({
                             {CATEGORY_LABEL[it.category]}
                           </Badge>
                         </TableCell>
-                        <TableCell>{it.unit || "—"}</TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell className="truncate">
+                          {it.unit || "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono truncate">
                           {formatVND(it.referencePrice ?? 0)}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">
+                        <TableCell className="text-right font-mono text-muted-foreground truncate">
                           {it.referenceCost == null
                             ? "—"
                             : formatVND(it.referenceCost)}

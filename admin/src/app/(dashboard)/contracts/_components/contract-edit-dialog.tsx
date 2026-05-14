@@ -365,7 +365,15 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
                     onValueChange={(v) => patch("vatRate", Number(v))}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue>
+                        {(v: string) => {
+                          // Base UI Select.Value render prop — Display Convention f18da46
+                          if (v === "0") return "0%";
+                          if (v === "8") return "8% (mặc định)";
+                          if (v === "10") return "10%";
+                          return v;
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">0%</SelectItem>
@@ -441,7 +449,9 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
                   }
                 >
                   <SelectTrigger id="edit-penalty-unit">
-                    <SelectValue />
+                    <SelectValue>
+                      {(v: string) => (v === "PER_DAY" ? "/ngày" : v === "PER_YEAR" ? "/năm" : v)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PER_DAY">/ngày</SelectItem>

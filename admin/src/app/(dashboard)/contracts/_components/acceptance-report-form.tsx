@@ -247,7 +247,16 @@ export function AcceptanceReportForm({ contract, onUpdated }: Props) {
                 disabled={isFinalized}
               >
                 <SelectTrigger id="verdict">
-                  <SelectValue />
+                  <SelectValue>
+                    {(v: string) => {
+                      // Base UI render prop — Display Convention f18da46
+                      if (v === "ACCEPTED") return "Chấp nhận";
+                      if (v === "ACCEPTED_WITH_NOTES")
+                        return "Chấp nhận có ghi chú";
+                      if (v === "REJECTED") return "Từ chối";
+                      return v;
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ACCEPTED">Chấp nhận</SelectItem>
