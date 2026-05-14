@@ -53,6 +53,27 @@ import { ChevronLeft, ChevronRight, CheckCircle2, X, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/confirm-dialog";
 
+/**
+ * VN labels cho enum dropdowns trong wizard.
+ *
+ * Vì admin dùng `@base-ui/react/select` v1.x — `<Select.Value />` mặc định
+ * render raw value (không lookup item children). Phải truyền render prop
+ * `<SelectValue>{(v) => LABEL_MAP[v]}</SelectValue>` để hiển thị VN.
+ * Display Convention rule (F-028 ban hành `f18da46`): KHÔNG render raw enum
+ * cho user. Áp dụng cho mọi `<Select.Value>` trong admin.
+ */
+const CONTRACT_TYPE_LABEL: Record<ContractType, string> = {
+  TIMING: "Dịch vụ tính giờ",
+  RACEKIT: "Vận hành racekit",
+  OPERATIONS: "Vận hành sự kiện",
+  TICKET_SALES: "Bán vé",
+};
+
+const DOCUMENT_TYPE_LABEL: Record<"QUOTATION" | "CONTRACT", string> = {
+  CONTRACT: "Hợp đồng",
+  QUOTATION: "Báo giá",
+};
+
 const STEPS = [
   "Loại & Provider",
   "Đối tác",
@@ -386,7 +407,11 @@ export function ContractWizard() {
                 onValueChange={(v) => onContractTypeChange(v as ContractType)}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>
+                    {(v: string) =>
+                      CONTRACT_TYPE_LABEL[v as ContractType] ?? v
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TIMING">Dịch vụ tính giờ</SelectItem>
@@ -405,7 +430,11 @@ export function ContractWizard() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>
+                    {(v: string) =>
+                      DOCUMENT_TYPE_LABEL[v as "QUOTATION" | "CONTRACT"] ?? v
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="CONTRACT">Hợp đồng</SelectItem>

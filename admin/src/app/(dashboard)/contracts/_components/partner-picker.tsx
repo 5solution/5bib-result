@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Search } from "lucide-react";
+import { CheckCircle2, Pencil, Plus, Search } from "lucide-react";
 import {
   createPartner,
   listPartners,
@@ -37,8 +37,20 @@ export function PartnerPicker({ value, onChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  /**
+   * UX-32 (Danny 2026-05-14 screenshot bug): khi đã pick partner, ẩn list panel
+   * + show compact "selected card + Đổi đối tác" button. Click "Đổi" mở lại
+   * search panel. Tránh tốn vertical space khi auto-fill form đã render bên dưới.
+   */
+  const [browsing, setBrowsing] = useState<boolean>(value == null);
 
   useEffect(() => {
+    // Khi parent reset value (vd: cancel wizard) thì auto mở lại browse mode
+    if (value == null) setBrowsing(true);
+  }, [value]);
+
+  useEffect(() => {
+    if (!browsing) return; // skip fetch khi đã collapse
     let alive = true;
     setLoading(true);
     const timer = setTimeout(() => {
@@ -55,8 +67,41 @@ export function PartnerPicker({ value, onChange }: Props) {
       alive = false;
       clearTimeout(timer);
     };
-  }, [q]);
+  }, [q, browsing]);
 
+  // ── Collapsed state: partner đã chọn, list ẩn, hiện compact card ───────────
+  if (value && !browsing) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50/40 px-4 py-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <CheckCircle2 className="size-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div
+                className="font-semibold text-sm truncate"
+                title={value.entityName}
+              >
+                {value.entityName}
+              </div>
+              <div className="font-mono text-xs text-[var(--text-muted,#78716C)] truncate">
+                MST: {value.taxId || "—"} · {value.representative || "—"}
+              </div>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setBrowsing(true)}
+          >
+            <Pencil className="size-4" /> Đổi đối tác
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Browse state: search + list panel ──────────────────────────────────────
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
@@ -83,6 +128,7 @@ export function PartnerPicker({ value, onChange }: Props) {
                 setCreateOpen(false);
                 setPartners((prev) => [p, ...prev]);
                 onChange(p);
+                setBrowsing(false); // collapse list sau khi tạo mới
               }}
             />
           </DialogContent>
@@ -104,15 +150,20 @@ export function PartnerPicker({ value, onChange }: Props) {
               <li key={p._id}>
                 <button
                   type="button"
-                  onClick={() => onChange(p)}
+                  onClick={() => {
+                    onChange(p);
+                    setBrowsing(false); // collapse list sau khi pick
+                  }}
                   className={`w-full px-3 py-2 text-left text-sm hover:bg-[#F3F0EB] ${
                     value?._id === p._id
                       ? "bg-[#E6ECFF] font-semibold"
                       : ""
                   }`}
                 >
-                  <div className="font-medium">{p.entityName}</div>
-                  <div className="font-mono text-xs text-[var(--text-muted,#78716C)]">
+                  <div className="font-medium truncate" title={p.entityName}>
+                    {p.entityName}
+                  </div>
+                  <div className="font-mono text-xs text-[var(--text-muted,#78716C)] truncate">
                     {p.taxId || "—"} · {p.representative || "—"}
                   </div>
                 </button>
@@ -121,6 +172,19 @@ export function PartnerPicker({ value, onChange }: Props) {
           </ul>
         )}
       </div>
+
+      {value && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setBrowsing(false)}
+          >
+            Huỷ chọn lại — giữ "{value.entityName}"
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
