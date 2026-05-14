@@ -325,6 +325,76 @@ function RaceFilterForm() {
 
 ---
 
+## 🆕 QC Persona-Based Testing Rule — MANDATORY (Manager 2026-05-14 directive)
+
+**Status:** ENFORCEMENT RULE — KHÔNG được skip.
+**Trigger:** Danny instruction sau session 2026-05-14 — QC report phải có persona walkthrough để bao quát UI/UX, KHÔNG chỉ test logic backend.
+
+### Quy định
+
+Từ FEATURE-037 trở đi, mọi `04-qc-report.md` cho feature có UI PHẢI có **Phase 5: Persona Journey Walkthrough** đầy đủ. Manager `/5bib-deploy` REJECT nếu thiếu.
+
+### Personas mandatory consideration
+
+Tùy module, tối thiểu 4 personas. Manager `02-manager-plan.md` declare personas list → QC test theo đúng list đó + bổ sung edge cases. Pattern persona cho 5BIB:
+
+| Persona | Domain |
+|---------|--------|
+| **Sales Admin (Hằng)** | Tạo HĐ, edit DRAFT, force-edit ACTIVE |
+| **Finance Admin (Hiền)** | Track P&L, add cost_items, view dashboard |
+| **Operations (Tùng)** | Bulk import Excel, batch operations |
+| **Document Generator** | Export DOCX/PDF, verify merchant info source |
+| **Acceptance Owner** | Tạo biên bản nghiệm thu, finalize, complete contract |
+| **Payment Handler** | Tạo yêu cầu thanh toán, track paid status |
+| **Quotation Approver** | Quotation accept/reject/convert flow |
+| **End-user (Athlete)** | Public-facing endpoint nếu feature touched public |
+| **Cancellation/Delete** | Soft delete, terminal state edge cases |
+
+### Mỗi persona journey PHẢI có
+
+1. **Numbered steps** với user action concrete (click X, type Y, navigate Z)
+2. **Expected behavior** per step (UI state, data shown, transitions)
+3. **Risk/Verify** column flag CRITICAL UI/UX checks (dialog width? truncation? sticky header? VN labels?)
+4. **Acceptance criteria** khi nào journey PASS
+
+### UI/UX scrutiny checklist (per journey, KHÔNG được skip)
+
+QC verify TỪNG ITEM per persona journey có UI:
+
+- [ ] **Dialog/Modal width responsive** — không bị shadcn `sm:max-w-sm` default ~384px trên desktop (verify với VN long names ≥30 ký tự + diacritics)
+- [ ] **Table cell truncation + tooltip** — `truncate` + `title` attr cho long content
+- [ ] **Sticky header + footer** trong scrollable dialog
+- [ ] **VN labels Select trigger** — KHÔNG raw enum (Base UI render prop pattern)
+- [ ] **Empty state** message + icon + CTA
+- [ ] **Loading state** — skeleton hoặc spinner
+- [ ] **Error state** — toast tiếng Việt clear, no stack trace leak
+- [ ] **Success state** — toast confirm + redirect/refresh
+- [ ] **Form validation feedback** — field-level error + scroll-to-error
+- [ ] **Picker collapse pattern** — UX-PICKER-COLLAPSE sau select
+
+### Real-world data scenario verification
+
+Test fixture PHẢI dùng VN long names ≥30 ký tự + diacritics + edge data:
+
+- Tên công ty: `CÔNG TY CỔ PHẦN ĐẦU TƯ THƯƠNG MẠI DỊCH VỤ XYZ VIỆT NAM`
+- Money: 1B+ VND vi-VN locale format
+- Quantity: 1000+ (BIB scenarios)
+- Negative margin (cost > price) — verify UI affordance (red, warning icon)
+- Long error messages >200 ký tự — verify line-clamp/scroll trong cell
+
+### Manager block conditions
+
+- 🛑 QC report thiếu Phase 5 Persona Walkthrough → `/5bib-deploy` REJECT
+- 🛑 Manager Plan `02-manager-plan.md` thiếu "Personas affected" section → `/5bib-plan` self-REVISION trước khi APPROVE
+- 🛑 Persona journey chỉ tick checkbox, KHÔNG có numbered steps + concrete actions → REJECT (rubber-stamp = failure)
+- 🛑 Test fixture dùng "Co A" / "Item 1" / synthetic ngắn — REJECT, yêu cầu re-test với real-world VN data
+
+### Reference example
+
+Comprehensive persona walkthrough example: session 2026-05-14 Danny request "QC toàn bộ module Contract Management" — 7 personas × 6 priorities × 9 TD findings. Output format: table-based với Step/Action/Expected/Risk columns. Save reference trong feature-log Q2 2026 thread.
+
+---
+
 ## 🆕 Patterns được team confirm (FEATURE-019 — Awards AG Podium + Warnings)
 
 ### 1. Independent calc + 2-layer verify (anti-vendor-lockin pattern)
