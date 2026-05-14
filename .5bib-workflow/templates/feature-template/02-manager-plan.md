@@ -26,6 +26,32 @@
 - [ ] Tất cả PAUSE conditions của Manager (file 00) đã được BA trả lời
 - [ ] UI states đầy đủ (loading, empty, error, success, submitting)
 
+### UI Detail — MANDATORY (Manager 2026-05-14 directive)
+> Danny instruction: "PRD phải mô tả CHI TIẾT Step UI, các nút, các trường dữ liệu và quy định step by step". Bất kỳ unchecked = REJECT verdict.
+
+- [ ] **UI Step-by-Step table** — mỗi journey có numbered steps với (Action / UI behavior / Trigger / Next state)
+- [ ] **Buttons spec table** — mọi button có (Label / Position / Default state / Disabled / Loading / Action / Confirm dialog)
+- [ ] **Form Fields Specification** — mọi input có (Name / Label / Type / Required / Validation / Error message / Default)
+- [ ] **Layout description** per screen — header/body/footer cụ thể, KHÔNG vague
+- [ ] **Field source table** — mỗi UI field map tới data source (MongoDB collection.field / Redis key / computed)
+- [ ] **Empty state spec** — icon + heading + description + CTA cho mọi list/table
+
+### Backend Detail — MANDATORY (Manager 2026-05-14 directive)
+> Test case structured với INPUT/OUTPUT cụ thể, KHÔNG vague "happy path".
+
+- [ ] **Endpoint spec table** — mỗi endpoint có (Method / Path / Auth / Guard / Request DTO / Response DTO / Status codes / Side effects)
+- [ ] **DTO field-level spec** — mỗi field có `@ApiProperty` description + `class-validator` decorators + sample value
+- [ ] **Test cases TC-XX numbered** — mỗi test case có Method / URL / Headers / Body input → Expected status / Expected body shape / MUST NOT leak / Side effect verify
+- [ ] **Minimum test cases**: 1 happy + 1 validation + 1 auth + 1 IDOR + 1 conflict (409) + 1 concurrent (race) + 1 boundary (max/min)
+- [ ] **Side effect verification per TC** — DB write, Redis invalidate, Audit log emit
+
+### Personas affected — MANDATORY (Manager 2026-05-14)
+> Force Manager declare personas → QC test theo. Section "Personas affected" trong file này phải fill đầy đủ.
+
+- [ ] Primary personas list (≥1)
+- [ ] Cross-cutting personas considered (end-user / acceptance / payment / bulk / edge)
+- [ ] Test priority tagged 🔴/🟡/🟢
+
 ### Technical correctness vs codebase
 - [ ] DB change phù hợp current schema
 - [ ] Endpoint design phù hợp REST convention hiện tại
@@ -33,6 +59,9 @@
 - [ ] DTO có `@ApiProperty()` + `class-validator` đầy đủ
 - [ ] Response DTO inject `id` alias TRƯỚC khi strip `_id` (nếu có)
 - [ ] `pnpm generate:api` được nhắc nếu DTO đổi
+- [ ] Base UI Select.Value render prop pattern nếu có dropdown (VN labels)
+- [ ] Dialog override `sm:max-w-sm` nếu có modal table
+- [ ] Picker collapse pattern nếu có inline picker với list
 
 ### Security
 - [ ] Logto auth guard trên route protected

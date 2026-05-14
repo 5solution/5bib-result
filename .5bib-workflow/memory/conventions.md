@@ -325,6 +325,125 @@ function RaceFilterForm() {
 
 ---
 
+## 🆕 BA PRD Quality Rule — MANDATORY (Manager 2026-05-14 directive)
+
+**Status:** ENFORCEMENT RULE — KHÔNG được skip.
+**Trigger:** Danny instruction sau session 2026-05-14 — "PRD phải mô tả CHI TIẾT Các Step UI, các nút, các trường dữ liệu và quy định của trường dữ liệu, step by step. Mô tả BE phải có test case đầy đủ và mô tả input và output rõ ràng chứ gần đây code ra rất khó hiểu và UI/UX rất tệ."
+
+### Quy định ban hành
+
+Từ FEATURE-037 trở đi, mọi `01-ba-prd.md` PHẢI có các section structured dưới đây. Manager `/5bib-plan` REJECT verdict nếu thiếu BẤT KỲ section nào.
+
+### Section 1: UI Step-by-Step (mỗi journey)
+
+**Format:** numbered table với cột (Action / UI behavior / Trigger / Next state).
+
+**Anti-pattern (REJECT):**
+- "User views list of partners" ❌ — vague
+- "Click button to create new" ❌ — không cụ thể UI state transition
+
+**Pattern:**
+```markdown
+| # | User action | UI behavior | Trigger | Next state |
+|---|-------------|-------------|---------|------------|
+| 1 | Click button "Tạo HĐ" ở header `/contracts` | Navigate `/contracts/create`, wizard step 1 render | Next.js Link | Step 1 active |
+| 2 | Select dropdown "Loại hợp đồng" → chọn "Dịch vụ tính giờ" | Trigger hiển thị "Dịch vụ tính giờ" (VN label, KHÔNG raw TIMING) | `<Select.Value>{(v)=>LABEL[v]}</Select.Value>` | state.contractType = "TIMING" |
+| 3 | Click radio "Provider 5BIB" | Card highlighted blue border | onClick patch | state.providerId = "5BIB" |
+| ... | ... | ... | ... | ... |
+```
+
+### Section 2: Buttons Specification Table
+
+Mọi button trong feature PHẢI có row:
+
+| Button label | Position | Default state | Disabled state | Loading state | Action | Confirm dialog? |
+
+**Anti-pattern:** "Add a Create button" ❌
+**Pattern:** "Button 'Tạo HĐ' ở header right, primary blue, never disabled, loading state spinner + 'Đang tạo...', click POST `/api/contracts`, KHÔNG confirm dialog"
+
+### Section 3: Form Fields Specification Table
+
+Mọi input PHẢI có row:
+
+| Field name | UI label | Type | Required | Validation | Error message | Default |
+
+Validation phải concrete:
+- `regex ^[0-9]{10}(-[0-9]{3})?$` thay vì "MST format"
+- `min 0, max 100` thay vì "non-negative percentage"
+- `min 1 char, max 255 char, trim` thay vì "required text"
+
+Error messages PHẢI tiếng Việt cụ thể, KHÔNG generic "Invalid input".
+
+### Section 4: Backend Endpoint Specification
+
+Mỗi endpoint table:
+
+| Element | Spec |
+|---------|------|
+| Method | POST |
+| Path | `/api/partners` |
+| Auth | `@UseGuards(LogtoStaffGuard)` |
+| Guard role | staff hoặc admin |
+| Request body DTO | `CreatePartnerDto` |
+| Response DTO | `PartnerResponseDto` |
+| Status codes | 201 success / 400 validation / 401 no auth / 403 insufficient / 409 dup / 500 server |
+| Side effects | Audit emit / Redis invalidate / Mongo write |
+
+### Section 5: DTO Field-Level Spec (code block)
+
+Mỗi DTO PHẢI có TypeScript code block với:
+- `@ApiProperty({ description, maxLength, pattern })`
+- `class-validator` decorators (`@IsString`, `@IsNotEmpty`, `@MaxLength`, `@Matches`)
+- Sample value comment
+
+### Section 6: Backend Test Cases TC-XX
+
+Mỗi TC phải có 7 elements bắt buộc:
+
+1. **Method** (GET/POST/PATCH/DELETE)
+2. **URL** (concrete path với param)
+3. **Headers** (Authorization Bearer, Content-Type)
+4. **Body** (JSON sample concrete, KHÔNG `{...}` placeholder)
+5. **Expected status** (cụ thể 201/400/401/403/409/500)
+6. **Expected body shape** (JSON sample concrete với key list)
+7. **MUST NOT leak** (declare field invisible: `_id`, `__v`, internal fields)
+8. **Side effect verify** (DB row, Redis key, Audit log entry)
+
+**Minimum TC coverage per endpoint:**
+- TC-01 Happy path
+- TC-02 Validation fail per field (mỗi field critical)
+- TC-03 Conflict (409 dup, race)
+- TC-04 Auth missing → 401
+- TC-05 Permission → 403 (IDOR)
+- TC-06 Concurrent (race condition)
+- TC-07 Boundary (max length, min value, exact limit)
+
+### Anti-patterns BA REJECT khi review
+
+| Anti-pattern | Tại sao sai | Fix |
+|--------------|-------------|-----|
+| "User views the list" | Vague — không biết list shape, layout, sort, filter | Mô tả table N cột với header names cụ thể + sort default + empty state |
+| "Click button to submit" | Không biết button label, color, disabled state | Buttons spec table với cột Label/State/Action |
+| "Field email is required" | Thiếu validation pattern + error message | Form Fields table với regex + error message tiếng Việt |
+| "Test happy path" trong testing section | Không actionable — Coder/QC không biết test gì | TC-XX với Method/URL/Body/Expected status/Expected shape |
+| "Returns user info" | Không biết response shape | JSON sample concrete với key list + MUST NOT leak |
+| "Validate input" trong endpoint spec | Generic — Coder không biết validate gì | DTO field-level code block với class-validator decorators |
+| "Backend handles errors" | Không actionable | Status codes specific (400/401/403/409/500) + body shape per error |
+
+### Manager block conditions
+
+- 🛑 `01-ba-prd.md` thiếu UI Step-by-Step numbered table → `/5bib-plan` REJECT
+- 🛑 PRD có "vague descriptions" như "user clicks button to submit form" → REJECT
+- 🛑 Form Fields thiếu validation regex / error message → REJECT
+- 🛑 Test cases viết "happy path" mà không TC-XX với input/output explicit → REJECT
+- 🛑 Endpoint spec thiếu status codes table (chỉ ghi "returns response") → REJECT
+
+### Reference example
+
+Comprehensive PRD format example: session 2026-05-14 QC report Contract Management module — 7 personas × concrete numbered steps × 9 TD findings. BA học format này cho output PRD detail tương tự.
+
+---
+
 ## 🆕 QC Persona-Based Testing Rule — MANDATORY (Manager 2026-05-14 directive)
 
 **Status:** ENFORCEMENT RULE — KHÔNG được skip.
