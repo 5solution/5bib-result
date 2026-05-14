@@ -196,6 +196,65 @@
 
 ---
 
+### 2026-05-14 — F-033 P&L "actual REPLACE estimated" semantic bug + Cowboy workflow (Danny instruction)
+
+**Discovery:** HĐ `11.05/2026/HDDV/CTTXT5-5BIB-20` Danny screenshot — nhập 1 chi phí phát sinh "Đút lót chính quyền" 1M → P&L card hiện chi phí 1M + margin 99.5%. Thực ra phải 186M (185M ước tính + 1M phát sinh) + margin 11%.
+
+**Symptom progression (3 bugs nested):**
+1. F-035a (dialog narrow): edit dialog `max-w-3xl` (768px) chật → 9-col table sau F-033 add "Giá vốn" → inputs nén "Th"/"67:"/"Nhập số (v..."
+2. F-035b (cost field drop): nhập "Giá vốn" save xong reload thấy rỗng → tưởng "k lưu được" (illusion — backend mất, admin state mismatch)
+3. F-036 (semantic): khi cost_items có data, F-033 design priority chain → actual override estimated → 1M phát sinh = total cost 1M (sai)
+
+**Root causes:**
+
+**F-035a:** Pattern shadcn override variant prefix (cùng pattern F-032 hotfix 6c6ce8a/9c6df03). Dialog `max-w-3xl` không có `!important` + matching variant prefix → sm:max-w-sm default thắng trên desktop.
+
+**F-035b:** Hand-pick field mapping bug triple-quên:
+- `contracts.service.create()` line 399 `lineItems.map` — quên cost
+- `contracts.service.update()` line 732 `lineItems.map` — quên cost
+- `contract-edit-dialog.tsx` `buildInitialState()` line 93 — quên cost trong admin state
+- Field "lậu" giữa schema (F-033 added) + DTO (F-033 added) + 3 transform layers
+- Backend save OK với cost — chỉ admin display lỗi → user nhìn empty cell → tưởng "không lưu" → 1 vòng debug rồi mới catch
+
+**F-036:** F-033 designed priority chain semantic (actual REPLACE estimated). Đúng nếu cost flow là "estimate at quote → finalize when actual numbers come in" (như order pricing). Sai nếu cost flow là "base + incremental extras" (như contracts business reality). Cost_items = "Đút lót chính quyền" rõ ràng là CHI PHÍ PHÁT SINH THÊM, không thay thế base estimate.
+
+**Detected by:** Danny manual UAT localhost (after Danny instruction "tạo nhánh ra để fix chứ đừng golive liên tục như này nữa").
+
+**Resolved:** Branch `fix/F-035-edit-dialog-line-items-width` 4 commits (`9f4cb64` + `797fa85` + `7bc1050` + `a8ad737`) merged main + release/v1.8.1 = HEAD `a8ad737` 2026-05-14.
+
+**Cowboy workflow violation (Danny called out same day):**
+
+Trong session 2026-05-14, tao push 11 commits liên tiếp lên `release/v1.8.1` (Excel dialog 2-step hotfix, wizard UX, recon DOCX, contracts SelectValue sweep, F-033, F-034). Mỗi commit = CI auto-deploy PROD. KHÔNG có DEV staging UAT. Danny phải catch bug trên PROD từng cái. Đây là cowboy ops — user làm guinea pig.
+
+Danny instruction: "Con này hơi nhiều bugs nên chắc mày tạo nhánh ra để fix chứ đừng golive liên tục như này nữa, nó k đúng."
+
+**Workflow chuẩn (memory hardened):**
+```
+feature/fix branch off main → push branch only (CI build, KHÔNG deploy)
+                              → merge main → DEV deploy (admin-dev.5bib.com)
+                              → user UAT trên DEV
+                              → cherry-pick/merge to release/v* → PROD deploy
+```
+
+Branch `fix/F-035-edit-dialog-line-items-width` là first example đúng workflow trong session. Push thẳng `release/v*` CHỈ cho critical incident (security, data corruption, complete PROD outage).
+
+**Memory hardening:**
+- ✅ `conventions.md` — 4 anti-patterns new:
+  1. Hand-pick field mapping trong service create/update/init (audit grep `.map((li) =>` khi thêm field)
+  2. "Actual overrides Estimated" semantic mà không hỏi business intent (additive vs replace)
+  3. Push commit thẳng `release/v*` mỗi hotfix (cowboy workflow)
+  4. Multi-source data field — explicit priority chain documented
+- ✅ `known-issues.md` — entry này
+- ✅ Backend pnl.service.spec 6 TC-LIC-* test cases include Danny screenshot scenario reproduction
+
+**Lessons hardened:**
+1. Thêm field mới vào schema → GREP `.map((field) =>` toàn codebase backend + admin để audit từng transform layer. Hoặc dùng spread `{...field, computed_only}` thay vì hand-pick.
+2. Manager `/5bib-plan` checklist: "Multi-source cost/revenue → hỏi business REPLACE hay INCREMENTAL trước khi design priority chain."
+3. Workflow guard: push thẳng `release/v*` CHỈ cho critical incident. Bug fix bình thường = branch + UAT.
+4. Test fixture phải dùng real-world scenario reproduction (TC-LIC-06 reproduce Danny screenshot exactly — 185M+1M=186M, margin 11.1%). Synthetic data dễ miss semantic bugs.
+
+---
+
 ### 2026-05-14 — Reconciliation DOCX dùng wrong merchant info source (PROD report Danny)
 
 **Discovery:** Reconciliation #6a054f08e3b84f1a9c6e35cb (Zaha tenant #46 Hai Phong Legacy Marathon 2026 04/2026). Danny screenshot trang merchant detail show 2 sources:
