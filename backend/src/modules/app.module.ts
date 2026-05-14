@@ -52,6 +52,8 @@ import { FinanceModule } from './finance/finance.module';
 import { PromoHubModule } from './promo-hub/promo-hub.module';
 import { PromoHubAnalyticsModule } from './promo-hub-analytics/promo-hub-analytics.module';
 import { OrderReadonly } from './finance/entities/order-readonly.entity';
+// FEATURE-033 — Promo Hub race calendar phase BÁN VÉ
+import { RaceReadonly } from './promo-hub/entities/race-readonly.entity';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
 import { VolRegistration } from './team-management/entities/vol-registration.entity';
@@ -95,6 +97,8 @@ const platformDbModules = env.platformDb.host
           CodeReadonly,
           // F-028 Finance — cross-DB cost MySQL pull cho TICKET_SALES
           OrderReadonly,
+          // F-033 Promo Hub — race-on-sale phase fetch
+          RaceReadonly,
         ],
         synchronize: false, // KHÔNG auto-sync — DB là readonly
         logging: env.env === 'local' || env.env === 'development',
