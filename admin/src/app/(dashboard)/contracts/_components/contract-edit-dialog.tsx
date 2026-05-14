@@ -99,6 +99,12 @@ function buildInitialState(c: ContractView): EditState {
       discount: li.discount ?? 0,
       selected: li.selected ?? true,
       note: li.note,
+      // FEATURE-035 fix — preserve catalogItemId (F-028 cost-suggestions ref)
+      // + cost (F-033 quote-time estimated cost). Trước đó buildInitialState
+      // drop 2 field này → save xong reload thấy empty cell → "k lưu được"
+      // illusion (thực ra DB có lưu, chỉ display state mismatch).
+      catalogItemId: li.catalogItemId,
+      cost: li.cost ?? 0,
     })),
     vatRate: c.vatRate,
     advancePercentage: c.paymentTerms.advancePercentage,
