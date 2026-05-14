@@ -325,6 +325,74 @@ function RaceFilterForm() {
 
 ---
 
+## 🆕 Coder Self-Review Pipeline — MANDATORY (Manager 2026-05-14 directive)
+
+**Status:** ENFORCEMENT RULE — KHÔNG được skip.
+**Trigger:** Danny instruction sau session 2026-05-14 — "thằng /5bib-fullstack-engineer thì thêm skill review code trước khi bàn giao code cho test nữa."
+
+### Quy định ban hành
+
+Từ FEATURE-037 trở đi, Coder PHẢI chạy đủ 10 bước self-review pipeline TRƯỚC khi mark `🟠 READY_FOR_QC`. QC giờ assume code đã pass self-review — skip = REJECT toàn bộ implementation, không chỉ test fail.
+
+### 10 bước self-review (Coder PHẢI paste checklist vào `03-coder-implementation.md`)
+
+| # | Step | Pass criteria |
+|---|------|---------------|
+| 1 | **Static Analysis** | `tsc --noEmit` + `lint` exit 0 cho Scope Lock files |
+| 2 | **PRD Strict Adherence Audit** | 5 tables PRD (Form Fields / Buttons / UI Steps / Endpoint / TC-XX) match code 1-1 |
+| 3 | **Anti-pattern Scan** | grep `console.log` / `any` / `as unknown as` / `TODO`+`FIXME` clean |
+| 4 | **Hand-pick Field Mapping Audit** | grep `.map((li) =>` toàn codebase, mọi transform bao gồm field mới (F-035 lesson) |
+| 5 | **PROD-readiness Smoke Self-Test** | Backend curl 401/400 OK, admin Next.js Ready, network tab verify |
+| 6 | **UI/UX Self-Inspection browser** | 10-item checklist (dialog width, truncation, sticky, VN labels, 4 states, validation, picker collapse) |
+| 7 | **Real-world Data Sanity** | VN long names ≥30+diacritics, 1B+ money, negative margin, long errors |
+| 8 | **Files Changed vs Scope Lock** | git status match Scope Lock 100%, no creep |
+| 9 | **Generated SDK Sync** | `pnpm generate:api` sau đổi DTO |
+| 10 | **Unit Tests Output** | PASS paste vào file 03, real-world fixture |
+
+### Pipeline self-test commands (Coder copy-paste)
+
+```bash
+# Backend
+cd backend && pnpm tsc --noEmit && pnpm lint
+# Admin
+cd admin && npx tsc --noEmit
+# Anti-pattern scan
+grep -rn 'console.log\|: any\|as unknown as' [scope-lock-paths]
+# Hand-pick audit (vd thêm field 'cost' vào LineItem)
+grep -rn '\.lineItems\.map\|lineItems\.map((li' backend/src admin/src
+# Start backend local + smoke test
+pnpm --filter backend dev &
+sleep 5 && curl -i -X POST -H "Authorization: Bearer fake" http://localhost:8081/api/[new-endpoint]
+# Start admin local
+pnpm --filter admin dev
+# Open browser + test 10-item UI checklist
+```
+
+### REJECT conditions (Manager + QC chung)
+
+- 🛑 Self-Review checklist trong `03-coder-implementation.md` thiếu BẤT KỲ bước nào → QC REJECT
+- 🛑 Test fixture dùng synthetic "Co A" / "Item 1" thay real-world VN data → QC REJECT
+- 🛑 UI feature không browser-tested → QC sẽ catch ở Phase 6 persona walkthrough → REJECT
+- 🛑 Hand-pick field mapping audit skip → bug F-035 lặp lại (cost field drop) → Manager `/5bib-deploy` REJECT
+- 🛑 Scope creep KHÔNG declared → Manager `/5bib-deploy` REJECT verdict
+
+### Manager `/5bib-deploy` verify step
+
+Manager khi `/5bib-deploy` PHẢI grep `03-coder-implementation.md`:
+```bash
+grep -A 20 "Self-Review Pipeline" 03-coder-implementation.md
+```
+- 10 bước MUST có checkbox ticked
+- Pipeline self-test commands MUST có evidence output (test PASS / curl 401 / browser screenshot link)
+
+Nếu thiếu → REJECT, không mark feature `✅ DONE` trong memory.
+
+### Reference example
+
+Self-review pipeline lần đầu apply: feature `/5bib-init FEATURE-037-...` (next feature) sẽ là first example đúng workflow detail. Manager template feature folder mới sẽ pre-include pipeline checklist trong `03-coder-implementation.md`.
+
+---
+
 ## 🆕 BA PRD Quality Rule — MANDATORY (Manager 2026-05-14 directive)
 
 **Status:** ENFORCEMENT RULE — KHÔNG được skip.
