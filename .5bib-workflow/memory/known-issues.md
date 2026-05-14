@@ -196,6 +196,53 @@
 
 ---
 
+### 2026-05-14 — Reconciliation DOCX dùng wrong merchant info source (PROD report Danny)
+
+**Discovery:** Reconciliation #6a054f08e3b84f1a9c6e35cb (Zaha tenant #46 Hai Phong Legacy Marathon 2026 04/2026). Danny screenshot trang merchant detail show 2 sources:
+1. Tab "Thông tin" (5BIB Platform sync, readonly): Tên công ty "Việt Nam Tôi đó - My Vietnam 2025", MST "0193762", contact "VinGroup / hienhm@5bib.com / Hà Nội"
+2. Tab "Công ty đối tác" (admin-entered): admin đã nhập riêng tên pháp nhân + MST + địa chỉ + người đại diện + bank info chính xác
+
+**Symptom:** DOCX export Zaha April 2026 dùng data từ tab "Thông tin" (platform sync) — sai. Đáng lẽ phải dùng tab "Công ty đối tác" admin-entered (single source of truth pháp lý).
+
+**Detected by:** Danny manual UAT screenshot 2026-05-14 ~15:30 GMT+7.
+**Resolved:** commit `b218a53` push `release/v1.8.1` ~15:55 GMT+7.
+
+**Root cause:** `docx.service.ts` line 169-178 chỉ đọc `(rec as any).tenant_metadata` (sync readonly từ MySQL platform tenant table). KHÔNG check `MerchantConfig` collection trên MongoDB 5bib-result.
+
+`MerchantConfig` schema từ F-024 era đã có sẵn 8 field admin-entered đúng cho purpose này:
+- `legal_name`, `tax_code`, `business_address`, `representative_name`, `representative_title`, `bank_account`, `bank_name`, `bank_branch`
+
+F-030 (commit `f980228` 2026-05-13) fix `env.provider.*` cho 5BIB BÊN B (provider info), nhưng KHÔNG audit BÊN A merchant info source — chỉ touched provider config. Bug merchant info source là pre-existing từ F-001 reconciliation original, masked vì lúc đó không có admin-entered tab.
+
+**Fix:**
+- Inject `Model<MerchantConfigDocument>` vào DocxService (module đã register sẵn)
+- Priority chain: MerchantConfig admin-entered > tenant_metadata sync > rec.tenant_name
+- Áp dụng 7 field: legal_name, tax_code, business_address, representative_name, representative_title, bank_account, bank_name (phone giữ tenant_metadata — MerchantConfig schema chưa có field phone admin-entered)
+- Fail-soft: Mongo error → log warn + fallback tenant_metadata (KHÔNG crash export)
+- Audit log per generate call: `docx_merchant_source tenant=N mc=yes/no companyName=mc/meta/tenant_name`
+
+**Manager self-audit — tại sao bug pre-existing F-001 mà sau ~5 features touched recon vẫn không phát hiện?**
+
+1. **F-030 scope was provider, not merchant.** Manager `02-manager-plan.md` F-030 chốt fix 5BIB BÊN B `env.provider.*` (commit `f980228`). KHÔNG audit BÊN A merchant info source — chỉ touched provider config. Convention scope-lock chính xác nhưng cùng module dùng cùng pattern.
+2. **MerchantConfig schema có sẵn từ era F-001 nhưng KHÔNG bao giờ được wire vào docx.** Bug original từ ngày đầu. F-001 docx có thể dùng tenant_metadata vì lúc đó admin chưa có UI "Công ty đối tác". Sau khi UI có (F-024 era?), backend không update để consume.
+3. **`tenant_metadata` field là `(rec as any).tenant_metadata` — KHÔNG declared trong schema.** Field "rò rỉ" qua any-cast. Lúc Coder/Manager review code không thấy field, cũng không thấy reference đến MerchantConfig → bug invisible.
+4. **0 test coverage merchant info priority pre-existing.** F-030 thêm TC-AO-07..10 cho provider info, KHÔNG có test merchant info source.
+5. **DOCX không show source attribution trong UI.** User không có cách biết doc đang lấy info từ đâu cho đến khi compare manually.
+
+**Memory hardening:**
+- ✅ `conventions.md` — add anti-pattern "`(x as any).field_not_in_schema` reading" + "Multi-source data field — luôn document priority chain in service comment"
+- ✅ `known-issues.md` — entry này
+- ✅ Pattern minted: "Admin-entered field > Platform sync field > Schema fallback" — apply to all docs/exports that use merchant/tenant info
+- ✅ F-030 schema gap flagged: MerchantConfig thiếu `phone` admin-entered field — schedule TD-MERCHANT-PHONE-FIELD
+
+**Lesson hardened:**
+1. Khi service đọc field qua `(x as any).field` cast → audit schema có declare field đó không. Nếu không → field "lậu", flag risk.
+2. Multi-source data (platform sync + admin override) phải có explicit priority chain documented in service code comment.
+3. Service writes that consume merchant/tenant info phải QC against admin-entered override scenario, không chỉ default-sync scenario.
+4. Manager `/5bib-plan` F-030 type feature touching reconciliation services nên đính kèm "audit BÊN A merchant info source" trong checklist — sister fix opportunity.
+
+---
+
 ### 2026-05-14 — F-024 Contract Wizard 2 UX bugs (PROD report Danny)
 
 **Discovery URL:** `https://admin.5bib.com/contracts/create` (wizard step 1 + 2)
