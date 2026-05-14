@@ -413,7 +413,7 @@ describe('PromoHubService', () => {
         ...overrides,
       }) as RaceReadonly;
 
-    it('queries with filter status=GENERATED_CODE + is_delete=0 + is_show=1 + url_name NOT NULL', async () => {
+    it('queries with filter status=GENERATED_CODE + is_delete=0 + is_show=1 (HOTFIX 2026-05-14: removed url_name NOT NULL — see TD-F033-06)', async () => {
       mockQueryBuilder.getMany.mockResolvedValue([mockRace()]);
       await service.findRacesOnSale({});
 
@@ -425,7 +425,15 @@ describe('PromoHubService', () => {
       );
       expect(andWhereCalls).toContain('CAST(r.is_delete AS UNSIGNED) = 0');
       expect(andWhereCalls).toContain('CAST(r.is_show AS UNSIGNED) = 1');
-      expect(andWhereCalls).toContain('r.url_name IS NOT NULL');
+    });
+
+    it('toRaceOnSaleDto fallback urlName → raceId when url_name NULL/empty', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([
+        mockRace({ raceId: '212', urlName: null as never }),
+      ]);
+      const result = await service.findRacesOnSale({});
+      expect(result[0].urlName).toBe('212');
+      expect(result[0].ticketUrl).toBe('https://5ticket.vn/event/212');
     });
 
     it('respects limit + default sort=registration_start_time ASC', async () => {

@@ -669,7 +669,10 @@ export class PromoHubService {
         })
         .andWhere('CAST(r.is_delete AS UNSIGNED) = 0')
         .andWhere('CAST(r.is_show AS UNSIGNED) = 1')
-        .andWhere('r.url_name IS NOT NULL')
+        // BR-PH33-03 REVISED 2026-05-14: KHÔNG hard-filter `url_name NOT NULL` —
+        // PROD data shows ALL 19 active races có url_name NULL (5Ticket convention
+        // dùng race_id thay slug trong URL). Service fallback urlName → raceId
+        // trong toRaceOnSaleDto() (xem TD-F033-06 verify 5Ticket route).
         .orderBy(sortColumn, 'ASC')
         .limit(limit)
         .getMany();
@@ -705,11 +708,13 @@ export class PromoHubService {
    * is_delete, is_show. Pre-compute ticketUrl (BR-PH33-05).
    */
   private toRaceOnSaleDto(r: RaceReadonly): RaceOnSaleResponseDto {
-    const urlName = r.urlName as string;
+    // BR-PH33-03 REVISED 2026-05-14: fallback to raceId if url_name NULL.
+    // PROD data shows 5Ticket convention uses race_id in URL when no slug.
+    const slug = (r.urlName && r.urlName.trim()) || r.raceId;
     return {
       raceId: r.raceId,
       title: r.title ?? '',
-      urlName,
+      urlName: slug,
       logoUrl: r.logoUrl,
       eventStartDate: r.eventStartDate
         ? r.eventStartDate.toISOString()
@@ -719,7 +724,7 @@ export class PromoHubService {
         : null,
       location: r.location,
       brand: r.brand,
-      ticketUrl: `${PromoHubService.TICKET_URL_BASE}${urlName}`,
+      ticketUrl: `${PromoHubService.TICKET_URL_BASE}${slug}`,
     };
   }
 }
