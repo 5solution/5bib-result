@@ -136,7 +136,7 @@ export function PartnerImportDialog({ open, onClose, onSuccess }: Props) {
         if (!o) handleClose();
       }}
     >
-      <DialogContent className="max-w-6xl w-[min(95vw,1200px)] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+      <DialogContent className="!max-w-6xl sm:!max-w-6xl !w-[min(95vw,1200px)] sm:!w-[min(95vw,1200px)] max-h-[90vh] overflow-hidden flex flex-col !p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="size-5" />
