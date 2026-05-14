@@ -621,29 +621,44 @@ export class ContractsService {
         (k) => k === 'linkedTenantId' || k === 'linkedMysqlRaceId',
       );
 
-    // F-024 Fix 2: chỉ DRAFT mới sửa được (BR-CM-07 lifecycle guard).
-    // Lý do: HĐ đã ACTIVE = có số HĐ chính thức + signed by đối tác → sửa
-    // = break legal integrity. Admin muốn sửa phải CANCEL HĐ rồi tạo HĐ mới.
-    // Cho phép cập nhật trạng thái (CANCELLED) qua updateContract — không
-    // qua activation flow — để giữ backward compat cho cancel action.
+    // FEATURE-034 (Danny 2026-05-14 "tao muốn sửa được trong mọi trường hợp,
+    // vì cơ bản thật ra cũng lắm chuyện phết"): UNLOCK edit cho mọi status
+    // không chỉ DRAFT. Lý do: business reality — đối tác đôi khi yêu cầu sửa
+    // line items/payment terms SAU khi đã sign HĐ. Trước F-034 admin phải
+    // CANCEL HĐ rồi tạo HĐ mới (lằng nhằng, mất số HĐ continuity).
+    //
+    // Trade-off chấp nhận (Danny acknowledged):
+    //   - HĐ ACTIVE đã sign → sửa = legal inconsistency với DOCX physical đã ký
+    //     → admin tự regenerate DOCX + re-send đối tác sau khi sửa
+    //   - HĐ COMPLETED đã có acceptance + payment → sửa line items KHÔNG
+    //     auto-recompute acceptance numbers → admin tự xem có cần fix không
+    //   - HĐ CANCELLED/REJECTED → low risk (đã end-of-life)
+    //
+    // Mitigation:
+    //   1. Audit emit `contract.update.force` với status snapshot trước khi
+    //      apply (track accountability — ai sửa, lúc nào, status gì)
+    //   2. Frontend confirm dialog cảnh báo cho non-DRAFT trước khi mở edit
+    //   3. Cache invalidate P&L + dashboard sau update (same as DRAFT path)
     const isCancelOnlyUpdate =
       dto.status === 'CANCELLED' && Object.keys(dto).length === 1;
-    if (
+    const isForceEdit =
       current.status !== 'DRAFT' &&
       !isCancelOnlyUpdate &&
-      !isLinkOnlyUpdate
-    ) {
-      throw new BadRequestException(
-        'Chỉ DRAFT mới sửa được — HĐ đã kích hoạt không thể chỉnh sửa',
-      );
-    }
+      !isLinkOnlyUpdate;
+    const previousStatus = current.status;
+
+    // FEATURE-034 — Vẫn block status manipulation qua update (status changes
+    // phải đi qua dedicated endpoints: activate / cancel / acceptQuotation /
+    // rejectQuotation / convertToContract). Cancel-only single-field vẫn
+    // hợp lệ (escape hatch). Mọi status khác = invalid.
     if (
-      TERMINAL_STATES.includes(current.status) &&
-      !isCancelOnlyUpdate &&
-      !isLinkOnlyUpdate
+      'status' in dto &&
+      dto.status !== undefined &&
+      dto.status !== 'CANCELLED' &&
+      !isCancelOnlyUpdate
     ) {
       throw new BadRequestException(
-        'Không thể chỉnh sửa hợp đồng ở trạng thái terminal (COMPLETED/CANCELLED/...)',
+        'Status transitions phải qua dedicated endpoints (activate/cancel/...) — KHÔNG sửa trực tiếp qua update',
       );
     }
 
@@ -797,7 +812,36 @@ export class ContractsService {
 
     await current.save();
     await this.invalidateContractsCache();
-    await this.emitAudit('contract.update', current, 'admin');
+    // FEATURE-034 — Force-edit audit: track ai sửa HĐ non-DRAFT lúc nào, status
+    // gì, fields nào. Admin accountability cho legal mismatch post-sign.
+    if (isForceEdit) {
+      await this.emitAudit('contract.update.force', current, 'admin', {
+        previousStatus,
+        editedFields: Object.keys(dto),
+      });
+      this.logger.warn(
+        `[contracts] FORCE-EDIT contract=${String(current._id)} ` +
+          `previousStatus=${previousStatus} fields=${Object.keys(dto).join(',')}`,
+      );
+    } else {
+      await this.emitAudit('contract.update', current, 'admin');
+    }
+
+    // FEATURE-034 — Flush P&L cache nếu force-edit ảnh hưởng revenue/cost
+    // (line items hoặc revenueShare changed). Dashboard cache cũng flush
+    // vì aggregation thay đổi.
+    if (isForceEdit && this.redis) {
+      try {
+        await this.redis.del(`pnl:contract:${String(current._id)}`);
+        await this.redis.del(`pnl:ticket-sales-fee:${String(current._id)}`);
+        await this.flushPnlDashboardCache();
+      } catch (err) {
+        this.logger.warn(
+          `[contracts] flush P&L cache fail post force-edit: ${(err as Error).message}`,
+        );
+      }
+    }
+
     return current.toObject();
   }
 

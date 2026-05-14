@@ -271,12 +271,35 @@ export default function ContractDetailPage({
               )}
             </>
           )}
+          {/*
+            FEATURE-034 (Danny 2026-05-14 "tao muốn sửa được trong mọi trường
+            hợp"): non-DRAFT HĐ giờ vẫn cho sửa nhưng đi qua confirm dialog
+            cảnh báo legal implication. Audit emit `contract.update.force`
+            track accountability backend side.
+          */}
           {!isDraft && (
             <Button
               variant="outline"
-              disabled
-              title="Chỉ DRAFT mới sửa được — hợp đồng đã kích hoạt"
-              aria-label="Chỉnh sửa (chỉ DRAFT mới sửa được)"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Sửa HĐ đang ${contract.status}?`,
+                  description:
+                    contract.status === "ACTIVE"
+                      ? "HĐ đã ký + có số HĐ chính thức. Sửa = mismatch với DOCX physical đã sign. Bạn nhớ regenerate DOCX/PDF + re-send đối tác sau khi sửa. Tiếp tục?"
+                      : contract.status === "COMPLETED"
+                        ? "HĐ đã COMPLETED + có biên bản nghiệm thu + yêu cầu thanh toán. Sửa line items KHÔNG auto-recompute acceptance/payment numbers — bạn cần check + fix manual nếu cần. Tiếp tục?"
+                      : contract.status === "CANCELLED" || contract.status === "REJECTED"
+                        ? `HĐ đã ${contract.status}. Sửa = thay đổi data lịch sử. Audit log sẽ track. Tiếp tục?`
+                        : `HĐ đang ${contract.status}. Sửa sẽ override line items / payment terms. Audit log track ai sửa + status snapshot. Tiếp tục?`,
+                  confirmText: "Vẫn sửa",
+                  variant: "destructive",
+                });
+                if (ok) setEditOpen(true);
+              }}
+              disabled={busy}
+              title={`Sửa HĐ (audit force_edit từ status ${contract.status})`}
+              aria-label={`Chỉnh sửa HĐ ${contract.status}`}
+              data-testid="btn-edit-force"
             >
               <Pencil className="size-4" /> Chỉnh sửa
             </Button>

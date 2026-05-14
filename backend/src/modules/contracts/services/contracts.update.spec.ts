@@ -106,29 +106,66 @@ describe('ContractsService — F-024 update + manual race input', () => {
       expect(c.save).toHaveBeenCalled();
     });
 
-    it('unhappy: ACTIVE contract update throws BadRequestException', async () => {
+    // FEATURE-034 — UNLOCKED: edit allowed cho mọi status (Danny 2026-05-14
+    // "tao muốn sửa được trong mọi trường hợp"). Audit event force_edit
+    // track accountability. Pre-F-034 expected BadRequestException; now
+    // expect success + audit emit.
+
+    it('TC-F034-01: ACTIVE contract update — force-edit OK + audit contract.update.force', async () => {
       const c = buildContract({ status: 'ACTIVE' });
       mockModel.findOne.mockResolvedValue(c);
-      await expect(
-        svc.update('contract-123', { raceName: 'Cannot Change' } as any),
-      ).rejects.toThrow(BadRequestException);
-      expect(c.save).not.toHaveBeenCalled();
+      const auditEmitSpy = jest.fn().mockResolvedValue(undefined);
+      (svc as any).auditLog = { emit: auditEmitSpy };
+      const result = await svc.update('contract-123', {
+        raceName: 'Force Edited Race',
+      } as any);
+      expect(result.raceName).toBe('Force Edited Race');
+      expect(c.save).toHaveBeenCalled();
+      expect(auditEmitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'contract.update.force',
+          metadata: expect.objectContaining({
+            previousStatus: 'ACTIVE',
+            editedFields: ['raceName'],
+          }),
+        }),
+      );
     });
 
-    it('unhappy: COMPLETED contract update throws BadRequestException', async () => {
+    it('TC-F034-02: COMPLETED contract update — force-edit OK', async () => {
       const c = buildContract({ status: 'COMPLETED' });
       mockModel.findOne.mockResolvedValue(c);
-      await expect(
-        svc.update('contract-123', { raceName: 'Cannot Change' } as any),
-      ).rejects.toThrow(BadRequestException);
+      const result = await svc.update('contract-123', {
+        raceName: 'Post-completion fix',
+      } as any);
+      expect(result.raceName).toBe('Post-completion fix');
+      expect(c.save).toHaveBeenCalled();
     });
 
-    it('unhappy: CANCELLED contract update throws BadRequestException', async () => {
+    it('TC-F034-03: CANCELLED contract update — force-edit OK', async () => {
       const c = buildContract({ status: 'CANCELLED' });
       mockModel.findOne.mockResolvedValue(c);
-      await expect(
-        svc.update('contract-123', { raceName: 'Cannot Change' } as any),
-      ).rejects.toThrow(BadRequestException);
+      const result = await svc.update('contract-123', {
+        raceName: 'Edit cancelled HD',
+      } as any);
+      expect(result.raceName).toBe('Edit cancelled HD');
+      expect(c.save).toHaveBeenCalled();
+    });
+
+    it('TC-F034-04: DRAFT contract update — vẫn dùng audit contract.update (KHÔNG force)', async () => {
+      const c = buildContract({ status: 'DRAFT' });
+      mockModel.findOne.mockResolvedValue(c);
+      const auditEmitSpy = jest.fn().mockResolvedValue(undefined);
+      (svc as any).auditLog = { emit: auditEmitSpy };
+      await svc.update('contract-123', { raceName: 'Draft edit' } as any);
+      expect(auditEmitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'contract.update' }),
+      );
+      // NO force_edit audit
+      const forceCalls = auditEmitSpy.mock.calls.filter(
+        (c) => c[0].action === 'contract.update.force',
+      );
+      expect(forceCalls).toHaveLength(0);
     });
 
     it('escape hatch: ACTIVE → CANCELLED status-only update OK', async () => {
@@ -141,10 +178,12 @@ describe('ContractsService — F-024 update + manual race input', () => {
       expect(c.save).toHaveBeenCalled();
     });
 
-    it('does NOT allow status update other than CANCELLED', async () => {
+    it('TC-F034-05: status manipulation BLOCKED — status=COMPLETED via update still rejects', async () => {
       const c = buildContract({ status: 'ACTIVE' });
       mockModel.findOne.mockResolvedValue(c);
-      // Pass status=COMPLETED + extra field → fails block ACTIVE non-cancel.
+      // Status transitions phải qua dedicated endpoints (activate / complete).
+      // Force-edit cho phép sửa fields KHÁC nhưng KHÔNG cho phép sửa status
+      // qua update (except CANCELLED single-field escape hatch).
       await expect(
         svc.update('contract-123', {
           status: 'COMPLETED' as any,

@@ -151,30 +151,14 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
     state.linkedMysqlRaceId !== (contract.linkedMysqlRaceId ?? null);
 
   async function save() {
-    // F-028 Q3.A: non-DRAFT chỉ được lưu link fields (metadata MySQL).
-    // Backend route reject các field khác via DRAFT-only gate.
-    if (!isDraft) {
-      if (!linkChanged) {
-        toast.info("Không có thay đổi liên kết MySQL");
-        return;
-      }
-      setSaving(true);
-      try {
-        const updated = await updateContract(contract._id, {
-          linkedTenantId: state.linkedTenantId,
-          linkedMysqlRaceId: state.linkedMysqlRaceId,
-        });
-        toast.success("Đã cập nhật liên kết MySQL");
-        onSaved(updated);
-        onClose();
-      } catch (err) {
-        toast.error(`Lỗi: ${(err as Error).message}`);
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
-
+    /**
+     * FEATURE-034 (Danny 2026-05-14 "tao muốn sửa được trong mọi trường hợp"):
+     * non-DRAFT giờ vẫn có thể edit full fields. Pre-F-034 chỉ cho link-only.
+     * Backend audit emit `contract.update.force` track accountability.
+     *
+     * Detail page đã có confirm dialog cảnh báo trước khi mở edit dialog →
+     * save() KHÔNG cần double-confirm. Vẫn validate required fields.
+     */
     if (!state.client.entityName?.trim()) {
       toast.error("Tên đơn vị Bên A bắt buộc");
       setTab("client");
@@ -187,6 +171,7 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
         return;
       }
     }
+
 
     setSaving(true);
     try {
@@ -225,14 +210,24 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
         });
       }
 
-      toast.success("Đã lưu thay đổi");
+      // FEATURE-034 — Cảnh báo follow-up cho non-DRAFT force-edit
+      if (!isDraft) {
+        toast.success(
+          `Đã sửa HĐ ${contract.status}. Nhớ regenerate DOCX/PDF + re-send đối tác + check acceptance/payment nếu cần.`,
+          { duration: 7000 },
+        );
+      } else {
+        toast.success("Đã lưu thay đổi");
+      }
       onSaved(finalUpdated);
       onClose();
     } catch (err) {
       const msg = (err as Error).message;
-      // Friendly message khi backend block ACTIVE update.
-      if (msg.toLowerCase().includes("draft")) {
-        toast.error("Chỉ DRAFT mới sửa được — hợp đồng này đã kích hoạt");
+      // FEATURE-034 — backend giờ chỉ throw "status transitions" cho status manipulation
+      if (msg.toLowerCase().includes("status transitions")) {
+        toast.error(
+          "Đổi trạng thái HĐ phải qua nút Kích hoạt/Huỷ HĐ — không sửa qua dialog edit",
+        );
       } else {
         toast.error(`Lỗi: ${msg}`);
       }
@@ -247,7 +242,9 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
         <DialogHeader className="pr-10">
           <DialogTitle className="flex flex-wrap items-baseline gap-x-2 gap-y-1 break-words">
             <span>
-              {isDraft ? "Chỉnh sửa hợp đồng nháp" : "Cập nhật liên kết MySQL"}
+              {isDraft
+                ? "Chỉnh sửa hợp đồng nháp"
+                : `Chỉnh sửa hợp đồng (${contract.status} — force-edit)`}
             </span>
             {contract.contractNumber && (
               <span className="block max-w-full truncate font-mono text-xs font-normal text-[var(--text-muted,#78716C)]">
@@ -255,6 +252,15 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
               </span>
             )}
           </DialogTitle>
+          {/* FEATURE-034 — Cảnh báo banner cho force-edit */}
+          {!isDraft && (
+            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              ⚠️ HĐ đang <strong>{contract.status}</strong>. Sửa sẽ được log
+              audit (action <code>contract.update.force</code>) — không bao giờ
+              ẩn được. Sau khi save, regenerate DOCX/PDF + re-send đối tác nếu
+              cần.
+            </div>
+          )}
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={setTab}>
@@ -508,8 +514,9 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
                   <span className="mt-1 block font-medium break-words whitespace-normal text-blue-800">
                     HĐ đã{" "}
                     {contract.status === "ACTIVE" ? "kích hoạt" : "kết thúc"} —
-                    chỉ liên kết MySQL được cập nhật ở đây (metadata, không
-                    đổi business amount).
+                    F-034 cho phép sửa mọi field (audit log
+                    <code>contract.update.force</code> tracking). Lưu ý update
+                    link MySQL = đổi revenue source P&L.
                   </span>
                 )}
               </div>
