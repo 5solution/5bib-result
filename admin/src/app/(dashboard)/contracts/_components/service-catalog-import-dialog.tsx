@@ -134,8 +134,8 @@ export function ServiceCatalogImportDialog({ open, onClose, onSuccess }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl w-[min(95vw,1080px)] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="size-5" />
             {step === "upload" ? "Import dịch vụ từ Excel" : "Xem trước Import"}
@@ -143,7 +143,7 @@ export function ServiceCatalogImportDialog({ open, onClose, onSuccess }: Props) 
         </DialogHeader>
 
         {step === "upload" && (
-          <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-4 px-6 py-4 overflow-y-auto">
             <div className="rounded-lg border bg-muted/30 p-4 text-sm">
               <p className="font-medium mb-2">Hướng dẫn import</p>
               <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
@@ -182,24 +182,27 @@ export function ServiceCatalogImportDialog({ open, onClose, onSuccess }: Props) 
               )}
             </div>
 
-            <DialogFooter>
-              <Button variant="ghost" onClick={handleClose} disabled={loading}>
-                Hủy
-              </Button>
-              <Button onClick={handlePreview} disabled={!file || loading}>
-                {loading ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 size-4" />
-                )}
-                Xem trước
-              </Button>
-            </DialogFooter>
           </div>
         )}
 
+        {step === "upload" && (
+          <DialogFooter className="px-6 py-4 border-t shrink-0">
+            <Button variant="ghost" onClick={handleClose} disabled={loading}>
+              Hủy
+            </Button>
+            <Button onClick={handlePreview} disabled={!file || loading}>
+              {loading ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 size-4" />
+              )}
+              Xem trước
+            </Button>
+          </DialogFooter>
+        )}
+
         {step === "preview" && preview && (
-          <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-4 px-6 py-4 overflow-y-auto flex-1 min-h-0">
             <div className="flex items-center gap-3 text-sm">
               <Badge variant="default" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
                 <CheckCircle2 className="mr-1 size-3" />
@@ -222,29 +225,29 @@ export function ServiceCatalogImportDialog({ open, onClose, onSuccess }: Props) 
 
             {/* Valid rows preview */}
             {preview.valid.length > 0 && (
-              <div className="rounded-lg border">
+              <div className="rounded-lg border overflow-hidden">
                 <div className="border-b bg-emerald-50/50 px-3 py-2 text-sm font-medium text-emerald-700">
                   ✅ {preview.valid.length} dòng sẽ được thêm vào danh mục
                 </div>
-                <div className="max-h-64 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
+                <div className="max-h-[40vh] overflow-auto">
+                  <Table className="table-fixed w-full">
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
-                        <TableHead className="w-12">#</TableHead>
-                        <TableHead>Tên dịch vụ</TableHead>
-                        <TableHead>Nhóm</TableHead>
-                        <TableHead>ĐVT</TableHead>
-                        <TableHead className="text-right">Giá tham khảo</TableHead>
-                        <TableHead className="text-right">Giá vốn</TableHead>
+                        <TableHead className="w-10">#</TableHead>
+                        <TableHead className="min-w-[240px]">Tên dịch vụ</TableHead>
+                        <TableHead className="w-[110px]">Nhóm</TableHead>
+                        <TableHead className="w-[80px]">ĐVT</TableHead>
+                        <TableHead className="text-right w-[140px]">Giá tham khảo</TableHead>
+                        <TableHead className="text-right w-[140px]">Giá vốn</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {preview.valid.map((row) => (
                         <TableRow key={`v-${row.rowNum}`}>
                           <TableCell className="text-muted-foreground">{row.rowNum}</TableCell>
-                          <TableCell className="font-medium">{row.name}</TableCell>
-                          <TableCell>{CATEGORY_LABEL[row.category] ?? row.category}</TableCell>
-                          <TableCell>{row.unit ?? "—"}</TableCell>
+                          <TableCell className="font-medium truncate" title={row.name}>{row.name}</TableCell>
+                          <TableCell className="truncate">{CATEGORY_LABEL[row.category] ?? row.category}</TableCell>
+                          <TableCell className="truncate">{row.unit ?? "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">{fmtVnd(row.referencePrice)}</TableCell>
                           <TableCell className="text-right tabular-nums">{fmtVnd(row.referenceCost)}</TableCell>
                         </TableRow>
@@ -257,25 +260,25 @@ export function ServiceCatalogImportDialog({ open, onClose, onSuccess }: Props) 
 
             {/* Duplicate rows */}
             {preview.duplicate.length > 0 && (
-              <div className="rounded-lg border">
+              <div className="rounded-lg border overflow-hidden">
                 <div className="border-b bg-amber-50/50 px-3 py-2 text-sm font-medium text-amber-700">
                   ⚠️ {preview.duplicate.length} dòng trùng (đã tồn tại trong danh mục) — sẽ bỏ qua
                 </div>
-                <div className="max-h-40 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
+                <div className="max-h-[30vh] overflow-auto">
+                  <Table className="table-fixed w-full">
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
-                        <TableHead className="w-12">#</TableHead>
-                        <TableHead>Tên dịch vụ</TableHead>
-                        <TableHead>Nhóm</TableHead>
+                        <TableHead className="w-10">#</TableHead>
+                        <TableHead className="min-w-[280px]">Tên dịch vụ</TableHead>
+                        <TableHead className="w-[140px]">Nhóm</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {preview.duplicate.map((row) => (
                         <TableRow key={`d-${row.rowNum}`}>
                           <TableCell className="text-muted-foreground">{row.rowNum}</TableCell>
-                          <TableCell>{row.name}</TableCell>
-                          <TableCell>{CATEGORY_LABEL[row.category] ?? row.category}</TableCell>
+                          <TableCell className="truncate" title={row.name}>{row.name}</TableCell>
+                          <TableCell className="truncate">{CATEGORY_LABEL[row.category] ?? row.category}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -286,57 +289,61 @@ export function ServiceCatalogImportDialog({ open, onClose, onSuccess }: Props) 
 
             {/* Invalid rows */}
             {preview.invalid.length > 0 && (
-              <div className="rounded-lg border">
+              <div className="rounded-lg border overflow-hidden">
                 <div className="border-b bg-red-50/50 px-3 py-2 text-sm font-medium text-red-700">
                   ❌ {preview.invalid.length} dòng lỗi — sẽ bỏ qua. Sửa file Excel + thử lại.
                 </div>
-                <div className="max-h-40 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
+                <div className="max-h-[30vh] overflow-auto">
+                  <Table className="table-fixed w-full">
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
-                        <TableHead className="w-12">#</TableHead>
-                        <TableHead>Tên (raw)</TableHead>
+                        <TableHead className="w-10">#</TableHead>
+                        <TableHead className="w-[280px]">Tên (raw)</TableHead>
                         <TableHead>Lỗi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {preview.invalid.map((row) => (
-                        <TableRow key={`i-${row.rowNum}`}>
-                          <TableCell className="text-muted-foreground">{row.rowNum}</TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {String((row.raw as { name?: unknown }).name ?? "—")}
-                          </TableCell>
-                          <TableCell className="text-xs text-red-700">
-                            {row.errors.join("; ")}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {preview.invalid.map((row) => {
+                        const rawName = String((row.raw as { name?: unknown }).name ?? "—");
+                        const errsJoined = row.errors.join("; ");
+                        return (
+                          <TableRow key={`i-${row.rowNum}`}>
+                            <TableCell className="text-muted-foreground">{row.rowNum}</TableCell>
+                            <TableCell className="font-mono text-xs truncate" title={rawName}>{rawName}</TableCell>
+                            <TableCell className="text-xs text-red-700" title={errsJoined}>
+                              <div className="line-clamp-2">{errsJoined}</div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
               </div>
             )}
-
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setStep("upload")} disabled={loading}>
-                Quay lại
-              </Button>
-              <Button variant="ghost" onClick={handleClose} disabled={loading}>
-                Hủy
-              </Button>
-              <Button
-                onClick={handleConfirm}
-                disabled={loading || preview.valid.length === 0}
-              >
-                {loading ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="mr-2 size-4" />
-                )}
-                Xác nhận thêm {preview.valid.length} dịch vụ
-              </Button>
-            </DialogFooter>
           </div>
+        )}
+
+        {step === "preview" && preview && (
+          <DialogFooter className="px-6 py-4 border-t shrink-0">
+            <Button variant="ghost" onClick={() => setStep("upload")} disabled={loading}>
+              Quay lại
+            </Button>
+            <Button variant="ghost" onClick={handleClose} disabled={loading}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={loading || preview.valid.length === 0}
+            >
+              {loading ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 size-4" />
+              )}
+              Xác nhận thêm {preview.valid.length} dịch vụ
+            </Button>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>
