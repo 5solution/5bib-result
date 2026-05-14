@@ -81,6 +81,8 @@ export default function PromoHubEditPage() {
   const [sections, setSections] = useState<EditorSection[]>([]);
   const [theme, setTheme] = useState<PromoHubThemeInputDto>({});
   const [seo, setSeo] = useState<PromoHubSeoInputDto>({});
+  /** Two-way sync: click section trên preview → open edit dialog cho section đó. */
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
 
   const loadHub = useCallback(async () => {
     try {
@@ -313,7 +315,12 @@ export default function PromoHubEditPage() {
                 <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground">
                   Các section
                 </h2>
-                <PromoHubEditor sections={sections} onChange={setSections} />
+                <PromoHubEditor
+                  sections={sections}
+                  onChange={setSections}
+                  editingId={editingSectionId}
+                  onOpenEdit={setEditingSectionId}
+                />
               </div>
             </div>
 
@@ -323,6 +330,18 @@ export default function PromoHubEditPage() {
                 title={title}
                 sections={sections}
                 primaryColor={theme.primaryColor}
+                secondaryColor={theme.secondaryColor}
+                onSectionClick={(id) => {
+                  // Scroll editor card into view + open config dialog
+                  const el = document.querySelector<HTMLElement>(
+                    `[data-section-id="${id}"]`,
+                  );
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }
+                  setEditingSectionId(id);
+                }}
+                highlightedSectionId={editingSectionId}
               />
             </div>
           </div>

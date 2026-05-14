@@ -37,6 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 import type { EditorSection } from "./SectionCard";
 import { SECTION_TYPE_META } from "./section-types";
+import { RichTextEditor } from "./RichTextEditor";
 
 type Props = {
   open: boolean;
@@ -523,15 +524,13 @@ function TypeSpecificForm({
             />
           </Field>
           <Field
-            label="Nội dung HTML"
-            hint="Backend sanitize-html sẽ strip <script>, event handlers, javascript: URIs."
+            label="Nội dung"
+            hint="Dùng thanh công cụ để format. Backend tự động lọc bỏ code không an toàn."
           >
-            <Textarea
-              rows={8}
+            <RichTextEditor
               value={(c.html as string) ?? ""}
-              onChange={(e) => onChange({ html: e.target.value })}
-              placeholder="<p>Nội dung…</p>"
-              className="font-mono text-xs"
+              onChange={(html) => onChange({ html })}
+              placeholder="Bắt đầu viết nội dung…"
             />
           </Field>
         </div>

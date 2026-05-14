@@ -38,11 +38,25 @@ import { cn } from "@/lib/utils";
 type Props = {
   sections: EditorSection[];
   onChange: (next: EditorSection[]) => void;
+  /** Two-way sync với preview: controlled editingId từ parent. */
+  editingId?: string | null;
+  onOpenEdit?: (id: string | null) => void;
 };
 
-export function PromoHubEditor({ sections, onChange }: Props) {
+export function PromoHubEditor({
+  sections,
+  onChange,
+  editingId: editingIdProp,
+  onOpenEdit,
+}: Props) {
   const [showAddPanel, setShowAddPanel] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingIdInternal, setEditingIdInternal] = useState<string | null>(null);
+  // Use controlled prop if provided, else internal state
+  const editingId = editingIdProp !== undefined ? editingIdProp : editingIdInternal;
+  const setEditingId = (id: string | null) => {
+    if (onOpenEdit) onOpenEdit(id);
+    else setEditingIdInternal(id);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -134,13 +148,21 @@ export function PromoHubEditor({ sections, onChange }: Props) {
           ) : (
             <div className="space-y-2">
               {sections.map((s) => (
-                <SectionCard
+                <div
                   key={s._id}
-                  section={s}
-                  onEdit={() => setEditingId(s._id)}
-                  onToggleVisible={() => handleToggleVisible(s._id)}
-                  onDelete={() => handleDelete(s._id)}
-                />
+                  data-section-id={s._id}
+                  className={cn(
+                    "transition-all",
+                    editingId === s._id && "rounded-lg ring-2 ring-[var(--admin-blue)] ring-offset-2",
+                  )}
+                >
+                  <SectionCard
+                    section={s}
+                    onEdit={() => setEditingId(s._id)}
+                    onToggleVisible={() => handleToggleVisible(s._id)}
+                    onDelete={() => handleDelete(s._id)}
+                  />
+                </div>
               ))}
             </div>
           )}
