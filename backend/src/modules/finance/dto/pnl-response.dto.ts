@@ -53,21 +53,43 @@ export class PnLSummaryDto {
   @ApiProperty({ enum: ['ESTIMATED', 'ACTUAL'] })
   revenueSource!: 'ESTIMATED' | 'ACTUAL';
 
-  @ApiProperty({ description: 'Tổng chi phí VND (BR-PNL-05)' })
+  @ApiProperty({
+    description:
+      'Tổng chi phí VND = estimatedCost + actualCost (ADDITIVE, F-036)',
+  })
   totalCost!: number;
 
   /**
-   * FEATURE-033 — Source attribution của totalCost (UI hiển thị badge "Ước tính"
-   * vs "Thực tế" + tooltip giải thích).
-   *   - 'actual'    → cost_items có data, totalCost = sum cost_items.amount
-   *   - 'estimated' → cost_items rỗng, totalCost = sum(line_items[i].cost × quantity)
-   *   - 'none'      → cả 2 = 0 (HĐ cũ pre-F-033 chưa nhập cost gì)
+   * FEATURE-036 — Breakdown ước tính từ line items (quote-time cost).
+   * = sum(line_items[i].cost × quantity) cho mọi line item selected.
    */
   @ApiProperty({
-    enum: ['actual', 'estimated', 'none'],
-    description: 'Source attribution của totalCost (F-033)',
+    description: 'Chi phí ước tính từ line items (F-036)',
   })
-  totalCostSource!: 'actual' | 'estimated' | 'none';
+  estimatedCost!: number;
+
+  /**
+   * FEATURE-036 — Breakdown thực tế phát sinh thêm.
+   * = sum(cost_items.amount) — chi phí nhập tay sau khi sign HĐ.
+   * KHÔNG override estimatedCost — ADD-ON.
+   */
+  @ApiProperty({
+    description: 'Chi phí phát sinh thêm từ cost_items (F-036)',
+  })
+  actualCost!: number;
+
+  /**
+   * FEATURE-036 — Source attribution descriptive (NOT used in compute):
+   *   - 'none'      → cả 2 = 0
+   *   - 'estimated' → chỉ line_items có cost
+   *   - 'actual'    → chỉ cost_items có data
+   *   - 'mixed'     → cả 2 có data
+   */
+  @ApiProperty({
+    enum: ['actual', 'estimated', 'mixed', 'none'],
+    description: 'Source attribution descriptive (F-036)',
+  })
+  totalCostSource!: 'actual' | 'estimated' | 'mixed' | 'none';
 
   @ApiProperty({ description: 'Lãi/Lỗ VND (BR-PNL-06)' })
   profit!: number;

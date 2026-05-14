@@ -144,15 +144,20 @@ describe('F-028 PnLService.getSummary', () => {
   });
 
   /* ────────────────────────────────────────────────────────────────────────
-   * FEATURE-033 — Line-item cost-at-quote-time (Danny 2026-05-14 request).
+   * FEATURE-036 — Line-item cost + cost_items ADDITIVE (Danny 2026-05-14
+   * fix F-033 semantic bug).
    *
-   * Priority chain:
-   *   1. cost_items > 0 → totalCost = actual, totalCostSource = 'actual'
-   *   2. cost_items empty + line_items có cost → estimated, source = 'estimated'
-   *   3. Cả 2 = 0 → totalCost = 0, source = 'none' (legacy HĐ pre-F-033)
+   * cost_items = chi phí phát sinh THÊM (KHÔNG override line_items.cost).
+   * totalCost = estimatedCost (line_items) + actualCost (cost_items).
+   *
+   * Source attribution descriptive:
+   *   'none'      → cả 2 = 0
+   *   'estimated' → chỉ line_items có cost
+   *   'actual'    → chỉ cost_items có data
+   *   'mixed'     → cả 2 có data
    * ──────────────────────────────────────────────────────────────────────── */
 
-  it('TC-LIC-01: cost_items rỗng + line_items có cost → totalCost=estimated, source=estimated', async () => {
+  it('TC-LIC-01: line_items có cost, no cost_items → estimated=32.5M, total=32.5M, source=estimated', async () => {
     const contract = makeContract({
       totalAmount: 100_000_000,
       lineItems: [
@@ -164,32 +169,34 @@ describe('F-028 PnLService.getSummary', () => {
     const { service } = setupService(contract, []);
 
     const result = await service.getSummary(contract._id.toString());
+    expect(result.estimatedCost).toBe(32_500_000);
+    expect(result.actualCost).toBe(0);
     expect(result.totalCost).toBe(32_500_000);
     expect(result.totalCostSource).toBe('estimated');
     expect(result.profit).toBe(67_500_000);
-    expect(result.costItemCount).toBe(0);
   });
 
-  it('TC-LIC-02: cost_items có data → actual ưu tiên, line_items.cost bị IGNORE', async () => {
+  it('TC-LIC-02 (F-036 FIX): cost_items ADD-ON line_items, KHÔNG override → totalCost = sum cả 2', async () => {
     const contract = makeContract({
       totalAmount: 100_000_000,
       lineItems: [
-        { quantity: 10, cost: 99_000_000, selected: true }, // wildly wrong estimate
+        { quantity: 10, cost: 2_000_000, selected: true }, // estimated 20M
       ],
     });
     const { service } = setupService(contract, [
-      { amount: 30_000_000, category: 'LABOR' },
+      { amount: 30_000_000, category: 'LABOR' }, // actual 50M
       { amount: 20_000_000, category: 'MATERIAL' },
     ]);
 
     const result = await service.getSummary(contract._id.toString());
-    expect(result.totalCost).toBe(50_000_000); // actual wins
-    expect(result.totalCostSource).toBe('actual');
-    expect(result.profit).toBe(50_000_000);
-    expect(result.costItemCount).toBe(2);
+    expect(result.estimatedCost).toBe(20_000_000);
+    expect(result.actualCost).toBe(50_000_000);
+    expect(result.totalCost).toBe(70_000_000); // ADDITIVE — F-036 fix
+    expect(result.totalCostSource).toBe('mixed');
+    expect(result.profit).toBe(30_000_000);
   });
 
-  it('TC-LIC-03: line_items có cost nhưng selected=false → KHÔNG tính vào estimated', async () => {
+  it('TC-LIC-03: line_items selected=false → KHÔNG tính vào estimated', async () => {
     const contract = makeContract({
       totalAmount: 100_000_000,
       lineItems: [
@@ -200,11 +207,13 @@ describe('F-028 PnLService.getSummary', () => {
     const { service } = setupService(contract, []);
 
     const result = await service.getSummary(contract._id.toString());
+    expect(result.estimatedCost).toBe(20_000_000);
+    expect(result.actualCost).toBe(0);
     expect(result.totalCost).toBe(20_000_000);
     expect(result.totalCostSource).toBe('estimated');
   });
 
-  it('TC-LIC-04: Cả cost_items + line_items.cost = 0 → totalCost=0, source=none (legacy HĐ pre-F-033)', async () => {
+  it('TC-LIC-04: Cả cost_items + line_items.cost = 0 → totalCost=0, source=none', async () => {
     const contract = makeContract({
       totalAmount: 50_000_000,
       lineItems: [{ quantity: 10, cost: 0, selected: true }],
@@ -212,25 +221,54 @@ describe('F-028 PnLService.getSummary', () => {
     const { service } = setupService(contract, []);
 
     const result = await service.getSummary(contract._id.toString());
+    expect(result.estimatedCost).toBe(0);
+    expect(result.actualCost).toBe(0);
     expect(result.totalCost).toBe(0);
     expect(result.totalCostSource).toBe('none');
     expect(result.profit).toBe(50_000_000);
     expect(result.margin).toBe(100);
   });
 
-  it('TC-LIC-05: Backward compat — HĐ cũ không có field `cost` trong line items → estimated=0, source=none', async () => {
+  it('TC-LIC-05: Backward compat — HĐ cũ không có field cost + có cost_items → source=actual', async () => {
     const contract = makeContract({
       totalAmount: 50_000_000,
       lineItems: [
         { quantity: 10, unitPrice: 5_000_000, selected: true }, // no cost field
-        { quantity: 1, unitPrice: 1_000_000, selected: true }, // no cost field
       ],
     });
-    const { service } = setupService(contract, []);
+    const { service } = setupService(contract, [
+      { amount: 5_000_000, category: 'OTHER' },
+    ]);
 
     const result = await service.getSummary(contract._id.toString());
-    expect(result.totalCost).toBe(0);
-    expect(result.totalCostSource).toBe('none');
+    expect(result.estimatedCost).toBe(0);
+    expect(result.actualCost).toBe(5_000_000);
+    expect(result.totalCost).toBe(5_000_000);
+    expect(result.totalCostSource).toBe('actual');
+  });
+
+  it('TC-LIC-06 (F-036 NEW): Danny screenshot scenario — estimated 185M + actual 1M = 186M total', async () => {
+    // HĐ 11.05/2026/HDDV/CTTXT5-5BIB-20 — 3 line items với cost ước tính
+    // + 1 cost_item "Đút lót chính quyền" 1M phát sinh thêm.
+    const contract = makeContract({
+      totalAmount: 209_199_994,
+      lineItems: [
+        { quantity: 1000, cost: 30_000, selected: true }, // 30M chip
+        { quantity: 1, cost: 30_000_000, selected: true }, // 30M cổng
+        { quantity: 10, cost: 12_500_000, selected: true }, // 125M nhân sự
+      ],
+    });
+    const { service } = setupService(contract, [
+      { amount: 1_000_000, category: 'OTHER' },
+    ]);
+
+    const result = await service.getSummary(contract._id.toString());
+    expect(result.estimatedCost).toBe(185_000_000);
+    expect(result.actualCost).toBe(1_000_000);
+    expect(result.totalCost).toBe(186_000_000);
+    expect(result.totalCostSource).toBe('mixed');
+    expect(result.profit).toBe(23_199_994);
+    expect(result.margin).toBeCloseTo(11.1, 0);
   });
 
   it('UP-04 — Contract không tồn tại → NotFoundException', async () => {

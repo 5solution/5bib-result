@@ -86,15 +86,20 @@ export interface PnLSummary {
   contractId: string;
   revenue: number;
   revenueSource: RevenueSource;
+  /** FEATURE-036 — totalCost = estimatedCost + actualCost (additive). */
   totalCost: number;
+  /** FEATURE-036 — chi phí ước tính từ line_items[i].cost × quantity. */
+  estimatedCost?: number;
+  /** FEATURE-036 — chi phí phát sinh thêm từ cost_items.amount. */
+  actualCost?: number;
   /**
-   * FEATURE-033 — Source attribution của totalCost:
-   *   - 'actual'    → cost_items có data
-   *   - 'estimated' → cost_items rỗng, totalCost = sum(line_items[i].cost × qty)
-   *   - 'none'      → cả 2 = 0 (HĐ cũ pre-F-033)
-   * Optional vì backend cũ pre-F-033 không return field này.
+   * FEATURE-036 — Source attribution descriptive (UI badge):
+   *   - 'none'      → cả 2 = 0
+   *   - 'estimated' → chỉ line_items có cost
+   *   - 'actual'    → chỉ cost_items có data
+   *   - 'mixed'     → cả 2 có data
    */
-  totalCostSource?: "actual" | "estimated" | "none";
+  totalCostSource?: "actual" | "estimated" | "mixed" | "none";
   profit: number;
   margin: number | null;
   marginTier: MarginTier;

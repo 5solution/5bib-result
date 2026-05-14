@@ -138,27 +138,52 @@ export function PnLSummaryCard({ contractId, compact, summary }: Props) {
             </div>
           </div>
           <div>
-            <div className="text-xs text-stone-500">Chi phí</div>
+            <div className="text-xs text-stone-500">Tổng chi phí</div>
             <div className="font-mono text-sm font-semibold">
               {formatVnd(pnl.totalCost)}
             </div>
-            <div className="text-[10px] text-stone-400">
-              {pnl.costItemCount} mục
-              {/* FEATURE-033 — Source attribution badge */}
+            {/* FEATURE-036 — Breakdown ước tính + phát sinh */}
+            {(pnl.estimatedCost ?? 0) > 0 && (
+              <div
+                className="text-[10px] text-stone-400"
+                title="Chi phí ước tính từ line items × quantity (quote-time estimate)"
+              >
+                Ước tính: {formatVnd(pnl.estimatedCost ?? 0)}
+              </div>
+            )}
+            {(pnl.actualCost ?? 0) > 0 && (
+              <div
+                className="text-[10px] text-stone-400"
+                title="Chi phí phát sinh thêm từ cost_items"
+              >
+                Phát sinh: {formatVnd(pnl.actualCost ?? 0)} ({pnl.costItemCount}{" "}
+                mục)
+              </div>
+            )}
+            {/* Source attribution badge */}
+            <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-stone-400">
               {pnl.totalCostSource === "estimated" && (
                 <span
-                  className="ml-1 inline-block rounded bg-amber-100 px-1 py-[1px] text-[9px] font-semibold text-amber-700"
-                  title="Chi phí ước tính từ line items khi tạo HĐ. Nhập cost_items thực tế để chuyển sang actual."
+                  className="inline-block rounded bg-amber-100 px-1 py-[1px] text-[9px] font-semibold text-amber-700"
+                  title="Chi phí toàn bộ là ước tính từ line items. Chưa có chi phí phát sinh thực tế."
                 >
                   ƯỚC TÍNH
                 </span>
               )}
               {pnl.totalCostSource === "actual" && (
                 <span
-                  className="ml-1 inline-block rounded bg-emerald-100 px-1 py-[1px] text-[9px] font-semibold text-emerald-700"
-                  title="Chi phí thực tế từ cost_items đã nhập."
+                  className="inline-block rounded bg-emerald-100 px-1 py-[1px] text-[9px] font-semibold text-emerald-700"
+                  title="Chi phí toàn bộ từ cost_items thực tế (line items không có cost ước tính)."
                 >
                   THỰC TẾ
+                </span>
+              )}
+              {pnl.totalCostSource === "mixed" && (
+                <span
+                  className="inline-block rounded bg-blue-100 px-1 py-[1px] text-[9px] font-semibold text-blue-700"
+                  title="Cả ước tính (line items) lẫn phát sinh (cost_items). Tổng = ước tính + phát sinh."
+                >
+                  KẾT HỢP
                 </span>
               )}
             </div>

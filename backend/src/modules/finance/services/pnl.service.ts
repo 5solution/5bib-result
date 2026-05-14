@@ -193,12 +193,22 @@ export class PnLService {
     const actualCost = costItems.reduce((s, c) => s + (c.amount || 0), 0);
 
     /**
-     * FEATURE-033 — totalCost priority chain:
-     *   1. cost_items có data → actualCost [admin nhập thực tế]
-     *   2. cost_items rỗng nhưng line_items có cost > 0 → estimatedCost
-     *      = sum(li.cost × li.quantity) [quote-time estimate, Danny intent
-     *      "muốn nhìn P&L ở đầu mục"]
-     *   3. Cả 2 = 0 → totalCost = 0 (legacy fallback HĐ cũ)
+     * FEATURE-036 (Danny 2026-05-14 fix F-033 semantic bug):
+     * cost_items KHÔNG override line_items.cost — chúng ADD-ON.
+     *
+     *   estimatedCost = sum(line_items[i].cost × quantity) [quote-time base]
+     *   actualCost    = sum(cost_items.amount) [chi phí phát sinh THÊM]
+     *   totalCost     = estimatedCost + actualCost [ADDITIVE]
+     *
+     * Trước F-036 (F-033 design): cost_items override estimated → admin
+     * nhập 1 chi phí phát sinh 1M làm P&L hiện chi phí 1M thay vì 185M+1M
+     * = 186M → margin 99.5% thay vì 11% → SAI semantic.
+     *
+     * totalCostSource attribution mới (descriptive only, KHÔNG dùng cho compute):
+     *   'none'      → cả 2 = 0
+     *   'estimated' → chỉ line_items có cost (chưa có cost_items)
+     *   'actual'    → chỉ cost_items có cost (line_items.cost = 0)
+     *   'mixed'     → cả 2 có cost
      */
     const lineItemsList = (contract.lineItems ?? []) as Array<{
       cost?: number;
@@ -212,13 +222,15 @@ export class PnLService {
         0,
       );
 
-    const totalCost = actualCost > 0 ? actualCost : estimatedCost;
-    const totalCostSource: 'actual' | 'estimated' | 'none' =
-      actualCost > 0
-        ? 'actual'
-        : estimatedCost > 0
-          ? 'estimated'
-          : 'none';
+    const totalCost = estimatedCost + actualCost;
+    const totalCostSource: 'actual' | 'estimated' | 'mixed' | 'none' =
+      estimatedCost > 0 && actualCost > 0
+        ? 'mixed'
+        : actualCost > 0
+          ? 'actual'
+          : estimatedCost > 0
+            ? 'estimated'
+            : 'none';
 
     const computed = computePnL({
       revenue,
@@ -239,6 +251,9 @@ export class PnLService {
       revenue: computed.revenue,
       revenueSource: computed.revenueSource,
       totalCost: computed.totalCost,
+      // FEATURE-036 — breakdown 2 nguồn (UI display purpose)
+      estimatedCost,
+      actualCost,
       totalCostSource,
       profit: computed.profit,
       margin: computed.margin,
@@ -447,10 +462,10 @@ export class PnLService {
       }
 
       /**
-       * FEATURE-033 — Dashboard aggregation cũng apply priority chain.
-       * Khi `cost_items` rỗng cho HĐ này → fallback estimated từ line_items.
-       * KHÔNG ghi vào costByCategory aggregation (estimate không có category
-       * breakdown — UI chart sẽ giữ 5-key all-zero cho contract này).
+       * FEATURE-036 — Dashboard aggregation: cost_items ADD-ON line_items.
+       * totalCost = estimated_from_line_items + actual_from_cost_items.
+       * costByCategory chỉ chứa actual cost_items breakdown (estimated chưa
+       * có category split — UI chart giữ behavior cũ).
        */
       const lineItemsList = ((c as ContractDocument).lineItems ?? []) as Array<{
         cost?: number;
@@ -463,8 +478,7 @@ export class PnLService {
           (s, li) => s + (Number(li.cost) || 0) * (Number(li.quantity) || 0),
           0,
         );
-      const effectiveCost =
-        cost.totalCost > 0 ? cost.totalCost : estimatedCostDash;
+      const effectiveCost = cost.totalCost + estimatedCostDash;
       const profit = revenue - effectiveCost;
       const margin =
         revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : null;
