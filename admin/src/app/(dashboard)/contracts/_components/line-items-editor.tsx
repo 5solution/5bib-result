@@ -90,28 +90,28 @@ export function LineItemsEditor({
   return (
     <div className="rounded-lg border border-[var(--border,#E7E2D9)] bg-white">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[1000px] text-sm">
           <thead className="bg-[#F3F0EB] text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--text-muted,#78716C)]">
             <tr>
-              <th className="px-2 py-2 text-left w-12">STT</th>
-              <th className="px-2 py-2 text-left">Mô tả</th>
+              <th className="px-2 py-2 text-left w-10">STT</th>
+              <th className="px-2 py-2 text-left min-w-[200px]">Mô tả</th>
               <th className="px-2 py-2 text-left w-20">ĐVT</th>
-              <th className="px-2 py-2 text-right w-16">SL</th>
-              <th className="px-2 py-2 text-right w-28">Đơn giá</th>
+              <th className="px-2 py-2 text-right w-20">SL</th>
+              <th className="px-2 py-2 text-right w-32">Đơn giá</th>
               <th
-                className="px-2 py-2 text-right w-28"
+                className="px-2 py-2 text-right w-32"
                 title="Giá vốn 1 đơn vị (ước tính). P&L Deal = (Đơn giá - Giá vốn) × SL. Khi có cost_items thực tế nhập sau, P&L sẽ ưu tiên actual."
               >
                 Giá vốn
               </th>
-              <th className="px-2 py-2 text-right w-16">Giảm (%)</th>
+              <th className="px-2 py-2 text-right w-20">Giảm %</th>
               <th
-                className="px-2 py-2 text-right w-32"
+                className="px-2 py-2 text-right w-36"
                 title="Thành tiền chưa bao gồm VAT — VAT tính ở Financial Summary bên dưới"
               >
                 Thành tiền
               </th>
-              <th className="px-2 py-2 w-16" aria-label="Actions" />
+              <th className="px-2 py-2 w-12" aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
@@ -176,6 +176,7 @@ export function LineItemsEditor({
                     className="text-right font-mono"
                     disabled={disabled}
                     aria-label={`Đơn giá dòng ${it.stt}`}
+                    placeholder="0"
                   />
                 </td>
                 <td className="px-1 py-1">
@@ -185,6 +186,7 @@ export function LineItemsEditor({
                     className="text-right font-mono text-muted-foreground"
                     disabled={disabled}
                     aria-label={`Giá vốn dòng ${it.stt}`}
+                    placeholder="0"
                   />
                 </td>
                 <td className="px-1 py-1">

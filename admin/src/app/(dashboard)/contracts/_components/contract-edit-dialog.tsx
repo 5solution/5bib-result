@@ -238,7 +238,7 @@ export function ContractEditDialog({ contract, open, onClose, onSaved }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-x-hidden overflow-y-auto sm:max-w-2xl lg:max-w-3xl">
+      <DialogContent className="max-h-[90vh] !max-w-6xl sm:!max-w-6xl !w-[min(95vw,1280px)] sm:!w-[min(95vw,1280px)] overflow-x-hidden overflow-y-auto">
         <DialogHeader className="pr-10">
           <DialogTitle className="flex flex-wrap items-baseline gap-x-2 gap-y-1 break-words">
             <span>
