@@ -144,6 +144,23 @@ export function PnLSummaryCard({ contractId, compact, summary }: Props) {
             </div>
             <div className="text-[10px] text-stone-400">
               {pnl.costItemCount} mục
+              {/* FEATURE-033 — Source attribution badge */}
+              {pnl.totalCostSource === "estimated" && (
+                <span
+                  className="ml-1 inline-block rounded bg-amber-100 px-1 py-[1px] text-[9px] font-semibold text-amber-700"
+                  title="Chi phí ước tính từ line items khi tạo HĐ. Nhập cost_items thực tế để chuyển sang actual."
+                >
+                  ƯỚC TÍNH
+                </span>
+              )}
+              {pnl.totalCostSource === "actual" && (
+                <span
+                  className="ml-1 inline-block rounded bg-emerald-100 px-1 py-[1px] text-[9px] font-semibold text-emerald-700"
+                  title="Chi phí thực tế từ cost_items đã nhập."
+                >
+                  THỰC TẾ
+                </span>
+              )}
             </div>
           </div>
           <div>

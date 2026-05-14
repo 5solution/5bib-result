@@ -153,6 +153,9 @@ export function ServiceCatalogPicker({
       unit: it.unit ?? "",
       quantity: 1,
       unitPrice: it.referencePrice ?? 0,
+      // FEATURE-033 — auto-copy referenceCost vào line.cost (Danny intent
+      // "nhìn P&L ngay khi tạo HĐ"). Admin có thể edit override sau pick.
+      cost: it.referenceCost ?? 0,
       discount: 0,
       selected: true,
       note: it.description,

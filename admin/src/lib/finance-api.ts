@@ -87,6 +87,14 @@ export interface PnLSummary {
   revenue: number;
   revenueSource: RevenueSource;
   totalCost: number;
+  /**
+   * FEATURE-033 — Source attribution của totalCost:
+   *   - 'actual'    → cost_items có data
+   *   - 'estimated' → cost_items rỗng, totalCost = sum(line_items[i].cost × qty)
+   *   - 'none'      → cả 2 = 0 (HĐ cũ pre-F-033)
+   * Optional vì backend cũ pre-F-033 không return field này.
+   */
+  totalCostSource?: "actual" | "estimated" | "none";
   profit: number;
   margin: number | null;
   marginTier: MarginTier;

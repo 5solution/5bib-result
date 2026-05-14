@@ -190,7 +190,35 @@ export class PnLService {
     const { revenue, source, warning } = await this.resolveRevenue(contract);
 
     const costItems = await this.costItems.findAllActiveByContract(contractId);
-    const totalCost = costItems.reduce((s, c) => s + (c.amount || 0), 0);
+    const actualCost = costItems.reduce((s, c) => s + (c.amount || 0), 0);
+
+    /**
+     * FEATURE-033 — totalCost priority chain:
+     *   1. cost_items có data → actualCost [admin nhập thực tế]
+     *   2. cost_items rỗng nhưng line_items có cost > 0 → estimatedCost
+     *      = sum(li.cost × li.quantity) [quote-time estimate, Danny intent
+     *      "muốn nhìn P&L ở đầu mục"]
+     *   3. Cả 2 = 0 → totalCost = 0 (legacy fallback HĐ cũ)
+     */
+    const lineItemsList = (contract.lineItems ?? []) as Array<{
+      cost?: number;
+      quantity?: number;
+      selected?: boolean;
+    }>;
+    const estimatedCost = lineItemsList
+      .filter((li) => li.selected !== false)
+      .reduce(
+        (s, li) => s + (Number(li.cost) || 0) * (Number(li.quantity) || 0),
+        0,
+      );
+
+    const totalCost = actualCost > 0 ? actualCost : estimatedCost;
+    const totalCostSource: 'actual' | 'estimated' | 'none' =
+      actualCost > 0
+        ? 'actual'
+        : estimatedCost > 0
+          ? 'estimated'
+          : 'none';
 
     const computed = computePnL({
       revenue,
@@ -211,6 +239,7 @@ export class PnLService {
       revenue: computed.revenue,
       revenueSource: computed.revenueSource,
       totalCost: computed.totalCost,
+      totalCostSource,
       profit: computed.profit,
       margin: computed.margin,
       marginTier: computed.marginTier,
@@ -417,7 +446,26 @@ export class PnLService {
         totalCostByCategory[k] += cost.costByCategory[k] ?? 0;
       }
 
-      const profit = revenue - cost.totalCost;
+      /**
+       * FEATURE-033 — Dashboard aggregation cũng apply priority chain.
+       * Khi `cost_items` rỗng cho HĐ này → fallback estimated từ line_items.
+       * KHÔNG ghi vào costByCategory aggregation (estimate không có category
+       * breakdown — UI chart sẽ giữ 5-key all-zero cho contract này).
+       */
+      const lineItemsList = ((c as ContractDocument).lineItems ?? []) as Array<{
+        cost?: number;
+        quantity?: number;
+        selected?: boolean;
+      }>;
+      const estimatedCostDash = lineItemsList
+        .filter((li) => li.selected !== false)
+        .reduce(
+          (s, li) => s + (Number(li.cost) || 0) * (Number(li.quantity) || 0),
+          0,
+        );
+      const effectiveCost =
+        cost.totalCost > 0 ? cost.totalCost : estimatedCostDash;
+      const profit = revenue - effectiveCost;
       const margin =
         revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : null;
       const marginTier: DashboardContractItemDto['marginTier'] =
@@ -439,7 +487,7 @@ export class PnLService {
         status: c.status as string,
         revenue,
         revenueSource: source as 'ESTIMATED' | 'ACTUAL',
-        totalCost: cost.totalCost,
+        totalCost: effectiveCost,
         profit,
         margin,
         marginTier,

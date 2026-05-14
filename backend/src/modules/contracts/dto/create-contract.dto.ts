@@ -43,6 +43,20 @@ export class LineItemInputDto {
   @IsOptional()
   @IsMongoId()
   catalogItemId?: string;
+  /**
+   * FEATURE-033 — Quote-time estimated cost per unit (giá vốn 1 đơn vị).
+   * Admin nhập trên line items table khi tạo HĐ → P&L Deal preview =
+   * estimated profit trước khi nhập actual cost_items.
+   * Default 0 (backward compat — HĐ cũ không có field).
+   */
+  @ApiPropertyOptional({
+    description: 'Quote-time estimated cost per unit (giá vốn 1 đơn vị)',
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cost?: number;
 }
 
 export class RevenueShareInputDto {

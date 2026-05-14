@@ -34,6 +34,7 @@ const BLANK_ITEM: LineItemInput = {
   unit: "",
   quantity: 1,
   unitPrice: 0,
+  cost: 0,
   discount: 0,
   selected: true,
 };
@@ -49,9 +50,26 @@ export function LineItemsEditor({
       items.map((it) => ({
         ...it,
         amount: calcLineAmount(it.quantity, it.unitPrice, it.discount ?? 0),
+        // FEATURE-033 — line-level estimated cost preview = cost × quantity
+        lineCost: (Number(it.cost) || 0) * (Number(it.quantity) || 0),
       })),
     [items],
   );
+
+  // FEATURE-033 — preview totals: revenue/cost/profit/margin estimated từ
+  // line items HIỆN TẠI trong wizard, KHÔNG đợi backend P&L compute.
+  // Mục đích Danny: "tao muốn nhìn P&L ở đầu mục luôn".
+  const previewTotals = useMemo(() => {
+    const revenue = computed
+      .filter((it) => it.selected !== false)
+      .reduce((s, it) => s + it.amount, 0);
+    const cost = computed
+      .filter((it) => it.selected !== false)
+      .reduce((s, it) => s + it.lineCost, 0);
+    const profit = revenue - cost;
+    const margin = revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0;
+    return { revenue, cost, profit, margin };
+  }, [computed]);
 
   function setRow(idx: number, patch: Partial<LineItemInput>) {
     const next = items.map((it, i) => (i === idx ? { ...it, ...patch } : it));
@@ -77,23 +95,29 @@ export function LineItemsEditor({
             <tr>
               <th className="px-2 py-2 text-left w-12">STT</th>
               <th className="px-2 py-2 text-left">Mô tả</th>
-              <th className="px-2 py-2 text-left w-24">ĐVT</th>
-              <th className="px-2 py-2 text-right w-20">SL</th>
-              <th className="px-2 py-2 text-right w-32">Đơn giá</th>
-              <th className="px-2 py-2 text-right w-20">Giảm (%)</th>
+              <th className="px-2 py-2 text-left w-20">ĐVT</th>
+              <th className="px-2 py-2 text-right w-16">SL</th>
+              <th className="px-2 py-2 text-right w-28">Đơn giá</th>
               <th
-                className="px-2 py-2 text-right w-36"
+                className="px-2 py-2 text-right w-28"
+                title="Giá vốn 1 đơn vị (ước tính). P&L Deal = (Đơn giá - Giá vốn) × SL. Khi có cost_items thực tế nhập sau, P&L sẽ ưu tiên actual."
+              >
+                Giá vốn
+              </th>
+              <th className="px-2 py-2 text-right w-16">Giảm (%)</th>
+              <th
+                className="px-2 py-2 text-right w-32"
                 title="Thành tiền chưa bao gồm VAT — VAT tính ở Financial Summary bên dưới"
               >
-                Thành tiền (chưa VAT)
+                Thành tiền
               </th>
-              <th className="px-2 py-2 w-20" aria-label="Actions" />
+              <th className="px-2 py-2 w-16" aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
             {computed.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-0">
+                <td colSpan={9} className="p-0">
                   <EmptyState
                     icon={ListPlus}
                     title="Chưa có hạng mục"
@@ -155,6 +179,15 @@ export function LineItemsEditor({
                   />
                 </td>
                 <td className="px-1 py-1">
+                  <MoneyInput
+                    value={it.cost ?? 0}
+                    onChange={(v) => setRow(idx, { cost: v })}
+                    className="text-right font-mono text-muted-foreground"
+                    disabled={disabled}
+                    aria-label={`Giá vốn dòng ${it.stt}`}
+                  />
+                </td>
+                <td className="px-1 py-1">
                   <Input
                     type="number"
                     min={0}
@@ -188,6 +221,44 @@ export function LineItemsEditor({
           </tbody>
         </table>
       </div>
+      {/* FEATURE-033 — P&L Deal preview real-time (nhìn ngay khi tạo HĐ) */}
+      {computed.length > 0 && previewTotals.cost > 0 && (
+        <div className="border-t border-[var(--border,#E7E2D9)] bg-emerald-50/40 px-3 py-2 text-xs">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+            <span className="font-semibold uppercase tracking-wider text-emerald-900">
+              💰 P&L Deal (ước tính)
+            </span>
+            <span className="text-muted-foreground">
+              Doanh thu:{" "}
+              <span className="font-mono font-semibold text-foreground">
+                {formatVND(previewTotals.revenue)}
+              </span>
+            </span>
+            <span className="text-muted-foreground">
+              Giá vốn:{" "}
+              <span className="font-mono font-semibold text-foreground">
+                {formatVND(previewTotals.cost)}
+              </span>
+            </span>
+            <span
+              className={`font-mono font-bold ${
+                previewTotals.profit >= 0
+                  ? "text-emerald-700"
+                  : "text-rose-700"
+              }`}
+            >
+              Lãi/Lỗ: {previewTotals.profit >= 0 ? "+" : ""}
+              {formatVND(previewTotals.profit)} ({previewTotals.margin}%)
+            </span>
+            <span
+              className="ml-auto text-[10px] italic text-muted-foreground"
+              title="P&L tính từ Giá vốn nhập tay ở line items. Khi nhập cost_items thực tế ở trang HĐ chi tiết, P&L sẽ ưu tiên actual."
+            >
+              Ước tính từ line items — actual override khi nhập cost_items
+            </span>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-2 border-t border-[var(--border,#E7E2D9)] p-3">
         <Button
           type="button"

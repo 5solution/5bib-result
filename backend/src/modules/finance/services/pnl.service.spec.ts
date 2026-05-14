@@ -143,6 +143,96 @@ describe('F-028 PnLService.getSummary', () => {
     expect(result.profit).toBe(-1_000_000);
   });
 
+  /* ────────────────────────────────────────────────────────────────────────
+   * FEATURE-033 — Line-item cost-at-quote-time (Danny 2026-05-14 request).
+   *
+   * Priority chain:
+   *   1. cost_items > 0 → totalCost = actual, totalCostSource = 'actual'
+   *   2. cost_items empty + line_items có cost → estimated, source = 'estimated'
+   *   3. Cả 2 = 0 → totalCost = 0, source = 'none' (legacy HĐ pre-F-033)
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  it('TC-LIC-01: cost_items rỗng + line_items có cost → totalCost=estimated, source=estimated', async () => {
+    const contract = makeContract({
+      totalAmount: 100_000_000,
+      lineItems: [
+        { quantity: 10, cost: 2_000_000, selected: true }, // 20M
+        { quantity: 5, cost: 1_500_000, selected: true }, //   7.5M
+        { quantity: 100, cost: 50_000, selected: true }, //   5M
+      ],
+    });
+    const { service } = setupService(contract, []);
+
+    const result = await service.getSummary(contract._id.toString());
+    expect(result.totalCost).toBe(32_500_000);
+    expect(result.totalCostSource).toBe('estimated');
+    expect(result.profit).toBe(67_500_000);
+    expect(result.costItemCount).toBe(0);
+  });
+
+  it('TC-LIC-02: cost_items có data → actual ưu tiên, line_items.cost bị IGNORE', async () => {
+    const contract = makeContract({
+      totalAmount: 100_000_000,
+      lineItems: [
+        { quantity: 10, cost: 99_000_000, selected: true }, // wildly wrong estimate
+      ],
+    });
+    const { service } = setupService(contract, [
+      { amount: 30_000_000, category: 'LABOR' },
+      { amount: 20_000_000, category: 'MATERIAL' },
+    ]);
+
+    const result = await service.getSummary(contract._id.toString());
+    expect(result.totalCost).toBe(50_000_000); // actual wins
+    expect(result.totalCostSource).toBe('actual');
+    expect(result.profit).toBe(50_000_000);
+    expect(result.costItemCount).toBe(2);
+  });
+
+  it('TC-LIC-03: line_items có cost nhưng selected=false → KHÔNG tính vào estimated', async () => {
+    const contract = makeContract({
+      totalAmount: 100_000_000,
+      lineItems: [
+        { quantity: 10, cost: 2_000_000, selected: true }, // 20M counted
+        { quantity: 5, cost: 10_000_000, selected: false }, // SKIP
+      ],
+    });
+    const { service } = setupService(contract, []);
+
+    const result = await service.getSummary(contract._id.toString());
+    expect(result.totalCost).toBe(20_000_000);
+    expect(result.totalCostSource).toBe('estimated');
+  });
+
+  it('TC-LIC-04: Cả cost_items + line_items.cost = 0 → totalCost=0, source=none (legacy HĐ pre-F-033)', async () => {
+    const contract = makeContract({
+      totalAmount: 50_000_000,
+      lineItems: [{ quantity: 10, cost: 0, selected: true }],
+    });
+    const { service } = setupService(contract, []);
+
+    const result = await service.getSummary(contract._id.toString());
+    expect(result.totalCost).toBe(0);
+    expect(result.totalCostSource).toBe('none');
+    expect(result.profit).toBe(50_000_000);
+    expect(result.margin).toBe(100);
+  });
+
+  it('TC-LIC-05: Backward compat — HĐ cũ không có field `cost` trong line items → estimated=0, source=none', async () => {
+    const contract = makeContract({
+      totalAmount: 50_000_000,
+      lineItems: [
+        { quantity: 10, unitPrice: 5_000_000, selected: true }, // no cost field
+        { quantity: 1, unitPrice: 1_000_000, selected: true }, // no cost field
+      ],
+    });
+    const { service } = setupService(contract, []);
+
+    const result = await service.getSummary(contract._id.toString());
+    expect(result.totalCost).toBe(0);
+    expect(result.totalCostSource).toBe('none');
+  });
+
   it('UP-04 — Contract không tồn tại → NotFoundException', async () => {
     const contractModel = {
       findById: jest.fn(() => ({

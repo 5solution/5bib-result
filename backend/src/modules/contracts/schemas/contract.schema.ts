@@ -65,6 +65,23 @@ export class LineItem {
    * crash). Pattern: `Contract.raceId` (string) thay vì ObjectId ref.
    */
   @Prop() catalogItemId?: string;
+  /**
+   * FEATURE-033 — Quote-time estimated cost per unit (giá vốn 1 đơn vị).
+   *
+   * Lý do: Danny 2026-05-14 request "tao muốn nhìn thấy P&L ở đầu mục luôn,
+   * còn việc phát sinh thêm gì thì ghi sau". Cho phép admin nhập cost ngay
+   * trên line items table khi tạo HĐ → P&L Deal preview = estimated profit
+   * BEFORE actual cost_items được nhập.
+   *
+   * Auto-fill khi pick từ catalog: line.cost = ServiceCatalog.referenceCost.
+   * Manual edit cũng được. Default 0 (backward compat: HĐ cũ không có field).
+   *
+   * P&L priority (xem `pnl.service.ts`):
+   *   1. cost_items collection có data → totalCost = sum(cost_items.amount) [actual]
+   *   2. cost_items rỗng → totalCost = sum(line_items[i].cost × quantity) [estimated]
+   *   3. Cả 2 rỗng → totalCost = 0 (legacy fallback)
+   */
+  @Prop({ default: 0, min: 0 }) cost?: number;
 }
 export const LineItemSchema = SchemaFactory.createForClass(LineItem);
 

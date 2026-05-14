@@ -77,6 +77,13 @@ export interface LineItemInput {
    * Backend lưu để cost-suggestions endpoint match HĐ ↔ catalog.
    */
   catalogItemId?: string;
+  /**
+   * FEATURE-033 — Quote-time estimated cost per unit (giá vốn 1 đơn vị).
+   * Admin nhập trong LineItemsEditor table → P&L Deal preview = estimated
+   * profit before cost_items thực tế được nhập. Default 0.
+   * Auto-fill khi pick từ catalog: cost = ServiceCatalog.referenceCost.
+   */
+  cost?: number;
 }
 
 export interface LineItemView extends LineItemInput {

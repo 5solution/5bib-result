@@ -56,6 +56,19 @@ export class PnLSummaryDto {
   @ApiProperty({ description: 'Tổng chi phí VND (BR-PNL-05)' })
   totalCost!: number;
 
+  /**
+   * FEATURE-033 — Source attribution của totalCost (UI hiển thị badge "Ước tính"
+   * vs "Thực tế" + tooltip giải thích).
+   *   - 'actual'    → cost_items có data, totalCost = sum cost_items.amount
+   *   - 'estimated' → cost_items rỗng, totalCost = sum(line_items[i].cost × quantity)
+   *   - 'none'      → cả 2 = 0 (HĐ cũ pre-F-033 chưa nhập cost gì)
+   */
+  @ApiProperty({
+    enum: ['actual', 'estimated', 'none'],
+    description: 'Source attribution của totalCost (F-033)',
+  })
+  totalCostSource!: 'actual' | 'estimated' | 'none';
+
   @ApiProperty({ description: 'Lãi/Lỗ VND (BR-PNL-06)' })
   profit!: number;
 
