@@ -196,6 +196,58 @@
 
 ---
 
+### 2026-05-14 — F-024 Contract Wizard 2 UX bugs (PROD report Danny)
+
+**Discovery URL:** `https://admin.5bib.com/contracts/create` (wizard step 1 + 2)
+**Symptom:**
+1. Step 1 "Loại hợp đồng" + "Loại tài liệu" Select trigger hiển thị raw enum `TIMING` / `CONTRACT` thay vì VN labels "Dịch vụ tính giờ" / "Hợp đồng"
+2. Step 2 "Đối tác" — list panel 19 partners + scroll KHÔNG tự đóng sau khi user click chọn 1 partner. List vẫn chiếm vertical space lớn, user phải scroll qua mới thấy form auto-fill bên dưới.
+
+**Detected by:** Danny manual UAT screenshot 2026-05-14 (~14:00 GMT+7).
+**Resolved:** commit `e166970` push `release/v1.8.1` ~14:30 GMT+7.
+
+**Root cause:**
+
+**Bug 1 (Select enum display):** Admin migrate sang `@base-ui/react/select` v1.3.0 (Base UI, NOT classic Radix). Trong Base UI, `<Select.Value />` empty children KHÔNG auto-lookup matched `<SelectItem>` children theo value. Mặc định render raw value string. Code F-024 cũ pattern `<SelectValue />` đã viết theo Radix mindset → broken sau migration. Vi phạm Display Convention F-028 (`f18da46`).
+
+**Bug 2 (Partner picker no-collapse):** `partner-picker.tsx` always render list panel. State `value` set chỉ highlight selected item, KHÔNG hide list. Vertical space lost = list + form đè nhau visually. UX rule "selection collapses list" không được apply.
+
+**Fix 2-bug:**
+1. Add `CONTRACT_TYPE_LABEL` + `DOCUMENT_TYPE_LABEL` Record maps tại đầu `contract-wizard.tsx` + change `<SelectValue />` → `<SelectValue>{(v) => LABEL[v] ?? v}</SelectValue>` (Base UI render prop pattern)
+2. Add `browsing` state trong `PartnerPicker`. Conditional render:
+   - `value && !browsing` → collapsed compact card (entityName + MST + "Đổi đối tác" button)
+   - else → search input + list panel
+   - Sau pick / sau tạo mới → setBrowsing(false) auto
+
+**Manager self-audit — tại sao bug pre-existing F-024 không detect?**
+- F-024 ship 2026-05-11 commit `c41feb3` — Coder QC khi đó chỉ test logic (create contract, wizard navigation) — KHÔNG test visual UX với data thực tế
+- Sau F-024 ship đã có 3 features khác (F-028 finance, F-029 hardening, F-032 partner import) chạm Contracts module — KHÔNG ai mở wizard `/contracts/create` để test
+- Bug 1 specific quirk: `@base-ui/react/select` Base UI vs `@radix-ui/react-select` Radix differ behavior. Admin migration `@base-ui` lúc nào KHÔNG có grep audit `<SelectValue />` usage check render-prop pattern compatibility
+- Bug 2 specific quirk: Designer/Manager khi review PRD không call-out "selected state → collapse selector". UX implicit assumption.
+
+**Memory hardening:**
+- ✅ `conventions.md` — add anti-pattern "`<SelectValue />` empty children với @base-ui/react/select Base UI" + Display Convention restatement
+- ✅ `known-issues.md` — this entry + TD-ADMIN-SELECTVALUE-SWEEP flagged
+- ✅ Pattern minted: "Picker/Selector with list → collapse to compact card after selection + Reopen button" (UX-PICKER-COLLAPSE)
+
+**TD-ADMIN-SELECTVALUE-SWEEP (MED priority):** `grep -rn "SelectValue />" admin/src --include="*.tsx" | wc -l` = 57 instances. Mọi instance render enum/status đều có thể display raw. Need sweep audit:
+- timing-leads list/detail status
+- result-image-stats filters
+- contract-edit-dialog (status + provider)
+- service-catalog-table (category + filter)
+- acceptance-report-form (verdict)
+- contract-list-table (filter status + contract type)
+- contract-wizard step 4+5 (catalog picker, payment terms)
+
+Sweep approach: tạo `admin/src/lib/select-labels.ts` central dictionary + helper component `<EnumSelectValue map={...} />` wrap pattern. Apply progressively per page khi Danny report tiếp.
+
+**Lesson hardened:**
+1. UI primitive lib migration (Radix → Base UI hoặc tương tự) → audit downstream usage pattern, KHÔNG assume API parity
+2. Picker/selector với always-visible list → mặc định collapse-after-select (UX rule)
+3. Manager Plan checklist add: "Select trigger render VN label or raw enum?"
+
+---
+
 ### 2026-05-14 — F-031 + F-032 Excel Import dialog overflow UX (PROD UX bug)
 
 **Discovery URL:** `https://admin.5bib.com/contracts/partners` (Import Excel button → preview step)
