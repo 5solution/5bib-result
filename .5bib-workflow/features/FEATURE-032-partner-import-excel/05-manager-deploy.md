@@ -1,9 +1,16 @@
 # FEATURE-032: Deploy & Memory Sync — Partner Excel Import
 
-**Deployed:** 2026-05-13
-**Status:** ✅ DONE
-**Commit:** `46563e3`
-**Branches updated:** `release/v1.8.0` (PROD trigger) + `main` (DEV trigger)
+**Deployed:** 2026-05-13 (initial) → 2026-05-14 (2-step UX hotfix)
+**Status:** ✅ DONE (post-UX hotfix Danny verified OK)
+**Commit chain:**
+- `46563e3` — F-032 initial code ship (2026-05-13)
+- `e57340f` — memory sync (feature-log + 05)
+- `6c6ce8a` — UX hotfix v1: flex layout + truncate + table-fixed (2026-05-14 morning)
+- `7f4b962` — memory: Visual QC mandatory pre-merge convention
+- `9c6df03` — UX hotfix v2: `!important` + `sm:` variant override for shadcn `sm:max-w-sm` default
+- `bb3c059` — memory: shadcn responsive-variant override anti-pattern
+
+**Branches updated:** `release/v1.8.0` then `release/v1.8.1` (PROD trigger) + `main` (DEV trigger)
 
 ---
 
@@ -80,3 +87,31 @@ git merge --ff-only origin/main      # safe, only succeeds if pure ancestor
   - Sponsors bulk import (future)
   - Race courses checkpoints bulk import (future)
 - "Pre-commit release branch parity check" lesson should be added to conventions.md by next Manager session that touches conventions.md.
+
+---
+
+## 🔥 Post-deploy UX hotfix retrospective (2026-05-14)
+
+**Symptom (Danny screenshot):** Dialog preview Import Excel hẹp ~380px trên desktop → table 6-col tràn ngang → cột Phone/Email cut khỏi viewport → "19 hợp lệ" badge wrap 2 dòng.
+
+**2-step hotfix:**
+
+### v1 hotfix `6c6ce8a` (failed)
+- Fix flex layout: sticky header/footer + scrollable body
+- `<DialogContent className="max-w-6xl w-[min(95vw,1200px)] ...">` + `table-fixed` + truncate cells
+- **Vẫn hỏng** — Danny screenshot lại sau deploy, dialog vẫn hẹp.
+
+### v2 hotfix `9c6df03` (success)
+- Root cause discovery: admin shadcn `DialogContent` default có `sm:max-w-sm` (384px @ ≥640px). Override `max-w-6xl` (no variant) KHÔNG override `sm:max-w-sm` vì tailwind-merge thấy 2 scope khác → variant class thắng trên desktop.
+- Fix: explicit `!` important + matching `sm:` variant: `!max-w-6xl sm:!max-w-6xl !w-[min(95vw,1200px)] sm:!w-[min(95vw,1200px)] !p-0`
+- Danny verified OK 2026-05-14.
+
+**3 lessons hardened (recorded in memory):**
+
+1. **Visual QC mandatory pre-merge cho UI feature** — `conventions.md` rule + `known-issues.md` incident log entry 2026-05-14. QC phải mở browser + paste screenshot/DOM snapshot vào `04-qc-report.md` Phase 5. Backend-only feature exempt.
+
+2. **shadcn responsive-variant override anti-pattern** — `conventions.md` anti-pattern row. Khi override shadcn primitive default có `sm:`/`md:`/`lg:` variant trong className, MUST match variant prefix HOẶC use `!important`. Đọc `components/ui/[primitive].tsx` để biết default trước khi override.
+
+3. **Pattern reuse KHÔNG miễn QC** — F-031 dialog đã có sẵn cùng bug (chỉ chưa được phát hiện vì 7-col service-catalog table không tràn dữ liệu test). F-032 copy pattern → double-shipped bug. Mỗi feature có UI vẫn phải visual QC độc lập, không trust pattern reuse.
+
+**Test fixture standard (new):** Mọi spec/manual UAT cho admin form/table phải test với tên VN dài thực tế ≥30 ký tự + diacritics (vd "CÔNG TY TNHH ĐẦU TƯ THƯƠNG MẠI DỊCH VỤ XYZ"), KHÔNG dùng "Co A" / "Item 1" / "Name 1".
