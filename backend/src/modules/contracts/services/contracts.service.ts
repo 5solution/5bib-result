@@ -415,6 +415,10 @@ export class ContractsService {
       ...((li as any).catalogItemId
         ? { catalogItemId: (li as any).catalogItemId }
         : {}),
+      // FEATURE-033 — preserve quote-time estimated cost per unit. Default 0
+      // backward compat. Bug-fix F-035 (branch fix/F-035-...): create + update
+      // path missing field → cost silent drop on save → P&L sai.
+      cost: (li as any).cost ?? 0,
     }));
 
     const totals = ContractsService.calcTotals(lineItems, vatRate);
@@ -749,6 +753,10 @@ export class ContractsService {
         ...((li as any).catalogItemId
           ? { catalogItemId: (li as any).catalogItemId }
           : {}),
+        // FEATURE-033 — preserve quote-time estimated cost per unit. F-035
+        // fix: trước đó update path drop cost silent → admin nhập Giá vốn,
+        // save xong field mất → P&L sai estimate.
+        cost: (li as any).cost ?? 0,
       }));
       const vatRate = dto.vatRate ?? current.vatRate;
       const totals = ContractsService.calcTotals(items, vatRate);
