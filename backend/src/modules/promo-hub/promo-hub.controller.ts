@@ -33,6 +33,10 @@ import { ReorderSectionsDto } from './dto/reorder-sections.dto';
 import { UpdatePromoHubDto } from './dto/update-promo-hub.dto';
 import { PromoHubService } from './promo-hub.service';
 import { PROMO_HUB_STATUSES, PromoHubStatus } from './schemas/promo-hub.schema';
+import {
+  RacesOnSaleListResponseDto,
+  RacesOnSaleQueryDto,
+} from './dto/race-on-sale-response.dto';
 
 /**
  * FEATURE-027 — Promo Hub controller.
@@ -59,6 +63,33 @@ export class PromoHubController {
   constructor(private readonly promoHubService: PromoHubService) {}
 
   // ─── Public endpoint (slug-based) — MUST declare before `:id` ───
+
+  /**
+   * FEATURE-033 — Public endpoint cho race calendar phase BÁN VÉ.
+   *
+   * Route MUST declare BEFORE `Get(':id')` để literal `races-on-sale` không
+   * bị shadow bởi generic `:id` route.
+   */
+  @Get('races-on-sale')
+  @ApiOperation({
+    summary: 'Public — list races đang phase BÁN VÉ (MySQL platform)',
+    description:
+      'FEATURE-033. Source: MySQL `5bib_platform_live.races` filter status="GENERATED_CODE" + is_delete=0 + is_show=1 + url_name NOT NULL. ' +
+      'Multi-tenant: show ALL (BR-PH33-06). Sort: registration_start_time ASC default. Cache Redis 60s TTL.',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: ['registration_start_time', 'event_date'],
+  })
+  @ApiResponse({ status: 200, type: RacesOnSaleListResponseDto })
+  async findRacesOnSale(
+    @Query() query: RacesOnSaleQueryDto,
+  ): Promise<RacesOnSaleListResponseDto> {
+    const data = await this.promoHubService.findRacesOnSale(query);
+    return { data };
+  }
 
   @Get('slug/:slug')
   @ApiOperation({

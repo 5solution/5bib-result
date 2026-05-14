@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { LogtoAuthModule } from '../logto-auth';
 import { PromoHub, PromoHubSchema } from './schemas/promo-hub.schema';
 import { PromoHubController } from './promo-hub.controller';
 import { PromoHubService } from './promo-hub.service';
+import { RaceReadonly } from './entities/race-readonly.entity';
 
 /**
  * FEATURE-027 — PromoHubModule.
@@ -20,6 +22,8 @@ import { PromoHubService } from './promo-hub.service';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: PromoHub.name, schema: PromoHubSchema }]),
+    // FEATURE-033 — Named connection 'platform' cho MySQL races read-only.
+    TypeOrmModule.forFeature([RaceReadonly], 'platform'),
     LogtoAuthModule,
   ],
   controllers: [PromoHubController],

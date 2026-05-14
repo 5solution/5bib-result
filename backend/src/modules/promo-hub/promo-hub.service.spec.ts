@@ -8,6 +8,8 @@ import {
 import { Types } from 'mongoose';
 import { PromoHubService } from './promo-hub.service';
 import { PromoHub } from './schemas/promo-hub.schema';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { RaceReadonly } from './entities/race-readonly.entity';
 
 const REDIS_TOKEN = 'default_IORedisModuleConnectionToken';
 
@@ -15,6 +17,8 @@ describe('PromoHubService', () => {
   let service: PromoHubService;
   let mockModel: any;
   let mockRedis: any;
+  let mockRaceRepo: any;
+  let mockQueryBuilder: any;
 
   const mockHub = (overrides: Partial<any> = {}): any => ({
     _id: new Types.ObjectId(),
@@ -62,11 +66,26 @@ describe('PromoHubService', () => {
       set: jest.fn().mockResolvedValue('OK'),
       del: jest.fn().mockResolvedValue(1),
     };
+    // FEATURE-033 — QueryBuilder mock cho findRacesOnSale()
+    mockQueryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+    mockRaceRepo = {
+      createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+    };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         PromoHubService,
         { provide: getModelToken(PromoHub.name), useValue: mockModel },
+        {
+          provide: getRepositoryToken(RaceReadonly, 'platform'),
+          useValue: mockRaceRepo,
+        },
         { provide: REDIS_TOKEN, useValue: mockRedis },
       ],
     }).compile();
@@ -371,6 +390,136 @@ describe('PromoHubService', () => {
       await service.list({ status: 'all' });
       const callArgs = mockModel.countDocuments.mock.calls[0][0];
       expect(callArgs).not.toHaveProperty('status');
+    });
+  });
+
+  // ─── FEATURE-033: findRacesOnSale() ────────────────────────────
+
+  describe('findRacesOnSale() — MySQL platform on-sale phase', () => {
+    const mockRace = (overrides: Partial<RaceReadonly> = {}): RaceReadonly =>
+      ({
+        raceId: '212',
+        title: 'UTMB Việt Nam 2026',
+        urlName: 'utmb-vn-2026',
+        status: 'GENERATED_CODE',
+        logoUrl: 'https://example.com/logo.png',
+        eventStartDate: new Date('2026-12-01T00:00:00Z'),
+        eventEndDate: new Date('2026-12-03T00:00:00Z'),
+        registrationStartTime: new Date('2026-06-01T00:00:00Z'),
+        registrationEndTime: new Date('2026-11-15T00:00:00Z'),
+        location: 'Mộc Châu, Sơn La',
+        brand: 'UTMB',
+        tenantId: '5',
+        ...overrides,
+      }) as RaceReadonly;
+
+    it('queries with filter status=GENERATED_CODE + is_delete=0 + is_show=1 + url_name NOT NULL', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([mockRace()]);
+      await service.findRacesOnSale({});
+
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith('r.status = :status', {
+        status: 'GENERATED_CODE',
+      });
+      const andWhereCalls = mockQueryBuilder.andWhere.mock.calls.map(
+        (c: unknown[]) => c[0],
+      );
+      expect(andWhereCalls).toContain('CAST(r.is_delete AS UNSIGNED) = 0');
+      expect(andWhereCalls).toContain('CAST(r.is_show AS UNSIGNED) = 1');
+      expect(andWhereCalls).toContain('r.url_name IS NOT NULL');
+    });
+
+    it('respects limit + default sort=registration_start_time ASC', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([]);
+      await service.findRacesOnSale({ limit: 10 });
+      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(10);
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith(
+        'r.registration_start_time',
+        'ASC',
+      );
+    });
+
+    it('sort=event_date maps to r.event_start_date ASC', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([]);
+      await service.findRacesOnSale({ sort: 'event_date' });
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith(
+        'r.event_start_date',
+        'ASC',
+      );
+    });
+
+    it('default limit=6 when not provided', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([]);
+      await service.findRacesOnSale({});
+      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(6);
+    });
+
+    it('Redis cache HIT on 2nd call — returns cached without re-querying MySQL', async () => {
+      const cachedDtos = [
+        {
+          raceId: '999',
+          title: 'Cached Race',
+          urlName: 'cached',
+          logoUrl: null,
+          eventStartDate: null,
+          registrationEndTime: null,
+          location: null,
+          brand: null,
+          ticketUrl: 'https://5ticket.vn/event/cached',
+        },
+      ];
+      mockRedis.get.mockResolvedValue(JSON.stringify(cachedDtos));
+
+      const result = await service.findRacesOnSale({ limit: 6 });
+
+      expect(result).toEqual(cachedDtos);
+      expect(mockRaceRepo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('Redis GET throws → fallback DB direct (graceful degrade)', async () => {
+      mockRedis.get.mockRejectedValue(new Error('Redis down'));
+      mockQueryBuilder.getMany.mockResolvedValue([mockRace()]);
+
+      const result = await service.findRacesOnSale({});
+
+      expect(result).toHaveLength(1);
+      expect(mockRaceRepo.createQueryBuilder).toHaveBeenCalled();
+    });
+
+    it('MySQL query throws → return empty [] (no 500)', async () => {
+      mockQueryBuilder.getMany.mockRejectedValue(new Error('MySQL down'));
+      const result = await service.findRacesOnSale({});
+      expect(result).toEqual([]);
+    });
+
+    it('transforms RaceReadonly → DTO, strips tenant_id, pre-computes ticketUrl', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([
+        mockRace({ urlName: 'utmb-2026' }),
+      ]);
+      const result = await service.findRacesOnSale({});
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        raceId: '212',
+        title: 'UTMB Việt Nam 2026',
+        urlName: 'utmb-2026',
+        ticketUrl: 'https://5ticket.vn/event/utmb-2026',
+        location: 'Mộc Châu, Sơn La',
+        brand: 'UTMB',
+      });
+      expect(result[0]).not.toHaveProperty('tenantId');
+      expect(result[0]).not.toHaveProperty('isShow');
+      expect(result[0]).not.toHaveProperty('isDelete');
+    });
+
+    it('caches result on successful query (Redis SET called)', async () => {
+      mockQueryBuilder.getMany.mockResolvedValue([mockRace()]);
+      await service.findRacesOnSale({ limit: 6 });
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'promo-hub:races-on-sale:6:registration_start_time',
+        expect.any(String),
+        'EX',
+        60,
+      );
     });
   });
 });

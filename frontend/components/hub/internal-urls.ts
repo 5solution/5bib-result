@@ -29,3 +29,19 @@ const RESULT_BASE_URL =
 export function getRaceUrl(slug: string): string {
   return `${RESULT_BASE_URL}/races/${encodeURIComponent(slug)}`;
 }
+
+/**
+ * FEATURE-033 — Build 5Ticket ticket sale URL for race phase BÁN VÉ.
+ *
+ * Backend pre-computes `ticketUrl` in `RaceOnSaleResponseDto` so frontend
+ * không cần hard-code domain. Helper này là fallback / legacy compat.
+ *
+ * @example
+ *   getTicketUrl('utmb-2026') → 'https://5ticket.vn/event/utmb-2026'
+ */
+const TICKET_BASE_URL =
+  process.env.NEXT_PUBLIC_TICKET_BASE_URL ?? 'https://5ticket.vn';
+
+export function getTicketUrl(urlName: string): string {
+  return `${TICKET_BASE_URL}/event/${encodeURIComponent(urlName)}`;
+}

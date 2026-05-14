@@ -243,7 +243,12 @@ function TypeSpecificForm({
         </div>
       );
 
-    case "race_calendar":
+    case "race_calendar": {
+      // F-033: backward-compat — missing source → 'result_active'
+      const source =
+        ((c.source as string | undefined) ?? "result_active") as
+          | "platform_on_sale"
+          | "result_active";
       return (
         <div className="space-y-3">
           <Field label="Tiêu đề khối">
@@ -251,6 +256,29 @@ function TypeSpecificForm({
               value={(c.title as string) ?? ""}
               onChange={(e) => onChange({ title: e.target.value })}
             />
+          </Field>
+          <Field
+            label="Nguồn dữ liệu"
+            hint="📊 Bán vé = race trên 5Ticket platform. 🏃 Vận hành = race đang chạy / đã kết thúc trên 5BIB Result."
+          >
+            <Select
+              value={source}
+              onValueChange={(v) =>
+                v && onChange({ source: v as "platform_on_sale" | "result_active" })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="platform_on_sale">
+                  📊 Race đang bán vé (5Ticket platform)
+                </SelectItem>
+                <SelectItem value="result_active">
+                  🏃 Race đang vận hành (5BIB Result)
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Số giải hiển thị">
             <Input
@@ -261,25 +289,50 @@ function TypeSpecificForm({
               onChange={(e) => onChange({ limit: Number(e.target.value) })}
             />
           </Field>
-          <Field label="Lọc theo trạng thái">
-            <Select
-              value={(((c.filter as Record<string, string> | undefined)?.status) ?? "pre_race") as string}
-              onValueChange={(v) =>
-                v && onChange({ filter: { ...(c.filter as object), status: v } })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pre_race">Sắp diễn ra</SelectItem>
-                <SelectItem value="live">Đang diễn ra</SelectItem>
-                <SelectItem value="ended">Đã kết thúc</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
+          {source === "platform_on_sale" ? (
+            <Field label="Sắp xếp">
+              <Select
+                value={(c.sort as string) ?? "registration_start_time"}
+                onValueChange={(v) => v && onChange({ sort: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="registration_start_time">
+                    Ngày mở bán (sớm trước)
+                  </SelectItem>
+                  <SelectItem value="event_date">
+                    Ngày diễn ra (sớm trước)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : (
+            <Field label="Lọc theo trạng thái">
+              <Select
+                value={
+                  (((c.filter as Record<string, string> | undefined)?.status) ??
+                    "pre_race") as string
+                }
+                onValueChange={(v) =>
+                  v && onChange({ filter: { ...(c.filter as object), status: v } })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pre_race">Sắp diễn ra</SelectItem>
+                  <SelectItem value="live">Đang diễn ra</SelectItem>
+                  <SelectItem value="ended">Đã kết thúc</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
         </div>
       );
+    }
 
     case "featured_races":
       return (

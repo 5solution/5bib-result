@@ -7,9 +7,11 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { InjectRepository } from '@nestjs/typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { Model, Types } from 'mongoose';
+import { Repository } from 'typeorm';
 // CJS interop — `sanitize-html` ships as CommonJS; default import via
 // `import sanitizeHtml from 'sanitize-html'` triggers Jest ts-jest resolver
 // quirk (undefined `.simpleTransform`, function not callable). Use namespace
@@ -34,6 +36,11 @@ import {
   PromoHubResponseDto,
 } from './dto/promo-hub-response.dto';
 import { SectionInputDto } from './dto/section.dto';
+import { RaceReadonly } from './entities/race-readonly.entity';
+import {
+  RaceOnSaleResponseDto,
+  RacesOnSaleQueryDto,
+} from './dto/race-on-sale-response.dto';
 
 /**
  * FEATURE-027 — PromoHubService.
@@ -122,9 +129,19 @@ export class PromoHubService {
     },
   };
 
+  /** FEATURE-033 — Pre-computed 5Ticket URL base for race-on-sale ticketUrl field. */
+  private static readonly TICKET_URL_BASE = 'https://5ticket.vn/event/';
+  private static readonly RACES_ON_SALE_CACHE_PREFIX = 'promo-hub:races-on-sale:';
+  private static readonly RACES_ON_SALE_CACHE_TTL = 60;
+  private static readonly RACES_ON_SALE_STATUS = 'GENERATED_CODE';
+
   constructor(
     @InjectModel(PromoHub.name)
     private readonly promoHubModel: Model<PromoHubDocument>,
+    /** FEATURE-033 — Optional injection: tests may skip platform DB. */
+    @Optional()
+    @InjectRepository(RaceReadonly, 'platform')
+    private readonly raceRepo?: Repository<RaceReadonly>,
     @Optional() @InjectRedis() private readonly redis?: Redis,
   ) {}
 
@@ -593,6 +610,116 @@ export class PromoHubService {
       createdBy: hub.createdBy,
       createdAt: (hub.createdAt ?? new Date(0)).toISOString(),
       updatedAt: (hub.updatedAt ?? new Date(0)).toISOString(),
+    };
+  }
+
+  // ─── FEATURE-033: Race calendar phase BÁN VÉ (MySQL platform) ────────────
+
+  /**
+   * FEATURE-033 — Fetch races đang phase BÁN VÉ từ MySQL `5bib_platform_live.races`.
+   *
+   * Filter (BR-PH33-01):
+   *   - status = 'GENERATED_CODE'
+   *   - is_delete = 0
+   *   - is_show = 1 (BR-PH33-04)
+   *   - url_name IS NOT NULL (BR-PH33-03)
+   *
+   * Sort (BR-PH33-04 default):
+   *   - 'registration_start_time' ASC
+   *   - 'event_date' = event_start_date ASC
+   *
+   * Cache TTL 60s. Graceful degrade khi Redis/MySQL fail.
+   * Multi-tenant: show ALL (BR-PH33-06).
+   */
+  async findRacesOnSale(
+    query: RacesOnSaleQueryDto,
+  ): Promise<RaceOnSaleResponseDto[]> {
+    const limit = query.limit ?? 6;
+    const sort = query.sort ?? 'registration_start_time';
+
+    if (!this.raceRepo) {
+      this.logger.warn(
+        '[findRacesOnSale] raceRepo not injected — returning empty array',
+      );
+      return [];
+    }
+
+    const cacheKey = `${PromoHubService.RACES_ON_SALE_CACHE_PREFIX}${limit}:${sort}`;
+
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return JSON.parse(cached) as RaceOnSaleResponseDto[];
+      } catch (err) {
+        this.logger.warn(
+          `[findRacesOnSale] Redis GET failed: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    const sortColumn =
+      sort === 'event_date' ? 'r.event_start_date' : 'r.registration_start_time';
+
+    let races: RaceReadonly[];
+    try {
+      races = await this.raceRepo
+        .createQueryBuilder('r')
+        .where('r.status = :status', {
+          status: PromoHubService.RACES_ON_SALE_STATUS,
+        })
+        .andWhere('CAST(r.is_delete AS UNSIGNED) = 0')
+        .andWhere('CAST(r.is_show AS UNSIGNED) = 1')
+        .andWhere('r.url_name IS NOT NULL')
+        .orderBy(sortColumn, 'ASC')
+        .limit(limit)
+        .getMany();
+    } catch (err) {
+      this.logger.error(
+        `[findRacesOnSale] MySQL query failed: ${(err as Error).message}`,
+      );
+      return [];
+    }
+
+    const dtos = races.map((r) => this.toRaceOnSaleDto(r));
+
+    if (this.redis) {
+      try {
+        await this.redis.set(
+          cacheKey,
+          JSON.stringify(dtos),
+          'EX',
+          PromoHubService.RACES_ON_SALE_CACHE_TTL,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `[findRacesOnSale] Redis SET failed: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    return dtos;
+  }
+
+  /**
+   * Transform RaceReadonly → public DTO. Strip sensitive: tenant_id,
+   * is_delete, is_show. Pre-compute ticketUrl (BR-PH33-05).
+   */
+  private toRaceOnSaleDto(r: RaceReadonly): RaceOnSaleResponseDto {
+    const urlName = r.urlName as string;
+    return {
+      raceId: r.raceId,
+      title: r.title ?? '',
+      urlName,
+      logoUrl: r.logoUrl,
+      eventStartDate: r.eventStartDate
+        ? r.eventStartDate.toISOString()
+        : null,
+      registrationEndTime: r.registrationEndTime
+        ? r.registrationEndTime.toISOString()
+        : null,
+      location: r.location,
+      brand: r.brand,
+      ticketUrl: `${PromoHubService.TICKET_URL_BASE}${urlName}`,
     };
   }
 }

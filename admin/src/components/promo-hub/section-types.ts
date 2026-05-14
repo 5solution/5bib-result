@@ -105,12 +105,15 @@ export const SECTION_TYPE_META: Record<SectionType, SectionTypeMeta> = {
   race_calendar: {
     type: "race_calendar",
     label: "Lịch giải đấu",
-    description: "Hiển thị danh sách giải sắp tới từ Races collection.",
+    description:
+      "Hiển thị danh sách giải đấu — chọn nguồn: ĐANG BÁN VÉ (5Ticket platform) hoặc ĐANG VẬN HÀNH (5BIB Result).",
     icon: Calendar,
+    // F-033: default source = 'platform_on_sale' (phase bán vé) cho hub mới
     defaultConfig: {
       title: "Lịch giải sắp tới",
       limit: 6,
-      filter: { status: "pre_race" },
+      source: "platform_on_sale",
+      sort: "registration_start_time",
     },
   },
   featured_races: {
