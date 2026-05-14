@@ -8,6 +8,7 @@
  */
 
 import type { SectionResponseDto } from "@/lib/api-generated";
+import { getRaceUrl } from "../internal-urls";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8081";
 
@@ -67,11 +68,11 @@ export async function RaceCalendarSection({ section }: { section: SectionRespons
             {races.map((r) => (
               <a
                 key={r.id ?? r._id}
-                href={`/races/${r.slug}`}
+                href={getRaceUrl(r.slug)}
                 data-promo-cta
                 data-promo-section-id={section._id}
                 data-promo-cta-label={r.name}
-                data-promo-cta-url={`/races/${r.slug}`}
+                data-promo-cta-url={getRaceUrl(r.slug)}
                 className="group block overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-lg"
               >
                 <div

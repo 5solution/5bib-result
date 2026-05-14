@@ -8,6 +8,7 @@
  */
 
 import type { SectionResponseDto } from "@/lib/api-generated";
+import { getRaceUrl } from "../internal-urls";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8081";
 
@@ -114,11 +115,11 @@ export async function RecentResultsSection({ section }: { section: SectionRespon
         {race?.slug && (
           <div className="mt-4 text-right">
             <a
-              href={`/races/${race.slug}`}
+              href={getRaceUrl(race.slug)}
               data-promo-cta
               data-promo-section-id={section._id}
               data-promo-cta-label="Xem toàn bộ kết quả"
-              data-promo-cta-url={`/races/${race.slug}`}
+              data-promo-cta-url={getRaceUrl(race.slug)}
               className="text-sm font-semibold text-[var(--promo-primary)] hover:underline"
             >
               Xem toàn bộ kết quả →

@@ -2,9 +2,31 @@
 
 > **Audience:** Team dev đang maintain repo `5bib.com` (5Ticket Next.js app trên Vercel)
 > **Author:** Team 5BIB Result
-> **Date:** 2026-05-13
+> **Date:** 2026-05-13 (rev 2026-05-14 — sau feedback dev 5Ticket về cross-app rewrite)
 > **Effort:** ~5 phút — thêm 1 rewrite rule
 > **Risk:** ZERO (rewrite path-specific, không đụng routes khác)
+
+---
+
+## 🙏 Cảm ơn dev 5Ticket — feedback v1 ghi nhận
+
+Dev 5Ticket đã chỉ ra **2 vấn đề kỹ thuật thật** về Next.js cross-app rewrite:
+
+1. **Asset paths relative → 404 trên 5bib.com**
+   - HTML render từ result.5bib.com có `<script src="/_next/static/...">` relative
+   - Browser ở `5bib.com` → resolve relative → `https://5bib.com/_next/...` → 404
+
+2. **Internal Next.js link `/races/<slug>` broken**
+   - User click race link trong hub → browser ở 5bib.com → goes to `5bib.com/races/<slug>` → 5Ticket app no match → 404
+
+**ĐÃ FIX phía 5bib-result frontend (deploy 2026-05-14):**
+
+| Issue | Fix bên 5bib-result | Effect |
+|---|---|---|
+| Asset paths | Add `assetPrefix: 'https://result.5bib.com'` vào `frontend/next.config.ts` | Tất cả `_next/static/*`, `_next/data/*`, image paths render ABSOLUTE URL trỏ về `result.5bib.com` — work cross-domain |
+| Internal links | 3 sections (`RaceCalendarSection`, `FeaturedRacesSection`, `RecentResultsSection`) hardcode absolute URL `https://result.5bib.com/races/<slug>` thông qua helper `getRaceUrl()` | Click race link từ hub trên 5bib.com → jump full URL sang result.5bib.com (race detail page native) |
+
+→ **Team 5Ticket KHÔNG cần làm gì thêm ngoài rewrite rule dưới.** Sau khi 5Ticket merge rewrite, end-to-end flow work clean.
 
 ---
 
@@ -14,7 +36,7 @@ Team 5BIB vừa ship **Promo Hub** — CMS-driven landing page builder cho marke
 
 **Cần:** Rewrite `5bib.com/hub/*` → render content từ `result.5bib.com/hub/*` để Google index SEO authority của `5bib.com`.
 
-**Cách:** Thêm 1 `rewrites()` rule vào `next.config.js` của repo 5Ticket. Implement <5 phút, không cần đụng component nào khác.
+**Cách:** Thêm 1 `rewrites()` rule vào `next.config.js` của repo 5Ticket. Implement <5 phút, không cần đụng component nào khác (asset prefix + internal link fix ĐÃ DONE bên 5bib-result frontend).
 
 ---
 
@@ -174,6 +196,14 @@ A: Có. Sau khi rewrite live, team 5BIB sẽ extend `5bib.com/sitemap.xml` để
 
 **Q6: Có cần restart Vercel sau deploy?**
 A: Không. Vercel auto-deploy + atomic switch. Zero downtime.
+
+**Q7: Asset `/_next/static/*` có 404 không (vấn đề dev 5Ticket flag)?**
+A: KHÔNG. Bên 5bib-result frontend đã add `assetPrefix: 'https://result.5bib.com'` vào `next.config.ts` (deploy 2026-05-14). Tất cả asset paths trong HTML render ra đều là ABSOLUTE URL trỏ về `result.5bib.com`. Browser load asset cross-domain OK (script/style/image tag không có CORS issue, chỉ XHR/fetch có).
+
+**Q8: Internal link như `/races/<slug>` có broken khi click không?**
+A: KHÔNG broken. Bên 5bib-result đã sửa 3 sections (RaceCalendarSection, FeaturedRacesSection, RecentResultsSection) hardcode absolute URL `https://result.5bib.com/races/<slug>` thay vì relative `/races/<slug>`. User click race link từ hub trên 5bib.com → browser jump sang `result.5bib.com/races/<slug>` (race detail page native).
+
+Tradeoff: user "thoát" domain 5bib.com khi xem race detail. Acceptable vì race detail không có trên 5Ticket app — phải đi qua result.5bib.com anyway. Khi user trở lại hub → vẫn ở 5bib.com domain (SEO juice unaffected).
 
 ---
 
