@@ -37,7 +37,24 @@ import * as os from 'os';
 import * as path from 'path';
 
 describe('DocxService — FEATURE-030 provider info from env + add-on row', () => {
-  const docxSvc = new DocxService();
+  /**
+   * Default mock: MerchantConfig findOne returns null → docx falls back to
+   * tenant_metadata (legacy F-030 behavior). Specific test cases override
+   * to assert MerchantConfig priority (BUG-FIX 2026-05-14).
+   */
+  const mockModel: any = {
+    findOne: jest.fn().mockReturnValue({
+      lean: () => Promise.resolve(null),
+    }),
+  };
+  const docxSvc = new DocxService(mockModel);
+
+  beforeEach(() => {
+    mockModel.findOne.mockClear();
+    mockModel.findOne.mockReturnValue({
+      lean: () => Promise.resolve(null),
+    });
+  });
 
   const rec: any = {
     tenant_id: 1,
@@ -139,5 +156,136 @@ describe('DocxService — FEATURE-030 provider info from env + add-on row', () =
     const text = await extractDocText(buf);
     // representativeName.toUpperCase() = 'NGUYỄN BÌNH MINH'
     expect(text).toContain('NGUYỄN BÌNH MINH');
+  });
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * BUG-FIX 2026-05-14 — Merchant info priority (MerchantConfig > tenant_metadata)
+   *
+   * Danny report screenshot: DOCX cho Zaha #46 dùng platform sync info
+   * thay vì "Công ty đối tác" admin đã nhập riêng → DOCX sai 8 field.
+   * Fix: priority MerchantConfig admin-entered > tenant_metadata > tenant_name.
+   * ────────────────────────────────────────────────────────────────────────── */
+
+  it('TC-MC-01: MerchantConfig admin-entered legal_name + tax_code thắng tenant_metadata + rec.tenant_name', async () => {
+    mockModel.findOne.mockReturnValue({
+      lean: () =>
+        Promise.resolve({
+          tenantId: 1,
+          legal_name: 'CÔNG TY CỔ PHẦN VIỆT NAM TÔI ĐÓ',
+          tax_code: '0193762555',
+          business_address: 'Hà Nội Admin Entered Address',
+          representative_name: 'Trần Quang Hùng',
+          representative_title: 'Chủ Tịch HĐQT',
+          bank_account: '999888777',
+          bank_name: 'Vietcombank Hà Nội',
+        }),
+    });
+
+    const recWithMeta = {
+      ...rec,
+      tenant_metadata: {
+        companyName: 'PLATFORM SYNC NAME WRONG',
+        vat: '0193762OLD',
+        address: 'Platform Address Wrong',
+        name: 'Platform Rep Wrong',
+        bankAccount: '111222333',
+        bankName: 'Platform Bank Wrong',
+      },
+    };
+    const buf = await docxSvc.generate(recWithMeta);
+    const text = await extractDocText(buf);
+
+    // Admin-entered values WIN
+    expect(text).toContain('CÔNG TY CỔ PHẦN VIỆT NAM TÔI ĐÓ');
+    expect(text).toContain('0193762555');
+    expect(text).toContain('Hà Nội Admin Entered Address');
+    expect(text).toContain('Trần Quang Hùng');
+    expect(text).toContain('Chủ Tịch HĐQT');
+    expect(text).toContain('999888777');
+    expect(text).toContain('Vietcombank Hà Nội');
+
+    // Platform sync values KHÔNG còn hiện
+    expect(text).not.toContain('PLATFORM SYNC NAME WRONG');
+    expect(text).not.toContain('0193762OLD');
+    expect(text).not.toContain('Platform Address Wrong');
+    expect(text).not.toContain('Platform Rep Wrong');
+    expect(text).not.toContain('111222333');
+    expect(text).not.toContain('Platform Bank Wrong');
+  });
+
+  it('TC-MC-02: MerchantConfig KHÔNG tồn tại → fallback tenant_metadata (backward compat F-030)', async () => {
+    // Default mock returns null — no admin override
+    const recWithMeta = {
+      ...rec,
+      tenant_metadata: {
+        companyName: 'PLATFORM SYNC NAME',
+        vat: '01122334',
+        bankAccount: '123456789',
+      },
+    };
+    const buf = await docxSvc.generate(recWithMeta);
+    const text = await extractDocText(buf);
+
+    expect(text).toContain('PLATFORM SYNC NAME');
+    expect(text).toContain('01122334');
+    expect(text).toContain('123456789');
+  });
+
+  it('TC-MC-03: MerchantConfig partial fields (chỉ legal_name) → các field khác fallback tenant_metadata', async () => {
+    mockModel.findOne.mockReturnValue({
+      lean: () =>
+        Promise.resolve({
+          tenantId: 1,
+          legal_name: 'ADMIN ENTERED COMPANY ONLY',
+          // tax_code, address, etc null
+        }),
+    });
+
+    const recWithMeta = {
+      ...rec,
+      tenant_metadata: {
+        companyName: 'PLATFORM NAME WRONG',
+        vat: '0199000111',
+        address: 'Platform Address Fallback',
+        name: 'Platform Rep Fallback',
+        bankAccount: '888777666',
+        bankName: 'Platform Bank Fallback',
+      },
+    };
+    const buf = await docxSvc.generate(recWithMeta);
+    const text = await extractDocText(buf);
+
+    // Admin-entered legal_name WINS
+    expect(text).toContain('ADMIN ENTERED COMPANY ONLY');
+    expect(text).not.toContain('PLATFORM NAME WRONG');
+
+    // Other fields fallback to tenant_metadata
+    expect(text).toContain('0199000111');
+    expect(text).toContain('Platform Address Fallback');
+    expect(text).toContain('Platform Rep Fallback');
+    expect(text).toContain('888777666');
+    expect(text).toContain('Platform Bank Fallback');
+  });
+
+  it('TC-MC-04: MerchantConfig fetch query uses correct tenantId', async () => {
+    await docxSvc.generate(rec);
+    expect(mockModel.findOne).toHaveBeenCalledWith({ tenantId: rec.tenant_id });
+  });
+
+  it('TC-MC-05: MerchantConfig fetch error → fail-soft fallback tenant_metadata (KHÔNG crash)', async () => {
+    mockModel.findOne.mockReturnValue({
+      lean: () => Promise.reject(new Error('mongo down')),
+    });
+
+    const recWithMeta = {
+      ...rec,
+      tenant_metadata: {
+        companyName: 'FALLBACK PLATFORM',
+      },
+    };
+    const buf = await docxSvc.generate(recWithMeta);
+    expect(buf.length).toBeGreaterThan(1000);
+    const text = await extractDocText(buf);
+    expect(text).toContain('FALLBACK PLATFORM');
   });
 });

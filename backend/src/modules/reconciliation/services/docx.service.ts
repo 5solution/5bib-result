@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -18,6 +20,10 @@ import {
   WidthType,
 } from 'docx';
 import { ReconciliationDocument } from '../schemas/reconciliation.schema';
+import {
+  MerchantConfig,
+  MerchantConfigDocument,
+} from '../../merchant/schemas/merchant-config.schema';
 import { env } from 'src/config';
 import { renderPeriodLabel } from './period-label.helper';
 
@@ -165,17 +171,65 @@ function multiPara(
 
 @Injectable()
 export class DocxService {
+  private readonly logger = new Logger(DocxService.name);
+
+  constructor(
+    @InjectModel(MerchantConfig.name)
+    private readonly merchantConfigModel: Model<MerchantConfigDocument>,
+  ) {}
+
   async generate(rec: ReconciliationDocument): Promise<Buffer> {
+    /**
+     * BUG-FIX 2026-05-14 (Danny report screenshot Zaha #46): DOCX dùng
+     * `tenant_metadata` (sync readonly từ 5BIB platform) thay vì
+     * `MerchantConfig` admin-entered tab "Công ty đối tác".
+     *
+     * Priority resolution (highest → lowest):
+     *   1. MerchantConfig admin-entered ("Công ty đối tác" tab) — single source of truth
+     *      khi admin đã nhập legal/banking info chính xác
+     *   2. `tenant_metadata` sync từ platform — fallback nếu admin chưa nhập
+     *   3. `rec.tenant_name` cuối cùng cho companyName fallback
+     *
+     * Áp dụng 8 field: companyName/legal_name, taxCode, address, representative,
+     * representative_title, bankAccount, bankName. Phone giữ từ platform vì
+     * MerchantConfig schema chưa có field phone admin-entered.
+     */
     const tenantMeta = (rec as any).tenant_metadata ?? {};
+
+    const mc = await this.merchantConfigModel
+      .findOne({ tenantId: rec.tenant_id })
+      .lean()
+      .catch((err) => {
+        this.logger.warn(
+          `docx_merchant_config_fetch_failed tenant=${rec.tenant_id}: ${(err as Error).message}`,
+        );
+        return null;
+      });
+
     const companyName =
-      tenantMeta.companyName ?? tenantMeta.company_name ?? rec.tenant_name;
-    const address = tenantMeta.address ?? '';
-    const taxCode = tenantMeta.companyTax ?? tenantMeta.vat ?? '';
+      mc?.legal_name ??
+      tenantMeta.companyName ??
+      tenantMeta.company_name ??
+      rec.tenant_name;
+    const address = mc?.business_address ?? tenantMeta.address ?? '';
+    const taxCode =
+      mc?.tax_code ?? tenantMeta.companyTax ?? tenantMeta.vat ?? '';
     const phone = tenantMeta.phone ?? '';
-    const representative = tenantMeta.name ?? tenantMeta.representative ?? '';
-    const repTitle = tenantMeta.position ?? 'Tổng Giám đốc';
-    const bankAccount = tenantMeta.bankAccount ?? '';
-    const bankName = tenantMeta.bankName ?? '';
+    const representative =
+      mc?.representative_name ??
+      tenantMeta.name ??
+      tenantMeta.representative ??
+      '';
+    const repTitle =
+      mc?.representative_title ?? tenantMeta.position ?? 'Tổng Giám đốc';
+    const bankAccount = mc?.bank_account ?? tenantMeta.bankAccount ?? '';
+    const bankName = mc?.bank_name ?? tenantMeta.bankName ?? '';
+
+    // Audit log: which source won (debugging future bugs)
+    this.logger.log(
+      `docx_merchant_source tenant=${rec.tenant_id} mc=${mc ? 'yes' : 'no'} ` +
+        `companyName=${mc?.legal_name ? 'mc' : tenantMeta.companyName ? 'meta' : 'tenant_name'}`,
+    );
 
     const periodLabel = renderPeriodLabel(rec.period_start, rec.period_end);
     const signedDate = formatDate(
