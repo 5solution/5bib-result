@@ -453,40 +453,28 @@ export class DocxService {
   }
 
   /* ------------------------------------------------------------------ */
-  /* Header table: logo | republic text                                  */
+  /* Header table: republic text full-width (logo removed F-037 v4)       */
   /* ------------------------------------------------------------------ */
-  private buildHeaderTable(logoImage: ImageRun | null): Table {
-    const logoParagraph = logoImage
-      ? new Paragraph({ children: [logoImage] })
-      : new Paragraph({
-          children: [
-            new TextRun({ text: '5BIB', bold: true, size: SZ_14, font: FONT }),
-          ],
-        });
-
+  private buildHeaderTable(_logoImage: ImageRun | null): Table {
+    // FEATURE-037 v4 (Danny 2026-05-15 chốt): logo image cell render distort
+    // qua Google Drive viewer / Mac Preview (image placeholder shape rỗng,
+    // không hiển thị logo đúng). MS Word OK, các viewer khác không.
+    // Decision: BỎ logo, header chỉ còn text "CỘNG HÒA..." centered
+    // full-width (single cell, no logo column). Cleaner + universal viewer
+    // compat.
+    //
+    // _logoImage param giữ signature backward-compat — load logoImage trong
+    // generate() vẫn try nhưng KHÔNG render.
     return new Table({
       width: { size: 9000, type: WidthType.DXA },
-      // FEATURE-037 v3 fix — `columnWidths` BẮT BUỘC declare explicit.
-      // docx lib auto-generate `<w:tblGrid>` với DEFAULT 100 DXA per
-      // column nếu KHÔNG pass columnWidths prop. Trong `tblLayout=fixed`,
-      // renderer STRICT respect `tblGrid` (NOT `tcW` per-cell), nên dù tcW
-      // = 2000/7000 đúng, tblGrid = 100/100 → text ép vào 0.07" → wrap
-      // vertical mỗi ký tự. MS Word smart-fit ignore tblGrid khi conflict,
-      // strict renderers Google Drive / Mac Preview / LibreOffice không.
       layout: TableLayoutType.FIXED,
-      columnWidths: [2000, 7000],
+      columnWidths: [9000],
       rows: [
         new TableRow({
           children: [
             new TableCell({
               borders: BORDER_NONE,
-              width: { size: 2000, type: WidthType.DXA },
-              verticalAlign: VerticalAlign.CENTER,
-              children: [logoParagraph],
-            }),
-            new TableCell({
-              borders: BORDER_NONE,
-              width: { size: 7000, type: WidthType.DXA },
+              width: { size: 9000, type: WidthType.DXA },
               children: [
                 para('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', {
                   bold: true,

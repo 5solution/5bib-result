@@ -333,6 +333,22 @@ describe('DocxService — FEATURE-030 provider info from env + add-on row', () =
     expect(tblLayoutMatches.length).toBeGreaterThanOrEqual(4);
   });
 
+  it('TC-DOCX-COL-07 (F-037 v4): Logo BỎ khỏi header table — strict viewers render image distorted', async () => {
+    // Danny chốt 2026-05-15: logo image cell render distort qua Google Drive
+    // viewer / Mac Preview (shape placeholder rỗng thay vì logo). MS Word
+    // OK nhưng người nhận file complain. Decision: BỎ logo, header chỉ
+    // text "CỘNG HÒA..." centered full-width.
+    const buf = await docxSvc.generate(rec);
+    const text = await extractDocText(buf);
+
+    // KHÔNG được có <w:drawing> trong document (drawing = image embed)
+    const drawingMatches = text.match(/<w:drawing>/g) ?? [];
+    expect(drawingMatches.length).toBe(0);
+
+    // Text "CỘNG HÒA" vẫn render đúng (full-width centered)
+    expect(text).toContain('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM');
+  });
+
   it('TC-DOCX-COL-06 (F-037 v3 fix B): Header + sub-header có `<w:tblHeader/>` + summary rows có `<w:cantSplit/>` cho page-break safe', async () => {
     // Bug v3 partial: sau khi fix tblLayout + columnWidths, table render
     // đúng widths NHƯNG dài quá → page break ngắt giữa Phí bán vé (2) và
@@ -364,9 +380,8 @@ describe('DocxService — FEATURE-030 provider info from env + add-on row', () =
     const buf = await docxSvc.generate(rec);
     const text = await extractDocText(buf);
 
-    // Header logo table cols 2000+7000
-    expect(text).toContain('<w:gridCol w:w="2000"/>');
-    expect(text).toContain('<w:gridCol w:w="7000"/>');
+    // Header table (logo removed F-037 v4) — single col 9000 full width
+    // expect(text).toContain('<w:gridCol w:w="9000"/>');  // tested below via 4500 grouping
 
     // BÊN A/B info table — labelW 1700 + colonW 200 + 4×1775
     expect(text).toContain('<w:gridCol w:w="1700"/>');
