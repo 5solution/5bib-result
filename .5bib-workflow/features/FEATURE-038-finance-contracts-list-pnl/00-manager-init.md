@@ -88,18 +88,16 @@ Row click → `/finance/contracts/{contractId}` (existing detail page F-028 Phas
 
 ## 🚧 PAUSE Conditions cần BA xác nhận khi viết PRD
 
-- [ ] **Status whitelist:** BR-PNL-08 hiện strict `status: ['ACTIVE','COMPLETED']` — list F-038 có giữ rule này HAY include DRAFT (pipeline preview)?
-  - Recommend: giữ ACTIVE+COMPLETED để consistency với dashboard. Drafts đã có wizard step 4 P&L preview real-time + detail page card.
-- [ ] **Default sort:** profit DESC (top earners) hay anchorMonth DESC (recent first) hay status?
-  - Recommend: anchorMonth DESC (recent first) — standard table pattern.
-- [ ] **Search field:** contractNumber + partnerName + raceName combined OR contractNumber-only?
-  - Recommend: combined (Mongo `$or` match cả 3 fields). Existing `/contracts` list dùng pattern này.
-- [ ] **Page size:** 20 / 50 / 100?
-  - Recommend: 20 default + selector. Mirror `/contracts` PAGE_SIZE convention.
-- [ ] **Margin badge legend:** Show legend "🟢 Healthy > 10% / 🟡 Thin 0-10% / 🔴 Loss < 0% / ⚪ Neutral (no revenue)" trên page header?
-  - Recommend: Có — accessibility + first-time user explain.
-- [ ] **Export:** CSV/Excel button reuse `PnLExportButton` cho list này không, hay defer Phase 2?
-  - Recommend: Defer Phase 2 (existing `PnLExportButton` chỉ export dashboard tổng; list export riêng cần backend endpoint mới).
+**✅ Danny chốt "A" 2026-05-15 — accept tất cả 6 defaults:**
+
+- [x] **PAUSE-38-01 Status whitelist:** ✅ Giữ BR-PNL-08 strict `status: ['ACTIVE','COMPLETED']` — consistency với dashboard `/finance`. DRAFT đã có preview wizard step 4 + detail page card.
+- [x] **PAUSE-38-02 Default sort:** ✅ `anchorMonth DESC` (recent first — standard table pattern).
+- [x] **PAUSE-38-03 Search field:** ✅ Combined `contractNumber + partnerName + raceName` (Mongo `$or` match 3 fields). Pattern reuse `/contracts` list.
+- [x] **PAUSE-38-04 Page size:** ✅ 20 default + selector 20/50/100. Mirror `/contracts` PAGE_SIZE convention.
+- [x] **PAUSE-38-05 Margin badge legend:** ✅ Show legend trên page header — 🟢 Healthy >10% / 🟡 Thin 0-10% / 🔴 Loss <0% / ⚪ Neutral no revenue. Accessibility + first-time user explain.
+- [x] **PAUSE-38-06 Export CSV/Excel:** ✅ Defer Phase 2. Existing `PnLExportButton` chỉ export dashboard tổng; list export riêng cần backend endpoint mới.
+
+**BA paste 6 answers này vào section "Answers to Manager's PAUSE conditions" trong `01-ba-prd.md`.**
 
 ---
 
@@ -117,13 +115,22 @@ Row click → `/finance/contracts/{contractId}` (existing detail page F-028 Phas
 
 ## ✅ Sẵn sàng cho `/5bib-prd`?
 
-- [ ] Yes — BA có thể bắt đầu sau khi Danny confirm 6 PAUSE conditions
-- [x] Cần Danny xác nhận: 6 questions trong PAUSE Conditions section (đặc biệt status whitelist + default sort + search field + page size)
+- [x] **Yes** — Danny chốt "A" accept 6 defaults 2026-05-15. BA proceed luôn.
 
 ---
 
 ## 🔗 Next step
 
-Danny trả lời 6 PAUSE → `/5bib-prd FEATURE-038-finance-contracts-list-pnl`
+Danny chạy: **`/5bib-prd FEATURE-038-finance-contracts-list-pnl`**
 
-Hoặc nếu Danny chấp nhận recommendations mặc định → BA proceed luôn.
+BA agent (5bib-po-ba) sẽ:
+1. Đọc `00-manager-init.md` (file này) + memory codebase-map + known-issues
+2. Output `01-ba-prd.md` theo template với structured tables MANDATORY (per Manager directive 2026-05-14):
+   - UI Step-by-Step numbered table (action / UI behavior / trigger / next state)
+   - Buttons Specification Table
+   - Form Fields Specification (validation regex + error messages tiếng Việt)
+   - Backend Endpoint Specification Table
+   - DTO field-level TypeScript code block
+   - TC-XX backend test cases (8 elements: Method/URL/Headers/Body/Expected status/Expected body shape/MUST NOT leak/Side effect verify)
+   - Frontend E2E Playwright table
+3. Paste 6 PAUSE-38-* answers từ file 00 vào section "Answers to Manager's PAUSE conditions"
