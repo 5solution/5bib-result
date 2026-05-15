@@ -14,6 +14,7 @@ import {
   ShadingType,
   Table,
   TableCell,
+  TableLayoutType,
   TableRow,
   TextRun,
   VerticalAlign,
@@ -465,6 +466,12 @@ export class DocxService {
 
     return new Table({
       width: { size: 9000, type: WidthType.DXA },
+      // FEATURE-037 v2 fix — `tblLayout type="fixed"` BẮT BUỘC để strict
+      // renderers (Google Drive viewer / Mac Preview / LibreOffice) respect
+      // tcW explicit widths. Default autofit → renderer free to ignore tcW
+      // → text dài wrap mỗi ký tự vertical. MS Word smart-fit OK ngay cả
+      // autofit nên bug bị mask cho dev test.
+      layout: TableLayoutType.FIXED,
       rows: [
         new TableRow({
           children: [
@@ -530,6 +537,8 @@ export class DocxService {
 
     return new Table({
       width: { size: 9000, type: WidthType.DXA },
+      // FEATURE-037 v2 fix — fixed layout cho strict renderers respect tcW
+      layout: TableLayoutType.FIXED,
       rows: [
         // BÊN A header
         new TableRow({
@@ -830,6 +839,11 @@ export class DocxService {
 
     return new Table({
       width: { size: 9000, type: WidthType.DXA },
+      // FEATURE-037 v2 fix — fixed layout cho reconciliation table
+      // (Cự ly / Giai đoạn / Đơn giá / SL / Giảm / Tổng cộng + summary rows
+      //  Tổng cộng (1) / Phí bán vé (2) / Thuế GTGT (3) / Hoàn trả (4) +
+      //  Vật phẩm bổ sung). Đây là table chính mà Danny report bug.
+      layout: TableLayoutType.FIXED,
       rows: [headerRow, subHeaderRow, ...dataRows, ...summaryRows],
     });
   }
@@ -844,6 +858,8 @@ export class DocxService {
   ): Table {
     return new Table({
       width: { size: 9000, type: WidthType.DXA },
+      // FEATURE-037 v2 fix — signature table cũng cần fixed layout
+      layout: TableLayoutType.FIXED,
       rows: [
         new TableRow({
           children: [

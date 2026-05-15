@@ -318,6 +318,21 @@ describe('DocxService — FEATURE-030 provider info from env + add-on row', () =
     expect(text).toContain('Bên cung cấp dịch vụ');
   });
 
+  it('TC-DOCX-COL-04 (F-037 v2): TẤT CẢ 4 tables có `<w:tblLayout w:type="fixed"/>` — strict renderers respect tcW', async () => {
+    // Without `tblLayout type="fixed"`, strict renderers (Google Drive viewer,
+    // Mac Preview, LibreOffice) default to "autofit" → ignore tcW → wrap long
+    // text vertical mỗi ký tự. MS Word smart-fit OK → bug bị mask.
+    //
+    // Fix root cause discovered 2026-05-15 sau khi Danny gửi screenshot file
+    // local có tcW="5620"/"3930"/"9000" NHƯNG vẫn wrap → tblLayout missing.
+    const buf = await docxSvc.generate(rec);
+    const text = await extractDocText(buf);
+
+    const tblLayoutMatches = text.match(/w:tblLayout w:type="fixed"/g) ?? [];
+    // 4 tables: header logo, BÊN A/B info, reconciliation calc, signature
+    expect(tblLayoutMatches.length).toBeGreaterThanOrEqual(4);
+  });
+
   it('TC-DOCX-COL-03: addOnRow "Vật phẩm bổ sung" colspan=5 có tcW="5620"', async () => {
     // rec đã có line_items[0].add_on_price = 299_000 → addOnRow render
     const buf = await docxSvc.generate(rec);
