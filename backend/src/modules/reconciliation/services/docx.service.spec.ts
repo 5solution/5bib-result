@@ -333,6 +333,26 @@ describe('DocxService — FEATURE-030 provider info from env + add-on row', () =
     expect(tblLayoutMatches.length).toBeGreaterThanOrEqual(4);
   });
 
+  it('TC-DOCX-COL-06 (F-037 v3 fix B): Header + sub-header có `<w:tblHeader/>` + summary rows có `<w:cantSplit/>` cho page-break safe', async () => {
+    // Bug v3 partial: sau khi fix tblLayout + columnWidths, table render
+    // đúng widths NHƯNG dài quá → page break ngắt giữa Phí bán vé (2) và
+    // Thuế GTGT (3) → trang 2 chỉ thấy 2 summary rows + KHÔNG header →
+    // user thấy "table 2-col rời" misleading.
+    //
+    // Fix v3 B: tableHeader=true cho header/sub-header → lặp lại page 2.
+    // cantSplit=true cho summary rows → ngăn split mid-row.
+    const buf = await docxSvc.generate(rec);
+    const text = await extractDocText(buf);
+
+    // tableHeader (=tblHeader trong XML) cho header + sub-header
+    const tblHeaderMatches = text.match(/<w:tblHeader/g) ?? [];
+    expect(tblHeaderMatches.length).toBeGreaterThanOrEqual(2);
+
+    // cantSplit cho 4-5 summary rows (addOn + Tổng cộng + Phí + Thuế + Hoàn trả)
+    const cantSplitMatches = text.match(/<w:cantSplit/g) ?? [];
+    expect(cantSplitMatches.length).toBeGreaterThanOrEqual(4);
+  });
+
   it('TC-DOCX-COL-05 (F-037 v3): TẤT CẢ 4 tables có `<w:tblGrid>` với gridCol widths đúng — NOT default 100 DXA', async () => {
     // Root cause v3 phát hiện 2026-05-15 sau v2 fix vẫn bug. XML inspect
     // file Danny attached: `<w:tblGrid><w:gridCol w:w="100"/></w:tblGrid>`

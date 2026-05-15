@@ -654,7 +654,13 @@ export class DocxService {
     const colWidths = [2300, 750, 880, 940, 750, 1240];
 
     // Header row
+    // FEATURE-037 v3 fix B — `tableHeader: true` lặp lại header row khi
+    // table page-break. Without this, Thuế GTGT (3) + Hoàn trả (4) summary
+    // rows push xuống page 2 không có header → render trông như "table 2-col
+    // rời". Với tableHeader: true, header + sub-header lặp lại trên page 2
+    // → user thấy full table context.
     const headerRow = new TableRow({
+      tableHeader: true,
       children: [
         tCell([{ text: 'Cự ly', bold: true }], {
           width: colWidths[0],
@@ -689,6 +695,7 @@ export class DocxService {
 
     // Sub-header (formula labels)
     const subHeaderRow = new TableRow({
+      tableHeader: true,
       children: [
         tCell([{ text: '' }], { width: colWidths[0] }),
         tCell([{ text: '' }], { width: colWidths[1] }),
@@ -757,9 +764,14 @@ export class DocxService {
     const colspan3Width = colWidths[0] + colWidths[1] + colWidths[2]; // 3930
     const colspan6Width = colspan5Width + colWidths[5]; // 6860 — full table
 
+    // FEATURE-037 v3 fix B — `cantSplit: true` per row prevent split
+    // mid-row khi cell có multi-line content. Combined với `tableHeader: true`
+    // trên header/sub-header → page break safe, không còn render "table 2-col
+    // rời" cho summary rows.
     const addOnRow: TableRow | null =
       totalAddOnPrice > 0
         ? new TableRow({
+            cantSplit: true,
             children: [
               tCell(
                 [{ text: 'Vật phẩm bổ sung (áo, ...)' }],
@@ -778,6 +790,7 @@ export class DocxService {
       ...(addOnRow ? [addOnRow] : []),
       // Tổng cộng (1) — gross_revenue = sum(line subtotal) + sum(add_on)
       new TableRow({
+        cantSplit: true,
         children: [
           tCell([{ text: 'Tổng cộng (1)', bold: true }], {
             colspan: 3,
@@ -799,6 +812,7 @@ export class DocxService {
       }),
       // Phí bán vé (2)
       new TableRow({
+        cantSplit: true,
         children: [
           tCell(
             [
@@ -817,6 +831,7 @@ export class DocxService {
       }),
       // Thuế GTGT (3)
       new TableRow({
+        cantSplit: true,
         children: [
           tCell(
             [{ text: `Thuế GTGT (${rec.fee_vat_rate}%) (3)`, bold: true }],
@@ -830,6 +845,7 @@ export class DocxService {
       }),
       // Hoàn trả merchant (4)
       new TableRow({
+        cantSplit: true,
         children: [
           tCell(
             [{ text: 'Hoàn trả merchant (4) = (1) - (2) - (3)', bold: true }],
