@@ -333,6 +333,41 @@ describe('DocxService — FEATURE-030 provider info from env + add-on row', () =
     expect(tblLayoutMatches.length).toBeGreaterThanOrEqual(4);
   });
 
+  it('TC-DOCX-COL-05 (F-037 v3): TẤT CẢ 4 tables có `<w:tblGrid>` với gridCol widths đúng — NOT default 100 DXA', async () => {
+    // Root cause v3 phát hiện 2026-05-15 sau v2 fix vẫn bug. XML inspect
+    // file Danny attached: `<w:tblGrid><w:gridCol w:w="100"/></w:tblGrid>`
+    // → docx lib auto-gen default 100 DXA per col khi columnWidths missing.
+    // Trong tblLayout=fixed, renderer respect tblGrid > tcW → strict
+    // renderer ép tất cả cells xuống 0.07" → wrap vertical.
+    //
+    // Fix v3: pass `columnWidths` prop cho mỗi Table.
+    const buf = await docxSvc.generate(rec);
+    const text = await extractDocText(buf);
+
+    // Header logo table cols 2000+7000
+    expect(text).toContain('<w:gridCol w:w="2000"/>');
+    expect(text).toContain('<w:gridCol w:w="7000"/>');
+
+    // BÊN A/B info table — labelW 1700 + colonW 200 + 4×1775
+    expect(text).toContain('<w:gridCol w:w="1700"/>');
+    expect(text).toContain('<w:gridCol w:w="200"/>');
+    expect(text).toContain('<w:gridCol w:w="1775"/>');
+
+    // Reconciliation calc table — colWidths [2300, 750, 880, 940, 750, 1240]
+    expect(text).toContain('<w:gridCol w:w="2300"/>');
+    expect(text).toContain('<w:gridCol w:w="750"/>');
+    expect(text).toContain('<w:gridCol w:w="880"/>');
+    expect(text).toContain('<w:gridCol w:w="940"/>');
+    expect(text).toContain('<w:gridCol w:w="1240"/>');
+
+    // Signature 2×4500
+    expect(text).toContain('<w:gridCol w:w="4500"/>');
+
+    // CRITICAL: KHÔNG được có default `100` gridCol (bug v1+v2 era)
+    const gridCol100 = text.match(/<w:gridCol w:w="100"\/>/g) ?? [];
+    expect(gridCol100.length).toBe(0);
+  });
+
   it('TC-DOCX-COL-03: addOnRow "Vật phẩm bổ sung" colspan=5 có tcW="5620"', async () => {
     // rec đã có line_items[0].add_on_price = 299_000 → addOnRow render
     const buf = await docxSvc.generate(rec);

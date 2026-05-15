@@ -466,12 +466,15 @@ export class DocxService {
 
     return new Table({
       width: { size: 9000, type: WidthType.DXA },
-      // FEATURE-037 v2 fix — `tblLayout type="fixed"` BẮT BUỘC để strict
-      // renderers (Google Drive viewer / Mac Preview / LibreOffice) respect
-      // tcW explicit widths. Default autofit → renderer free to ignore tcW
-      // → text dài wrap mỗi ký tự vertical. MS Word smart-fit OK ngay cả
-      // autofit nên bug bị mask cho dev test.
+      // FEATURE-037 v3 fix — `columnWidths` BẮT BUỘC declare explicit.
+      // docx lib auto-generate `<w:tblGrid>` với DEFAULT 100 DXA per
+      // column nếu KHÔNG pass columnWidths prop. Trong `tblLayout=fixed`,
+      // renderer STRICT respect `tblGrid` (NOT `tcW` per-cell), nên dù tcW
+      // = 2000/7000 đúng, tblGrid = 100/100 → text ép vào 0.07" → wrap
+      // vertical mỗi ký tự. MS Word smart-fit ignore tblGrid khi conflict,
+      // strict renderers Google Drive / Mac Preview / LibreOffice không.
       layout: TableLayoutType.FIXED,
+      columnWidths: [2000, 7000],
       rows: [
         new TableRow({
           children: [
@@ -537,8 +540,11 @@ export class DocxService {
 
     return new Table({
       width: { size: 9000, type: WidthType.DXA },
-      // FEATURE-037 v2 fix — fixed layout cho strict renderers respect tcW
+      // FEATURE-037 v3 fix — fixed layout + columnWidths explicit cho 6 cols:
+      // labelW + colonW + 4 × (valueW/4) = 1700 + 200 + 4 × 1775 = 9000.
+      // valueW (7100) là logical span của 4 cells khi colspan=4.
       layout: TableLayoutType.FIXED,
+      columnWidths: [labelW, colonW, 1775, 1775, 1775, 1775],
       rows: [
         // BÊN A header
         new TableRow({
@@ -838,12 +844,12 @@ export class DocxService {
     ];
 
     return new Table({
-      width: { size: 9000, type: WidthType.DXA },
-      // FEATURE-037 v2 fix — fixed layout cho reconciliation table
-      // (Cự ly / Giai đoạn / Đơn giá / SL / Giảm / Tổng cộng + summary rows
-      //  Tổng cộng (1) / Phí bán vé (2) / Thuế GTGT (3) / Hoàn trả (4) +
-      //  Vật phẩm bổ sung). Đây là table chính mà Danny report bug.
+      // FEATURE-037 v3 — table width PHẢI match sum(columnWidths) trong
+      // fixed layout, nếu không strict renderer hiển thị sai. colWidths
+      // sum = 2300+750+880+940+750+1240 = 6860 (≈4.76 inch = 12.1 cm).
+      width: { size: 6860, type: WidthType.DXA },
       layout: TableLayoutType.FIXED,
+      columnWidths: colWidths,
       rows: [headerRow, subHeaderRow, ...dataRows, ...summaryRows],
     });
   }
@@ -858,8 +864,9 @@ export class DocxService {
   ): Table {
     return new Table({
       width: { size: 9000, type: WidthType.DXA },
-      // FEATURE-037 v2 fix — signature table cũng cần fixed layout
+      // FEATURE-037 v3 — signature table 2 cols × 4500 DXA = 9000 total
       layout: TableLayoutType.FIXED,
+      columnWidths: [4500, 4500],
       rows: [
         new TableRow({
           children: [
