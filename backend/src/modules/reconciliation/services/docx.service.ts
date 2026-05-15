@@ -566,7 +566,12 @@ export class DocxService {
                   bold: true,
                 },
               ],
-              { colspan: 6 },
+              // FEATURE-037 fix — colspan cell PHẢI có explicit width để
+              // Google Drive viewer / LibreOffice / Mac Preview render
+              // đúng. Thiếu width → strict renderer wrap mỗi ký tự thành
+              // 1 dòng vertical (MS Word auto-fit OK nhưng người nhận
+              // file open bằng viewer khác bị xấu).
+              { colspan: 6, width: 9000 },
             ),
           ],
         }),
@@ -575,6 +580,7 @@ export class DocxService {
           children: [
             tCell([{ text: 'Và', bold: true }], {
               colspan: 6,
+              width: 9000,
               align: AlignmentType.CENTER,
             }),
           ],
@@ -612,7 +618,8 @@ export class DocxService {
                   bold: true,
                 },
               ],
-              { colspan: 6 },
+              // FEATURE-037 fix — colspan width explicit
+              { colspan: 6, width: 9000 },
             ),
           ],
         }),
@@ -724,15 +731,27 @@ export class DocxService {
       (s, li) => s + li.add_on_price,
       0,
     );
+    // FEATURE-037 fix — sum widths cho colspan cells. Strict renderers
+    // (Google Drive viewer / LibreOffice / Mac Preview) cần explicit width
+    // trên merged cells, nếu không sẽ inherit width col[0] (2300 DXA =
+    // 1.6") → text dài "Hoàn trả merchant (4) = (1) - (2) - (3)" wrap mỗi
+    // ký tự thành 1 dòng vertical. MS Word auto-fit nên bị mask, người
+    // nhận bằng client khác complain.
+    const colspan5Width =
+      colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4]; // 5620
+    const colspan3Width = colWidths[0] + colWidths[1] + colWidths[2]; // 3930
+    const colspan6Width = colspan5Width + colWidths[5]; // 6860 — full table
+
     const addOnRow: TableRow | null =
       totalAddOnPrice > 0
         ? new TableRow({
             children: [
               tCell(
                 [{ text: 'Vật phẩm bổ sung (áo, ...)' }],
-                { colspan: 5 },
+                { colspan: 5, width: colspan5Width },
               ),
               tCell([{ text: fmtVnd(totalAddOnPrice) }], {
+                width: colWidths[5],
                 align: AlignmentType.RIGHT,
               }),
             ],
@@ -747,14 +766,18 @@ export class DocxService {
         children: [
           tCell([{ text: 'Tổng cộng (1)', bold: true }], {
             colspan: 3,
+            width: colspan3Width,
           }),
           tCell([{ text: String(totalQty), bold: true }], {
+            width: colWidths[3],
             align: AlignmentType.RIGHT,
           }),
           tCell([{ text: fmtVnd(totalDiscount), bold: true }], {
+            width: colWidths[4],
             align: AlignmentType.RIGHT,
           }),
           tCell([{ text: fmtVnd(rec.net_revenue), bold: true }], {
+            width: colWidths[5],
             align: AlignmentType.RIGHT,
           }),
         ],
@@ -769,9 +792,10 @@ export class DocxService {
                 bold: true,
               },
             ],
-            { colspan: 5 },
+            { colspan: 5, width: colspan5Width },
           ),
           tCell([{ text: fmtVnd(rec.fee_amount), bold: true }], {
+            width: colWidths[5],
             align: AlignmentType.RIGHT,
           }),
         ],
@@ -781,9 +805,10 @@ export class DocxService {
         children: [
           tCell(
             [{ text: `Thuế GTGT (${rec.fee_vat_rate}%) (3)`, bold: true }],
-            { colspan: 5 },
+            { colspan: 5, width: colspan5Width },
           ),
           tCell([{ text: fmtVnd(rec.fee_vat_amount), bold: true }], {
+            width: colWidths[5],
             align: AlignmentType.RIGHT,
           }),
         ],
@@ -793,9 +818,10 @@ export class DocxService {
         children: [
           tCell(
             [{ text: 'Hoàn trả merchant (4) = (1) - (2) - (3)', bold: true }],
-            { colspan: 5 },
+            { colspan: 5, width: colspan5Width },
           ),
           tCell([{ text: fmtVnd(rec.payout_amount), bold: true }], {
+            width: colWidths[5],
             align: AlignmentType.RIGHT,
           }),
         ],

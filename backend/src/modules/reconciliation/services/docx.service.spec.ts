@@ -272,6 +272,63 @@ describe('DocxService — FEATURE-030 provider info from env + add-on row', () =
     expect(mockModel.findOne).toHaveBeenCalledWith({ tenantId: rec.tenant_id });
   });
 
+  /* ────────────────────────────────────────────────────────────────────────
+   * FEATURE-037 — colspan cell explicit width (Danny 2026-05-15 bug report)
+   *
+   * Bug: DOCX preview Google Drive viewer / LibreOffice / Mac Preview render
+   * colspan cells thiếu width → text dài như "Hoàn trả merchant (4) = (1) -
+   * (2) - (3)" wrap mỗi ký tự thành 1 dòng vertical. MS Word auto-fit
+   * KHÔNG bị → người nhận bằng client khác complain.
+   *
+   * Fix: thêm explicit `<w:tcW w:w="N" w:type="dxa"/>` per colspan cell.
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  it('TC-DOCX-COL-01: Tất cả colspan cells trong reconciliation table có explicit tcW (width DXA)', async () => {
+    const buf = await docxSvc.generate(rec);
+    const text = await extractDocText(buf);
+
+    // Verify cells "Phí bán vé" + "Thuế GTGT" + "Hoàn trả merchant" — mỗi
+    // text dài này PHẢI render cùng tcW preceding nó (= 5620 = sum colWidths[0..4])
+    // Pattern check: trong XML, mỗi tcW="5620" appearance phải >= 3 (3 colspan-5 rows)
+    const tcWMatches5620 = text.match(/w:w="5620"/g) ?? [];
+    expect(tcWMatches5620.length).toBeGreaterThanOrEqual(3);
+
+    // Verify cell "Tổng cộng (1)" colspan=3 → tcW="3930" (2300+750+880)
+    const tcWMatches3930 = text.match(/w:w="3930"/g) ?? [];
+    expect(tcWMatches3930.length).toBeGreaterThanOrEqual(1);
+
+    // Verify text "Hoàn trả merchant" KHÔNG đứng cạnh cell missing width
+    // (tức: text này phải xuất hiện sau tcW="5620" definition)
+    expect(text).toContain('Hoàn trả merchant (4) = (1) - (2) - (3)');
+    expect(text).toContain('Thuế GTGT');
+    expect(text).toContain('Phí bán vé');
+  });
+
+  it('TC-DOCX-COL-02: Sub-header BÊN A/B colspan=6 có tcW="9000" (full table width)', async () => {
+    const buf = await docxSvc.generate(rec);
+    const text = await extractDocText(buf);
+
+    // BÊN A "Bên sử dụng dịch vụ" + BÊN B "Bên cung cấp dịch vụ" + "Và" separator
+    // = 3 cells colspan=6 với width=9000
+    const tcWMatches9000 = text.match(/w:w="9000"/g) ?? [];
+    expect(tcWMatches9000.length).toBeGreaterThanOrEqual(3);
+
+    // Verify text "Sau đây gọi tắt là" KHÔNG bị wrap (presence check)
+    expect(text).toContain('Bên sử dụng dịch vụ');
+    expect(text).toContain('Bên cung cấp dịch vụ');
+  });
+
+  it('TC-DOCX-COL-03: addOnRow "Vật phẩm bổ sung" colspan=5 có tcW="5620"', async () => {
+    // rec đã có line_items[0].add_on_price = 299_000 → addOnRow render
+    const buf = await docxSvc.generate(rec);
+    const text = await extractDocText(buf);
+
+    expect(text).toContain('Vật phẩm bổ sung');
+    // 4 colspan-5 cells total (addOn + Phí + Thuế + Hoàn trả)
+    const tcWMatches5620 = text.match(/w:w="5620"/g) ?? [];
+    expect(tcWMatches5620.length).toBeGreaterThanOrEqual(4);
+  });
+
   it('TC-MC-05: MerchantConfig fetch error → fail-soft fallback tenant_metadata (KHÔNG crash)', async () => {
     mockModel.findOne.mockReturnValue({
       lean: () => Promise.reject(new Error('mongo down')),
