@@ -113,8 +113,10 @@ describe('F-028 CostItemsService — UP-08 concurrency (MED-03 carryover)', () =
     );
     expect(contractCacheDels).toHaveLength(2);
 
-    // 3. Dashboard scanStream gọi đúng 2 lần — flush per mutation
-    expect(scanStreamCalls).toBe(2);
+    // 3. Dashboard scanStream gọi 4 lần — flush per mutation × 2 patterns
+    // (F-038 BR-38-09: flushDashboardCache iterates BOTH `pnl:dashboard:*` +
+    // `pnl:contracts-list:*` per mutation → 2 mutations × 2 patterns = 4).
+    expect(scanStreamCalls).toBe(4);
 
     // 4. Audit log emit đủ 2 mutation (BR-PNL-09)
     const auditCreates = (audit.emit as jest.Mock).mock.calls.filter(

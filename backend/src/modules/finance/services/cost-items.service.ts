@@ -61,30 +61,35 @@ export class CostItemsService {
     }
   }
 
+  /**
+   * Flush BOTH dashboard aggregated cache (`pnl:dashboard:*`) AND F-038
+   * contracts list cache (`pnl:contracts-list:*`). Both reflect P&L compute
+   * across contracts/cost-items so mutation invalidates them in lockstep
+   * (BR-PNL-14 + BR-38-09). Best-effort — log warn, KHÔNG throw.
+   */
   private async flushDashboardCache(): Promise<void> {
     if (!this.redis) return;
-    try {
-      const stream = this.redis.scanStream({
-        match: 'pnl:dashboard:*',
-        count: 200,
-      });
-      const pipeline = this.redis.pipeline();
-      let count = 0;
-      await new Promise<void>((resolve, reject) => {
-        stream.on('data', (keys: string[]) => {
-          for (const k of keys) {
-            pipeline.del(k);
-            count++;
-          }
+    for (const pattern of ['pnl:dashboard:*', 'pnl:contracts-list:*']) {
+      try {
+        const stream = this.redis.scanStream({ match: pattern, count: 200 });
+        const pipeline = this.redis.pipeline();
+        let count = 0;
+        await new Promise<void>((resolve, reject) => {
+          stream.on('data', (keys: string[]) => {
+            for (const k of keys) {
+              pipeline.del(k);
+              count++;
+            }
+          });
+          stream.on('end', resolve);
+          stream.on('error', reject);
         });
-        stream.on('end', resolve);
-        stream.on('error', reject);
-      });
-      if (count > 0) await pipeline.exec();
-    } catch (e) {
-      this.logger.warn(
-        `[finance] flush pnl:dashboard:* fail: ${(e as Error).message}`,
-      );
+        if (count > 0) await pipeline.exec();
+      } catch (e) {
+        this.logger.warn(
+          `[finance] flush ${pattern} fail: ${(e as Error).message}`,
+        );
+      }
     }
   }
 

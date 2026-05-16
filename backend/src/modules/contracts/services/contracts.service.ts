@@ -166,39 +166,39 @@ export class ContractsService {
   }
 
   /**
-   * F-028 HIGH-01 QC carryover — flush `pnl:dashboard:*` (mọi filterHash).
+   * F-028 HIGH-01 QC carryover + F-038 BR-38-09 — flush BOTH
+   * `pnl:dashboard:*` AND `pnl:contracts-list:*` (mọi filterHash).
    *
    * Khi link/unlink TICKET_SALES contract với MySQL race → revenue source
    * chuyển từ Estimated → Actual (hoặc ngược lại). Dashboard P&L Phase 2
-   * aggregate `totalRevenue` + `byMonth` + `byType` qua nhiều contract nên
-   * MỌI filterHash đều có thể stale. Clone pattern từ
-   * `cost-items.service.ts#flushDashboardCache` (BR-PNL-14) + articles
-   * invalidation. Best-effort — fail log warn, KHÔNG throw.
+   * + F-038 contracts list cùng aggregate revenue/profit qua nhiều contract
+   * nên MỌI filterHash đều có thể stale. Clone pattern từ
+   * `cost-items.service.ts#flushDashboardCache` + articles invalidation.
+   * Best-effort — fail log warn, KHÔNG throw.
    */
   private async flushPnlDashboardCache(): Promise<void> {
     if (!this.redis) return;
-    try {
-      const stream = this.redis.scanStream({
-        match: 'pnl:dashboard:*',
-        count: 200,
-      });
-      const pipeline = this.redis.pipeline();
-      let count = 0;
-      await new Promise<void>((resolve, reject) => {
-        stream.on('data', (keys: string[]) => {
-          for (const k of keys) {
-            pipeline.del(k);
-            count++;
-          }
+    for (const pattern of ['pnl:dashboard:*', 'pnl:contracts-list:*']) {
+      try {
+        const stream = this.redis.scanStream({ match: pattern, count: 200 });
+        const pipeline = this.redis.pipeline();
+        let count = 0;
+        await new Promise<void>((resolve, reject) => {
+          stream.on('data', (keys: string[]) => {
+            for (const k of keys) {
+              pipeline.del(k);
+              count++;
+            }
+          });
+          stream.on('end', () => resolve());
+          stream.on('error', (err) => reject(err));
         });
-        stream.on('end', () => resolve());
-        stream.on('error', (err) => reject(err));
-      });
-      if (count > 0) await pipeline.exec();
-    } catch (err) {
-      this.logger.warn(
-        `[contracts] flush pnl:dashboard:* fail: ${(err as Error).message}`,
-      );
+        if (count > 0) await pipeline.exec();
+      } catch (err) {
+        this.logger.warn(
+          `[contracts] flush ${pattern} fail: ${(err as Error).message}`,
+        );
+      }
     }
   }
 

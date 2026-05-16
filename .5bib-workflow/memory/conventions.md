@@ -3410,3 +3410,120 @@ If signal → REQUIRE answer to domain/repo question in `00-manager-init.md` BEF
 | `5sport.vn` family | 5Sport repo (separate) | TBD |
 
 When future feature requires SEO on `5bib.com` apex → CROSS-TEAM coordination with 5Ticket needed.
+
+
+---
+
+## 🆕 Patterns minted by FEATURE-038 (Finance Contracts List P&L) — 2026-05-16
+
+### Pattern 1: Dual-pattern cache flush helper
+
+**Rule:** Khi feature mới thêm Redis cache key pattern SONG SONG với pattern existing (cùng data domain, cùng invalidation triggers), MUST extend EXISTING flush helper to iterate BOTH patterns trong series — KHÔNG tạo flush helper riêng (risk forgetting one site).
+
+```typescript
+// ✅ ĐÚNG — single helper iterates array of patterns
+private async flushDashboardCache(): Promise<void> {
+  if (!this.redis) return;
+  for (const pattern of ['pnl:dashboard:*', 'pnl:contracts-list:*']) {
+    try {
+      const stream = this.redis.scanStream({ match: pattern, count: 200 });
+      const pipeline = this.redis.pipeline();
+      let count = 0;
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (keys) => { for (const k of keys) { pipeline.del(k); count++; }});
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      });
+      if (count > 0) await pipeline.exec();
+    } catch (e) {
+      this.logger.warn(`flush ${pattern} fail: ${(e as Error).message}`);
+    }
+  }
+}
+```
+
+**Gotcha:** Existing tests that count `scanStream` calls will break (N mutations × M patterns). Update assertions to reflect new behavior — DOCUMENT as "necessary consequence" not scope creep.
+
+### Pattern 2: URL deep-link 2-level debounce (filter state)
+
+**Rule:** Khi filter page có search input + URL sync, MUST split state into 2 levels:
+- **Local input state** — immediate UX feedback (typing reflects in input)
+- **Applied state** — debounced 400ms, triggers URL push + fetch refetch
+
+Prevents URL history spam + reduces backend load while keeping UX responsive.
+
+```typescript
+'use client';
+const [searchInput, setSearchInput] = useState(initial);   // immediate
+const [appliedQ, setAppliedQ] = useState(initial);          // debounced
+
+useEffect(() => {
+  const t = setTimeout(() => {
+    setAppliedQ(searchInput.trim());
+    setPage(1);  // reset to page 1 on search change
+  }, 400);
+  return () => clearTimeout(t);
+}, [searchInput]);
+
+// Fetch effect uses appliedQ (not searchInput) so it only fires after debounce
+useEffect(() => { fetchData(); }, [period, appliedQ, page, ...]);
+```
+
+### Pattern 3: Defense-in-depth admin gate (page-level + backend Guard)
+
+**Rule:** Admin-only pages MUST have 2 layers of defense:
+1. **Backend Guard** `@UseGuards(LogtoAdminGuard)` class-level — enforces auth
+2. **Page-level UI gate** `useAuth().isAdmin` check renders `<RestrictedAccess />` BEFORE mounting client component
+
+Reason: page-level gate prevents non-admin client component from mounting → no wasted fetch fired → no UX confusion via 403 toast.
+
+```typescript
+// admin/src/app/(dashboard)/finance/contracts/page.tsx
+'use client';
+import { useAuth } from "@/lib/auth-context";
+import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
+import { ContractsListClient } from "./_components/contracts-list-client";
+
+export default function FinanceContractsListPage() {
+  const { isAdmin, isLoading } = useAuth();
+  if (isLoading) return <Skeleton />;
+  if (!isAdmin) return <RestrictedAccess message="Module Tài chính chỉ dành cho admin..." />;
+  return <ContractsListClient />;
+}
+```
+
+### Pattern 4: Deterministic cache key hashing (sorted keys)
+
+**Rule:** Cache key includes filter hash MUST be deterministic across object key ordering. Sort keys alphabetically before `JSON.stringify`:
+
+```typescript
+private hashContractsListFilter(filter: PnLContractsListFilterDto): string {
+  const norm = JSON.stringify({
+    f: filter.dateFrom ?? '',
+    l: filter.limit ?? 20,
+    p: filter.period ?? 'last_3_months',
+    pg: filter.page ?? 1,
+    q: (filter.q ?? '').trim().toLowerCase(),  // case-insensitive
+    sb: filter.sortBy ?? 'anchorMonth',
+    sd: filter.sortDir ?? 'desc',
+    t: filter.dateTo ?? '',
+  });
+  return crypto.createHash('sha256').update(norm).digest('hex').slice(0, 16);
+}
+```
+
+Reason: `JSON.stringify({page:1,limit:20})` vs `JSON.stringify({limit:20,page:1})` produce DIFFERENT strings → different hashes → cache MISS even though semantically identical filter. Sorted-key normalization fixes this.
+
+**Test:** `expect(hash(filterA)).toEqual(hash(filterB))` when filterA and filterB have same fields different order (TC-CL-12 verifies).
+
+### Pattern 5: Read-only compute reuse — copy vs extract trade-off
+
+**Rule:** When new feature needs to reuse existing compute path (e.g., `getContractsList()` reusing `getDashboardData()` items+totals logic), prefer COPY over REFACTOR EXTRACT when regression risk is high.
+
+**Rationale:** Refactoring shared method body changes existing behavior — risks breaking N existing tests. Copying ~80 LoC duplicate is acceptable scope-bound cost for guaranteed regression safety. Document as `TD-FXXX-REFACTOR-EXTRACT` for future consolidation.
+
+**Decision matrix:**
+- Existing tests count > 20 + recent feature lineage (F-028 → F-029 → F-036) → COPY
+- Existing tests count < 5 OR refactor obvious (no semantic change) → EXTRACT
+
+**F-038 example:** `computeContractRows()` duplicates `getDashboardData()` body. 32 existing tests + F-029/F-036 lineage → chose COPY. TD-F038-REFACTOR-EXTRACT tracked.

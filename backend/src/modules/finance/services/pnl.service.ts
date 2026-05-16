@@ -26,6 +26,13 @@ import {
   DashboardGroupBucketDto,
   PnLDashboardResponseDto,
 } from '../dto/dashboard-response.dto';
+import {
+  PnLContractsListFilterDto,
+  type ContractsListSortBy,
+  type SortDir,
+} from '../dto/pnl-contracts-list-filter.dto';
+import { PnLContractsListResponseDto } from '../dto/pnl-contracts-list-response.dto';
+import { escapeRegex } from '../../contracts/utils/escape-regex';
 import * as crypto from 'crypto';
 
 /**
@@ -589,6 +596,319 @@ export class PnLService {
         );
       }
     }
+    return result;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // FEATURE-038 — Paginated contracts list with P&L per row
+  // ────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Deterministic hash of list filter (sorted keys → same hash regardless of
+   * key order). Used as Redis cache key suffix `pnl:contracts-list:<hash>`.
+   * Includes all list-affecting params (period/dates/page/limit/sort/q).
+   */
+  private hashContractsListFilter(filter: PnLContractsListFilterDto): string {
+    const norm = JSON.stringify({
+      f: filter.dateFrom ?? '',
+      l: filter.limit ?? 20,
+      p: filter.period ?? 'last_3_months',
+      pg: filter.page ?? 1,
+      q: (filter.q ?? '').trim().toLowerCase(),
+      sb: filter.sortBy ?? 'anchorMonth',
+      sd: filter.sortDir ?? 'desc',
+      t: filter.dateTo ?? '',
+    });
+    return crypto.createHash('sha256').update(norm).digest('hex').slice(0, 16);
+  }
+
+  /**
+   * Compute each contract's P&L row + dataset-wide totals — identical
+   * semantics with `getDashboardData()` body for items/totals computation
+   * (BR-PNL-08 status whitelist + F-029 bulk MySQL revenue prefetch + F-036
+   * additive cost ADD-ON). Used by `getContractsList()` only — extracted
+   * here to keep `getDashboardData()` body untouched (regression safety for
+   * 32 existing F-028 + F-029 + F-036 tests).
+   */
+  private async computeContractRows(filter: PnLContractsListFilterDto): Promise<{
+    items: DashboardContractItemDto[];
+    totals: {
+      contractCount: number;
+      totalRevenue: number;
+      totalCost: number;
+      totalProfit: number;
+      avgMargin: number | null;
+      costByCategory: Record<string, number>;
+    };
+    period: DashboardPeriod;
+    dateFrom: Date;
+    dateTo: Date;
+  }> {
+    const { period, dateFrom, dateTo } = this.resolveDateRange(filter);
+
+    const contracts = await this.contractModel
+      .find({
+        deletedAt: null,
+        status: { $in: ['ACTIVE', 'COMPLETED'] },
+        $or: [
+          { signDate: { $gte: dateFrom, $lte: dateTo } },
+          {
+            signDate: { $exists: false },
+            createdAt: { $gte: dateFrom, $lte: dateTo },
+          },
+          {
+            signDate: null,
+            createdAt: { $gte: dateFrom, $lte: dateTo },
+          },
+        ],
+      })
+      .lean()
+      .exec();
+
+    const contractIds = contracts.map((c) => c._id as Types.ObjectId);
+    const costMap = await this.costItems.aggregateByContractIds(contractIds);
+
+    // F-029 HIGH-PERF-01 — bulk pre-fetch TICKET_SALES revenue.
+    const ticketSalesRaceIds: number[] = [];
+    for (const c of contracts) {
+      if (c.contractType === 'TICKET_SALES') {
+        const linkage = this.extractPlatformLinkage(c as ContractDocument);
+        if (linkage.tenantId !== null && linkage.mysqlRaceId !== null) {
+          ticketSalesRaceIds.push(linkage.mysqlRaceId);
+        }
+      }
+    }
+    const revenueByRaceId =
+      ticketSalesRaceIds.length > 0
+        ? await this.feeService.getActualRevenueForRaces(ticketSalesRaceIds)
+        : new Map<number, number>();
+
+    const items: DashboardContractItemDto[] = [];
+    const totalCostByCategory: Record<string, number> = {
+      LABOR: 0,
+      MATERIAL: 0,
+      VENDOR: 0,
+      OUTSOURCE: 0,
+      OTHER: 0,
+    };
+
+    for (const c of contracts) {
+      const id = (c._id as Types.ObjectId).toString();
+      const { revenue, source } = this.resolveRevenueSync(
+        c as ContractDocument,
+        revenueByRaceId,
+      );
+      const cost = costMap.get(id) ?? {
+        totalCost: 0,
+        costByCategory: {
+          LABOR: 0,
+          MATERIAL: 0,
+          VENDOR: 0,
+          OUTSOURCE: 0,
+          OTHER: 0,
+        },
+      };
+      for (const k of Object.keys(totalCostByCategory)) {
+        totalCostByCategory[k] += cost.costByCategory[k] ?? 0;
+      }
+
+      // F-036 — totalCost = estimated (line_items) + actual (cost_items)
+      const lineItemsList = ((c as ContractDocument).lineItems ?? []) as Array<{
+        cost?: number;
+        quantity?: number;
+        selected?: boolean;
+      }>;
+      const estimatedCostDash = lineItemsList
+        .filter((li) => li.selected !== false)
+        .reduce(
+          (s, li) => s + (Number(li.cost) || 0) * (Number(li.quantity) || 0),
+          0,
+        );
+      const effectiveCost = cost.totalCost + estimatedCostDash;
+      const profit = revenue - effectiveCost;
+      const margin =
+        revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : null;
+      const marginTier: DashboardContractItemDto['marginTier'] =
+        margin === null
+          ? 'neutral'
+          : margin < 0
+            ? 'loss'
+            : margin <= 10
+              ? 'thin'
+              : 'healthy';
+
+      const anchorDate = c.signDate ?? c.createdAt;
+      items.push({
+        contractId: id,
+        contractNumber: c.contractNumber ?? null,
+        partnerName: (c.client as any)?.entityName ?? null,
+        raceName: c.raceName ?? null,
+        contractType: c.contractType as DashboardContractItemDto['contractType'],
+        status: c.status as string,
+        revenue,
+        revenueSource: source as 'ESTIMATED' | 'ACTUAL',
+        totalCost: effectiveCost,
+        profit,
+        margin,
+        marginTier,
+        anchorMonth: anchorDate ? this.isoMonth(new Date(anchorDate)) : null,
+      });
+    }
+
+    return {
+      items,
+      totals: {
+        contractCount: items.length,
+        totalRevenue: items.reduce((s, i) => s + i.revenue, 0),
+        totalCost: items.reduce((s, i) => s + i.totalCost, 0),
+        totalProfit: items.reduce((s, i) => s + (i.revenue - i.totalCost), 0),
+        avgMargin: this.avg(items.map((i) => i.margin)),
+        costByCategory: totalCostByCategory,
+      },
+      period,
+      dateFrom,
+      dateTo,
+    };
+  }
+
+  /**
+   * Filter items by combined search keyword across contractNumber +
+   * partnerName + raceName. Regex-escaped (BR-38-05 ReDoS defense via
+   * `escapeRegex` util). Empty/whitespace `q` → no filter applied.
+   */
+  private filterBySearch(
+    items: DashboardContractItemDto[],
+    q?: string,
+  ): DashboardContractItemDto[] {
+    const trimmed = q?.trim();
+    if (!trimmed) return items;
+    const safe = escapeRegex(trimmed);
+    const re = new RegExp(safe, 'i');
+    return items.filter(
+      (i) =>
+        re.test(i.contractNumber ?? '') ||
+        re.test(i.partnerName ?? '') ||
+        re.test(i.raceName ?? ''),
+    );
+  }
+
+  /**
+   * Sort items by `sortBy` / `sortDir`. Null values (margin neutral) sort
+   * LAST regardless of direction → loss-making contracts surface top on
+   * ASC margin sort, healthy contracts top on DESC. String columns
+   * (contractNumber, anchorMonth) use locale compare for natural order.
+   */
+  private sortItems(
+    items: DashboardContractItemDto[],
+    sortBy: ContractsListSortBy,
+    sortDir: SortDir,
+  ): DashboardContractItemDto[] {
+    const sorted = [...items];
+    const dirMul = sortDir === 'asc' ? 1 : -1;
+
+    sorted.sort((a, b) => {
+      const aVal = a[sortBy];
+      const bVal = b[sortBy];
+      // Null/undefined always last (regardless of asc/desc)
+      const aNull = aVal === null || aVal === undefined;
+      const bNull = bVal === null || bVal === undefined;
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      // Numeric vs string
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return (aVal - bVal) * dirMul;
+      }
+      return String(aVal).localeCompare(String(bVal)) * dirMul;
+    });
+    return sorted;
+  }
+
+  /**
+   * FEATURE-038 — paginated contracts list with P&L per row.
+   *
+   * Pipeline:
+   *   1. Resolve date range + Mongo query (BR-38-01 status whitelist +
+   *      BR-38-02 period filter)
+   *   2. Bulk cost aggregation + bulk MySQL revenue (F-029 HIGH-PERF-01)
+   *   3. Compute P&L per row (F-036 additive cost) → dataset items + totals
+   *   4. Search filter (BR-38-05, regex-escaped)
+   *   5. Sort (BR-38-04)
+   *   6. Paginate (BR-38-06, max 100)
+   *
+   * Cache `pnl:contracts-list:<sha256-filter-hash>` TTL 60s. Invalidate via
+   * `cost-items.service.ts` + `contracts.service.ts` mutation hooks
+   * (BR-38-09). `totals` aggregates ALL filtered items (NOT paged subset)
+   * for accurate footer summary.
+   */
+  async getContractsList(
+    filter: PnLContractsListFilterDto,
+  ): Promise<PnLContractsListResponseDto> {
+    // Cache check
+    const cacheKey = `pnl:contracts-list:${this.hashContractsListFilter(filter)}`;
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return JSON.parse(cached) as PnLContractsListResponseDto;
+      } catch (e) {
+        this.logger.warn(
+          `[finance] contracts-list cache get fail: ${(e as Error).message}`,
+        );
+      }
+    }
+
+    // Compute dataset
+    const { items: allItems, totals, period, dateFrom, dateTo } =
+      await this.computeContractRows(filter);
+
+    // Search (BR-38-05)
+    const searched = this.filterBySearch(allItems, filter.q);
+
+    // Filtered totals (after search but before pagination) — for footer
+    const filteredTotals = {
+      contractCount: searched.length,
+      totalRevenue: searched.reduce((s, i) => s + i.revenue, 0),
+      totalCost: searched.reduce((s, i) => s + i.totalCost, 0),
+      totalProfit: searched.reduce((s, i) => s + i.profit, 0),
+      avgMargin: this.avg(searched.map((i) => i.margin)),
+      costByCategory: totals.costByCategory, // dataset-wide; donut still uses dataset totals
+    };
+
+    // Sort (BR-38-04)
+    const sortBy: ContractsListSortBy = filter.sortBy ?? 'anchorMonth';
+    const sortDir: SortDir = filter.sortDir ?? 'desc';
+    const sorted = this.sortItems(searched, sortBy, sortDir);
+
+    // Paginate (BR-38-06)
+    const page = Math.max(1, filter.page ?? 1);
+    const limit = filter.limit ?? 20;
+    const total = sorted.length;
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    const paged = sorted.slice((page - 1) * limit, page * limit);
+
+    const result: PnLContractsListResponseDto = {
+      period,
+      dateFrom: dateFrom.toISOString().slice(0, 10),
+      dateTo: dateTo.toISOString().slice(0, 10),
+      generatedAt: new Date().toISOString(),
+      items: paged,
+      total,
+      page,
+      limit,
+      totalPages,
+      totals: filteredTotals,
+    };
+
+    if (this.redis) {
+      try {
+        await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 60);
+      } catch (e) {
+        this.logger.warn(
+          `[finance] contracts-list cache set fail: ${(e as Error).message}`,
+        );
+      }
+    }
+
     return result;
   }
 }

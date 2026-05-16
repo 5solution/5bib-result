@@ -770,4 +770,358 @@ describe('F-028 PnLService.getSummary', () => {
     expect(result).toEqual(cached);
     expect(contractModel.findById).not.toHaveBeenCalled();
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // FEATURE-038 — getContractsList (paginated P&L list)
+  // ────────────────────────────────────────────────────────────────────
+
+  describe('FEATURE-038 getContractsList', () => {
+    it('TC-CL-01 — Default filter returns paginated 20 items + totals shape correct', async () => {
+      // 25 contracts → page 1 limit 20 → 20 items, total 25, totalPages 2
+      const contracts = Array.from({ length: 25 }, (_, i) =>
+        makeC({
+          totalAmount: 1_000_000 * (i + 1),
+          contractType: 'TIMING',
+          contractNumber: `CN-${String(i + 1).padStart(3, '0')}`,
+          client: { entityName: `Partner ${i + 1}` },
+        }),
+      );
+      const { service } = setupDashboardService({ contracts });
+
+      const result = await service.getContractsList({});
+
+      expect(result.items).toHaveLength(20);
+      expect(result.total).toBe(25);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(20);
+      expect(result.totalPages).toBe(2);
+      expect(result.totals.contractCount).toBe(25);
+      // Item shape per row
+      const first = result.items[0];
+      expect(first).toHaveProperty('contractId');
+      expect(first).toHaveProperty('contractNumber');
+      expect(first).toHaveProperty('partnerName');
+      expect(first).toHaveProperty('revenue');
+      expect(first).toHaveProperty('totalCost');
+      expect(first).toHaveProperty('profit');
+      expect(first).toHaveProperty('margin');
+      expect(first).toHaveProperty('marginTier');
+      expect(first).toHaveProperty('anchorMonth');
+    });
+
+    it('TC-CL-02 — Status whitelist applied at Mongo query (ACTIVE+COMPLETED only)', async () => {
+      const { service, contractModel } = setupDashboardService({ contracts: [] });
+      await service.getContractsList({});
+      const arg = (contractModel.find.mock.calls as any[])[0][0] as {
+        status: { $in: string[] };
+      };
+      expect(arg.status.$in).toEqual(['ACTIVE', 'COMPLETED']);
+      for (const excluded of [
+        'DRAFT',
+        'SENT',
+        'ACCEPTED',
+        'CONVERTED_TO_CONTRACT',
+        'CANCELLED',
+        'REJECTED',
+      ]) {
+        expect(arg.status.$in).not.toContain(excluded);
+      }
+    });
+
+    it('TC-CL-03 — Search combined matches contractNumber OR partnerName OR raceName', async () => {
+      const cA = makeC({
+        contractNumber: '14.05/2026/HDDV',
+        client: { entityName: 'Zaha' },
+        raceName: 'Hai Phong',
+      });
+      const cB = makeC({
+        contractNumber: 'CN-OTHER',
+        client: { entityName: 'Thach Sanh' },
+        raceName: 'Mau Son',
+      });
+      const cC = makeC({
+        contractNumber: 'CN-XYZ',
+        client: { entityName: 'Zaha SubCo' },
+        raceName: 'Da Lat',
+      });
+      const { service } = setupDashboardService({ contracts: [cA, cB, cC] });
+
+      const result = await service.getContractsList({ q: 'Zaha' });
+      expect(result.items).toHaveLength(2);
+      const ids = result.items.map((i) => i.contractId);
+      expect(ids).toContain(cA._id.toString());
+      expect(ids).toContain(cC._id.toString());
+      expect(ids).not.toContain(cB._id.toString());
+
+      // Match raceName
+      const byRace = await service.getContractsList({ q: 'Hai Phong' });
+      expect(byRace.items).toHaveLength(1);
+      expect(byRace.items[0].contractId).toBe(cA._id.toString());
+
+      // Match contractNumber prefix
+      const byNum = await service.getContractsList({ q: '14.05' });
+      expect(byNum.items).toHaveLength(1);
+      expect(byNum.items[0].contractId).toBe(cA._id.toString());
+    });
+
+    it('TC-CL-04 — Pagination boundary: page=2 limit=20 returns items[20..39]', async () => {
+      const contracts = Array.from({ length: 50 }, (_, i) =>
+        makeC({
+          contractNumber: `CN-${String(i + 1).padStart(3, '0')}`,
+          // varying signDate so anchorMonth DESC default sort is deterministic
+          signDate: new Date(2026, 0, i + 1),
+        }),
+      );
+      const { service } = setupDashboardService({ contracts });
+
+      const page1 = await service.getContractsList({ page: 1, limit: 20 });
+      const page2 = await service.getContractsList({ page: 2, limit: 20 });
+      const page3 = await service.getContractsList({ page: 3, limit: 20 });
+
+      expect(page1.items).toHaveLength(20);
+      expect(page2.items).toHaveLength(20);
+      expect(page3.items).toHaveLength(10);
+      expect(page2.total).toBe(50);
+      expect(page2.totalPages).toBe(3);
+      expect(page2.page).toBe(2);
+
+      // No overlap between pages
+      const ids1 = new Set(page1.items.map((i) => i.contractId));
+      const ids2 = new Set(page2.items.map((i) => i.contractId));
+      for (const id of ids2) {
+        expect(ids1.has(id)).toBe(false);
+      }
+    });
+
+    it('TC-CL-05 — Sort margin ASC: loss tier first, neutral (null) LAST', async () => {
+      // A healthy (margin=50%), B loss (-10%), C thin (5%), D neutral (rev=0)
+      const cA = makeC({
+        totalAmount: 200_000_000,
+        contractNumber: 'A',
+      });
+      const cB = makeC({
+        totalAmount: 100_000_000,
+        contractNumber: 'B',
+      });
+      const cC = makeC({
+        totalAmount: 100_000_000,
+        contractNumber: 'C',
+      });
+      const cD = makeC({
+        totalAmount: 0,
+        contractNumber: 'D',
+      });
+      const costMap = new Map<
+        string,
+        { totalCost: number; costByCategory: Record<string, number> }
+      >();
+      // A: cost 100M → margin 50% (healthy)
+      costMap.set(cA._id.toString(), {
+        totalCost: 100_000_000,
+        costByCategory: { LABOR: 100_000_000, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+      });
+      // B: cost 110M → margin -10% (loss)
+      costMap.set(cB._id.toString(), {
+        totalCost: 110_000_000,
+        costByCategory: { LABOR: 110_000_000, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+      });
+      // C: cost 95M → margin 5% (thin)
+      costMap.set(cC._id.toString(), {
+        totalCost: 95_000_000,
+        costByCategory: { LABOR: 95_000_000, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+      });
+      // D: rev=0 → margin null (neutral)
+      const { service } = setupDashboardService({
+        contracts: [cA, cB, cC, cD],
+        costMap,
+      });
+
+      const result = await service.getContractsList({
+        sortBy: 'margin',
+        sortDir: 'asc',
+      });
+
+      const nums = result.items.map((i) => i.contractNumber);
+      expect(nums).toEqual(['B', 'C', 'A', 'D']); // loss → thin → healthy → neutral last
+    });
+
+    it('TC-CL-06 — Search regex escape: ReDoS pattern (a+)+$ does NOT timeout, no 500', async () => {
+      const c1 = makeC({ contractNumber: 'CN-AAA', client: { entityName: 'aaa' } });
+      const { service } = setupDashboardService({ contracts: [c1] });
+
+      const start = Date.now();
+      const result = await service.getContractsList({ q: '(a+)+$' });
+      const elapsed = Date.now() - start;
+
+      // No timeout — service returns normally
+      expect(elapsed).toBeLessThan(500);
+      // No match (literal '(a+)+$' không tồn tại trong fixture)
+      expect(result.items).toHaveLength(0);
+      expect(result.total).toBe(0);
+    });
+
+    it('TC-CL-07 — Cache hit: 2 same-filter calls → 2nd returns cached without recompute', async () => {
+      const c1 = makeC({ totalAmount: 100_000_000 });
+      const { service, contractModel, redis } = setupDashboardService({
+        contracts: [c1],
+      });
+
+      // 1st call — cache miss → compute + SET
+      const r1 = await service.getContractsList({ period: 'last_3_months' });
+      expect(contractModel.find).toHaveBeenCalledTimes(1);
+      expect(redis.set).toHaveBeenCalledTimes(1);
+      const setCallArgs = (redis.set as jest.Mock).mock.calls[0];
+      expect(setCallArgs[0]).toMatch(/^pnl:contracts-list:/);
+      expect(setCallArgs[2]).toBe('EX');
+      expect(setCallArgs[3]).toBe(60);
+
+      // 2nd call — simulate cache hit by returning serialized result
+      (redis.get as jest.Mock).mockResolvedValueOnce(JSON.stringify(r1));
+      const r2 = await service.getContractsList({ period: 'last_3_months' });
+
+      // contractModel.find called only ONCE total (not twice)
+      expect(contractModel.find).toHaveBeenCalledTimes(1);
+      expect(r2).toEqual(r1);
+    });
+
+    it('TC-CL-08 — Graceful when Redis unavailable (no redis injected) → still computes + returns', async () => {
+      const c1 = makeC({ totalAmount: 100_000_000 });
+      const contractModel = {
+        find: jest.fn(() => ({
+          lean: jest.fn(() => ({ exec: jest.fn().mockResolvedValue([c1]) })),
+        })),
+        findById: jest.fn(),
+      };
+      const costItemsService = {
+        findAllActiveByContract: jest.fn().mockResolvedValue([]),
+        aggregateByContractIds: jest.fn().mockResolvedValue(new Map()),
+      };
+      const feeService = {
+        getActualRevenueForRace: jest.fn(),
+        getActualRevenueForRaces: jest.fn().mockResolvedValue(new Map()),
+      };
+      // NO redis (undefined)
+      const service = new PnLService(
+        contractModel as any,
+        costItemsService as any,
+        feeService as any,
+        undefined,
+      );
+
+      const result = await service.getContractsList({});
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+    });
+
+    it('TC-CL-09 — Cache miss + Redis SET fail → graceful, response still returned', async () => {
+      const c1 = makeC({ totalAmount: 100_000_000 });
+      const { service, redis } = setupDashboardService({ contracts: [c1] });
+      (redis.set as jest.Mock).mockRejectedValue(new Error('redis down'));
+
+      // Should NOT throw
+      const result = await service.getContractsList({});
+      expect(result.items).toHaveLength(1);
+    });
+
+    it('TC-CL-10 — Sort by profit DESC: highest profit first', async () => {
+      const cA = makeC({
+        totalAmount: 100_000_000,
+        contractNumber: 'A',
+      });
+      const cB = makeC({
+        totalAmount: 200_000_000,
+        contractNumber: 'B',
+      });
+      const cC = makeC({
+        totalAmount: 50_000_000,
+        contractNumber: 'C',
+      });
+      const { service } = setupDashboardService({
+        contracts: [cA, cB, cC],
+      });
+
+      const result = await service.getContractsList({
+        sortBy: 'profit',
+        sortDir: 'desc',
+      });
+
+      expect(result.items.map((i) => i.contractNumber)).toEqual(['B', 'A', 'C']);
+    });
+
+    it('TC-CL-11 — Sort by contractNumber ASC (locale compare for natural order)', async () => {
+      const c1 = makeC({ contractNumber: 'CN-003' });
+      const c2 = makeC({ contractNumber: 'CN-001' });
+      const c3 = makeC({ contractNumber: 'CN-002' });
+      const { service } = setupDashboardService({ contracts: [c1, c2, c3] });
+
+      const result = await service.getContractsList({
+        sortBy: 'contractNumber',
+        sortDir: 'asc',
+      });
+
+      expect(result.items.map((i) => i.contractNumber)).toEqual([
+        'CN-001',
+        'CN-002',
+        'CN-003',
+      ]);
+    });
+
+    it('TC-CL-12 — hashContractsListFilter deterministic across key order', async () => {
+      const c1 = makeC({ totalAmount: 100_000_000 });
+      const { service, redis } = setupDashboardService({ contracts: [c1] });
+
+      // 2 filters with same logical content but different field set order
+      await service.getContractsList({
+        page: 1,
+        limit: 20,
+        period: 'last_3_months',
+        sortBy: 'profit',
+        sortDir: 'desc',
+        q: 'foo',
+      });
+      await service.getContractsList({
+        q: 'foo',
+        sortDir: 'desc',
+        sortBy: 'profit',
+        period: 'last_3_months',
+        limit: 20,
+        page: 1,
+      });
+
+      // Both calls produce SAME cache key (deterministic hash)
+      const setKey1 = (redis.set as jest.Mock).mock.calls[0][0];
+      const setKey2 = (redis.set as jest.Mock).mock.calls[1][0];
+      expect(setKey1).toBe(setKey2);
+    });
+
+    it('TC-CL-13 — Empty result: 0 contracts → items=[], total=0, totalPages=0, totals zero', async () => {
+      const { service } = setupDashboardService({ contracts: [] });
+      const result = await service.getContractsList({});
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(0);
+      expect(result.totalPages).toBe(0);
+      expect(result.totals.contractCount).toBe(0);
+      expect(result.totals.totalRevenue).toBe(0);
+      expect(result.totals.totalCost).toBe(0);
+    });
+
+    it('TC-CL-14 — Filtered totals reflect search subset (not dataset-wide contractCount)', async () => {
+      const cA = makeC({
+        totalAmount: 100_000_000,
+        client: { entityName: 'Zaha' },
+      });
+      const cB = makeC({
+        totalAmount: 200_000_000,
+        client: { entityName: 'Other' },
+      });
+      const { service } = setupDashboardService({ contracts: [cA, cB] });
+
+      const result = await service.getContractsList({ q: 'Zaha' });
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      // Footer summary reflects ONLY filtered (1 contract, 100M), not dataset 2 contracts/300M
+      expect(result.totals.contractCount).toBe(1);
+      expect(result.totals.totalRevenue).toBe(100_000_000);
+    });
+  });
 });

@@ -22,6 +22,7 @@ import { CostItemsController } from './controllers/cost-items.controller';
 import { PnLController } from './controllers/pnl.controller';
 import { PnLExportController } from './controllers/pnl-export.controller';
 import { PnLDashboardController } from './controllers/pnl-dashboard.controller';
+import { PnLContractsListController } from './controllers/pnl-contracts-list.controller';
 import { MysqlLookupController } from './controllers/mysql-lookup.controller';
 import { CostSuggestionsController } from './controllers/cost-suggestions.controller';
 
@@ -60,6 +61,7 @@ import { CostSuggestionsController } from './controllers/cost-suggestions.contro
     PnLController,
     PnLExportController,
     PnLDashboardController,
+    PnLContractsListController,
     MysqlLookupController,
     CostSuggestionsController,
   ],

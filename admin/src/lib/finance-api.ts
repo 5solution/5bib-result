@@ -359,6 +359,51 @@ export function exportDashboardExcel(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// FEATURE-038 — Paginated Contracts List with P&L per row
+// ────────────────────────────────────────────────────────────────────────────
+
+export type ContractsListSortBy =
+  | "anchorMonth"
+  | "profit"
+  | "revenue"
+  | "margin"
+  | "contractNumber";
+
+export type SortDir = "asc" | "desc";
+
+export const CONTRACTS_LIST_PAGE_SIZES = [20, 50, 100] as const;
+export type ContractsListPageSize = (typeof CONTRACTS_LIST_PAGE_SIZES)[number];
+
+export interface PnLContractsListFilter extends DashboardFilter {
+  page?: number;
+  limit?: ContractsListPageSize;
+  sortBy?: ContractsListSortBy;
+  sortDir?: SortDir;
+  q?: string;
+}
+
+export interface PnLContractsListResponse {
+  period: string;
+  dateFrom: string;
+  dateTo: string;
+  generatedAt: string;
+  items: DashboardContractItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  totals: DashboardTotals;
+}
+
+export function getContractsList(
+  filter: PnLContractsListFilter = {},
+): Promise<PnLContractsListResponse> {
+  return jsonFetch<PnLContractsListResponse>(
+    `/api/finance/pnl/contracts${toQs(filter)}`,
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // F-028 Phase 3 — Cost suggestions từ Service Catalog (HĐ line items)
 // ────────────────────────────────────────────────────────────────────────────
 
