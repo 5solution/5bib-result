@@ -228,13 +228,20 @@ export function CommandCenterLayout({
         }
       : undefined;
 
-  // First course as default Discovery target (parent could expose finer control later).
-  const firstCourse = data.checkpointHealthMatrix?.[0];
-  const handleOpenDiscovery = firstCourse
+  // F-039 fix — Discovery target follows activeCourseId (synced với LiveLeaderboardTable
+  // + AthleteFlowChart course pill selection). BEFORE: hardcoded checkpointHealthMatrix[0]
+  // → user click tab Trail 70Km nhưng Discovery vẫn open course[0] Trail 5KM. Bug repro
+  // race 69fffc36... Trail 70Km auto-derive luôn target wrong course.
+  //
+  // Resolution order: activeCourseId match → fallback first course in matrix → undefined.
+  const matrixCourses = data.checkpointHealthMatrix ?? [];
+  const activeCourseInMatrix =
+    matrixCourses.find((c) => c.courseId === activeCourseId) ?? matrixCourses[0];
+  const handleOpenDiscovery = activeCourseInMatrix
     ? () =>
         setDiscoveryCourse({
-          courseId: firstCourse.courseId,
-          courseName: firstCourse.courseName,
+          courseId: activeCourseInMatrix.courseId,
+          courseName: activeCourseInMatrix.courseName,
         })
     : undefined;
 
@@ -251,7 +258,7 @@ export function CommandCenterLayout({
         exporting={exporting}
         raceMeta={raceMetaForTopBar}
         onOpenDiscovery={handleOpenDiscovery}
-        showDiscoveryTrigger={!!firstCourse}
+        showDiscoveryTrigger={!!activeCourseInMatrix}
       />
 
       {/* F-008 v2 BR-CC2-19 — RaceStatusPill inline above SummaryCardsRow */}

@@ -368,42 +368,52 @@ export class CheckpointDiscoveryService {
       }
     }
 
-    // Sort chronologically theo median time. Nếu nhiều keys có median=0
-    // (race chưa start, schema-from-1 mode), preserve insertion order
-    // (vendor RR thường insert theo course order trong JSON).
-    const allMediansZero = surviving.every((s) => s.medianTimeSeconds === 0);
-    if (!allMediansZero) {
-      surviving.sort((a, b) => a.medianTimeSeconds - b.medianTimeSeconds);
-    }
-    // else: giữ insertion order từ vendor JSON
-
-    // Last surviving = Finish (cup level)
-    const finishKey = surviving.length > 0 ? surviving[surviving.length - 1] : null;
-    const finishMedian = finishKey?.medianTimeSeconds ?? 0;
-    const finishersCount = finishKey?.passedCount ?? 0;
-    const canDeriveDistance =
-      courseDistanceKm !== null && finishersCount >= MIN_FINISHERS_FOR_DISTANCE && finishMedian > 0;
-
-    const notes: string[] = [];
-    if (!canDeriveDistance) {
-      if (courseDistanceKm === null) {
-        notes.push(
-          'Course chưa có distanceKm — distance suggestion null. Nhập distanceKm ở Race edit để auto-derive.',
-        );
-      } else if (finishersCount < MIN_FINISHERS_FOR_DISTANCE) {
-        notes.push(
-          `Chỉ ${finishersCount} athletes đã finish (<${MIN_FINISHERS_FOR_DISTANCE}) — distance derivation chưa đáng tin. BTC override sau khi race tiến triển.`,
-        );
+    // F-039 BR-CDD-01/02 — Schema-from-1 mode: TRUST vendor JSON insertion order
+    // (chronological course order). Median-time sort UNRELIABLE khi:
+    //  - Many CP có 0 samples (athletes chưa pass) → median=0 → sort grouped với Start
+    //  - Lone-sample CP (1-2 fluke finishers) → median không reliable, vị trí ngẫu nhiên
+    //  - Many-sample mid-course CP có median bị pull cao bởi athletes chậm → sorted SAU
+    //    lone-sample CP có ít athletes nhưng nhanh hơn
+    // Vendor RR consistently inserts Chiptimes keys theo order course design — verified
+    // 72/72 athletes race 399839 (Trail 70Km) cùng schema ['Start','TM1',...,'TM5','Finish'].
+    // Fallback aggregate mode (schema inconsistent <80%) vẫn dùng median sort như cũ.
+    if (candidateKeys === null) {
+      const allMediansZero = surviving.every((s) => s.medianTimeSeconds === 0);
+      if (!allMediansZero) {
+        surviving.sort((a, b) => a.medianTimeSeconds - b.medianTimeSeconds);
       }
-    } else {
+    }
+    // Schema-from-1: surviving already in vendor JSON insertion order (line 345-355
+    // iterates candidateKeys). NO sort applied — vendor truth preserved.
+
+    // Last surviving = Finish (cup level). Per F-039, đây là vendor's last key (e.g.
+    // literal "Finish" or final "TM5" key), KHÔNG còn "key có median lớn nhất".
+    const finishKey = surviving.length > 0 ? surviving[surviving.length - 1] : null;
+    const finishersCount = finishKey?.passedCount ?? 0;
+
+    // F-039 BR-CDD-03/04 — KILL median-time distance derivation. Vendor RR API
+    // KHÔNG cung cấp distance per CP. Code trước đây tự nội suy bằng công thức:
+    //   distance[i] = courseTotalKm × (medianTime[i] / medianTime[Finish])
+    // GIẢ ĐỊNH "athletes chạy đều tốc" — SAI cho trail (dốc/terrain mixed) + race
+    // partial-timing (lone-sample fluke ruins reference base). Honesty UX > guess.
+    //
+    // New rule:
+    //  - Start = 0 km (chronologically first key)
+    //  - Finish = courseTotalKm (chronologically last key, IF race config has it)
+    //  - Intermediate (TM1..TM5) = null → frontend hiện ô trống, BTC nhập thủ công
+    const notes: string[] = [];
+    if (courseDistanceKm === null) {
       notes.push(
-        `Distance derived theo time proportion với reference courseDistanceKm=${courseDistanceKm}km, finish median=${formatSeconds(finishMedian)}.`,
+        'Course chưa có distanceKm tổng — Finish suggestion sẽ null. Nhập distanceKm ở Race edit trước khi discover.',
       );
     }
-
     if (surviving.length === 0) {
       notes.push(
         `Không key nào đạt coverage ≥${(MIN_COVERAGE * 100).toFixed(0)}% — race có thể vừa start, đợi 5-10 min rồi discover lại.`,
+      );
+    } else {
+      notes.push(
+        'Distance per checkpoint KHÔNG có trong vendor RaceResult API. Start = 0km, Finish = tổng cự ly. Intermediate (TM1..TM5) BTC nhập thủ công nếu cần — có thể bỏ trống.',
       );
     }
 
@@ -413,10 +423,7 @@ export class CheckpointDiscoveryService {
       // Start: orderIndex = 0
       const isImplicitStart = idx === 0;
       // Finish: orderIndex = N-1 AND N > 1.
-      // Note: nếu vendor có literal "Finish" key, sort theo time ASC →
-      // Finish key sẽ có median time muộn nhất → naturally orderIndex=N-1.
-      // Cả 2 trường hợp (literal "Finish" hoặc vendor dùng "TM5"):
-      // last surviving = vạch về đích.
+      // Vendor JSON order — last key luôn là Finish (literal "Finish" hoặc final TM_N).
       const isImplicitFinish = idx === lastIdx && lastIdx > 0;
 
       // Suggested name — gợi ý đẹp hơn cho start/finish nếu vendor dùng key
@@ -430,18 +437,13 @@ export class CheckpointDiscoveryService {
       return {
         key: s.key,
         suggestedName,
-        suggestedDistanceKm:
-          isImplicitStart && s.medianTimeSeconds === 0
-            ? 0 // Start luôn = 0km
-            : isImplicitFinish && courseDistanceKm !== null
-              ? courseDistanceKm // Finish = course total distance
-              : canDeriveDistance
-                ? roundTo(
-                    courseDistanceKm! *
-                      (s.medianTimeSeconds / finishMedian),
-                    2,
-                  )
-                : null,
+        // F-039 BR-CDD-03 — distance honesty: chỉ Start (0) + Finish (courseTotal) trả số,
+        // intermediate luôn null. KHÔNG nội suy time ratio.
+        suggestedDistanceKm: isImplicitStart
+          ? 0
+          : isImplicitFinish && courseDistanceKm !== null
+            ? courseDistanceKm
+            : null,
         coverage: roundTo(s.coverage, 3),
         medianTimeSeconds: Math.round(s.medianTimeSeconds),
         orderIndex: idx,

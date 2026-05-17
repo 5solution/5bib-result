@@ -4,24 +4,32 @@
  * Phase B FEATURE-001 — Discover preview inline trên race edit form.
  *
  * BR-04: Auto-trigger discover khi BTC paste/edit course.apiUrl (debounce 800ms).
- * BR-05: PREVIEW only — KHÔNG silent persist. BTC review tên + distance, click
- *        Apply để write vào courseForm.checkpoints (parent state). Save form
- *        sau đó persist.
+ * BR-05 (F-039 fix): "Apply" button gọi applyCheckpoints endpoint TRỰC TIẾP để
+ *        persist vào course.checkpoints — KHÔNG còn rely vào parent form save
+ *        (which silently dropped edits). BTC review tên + distance → click Apply
+ *        → backend write → query invalidate → UI refresh.
  * BR-09: Re-discover preserve tên BTC đã đặt (existing checkpoints merge).
  *
- * Component dùng existing endpoint POST /discover-checkpoints/:courseId
- * (KHÔNG dùng cache endpoint — frontend-driven, debounce đủ tránh spam).
+ * F-039 thay đổi (Option A — distance honesty):
+ *  - Distance intermediate luôn null từ backend (Start=0, Finish=courseTotal stay).
+ *  - BTC nhập thủ công nếu cần distance per CP (hoặc bỏ trống).
+ *  - "🔄 Reset to vendor order" button — force re-apply current vendor order,
+ *    preserve names BTC đã đặt, clear distance về backend suggestion (= migrate
+ *    legacy data saved theo time-ratio guess cũ).
  */
 
 import { useEffect, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import {
+  applyCheckpoints,
   discoverCheckpoints,
+  type CheckpointApplyItem,
   type DetectedCheckpoint,
 } from '@/lib/timing-alert-api';
 
@@ -52,6 +60,7 @@ export function DiscoverPreviewPanel({
   apiUrl,
   existingCheckpoints,
 }: Props) {
+  const qc = useQueryClient();
   const [debouncedApiUrl, setDebouncedApiUrl] = useState(apiUrl);
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -95,6 +104,65 @@ export function DiscoverPreviewPanel({
       setErrMsg(null);
     },
     onError: (err: Error) => setErrMsg(err.message),
+  });
+
+  // F-039 — Apply mutation persists rows to backend via applyCheckpoints endpoint.
+  // 2 modes:
+  //  - mode='current': save rows as-edited (BTC current edits)
+  //  - mode='vendor-reset': save với editDistanceKm = backend suggestion (= reset
+  //    legacy time-ratio guess về null cho intermediate, giữ Start=0 + Finish=total).
+  //    Preserve editName BTC đã đặt.
+  const apply = useMutation({
+    mutationFn: async (mode: 'current' | 'vendor-reset') => {
+      if (rows.length === 0) throw new Error('Không có checkpoints để save');
+      const payload: CheckpointApplyItem[] = rows.map((r) => {
+        const name = (r.editName.trim() || r.suggestedName || r.key).trim();
+        let distanceKm: number | null;
+        if (mode === 'vendor-reset') {
+          // Reset distance về backend suggestion (intermediate = null)
+          distanceKm = r.suggestedDistanceKm;
+        } else {
+          // Use BTC current edit
+          const raw = r.editDistanceKm.trim();
+          if (raw.length === 0) {
+            distanceKm = null;
+          } else {
+            const n = Number(raw);
+            if (!Number.isFinite(n) || n < 0) {
+              throw new Error(`distanceKm không hợp lệ ở row "${r.key}": ${raw}`);
+            }
+            distanceKm = n;
+          }
+        }
+        return { key: r.key, name, distanceKm };
+      });
+      return applyCheckpoints(raceId, courseId, payload);
+    },
+    onSuccess: (result, mode) => {
+      qc.invalidateQueries({ queryKey: ['dashboard-snapshot', raceId] });
+      qc.invalidateQueries({ queryKey: ['timing-alert-discover', raceId] });
+      qc.invalidateQueries({ queryKey: ['race', raceId] });
+      toast.success(
+        mode === 'vendor-reset'
+          ? `🔄 Đã reset ${result.saved} checkpoints về vendor order (giữ tên BTC)`
+          : `💾 Đã lưu ${result.saved} checkpoints cho ${courseName}`,
+      );
+      if (mode === 'vendor-reset') {
+        // Re-sync rows từ backend sau reset (suggestedDistanceKm = null cho intermediate)
+        setRows((prev) =>
+          prev.map((r) => ({
+            ...r,
+            editDistanceKm:
+              r.suggestedDistanceKm !== null ? String(r.suggestedDistanceKm) : '',
+          })),
+        );
+      }
+      setErrMsg(null);
+    },
+    onError: (err: Error) => {
+      setErrMsg(err.message);
+      toast.error(`❌ Save thất bại: ${err.message}`);
+    },
   });
 
   // Auto-trigger khi debouncedApiUrl thay đổi (nếu không empty)
@@ -198,11 +266,41 @@ export function DiscoverPreviewPanel({
                     </tbody>
                   </table>
                 </div>
-                <p className="text-xs text-stone-600">
-                  💡 BTC review + edit tên/distance trên đây. Khi save form race, checkpoints
-                  sẽ commit vào course.checkpoints. Re-paste apiUrl khác → re-discover, tên cũ
-                  preserve nếu key giống nhau.
-                </p>
+                <div className="space-y-2 text-xs text-stone-700">
+                  <p>
+                    💡 <strong>Order</strong>: theo thứ tự vendor RaceResult JSON (chronological course design).
+                  </p>
+                  <p>
+                    📏 <strong>Distance per CP KHÔNG có trong vendor API</strong> — chỉ Start=0 và Finish=tổng cự ly là chắc chắn.
+                    Intermediate (TM1..TM5) BTC <em>tự nhập nếu biết course design</em> hoặc bỏ trống.
+                    Distance KHÔNG ảnh hưởng tới progression bar — chỉ là display label.
+                  </p>
+                  <p>
+                    💾 <strong>Lưu cách nào</strong>: click <em>"💾 Lưu checkpoints"</em> để persist edits hiện tại,
+                    hoặc <em>"🔄 Reset về vendor order"</em> để fix race cũ (clear distance guess cũ về null, giữ tên BTC đã đặt).
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => apply.mutate('vendor-reset')}
+                    disabled={apply.isPending}
+                    className="h-8 text-xs"
+                    title="Force re-apply current vendor order, preserve names BTC đã đặt, clear distance guess cũ về null cho intermediate CP"
+                  >
+                    🔄 Reset về vendor order
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => apply.mutate('current')}
+                    disabled={apply.isPending}
+                    className="h-8 text-xs"
+                  >
+                    {apply.isPending ? 'Đang lưu...' : '💾 Lưu checkpoints'}
+                  </Button>
+                </div>
               </>
             )}
 
