@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { getModelToken } from '@nestjs/mongoose';
 import { Logger } from '@nestjs/common';
 import { ReconciliationQueryService } from './reconciliation-query.service';
+import { Reconciliation } from '../schemas/reconciliation.schema';
 import { Tenant } from '../../merchant/entities/tenant.entity';
 
 /**
@@ -27,6 +29,18 @@ describe('ReconciliationQueryService — categorize (FEATURE-016 v1.6.5)', () =>
       providers: [
         ReconciliationQueryService,
         { provide: getRepositoryToken(Tenant, 'platform'), useValue: mockTenantRepo },
+        // F-040 — Reconciliation model needed by getReconciledFeeForContract.
+        // Existing tests only exercise queryOrders → minimal stub OK.
+        {
+          provide: getModelToken(Reconciliation.name),
+          useValue: {
+            find: jest.fn().mockReturnValue({
+              lean: jest.fn().mockReturnValue({
+                exec: jest.fn().mockResolvedValue([]),
+              }),
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -300,3 +314,142 @@ describe('ReconciliationQueryService — categorize (FEATURE-016 v1.6.5)', () =>
     });
   });
 });
+
+// ============================================================
+// FEATURE-040 — getReconciledFeeForContract
+// ============================================================
+
+describe('ReconciliationQueryService — getReconciledFeeForContract (F-040)', () => {
+  let service: ReconciliationQueryService;
+  let reconciliationFindMock: jest.Mock;
+  let warnSpy: jest.SpyInstance;
+  let infoSpy: jest.SpyInstance;
+
+  function setupService(docsReturn: unknown[]) {
+    reconciliationFindMock = jest.fn().mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(docsReturn),
+      }),
+    });
+    const mockTenantRepo = { manager: { query: jest.fn() } };
+    service = new ReconciliationQueryService(
+      mockTenantRepo as never,
+      { find: reconciliationFindMock } as never,
+    );
+    warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    infoSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+  }
+
+  afterEach(() => {
+    warnSpy?.mockRestore();
+    infoSpy?.mockRestore();
+  });
+
+  it('TC-FE-19: duplicate recon docs for same (raceId,tenantId,period) → SUM all + log WARN', async () => {
+    setupService([
+      {
+        _id: 'rec1',
+        period_start: '2026-05-01',
+        period_end: '2026-05-31',
+        status: 'signed',
+        fee_amount: 500_000,
+        manual_fee_amount: 100_000,
+        signed_at: new Date('2026-06-01'),
+        createdAt: new Date('2026-05-15'),
+      },
+      {
+        _id: 'rec2',
+        period_start: '2026-05-01',
+        period_end: '2026-05-31',
+        status: 'reviewed',
+        fee_amount: 500_000,
+        manual_fee_amount: 100_000,
+        reviewed_at: new Date('2026-06-02'),
+        createdAt: new Date('2026-05-15'),
+      },
+    ]);
+
+    const slices = await service.getReconciledFeeForContract(
+      194,
+      20,
+      '2026-05-01',
+      '2026-05-31',
+    );
+    expect(slices).toHaveLength(2);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[F-040] duplicate recon docs detected'),
+    );
+    const total = slices.reduce((s, r) => s + r.feeAmount + r.manualFeeAmount, 0);
+    expect(total).toBe(1_200_000);
+  });
+
+  it('Status whitelist — non-whitelist statuses excluded via Mongo query filter', async () => {
+    setupService([]);
+    await service.getReconciledFeeForContract(100, 10, '2026-01-01', '2026-12-31');
+    const filterArg = reconciliationFindMock.mock.calls[0][0];
+    expect(filterArg.status.$in).toEqual([
+      'signed',
+      'reviewed',
+      'completed',
+      'sent',
+    ]);
+  });
+
+  it('Period overlap filter — period_end >= from AND period_start <= to', async () => {
+    setupService([]);
+    await service.getReconciledFeeForContract(
+      100,
+      10,
+      new Date('2026-05-01'),
+      new Date('2026-12-31'),
+    );
+    const filterArg = reconciliationFindMock.mock.calls[0][0];
+    expect(filterArg.period_end.$gte).toBe('2026-05-01');
+    expect(filterArg.period_start.$lte).toBe('2026-12-31');
+  });
+
+  it('BR-40-12 legacy warning — pre-2026-05-08 recon gets legacyWarning set', async () => {
+    setupService([
+      {
+        _id: 'rec-legacy',
+        period_start: '2026-04-01',
+        period_end: '2026-04-30',
+        status: 'signed',
+        fee_amount: 700_000,
+        manual_fee_amount: 0,
+        signed_at: new Date('2026-04-30'),
+        createdAt: new Date('2026-04-15'), // PRE-cutoff
+      },
+    ]);
+    const slices = await service.getReconciledFeeForContract(
+      194,
+      20,
+      '2026-04-01',
+      '2026-04-30',
+    );
+    expect(slices[0].legacyWarning).toMatch(/pre-F016/);
+  });
+
+  it('Post-cutoff recon gets NO legacyWarning', async () => {
+    setupService([
+      {
+        _id: 'rec-fresh',
+        period_start: '2026-05-01',
+        period_end: '2026-05-31',
+        status: 'signed',
+        fee_amount: 100_000,
+        manual_fee_amount: 0,
+        signed_at: new Date('2026-06-01'),
+        createdAt: new Date('2026-06-01'), // POST-cutoff
+      },
+    ]);
+    const slices = await service.getReconciledFeeForContract(
+      100,
+      10,
+      '2026-05-01',
+      '2026-05-31',
+    );
+    expect(slices[0].legacyWarning).toBeUndefined();
+  });
+});
+

@@ -1,10 +1,14 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectModel } from '@nestjs/mongoose';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import type { Redis } from 'ioredis';
 import { Repository } from 'typeorm';
 import { Model } from 'mongoose';
 import { Tenant } from './entities/tenant.entity';
@@ -24,6 +28,8 @@ import { ApproveMerchantDto } from './dto/approve-merchant.dto';
 
 @Injectable()
 export class MerchantService {
+  private readonly logger = new Logger(MerchantService.name);
+
   constructor(
     @InjectRepository(Tenant, 'platform')
     private readonly tenantRepo: Repository<Tenant>,
@@ -33,7 +39,79 @@ export class MerchantService {
 
     @InjectModel(MerchantFeeHistory.name)
     private readonly feeHistoryModel: Model<MerchantFeeHistoryDocument>,
+
+    @Optional() @InjectRedis() private readonly redis?: Redis,
   ) {}
+
+  /**
+   * FEATURE-040 BR-40-11 — flush all `pnl:*:tenant=<tenantId>` cache keys
+   * after fee config mutation. Uses scanStream + pipeline DEL for atomic
+   * batch removal. Patterns covered:
+   *   - pnl:ticket-sales-fee:*:tenant=<id>
+   *   - pnl:fee-source:*:tenant=<id>
+   *   - pnl:gross-gmv:*:tenant=<id>
+   *   - pnl:fee-breakdown:*:tenant=<id>
+   *
+   * Also flushes aggregated dashboard/list keys (broader pattern `pnl:*`)
+   * because tenant rate change may affect MANY contracts' aggregated totals.
+   */
+  private async flushPnLCacheForTenant(tenantId: number): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const pattern = `pnl:*:tenant=${tenantId}`;
+      const keys: string[] = [];
+      // Use scanStream for non-blocking iteration. Match scoped pattern first.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const stream = (this.redis as any).scanStream({
+        match: pattern,
+        count: 200,
+      });
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (chunk: string[]) => keys.push(...chunk));
+        stream.on('end', () => resolve());
+        stream.on('error', (e: Error) => reject(e));
+      });
+      if (keys.length > 0) {
+        const pipe = this.redis.pipeline();
+        for (const k of keys) pipe.del(k);
+        await pipe.exec();
+      }
+      // Also flush aggregated dashboard + contracts-list keys (no tenant suffix)
+      const aggKeys: string[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const aggStream = (this.redis as any).scanStream({
+        match: 'pnl:dashboard:*',
+        count: 200,
+      });
+      await new Promise<void>((resolve, reject) => {
+        aggStream.on('data', (chunk: string[]) => aggKeys.push(...chunk));
+        aggStream.on('end', () => resolve());
+        aggStream.on('error', (e: Error) => reject(e));
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const listStream = (this.redis as any).scanStream({
+        match: 'pnl:contracts-list:*',
+        count: 200,
+      });
+      await new Promise<void>((resolve, reject) => {
+        listStream.on('data', (chunk: string[]) => aggKeys.push(...chunk));
+        listStream.on('end', () => resolve());
+        listStream.on('error', (e: Error) => reject(e));
+      });
+      if (aggKeys.length > 0) {
+        const pipe = this.redis.pipeline();
+        for (const k of aggKeys) pipe.del(k);
+        await pipe.exec();
+      }
+      this.logger.log(
+        `[F-040] flushed PnL cache for tenantId=${tenantId} — scoped=${keys.length}, aggregated=${aggKeys.length}`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `[F-040] flushPnLCacheForTenant fail tenantId=${tenantId}: ${(e as Error).message}`,
+      );
+    }
+  }
 
   // ── List ─────────────────────────────────────────────────────
 
@@ -181,6 +259,17 @@ export class MerchantService {
 
     await config.save();
     await this.feeHistoryModel.insertMany(historyDocs);
+
+    // F-040 BR-40-11 — invalidate PnL cache for this tenant after fee change.
+    // Affects: pnl:ticket-sales-fee, pnl:fee-source, pnl:gross-gmv,
+    //          pnl:fee-breakdown (scoped) + aggregated dashboard/list (broad).
+    if (
+      service_fee_rate !== undefined ||
+      manual_fee_per_ticket !== undefined ||
+      fee_vat_rate !== undefined
+    ) {
+      await this.flushPnLCacheForTenant(id);
+    }
 
     return { data: this.mergeFormat(tenant, config.toObject()) };
   }

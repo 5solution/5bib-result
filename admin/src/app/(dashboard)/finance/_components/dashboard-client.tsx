@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -31,8 +32,10 @@ import {
   type DashboardPeriod,
   type DashboardGroupBy,
   type PnLDashboardResponse,
+  type FeeSource,
 } from "@/lib/finance-api";
 import { PeriodFilter } from "./period-filter";
+import { SourceMixStrip } from "./source-mix-strip";
 import { PnLDashboardTabs } from "./pnl-dashboard-tabs";
 import { TopProfitTable } from "./top-profit-table";
 import { LossMakingTable } from "./loss-making-table";
@@ -84,6 +87,7 @@ function KpiCard({
 }
 
 export function DashboardClient() {
+  const router = useRouter();
   const [period, setPeriod] = useState<DashboardPeriod>("last_3_months");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -125,6 +129,14 @@ export function DashboardClient() {
 
   const totals = data?.totals;
   const profitTone = (totals?.totalProfit ?? 0) >= 0 ? "good" : "bad";
+
+  // F-040 — navigate F-038 list filtered by source on segment click
+  const handleSourceClick = useCallback(
+    (source: FeeSource) => {
+      router.push(`/finance/contracts?feeSource=${source}`);
+    },
+    [router],
+  );
 
   return (
     <div className="flex flex-col gap-5 p-5">
@@ -205,6 +217,15 @@ export function DashboardClient() {
           loading={loading}
         />
       </div>
+
+      {/* F-040 — Source mix strip (hide if total=0) */}
+      {totals && totals.contractCount > 0 ? (
+        <SourceMixStrip
+          mix={totals.feeSourceMix}
+          total={totals.contractCount}
+          onSegmentClick={handleSourceClick}
+        />
+      ) : null}
 
       {/* Tabs aggregated */}
       <PnLDashboardTabs

@@ -48,6 +48,12 @@ import { TongHopService } from './export/tong-hop.service';
     BatchExportService,
     TongHopService,
   ],
-  exports: [ReconciliationService],
+  exports: [
+    ReconciliationService,
+    // F-040 — expose ReconciliationQueryService to FinanceModule for fee compute
+    // cross-domain integration (BR-40-02). Models are exported via Mongoose.
+    ReconciliationQueryService,
+    MongooseModule, // re-export feature models so importer can @InjectModel(Reconciliation.name)
+  ],
 })
 export class ReconciliationModule {}

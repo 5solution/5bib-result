@@ -132,7 +132,12 @@ export function PnLSummaryCard({ contractId, compact, summary }: Props) {
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
-            <div className="text-xs text-stone-500">Doanh thu</div>
+            <div
+              className="cursor-help text-xs text-stone-500"
+              title="Doanh thu = fee 5BIB thật (đã đổi từ FEATURE-040). TICKET_SALES tính theo fee thu được, KHÔNG phải GMV gross."
+            >
+              Doanh thu
+            </div>
             <div className="font-mono text-sm font-semibold">
               {formatVnd(pnl.revenue)}
             </div>
@@ -237,7 +242,10 @@ export function PnLSummaryCard({ contractId, compact, summary }: Props) {
       <CardContent>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div>
-            <div className="text-xs uppercase tracking-wide text-stone-500">
+            <div
+              className="cursor-help text-xs uppercase tracking-wide text-stone-500"
+              title="Doanh thu = fee 5BIB thật (đã đổi từ FEATURE-040). TICKET_SALES tính theo fee thu được, KHÔNG phải GMV gross."
+            >
               Doanh thu
             </div>
             <div className="mt-1 font-mono text-lg font-bold text-stone-900">

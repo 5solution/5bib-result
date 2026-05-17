@@ -1,4 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { FEE_SOURCES, FeeSource } from './pnl-response.dto';
 
 /**
  * F-028 Phase 2 — aggregated dashboard response shapes.
@@ -8,6 +9,9 @@ import { ApiProperty } from '@nestjs/swagger';
  *
  * Mỗi contract entry chứa đủ field FE render bảng — KHÔNG cần round-trip
  * /pnl per row (BR-PNL-13 cache 120s aggregated).
+ *
+ * FEATURE-040 — additive fields per row: feeSource, grossGMV?, feeWarning?.
+ * Aggregate `feeSourceMix` trên totals.
  */
 
 export class DashboardContractItemDto {
@@ -18,9 +22,33 @@ export class DashboardContractItemDto {
   @ApiProperty({ enum: ['TICKET_SALES', 'TIMING', 'RACEKIT', 'OPERATIONS'] })
   contractType!: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
   @ApiProperty() status!: string;
-  @ApiProperty() revenue!: number;
+  @ApiProperty({
+    description:
+      'F-040 semantic shift (TICKET_SALES only): fee 5BIB thật, NOT gross GMV. Non-TICKET_SALES unchanged.',
+  })
+  revenue!: number;
   @ApiProperty({ enum: ['ESTIMATED', 'ACTUAL'] })
   revenueSource!: 'ESTIMATED' | 'ACTUAL';
+
+  /** FEATURE-040 — fee source enum (TICKET_SALES only; non-TICKET_SALES undefined). */
+  @ApiPropertyOptional({
+    enum: FEE_SOURCES,
+    description: 'F-040 fee source (TICKET_SALES only)',
+  })
+  feeSource?: FeeSource;
+
+  /** FEATURE-040 — gross GMV reference (TICKET_SALES only, transparency). */
+  @ApiPropertyOptional({
+    description: 'F-040 gross GMV reference (TICKET_SALES only)',
+  })
+  grossGMV?: number;
+
+  /** FEATURE-040 — fee compute warning (TD legacy / cross-DB degrade). */
+  @ApiPropertyOptional({
+    description: 'F-040 fee compute warning string',
+  })
+  feeWarning?: string;
+
   @ApiProperty() totalCost!: number;
   @ApiProperty() profit!: number;
   @ApiProperty({ nullable: true }) margin!: number | null;
@@ -45,6 +73,23 @@ export class DashboardGroupBucketDto {
   @ApiProperty({ nullable: true }) avgMargin!: number | null;
 }
 
+/**
+ * FEATURE-040 — distribution of contracts by feeSource (counts).
+ */
+export class FeeSourceMixDto {
+  @ApiProperty({ description: 'Count of contracts with RECONCILIATION source' })
+  reconciliation!: number;
+
+  @ApiProperty({ description: 'Count of contracts with SELF_COMPUTE source' })
+  selfCompute!: number;
+
+  @ApiProperty({ description: 'Count of contracts with MIXED source' })
+  mixed!: number;
+
+  @ApiProperty({ description: 'Count of contracts with ESTIMATED source' })
+  estimated!: number;
+}
+
 export class DashboardTotalsDto {
   @ApiProperty() contractCount!: number;
   @ApiProperty() totalRevenue!: number;
@@ -58,6 +103,13 @@ export class DashboardTotalsDto {
     example: { LABOR: 0, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
   })
   costByCategory!: Record<string, number>;
+
+  /** FEATURE-040 — distribution of contracts by feeSource (dashboard mix strip). */
+  @ApiProperty({
+    type: FeeSourceMixDto,
+    description: 'F-040 distribution of contracts by feeSource',
+  })
+  feeSourceMix!: FeeSourceMixDto;
 }
 
 export class PnLDashboardResponseDto {

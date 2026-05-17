@@ -1,7 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Model } from 'mongoose';
 import { Repository } from 'typeorm';
 import { Tenant } from '../../merchant/entities/tenant.entity';
+import {
+  Reconciliation,
+  ReconciliationDocument,
+} from '../schemas/reconciliation.schema';
 
 /**
  * FEATURE-016 v1.6.5 — extend FIVE_BIB_CATEGORIES.
@@ -41,6 +47,35 @@ export interface QueryOrdersResult {
   unknownCategoryCount: number;
 }
 
+/**
+ * FEATURE-040 — slice từ một reconciliation doc, dùng trong fee breakdown
+ * payload và trong source-decision logic của FeeService.
+ */
+export interface ReconciledFeeSlice {
+  reconciliationId: string;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+  feeAmount: number;
+  manualFeeAmount: number;
+  finalizedAt: string | null;
+  legacyWarning?: string;
+  /** Source createdAt — used for legacy detection downstream. */
+  createdAt: Date | null;
+}
+
+/** BR-40-03 — recon doc statuses considered "BBNT signed/equivalent". */
+export const F040_RECON_STATUS_WHITELIST = [
+  'signed',
+  'reviewed',
+  'completed',
+  'sent',
+] as const;
+
+/** BR-40-12 — pre-F016 cutoff. Recon docs created before this date may have
+ * underestimated fee_amount due to GROUP_BUY/CODE_TRANSFER drop. */
+export const F040_PRE_F016_CUTOFF = new Date('2026-05-08T00:00:00.000Z');
+
 @Injectable()
 export class ReconciliationQueryService {
   private readonly logger = new Logger(ReconciliationQueryService.name);
@@ -48,6 +83,8 @@ export class ReconciliationQueryService {
   constructor(
     @InjectRepository(Tenant, 'platform')
     private tenantRepo: Repository<Tenant>,
+    @InjectModel(Reconciliation.name)
+    private reconciliationModel: Model<ReconciliationDocument>,
   ) {}
 
   async queryOrders(
@@ -178,5 +215,79 @@ export class ReconciliationQueryService {
       ORDER BY r.created_on DESC
     `;
     return this.tenantRepo.manager.query(sql, [tenant_id]);
+  }
+
+  /**
+   * FEATURE-040 BR-40-02 + BR-40-03 + BR-40-04 + BR-40-12 + BR-40-13.
+   *
+   * Query reconciliations cho (mysql_race_id, tenant_id) overlap với contract
+   * period. Whitelist status `signed | reviewed | completed | sent` ONLY
+   * (BR-40-03 — `draft | flagged | ready | approved` chưa BBNT ký, KHÔNG dùng).
+   *
+   * Period overlap (BR-40-04): `period_end >= periodFrom AND period_start <= periodTo`
+   * — atomic month-bound, không split partial month.
+   *
+   * Defensive (BR-40-13): >1 docs match (race condition duplicate) → log WARN,
+   * SUM caller. KHÔNG throw.
+   *
+   * Defensive (BR-40-12): docs `createdAt < 2026-05-08` (pre-F016 fix) → attach
+   * `legacyWarning`. Caller (FeeService) rate-limits INFO log per request.
+   */
+  async getReconciledFeeForContract(
+    mysqlRaceId: number,
+    tenantId: number,
+    periodFrom: Date | string,
+    periodTo: Date | string,
+  ): Promise<ReconciledFeeSlice[]> {
+    const fromIso = this.toIsoDateString(periodFrom);
+    const toIso = this.toIsoDateString(periodTo);
+
+    const docs = await this.reconciliationModel
+      .find({
+        mysql_race_id: mysqlRaceId,
+        tenant_id: tenantId,
+        status: { $in: [...F040_RECON_STATUS_WHITELIST] },
+        period_end: { $gte: fromIso },
+        period_start: { $lte: toIso },
+      })
+      .lean()
+      .exec();
+
+    if (docs.length > 1) {
+      this.logger.warn(
+        `[F-040] duplicate recon docs detected for (raceId=${mysqlRaceId}, tenantId=${tenantId}, period=${fromIso}..${toIso}): ${docs.length} docs summed`,
+      );
+    }
+
+    return docs.map((d) => {
+      const createdAt = (d as { createdAt?: Date }).createdAt ?? null;
+      const isLegacy =
+        createdAt !== null && createdAt.getTime() < F040_PRE_F016_CUTOFF.getTime();
+      const finalizedAt =
+        d.signed_at ?? d.approved_at ?? d.reviewed_at ?? null;
+      return {
+        reconciliationId: String(d._id),
+        periodStart: d.period_start,
+        periodEnd: d.period_end,
+        status: d.status,
+        feeAmount: Number(d.fee_amount ?? 0),
+        manualFeeAmount: Number(d.manual_fee_amount ?? 0),
+        finalizedAt: finalizedAt ? finalizedAt.toISOString() : null,
+        legacyWarning: isLegacy
+          ? 'BBNT pre-F016 — fee_amount có thể underestimate GROUP_BUY/CODE_TRANSFER orders (xem TD-F016-FINANCE-01)'
+          : undefined,
+        createdAt,
+      };
+    });
+  }
+
+  private toIsoDateString(input: Date | string): string {
+    if (typeof input === 'string') {
+      // Accept either YYYY-MM-DD or full ISO; trim to YYYY-MM-DD.
+      if (/^\d{4}-\d{2}-\d{2}/.test(input)) return input.slice(0, 10);
+      const parsed = new Date(input);
+      return parsed.toISOString().slice(0, 10);
+    }
+    return input.toISOString().slice(0, 10);
   }
 }

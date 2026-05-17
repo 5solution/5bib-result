@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { COST_CATEGORIES, CostCategory } from '../schemas/cost-item.schema';
 
 /**
@@ -43,15 +43,187 @@ export class CostItemResponseDto {
   updatedAt!: string;
 }
 
+/**
+ * FEATURE-040 — source attribution của fee 5BIB compute.
+ *   - RECONCILIATION: full period covered by BBNT signed/equivalent recon docs
+ *   - SELF_COMPUTE: no recon coverage → MySQL platform self-compute
+ *   - MIXED: recon partial + self-compute fill gap
+ *   - ESTIMATED: fallback (no tenant/race link OR cross-DB unreachable)
+ */
+export const FEE_SOURCES = [
+  'RECONCILIATION',
+  'SELF_COMPUTE',
+  'MIXED',
+  'ESTIMATED',
+] as const;
+export type FeeSource = (typeof FEE_SOURCES)[number];
+
+/**
+ * FEATURE-040 — slice của fee từ 1 recon doc (1 trong N recons cover period).
+ */
+export class ReconciledFeeSliceDto {
+  @ApiProperty({ description: 'Recon doc _id (hex string)' })
+  reconciliationId!: string;
+
+  @ApiProperty({ description: 'Period start ISO YYYY-MM-DD' })
+  periodStart!: string;
+
+  @ApiProperty({ description: 'Period end ISO YYYY-MM-DD' })
+  periodEnd!: string;
+
+  @ApiProperty({ description: 'Recon status (signed/reviewed/completed/sent)' })
+  status!: string;
+
+  @ApiProperty({ description: 'Phí 5BIB orders từ recon (VND)' })
+  feeAmount!: number;
+
+  @ApiProperty({ description: 'Phí MANUAL orders từ recon (VND)' })
+  manualFeeAmount!: number;
+
+  @ApiPropertyOptional({
+    description: 'TD-F016 legacy warning nếu created_at < 2026-05-08',
+  })
+  legacyWarning?: string;
+
+  @ApiProperty({
+    description: 'Signed/reviewed/completed timestamp ISO (nullable)',
+    nullable: true,
+  })
+  finalizedAt!: string | null;
+}
+
+/**
+ * FEATURE-040 — slice của fee từ self-compute MySQL platform pull.
+ */
+export class SelfComputeSliceDto {
+  @ApiProperty({ description: 'Số đơn 5BIB-eligible (ORDINARY/GROUP_BUY/etc.)' })
+  count5BIB!: number;
+
+  @ApiProperty({ description: 'SUM(total_price) của 5BIB orders (VND)' })
+  gross5BIB!: number;
+
+  @ApiProperty({ description: 'Tỉ lệ phí % áp dụng' })
+  feeRatePercent!: number;
+
+  @ApiProperty({ description: 'Phí 5BIB = gross5BIB × feeRatePercent / 100 (VND)' })
+  fee5BIB!: number;
+
+  @ApiProperty({ description: 'Số đơn MANUAL' })
+  countManual!: number;
+
+  @ApiProperty({ description: 'Tổng số vé MANUAL (SUM line_item.quantity)' })
+  manualTicketCount!: number;
+
+  @ApiProperty({ description: 'VNĐ/vé MANUAL áp dụng' })
+  manualFeePerTicket!: number;
+
+  @ApiProperty({
+    description: 'Phí MANUAL = manualTicketCount × manualFeePerTicket (VND)',
+  })
+  feeManual!: number;
+
+  @ApiPropertyOptional({
+    description: 'Period gap start that self-compute covers (when MIXED source)',
+  })
+  periodGapStart?: string;
+
+  @ApiPropertyOptional({
+    description: 'Period gap end that self-compute covers (when MIXED source)',
+  })
+  periodGapEnd?: string;
+
+  @ApiPropertyOptional({
+    description: 'Warning nếu fallback cascade tier 3 default 5.5% kích hoạt',
+    example: 'MerchantConfig + contract.feePercentage cả 2 null - dùng default 5.5%',
+  })
+  rateFallbackWarning?: string;
+}
+
+/**
+ * FEATURE-040 — full breakdown payload cho fee-breakdown drill-down endpoint.
+ */
+export class FeeBreakdownDto {
+  @ApiProperty({ description: 'Contract ObjectId (hex string)' })
+  contractId!: string;
+
+  @ApiProperty({ enum: FEE_SOURCES })
+  feeSource!: FeeSource;
+
+  @ApiProperty({
+    description: 'Total fee 5BIB = SUM(reconciliations) + selfCompute (VND)',
+  })
+  totalFee!: number;
+
+  @ApiPropertyOptional({
+    description: 'Gross GMV reference (KHÔNG dùng cho P&L, transparency only)',
+  })
+  grossGMV?: number;
+
+  @ApiProperty({
+    type: [ReconciledFeeSliceDto],
+    description: 'Reconciliation slices contributing to total (empty if pure SELF_COMPUTE)',
+  })
+  reconciliations!: ReconciledFeeSliceDto[];
+
+  @ApiPropertyOptional({
+    type: SelfComputeSliceDto,
+    description: 'Self-compute slice for period gap (omit if pure RECONCILIATION cover)',
+  })
+  selfCompute?: SelfComputeSliceDto;
+
+  @ApiProperty({ description: 'Computed at ISO timestamp' })
+  computedAt!: string;
+
+  @ApiPropertyOptional({ description: 'Generic warnings if any', type: [String] })
+  warnings?: string[];
+}
+
 export class PnLSummaryDto {
   @ApiProperty()
   contractId!: string;
 
-  @ApiProperty({ description: 'Revenue VND (include VAT — BR-PNL-02)' })
+  @ApiProperty({
+    description: 'Revenue VND. F-040: TICKET_SALES → fee 5BIB thật (KHÔNG GMV). Non-TICKET_SALES → BBNT actualTotalWithVat hoặc totalAmount.',
+  })
   revenue!: number;
 
   @ApiProperty({ enum: ['ESTIMATED', 'ACTUAL'] })
   revenueSource!: 'ESTIMATED' | 'ACTUAL';
+
+  /**
+   * FEATURE-040 — fee source attribution (TICKET_SALES only). Non-TICKET_SALES
+   * contracts retain legacy `revenueSource` and feeSource undefined.
+   */
+  @ApiPropertyOptional({
+    enum: FEE_SOURCES,
+    description: 'F-040 fee source (TICKET_SALES only)',
+  })
+  feeSource?: FeeSource;
+
+  /**
+   * FEATURE-040 — gross GMV reference cho transparency (TICKET_SALES only).
+   */
+  @ApiPropertyOptional({
+    description: 'F-040 gross GMV (SUM order.total_price) — TICKET_SALES only',
+  })
+  grossGMV?: number;
+
+  /**
+   * FEATURE-040 — fee compute warning (TD-F016 legacy / cross-DB degraded / etc.).
+   */
+  @ApiPropertyOptional({
+    description: 'F-040 fee warning (TD legacy hoặc degraded path)',
+  })
+  feeWarning?: string;
+
+  /**
+   * FEATURE-040 — full breakdown (TICKET_SALES only).
+   */
+  @ApiPropertyOptional({
+    type: FeeBreakdownDto,
+    description: 'F-040 full fee breakdown (TICKET_SALES only)',
+  })
+  feeBreakdown?: FeeBreakdownDto;
 
   @ApiProperty({
     description:

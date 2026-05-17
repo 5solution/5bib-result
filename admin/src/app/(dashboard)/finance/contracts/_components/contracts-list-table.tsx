@@ -23,6 +23,11 @@ import {
   formatContractStatus,
   formatContractType,
 } from "@/lib/finance-labels";
+import {
+  FeeSourceBadge,
+  FEE_SOURCE_TOOLTIP,
+  FEE_SOURCE_ICON,
+} from "../../_components/fee-source-badge";
 
 const MARGIN_TIER_ICON: Record<MarginTier, string> = {
   loss: "🔴",
@@ -37,6 +42,45 @@ const MARGIN_TIER_CLASSES: Record<MarginTier, string> = {
   healthy: "text-emerald-700",
   neutral: "text-stone-500",
 };
+
+/**
+ * FEATURE-040 — Doanh thu cell with feeSource badge + hover tooltip group.
+ *
+ * Tooltip uses CSS-only `group-hover` pattern (no external lib). Renders:
+ *   - source-specific tooltip text (BR-40-09)
+ *   - grossGMV reference line if present
+ */
+function RevenueCell({ item }: { item: DashboardContractItem }) {
+  const source = item.feeSource;
+  const tooltipText = source ? FEE_SOURCE_TOOLTIP[source] : null;
+  const icon = source ? FEE_SOURCE_ICON[source] : null;
+
+  return (
+    <div className="group relative inline-flex flex-col items-end">
+      <div className="flex items-center justify-end gap-1.5">
+        <span className="tabular-nums">{formatVnd(item.revenue)}</span>
+        <FeeSourceBadge source={source} hideEstimated size="sm" />
+      </div>
+      {tooltipText ? (
+        <span
+          role="tooltip"
+          className="pointer-events-none invisible absolute right-0 top-full z-20 mt-1 w-[280px] rounded-md border border-stone-200 bg-white p-2 text-left text-[11px] font-normal leading-snug text-stone-700 shadow-lg opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+        >
+          <span className="block">
+            {icon ? <span aria-hidden>{icon} </span> : null}
+            {tooltipText}
+          </span>
+          {item.grossGMV !== undefined && item.grossGMV > 0 ? (
+            <span className="mt-1 block text-stone-500">
+              GMV tham khảo:{" "}
+              <span className="font-mono">{formatVnd(item.grossGMV)}</span>
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 function SortableHeader({
   column,
@@ -192,7 +236,7 @@ export function ContractsListTable({
                   {formatContractType(it.contractType)}
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
-                  {formatVnd(it.revenue)}
+                  <RevenueCell item={it} />
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
                   {formatVnd(it.totalCost)}

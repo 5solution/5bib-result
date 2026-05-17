@@ -16,7 +16,11 @@ import {
   computePnL,
   RevenueSource,
 } from '../utils/pnl-compute';
-import { PnLSummaryDto } from '../dto/pnl-response.dto';
+import {
+  FeeBreakdownDto,
+  FeeSource,
+  PnLSummaryDto,
+} from '../dto/pnl-response.dto';
 import {
   PnLDashboardFilterDto,
   DashboardPeriod,
@@ -98,32 +102,66 @@ export class PnLService {
   }
 
   /**
-   * F-029 HIGH-PERF-01 — Synchronous variant của `resolveRevenue` cho
-   * dashboard batch flow. Caller PRE-FETCH `revenueByRaceId` Map qua
-   * `feeService.getActualRevenueForRaces(raceIds)` rồi pass vào — eliminate
-   * N+1 cross-DB query khi process N contracts. Race nào không có order
-   * paid → Map.get trả undefined → fallback estimatedFee (giữ semantic
-   * BR-PNL-04 edge case identical với async version).
+   * F-040 (replaces F-029 sync variant) — Sync variant cho dashboard batch
+   * flow. Caller PRE-FETCH `feeByContractId` Map qua
+   * `feeService.getFeeForContractsBulk()` rồi pass vào — eliminate N+1
+   * cross-DB query khi process N contracts.
+   *
+   * F-040 semantic: `revenue` = fee 5BIB thật (KHÔNG GMV) cho TICKET_SALES.
+   * Non-TICKET_SALES unchanged (BR-40-17).
    */
   private resolveRevenueSync(
     contract: ContractDocument,
-    revenueByRaceId: Map<number, number>,
-  ): { revenue: number; source: RevenueSource } {
-    if (contract.contractType === 'TICKET_SALES') {
-      const { tenantId, mysqlRaceId } = this.extractPlatformLinkage(contract);
-      if (tenantId !== null && mysqlRaceId !== null) {
-        const pulledRevenue = revenueByRaceId.get(mysqlRaceId);
-        if (pulledRevenue !== undefined && pulledRevenue > 0) {
-          return { revenue: pulledRevenue, source: 'ACTUAL' };
-        }
+    feeByContractId: Map<
+      string,
+      {
+        fee: number;
+        source: FeeSource;
+        grossGMV: number;
+        breakdown: FeeBreakdownDto;
+        warnings: string[];
       }
-      // Fallback estimatedFee (mirrors `resolveRevenue` BR-PNL-04 edge case).
+    >,
+  ): {
+    revenue: number;
+    source: RevenueSource;
+    feeSource?: FeeSource;
+    grossGMV?: number;
+    feeWarning?: string;
+    breakdown?: FeeBreakdownDto;
+  } {
+    if (contract.contractType === 'TICKET_SALES') {
+      const id = String(contract._id);
+      const cached = feeByContractId.get(id);
+      if (cached) {
+        // F-040: revenue = fee thật. revenueSource preserved for BC (BR-40-18):
+        //   - RECONCILIATION → ACTUAL
+        //   - SELF_COMPUTE → ACTUAL (cross-DB pulled)
+        //   - MIXED → ACTUAL
+        //   - ESTIMATED → ESTIMATED
+        const legacySource: RevenueSource =
+          cached.source === 'ESTIMATED' ? 'ESTIMATED' : 'ACTUAL';
+        return {
+          revenue: cached.fee,
+          source: legacySource,
+          feeSource: cached.source,
+          grossGMV: cached.grossGMV,
+          feeWarning:
+            cached.warnings.length > 0 ? cached.warnings.join(' | ') : undefined,
+          breakdown: cached.breakdown,
+        };
+      }
+      // Bulk map miss — fallback estimatedFee (graceful, mirrors legacy
+      // behavior for parity with non-linked contracts).
       const estimated = contract.revenueShare?.estimatedFee ?? 0;
-      return { revenue: estimated, source: 'ESTIMATED' };
+      return {
+        revenue: estimated,
+        source: 'ESTIMATED',
+        feeSource: 'ESTIMATED',
+      };
     }
 
-    // Non-TICKET_SALES (TIMING / RACEKIT / OPERATIONS) — same as
-    // `resolveRevenue` non-TICKET_SALES branch (already sync).
+    // Non-TICKET_SALES (BR-40-17 — unchanged from F-028)
     const ar = contract.acceptanceReport;
     if (ar && ar.status === 'FINALIZED' && ar.actualTotalWithVat > 0) {
       return { revenue: ar.actualTotalWithVat, source: 'ACTUAL' };
@@ -132,36 +170,50 @@ export class PnLService {
   }
 
   /**
-   * Compute revenue + source per BR-PNL-01 / BR-PNL-04.
-   * **Used by per-contract `getSummary(contractId)` only** (1 MySQL query
-   * acceptable). For batch dashboard, use `resolveRevenueSync` with
-   * pre-fetched `revenueByRaceId` Map to avoid N+1 (F-029 HIGH-PERF-01).
+   * F-040 — Compute revenue + fee source per contract. Used by per-contract
+   * `getSummary(contractId)` only (1 MySQL+Mongo round-trip acceptable).
+   * For batch dashboard, use `resolveRevenueSync` with pre-fetched
+   * `feeByContractId` Map.
    */
   private async resolveRevenue(
     contract: ContractDocument,
-  ): Promise<{ revenue: number; source: RevenueSource; warning?: string }> {
-    const contractId = contract._id.toString();
-
+  ): Promise<{
+    revenue: number;
+    source: RevenueSource;
+    warning?: string;
+    feeSource?: FeeSource;
+    grossGMV?: number;
+    feeBreakdown?: FeeBreakdownDto;
+  }> {
     if (contract.contractType === 'TICKET_SALES') {
-      const { tenantId, mysqlRaceId } = this.extractPlatformLinkage(contract);
-      const pulled = await this.feeService.getActualRevenueForRace(
-        tenantId,
-        mysqlRaceId,
-        contractId,
-      );
-      if (pulled.revenue !== null && pulled.revenue > 0) {
-        return { revenue: pulled.revenue, source: 'ACTUAL' };
+      try {
+        const result = await this.feeService.getFeeForContract(contract);
+        const legacySource: RevenueSource =
+          result.source === 'ESTIMATED' ? 'ESTIMATED' : 'ACTUAL';
+        return {
+          revenue: result.fee,
+          source: legacySource,
+          warning:
+            result.warnings.length > 0 ? result.warnings.join(' | ') : undefined,
+          feeSource: result.source,
+          grossGMV: result.grossGMV,
+          feeBreakdown: result.breakdown,
+        };
+      } catch (e) {
+        this.logger.warn(
+          `[F-040] getFeeForContract fail contract=${String(contract._id)}: ${(e as Error).message}`,
+        );
+        const estimated = contract.revenueShare?.estimatedFee ?? 0;
+        return {
+          revenue: estimated,
+          source: 'ESTIMATED',
+          warning: `Compute fee fail: ${(e as Error).message}`,
+          feeSource: 'ESTIMATED',
+        };
       }
-      // Fallback estimatedFee (BR-PNL-04 edge case)
-      const estimated = contract.revenueShare?.estimatedFee ?? 0;
-      return {
-        revenue: estimated,
-        source: 'ESTIMATED',
-        warning: pulled.warning,
-      };
     }
 
-    // Non-TICKET_SALES (TIMING / RACEKIT / OPERATIONS)
+    // Non-TICKET_SALES unchanged (BR-40-17)
     const ar = contract.acceptanceReport;
     if (ar && ar.status === 'FINALIZED' && ar.actualTotalWithVat > 0) {
       return { revenue: ar.actualTotalWithVat, source: 'ACTUAL' };
@@ -194,7 +246,8 @@ export class PnLService {
       throw new NotFoundException(`Contract không tồn tại: ${contractId}`);
     }
 
-    const { revenue, source, warning } = await this.resolveRevenue(contract);
+    const resolved = await this.resolveRevenue(contract);
+    const { revenue, source, warning } = resolved;
 
     const costItems = await this.costItems.findAllActiveByContract(contractId);
     const actualCost = costItems.reduce((s, c) => s + (c.amount || 0), 0);
@@ -268,6 +321,11 @@ export class PnLService {
       costItemCount: costItems.length,
       costByCategory,
       warning,
+      // FEATURE-040 — fee source attribution (TICKET_SALES only)
+      feeSource: resolved.feeSource,
+      grossGMV: resolved.grossGMV,
+      feeWarning: warning,
+      feeBreakdown: resolved.feeBreakdown,
     };
 
     if (this.redis) {
@@ -414,29 +472,26 @@ export class PnLService {
     // ── 2. Aggregate cost items bulk (1 query — no N+1)
     const costMap = await this.costItems.aggregateByContractIds(contractIds);
 
-    // ── 2b. F-029 HIGH-PERF-01 — Pre-fetch bulk TICKET_SALES revenue from
-    //        MySQL platform. Eliminates N+1 cross-DB queries (was
-    //        `for (c of contracts) await resolveRevenue(c)` → 50 contracts =
-    //        50 MySQL RTT). Bulk version chunks 100 race_id/query, GROUP BY
-    //        rc.race_id, preserves DISTINCT semantics (1 order ≥2 line items
-    //        same race → 1 sum).
-    //
-    //        Per-race revenue lookup downstream is now O(1) Map.get instead
-    //        of awaited MySQL call. Per-contract `resolveRevenue` no longer
-    //        async cho TICKET_SALES path (BBNT path was already sync).
-    const ticketSalesRaceIds: number[] = [];
-    for (const c of contracts) {
-      if (c.contractType === 'TICKET_SALES') {
-        const linkage = this.extractPlatformLinkage(c as ContractDocument);
-        if (linkage.tenantId !== null && linkage.mysqlRaceId !== null) {
-          ticketSalesRaceIds.push(linkage.mysqlRaceId);
-        }
-      }
-    }
-    const revenueByRaceId =
-      ticketSalesRaceIds.length > 0
-        ? await this.feeService.getActualRevenueForRaces(ticketSalesRaceIds)
-        : new Map<number, number>();
+    // ── 2b. F-040 (replaces F-029 race-id batch) — Pre-fetch bulk fee for
+    //        every TICKET_SALES contract via concurrency-capped Promise.all.
+    //        Each per-contract call hits composite cache (mget 4 keys) first;
+    //        cache hot path keeps p95 < 100ms cho warm dashboard.
+    const ticketSalesContracts = contracts.filter(
+      (c) => c.contractType === 'TICKET_SALES',
+    ) as ContractDocument[];
+    const feeByContractId =
+      ticketSalesContracts.length > 0
+        ? await this.feeService.getFeeForContractsBulk(ticketSalesContracts)
+        : new Map<
+            string,
+            {
+              fee: number;
+              source: FeeSource;
+              grossGMV: number;
+              breakdown: FeeBreakdownDto;
+              warnings: string[];
+            }
+          >();
 
     // ── 3. Resolve revenue per contract (TICKET_SALES → bulk Map lookup,
     //       BBNT → sync compute). Pure synchronous loop after pre-fetch.
@@ -448,12 +503,20 @@ export class PnLService {
       OUTSOURCE: 0,
       OTHER: 0,
     };
+    // F-040 — feeSourceMix accumulator
+    const feeSourceMix = {
+      reconciliation: 0,
+      selfCompute: 0,
+      mixed: 0,
+      estimated: 0,
+    };
     for (const c of contracts) {
       const id = (c._id as Types.ObjectId).toString();
-      const { revenue, source } = this.resolveRevenueSync(
+      const resolved = this.resolveRevenueSync(
         c as ContractDocument,
-        revenueByRaceId,
+        feeByContractId,
       );
+      const { revenue, source } = resolved;
       const cost = costMap.get(id) ?? {
         totalCost: 0,
         costByCategory: {
@@ -468,12 +531,6 @@ export class PnLService {
         totalCostByCategory[k] += cost.costByCategory[k] ?? 0;
       }
 
-      /**
-       * FEATURE-036 — Dashboard aggregation: cost_items ADD-ON line_items.
-       * totalCost = estimated_from_line_items + actual_from_cost_items.
-       * costByCategory chỉ chứa actual cost_items breakdown (estimated chưa
-       * có category split — UI chart giữ behavior cũ).
-       */
       const lineItemsList = ((c as ContractDocument).lineItems ?? []) as Array<{
         cost?: number;
         quantity?: number;
@@ -498,16 +555,27 @@ export class PnLService {
               ? 'thin'
               : 'healthy';
 
+      // F-040 — accumulate fee source mix (TICKET_SALES contracts only)
+      if (resolved.feeSource) {
+        if (resolved.feeSource === 'RECONCILIATION') feeSourceMix.reconciliation += 1;
+        else if (resolved.feeSource === 'SELF_COMPUTE') feeSourceMix.selfCompute += 1;
+        else if (resolved.feeSource === 'MIXED') feeSourceMix.mixed += 1;
+        else feeSourceMix.estimated += 1;
+      }
+
       const anchorDate = c.signDate ?? c.createdAt;
       items.push({
         contractId: id,
         contractNumber: c.contractNumber ?? null,
-        partnerName: (c.client as any)?.entityName ?? null,
+        partnerName: (c.client as { entityName?: string } | undefined)?.entityName ?? null,
         raceName: c.raceName ?? null,
-        contractType: c.contractType as any,
+        contractType: c.contractType as DashboardContractItemDto['contractType'],
         status: c.status as string,
         revenue,
         revenueSource: source as 'ESTIMATED' | 'ACTUAL',
+        feeSource: resolved.feeSource,
+        grossGMV: resolved.grossGMV,
+        feeWarning: resolved.feeWarning,
         totalCost: effectiveCost,
         profit,
         margin,
@@ -579,6 +647,8 @@ export class PnLService {
         totalProfit,
         avgMargin,
         costByCategory: totalCostByCategory,
+        // FEATURE-040 — distribution of contracts by feeSource
+        feeSourceMix,
       },
       byType,
       byPartner,
@@ -639,6 +709,12 @@ export class PnLService {
       totalProfit: number;
       avgMargin: number | null;
       costByCategory: Record<string, number>;
+      feeSourceMix: {
+        reconciliation: number;
+        selfCompute: number;
+        mixed: number;
+        estimated: number;
+      };
     };
     period: DashboardPeriod;
     dateFrom: Date;
@@ -668,20 +744,23 @@ export class PnLService {
     const contractIds = contracts.map((c) => c._id as Types.ObjectId);
     const costMap = await this.costItems.aggregateByContractIds(contractIds);
 
-    // F-029 HIGH-PERF-01 — bulk pre-fetch TICKET_SALES revenue.
-    const ticketSalesRaceIds: number[] = [];
-    for (const c of contracts) {
-      if (c.contractType === 'TICKET_SALES') {
-        const linkage = this.extractPlatformLinkage(c as ContractDocument);
-        if (linkage.tenantId !== null && linkage.mysqlRaceId !== null) {
-          ticketSalesRaceIds.push(linkage.mysqlRaceId);
-        }
-      }
-    }
-    const revenueByRaceId =
-      ticketSalesRaceIds.length > 0
-        ? await this.feeService.getActualRevenueForRaces(ticketSalesRaceIds)
-        : new Map<number, number>();
+    // F-040 — bulk pre-fetch fee per TICKET_SALES contract
+    const ticketSalesContracts = contracts.filter(
+      (c) => c.contractType === 'TICKET_SALES',
+    ) as ContractDocument[];
+    const feeByContractId =
+      ticketSalesContracts.length > 0
+        ? await this.feeService.getFeeForContractsBulk(ticketSalesContracts)
+        : new Map<
+            string,
+            {
+              fee: number;
+              source: FeeSource;
+              grossGMV: number;
+              breakdown: FeeBreakdownDto;
+              warnings: string[];
+            }
+          >();
 
     const items: DashboardContractItemDto[] = [];
     const totalCostByCategory: Record<string, number> = {
@@ -691,13 +770,20 @@ export class PnLService {
       OUTSOURCE: 0,
       OTHER: 0,
     };
+    const feeSourceMix = {
+      reconciliation: 0,
+      selfCompute: 0,
+      mixed: 0,
+      estimated: 0,
+    };
 
     for (const c of contracts) {
       const id = (c._id as Types.ObjectId).toString();
-      const { revenue, source } = this.resolveRevenueSync(
+      const resolved = this.resolveRevenueSync(
         c as ContractDocument,
-        revenueByRaceId,
+        feeByContractId,
       );
+      const { revenue, source } = resolved;
       const cost = costMap.get(id) ?? {
         totalCost: 0,
         costByCategory: {
@@ -712,7 +798,6 @@ export class PnLService {
         totalCostByCategory[k] += cost.costByCategory[k] ?? 0;
       }
 
-      // F-036 — totalCost = estimated (line_items) + actual (cost_items)
       const lineItemsList = ((c as ContractDocument).lineItems ?? []) as Array<{
         cost?: number;
         quantity?: number;
@@ -737,16 +822,26 @@ export class PnLService {
               ? 'thin'
               : 'healthy';
 
+      if (resolved.feeSource) {
+        if (resolved.feeSource === 'RECONCILIATION') feeSourceMix.reconciliation += 1;
+        else if (resolved.feeSource === 'SELF_COMPUTE') feeSourceMix.selfCompute += 1;
+        else if (resolved.feeSource === 'MIXED') feeSourceMix.mixed += 1;
+        else feeSourceMix.estimated += 1;
+      }
+
       const anchorDate = c.signDate ?? c.createdAt;
       items.push({
         contractId: id,
         contractNumber: c.contractNumber ?? null,
-        partnerName: (c.client as any)?.entityName ?? null,
+        partnerName: (c.client as { entityName?: string } | undefined)?.entityName ?? null,
         raceName: c.raceName ?? null,
         contractType: c.contractType as DashboardContractItemDto['contractType'],
         status: c.status as string,
         revenue,
         revenueSource: source as 'ESTIMATED' | 'ACTUAL',
+        feeSource: resolved.feeSource,
+        grossGMV: resolved.grossGMV,
+        feeWarning: resolved.feeWarning,
         totalCost: effectiveCost,
         profit,
         margin,
@@ -764,6 +859,7 @@ export class PnLService {
         totalProfit: items.reduce((s, i) => s + (i.revenue - i.totalCost), 0),
         avgMargin: this.avg(items.map((i) => i.margin)),
         costByCategory: totalCostByCategory,
+        feeSourceMix,
       },
       period,
       dateFrom,
@@ -841,6 +937,38 @@ export class PnLService {
    * (BR-38-09). `totals` aggregates ALL filtered items (NOT paged subset)
    * for accurate footer summary.
    */
+  /**
+   * FEATURE-040 — fee breakdown drill-down cho contract detail endpoint.
+   * Returns full FeeBreakdownDto from `feeService.getFeeForContract`.
+   *
+   * @throws NotFoundException nếu contract không tồn tại / deleted
+   */
+  async getFeeBreakdown(contractId: string): Promise<FeeBreakdownDto> {
+    if (!Types.ObjectId.isValid(contractId)) {
+      throw new NotFoundException(`Contract không tồn tại: ${contractId}`);
+    }
+    const contract = await this.contractModel.findById(contractId).exec();
+    if (!contract || contract.deletedAt) {
+      throw new NotFoundException(`Contract không tồn tại: ${contractId}`);
+    }
+    if (contract.contractType !== 'TICKET_SALES') {
+      // Non-TICKET_SALES has no fee breakdown — return ESTIMATED skeleton
+      return {
+        contractId,
+        feeSource: 'ESTIMATED',
+        totalFee: contract.totalAmount ?? 0,
+        grossGMV: 0,
+        reconciliations: [],
+        computedAt: new Date().toISOString(),
+        warnings: [
+          'Contract type không phải TICKET_SALES — không áp dụng fee breakdown',
+        ],
+      };
+    }
+    const result = await this.feeService.getFeeForContract(contract);
+    return result.breakdown;
+  }
+
   async getContractsList(
     filter: PnLContractsListFilterDto,
   ): Promise<PnLContractsListResponseDto> {
@@ -861,10 +989,17 @@ export class PnLService {
     const { items: allItems, totals, period, dateFrom, dateTo } =
       await this.computeContractRows(filter);
 
-    // Search (BR-38-05)
-    const searched = this.filterBySearch(allItems, filter.q);
+    // F-040 — feeSource filter (applied AFTER compute, BEFORE search)
+    const feeSourceFiltered = filter.feeSource
+      ? allItems.filter((i) => i.feeSource === filter.feeSource)
+      : allItems;
 
-    // Filtered totals (after search but before pagination) — for footer
+    // Search (BR-38-05)
+    const searched = this.filterBySearch(feeSourceFiltered, filter.q);
+
+    // Filtered totals (after search but before pagination) — for footer.
+    // NOTE: feeSourceMix on totals always reflects DATASET-wide distribution
+    // (NOT filtered subset) — UI shows "tổng thể" mix per BR-40-10 design.
     const filteredTotals = {
       contractCount: searched.length,
       totalRevenue: searched.reduce((s, i) => s + i.revenue, 0),
@@ -872,6 +1007,7 @@ export class PnLService {
       totalProfit: searched.reduce((s, i) => s + i.profit, 0),
       avgMargin: this.avg(searched.map((i) => i.margin)),
       costByCategory: totals.costByCategory, // dataset-wide; donut still uses dataset totals
+      feeSourceMix: totals.feeSourceMix,
     };
 
     // Sort (BR-38-04)

@@ -27,11 +27,13 @@ import { Button } from "@/components/ui/button";
 import {
   getContractsList,
   FinanceApiError,
+  FEE_SOURCES,
   type DashboardPeriod,
   type ContractsListSortBy,
   type SortDir,
   type ContractsListPageSize,
   type PnLContractsListResponse,
+  type FeeSource,
   CONTRACTS_LIST_PAGE_SIZES,
 } from "@/lib/finance-api";
 import { PeriodFilter } from "../../_components/period-filter";
@@ -90,6 +92,13 @@ function parsePage(v: string | null): number {
   return Math.floor(n);
 }
 
+function parseFeeSource(v: string | null): FeeSource | undefined {
+  if (v && (FEE_SOURCES as readonly string[]).includes(v)) {
+    return v as FeeSource;
+  }
+  return undefined;
+}
+
 export function ContractsListClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -115,6 +124,10 @@ export function ContractsListClient() {
   );
   const [page, setPage] = useState<number>(() =>
     parsePage(searchParams.get("page")),
+  );
+  // F-040 — feeSource filter (URL query param)
+  const [feeSource, setFeeSource] = useState<FeeSource | undefined>(() =>
+    parseFeeSource(searchParams.get("feeSource")),
   );
 
   // Search: local input + debounced applied value
@@ -156,6 +169,7 @@ export function ContractsListClient() {
     if (limit !== DEFAULT_LIMIT) usp.set("limit", String(limit));
     if (page !== 1) usp.set("page", String(page));
     if (appliedQ) usp.set("q", appliedQ);
+    if (feeSource) usp.set("feeSource", feeSource);
     const qs = usp.toString();
     router.replace(qs ? `/finance/contracts?${qs}` : `/finance/contracts`, {
       scroll: false,
@@ -170,6 +184,7 @@ export function ContractsListClient() {
     limit,
     page,
     appliedQ,
+    feeSource,
   ]);
 
   // Data fetch
@@ -190,6 +205,7 @@ export function ContractsListClient() {
         sortBy,
         sortDir,
         q: appliedQ || undefined,
+        feeSource,
       });
       setData(res);
     } catch (e) {
@@ -202,7 +218,7 @@ export function ContractsListClient() {
     } finally {
       setLoading(false);
     }
-  }, [period, dateFrom, dateTo, page, limit, sortBy, sortDir, appliedQ]);
+  }, [period, dateFrom, dateTo, page, limit, sortBy, sortDir, appliedQ, feeSource]);
 
   useEffect(() => {
     fetchData();
@@ -233,6 +249,13 @@ export function ContractsListClient() {
     setPage(1);
     setSearchInput("");
     setAppliedQ("");
+    setFeeSource(undefined);
+  }, []);
+
+  // F-040 — clear only feeSource filter (keep other filters)
+  const handleClearFeeSource = useCallback(() => {
+    setFeeSource(undefined);
+    setPage(1);
   }, []);
 
   const handleClearSearch = useCallback(() => {
@@ -247,9 +270,10 @@ export function ContractsListClient() {
       appliedQ.length > 0 ||
       period !== DEFAULT_PERIOD ||
       sortBy !== DEFAULT_SORT_BY ||
-      sortDir !== DEFAULT_SORT_DIR
+      sortDir !== DEFAULT_SORT_DIR ||
+      feeSource !== undefined
     );
-  }, [appliedQ, period, sortBy, sortDir]);
+  }, [appliedQ, period, sortBy, sortDir, feeSource]);
 
   return (
     <div className="space-y-4 p-6">
@@ -340,11 +364,31 @@ export function ContractsListClient() {
       ) : error && !data ? (
         <ContractsListEmptyState variant="error" onRetry={fetchData} />
       ) : data && data.items.length === 0 ? (
-        <ContractsListEmptyState
-          variant={hasFilterApplied ? "filtered-empty" : "empty"}
-          searchKeyword={appliedQ || undefined}
-          onResetFilter={hasFilterApplied ? handleResetFilter : undefined}
-        />
+        feeSource ? (
+          // F-040 — feeSource filter no match
+          <div className="flex flex-col items-center justify-center rounded-lg border border-stone-200 bg-white py-12 text-center">
+            <h3 className="text-base font-semibold text-stone-900">
+              Không có HĐ với source này
+            </h3>
+            <p className="mt-1 text-sm text-stone-600">
+              Filter feeSource={feeSource} không tìm thấy hợp đồng nào.
+            </p>
+            <Button
+              onClick={handleClearFeeSource}
+              className="mt-4"
+              variant="outline"
+              size="sm"
+            >
+              Xoá filter
+            </Button>
+          </div>
+        ) : (
+          <ContractsListEmptyState
+            variant={hasFilterApplied ? "filtered-empty" : "empty"}
+            searchKeyword={appliedQ || undefined}
+            onResetFilter={hasFilterApplied ? handleResetFilter : undefined}
+          />
+        )
       ) : data ? (
         <>
           <ContractsListTable

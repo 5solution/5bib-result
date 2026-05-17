@@ -40,8 +40,41 @@ function setupService(
   const costItemsService = {
     findAllActiveByContract: jest.fn().mockResolvedValue(costItems),
   };
+  // F-040 — derive new-shape result from legacy feeResult for backward compat.
+  // Legacy tests pass { revenue, warning } → adapter wraps into the F-040
+  // getFeeForContract return shape. Legacy `revenue=null` means cross-DB
+  // pulled empty → fall back to estimatedFee; emulate by using estimatedFee
+  // as the F-040 fee with source=ESTIMATED + propagating warning.
+  const legacyHasRevenue =
+    feeResult.revenue !== null && (feeResult.revenue ?? 0) > 0;
+  const estimatedFallback =
+    (contract as { revenueShare?: { estimatedFee?: number } }).revenueShare
+      ?.estimatedFee ?? 0;
+  const fee = legacyHasRevenue ? (feeResult.revenue as number) : estimatedFallback;
+  const source = legacyHasRevenue ? 'SELF_COMPUTE' : 'ESTIMATED';
+  const f040Result = {
+    fee,
+    source,
+    grossGMV: legacyHasRevenue ? (feeResult.revenue as number) : 0,
+    breakdown: {
+      contractId: String(contract._id),
+      feeSource: source,
+      totalFee: fee,
+      grossGMV: legacyHasRevenue ? (feeResult.revenue as number) : 0,
+      reconciliations: [],
+      computedAt: new Date().toISOString(),
+      warnings: feeResult.warning ? [feeResult.warning] : undefined,
+    },
+    warnings: feeResult.warning ? [feeResult.warning] : [],
+  };
   const feeService = {
     getActualRevenueForRace: jest.fn().mockResolvedValue(feeResult),
+    getFeeForContract: jest.fn().mockResolvedValue(f040Result),
+    getFeeForContractsBulk: jest.fn().mockImplementation((contracts: any[]) => {
+      const map = new Map();
+      for (const c of contracts) map.set(String(c._id), f040Result);
+      return Promise.resolve(map);
+    }),
   };
   const redis = {
     get: jest.fn().mockResolvedValue(null),
@@ -325,6 +358,26 @@ describe('F-028 PnLService.getSummary', () => {
       getActualRevenueForRaces: jest
         .fn()
         .mockResolvedValue(new Map<number, number>()),
+      // F-040 — new bulk fee compute. Default empty Map → all TICKET_SALES
+      // contracts fall through to revenueShare.estimatedFee fallback in
+      // resolveRevenueSync (BR-40-02 tier 4 parity).
+      getFeeForContractsBulk: jest
+        .fn()
+        .mockResolvedValue(new Map<string, any>()),
+      getFeeForContract: jest.fn().mockResolvedValue({
+        fee: 0,
+        source: 'ESTIMATED',
+        grossGMV: 0,
+        breakdown: {
+          contractId: '',
+          feeSource: 'ESTIMATED',
+          totalFee: 0,
+          grossGMV: 0,
+          reconciliations: [],
+          computedAt: new Date().toISOString(),
+        },
+        warnings: [],
+      }),
     };
     const redis: any = {
       get: jest.fn().mockResolvedValue(opts.redisGetReturn ?? null),
@@ -638,32 +691,49 @@ describe('F-028 PnLService.getSummary', () => {
       const { service, feeService } = setupDashboardService({
         contracts: [c1, c2, c3],
       });
-      // Pre-populate Map for 2/3 races; 3rd race fallbacks to estimatedFee.
-      feeService.getActualRevenueForRaces.mockResolvedValue(
-        new Map<number, number>([
-          [100, 10_000_000],
-          [200, 20_000_000],
+      // F-040 — bulk fee result Map for 2/3 contracts; 3rd falls back to estimatedFee.
+      feeService.getFeeForContractsBulk.mockResolvedValue(
+        new Map<string, any>([
+          [
+            String(c1._id),
+            {
+              fee: 10_000_000,
+              source: 'SELF_COMPUTE',
+              grossGMV: 100_000_000,
+              breakdown: { contractId: String(c1._id), feeSource: 'SELF_COMPUTE', totalFee: 10_000_000, grossGMV: 100_000_000, reconciliations: [], computedAt: new Date().toISOString() },
+              warnings: [],
+            },
+          ],
+          [
+            String(c2._id),
+            {
+              fee: 20_000_000,
+              source: 'SELF_COMPUTE',
+              grossGMV: 200_000_000,
+              breakdown: { contractId: String(c2._id), feeSource: 'SELF_COMPUTE', totalFee: 20_000_000, grossGMV: 200_000_000, reconciliations: [], computedAt: new Date().toISOString() },
+              warnings: [],
+            },
+          ],
         ]),
       );
 
       const result = await service.getDashboardData({});
 
       // ASSERTION: exactly 1 bulk call (N+1 eliminated).
-      expect(feeService.getActualRevenueForRaces).toHaveBeenCalledTimes(1);
-      // Per-race-id single-race method should NOT be called by batch flow.
-      expect(feeService.getActualRevenueForRace).not.toHaveBeenCalled();
-      // Verify race_ids array passed to bulk (raceId 100 + 200 + 300).
-      const calledRaceIds = feeService.getActualRevenueForRaces.mock.calls[0][0];
-      expect(calledRaceIds).toEqual(expect.arrayContaining([100, 200, 300]));
-      expect(calledRaceIds).toHaveLength(3);
+      expect(feeService.getFeeForContractsBulk).toHaveBeenCalledTimes(1);
+      // Per-contract single method should NOT be called by batch flow.
+      expect(feeService.getFeeForContract).not.toHaveBeenCalled();
+      // Verify all 3 TICKET_SALES contracts in bulk call.
+      const calledContracts = feeService.getFeeForContractsBulk.mock.calls[0][0];
+      expect(calledContracts).toHaveLength(3);
 
-      // Revenue resolution: c1 + c2 ACTUAL from Map, c3 fallback estimated.
+      // Revenue: c1 + c2 from Map, c3 fallback estimatedFee.
       expect(result.totals.totalRevenue).toBe(
         10_000_000 + 20_000_000 + 3_000_000,
       );
     });
 
-    it('Mixed TICKET_SALES + BBNT → 1 bulk call covering only TICKET_SALES race_ids', async () => {
+    it('Mixed TICKET_SALES + BBNT → 1 bulk call covering only TICKET_SALES contracts', async () => {
       const cTicket = makeC({
         contractType: 'TICKET_SALES',
         linkedTenantId: 10,
@@ -678,21 +748,32 @@ describe('F-028 PnLService.getSummary', () => {
       const { service, feeService } = setupDashboardService({
         contracts: [cTicket, cBbnt],
       });
-      feeService.getActualRevenueForRaces.mockResolvedValue(
-        new Map<number, number>([[100, 5_000_000]]),
+      feeService.getFeeForContractsBulk.mockResolvedValue(
+        new Map<string, any>([
+          [
+            String(cTicket._id),
+            {
+              fee: 5_000_000,
+              source: 'SELF_COMPUTE',
+              grossGMV: 50_000_000,
+              breakdown: { contractId: String(cTicket._id), feeSource: 'SELF_COMPUTE', totalFee: 5_000_000, grossGMV: 50_000_000, reconciliations: [], computedAt: new Date().toISOString() },
+              warnings: [],
+            },
+          ],
+        ]),
       );
 
       const result = await service.getDashboardData({});
 
-      expect(feeService.getActualRevenueForRaces).toHaveBeenCalledTimes(1);
-      // Only race_id 100 (TICKET_SALES) in bulk call — BBNT NOT included.
-      expect(
-        feeService.getActualRevenueForRaces.mock.calls[0][0],
-      ).toEqual([100]);
+      expect(feeService.getFeeForContractsBulk).toHaveBeenCalledTimes(1);
+      // Only TICKET_SALES contract in bulk call — BBNT NOT included.
+      const calledContracts = feeService.getFeeForContractsBulk.mock.calls[0][0];
+      expect(calledContracts).toHaveLength(1);
+      expect(String(calledContracts[0]._id)).toBe(String(cTicket._id));
       expect(result.totals.totalRevenue).toBe(5_000_000 + 50_000_000);
     });
 
-    it('TICKET_SALES with missing linkage (linkedMysqlRaceId=null) → fallback estimatedFee, NOT in bulk call', async () => {
+    it('TICKET_SALES with missing linkage (linkedMysqlRaceId=null) → fallback estimatedFee', async () => {
       const cNoLinkage = makeC({
         contractType: 'TICKET_SALES',
         linkedTenantId: null,
@@ -703,23 +784,18 @@ describe('F-028 PnLService.getSummary', () => {
       const { service, feeService } = setupDashboardService({
         contracts: [cNoLinkage],
       });
+      // Bulk returns empty Map → resolveRevenueSync falls back to estimatedFee.
+      feeService.getFeeForContractsBulk.mockResolvedValue(new Map());
 
       const result = await service.getDashboardData({});
 
-      // No race_id to query → bulk call skipped entirely (raceIds.length === 0).
-      expect(feeService.getActualRevenueForRaces).not.toHaveBeenCalled();
       // Revenue = estimatedFee with ESTIMATED source.
-      // Verify via topProfit list (1 contract → appears in top 10).
       expect(result.totals.totalRevenue).toBe(7_000_000);
       expect(result.topProfit[0].revenue).toBe(7_000_000);
       expect(result.topProfit[0].revenueSource).toBe('ESTIMATED');
     });
 
     it('Snapshot equivalence — TICKET_SALES revenue values match pre-refactor semantics', async () => {
-      // Setup same fixture as pre-refactor: 1 contract TICKET_SALES with
-      // mysqlRaceId mapping to 12_345_000 VND actual revenue. Verify the
-      // batch flow result matches what the legacy single-race resolveRevenue
-      // would have produced (revenue=12_345_000, source=ACTUAL).
       const c = makeC({
         contractType: 'TICKET_SALES',
         linkedTenantId: 10,
@@ -730,8 +806,19 @@ describe('F-028 PnLService.getSummary', () => {
       const { service, feeService } = setupDashboardService({
         contracts: [c],
       });
-      feeService.getActualRevenueForRaces.mockResolvedValue(
-        new Map<number, number>([[500, 12_345_000]]),
+      feeService.getFeeForContractsBulk.mockResolvedValue(
+        new Map<string, any>([
+          [
+            String(c._id),
+            {
+              fee: 12_345_000,
+              source: 'SELF_COMPUTE',
+              grossGMV: 123_450_000,
+              breakdown: { contractId: String(c._id), feeSource: 'SELF_COMPUTE', totalFee: 12_345_000, grossGMV: 123_450_000, reconciliations: [], computedAt: new Date().toISOString() },
+              warnings: [],
+            },
+          ],
+        ]),
       );
 
       const result = await service.getDashboardData({});
@@ -1123,5 +1210,343 @@ describe('F-028 PnLService.getSummary', () => {
       expect(result.totals.contractCount).toBe(1);
       expect(result.totals.totalRevenue).toBe(100_000_000);
     });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// FEATURE-040 — PnLService integration with FeeService new fee compute
+// ════════════════════════════════════════════════════════════════════
+
+describe('F-040 PnLService — fee source integration', () => {
+  function buildF040Service(opts: {
+    contract: any;
+    feeForContract?: any;
+    costItems?: any[];
+  }) {
+    const contractModel = {
+      findById: jest.fn(() => ({
+        exec: jest.fn().mockResolvedValue(opts.contract),
+      })),
+    };
+    const costItemsService = {
+      findAllActiveByContract: jest.fn().mockResolvedValue(opts.costItems ?? []),
+    };
+    const feeService = {
+      getActualRevenueForRace: jest.fn(),
+      getFeeForContract: jest.fn().mockResolvedValue(
+        opts.feeForContract ?? {
+          fee: 0,
+          source: 'ESTIMATED',
+          grossGMV: 0,
+          breakdown: {
+            contractId: '',
+            feeSource: 'ESTIMATED',
+            totalFee: 0,
+            grossGMV: 0,
+            reconciliations: [],
+            computedAt: new Date().toISOString(),
+          },
+          warnings: [],
+        },
+      ),
+      getFeeForContractsBulk: jest.fn().mockResolvedValue(new Map()),
+    };
+    const redis = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+    };
+    const service = new PnLService(
+      contractModel as any,
+      costItemsService as any,
+      feeService as any,
+      redis as any,
+    );
+    return { service, feeService, redis };
+  }
+
+  it('TC-FE-04: Reconciliation full-period override (recon > self-compute priority)', async () => {
+    const contract = {
+      _id: new Types.ObjectId(),
+      contractType: 'TICKET_SALES',
+      status: 'ACTIVE',
+      linkedTenantId: 20,
+      linkedMysqlRaceId: 194,
+      effectiveDate: new Date('2026-05-01'),
+      endDate: new Date('2026-05-31'),
+      revenueShare: { estimatedFee: 999_999, feePercentage: 7 },
+      totalAmount: 0,
+      lineItems: [],
+      deletedAt: null,
+    };
+    const { service, feeService } = buildF040Service({
+      contract,
+      feeForContract: {
+        fee: 700_000,
+        source: 'RECONCILIATION',
+        grossGMV: 18_000_000,
+        breakdown: {
+          contractId: String(contract._id),
+          feeSource: 'RECONCILIATION',
+          totalFee: 700_000,
+          grossGMV: 18_000_000,
+          reconciliations: [
+            {
+              reconciliationId: 'rec1',
+              periodStart: '2026-05-01',
+              periodEnd: '2026-05-31',
+              status: 'signed',
+              feeAmount: 500_000,
+              manualFeeAmount: 200_000,
+              finalizedAt: '2026-06-01',
+            },
+          ],
+          computedAt: new Date().toISOString(),
+        },
+        warnings: [],
+      },
+    });
+
+    const result = await service.getSummary(String(contract._id));
+    expect(result.revenue).toBe(700_000);
+    expect(result.feeSource).toBe('RECONCILIATION');
+    expect(result.feeBreakdown?.reconciliations).toHaveLength(1);
+    expect(feeService.getFeeForContract).toHaveBeenCalled();
+  });
+
+  it('TC-FE-05: MIXED source — recon partial period + self-compute gap', async () => {
+    const contract = {
+      _id: new Types.ObjectId(),
+      contractType: 'TICKET_SALES',
+      status: 'ACTIVE',
+      linkedTenantId: 20,
+      linkedMysqlRaceId: 194,
+      effectiveDate: new Date('2026-01-01'),
+      endDate: new Date('2026-06-30'),
+      revenueShare: { estimatedFee: 0 },
+      totalAmount: 0,
+      lineItems: [],
+      deletedAt: null,
+    };
+    const { service } = buildF040Service({
+      contract,
+      feeForContract: {
+        fee: 800_000,
+        source: 'MIXED',
+        grossGMV: 20_000_000,
+        breakdown: {
+          contractId: String(contract._id),
+          feeSource: 'MIXED',
+          totalFee: 800_000,
+          grossGMV: 20_000_000,
+          reconciliations: [
+            {
+              reconciliationId: 'rec-may',
+              periodStart: '2026-05-01',
+              periodEnd: '2026-05-31',
+              status: 'signed',
+              feeAmount: 500_000,
+              manualFeeAmount: 100_000,
+              finalizedAt: '2026-06-01',
+            },
+          ],
+          selfCompute: {
+            count5BIB: 5,
+            gross5BIB: 2_000_000,
+            feeRatePercent: 7,
+            fee5BIB: 140_000,
+            countManual: 12,
+            manualTicketCount: 12,
+            manualFeePerTicket: 5000,
+            feeManual: 60_000,
+            periodGapStart: '2026-01-01',
+            periodGapEnd: '2026-04-30',
+          },
+          computedAt: new Date().toISOString(),
+        },
+        warnings: [],
+      },
+    });
+
+    const result = await service.getSummary(String(contract._id));
+    expect(result.revenue).toBe(800_000);
+    expect(result.feeSource).toBe('MIXED');
+    expect(result.feeBreakdown?.selfCompute?.periodGapStart).toBe('2026-01-01');
+  });
+
+  it('TC-FE-09: DRAFT status recon excluded → SELF_COMPUTE (mocked via FeeService)', async () => {
+    // FeeService is responsible for filtering; PnLService just consumes result.
+    // Verify pass-through semantic: if FeeService returns SELF_COMPUTE (because
+    // it filtered DRAFT), PnLService propagates source correctly.
+    const contract = {
+      _id: new Types.ObjectId(),
+      contractType: 'TICKET_SALES',
+      status: 'ACTIVE',
+      linkedTenantId: 20,
+      linkedMysqlRaceId: 194,
+      effectiveDate: new Date('2026-05-01'),
+      endDate: new Date('2026-05-31'),
+      revenueShare: { estimatedFee: 0 },
+      totalAmount: 0,
+      lineItems: [],
+      deletedAt: null,
+    };
+    const { service } = buildF040Service({
+      contract,
+      feeForContract: {
+        fee: 1_500_000,
+        source: 'SELF_COMPUTE',
+        grossGMV: 15_000_000,
+        breakdown: {
+          contractId: String(contract._id),
+          feeSource: 'SELF_COMPUTE',
+          totalFee: 1_500_000,
+          grossGMV: 15_000_000,
+          reconciliations: [], // DRAFT recons filtered out at FeeService layer
+          computedAt: new Date().toISOString(),
+        },
+        warnings: [],
+      },
+    });
+    const result = await service.getSummary(String(contract._id));
+    expect(result.feeSource).toBe('SELF_COMPUTE');
+    expect(result.feeBreakdown?.reconciliations).toEqual([]);
+  });
+
+  it('TC-FE-10: Cache hit — 2 consecutive calls (single contract), Redis get cached value', async () => {
+    // PnLService caches summary at `pnl:contract:<id>` (existing F-028). Verify
+    // 2nd call returns cached result, FeeService NOT re-invoked.
+    const contract = {
+      _id: new Types.ObjectId(),
+      contractType: 'TICKET_SALES',
+      status: 'ACTIVE',
+      linkedTenantId: 20,
+      linkedMysqlRaceId: 194,
+      effectiveDate: new Date('2026-05-01'),
+      endDate: new Date('2026-05-31'),
+      revenueShare: { estimatedFee: 0 },
+      totalAmount: 0,
+      lineItems: [],
+      deletedAt: null,
+    };
+    const cachedSummary = {
+      contractId: String(contract._id),
+      revenue: 1_279_880,
+      revenueSource: 'ACTUAL',
+      feeSource: 'SELF_COMPUTE',
+      totalCost: 0,
+      estimatedCost: 0,
+      actualCost: 0,
+      totalCostSource: 'none',
+      profit: 1_279_880,
+      margin: 100,
+      marginTier: 'healthy',
+      costItemCount: 0,
+      costByCategory: { LABOR: 0, MATERIAL: 0, VENDOR: 0, OUTSOURCE: 0, OTHER: 0 },
+    };
+    const contractModel = {
+      findById: jest.fn(() => ({
+        exec: jest.fn().mockResolvedValue(contract),
+      })),
+    };
+    const feeService = {
+      getActualRevenueForRace: jest.fn(),
+      getFeeForContract: jest.fn(),
+      getFeeForContractsBulk: jest.fn(),
+    };
+    const redis = {
+      get: jest.fn().mockResolvedValue(JSON.stringify(cachedSummary)),
+      set: jest.fn(),
+    };
+    const service = new PnLService(
+      contractModel as any,
+      { findAllActiveByContract: jest.fn() } as any,
+      feeService as any,
+      redis as any,
+    );
+    const r = await service.getSummary(String(contract._id));
+    expect(r.revenue).toBe(1_279_880);
+    expect(feeService.getFeeForContract).not.toHaveBeenCalled();
+    expect(contractModel.findById).not.toHaveBeenCalled();
+  });
+
+  it('TC-FE-16: F-038 list filter by feeSource → only matching items returned', async () => {
+    // Inline helpers (this describe block is at module-top scope; can't reach
+    // outer-describe-scoped makeC/setupDashboardService).
+    const localMake = (over: any = {}) => ({
+      _id: new Types.ObjectId(),
+      contractType: 'TIMING',
+      status: 'ACTIVE',
+      totalAmount: 100_000_000,
+      acceptanceReport: undefined,
+      revenueShare: undefined,
+      templateOverrides: {},
+      raceName: 'R',
+      contractNumber: 'CN',
+      deletedAt: null,
+      signDate: new Date(),
+      createdAt: new Date(),
+      lineItems: [],
+      ...over,
+    });
+    const cTicket1 = localMake({
+      contractType: 'TICKET_SALES',
+      linkedTenantId: 10,
+      linkedMysqlRaceId: 100,
+      revenueShare: { estimatedFee: 0 },
+    });
+    const cTicket2 = localMake({
+      contractType: 'TICKET_SALES',
+      linkedTenantId: 11,
+      linkedMysqlRaceId: 200,
+      revenueShare: { estimatedFee: 0 },
+    });
+    const cTicket3 = localMake({
+      contractType: 'TICKET_SALES',
+      linkedTenantId: 12,
+      linkedMysqlRaceId: 300,
+      revenueShare: { estimatedFee: 0 },
+    });
+    const contractModel = {
+      find: jest.fn(() => ({
+        lean: jest.fn(() => ({
+          exec: jest.fn().mockResolvedValue([cTicket1, cTicket2, cTicket3]),
+        })),
+      })),
+      findById: jest.fn(),
+    };
+    const costItemsService = {
+      findAllActiveByContract: jest.fn().mockResolvedValue([]),
+      aggregateByContractIds: jest.fn().mockResolvedValue(new Map()),
+    };
+    const feeService = {
+      getActualRevenueForRace: jest.fn(),
+      getActualRevenueForRaces: jest.fn().mockResolvedValue(new Map()),
+      getFeeForContract: jest.fn(),
+      getFeeForContractsBulk: jest.fn().mockResolvedValue(
+        new Map<string, any>([
+          [String(cTicket1._id), { fee: 100_000, source: 'RECONCILIATION', grossGMV: 1_000_000, breakdown: { contractId: String(cTicket1._id), feeSource: 'RECONCILIATION', totalFee: 100_000, grossGMV: 1_000_000, reconciliations: [], computedAt: new Date().toISOString() }, warnings: [] }],
+          [String(cTicket2._id), { fee: 200_000, source: 'SELF_COMPUTE', grossGMV: 2_000_000, breakdown: { contractId: String(cTicket2._id), feeSource: 'SELF_COMPUTE', totalFee: 200_000, grossGMV: 2_000_000, reconciliations: [], computedAt: new Date().toISOString() }, warnings: [] }],
+          [String(cTicket3._id), { fee: 300_000, source: 'SELF_COMPUTE', grossGMV: 3_000_000, breakdown: { contractId: String(cTicket3._id), feeSource: 'SELF_COMPUTE', totalFee: 300_000, grossGMV: 3_000_000, reconciliations: [], computedAt: new Date().toISOString() }, warnings: [] }],
+        ]),
+      ),
+    };
+    const redis = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+    };
+    const service = new PnLService(
+      contractModel as any,
+      costItemsService as any,
+      feeService as any,
+      redis as any,
+    );
+
+    const r = await service.getContractsList({
+      feeSource: 'SELF_COMPUTE',
+    } as any);
+    expect(r.items).toHaveLength(2);
+    expect(r.items.every((i) => i.feeSource === 'SELF_COMPUTE')).toBe(true);
+    expect(r.totals.feeSourceMix.reconciliation).toBe(1);
+    expect(r.totals.feeSourceMix.selfCompute).toBe(2);
   });
 });

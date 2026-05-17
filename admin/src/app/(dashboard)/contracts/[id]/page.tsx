@@ -36,6 +36,8 @@ import { ContractEditDialog } from "../_components/contract-edit-dialog";
 import { useAuth } from "@/lib/auth-context";
 import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { PnLSummaryCard } from "../../finance/_components/pnl-summary-card";
+// F-040 — fee breakdown drill-down panel (mount in Lãi/Lỗ section)
+import { FeeBreakdownPanel } from "../_components/fee-breakdown-panel";
 
 export default function ContractDetailPage({
   params,
@@ -377,6 +379,8 @@ export default function ContractDetailPage({
             💰 Lãi/Lỗ Deal
           </h2>
           <PnLSummaryCard contractId={contract._id} compact />
+          {/* F-040 — drill-down fee breakdown panel (collapsed by default) */}
+          <FeeBreakdownPanel contractId={contract._id} />
         </section>
       )}
 

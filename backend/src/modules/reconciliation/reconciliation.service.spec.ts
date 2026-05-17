@@ -166,12 +166,17 @@ describe('ReconciliationService — auditPeriodBoundary (BR-10)', () => {
 
 describe('ReconciliationService.deleteMany — FEATURE-025 bulk delete', () => {
   let service: ReconciliationService;
-  let mockReconciliationModel: { deleteMany: jest.Mock };
+  let mockReconciliationModel: { deleteMany: jest.Mock; find: jest.Mock };
   let loggerWarnSpy: jest.SpyInstance;
 
   beforeEach(async () => {
     mockReconciliationModel = {
       deleteMany: jest.fn(),
+      // F-040 — `.find()` called before deleteMany to capture (tenant,race)
+      // pairs for cache flush. Default returns empty array (no flush fired).
+      find: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([]),
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({

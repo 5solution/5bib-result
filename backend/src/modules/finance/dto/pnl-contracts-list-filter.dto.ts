@@ -11,6 +11,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PnLDashboardFilterDto } from './dashboard-filter.dto';
+import { FEE_SOURCES, FeeSource } from './pnl-response.dto';
 
 /**
  * FEATURE-038 — paginated contracts list filter.
@@ -92,4 +93,18 @@ export class PnLContractsListFilterDto extends PnLDashboardFilterDto {
   @IsString()
   @MaxLength(100, { message: 'Từ khoá tối đa 100 ký tự' })
   q?: string;
+
+  /**
+   * FEATURE-040 — filter contracts by fee source enum. Optional.
+   * Validation rejects invalid values with VN message (TC-FE-17).
+   */
+  @ApiPropertyOptional({
+    enum: FEE_SOURCES,
+    description: 'F-040 filter — fee source (RECONCILIATION/SELF_COMPUTE/MIXED/ESTIMATED)',
+  })
+  @IsOptional()
+  @IsEnum(FEE_SOURCES, {
+    message: 'feeSource phải là RECONCILIATION|SELF_COMPUTE|MIXED|ESTIMATED',
+  })
+  feeSource?: FeeSource;
 }

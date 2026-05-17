@@ -456,3 +456,337 @@ describe('F-028 FeeService — searchRaces', () => {
     expect(r).toEqual([]);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════
+// FEATURE-040 — getFeeForContract (replaces gross GMV w/ real fee 5BIB)
+// ════════════════════════════════════════════════════════════════════
+
+import { Types } from 'mongoose';
+
+function makeContract(overrides: Record<string, unknown> = {}) {
+  return {
+    _id: new Types.ObjectId(),
+    contractType: 'TICKET_SALES',
+    status: 'ACTIVE',
+    linkedTenantId: 20,
+    linkedMysqlRaceId: 194,
+    effectiveDate: new Date('2026-05-01'),
+    endDate: new Date('2026-05-31'),
+    revenueShare: { feePercentage: 0 },
+    totalAmount: 0,
+    ...overrides,
+  } as unknown as import('../../contracts/schemas/contract.schema').ContractDocument;
+}
+
+function buildOrderRepo(rawRow: Record<string, string | number | null>) {
+  return {
+    manager: {
+      query: jest.fn().mockResolvedValue([rawRow]),
+    },
+  };
+}
+
+function buildMerchantConfigModel(config: Record<string, unknown> | null) {
+  return {
+    findOne: jest.fn().mockReturnValue({
+      lean: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(config),
+      }),
+    }),
+  };
+}
+
+function buildReconQuery(reconslices: Array<Record<string, unknown>>) {
+  return {
+    getReconciledFeeForContract: jest.fn().mockResolvedValue(reconslices),
+  };
+}
+
+describe('F-040 FeeService.getFeeForContract', () => {
+  it('TC-FE-01: Self-compute % fee 5BIB-eligible only (happy path)', async () => {
+    const contract = makeContract();
+    const orderRepo = buildOrderRepo({
+      fee_5bib: '1279880',
+      gross_5bib: '18284000',
+      count_5bib: 34,
+      count_manual: 0,
+      manual_ticket_count: 0,
+      gross_gmv_all: '18284000',
+    });
+    const configModel = buildMerchantConfigModel({
+      service_fee_rate: 7,
+      manual_fee_per_ticket: 5000,
+    });
+    const reconQuery = buildReconQuery([]);
+    const redis = {
+      mget: jest.fn().mockResolvedValue([null, null, null, null]),
+      pipeline: jest.fn().mockReturnValue({
+        set: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([]),
+      }),
+    };
+
+    const svc = new FeeService(
+      orderRepo as never,
+      redis as never,
+      null,
+      configModel as never,
+      reconQuery as never,
+    );
+    const r = await svc.getFeeForContract(contract);
+    expect(r.source).toBe('SELF_COMPUTE');
+    expect(r.fee).toBe(1_279_880);
+    expect(r.grossGMV).toBe(18_284_000);
+    expect(r.breakdown.selfCompute?.fee5BIB).toBe(1_279_880);
+    expect(r.breakdown.reconciliations).toEqual([]);
+  });
+
+  it('TC-FE-02: MANUAL VNĐ/vé only — line_item quantity SUM correct', async () => {
+    const contract = makeContract();
+    const orderRepo = buildOrderRepo({
+      fee_5bib: '0',
+      gross_5bib: '0',
+      count_5bib: 0,
+      count_manual: 10,
+      manual_ticket_count: 50,
+      gross_gmv_all: '2500000',
+    });
+    const configModel = buildMerchantConfigModel({
+      service_fee_rate: 7,
+      manual_fee_per_ticket: 5000,
+    });
+    const reconQuery = buildReconQuery([]);
+    const redis = {
+      mget: jest.fn().mockResolvedValue([null, null, null, null]),
+      pipeline: jest.fn().mockReturnValue({
+        set: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([]),
+      }),
+    };
+    const svc = new FeeService(
+      orderRepo as never,
+      redis as never,
+      null,
+      configModel as never,
+      reconQuery as never,
+    );
+    const r = await svc.getFeeForContract(contract);
+    expect(r.fee).toBe(250_000); // 50 × 5000
+    expect(r.source).toBe('SELF_COMPUTE');
+    expect(r.breakdown.selfCompute?.feeManual).toBe(250_000);
+    expect(r.breakdown.selfCompute?.manualTicketCount).toBe(50);
+  });
+
+  it('TC-FE-03: Mixed 5BIB + MANUAL → sum', async () => {
+    const contract = makeContract();
+    const orderRepo = buildOrderRepo({
+      fee_5bib: '1000000',
+      gross_5bib: '10000000',
+      count_5bib: 20,
+      count_manual: 5,
+      manual_ticket_count: 15,
+      gross_gmv_all: '10300000',
+    });
+    const configModel = buildMerchantConfigModel({
+      service_fee_rate: 10,
+      manual_fee_per_ticket: 5000,
+    });
+    const reconQuery = buildReconQuery([]);
+    const redis = {
+      mget: jest.fn().mockResolvedValue([null, null, null, null]),
+      pipeline: jest.fn().mockReturnValue({
+        set: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([]),
+      }),
+    };
+    const svc = new FeeService(
+      orderRepo as never,
+      redis as never,
+      null,
+      configModel as never,
+      reconQuery as never,
+    );
+    const r = await svc.getFeeForContract(contract);
+    expect(r.fee).toBe(1_000_000 + 75_000); // 5BIB 1M + MANUAL 15×5000
+    expect(r.source).toBe('SELF_COMPUTE');
+  });
+
+  it('TC-FE-07: Rate cascade tier 2 — contract.feePercentage fallback when config null', async () => {
+    const contract = makeContract({
+      revenueShare: { feePercentage: 8 },
+    });
+    const orderRepo = buildOrderRepo({
+      fee_5bib: '800000',
+      gross_5bib: '10000000',
+      count_5bib: 10,
+      count_manual: 0,
+      manual_ticket_count: 0,
+      gross_gmv_all: '10000000',
+    });
+    const configModel = buildMerchantConfigModel({
+      service_fee_rate: null, // primary fails
+      manual_fee_per_ticket: 5000,
+    });
+    const reconQuery = buildReconQuery([]);
+    const svc = new FeeService(
+      orderRepo as never,
+      undefined,
+      null,
+      configModel as never,
+      reconQuery as never,
+    );
+    const r = await svc.getFeeForContract(contract);
+    expect(r.breakdown.selfCompute?.feeRatePercent).toBe(8);
+    expect(r.breakdown.selfCompute?.rateFallbackWarning).toMatch(
+      /MerchantConfig.service_fee_rate null/,
+    );
+  });
+
+  it('TC-FE-08: Rate cascade tier 3 — hardcoded 5.5% when both null', async () => {
+    const contract = makeContract({
+      revenueShare: { feePercentage: null }, // tier 2 null
+    });
+    const orderRepo = buildOrderRepo({
+      fee_5bib: '0',
+      gross_5bib: '0',
+      count_5bib: 0,
+      count_manual: 0,
+      manual_ticket_count: 0,
+      gross_gmv_all: '0',
+    });
+    const configModel = buildMerchantConfigModel(null); // tier 1 null
+    const reconQuery = buildReconQuery([]);
+    const svc = new FeeService(
+      orderRepo as never,
+      undefined,
+      null,
+      configModel as never,
+      reconQuery as never,
+    );
+    const r = await svc.getFeeForContract(contract);
+    expect(r.breakdown.selfCompute?.feeRatePercent).toBe(5.5);
+    expect(r.breakdown.selfCompute?.rateFallbackWarning).toMatch(/default 5.5%/);
+  });
+
+  it('TC-FE-13: Cross-DB graceful — MySQL throw → ESTIMATED + warning, no crash', async () => {
+    const contract = makeContract({ totalAmount: 99_999 });
+    const orderRepo = {
+      manager: {
+        query: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')),
+      },
+    };
+    const configModel = buildMerchantConfigModel({
+      service_fee_rate: 7,
+      manual_fee_per_ticket: 5000,
+    });
+    const reconQuery = buildReconQuery([]);
+    const svc = new FeeService(
+      orderRepo as never,
+      undefined,
+      null,
+      configModel as never,
+      reconQuery as never,
+    );
+    const r = await svc.getFeeForContract(contract);
+    expect(r.source).toBe('ESTIMATED');
+    expect(r.fee).toBe(99_999); // fallback to totalAmount
+    expect(r.warnings.some((w) => /unreachable/.test(w))).toBe(true);
+  });
+
+  it('TC-FE-18 boundary: period overlap exact start — recon matches, source=MIXED if gap remains', async () => {
+    const contract = makeContract({
+      effectiveDate: new Date('2026-05-01'),
+      endDate: new Date('2026-12-31'), // 8 months
+    });
+    const orderRepo = buildOrderRepo({
+      fee_5bib: '500000',
+      gross_5bib: '5000000',
+      count_5bib: 10,
+      count_manual: 0,
+      manual_ticket_count: 0,
+      gross_gmv_all: '5000000',
+    });
+    const configModel = buildMerchantConfigModel({
+      service_fee_rate: 7,
+      manual_fee_per_ticket: 5000,
+    });
+    const reconQuery = buildReconQuery([
+      {
+        reconciliationId: 'rec1',
+        periodStart: '2026-05-01',
+        periodEnd: '2026-05-31',
+        status: 'signed',
+        feeAmount: 1_000_000,
+        manualFeeAmount: 0,
+        finalizedAt: '2026-06-01',
+        createdAt: new Date('2026-06-01'),
+      },
+    ]);
+    const svc = new FeeService(
+      orderRepo as never,
+      undefined,
+      null,
+      configModel as never,
+      reconQuery as never,
+    );
+    const r = await svc.getFeeForContract(contract);
+    // May 2026 covered by recon, Jun-Dec gap covered by self-compute
+    expect(r.source).toBe('MIXED');
+    expect(r.fee).toBeGreaterThan(0);
+    expect(r.breakdown.reconciliations).toHaveLength(1);
+  });
+
+  it('No linkage (linkedTenantId null) → ESTIMATED fallback to totalAmount', async () => {
+    const contract = makeContract({
+      linkedTenantId: undefined,
+      linkedMysqlRaceId: undefined,
+      totalAmount: 5_000_000,
+    });
+    const svc = new FeeService(null as never, undefined, null);
+    const r = await svc.getFeeForContract(contract);
+    expect(r.source).toBe('ESTIMATED');
+    expect(r.fee).toBe(5_000_000);
+  });
+
+  it('Full-period recon cover → RECONCILIATION (not MIXED)', async () => {
+    const contract = makeContract({
+      effectiveDate: new Date('2026-05-01'),
+      endDate: new Date('2026-05-31'),
+    });
+    const orderRepo = buildOrderRepo({
+      fee_5bib: '999999',
+      gross_5bib: '0',
+      count_5bib: 0,
+      count_manual: 0,
+      manual_ticket_count: 0,
+      gross_gmv_all: '12000000',
+    });
+    const configModel = buildMerchantConfigModel({
+      service_fee_rate: 7,
+      manual_fee_per_ticket: 5000,
+    });
+    const reconQuery = buildReconQuery([
+      {
+        reconciliationId: 'rec-full',
+        periodStart: '2026-05-01',
+        periodEnd: '2026-05-31',
+        status: 'signed',
+        feeAmount: 500_000,
+        manualFeeAmount: 200_000,
+        finalizedAt: '2026-06-01',
+        createdAt: new Date('2026-06-01'),
+      },
+    ]);
+    const svc = new FeeService(
+      orderRepo as never,
+      undefined,
+      null,
+      configModel as never,
+      reconQuery as never,
+    );
+    const r = await svc.getFeeForContract(contract);
+    expect(r.source).toBe('RECONCILIATION');
+    expect(r.fee).toBe(700_000);
+    expect(r.breakdown.selfCompute).toBeUndefined();
+  });
+});

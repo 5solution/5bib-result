@@ -82,10 +82,81 @@ export type RevenueSource = "ESTIMATED" | "ACTUAL";
 
 export type MarginTier = "loss" | "thin" | "healthy" | "neutral";
 
+/**
+ * FEATURE-040 — fee source attribution enum.
+ *   - RECONCILIATION: full period covered by BBNT signed/equivalent recon docs
+ *   - SELF_COMPUTE: no recon coverage → MySQL platform self-compute
+ *   - MIXED: recon partial + self-compute fill gap
+ *   - ESTIMATED: fallback (no tenant/race link OR cross-DB unreachable)
+ */
+export type FeeSource =
+  | "RECONCILIATION"
+  | "SELF_COMPUTE"
+  | "MIXED"
+  | "ESTIMATED";
+
+export const FEE_SOURCES: readonly FeeSource[] = [
+  "RECONCILIATION",
+  "SELF_COMPUTE",
+  "MIXED",
+  "ESTIMATED",
+] as const;
+
+export interface ReconciledFeeSliceClient {
+  reconciliationId: string;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+  feeAmount: number;
+  manualFeeAmount: number;
+  legacyWarning?: string;
+  finalizedAt: string | null;
+}
+
+export interface SelfComputeSliceClient {
+  count5BIB: number;
+  gross5BIB: number;
+  feeRatePercent: number;
+  fee5BIB: number;
+  countManual: number;
+  manualTicketCount: number;
+  manualFeePerTicket: number;
+  feeManual: number;
+  periodGapStart?: string;
+  periodGapEnd?: string;
+  rateFallbackWarning?: string;
+}
+
+export interface FeeBreakdownResponse {
+  contractId: string;
+  feeSource: FeeSource;
+  totalFee: number;
+  grossGMV?: number;
+  reconciliations: ReconciledFeeSliceClient[];
+  selfCompute?: SelfComputeSliceClient;
+  computedAt: string;
+  warnings?: string[];
+}
+
+export interface FeeSourceMixClient {
+  reconciliation: number;
+  selfCompute: number;
+  mixed: number;
+  estimated: number;
+}
+
 export interface PnLSummary {
   contractId: string;
   revenue: number;
   revenueSource: RevenueSource;
+  /** FEATURE-040 — fee source attribution (TICKET_SALES only). */
+  feeSource?: FeeSource;
+  /** FEATURE-040 — gross GMV reference (TICKET_SALES only, transparency). */
+  grossGMV?: number;
+  /** FEATURE-040 — fee compute warning (TD legacy / cross-DB degrade). */
+  feeWarning?: string;
+  /** FEATURE-040 — full breakdown (TICKET_SALES only). */
+  feeBreakdown?: FeeBreakdownResponse;
   /** FEATURE-036 — totalCost = estimatedCost + actualCost (additive). */
   totalCost: number;
   /** FEATURE-036 — chi phí ước tính từ line_items[i].cost × quantity. */
@@ -302,8 +373,15 @@ export interface DashboardContractItem {
   raceName: string | null;
   contractType: "TICKET_SALES" | "TIMING" | "RACEKIT" | "OPERATIONS";
   status: string;
+  /** FEATURE-040 — TICKET_SALES semantic = fee 5BIB thật (NOT gross GMV). */
   revenue: number;
   revenueSource: RevenueSource;
+  /** FEATURE-040 — fee source enum (TICKET_SALES only). */
+  feeSource?: FeeSource;
+  /** FEATURE-040 — gross GMV reference (TICKET_SALES only). */
+  grossGMV?: number;
+  /** FEATURE-040 — fee compute warning string. */
+  feeWarning?: string;
   totalCost: number;
   profit: number;
   margin: number | null;
@@ -328,6 +406,8 @@ export interface DashboardTotals {
   totalProfit: number;
   avgMargin: number | null;
   costByCategory: Record<string, number>;
+  /** FEATURE-040 — distribution of contracts by feeSource. */
+  feeSourceMix?: FeeSourceMixClient;
 }
 
 export interface PnLDashboardResponse {
@@ -380,6 +460,8 @@ export interface PnLContractsListFilter extends DashboardFilter {
   sortBy?: ContractsListSortBy;
   sortDir?: SortDir;
   q?: string;
+  /** FEATURE-040 — filter by fee source enum. */
+  feeSource?: FeeSource;
 }
 
 export interface PnLContractsListResponse {
@@ -400,6 +482,18 @@ export function getContractsList(
 ): Promise<PnLContractsListResponse> {
   return jsonFetch<PnLContractsListResponse>(
     `/api/finance/pnl/contracts${toQs(filter)}`,
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// FEATURE-040 — Fee Breakdown drill-down
+// ────────────────────────────────────────────────────────────────────────────
+
+export function getFeeBreakdown(
+  contractId: string,
+): Promise<FeeBreakdownResponse> {
+  return jsonFetch<FeeBreakdownResponse>(
+    `/api/finance/contracts/${encodeURIComponent(contractId)}/fee-breakdown`,
   );
 }
 

@@ -1,6 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import type { Redis } from 'ioredis';
 import { Model } from 'mongoose';
 import { Repository } from 'typeorm';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -51,6 +53,7 @@ export class ReconciliationService {
     private cronLogModel: Model<ReconciliationCronLogDocument>,
     @InjectRepository(Tenant, 'platform')
     private tenantRepo: Repository<Tenant>,
+    @Optional() @InjectRedis() private readonly redis?: Redis,
   ) {
     this.s3Client = new S3Client({
       region: REGION,
@@ -59,6 +62,64 @@ export class ReconciliationService {
         secretAccessKey: env.s3.secretAccessKey,
       },
     });
+  }
+
+  /**
+   * FEATURE-040 BR-40-11 — invalidate PnL fee cache after recon mutation
+   * affecting (tenant_id, mysql_race_id). Race-to-tenant is 1:1 on platform,
+   * so flushing pattern `pnl:*:tenant=<tenantId>` is correct + sufficient.
+   * Also flushes aggregated dashboard/list (no tenant suffix in key).
+   */
+  private async flushPnLCacheForRecon(
+    tenantId: number,
+    mysqlRaceId: number,
+  ): Promise<void> {
+    if (!this.redis) return;
+    try {
+      const pattern = `pnl:*:tenant=${tenantId}`;
+      const keys: string[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const stream = (this.redis as any).scanStream({
+        match: pattern,
+        count: 200,
+      });
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (chunk: string[]) => keys.push(...chunk));
+        stream.on('end', () => resolve());
+        stream.on('error', (e: Error) => reject(e));
+      });
+      if (keys.length > 0) {
+        const pipe = this.redis.pipeline();
+        for (const k of keys) pipe.del(k);
+        await pipe.exec();
+      }
+      // Aggregated keys — broader sweep
+      const aggKeys: string[] = [];
+      for (const aggPattern of ['pnl:dashboard:*', 'pnl:contracts-list:*']) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const s = (this.redis as any).scanStream({
+          match: aggPattern,
+          count: 200,
+        });
+        await new Promise<void>((resolve, reject) => {
+          s.on('data', (chunk: string[]) => aggKeys.push(...chunk));
+          s.on('end', () => resolve());
+          s.on('error', (e: Error) => reject(e));
+        });
+      }
+      if (aggKeys.length > 0) {
+        const pipe = this.redis.pipeline();
+        for (const k of aggKeys) pipe.del(k);
+        await pipe.exec();
+      }
+      this.logger.log(
+        `[F-040] flushed PnL cache after recon mutation tenantId=${tenantId} raceId=${mysqlRaceId} — scoped=${keys.length}, aggregated=${aggKeys.length}`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `[F-040] flushPnLCacheForRecon fail tenantId=${tenantId} raceId=${mysqlRaceId}: ${(e as Error).message}`,
+      );
+    }
   }
 
   async preview(dto: PreviewReconciliationDto) {
@@ -207,6 +268,11 @@ export class ReconciliationService {
     }
 
     await doc.save();
+
+    // F-040 BR-40-11 — flush PnL cache (recon doc may overlap a contract period
+    // and switch its feeSource from SELF_COMPUTE → RECONCILIATION on next read)
+    await this.flushPnLCacheForRecon(dto.tenant_id, dto.mysql_race_id);
+
     return doc;
   }
 
@@ -276,6 +342,12 @@ export class ReconciliationService {
     }
 
     await doc.save();
+
+    // F-040 BR-40-11 — flush PnL cache when status crosses whitelist boundary.
+    // Whitelist = {signed, reviewed, completed, sent}. Any status change in or
+    // out of this set could flip feeSource; safe to flush unconditionally.
+    await this.flushPnLCacheForRecon(doc.tenant_id, doc.mysql_race_id);
+
     return doc;
   }
 
@@ -453,8 +525,15 @@ export class ReconciliationService {
   }
 
   async delete(id: string): Promise<void> {
+    // Fetch tenant+race BEFORE delete for cache flush hook (F-040 BR-40-11)
+    const existing = await this.reconciliationModel
+      .findById(id, { tenant_id: 1, mysql_race_id: 1 })
+      .lean();
     const result = await this.reconciliationModel.deleteOne({ _id: id });
     if (result.deletedCount === 0) throw new NotFoundException(`Reconciliation ${id} not found`);
+    if (existing) {
+      await this.flushPnLCacheForRecon(existing.tenant_id, existing.mysql_race_id);
+    }
   }
 
   /**
@@ -469,6 +548,12 @@ export class ReconciliationService {
    *   validation, nên KHÔNG có CastError tại service layer.
    */
   async deleteMany(ids: string[]): Promise<DeleteBatchResponseDto> {
+    // F-040 BR-40-11 — capture affected (tenant_id, mysql_race_id) pairs
+    // BEFORE delete so cache flush hooks can fire after delete completes.
+    const existing = await this.reconciliationModel
+      .find({ _id: { $in: ids } }, { tenant_id: 1, mysql_race_id: 1 })
+      .lean();
+
     const result = await this.reconciliationModel.deleteMany({
       _id: { $in: ids },
     });
@@ -480,6 +565,16 @@ export class ReconciliationService {
       deleted_count: deleted,
       not_found_count: not_found,
     });
+
+    // Flush PnL cache per affected (tenant, race) pair (deduped)
+    const affected = new Set<string>();
+    for (const e of existing) {
+      affected.add(`${e.tenant_id}:${e.mysql_race_id}`);
+    }
+    for (const pair of affected) {
+      const [tenantStr, raceStr] = pair.split(':');
+      await this.flushPnLCacheForRecon(Number(tenantStr), Number(raceStr));
+    }
 
     return { deleted, not_found };
   }
