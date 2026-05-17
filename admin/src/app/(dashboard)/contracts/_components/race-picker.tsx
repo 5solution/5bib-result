@@ -45,6 +45,12 @@ type Props = {
 type RaceLite = {
   _id?: string;
   id?: string;
+  // Backend Race schema field hierarchy:
+  //  - `title` — primary display name on Race doc (race.schema.ts:136)
+  //  - `name` — legacy alt OR may be present on some races
+  //  - `raceName` — manual mode shape (contracts ContractRaceSnapshotDto)
+  // Frontend fallback chain: raceName → title → name → "(không tên)"
+  title?: string;
   name?: string;
   raceName?: string;
   startDate?: string;
@@ -267,7 +273,10 @@ export function RacePicker({ value, onChange, allowManual = true }: Props) {
           {!loading &&
             list.map((r) => {
               const id = r._id || r.id || "";
-              const name = r.raceName || r.name || "(không tên)";
+              // F-040 fix — Backend Race schema dùng field `title` (race.schema.ts:136),
+              // KHÔNG phải `name`. Trước fix: race-picker chỉ check raceName||name → fallback
+              // "(không tên)" cho mọi race vì Race objects không có 2 field này.
+              const name = r.raceName || r.title || r.name || "(không tên)";
               const date = r.raceDate || r.startDate;
               return (
                 <button
