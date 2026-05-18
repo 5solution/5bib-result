@@ -3679,3 +3679,99 @@ Nếu tìm thấy existing gtag in sub-layouts → mount scope phải narrower h
 ---
 
 **Reference:** F-041 deploy 2026-05-18 — 4 patterns minted from real bug avoidance during plan review (Manager Adjustment #1 + #2).
+
+---
+
+## 🆕 Contract DOCX Template Fix Patterns (F-042 2026-05-18)
+
+### 1. DOCX template fix via XML manipulation (alternative to LibreOffice edit)
+
+**Pattern:** Edit `.docx` template content by extracting zip → modifying `word/document.xml` text → repacking zip. Preserves formatting bit-perfect compared to LibreOffice save-as drift.
+
+```python
+# F-042 fix_templates.py methodology
+import zipfile, re, shutil
+
+# 1. Extract DOCX zip
+with zipfile.ZipFile(src_docx) as zf:
+    zf.extractall(extract_dir)
+
+# 2. Read + replace text in document.xml
+with open(f'{extract_dir}/word/document.xml') as f:
+    xml = f.read()
+
+# Ordinal-based replacement cho duplicate values với different semantic
+xml, _ = re.subn(r'152\.000\.000', '{subtotal}', xml, count=0)  # global
+xml, _ = re.subn(r'36\.180\.000', '{totalAmount}', xml, count=2)  # first 2
+xml, _ = re.subn(r'36\.180\.000', '{actualTotalWithVat}', xml, count=0)  # remaining
+
+# 3. Write back + repack
+with open(f'{extract_dir}/word/document.xml', 'w') as f:
+    f.write(xml)
+
+with zipfile.ZipFile(out_docx, 'w', zipfile.ZIP_DEFLATED) as zf:
+    for root, dirs, files in os.walk(extract_dir):
+        for file in files:
+            arcname = os.path.relpath(os.path.join(root, file), extract_dir)
+            zf.write(os.path.join(root, file), arcname)
+```
+
+**When to use:** Bug fix to template static text (hardcoded values → placeholders). When text is intact in `<w:t>` runs (verify first via plain-text extraction).
+
+**Multi-viewer verification mandatory post-edit:** Open in MS Word + LibreOffice + Google Docs (F-037 lesson). Verify visual fidelity.
+
+**Backup pattern:** `<type>-<timestamp>-<feature-id>.docx` in existing `.backup/` directory (per F-024 BACKUP_DIRNAME constant).
+
+**Post-edit grep audit:** `grep -oE '[0-9]{1,3}\.[0-9]{3}\.[0-9]{3}' word/document.xml | sort -u` MUST be empty in financial sections.
+
+---
+
+### 2. Context flatten cho docxtemplater
+
+**Pattern:** When template needs nested object fields, flatten to top-level keys via conditional spread. Cleaner than `{nested.field}` access, plus belt-and-suspenders.
+
+```typescript
+// F-042 buildRenderContext() extension
+return {
+  // ... existing flat fields
+  acceptanceReport: contract.acceptanceReport ?? null,  // ← preserve nested for backward compat
+  ...(contract.acceptanceReport
+    ? {
+        // F-042: Flatten 11 fields to top-level for docxtemplater simple substitution
+        actualSubtotal: contract.acceptanceReport.actualSubtotal,
+        actualVatAmount: contract.acceptanceReport.actualVatAmount,
+        actualTotalWithVat: contract.acceptanceReport.actualTotalWithVat,
+        // ... 8 more keys
+      }
+    : {}),
+};
+```
+
+**Rule:** PRESERVE nested object key (e.g., `acceptanceReport`) for backward compat. ADD top-level flatten keys via conditional spread. Templates can use either form.
+
+**Reason:** `sanitizeContext()` recurses nested objects so `{acceptanceReport.actualSubtotal}` works, but `{actualSubtotal}` simpler for template authors + cross-version docxtemplater compat.
+
+---
+
+### 3. Audit + Regenerate script duo cho data-fix features
+
+**Pattern:** Bug-fix features that need to regenerate affected resources (DOCX files, computed values) use 2 paired scripts.
+
+**Audit script:**
+- File: `backend/scripts/audit-<resource>.ts`
+- Run: `npx ts-node scripts/audit-<resource>.ts [--deploy-ts=...]`
+- Behavior: NestApplicationContext bootstrap → Model query (read-only `.lean()`) → JSON report output
+- Output schema: per-resource entries với `needsRegen: boolean` flag + summary counts
+- Side effects: NONE (read-only). NO DB mutation.
+
+**Regenerate script:**
+- File: `backend/scripts/regenerate-<resource>.ts`
+- Run: `npx ts-node scripts/regenerate-<resource>.ts --audit-file=... [--dry-run] [--limit=N]`
+- Behavior: Read audit JSON → iterate tasks → call existing service method (sequential, NOT Promise.all)
+- Sleep 200ms between ops (S3 rate limit + Mongoose race prevention)
+- Audit log emit per task via existing service `emitAudit()` with actor=`<feature>-regenerate-script`
+- Dry-run mode: list tasks WITHOUT execute
+
+**Safeguard cho paid/finalized state:** Log WARN + emit special audit event với flag. Don't block regen — finalized resources unchanged by regen, but Finance team needs filter pattern for traceability.
+
+**Reference:** F-042 deploy 2026-05-18 — 3 patterns minted from real bug fix (Manager Adjustment for paid contract safeguard beyond BA PRD).
