@@ -37,6 +37,8 @@ import {
   RacesOnSaleListResponseDto,
   RacesOnSaleQueryDto,
 } from './dto/race-on-sale-response.dto';
+import { RaceOnSaleDetailDto } from './dto/race-on-sale-detail.dto';
+import { NotFoundException } from '@nestjs/common';
 
 /**
  * FEATURE-027 — Promo Hub controller.
@@ -89,6 +91,39 @@ export class PromoHubController {
   ): Promise<RacesOnSaleListResponseDto> {
     const data = await this.promoHubService.findRacesOnSale(query);
     return { data };
+  }
+
+  /**
+   * FEATURE-037 — Public endpoint cho on-sale race detail page SEO.
+   *
+   * Route MUST declare BEFORE `Get(':id')` để literal `races-on-sale` prefix
+   * không bị shadow bởi generic `:id` route. ⚠️ MUST also declare BEFORE
+   * `Get('races-on-sale')` literal — but specificity rule (longer path first)
+   * makes this safe.
+   *
+   * `urlName` param: race `url_name` (MySQL field) OR raceId fallback
+   * (when url_name NULL — 5Ticket convention TD-F033-06).
+   *
+   * 404 cho: race not found, status != GENERATED_CODE, is_delete=1, is_show=0.
+   */
+  @Get('races-on-sale/by-url-name/:urlName')
+  @ApiOperation({
+    summary: 'Public — on-sale race detail with courses (MySQL platform)',
+    description:
+      'FEATURE-037. Returns full race + courses JOIN for SEO detail page. ' +
+      'Lookup by url_name OR raceId fallback. Cache Redis 600s.',
+  })
+  @ApiParam({ name: 'urlName', type: 'string' })
+  @ApiResponse({ status: 200, type: RaceOnSaleDetailDto })
+  @ApiResponse({ status: 404, description: 'Race not found / hidden / deleted' })
+  async findRaceOnSaleByUrlName(
+    @Param('urlName') urlName: string,
+  ): Promise<RaceOnSaleDetailDto> {
+    const detail = await this.promoHubService.findRaceOnSaleByUrlName(urlName);
+    if (!detail) {
+      throw new NotFoundException('Race not found');
+    }
+    return detail;
   }
 
   @Get('slug/:slug')

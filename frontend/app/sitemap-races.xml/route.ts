@@ -50,19 +50,21 @@ function buildEntries(): Promise<SitemapEntry[]> {
     for (const race of races) {
       if (race.status === "draft") continue; // belt-and-suspenders BR-08
       if (!race.slug) continue; // skip races without slug (cron not run yet)
-      // On-sale races have no internal detail page (RaceCard links external to
-      // selling-web). Visiting /giai-chay/[urlName] would 404 → don't sitemap.
-      if (race.source === "on-sale") continue;
+      // F-037: on-sale races now have internal detail page (resolved
+      // TD-F036-09). Include in sitemap with priority 0.9 (active type
+      // same as MongoDB pre_race/live per BR-37-12).
 
+      const isOnSale = race.source === "on-sale";
       const isEnded = race.status === "ended";
-      const isActive = race.status === "pre_race" || race.status === "live";
+      const isActive =
+        isOnSale || race.status === "pre_race" || race.status === "live";
       const isLive = race.status === "live";
 
       const lastmodDate = isEnded && race.endDate
         ? new Date(race.endDate).toISOString()
         : now;
 
-      // Detail entry — BR-17 always
+      // Detail entry — BR-17 + BR-37-12
       entries.push({
         loc: `https://5bib.com/giai-chay/${race.slug}`,
         lastmod: lastmodDate,
@@ -70,8 +72,8 @@ function buildEntries(): Promise<SitemapEntry[]> {
         priority: isActive ? "0.9" : "0.6",
       });
 
-      // Results entry — only if live OR ended (BR-17)
-      if (isEnded || isLive) {
+      // Results entry — only if live OR ended (BR-17, NOT on-sale)
+      if (!isOnSale && (isEnded || isLive)) {
         entries.push({
           loc: `https://5bib.com/giai-chay/${race.slug}/ket-qua`,
           lastmod: lastmodDate,

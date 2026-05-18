@@ -37,10 +37,15 @@ import {
 } from './dto/promo-hub-response.dto';
 import { SectionInputDto } from './dto/section.dto';
 import { RaceReadonly } from './entities/race-readonly.entity';
+import { OnSaleCourseReadonly } from './entities/on-sale-course-readonly.entity';
 import {
   RaceOnSaleResponseDto,
   RacesOnSaleQueryDto,
 } from './dto/race-on-sale-response.dto';
+import {
+  RaceOnSaleDetailDto,
+  RaceCourseDto,
+} from './dto/race-on-sale-detail.dto';
 
 /**
  * FEATURE-027 — PromoHubService.
@@ -135,6 +140,17 @@ export class PromoHubService {
   private static readonly RACES_ON_SALE_CACHE_TTL = 60;
   private static readonly RACES_ON_SALE_STATUS = 'GENERATED_CODE';
 
+  /** FEATURE-037 — Selling-web URL template (BR-37-09, reuses F-036 BR-12 UTM tracking). */
+  private static readonly SELLING_WEB_BASE_URL =
+    'https://5bib.com/vi/events/';
+  private static readonly SELLING_WEB_UTM_PARAMS =
+    'ref=seo-giai-chay&utm_source=organic&utm_medium=seo&utm_campaign=giai-chay';
+
+  /** FEATURE-037 — Detail page cache key + TTL (BR-37-18). */
+  private static readonly RACE_DETAIL_CACHE_PREFIX =
+    'promo-hub:race-on-sale-detail:';
+  private static readonly RACE_DETAIL_CACHE_TTL = 600;
+
   constructor(
     @InjectModel(PromoHub.name)
     private readonly promoHubModel: Model<PromoHubDocument>,
@@ -142,6 +158,10 @@ export class PromoHubService {
     @Optional()
     @InjectRepository(RaceReadonly, 'platform')
     private readonly raceRepo?: Repository<RaceReadonly>,
+    /** FEATURE-037 — Optional injection: tests may skip platform DB. */
+    @Optional()
+    @InjectRepository(OnSaleCourseReadonly, 'platform')
+    private readonly raceCourseRepo?: Repository<OnSaleCourseReadonly>,
     @Optional() @InjectRedis() private readonly redis?: Redis,
   ) {}
 
@@ -725,6 +745,173 @@ export class PromoHubService {
       location: r.location,
       brand: r.brand,
       ticketUrl: `${PromoHubService.TICKET_URL_BASE}${slug}`,
+    };
+  }
+
+  // ─── FEATURE-037 — On-sale race detail page ─────────────────────────────
+
+  /**
+   * FEATURE-037 — Fetch full race detail + courses cho SEO detail page.
+   *
+   * Filter (BR-37-01, BR-37-23, BR-37-24):
+   *   - races.status = 'GENERATED_CODE'
+   *   - races.is_delete = 0
+   *   - races.is_show = 1
+   *   - race_course.deleted = 0 (course filter trong JOIN)
+   *
+   * Lookup strategy: try `url_name` match first (when set), fallback raceId
+   * (PROD data shows 5Ticket convention NULL url_name → use race_id).
+   *
+   * Single LEFT JOIN query — no N+1 (BR-37-05).
+   * Cache Redis 600s TTL (BR-37-18).
+   * Graceful degrade on Redis/MySQL fail (returns null → controller 404).
+   */
+  async findRaceOnSaleByUrlName(
+    urlName: string,
+  ): Promise<RaceOnSaleDetailDto | null> {
+    if (!this.raceRepo || !this.raceCourseRepo) {
+      this.logger.warn(
+        '[findRaceOnSaleByUrlName] platform repos not injected — returning null',
+      );
+      return null;
+    }
+
+    const cacheKey = `${PromoHubService.RACE_DETAIL_CACHE_PREFIX}${urlName}`;
+
+    // Cache hit fast path
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached) return JSON.parse(cached) as RaceOnSaleDetailDto;
+      } catch (err) {
+        this.logger.warn(
+          `[findRaceOnSaleByUrlName] Redis GET failed: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // Query: race với url_name match OR raceId match (numeric fallback)
+    let race: RaceReadonly | null = null;
+    try {
+      race = await this.raceRepo
+        .createQueryBuilder('r')
+        .where('r.status = :status', {
+          status: PromoHubService.RACES_ON_SALE_STATUS,
+        })
+        .andWhere('CAST(r.is_delete AS UNSIGNED) = 0')
+        .andWhere('CAST(r.is_show AS UNSIGNED) = 1')
+        .andWhere('(r.url_name = :urlName OR r.race_id = :raceId)', {
+          urlName,
+          raceId: /^\d+$/.test(urlName) ? urlName : '0', // safe parse
+        })
+        .getOne();
+    } catch (err) {
+      this.logger.error(
+        `[findRaceOnSaleByUrlName] MySQL race query failed: ${(err as Error).message}`,
+      );
+      return null;
+    }
+
+    if (!race) return null;
+
+    // Fetch courses cho race này (deleted=0 filter, BR-37-04)
+    let courses: OnSaleCourseReadonly[] = [];
+    try {
+      courses = await this.raceCourseRepo
+        .createQueryBuilder('rc')
+        .where('rc.race_id = :raceId', { raceId: race.raceId })
+        .andWhere('CAST(rc.deleted AS UNSIGNED) = 0')
+        .orderBy('rc.id', 'ASC')
+        .getMany();
+    } catch (err) {
+      this.logger.error(
+        `[findRaceOnSaleByUrlName] MySQL race_course query failed: ${(err as Error).message}`,
+      );
+      // Continue with empty courses array (BR-37-25)
+      courses = [];
+    }
+
+    const dto = this.toRaceOnSaleDetailDto(race, courses);
+
+    // Cache result 600s
+    if (this.redis) {
+      try {
+        await this.redis.set(
+          cacheKey,
+          JSON.stringify(dto),
+          'EX',
+          PromoHubService.RACE_DETAIL_CACHE_TTL,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `[findRaceOnSaleByUrlName] Redis SET failed: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    return dto;
+  }
+
+  /**
+   * Transform race + courses → public DTO.
+   *
+   * Strip sensitive: `tenant_id`, internal admin fields. Pre-compute
+   * `sellingWebUrl` (BR-37-09 format).
+   */
+  private toRaceOnSaleDetailDto(
+    race: RaceReadonly,
+    courses: OnSaleCourseReadonly[],
+  ): RaceOnSaleDetailDto {
+    const slug = (race.urlName && race.urlName.trim()) || race.raceId;
+    const sellingWebUrl =
+      `${PromoHubService.SELLING_WEB_BASE_URL}` +
+      `${encodeURIComponent(slug)}_${encodeURIComponent(race.raceId)}` +
+      `?${PromoHubService.SELLING_WEB_UTM_PARAMS}`;
+
+    return {
+      raceId: race.raceId,
+      title: race.title ?? '',
+      urlName: slug,
+      description: race.description,
+      logoUrl: race.logoUrl,
+      images: race.images,
+      eventStartDate: race.eventStartDate?.toISOString() ?? null,
+      eventEndDate: race.eventEndDate?.toISOString() ?? null,
+      registrationStartTime:
+        race.registrationStartTime?.toISOString() ?? null,
+      registrationEndTime: race.registrationEndTime?.toISOString() ?? null,
+      location: race.location,
+      province: race.province,
+      district: race.district,
+      locationUrl: race.locationUrl,
+      brand: race.brand,
+      eventType: race.eventType,
+      raceType: race.raceType,
+      season: race.season,
+      sellingWebUrl,
+      courses: courses.map((c) => this.toRaceCourseDto(c)),
+      source: 'on-sale' as const,
+    };
+  }
+
+  private toRaceCourseDto(c: OnSaleCourseReadonly): RaceCourseDto {
+    return {
+      id: c.id,
+      prefix: c.prefix,
+      name: c.name,
+      distance: c.distance,
+      description: c.description,
+      price: c.price,
+      maxParticipate: c.maxParticipate,
+      minAge: c.minAge,
+      maxAge: c.maxAge,
+      openForSaleDateTime: c.openForSaleDateTime?.toISOString() ?? null,
+      closeForSaleDateTime: c.closeForSaleDateTime?.toISOString() ?? null,
+      routeImageUrl: c.routeImageUrl,
+      routeMapImageUrl: c.routeMapImageUrl,
+      medalUrl: c.medalUrl,
+      gain: c.gain,
+      courseType: c.courseType,
     };
   }
 }

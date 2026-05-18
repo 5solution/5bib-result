@@ -10,6 +10,7 @@ import { PromoHubService } from './promo-hub.service';
 import { PromoHub } from './schemas/promo-hub.schema';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { RaceReadonly } from './entities/race-readonly.entity';
+import { OnSaleCourseReadonly } from './entities/on-sale-course-readonly.entity';
 
 const REDIS_TOKEN = 'default_IORedisModuleConnectionToken';
 
@@ -19,6 +20,8 @@ describe('PromoHubService', () => {
   let mockRedis: any;
   let mockRaceRepo: any;
   let mockQueryBuilder: any;
+  let mockCourseRepo: any;
+  let mockCourseQueryBuilder: any;
 
   const mockHub = (overrides: Partial<any> = {}): any => ({
     _id: new Types.ObjectId(),
@@ -67,15 +70,28 @@ describe('PromoHubService', () => {
       del: jest.fn().mockResolvedValue(1),
     };
     // FEATURE-033 — QueryBuilder mock cho findRacesOnSale()
+    // FEATURE-037 — Extended với getOne() cho findRaceOnSaleByUrlName()
     mockQueryBuilder = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([]),
+      getOne: jest.fn().mockResolvedValue(null),
     };
     mockRaceRepo = {
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+    };
+    // FEATURE-037 — Course QueryBuilder mock (separate, may have different where/getMany flow)
+    mockCourseQueryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+      getOne: jest.fn().mockResolvedValue(null),
+    };
+    mockCourseRepo = {
+      createQueryBuilder: jest.fn().mockReturnValue(mockCourseQueryBuilder),
     };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -85,6 +101,10 @@ describe('PromoHubService', () => {
         {
           provide: getRepositoryToken(RaceReadonly, 'platform'),
           useValue: mockRaceRepo,
+        },
+        {
+          provide: getRepositoryToken(OnSaleCourseReadonly, 'platform'),
+          useValue: mockCourseRepo,
         },
         { provide: REDIS_TOKEN, useValue: mockRedis },
       ],
@@ -528,6 +548,229 @@ describe('PromoHubService', () => {
         'EX',
         60,
       );
+    });
+  });
+
+  // ─── FEATURE-037 — findRaceOnSaleByUrlName() ──────────────────────────────
+
+  describe('findRaceOnSaleByUrlName() — F-037 detail endpoint', () => {
+    const mockRace = (overrides: Partial<RaceReadonly> = {}): RaceReadonly =>
+      ({
+        raceId: '175',
+        title: 'Hai Phong Legacy Marathon 2026',
+        urlName: null, // PROD pattern — NULL → fallback raceId
+        status: 'GENERATED_CODE',
+        logoUrl: 'https://example.com/logo.png',
+        eventStartDate: new Date('2026-10-15T00:00:00Z'),
+        eventEndDate: null,
+        registrationStartTime: new Date('2026-06-01'),
+        registrationEndTime: new Date('2026-10-10'),
+        location: 'Hải Phòng',
+        province: 'Hải Phòng',
+        district: null,
+        locationUrl: null,
+        brand: 'Hai Phong BTC',
+        tenantId: 'tenant-1',
+        description: '<p>Test race description</p>',
+        images: null,
+        eventType: 'RUNNING',
+        raceType: 'MARATHON',
+        season: '2026',
+        ...overrides,
+      }) as RaceReadonly;
+
+    const mockCourse = (
+      overrides: Partial<OnSaleCourseReadonly> = {},
+    ): OnSaleCourseReadonly =>
+      ({
+        id: '100',
+        raceId: '175',
+        prefix: 'M42K',
+        name: 'Marathon 42KM',
+        distance: '42KM',
+        description: 'Đường marathon đỉnh',
+        price: 1500000,
+        maxParticipate: 500,
+        minAge: 18,
+        maxAge: 70,
+        openForSaleDateTime: new Date('2026-06-01'),
+        closeForSaleDateTime: new Date('2026-10-10'),
+        routeImageUrl: 'https://example.com/route.jpg',
+        routeMapImageUrl: 'https://example.com/map.jpg',
+        medalUrl: null,
+        courseType: 'ORDINARY',
+        gain: '500m+',
+        deleted: Buffer.from([0]),
+        ...overrides,
+      }) as OnSaleCourseReadonly;
+
+    it('TC-37-01 happy path — returns race + 3 courses with sellingWebUrl', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(mockRace());
+      mockCourseQueryBuilder.getMany.mockResolvedValue([
+        mockCourse({ id: '100', name: 'Marathon 42KM', distance: '42KM' }),
+        mockCourse({ id: '101', name: 'Half 21KM', distance: '21KM', price: 800000 }),
+        mockCourse({ id: '102', name: '10K Fun Run', distance: '10KM', price: 400000 }),
+      ]);
+
+      const result = await service.findRaceOnSaleByUrlName('175');
+
+      expect(result).not.toBeNull();
+      expect(result?.raceId).toBe('175');
+      expect(result?.urlName).toBe('175'); // fallback to raceId
+      expect(result?.title).toBe('Hai Phong Legacy Marathon 2026');
+      expect(result?.description).toBe('<p>Test race description</p>');
+      expect(result?.brand).toBe('Hai Phong BTC');
+      expect(result?.raceType).toBe('MARATHON');
+      expect(result?.source).toBe('on-sale');
+      expect(result?.courses).toHaveLength(3);
+      expect(result?.courses[0].name).toBe('Marathon 42KM');
+      expect(result?.courses[0].price).toBe(1500000);
+      // BR-37-09 sellingWebUrl format
+      expect(result?.sellingWebUrl).toContain('https://5bib.com/vi/events/175_175?');
+      expect(result?.sellingWebUrl).toContain('ref=seo-giai-chay');
+      expect(result?.sellingWebUrl).toContain('utm_source=organic');
+      expect(result?.sellingWebUrl).toContain('utm_medium=seo');
+      expect(result?.sellingWebUrl).toContain('utm_campaign=giai-chay');
+      // MUST NOT leak tenant_id, is_delete, is_show in response
+      expect(result).not.toHaveProperty('tenantId');
+      expect(result).not.toHaveProperty('is_delete');
+      expect(result).not.toHaveProperty('is_show');
+    });
+
+    it('TC-37-02 not found — returns null when race missing', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(null);
+
+      const result = await service.findRaceOnSaleByUrlName('nonexistent');
+
+      expect(result).toBeNull();
+      // Course query should NOT be called when race not found
+      expect(mockCourseQueryBuilder.getMany).not.toHaveBeenCalled();
+    });
+
+    it('TC-37-03 url_name set — uses url_name as slug', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(
+        mockRace({ urlName: 'hai-phong-marathon-2026' }),
+      );
+      mockCourseQueryBuilder.getMany.mockResolvedValue([]);
+
+      const result = await service.findRaceOnSaleByUrlName(
+        'hai-phong-marathon-2026',
+      );
+
+      expect(result?.urlName).toBe('hai-phong-marathon-2026');
+      expect(result?.sellingWebUrl).toContain(
+        '/vi/events/hai-phong-marathon-2026_175?',
+      );
+    });
+
+    it('TC-37-04 empty courses — returns DTO with empty array (BR-37-25)', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(mockRace());
+      mockCourseQueryBuilder.getMany.mockResolvedValue([]);
+
+      const result = await service.findRaceOnSaleByUrlName('175');
+
+      expect(result).not.toBeNull();
+      expect(result?.courses).toEqual([]);
+    });
+
+    it('TC-37-05 course query fail — continues with empty courses (graceful)', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(mockRace());
+      mockCourseQueryBuilder.getMany.mockRejectedValue(
+        new Error('MySQL course query failed'),
+      );
+
+      const result = await service.findRaceOnSaleByUrlName('175');
+
+      expect(result).not.toBeNull();
+      expect(result?.courses).toEqual([]);
+      expect(result?.title).toBe('Hai Phong Legacy Marathon 2026');
+    });
+
+    it('TC-37-06 race query fail — returns null', async () => {
+      mockQueryBuilder.getOne.mockRejectedValue(
+        new Error('MySQL connection lost'),
+      );
+
+      const result = await service.findRaceOnSaleByUrlName('175');
+
+      expect(result).toBeNull();
+    });
+
+    it('TC-37-07 cache hit — skips MySQL query, returns parsed JSON', async () => {
+      const cachedDto = {
+        raceId: '175',
+        title: 'Cached Race',
+        urlName: '175',
+        source: 'on-sale',
+        courses: [],
+        sellingWebUrl: 'https://5bib.com/vi/events/175_175?cached=true',
+      };
+      mockRedis.get.mockResolvedValueOnce(JSON.stringify(cachedDto));
+
+      const result = await service.findRaceOnSaleByUrlName('175');
+
+      expect(result?.title).toBe('Cached Race');
+      // MUST NOT query MySQL when cache hit
+      expect(mockQueryBuilder.getOne).not.toHaveBeenCalled();
+      expect(mockCourseQueryBuilder.getMany).not.toHaveBeenCalled();
+    });
+
+    it('TC-37-08 cache miss — caches result with 600s TTL', async () => {
+      mockRedis.get.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(mockRace());
+      mockCourseQueryBuilder.getMany.mockResolvedValue([]);
+
+      await service.findRaceOnSaleByUrlName('175');
+
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'promo-hub:race-on-sale-detail:175',
+        expect.any(String),
+        'EX',
+        600,
+      );
+    });
+
+    it('TC-37-09 platform repos not injected — returns null gracefully', async () => {
+      // Re-create service WITHOUT raceRepo/courseRepo
+      const moduleRefNoRepo: TestingModule = await Test.createTestingModule({
+        providers: [
+          PromoHubService,
+          { provide: getModelToken(PromoHub.name), useValue: mockModel },
+          { provide: REDIS_TOKEN, useValue: mockRedis },
+        ],
+      }).compile();
+      const noRepoService = moduleRefNoRepo.get<PromoHubService>(PromoHubService);
+
+      const result = await noRepoService.findRaceOnSaleByUrlName('175');
+
+      expect(result).toBeNull();
+    });
+
+    it('TC-37-10 course mapping — Date fields ISO-stringified, all 16 cols mapped', async () => {
+      mockQueryBuilder.getOne.mockResolvedValue(mockRace());
+      mockCourseQueryBuilder.getMany.mockResolvedValue([mockCourse()]);
+
+      const result = await service.findRaceOnSaleByUrlName('175');
+      const course = result?.courses[0];
+
+      expect(course).toBeDefined();
+      expect(course?.id).toBe('100');
+      expect(course?.prefix).toBe('M42K');
+      expect(course?.name).toBe('Marathon 42KM');
+      expect(course?.distance).toBe('42KM');
+      expect(course?.price).toBe(1500000);
+      expect(course?.maxParticipate).toBe(500);
+      expect(course?.minAge).toBe(18);
+      expect(course?.maxAge).toBe(70);
+      expect(course?.routeImageUrl).toBe('https://example.com/route.jpg');
+      expect(course?.routeMapImageUrl).toBe('https://example.com/map.jpg');
+      expect(course?.courseType).toBe('ORDINARY');
+      expect(course?.gain).toBe('500m+');
+      // Date ISO-serialized
+      expect(typeof course?.openForSaleDateTime).toBe('string');
+      expect(course?.openForSaleDateTime).toContain('2026-06-01');
+      // MUST NOT leak `deleted` Buffer in DTO
+      expect(course).not.toHaveProperty('deleted');
     });
   });
 });

@@ -214,18 +214,131 @@ function unwrap<T>(raw: unknown): T | null {
 }
 
 /**
- * BR-29 + BR-30: returns null when slug not found OR race is draft.
+ * FEATURE-037 — On-sale race detail DTO shape from MySQL platform.
+ * Returned by `GET /api/promo-hubs/races-on-sale/by-url-name/:urlName`.
+ */
+interface ApiOnSaleCourseDto {
+  id: string;
+  prefix: string;
+  name?: string | null;
+  distance?: string | null;
+  description?: string | null;
+  price?: number | null;
+  maxParticipate?: number | null;
+  minAge?: number | null;
+  maxAge?: number | null;
+  openForSaleDateTime?: string | null;
+  closeForSaleDateTime?: string | null;
+  routeImageUrl?: string | null;
+  routeMapImageUrl?: string | null;
+  medalUrl?: string | null;
+  gain?: string | null;
+  courseType?: string | null;
+}
+
+interface ApiOnSaleDetailDto {
+  raceId: string;
+  title: string;
+  urlName: string;
+  description?: string | null;
+  logoUrl?: string | null;
+  images?: string | null;
+  eventStartDate?: string | null;
+  eventEndDate?: string | null;
+  registrationStartTime?: string | null;
+  registrationEndTime?: string | null;
+  location?: string | null;
+  province?: string | null;
+  district?: string | null;
+  locationUrl?: string | null;
+  brand?: string | null;
+  eventType?: string | null;
+  raceType?: string | null;
+  season?: string | null;
+  sellingWebUrl: string;
+  courses: ApiOnSaleCourseDto[];
+  source: "on-sale";
+}
+
+/**
+ * BR-37-06 — Fetch on-sale race detail from MySQL platform via F-037 endpoint.
+ * Used as fallback in `getRaceBySlug()` dual-source resolution.
+ */
+async function getRaceOnSaleByUrlName(
+  urlName: string,
+): Promise<Race | null> {
+  const raw = await safeFetch<unknown>(
+    `${BACKEND_URL}/api/promo-hubs/races-on-sale/by-url-name/${encodeURIComponent(urlName)}`,
+    { next: { revalidate: 3600, tags: [`giai-chay:on-sale:${urlName}`] } },
+    null,
+  );
+  const detail = unwrap<ApiOnSaleDetailDto>(raw);
+  if (!detail) return null;
+  return mapOnSaleDetailToRace(detail);
+}
+
+/**
+ * BR-37-08 — Normalize on-sale DTO → unified `Race` shape with `source='on-sale'`.
+ * Course map: backend ApiOnSaleCourseDto → frontend RaceCourse with id as courseId.
+ */
+function mapOnSaleDetailToRace(detail: ApiOnSaleDetailDto): Race {
+  const courses: RaceCourse[] = detail.courses.map((c) => ({
+    courseId: c.id,
+    name: c.name ?? c.prefix,
+    distance: c.distance ?? undefined,
+    startTime: c.openForSaleDateTime ?? undefined,
+    cutOffTime: c.closeForSaleDateTime ?? undefined,
+    imageUrl: c.routeImageUrl ?? undefined,
+    mapUrl: c.routeMapImageUrl ?? undefined,
+  }));
+
+  return {
+    id: detail.raceId,
+    slug: detail.urlName,
+    title: detail.title,
+    status: "pre_race",
+    province: detail.province ?? undefined,
+    location: detail.location ?? undefined,
+    startDate: detail.eventStartDate ?? undefined,
+    endDate: detail.eventEndDate ?? undefined,
+    description: detail.description ?? undefined,
+    bannerUrl: detail.logoUrl ?? undefined,
+    logoUrl: detail.logoUrl ?? undefined,
+    organizer: detail.brand ?? undefined,
+    courses,
+    source: "on-sale",
+    ticketUrl: detail.sellingWebUrl,
+    registrationEndTime: detail.registrationEndTime ?? undefined,
+  };
+}
+
+/**
+ * BR-29 + BR-30 (F-036) + BR-37-06 (F-037 dual-source):
+ * 1. Try MongoDB via `GET /api/races/slug/:slug`
+ * 2. If MongoDB miss OR status=draft → fallback MySQL on-sale endpoint
+ * 3. If both miss → returns null (Next.js notFound)
+ *
+ * BR-37-07: MongoDB precedence — race transitioned (BÁN VÉ→VẬN HÀNH)
+ * automatically returns MongoDB shape (more complete data with courses+results).
  */
 export async function getRaceBySlug(slug: string): Promise<Race | null> {
+  // Step 1: try MongoDB
   const raw = await safeFetch<unknown>(
     `${BACKEND_URL}/api/races/slug/${encodeURIComponent(slug)}`,
     { next: { revalidate: 3600, tags: [`giai-chay:race:${slug}`] } },
     null,
   );
-  const race = unwrap<Race>(raw);
-  if (!race) return null;
-  if (race.status === "draft") return null;
-  return race;
+  const mongoRace = unwrap<Race>(raw);
+  if (mongoRace && mongoRace.status !== "draft") {
+    return { ...mongoRace, source: "mongodb" as RaceSource };
+  }
+
+  // Step 2: fallback MySQL on-sale (F-037)
+  const onSaleRace = await getRaceOnSaleByUrlName(slug);
+  if (onSaleRace) return onSaleRace;
+
+  // Step 3: both miss
+  return null;
 }
 
 /**
