@@ -1263,6 +1263,41 @@ export class ContractsService {
       // docxtemplater dùng loop `{#articles}{title}{body}{/articles}`.
       articles,
       acceptanceReport: contract.acceptanceReport ?? null,
+      // F-042: Flatten acceptanceReport.* to top-level keys for docxtemplater
+      // simple substitution. Templates use `{actualSubtotal}` NOT
+      // `{acceptanceReport.actualSubtotal}` for cross-version docxtemplater
+      // compat. sanitizeContext() RECURSES nested objects too, but flatten
+      // is belt-and-suspenders + simpler template authoring.
+      // Per BR-42-10 + Manager Adjustment plan F-042.
+      ...(contract.acceptanceReport
+        ? {
+            actualSubtotal: contract.acceptanceReport.actualSubtotal,
+            actualVatAmount: contract.acceptanceReport.actualVatAmount,
+            actualTotalWithVat: contract.acceptanceReport.actualTotalWithVat,
+            contractSubtotal: contract.acceptanceReport.contractSubtotal,
+            diffAmount: contract.acceptanceReport.diffAmount,
+            advancePaid: contract.acceptanceReport.advancePaid,
+            remainingBalance: contract.acceptanceReport.remainingBalance,
+            actualTotalWithVatInWords: vndAmountInWords(
+              contract.acceptanceReport.actualTotalWithVat ?? 0,
+            ),
+            reportDay: contract.acceptanceReport.reportDate
+              ? String(
+                  new Date(contract.acceptanceReport.reportDate).getDate(),
+                ).padStart(2, '0')
+              : '',
+            reportMonth: contract.acceptanceReport.reportDate
+              ? String(
+                  new Date(contract.acceptanceReport.reportDate).getMonth() + 1,
+                ).padStart(2, '0')
+              : '',
+            reportYear: contract.acceptanceReport.reportDate
+              ? String(
+                  new Date(contract.acceptanceReport.reportDate).getFullYear(),
+                )
+              : '',
+          }
+        : {}),
       paymentRequest: contract.paymentRequest
         ? {
             ...contract.paymentRequest,
