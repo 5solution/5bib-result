@@ -7,6 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { Search, ChevronLeft, Trophy, Calendar, Loader2 } from 'lucide-react';
 import { countryToFlag } from '@/lib/country-flags';
 import { useGlobalSearch } from '@/lib/api-hooks';
+import { useGAEvent } from '@/lib/analytics/useGAEvent';
+import { EVENTS } from '@/lib/analytics/events';
+import { useEffect } from 'react';
 
 interface SearchResult {
   Bib: number;
@@ -50,6 +53,18 @@ function SearchContent() {
   const { data: searchRaw, isLoading: loading } = useGlobalSearch(activeQuery, 50);
   const results = useMemo<SearchResult[]>(() => (searchRaw as any)?.data ?? [], [searchRaw]);
   const searched = activeQuery.length >= 2;
+  const gaEvent = useGAEvent();
+
+  // F-041 BR-41-06 — search event fires on activeQuery change (post-submit only,
+  // NOT on every keystroke — submit acts as natural debounce, plus 800ms loading).
+  useEffect(() => {
+    if (!activeQuery || activeQuery.length < 2) return;
+    if (loading) return; // wait until fetch completes for accurate result_count
+    gaEvent(EVENTS.SEARCH, {
+      search_term: activeQuery,
+      result_count: results.length,
+    });
+  }, [activeQuery, loading, results.length, gaEvent]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

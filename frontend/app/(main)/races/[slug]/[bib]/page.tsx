@@ -24,6 +24,8 @@ import RaceTheme from '@/components/RaceTheme';
 import RaceHeroHeader from '@/components/RaceHeroHeader';
 import FloatingActionBar from '@/components/FloatingActionBar';
 import { useScrollRevealObserver } from '@/lib/useScrollRevealObserver';
+import { useGAEvent } from '@/lib/analytics/useGAEvent';
+import { EVENTS } from '@/lib/analytics/events';
 
 // ── Nationality guard ────────────────────────────────────────────────────
 // Upstream RaceResult sometimes sends placeholder values like "0", "-1",
@@ -339,11 +341,21 @@ export default function AthleteDetailPage() {
     });
   }, [t]);
 
+  const gaEvent = useGAEvent();
+
   const handleShareFacebook = () => {
     const url = encodeURIComponent(window.location.href);
     const text = encodeURIComponent(
       athlete ? `${athlete.Name} - BIB ${athlete.Bib} - ${athlete.distance} - Chip Time: ${athlete.ChipTime}` : ''
     );
+    // F-041 BR-41 share_athlete conversion event — race_slug + bib (PII safe).
+    if (athlete && slug) {
+      gaEvent(EVENTS.SHARE_ATHLETE, {
+        race_slug: slug,
+        bib: String(athlete.Bib),
+        share_method: 'link',
+      });
+    }
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank', 'width=600,height=400');
   };
 
@@ -676,16 +688,34 @@ export default function AthleteDetailPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
+      // F-041 download_certificate conversion event — race_slug + bib + format.
+      if (slug) {
+        gaEvent(EVENTS.DOWNLOAD_CERTIFICATE, {
+          race_slug: slug,
+          bib: String(athlete.Bib),
+          download_format: 'png',
+          action_status: 'success',
+        });
+      }
+
       toast.success(t('athlete.certificateSuccess'), { id: 'cert-download' });
       fireCelebration();
       setDownloading(false);
     } catch (err) {
       console.error('Certificate download error:', err);
+      if (slug) {
+        gaEvent(EVENTS.DOWNLOAD_CERTIFICATE, {
+          race_slug: slug,
+          bib: String(athlete.Bib),
+          download_format: 'png',
+          action_status: 'fail',
+        });
+      }
       window.open(athlete.Certificate, '_blank');
       toast.dismiss('cert-download');
       setDownloading(false);
     }
-  }, [athlete, fireCelebration]);
+  }, [athlete, fireCelebration, slug, gaEvent, t]);
 
   if (loading) {
     return (

@@ -1,4 +1,13 @@
 {
+  "cookie": {
+    "consent": {
+      "message": "🍪 5BIB sử dụng cookie để phân tích lưu lượng và cải thiện trải nghiệm. Bạn có đồng ý không?",
+      "accept": "Đồng ý",
+      "reject": "Từ chối",
+      "learn_more": "Tìm hiểu thêm",
+      "aria_label": "Thông báo cookie"
+    }
+  },
   "common": {
     "loading": "Đang tải...",
     "error": "Lỗi",

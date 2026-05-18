@@ -3527,3 +3527,155 @@ Reason: `JSON.stringify({page:1,limit:20})` vs `JSON.stringify({limit:20,page:1}
 - Existing tests count < 5 OR refactor obvious (no semantic change) → EXTRACT
 
 **F-038 example:** `computeContractRows()` duplicates `getDashboardData()` body. 32 existing tests + F-029/F-036 lineage → chose COPY. TD-F038-REFACTOR-EXTRACT tracked.
+
+---
+
+## 🆕 Analytics & Privacy Patterns (F-041 2026-05-18)
+
+### 1. Event taxonomy single source of truth (SSOT)
+
+**Pattern:** Centralize event names + param keys + value enums trong 1 const file `frontend/lib/analytics/events.ts`.
+
+```typescript
+// Single source of truth — NEVER hardcode event names elsewhere
+export const EVENTS = {
+  VIEW_RACE: 'view_race',
+  SHARE_ATHLETE: 'share_athlete', // ⭐ conversion
+  // ... 24 events total
+} as const;
+
+// Allowed dimensions only — adding new param requires update HERE first
+export type EventParamKey =
+  | 'race_slug' | 'course_id' | 'bib' | 'lang' | 'from_route' /* ... 24 keys */;
+
+// PII compile-time reject (defense layer 1)
+export type PIIParamKey = 'athlete_name' | 'email' | 'phone' /* ... */;
+export type EventParams = {
+  [K in EventParamKey]?: string | number | boolean | undefined;
+} & {
+  [K in PIIParamKey]?: never; // TS error if user passes blacklisted key
+};
+
+// Runtime sanitizer (defense layer 2 — catches dynamic key bypass)
+const PII_BLACKLIST = new Set([
+  'athlete_name', 'email', 'phone', 'fullname',
+  'name', 'fullName', 'athleteName', /* aliases */
+]);
+```
+
+**Rule:** When wiring touch point, ALWAYS `import { EVENTS } from '@/lib/analytics/events'` + reference `EVENTS.SHARE_ATHLETE`. NEVER hardcode `'share_athlete'` string literal.
+
+**Rule:** Adding new event → update `EVENTS` const + `EventParamKey` union BEFORE writing touch point. Otherwise TS compile fails.
+
+**Rule:** Adding new dimension → update GA4 Admin Custom Dimension registration EXACT match param key (case-sensitive snake_case) BEFORE deploy. Otherwise data orphan in GA4 reports.
+
+---
+
+### 2. Consent Mode v2 + localStorage versioned schema (Vietnam PDPA)
+
+**Pattern:** Comply Vietnam PDPA Decree 13/2023/NĐ-CP via Google Consent Mode v2.
+
+```typescript
+// In gtag init (BEFORE gtag('config', ...)):
+gtag('consent', 'default', {
+  analytics_storage: 'denied',  // Vietnam PDPA: no tracking pre-consent
+  ad_storage: 'denied',
+  ad_user_data: 'denied',
+  ad_personalization: 'denied',
+  wait_for_update: 1500,  // Match banner SHOW_DELAY_MS — buffer events
+});
+
+// After user clicks Accept:
+gtag('consent', 'update', {
+  analytics_storage: 'granted',
+  ad_storage: 'granted',
+  ad_user_data: 'granted',
+  ad_personalization: 'granted',
+});
+```
+
+**localStorage schema:**
+```typescript
+const CONSENT_KEY = '5bib_consent_v1';
+const CONSENT_VERSION = 1;
+const CONSENT_TTL_DAYS = 365;
+
+interface ConsentRecord {
+  accepted: boolean;
+  timestamp: string;  // ISO 8601
+  version: number;    // Bump triggers re-prompt
+}
+```
+
+**Re-prompt conditions:**
+1. `parsed.version !== CONSENT_VERSION` (privacy policy update Phase 2 → bump version 2)
+2. `Date.now() - parsed.timestamp > CONSENT_TTL_MS` (365 days expired)
+3. localStorage missing/corrupted → re-prompt
+
+**Triple defense:**
+1. gtag default DENIED state (GA4 SDK blocks send)
+2. `wait_for_update` buffer (queue events while user decides)
+3. `useGAEvent` hook checks `hasConsent()` before emit (app-layer gate)
+
+---
+
+### 3. SPA pageview hybrid (Next.js App Router)
+
+**Problem:** Next.js App Router KHÔNG auto-fire `page_view` on client-side route change (history API push). GA4 Enhanced Measurement DOES fire `page_view` on history event but ONLY URL — no entity context.
+
+**Solution:** Hybrid approach:
+- Enable GA4 Enhanced Measurement → auto `page_view` events
+- Mount custom `<PageViewTracker />` Client Component → emit CONTEXT events with entity params
+
+```typescript
+'use client';
+export default function PageViewTracker() {
+  const pathname = usePathname();
+  const gaEvent = useGAEvent();
+
+  useEffect(() => {
+    // Route regex match → emit context event
+    const athleteMatch = pathname.match(
+      /^\/races\/([^/]+)\/(?!ranking|compare|components)([^/]+)$/
+    );
+    if (athleteMatch) {
+      gaEvent(EVENTS.VIEW_ATHLETE, {
+        race_slug: athleteMatch[1],
+        bib: athleteMatch[2],
+        from_route: 'direct',
+      });
+    }
+    // ... handle other patterns
+  }, [pathname]);
+
+  return null;
+}
+```
+
+**Key technique:** Negative lookahead `(?!ranking|compare|components)` excludes subroute names from bib position. Otherwise `/races/abc/ranking/xyz` would falsely match `view_athlete` with `bib='ranking'`.
+
+---
+
+### 4. Mount scope per route group (NOT root)
+
+**Lesson F-041:** Mounting analytics component in root `app/layout.tsx` causes conflict when sub-layouts have own tracker config.
+
+**Discovery:** 4 solution layouts already had own gtag/GTM (G-ND6VCY2B57 + GTM-WNJV5PD9 + GTM-PLR9LHLZ + GTM-TGL3KFCS). Root mount would:
+1. Double-fire `page_view` on solution pages (root + solution layouts both init gtag)
+2. Solution layouts bypass Consent Mode (call `gtag('config', ...)` immediately) → Vietnam PDPA violation on those routes
+3. Out of feature scope (Danny intent = "result.5bib.com" main user journey = `(main)/` route group)
+
+**Rule:** Khi FE feature chỉ apply cho subset routes:
+- Mount component trong route-group layout (`app/(main)/layout.tsx`)
+- AVOID root layout mount nếu có sub-layouts với config riêng
+
+**Discovery checklist before mounting tracking:**
+```bash
+grep -rn "gtag\|dataLayer" frontend/app/ --include="*.tsx" --include="*.ts"
+```
+
+Nếu tìm thấy existing gtag in sub-layouts → mount scope phải narrower hơn root.
+
+---
+
+**Reference:** F-041 deploy 2026-05-18 — 4 patterns minted from real bug avoidance during plan review (Manager Adjustment #1 + #2).

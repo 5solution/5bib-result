@@ -10,6 +10,8 @@ import LiveTimer from '@/components/LiveTimer';
 import { useRaceBySlug, useSponsors } from '@/lib/api-hooks';
 import { raceResultControllerGetRaceResults, raceResultControllerGetCourseStats } from '@/lib/api-generated';
 import { CourseMapSection } from './components/CourseMapSection';
+import { useGAEvent } from '@/lib/analytics/useGAEvent';
+import { EVENTS } from '@/lib/analytics/events';
 
 const GpxMap = dynamic(() => import('@/components/GpxMap'), { ssr: false });
 
@@ -136,6 +138,7 @@ export default function RaceDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
   const router = useRouter();
+  const gaEvent = useGAEvent();
 
   const { data: raceRaw, isLoading: loadingRace } = useRaceBySlug(slug);
   const [courseResults, setCourseResults] = useState<Record<string, RaceResult[]>>({});
@@ -411,6 +414,13 @@ export default function RaceDetailPage() {
               <Link
                 key={course.id}
                 href={`/races/${slug}/ranking/${course.id}`}
+                onClick={() =>
+                  gaEvent(EVENTS.SELECT_COURSE_TAB, {
+                    race_slug: slug,
+                    course_id: course.id,
+                    tab_index: ci,
+                  })
+                }
                 className={`group border border-slate-200 ${accent.border} border-b-4 rounded-lg overflow-hidden bg-white shadow-sm transition-all duration-300 hover:shadow-xl ${accent.bg} hover:-translate-y-0.5 cursor-pointer`}
               >
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_0.8fr]">

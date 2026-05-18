@@ -1,4 +1,13 @@
 {
+  "cookie": {
+    "consent": {
+      "message": "🍪 5BIB uses cookies to analyze traffic and improve your experience. Do you agree?",
+      "accept": "Accept",
+      "reject": "Reject",
+      "learn_more": "Learn more",
+      "aria_label": "Cookie consent"
+    }
+  },
   "common": {
     "loading": "Loading...",
     "error": "Error",

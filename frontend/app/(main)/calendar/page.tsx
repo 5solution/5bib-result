@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { Search, MapPin, Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useRaces } from '@/lib/api-hooks';
+import { useGAEvent } from '@/lib/analytics/useGAEvent';
+import { EVENTS } from '@/lib/analytics/events';
 
 const PAGE_SIZE = 9;
 
@@ -61,12 +63,33 @@ function CalendarContent() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
   const [page, setPage] = useState(1);
 
-  // Debounce search — avoid firing API on every keystroke
+  const gaEvent = useGAEvent();
+
+  // Debounce search — avoid firing API on every keystroke (also debounces GA event 800ms — BR-41-06)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearchChange = (val: string) => {
     setSearchQuery(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => { setDebouncedSearch(val); setPage(1); }, 400);
+    // F-041 BR-41-06: debounce 800ms — fire filter_calendar with date filter type
+    if (gaDebounceRef.current) clearTimeout(gaDebounceRef.current);
+    if (val.trim().length >= 2) {
+      gaDebounceRef.current = setTimeout(() => {
+        gaEvent(EVENTS.FILTER_CALENDAR, {
+          filter_type: 'location', // search field maps to location/title — use 'location' as proxy
+          filter_value: val.trim(),
+        });
+      }, 800);
+    }
+  };
+
+  const handleStatusChange = (next: StatusFilter) => {
+    setStatusFilter(next);
+    gaEvent(EVENTS.FILTER_CALENDAR, {
+      filter_type: 'status',
+      filter_value: next,
+    });
   };
 
   // Map UI status filter → API status value
@@ -195,7 +218,7 @@ function CalendarContent() {
               {statusTabs.map((tab) => (
                 <button
                   key={tab.key}
-                  onClick={() => setStatusFilter(tab.key)}
+                  onClick={() => handleStatusChange(tab.key)}
                   className={`px-4 py-2.5 rounded-full text-sm font-semibold transition-all ${statusFilter === tab.key
                     ? 'bg-white text-blue-700 shadow-lg'
                     : 'bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm'

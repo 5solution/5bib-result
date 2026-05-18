@@ -3,6 +3,8 @@
 import { useMemo } from 'react'
 import Image from 'next/image'
 import { useSponsors } from '@/lib/api-hooks'
+import { useGAEvent } from '@/lib/analytics/useGAEvent'
+import { EVENTS } from '@/lib/analytics/events'
 
 interface Sponsor {
   _id: string
@@ -21,6 +23,7 @@ const LOGO_SIZES: Record<Sponsor['level'], { width: number; height: number }> = 
 
 export default function SponsorSidebar() {
   const { data: sponsorsRaw } = useSponsors()
+  const gaEvent = useGAEvent()
 
   const sponsors = useMemo(() => {
     const list: Sponsor[] = (sponsorsRaw as any)?.data ?? sponsorsRaw ?? []
@@ -82,6 +85,13 @@ export default function SponsorSidebar() {
                 href={sponsor.website}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() =>
+                  gaEvent(EVENTS.SELECT_SPONSOR, {
+                    sponsor_name: sponsor.name,
+                    sponsor_id: sponsor._id,
+                    position: 'sidebar',
+                  })
+                }
               >
                 {logoBox}
               </a>

@@ -16,6 +16,8 @@ import {
   useLogShareEvent,
   ResultImageError,
 } from '@/lib/api-hooks/result-image';
+import { useGAEvent } from '@/lib/analytics/useGAEvent';
+import { EVENTS } from '@/lib/analytics/events';
 
 /**
  * Result Image Creator — Phase 2 modal.
@@ -72,6 +74,10 @@ export default function ResultImageCreator({
   raceName,
   onClose,
 }: Props) {
+  // F-041: derive race_slug from URL (PageViewTracker handles routing context)
+  const pathnameForGA = typeof window !== 'undefined' ? window.location.pathname : '';
+  const raceSlugFromUrl = pathnameForGA.match(/^\/races\/([^/]+)/)?.[1];
+  const gaEvent = useGAEvent();
   // ─── State ────────────────────────────────────────────────
   const [template, setTemplate] = useState<TemplateKey>('classic');
   const [gradient, setGradient] = useState<GradientKey>('blue');
@@ -359,6 +365,13 @@ export default function ResultImageCreator({
       }
       setGeneratedUrl(result.objectUrl);
       setLastFallback(result.templateFallback);
+      // F-041 generate_result_image conversion event.
+      gaEvent(EVENTS.GENERATE_RESULT_IMAGE, {
+        ...(raceSlugFromUrl ? { race_slug: raceSlugFromUrl } : {}),
+        bib: String(athlete.Bib),
+        preset_bg: gradient,
+        action_status: 'success',
+      });
       if (result.templateFallback) {
         toast.info('Đã sử dụng template Classic (Podium chỉ dành cho Top 3)');
       }
@@ -366,6 +379,12 @@ export default function ResultImageCreator({
     } catch (err) {
       // 'superseded' is an internal signal — not a real error, no toast needed.
       if ((err as { superseded?: boolean }).superseded) throw err;
+      gaEvent(EVENTS.GENERATE_RESULT_IMAGE, {
+        ...(raceSlugFromUrl ? { race_slug: raceSlugFromUrl } : {}),
+        bib: String(athlete.Bib),
+        preset_bg: gradient,
+        action_status: 'fail',
+      });
       if (err instanceof ResultImageError) {
         if (err.status === 429 || err.status === 503) {
           toast.error(`${err.message}${err.retryAfterSeconds ? ` (thử lại sau ${err.retryAfterSeconds}s)` : ''}`);
@@ -392,6 +411,12 @@ export default function ResultImageCreator({
       a.click();
       a.remove();
       toast.success('Đã tải ảnh');
+      // F-041 share_result_image conversion event with method=download.
+      gaEvent(EVENTS.SHARE_RESULT_IMAGE, {
+        ...(raceSlugFromUrl ? { race_slug: raceSlugFromUrl } : {}),
+        bib: String(athlete.Bib),
+        share_method: 'download',
+      });
       incrementShare.mutate('download');
       logShareEvent.mutate({
         raceId,
@@ -431,6 +456,12 @@ export default function ResultImageCreator({
           title: raceName ?? '5BIB Result',
           text: `${athlete.Name} · ${athlete.ChipTime}`,
         });
+        // F-041 share_result_image conversion event with method=native.
+        gaEvent(EVENTS.SHARE_RESULT_IMAGE, {
+          ...(raceSlugFromUrl ? { race_slug: raceSlugFromUrl } : {}),
+          bib: String(athlete.Bib),
+          share_method: 'native',
+        });
         incrementShare.mutate('native-share');
         logShareEvent.mutate({
           raceId,
@@ -450,6 +481,12 @@ export default function ResultImageCreator({
         // Give the browser 30s to load the blob before revoking.
         setTimeout(() => URL.revokeObjectURL(shareUrl), 30_000);
         toast.info('Nhấn giữ ảnh để lưu về máy');
+        // F-041 share_result_image conversion event with method=copy_link.
+        gaEvent(EVENTS.SHARE_RESULT_IMAGE, {
+          ...(raceSlugFromUrl ? { race_slug: raceSlugFromUrl } : {}),
+          bib: String(athlete.Bib),
+          share_method: 'copy_link',
+        });
         incrementShare.mutate('fallback-share');
         logShareEvent.mutate({
           raceId,

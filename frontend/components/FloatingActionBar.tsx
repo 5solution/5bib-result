@@ -14,7 +14,10 @@
  */
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { BarChart3, ImageDown, Award, Link2, Check } from 'lucide-react';
+import { useGAEvent } from '@/lib/analytics/useGAEvent';
+import { EVENTS } from '@/lib/analytics/events';
 
 interface Props {
   bib: string | number;
@@ -42,6 +45,19 @@ export function FloatingActionBar({
   linkCopied,
 }: Props) {
   const [visible, setVisible] = useState(false);
+  const pathname = usePathname();
+  const gaEvent = useGAEvent();
+
+  // F-041 BR-41-21: emit `click_floating_action` with action_type, race_slug, bib.
+  const raceSlugMatch = pathname?.match(/^\/races\/([^/]+)/);
+  const raceSlug = raceSlugMatch?.[1];
+  const emitFabClick = (actionType: 'back_to_top' | 'share' | 'scroll_splits') => {
+    gaEvent(EVENTS.CLICK_FLOATING_ACTION, {
+      action_type: actionType,
+      ...(raceSlug ? { race_slug: raceSlug } : {}),
+      ...(bib ? { bib: String(bib) } : {}),
+    });
+  };
 
   useEffect(() => {
     let ticking = false;
@@ -106,6 +122,7 @@ export function FloatingActionBar({
         {/* Actions — always visible on all screen sizes */}
         <a
           href={rankingHref}
+          onClick={() => emitFabClick('back_to_top')}
           className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold transition hover:bg-white/20"
         >
           <BarChart3 className="h-3.5 w-3.5" />
@@ -114,7 +131,7 @@ export function FloatingActionBar({
         {onResultImage && (
           <button
             type="button"
-            onClick={onResultImage}
+            onClick={() => { emitFabClick('scroll_splits'); onResultImage(); }}
             className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold transition hover:bg-white/20"
           >
             <ImageDown className="h-3.5 w-3.5" />
@@ -123,7 +140,7 @@ export function FloatingActionBar({
         )}
         <button
           type="button"
-          onClick={onShare}
+          onClick={() => { emitFabClick('share'); onShare(); }}
           className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold transition hover:bg-white/20"
         >
           {/* Facebook icon */}

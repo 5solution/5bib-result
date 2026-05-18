@@ -406,6 +406,16 @@ frontend/app/
 - `frontend/app/api/[...proxy]/route.ts` — runtime proxy
 - `frontend/app/globals.css` — ⭐ "Velocity" design system (Athletic Editorial theme)
 - Service worker: `frontend/app/sw.ts`
+- `frontend/lib/analytics/` — ⭐ **FEATURE-041 NEW** (4 files, GA4 + Vietnam PDPA):
+  - `events.ts` — 24 events SSOT const + 24 EventParamKey union + 8 PIIParamKey compile reject + 12-key runtime blacklist sanitizer
+  - `consent-manager.ts` — `loadConsent`/`saveConsent`/`clearConsent`/`hasConsent`/`updateGtagConsent`/`emitGtagEvent`. localStorage key `5bib_consent_v1` JSON `{accepted, timestamp, version: 1}` TTL 365 days
+  - `useGAEvent.ts` — React hook + non-hook `gaEvent()` variant với consent gate + runtime sanitize
+  - `page-view-tracker.tsx` — `<PageViewTracker />` Client Component listen `usePathname()` emit CONTEXT events (view_race/view_athlete/view_ranking/view_hub/view_race_calendar/view_race_directory) với entity params
+- `frontend/components/CookieConsentBanner.tsx` — ⭐ FEATURE-041 NEW. Vietnam PDPA Decree 13/2023/NĐ-CP banner. Bottom-fixed, 1500ms delay, i18n keys, 3 buttons (Đồng ý/Từ chối/Tìm hiểu thêm)
+- `frontend/components/analytics/google-analytics.tsx` — Extended F-041 với Consent Mode v2 default `denied` block + `wait_for_update: 1500` matches CookieConsentBanner + `anonymize_ip: true`
+- `frontend/.env.production` — ⭐ FEATURE-041 NEW. Build-time `NEXT_PUBLIC_GA_ID=G-PNVB69YRL2`
+- `frontend/e2e/ga4-consent-flow.spec.ts` — ⭐ FEATURE-041 NEW. 17 Playwright specs (15 functional + 2 stability 10x). Ready-to-run once `@playwright/test` installed
+- `frontend/app/(main)/layout.tsx` — Mount `<GoogleAnalytics />` + `<PageViewTracker />` + `<CookieConsentBanner />` (Manager Adjustment #1: route-group ONLY, NOT root — avoid solution layouts conflict)
 - `frontend/components/hub/` — ⭐ FEATURE-027 NEW (21 files):
   - `PromoHubRenderer.tsx` — Server Component dispatcher, switch over 19 section.type cases (forward-compat unknown → null silent skip)
   - `PromoHubTracker.tsx` — Client Component, useEffect fires view event on mount + attaches document-level capture-phase click listener for `[data-promo-cta]` data-attr delegation. Uses `keepalive: true` fetch.
