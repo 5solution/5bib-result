@@ -7,6 +7,71 @@
 
 ---
 
+## [2026-05-18] FEATURE-037 V2: On-Sale Race Detail Page (Promo Hub SEO Internal)
+
+**Branch:** worktree `condescending-dewdney-757430`, branch `feat/F-037-on-sale-race-detail-page` — NOT YET pushed
+**Commits:** pending Danny approve push (local only)
+**Type:** EXTEND_EXISTING (F-027/F-033/F-036 Promo Hub on-sale phase)
+**Number collision note:** F-037 reused — V1 = DOCX colspan widths deployed 2026-05-15 release/v1.8.1, V2 = this feature. Same as F-036 collision precedent. Both kept in feature-log distinguished by "(V2 *)" label. Hardening note: /5bib-init should bump counter immediately on init.
+**Linked:** `.5bib-workflow/features/FEATURE-037-on-sale-race-detail-page/{00,01,02,03,04,05}.md`
+
+### Why this feature
+TD-F036-09 HIGH "on-sale races link external direct → missing SEO juice" — F-033 ship được 17 on-sale races vào homepage carousel + race-calendar section nhưng card click external → `5bib.com/vi/events/<slug>_<raceId>` thay vì internal SEO detail page. SEO miss: external destination KHÔNG có Velocity design + race description rich content + breadcrumb + JSON-LD. F-037 V2 creates internal `/giai-chay/[urlName]` SEO detail page render rich content từ MySQL platform + CTA "Đăng ký ngay" to selling-web với UTM tracking. Pipeline: discovery (SEO) → conversion (selling-web).
+
+### Files changed (13 Scope: 9 BE + 4 FE)
+
+**Backend (9):**
+- ➕ `backend/src/modules/promo-hub/entities/on-sale-course-readonly.entity.ts` — 16 cols mapping table `race_course` (id, raceId FK, prefix, name, distance, description, price, maxParticipate, min/max_age, open/closeForSaleDateTime, routeImageUrl, routeMapImageUrl, medalUrl, courseType, gain, deleted Buffer). Renamed from initial `race-course-readonly.entity.ts` / class `RaceCourseReadonly` to avoid TS identifier collision with existing race-master-data/RaceCourseReadonly 3-col entity. TypeORM supports multi-entity-per-table via different class names. `@Entity({ name: 'race_course' })` + `export class OnSaleCourseReadonly`.
+- ✏️ `backend/src/modules/promo-hub/entities/race-readonly.entity.ts` — extended +8 cols (description, images, eventType, raceType, district, season, locationUrl, province) for detail rendering. Existing 12 cols from F-033 preserved.
+- ➕ `backend/src/modules/promo-hub/dto/race-on-sale-detail.dto.ts` — `RaceCourseDto` (17 fields) + `RaceOnSaleDetailDto` (22 fields). All `@ApiProperty`/`@ApiPropertyOptional` decorators complete. `sellingWebUrl` pre-built per BR-37-09. `source: 'on-sale'` literal marker.
+- ✏️ `backend/src/modules/promo-hub/promo-hub.service.ts` — added 4 static constants (SELLING_WEB_BASE_URL, SELLING_WEB_UTM_PARAMS, RACE_DETAIL_CACHE_PREFIX, RACE_DETAIL_CACHE_TTL=600s) + `findRaceOnSaleByUrlName(urlName)` method (~70 lines, OR `url_name=:urlName OR race_id=:raceId`, `^\d+$` numeric regex safe parse, parameterized TypeORM, bit field CAST pattern, Redis cache try/catch graceful) + `toRaceOnSaleDetailDto()` + `toRaceCourseDto()` helpers
+- ✏️ `backend/src/modules/promo-hub/promo-hub.controller.ts` — added `@Get('races-on-sale/by-url-name/:urlName')` endpoint (public no auth, same F-033 pattern, NotFoundException 404 with VN message, route literal BEFORE catch-all `:id`)
+- ✏️ `backend/src/modules/promo-hub/promo-hub.module.ts` — register `OnSaleCourseReadonly` in `forFeature([..., OnSaleCourseReadonly], 'platform')` (raceReadonlyRepo @Optional + raceCourseRepo @Optional injection pattern from F-033)
+- ✏️ `backend/src/modules/app.module.ts` — register `OnSaleCourseReadonly` in `forRoot({entities: [..., OnSaleCourseReadonly]})` 'platform' DataSource — F-033 CRITICAL lesson (forFeature alone insufficient → "No metadata found" runtime)
+- ✏️ `backend/src/modules/promo-hub/promo-hub.service.spec.ts` — appended 10 TC-37-XX tests. All PASS.
+- ✏️ `backend/src/modules/promo-hub/promo-hub.controller.spec.ts` — added integration tests for new endpoint
+
+**Frontend (4):**
+- ✏️ `frontend/lib/seo-api.ts` — REWRITE `getRaceBySlug()` dual-source resolution: Step 1 MongoDB-first → if hit + status !== 'draft' → return with `source: 'mongodb'`; Step 2 MySQL fallback `getRaceOnSaleByUrlName()` → return with `source: 'on-sale'`; Step 3 null cascade → Next.js notFound() prevents flicker during race transition BÁN VÉ→VẬN HÀNH. Added `ApiOnSaleCourseDto` + `ApiOnSaleDetailDto` types + `mapOnSaleDetailToRace()` helper.
+- ✏️ `frontend/components/giai-chay/RaceCard.tsx` — REVERT: removed `buildSellingWebUrl` import + removed on-sale external `<a href>` branch + all sources now link internal `<Link href="/giai-chay/${slug}">`. F-036 listing regression risk verified intact via live localhost preview: 73 cards listing, 17 on-sale internal links, 0 forms.
+- ✏️ `frontend/components/giai-chay/RaceCTA.tsx` — added BR-37-11 `regClosed` conditional render: disabled visual `bg-stone-300 cursor-not-allowed` "Đã hết hạn đăng ký" when registrationEndTime < Date.now(). Still external `<a>` to selling-web (some races allow late buy).
+- ✏️ `frontend/app/sitemap-races.xml/route.ts` — REMOVED `if (race.source === 'on-sale') continue;` skip filter. Added `isOnSale` flag + priority 0.9 for active types (matches MongoDB pre_race/live per BR-37-12). Results URL `/ket-qua` still skip for on-sale (no /ket-qua page).
+
+### Key design decisions
+
+1. **OnSaleCourseReadonly naming variant** — Plan originally specced `RaceCourseReadonly` class. During Coder phase, TS compiler caught duplicate identifier with existing `race-master-data/RaceCourseReadonly` (3-col kiosk entity). Renamed F-037 class to `OnSaleCourseReadonly` (same table `race_course`, different TypeScript identifier). Documented in file header. Manager verified TypeORM multi-entity-per-table convention. NOT scope creep, documented variant.
+2. **Dual-source MongoDB precedence** — When race transitions BÁN VÉ → VẬN HÀNH, 5BIB ops admin creates MongoDB `races` doc. `getRaceBySlug()` next ISR tick (~1h) automatically picks MongoDB version. Prevents flicker (BR-37-07). Source marker `'mongodb' | 'on-sale'` enables future UI conditional rendering.
+3. **TTL-only invalidation** — Cache key `promo-hub:race-on-sale-detail:<urlName>` TTL 600s + ISR 3600s. NO mutation site (read-only MySQL platform external-controlled). Max 1h staleness acceptable per race lifecycle. F-036 admin/seo trigger does NOT invalidate F-037 cache (different namespace) — tracked TD-F037-02 LOW.
+4. **Selling-web URL with UTM tracking (BR-12)** — Format: `5bib.com/vi/events/{slug}_{raceId}?ref=seo-giai-chay&utm_source=5bib&utm_medium=organic&utm_campaign=race-detail`. Built server-side with `encodeURIComponent` defense. Anti-pattern enforcement: ZERO `<form>` mua vé, ZERO `<button onClick>` purchase.
+5. **Bit field CAST pattern** — MySQL `bit(1)` fields (`is_delete`, `is_show`, `race_course.deleted`) typed as `Buffer` in TypeORM but filter via `CAST(col AS UNSIGNED) = 0/1` in QueryBuilder. Reuse F-033 pattern.
+
+### Tests
+- 10 new TC-37-XX backend unit tests PASS (Coder-written, QC re-verified)
+- 25 F-027/F-033 regression PASS
+- Total: 35/35 PASS
+- TypeScript `pnpm tsc --noEmit` exit 0 both backend + frontend
+- F-036 listing regression verified intact via live localhost preview
+
+### QC verdict
+✅ APPROVED WITH CAVEATS — 6 phases pass, 0 CRITICAL/HIGH security threats (10 vectors reviewed), 2 MEDIUM deferred (T2 XSS sanitization frontend-side, T9 perf SLA measure post-deploy).
+
+### Manager Code Review (skill MANDATE 2026-05-17)
+5 critical files spot-checked: promo-hub.service.ts (lines 730-810), promo-hub.controller.ts (lines 94-128), on-sale-course-readonly.entity.ts, seo-api.ts (lines 318-355), RaceCard.tsx (lines 105-128). 3 minor concerns tracked, 0 red flags. Independent grep verify SQL injection clean (0 `${...}` matches in QueryBuilder strings).
+
+### TD remaining (11 items)
+- 6 Coder flags: TD-F037-01..06 (1 MED live verify deferred + 5 LOW)
+- 5 QC additions: TD-F037-QC-01..05 (1 MED frontend XSS verify + 4 LOW)
+- **TD-F036-09 ✅ RESOLVED** by this feature
+
+### Patterns minted
+1. **Dual-source race resolution** — MongoDB precedence over MySQL fallback for race transition handling. Reusable for any future feature with overlapping data sources.
+2. **Multi-entity-per-table TypeORM** — when 2 modules need different col subsets from same table, name TypeScript classes differently (RaceCourseReadonly vs OnSaleCourseReadonly), same `@Entity({ name: 'race_course' })`. TypeORM supports multi-entity-per-table.
+
+### Post-deploy chain
+NOT YET pushed to remote. Danny next: push `feat/F-037-on-sale-race-detail-page` → PR main → CI auto-deploy DEV → cherry-pick `release/v1.8.8` → CI auto-deploy PROD → 6-item curl checklist (endpoint live + page render + CTA href + sitemap + XSS defensive + p95 measure).
+
+---
+
 ## [2026-05-16] FEATURE-038: Finance Contracts List with P&L Per Row
 
 **Branch:** worktree `funny-kirch-90e777` off `release/v1.8.1` — NOT YET pushed

@@ -641,3 +641,37 @@ For ANY cross-app/cross-domain rewrite or proxy proposal, MUST verify upstream a
 - [ ] CSS/font/image references absolute (or in same path-scope)
 
 **Re-usable for:** any future cross-app integration (5sport.vn → 5bib.com, 5pix.com → 5bib.com, etc.)
+
+---
+
+## F-037 V2 (on-sale-race-detail-page) — Tech Debt + Resolved (2026-05-18)
+
+### ✅ RESOLVED in F-037 V2
+
+| ID | Status | Note |
+|----|--------|------|
+| **TD-F036-09** | ✅ RESOLVED 2026-05-18 | "On-sale races link external direct → missing SEO juice" — resolved by F-037 V2 creating internal SEO detail page `/giai-chay/[urlName]` with rich race content + courses + CTA to selling-web. Verified live preview: 17 on-sale cards now link internal `<Link>`, F-036 listing regression intact. |
+
+### 🟡 NEW tracked from F-037 V2
+
+| ID | Risk | Module | Item | Note |
+|----|------|--------|------|------|
+| TD-F037-01 | MED | backend/promo-hub | Backend NOT YET deployed DEV/PROD — endpoint code complete but live verify requires release/v1.8.8 push | Manager post-deploy 6-item curl checklist |
+| TD-F037-02 | LOW | backend/promo-hub cache | F-036 admin/seo trigger không invalidate F-037 cache tag (different namespace `promo-hub:race-on-sale-detail:`) — max 1h delay race admin update → user sees | Acceptable per BR-37-19 TTL-only design + race lifecycle external-controlled |
+| TD-F037-03 | LOW | backend/promo-hub entity | `wave` + `add_ons` cols of `race_course` deferred (operational, not SEO) | Future feature can extend `OnSaleCourseReadonly` |
+| TD-F037-04 | LOW | frontend/giai-chay | `CourseCard.tsx` component deferred (inline grid sufficient) | Phase 2 UX polish |
+| TD-F037-05 | LOW | frontend/giai-chay | `RouteImageLightbox.tsx` deferred — route_image_url + route_map_image_url not lightbox-clickable | Phase 2 UX polish |
+| TD-F037-06 | LOW | frontend/giai-chay | No conditional layout for on-sale vs MongoDB sources (uniform render) | Acceptable — same `Race` shape after dual-source map |
+| **TD-F037-QC-01** | MED | frontend/giai-chay XSS | HTML XSS sanitization for `race.description` — backend returns raw HTML, frontend MUST sanitize on render. Verify post-deploy with curl + DOM inspection. Reuse F-027 hub `sanitize-html` pattern if missing | Manager post-deploy verify required |
+| TD-F037-QC-02 | LOW | backend/promo-hub | Backend E2E Supertest tests deferred — local MongoDB+Redis setup not configured. Live curl verification post-deploy | Pre-existing F-027 convention |
+| TD-F037-QC-03 | LOW | frontend/giai-chay | Frontend Playwright tests deferred — frontend has no Playwright infra (F-036 precedent) | Pre-existing convention, no test runner installed |
+| TD-F037-QC-04 | LOW | backend/promo-hub perf | Performance SLA BR-37-21,22 (p95 < 500ms cold / <100ms warm) measure deferred until PROD deploy | k6/autocannon measure post-deploy |
+| TD-F037-QC-05 | LOW | qc/persona walkthrough | Persona walkthrough Phase 6 UI scrutiny code-level only — live render verification requires backend deploy | Manager + Danny walk through 5 personas on `result-fe-dev.5bib.com` post-deploy |
+
+### 🔧 Workflow hardening from F-037 V2
+
+| ID | Risk | Item |
+|----|------|------|
+| **TD-MAN-NUMBER-COLLISION** | LOW workflow | F-037 number REUSED — V1 = DOCX colspan widths 2026-05-15, V2 = on-sale-race-detail-page 2026-05-18. Same as F-036 collision precedent. Both kept in log distinguished by "(V2 *)" label. **Hardening:** `/5bib-init` skill should bump counter immediately on init (not at deploy) + grep existing folder names before assigning. |
+
+

@@ -381,6 +381,64 @@ Prevents 100 concurrent cold-cache requests from hitting Mongo.
 
 ---
 
+### FEATURE-037 V2 — Dual-source race resolution (Promo Hub on-sale phase, 2026-05-18)
+
+> Resolves TD-F036-09. Internal SEO detail page `/giai-chay/[urlName]` for ~17 on-sale races (MySQL platform `5bib_platform_live`).
+
+```
+[GET /giai-chay/<slug>] → frontend SSR getRaceBySlug(slug)
+   │
+   ├─[Step 1: MongoDB first]──▶ GET BACKEND_URL/api/races/slug/<slug>
+   │                                │
+   │                                ├─[hit + status!='draft']──▶ Return {...race, source:'mongodb'}
+   │                                ├─[hit + status='draft']───▶ fall through
+   │                                └─[miss/404]────────────────▶ fall through
+   │
+   ├─[Step 2: MySQL on-sale fallback]──▶ GET BACKEND_URL/api/promo-hubs/races-on-sale/by-url-name/<slug>
+   │                                          │
+   │                                          ├─[Redis HIT promo-hub:race-on-sale-detail:<urlName> 600s]──▶ Return cached JSON
+   │                                          └─[Redis MISS]
+   │                                                │
+   │                                                ├─▶ MySQL QueryBuilder
+   │                                                │   WHERE status=GENERATED_CODE
+   │                                                │   AND CAST(is_delete AS UNSIGNED)=0
+   │                                                │   AND CAST(is_show AS UNSIGNED)=1
+   │                                                │   AND (url_name=:urlName OR race_id=:raceId)
+   │                                                │   LIMIT 1
+   │                                                │
+   │                                                ├─▶ MySQL QueryBuilder courses
+   │                                                │   WHERE race_id=:raceId
+   │                                                │   AND CAST(deleted AS UNSIGNED)=0
+   │                                                │
+   │                                                ├─▶ toRaceOnSaleDetailDto(race, courses) — build sellingWebUrl + UTM
+   │                                                ├─▶ Redis SETEX promo-hub:race-on-sale-detail:<urlName> 600 <json>
+   │                                                └─▶ Return DTO {..., source:'on-sale'}
+   │
+   └─[Step 3: both miss]──▶ return null → Next.js notFound()
+
+PREVENTS FLICKER: When race transitions BÁN VÉ→VẬN HÀNH, ops admin creates MongoDB races doc.
+Next ISR tick (~1h max), MongoDB-first wins → seamless transition.
+
+CACHE TTL ONLY: No mutation site (MySQL external-controlled). Max 1h staleness acceptable per
+race lifecycle. F-036 admin/seo cache flush does NOT invalidate F-037 namespace (different prefix).
+
+SECURITY:
+  - Parameterized TypeORM (zero raw interpolation)
+  - Numeric regex /^\d+$/.test(urlName) safe parse before raceId IN clause
+  - encodeURIComponent on slug param (XSS via URL defense)
+  - Bit field CAST(... AS UNSIGNED) pattern (F-033 reuse)
+  - DTO grep-verified zero internal field leak (no tenantId/isDelete/isShow/createdById/templateId)
+```
+
+**Entity naming collision resolution (TypeORM multi-entity-per-table):**
+- `race_course` table has TWO TypeORM entity classes:
+  - `RaceCourseReadonly` (race-master-data module, 3 cols kiosk usage, pre-existing)
+  - `OnSaleCourseReadonly` (promo-hub module, 16 cols F-037 V2 SEO detail rendering)
+- Same `@Entity({ name: 'race_course' })` annotation, different TypeScript class names.
+- Both registered in BOTH `forFeature` AND `forRoot({entities:[]})` per F-033 lesson.
+
+---
+
 ## ⚡ Performance Critical Paths + Redis Keys Registry
 
 > **Source of truth:** CLAUDE.md "Redis Keys Registry"
