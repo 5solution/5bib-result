@@ -11,7 +11,6 @@
 
 import Link from "next/link";
 import type { Race } from "@/lib/seo-api";
-import { buildSellingWebUrl } from "@/lib/selling-web-url";
 
 const STATUS_BADGE = {
   pre_race: { label: "Sắp diễn ra", cls: "bg-blue-100 text-blue-700" },
@@ -112,22 +111,10 @@ export function RaceCard({ race }: { race: Race }) {
     ? ON_SALE_BADGE
     : (STATUS_BADGE[race.status] ?? STATUS_BADGE.pre_race);
 
-  // On-sale race: card → direct external selling-web link (BR-12)
-  if (isOnSale) {
-    const url = buildSellingWebUrl(slug || null, race.id);
-    return (
-      <a
-        href={url}
-        target="_self"
-        rel="noopener"
-        className="group block overflow-hidden rounded-xl border border-stone-200 bg-white transition-shadow hover:shadow-lg"
-      >
-        <CardInner race={race} badge={badge} bg={bg} distances={distances} />
-      </a>
-    );
-  }
-
-  // MongoDB race: skip if no slug (BR-29 — listing shouldn't show slugless)
+  // F-037: BOTH sources giờ link internal `/giai-chay/[slug]` — on-sale có
+  // internal SEO detail page rồi (resolved TD-F036-09). User click → page
+  // render rich content → CTA "Đăng ký ngay" trên page đó link external
+  // selling-web. Pipeline: discovery (SEO) → conversion (selling-web).
   if (!slug) return null;
 
   return (

@@ -56,6 +56,8 @@ import { PromoHubAnalyticsModule } from './promo-hub-analytics/promo-hub-analyti
 import { OrderReadonly } from './finance/entities/order-readonly.entity';
 // FEATURE-033 — Promo Hub race calendar phase BÁN VÉ
 import { RaceReadonly } from './promo-hub/entities/race-readonly.entity';
+// FEATURE-037 — On-sale race detail page (race_course JOIN cho SEO detail)
+import { OnSaleCourseReadonly } from './promo-hub/entities/on-sale-course-readonly.entity';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
 import { VolRegistration } from './team-management/entities/vol-registration.entity';
@@ -101,6 +103,8 @@ const platformDbModules = env.platformDb.host
           OrderReadonly,
           // F-033 Promo Hub — race-on-sale phase fetch
           RaceReadonly,
+          // F-037 On-sale race detail — JOIN race_course cho SEO detail page
+          OnSaleCourseReadonly,
         ],
         synchronize: false, // KHÔNG auto-sync — DB là readonly
         logging: env.env === 'local' || env.env === 'development',

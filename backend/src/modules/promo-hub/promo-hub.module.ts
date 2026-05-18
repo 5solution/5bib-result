@@ -6,6 +6,7 @@ import { PromoHub, PromoHubSchema } from './schemas/promo-hub.schema';
 import { PromoHubController } from './promo-hub.controller';
 import { PromoHubService } from './promo-hub.service';
 import { RaceReadonly } from './entities/race-readonly.entity';
+import { OnSaleCourseReadonly } from './entities/on-sale-course-readonly.entity';
 
 /**
  * FEATURE-027 — PromoHubModule.
@@ -23,7 +24,7 @@ import { RaceReadonly } from './entities/race-readonly.entity';
   imports: [
     MongooseModule.forFeature([{ name: PromoHub.name, schema: PromoHubSchema }]),
     // FEATURE-033 — Named connection 'platform' cho MySQL races read-only.
-    TypeOrmModule.forFeature([RaceReadonly], 'platform'),
+    TypeOrmModule.forFeature([RaceReadonly, OnSaleCourseReadonly], 'platform'),
     LogtoAuthModule,
   ],
   controllers: [PromoHubController],

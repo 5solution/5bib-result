@@ -24,13 +24,21 @@ export function RaceCTA({ race }: { race: Race }) {
   const isLive = race.status === "live";
   const isEnded = race.status === "ended";
 
-  // On-sale source: pre-built ticketUrl from F-033 OR build via helper
+  // F-037 BR-37-11: on-sale race với registration closed → disabled visual
+  // (still link external — some races allow late buy)
+  const isOnSale = race.source === "on-sale";
+  const regClosed =
+    isOnSale &&
+    race.registrationEndTime != null &&
+    new Date(race.registrationEndTime).getTime() < Date.now();
+
+  // On-sale source: pre-built ticketUrl from backend OR build via helper
   const sellingUrl = race.ticketUrl ?? buildSellingWebUrl(slug || null, raceId);
   const resultPageUrl = slug ? getResultPageUrl(slug) : null;
 
   return (
     <div className="flex flex-wrap gap-3">
-      {isActive && raceId && (
+      {isActive && raceId && !regClosed && (
         <a
           href={sellingUrl}
           target="_self"
@@ -38,6 +46,17 @@ export function RaceCTA({ race }: { race: Race }) {
           className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
         >
           Đăng ký ngay →
+        </a>
+      )}
+      {regClosed && (
+        <a
+          href={sellingUrl}
+          target="_self"
+          rel="noopener"
+          title="Đã quá hạn đăng ký — liên hệ BTC nếu vẫn muốn mua vé"
+          className="inline-flex items-center gap-2 rounded-lg bg-stone-300 px-6 py-3 text-base font-semibold text-stone-600 shadow-sm cursor-not-allowed"
+        >
+          Đã hết hạn đăng ký
         </a>
       )}
       {isLive && resultPageUrl && (

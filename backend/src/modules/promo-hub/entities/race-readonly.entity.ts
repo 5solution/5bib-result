@@ -55,4 +55,31 @@ export class RaceReadonly {
 
   @Column({ name: 'tenant_id', type: 'bigint', nullable: true })
   tenantId: string | null;
+
+  // ─── FEATURE-037 — Extension cho on-sale race detail page ───
+  // Manager 2026-05-18 verified SELECT grant cho 7 cols dưới + JOIN race_course
+
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  images: string | null;
+
+  @Column({ name: 'event_type', type: 'varchar', length: 255, nullable: true })
+  eventType: string | null;
+
+  @Column({ name: 'race_type', type: 'varchar', length: 64, nullable: true })
+  raceType: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  district: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  season: string | null;
+
+  @Column({ name: 'location_url', type: 'text', nullable: true })
+  locationUrl: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  province: string | null;
 }
