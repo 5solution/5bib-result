@@ -126,10 +126,47 @@ export class ReconciliationService {
     const tenant = await this.queryService.getTenant(dto.tenant_id);
     const config = await this.configModel.findOne({ tenantId: dto.tenant_id });
 
-    // DTO values take priority; fall back to merchant config
-    const feeRate = dto.fee_rate_applied ?? config?.service_fee_rate ?? null;
-    const manualFeePerTicket = dto.manual_fee_per_ticket ?? config?.manual_fee_per_ticket ?? 5000;
-    const feeVatRate = dto.fee_vat_rate ?? config?.fee_vat_rate ?? 0;
+    // F-043 BR-43-05/16 — Cascade resolution với feeSource attribution.
+    // DTO values (admin preview override) ABSOLUTE priority.
+    // Else: event_fee_overrides[raceId] + effective_from <= period_start → TIER 0
+    // Else: MerchantConfig.service_fee_rate → TIER 1 merchant_default
+    // Else: null (preview KHÔNG auto-fallback 5.5% — UI hiển thị "chưa cấu hình")
+    const override = config?.event_fee_overrides?.find(
+      (o) =>
+        o.raceId === dto.mysql_race_id &&
+        o.effective_from <= dto.period_start,
+    );
+
+    let feeRate: number | null;
+    let feeSource:
+      | 'admin_preview_override'
+      | 'event_override'
+      | 'merchant_default'
+      | 'unconfigured';
+    if (dto.fee_rate_applied != null) {
+      feeRate = dto.fee_rate_applied;
+      feeSource = 'admin_preview_override';
+    } else if (override?.service_fee_rate != null) {
+      feeRate = Number(override.service_fee_rate);
+      feeSource = 'event_override';
+    } else if (config?.service_fee_rate != null) {
+      feeRate = Number(config.service_fee_rate);
+      feeSource = 'merchant_default';
+    } else {
+      feeRate = null;
+      feeSource = 'unconfigured';
+    }
+
+    const manualFeePerTicket =
+      dto.manual_fee_per_ticket ??
+      override?.manual_fee_per_ticket ??
+      config?.manual_fee_per_ticket ??
+      5000;
+    const feeVatRate =
+      dto.fee_vat_rate ??
+      override?.fee_vat_rate ??
+      config?.fee_vat_rate ??
+      0;
 
     const { fiveBibOrders, manualOrders, missingPaymentRef } =
       await this.queryService.queryOrders(
@@ -156,6 +193,16 @@ export class ReconciliationService {
       fee_rate_applied: feeRate,
       manual_fee_per_ticket: manualFeePerTicket,
       fee_vat_rate: feeVatRate,
+      // F-043 BR-43-16 — Nguồn fee rate (admin UI dùng để render badge)
+      fee_source: feeSource,
+      // F-043 — Override metadata nếu fee_source = 'event_override' (UI tooltip)
+      event_override_meta:
+        feeSource === 'event_override' && override
+          ? {
+              effective_from: override.effective_from,
+              note: override.note,
+            }
+          : null,
       ...summary,
       line_items: lineItems,
       manual_orders: manualOrderRows,

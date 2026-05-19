@@ -6,6 +6,56 @@ export type MerchantConfigDocument = MerchantConfig & Document;
 export type ContractStatus = 'pending' | 'active' | 'suspended' | 'terminated';
 
 /**
+ * F-043: Event-level fee override sub-document.
+ *
+ * Cho phép merchant có mức phí khác nhau cho từng sự kiện (raceId từ MySQL
+ * platform). Mỗi field rate/manual/vat NULL = fallback merchant default.
+ *
+ * Lookup priority trong `fee.service.computeSelfFee()` (BR-43-05):
+ *   1. event_fee_overrides[raceId] AND effective_from <= periodFrom (TIER 0)
+ *   2. MerchantConfig.<field> (TIER 1 — merchant default)
+ *   3. contract.revenueShare.feePercentage (TIER 2 — chỉ cho service_fee_rate)
+ *   4. hardcoded default 5.5% / 5000 VNĐ / 0% (TIER 3)
+ *
+ * Per-tenant per-raceId là unique constraint (BR-43-04).
+ */
+@Schema({ _id: false, timestamps: true })
+export class EventFeeOverride {
+  /** MySQL platform race.id — phải tồn tại trong `races` table */
+  @Prop({ type: Number, required: true })
+  raceId: number;
+
+  /** % phí dịch vụ — null = dùng merchant.service_fee_rate */
+  @Prop({ type: Number, default: null })
+  service_fee_rate: number | null;
+
+  /** Phí cố định VNĐ/vé cho MANUAL — null = dùng merchant.manual_fee_per_ticket */
+  @Prop({ type: Number, default: null })
+  manual_fee_per_ticket: number | null;
+
+  /** % VAT trên fee — null = dùng merchant.fee_vat_rate */
+  @Prop({ type: Number, default: null })
+  fee_vat_rate: number | null;
+
+  /** Ngày bắt đầu áp dụng (YYYY-MM-DD) — required cho versioning per BR-43-07 */
+  @Prop({ type: String, required: true })
+  effective_from: string;
+
+  /** Ghi chú admin */
+  @Prop({ type: String, default: null })
+  note: string | null;
+
+  /** ID admin tạo override */
+  @Prop({ type: Number, default: null })
+  createdBy: number | null;
+
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export const EventFeeOverrideSchema = SchemaFactory.createForClass(EventFeeOverride);
+
+/**
  * Config mở rộng của merchant — lưu trong MongoDB của 5bib-result.
  * Keyed bằng tenantId từ MySQL 5bib_platform_live.tenant.id
  */
@@ -96,6 +146,23 @@ export class MerchantConfig {
   /** Ghi chú admin */
   @Prop({ type: String, default: null })
   admin_note: string | null;
+
+  // ── F-043: Event-level fee overrides ────────────────────
+  /**
+   * Array of fee overrides per race event. Empty default — existing 58
+   * configs lazy default `[]` (no migration needed per BR-43-02).
+   *
+   * Lookup priority documented in `EventFeeOverride` schema docstring.
+   */
+  @Prop({ type: [EventFeeOverrideSchema], default: [] })
+  event_fee_overrides: EventFeeOverride[];
 }
 
 export const MerchantConfigSchema = SchemaFactory.createForClass(MerchantConfig);
+
+// F-043 BR-43-03 — Compound index cho fast event override lookup
+// theo (tenantId, event_fee_overrides.raceId)
+MerchantConfigSchema.index({
+  tenantId: 1,
+  'event_fee_overrides.raceId': 1,
+});

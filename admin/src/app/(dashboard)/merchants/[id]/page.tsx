@@ -52,6 +52,8 @@ import {
   Receipt,
   Pencil,
 } from "lucide-react";
+// F-043: Event-level fee override manager
+import { EventFeeOverrideManager } from "../_components/event-fee-override-manager";
 
 interface Merchant {
   id: number;
@@ -652,6 +654,11 @@ export default function MerchantDetailPage() {
                   </TableBody>
                 </Table>
               )}
+            </div>
+
+            {/* F-043: Event-level fee override manager — accordion-style card */}
+            <div className="mt-6">
+              <EventFeeOverrideManager tenantId={merchant.id} races={races} />
             </div>
           </div>
         </TabsContent>

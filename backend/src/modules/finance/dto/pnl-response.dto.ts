@@ -137,6 +137,17 @@ export class SelfComputeSliceDto {
     example: 'MerchantConfig + contract.feePercentage cả 2 null - dùng default 5.5%',
   })
   rateFallbackWarning?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'F-043 — Nguồn fee rate được resolved trong cascade 4-tier. ' +
+      '`event_override` = từ MerchantConfig.event_fee_overrides[raceId]; ' +
+      '`merchant_default` = từ MerchantConfig.service_fee_rate; ' +
+      '`contract_fallback` = từ contract.revenueShare.feePercentage; ' +
+      '`platform_default` = hardcoded 5.5%.',
+    enum: ['event_override', 'merchant_default', 'contract_fallback', 'platform_default'],
+  })
+  feeSource?: 'event_override' | 'merchant_default' | 'contract_fallback' | 'platform_default';
 }
 
 /**

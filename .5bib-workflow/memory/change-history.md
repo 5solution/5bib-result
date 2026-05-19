@@ -789,6 +789,48 @@ Reuse candidates: bulk delete admin actions (athletes, sponsors, contracts), bul
 
 ## Entries
 
+## 2026-05-19 FEATURE-043: Reconciliation per-event fee rate override
+
+**Branch:** `feat/F-043-reconciliation-fee-override` từ origin/main (post F-044+F-045 merge)
+**Type:** EXTEND_EXISTING (Merchant + Finance + Reconciliation modules)
+
+### Files changed
+- ✏️ Modified: `backend/src/modules/merchant/schemas/merchant-config.schema.ts` (+~60 LoC) — Sub-schema `EventFeeOverride` + nested array field + compound index
+- ✏️ Modified: `backend/src/modules/merchant/merchant.module.ts` — Register RaceReadonly in 'platform' connection
+- ✏️ Modified: `backend/src/modules/merchant/merchant.service.ts` (+~280 LoC) — 4 CRUD methods + 3 helpers (validateRaceExists, logEventOverrideAudit, formatOverrideResponse, flushEventOverrideCache)
+- ✏️ Modified: `backend/src/modules/merchant/merchant.controller.ts` — 4 NEW endpoints với full Swagger
+- ✏️ Modified: `backend/src/modules/finance/services/fee.service.ts` — Tier 0 cascade lookup + feeSource enum return
+- ✏️ Modified: `backend/src/modules/finance/dto/pnl-response.dto.ts` — Add feeSource field on SelfComputeSliceDto
+- ✏️ Modified: `backend/src/modules/reconciliation/reconciliation.service.ts` — Preview cascade + fee_source + event_override_meta response
+- ➕ Added: `backend/src/modules/merchant/dto/event-fee-override.dto.ts` — 3 DTOs (Create + Update Partial + Response)
+- ➕ Added: `backend/src/modules/merchant/merchant.service.f043.spec.ts` — 13 tests (TC-43-01..06, 13-16)
+- ➕ Added: `backend/src/modules/finance/services/fee.service.f043.spec.ts` — 7 tests (TC-43-08..12 + 2 bonus)
+- ✏️ Modified: `admin/src/app/(dashboard)/merchants/[id]/page.tsx` — Import + inject EventFeeOverrideManager
+- ➕ Added: `admin/src/app/(dashboard)/merchants/_components/event-fee-override-manager.tsx` (~450 LoC) — Full CRUD component với dialog + table + delete confirm
+
+### Architecture impact
+- No new module. Extends MerchantConfig schema + fee.service cascade + reconciliation preview.
+- Cross-DB integration: MerchantModule reuses promo-hub RaceReadonly entity via `TypeOrmModule.forFeature([RaceReadonly], 'platform')`.
+
+### Conventions impact
+NEW pattern minted (add to conventions.md):
+- **N-tier cascade resolution với feeSource enum attribution** — generic template cho future config/rate/preference cascade chains. Returns `{value, source: 'tier_0' | 'tier_1' | 'tier_2' | 'tier_3'}` cho UI badge rendering + audit trail.
+
+### DB / Cache impact
+- MongoDB: `merchant_configs.event_fee_overrides[]` nested array (lazy default `[]`, no migration). Compound index `{tenantId, event_fee_overrides.raceId}`.
+- MySQL platform: no schema change (reuse existing `races` table read-only).
+- Redis: NEW key `merchant:fee-overrides:<tenantId>` TTL 3600s + extends F-040 `pnl:*:tenant=*` flush pattern.
+
+### Tech debt còn lại (moved to known-issues.md)
+- TD-F043-CONCURRENT-POST-RACE (LOW) — Sequential test verify 409 enforce; real concurrent atomic test (Promise.all 10 calls) defer
+- TD-F043-ADMIN-UI-BADGE (LOW) — Reconciliation preview UI badge `fee_source` render defer
+- TD-F043-FE-CASCADE-LOGGER-TIER0 (LOW) — Tier 0 hit không log; only Tier 2/3 fallback log
+
+### Lessons learned
+1. **Cascade extension pattern reusable**: Inject new tier BEFORE existing tiers preserves backward compat + zero regression. Test với mocked config matrix giúp catch logic errors trước integration.
+2. **Sub-schema `_id: false` clean**: Avoid `_id` leak trong response + simpler array operations.
+3. **TypeORM cross-module entity sharing**: Re-import + register cùng entity trong nhiều modules via same connection token. Documented trong promo-hub + merchant.
+
 ## 2026-05-19 FEATURE-045: Contract DOCX Phase 3 — Legacy hardcoded bank account + provider name + taxId fix
 
 **PR/Commit:** Same branch `feat/F-044-contract-docx-phase-2` extended (combined Option B với F-044), pending Danny push + release branch decision

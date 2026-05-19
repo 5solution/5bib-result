@@ -592,25 +592,58 @@ export class FeeService {
       throw new Error('Platform DB chưa cấu hình (orderRepo null)');
     }
 
-    // Rate cascade (BR-40-08)
+    // F-043 Rate cascade extended 4-tier (BR-43-05):
+    //   TIER 0: event_fee_overrides[raceId] AND effective_from <= periodFrom
+    //   TIER 1: MerchantConfig.service_fee_rate (merchant default)
+    //   TIER 2: contract.revenueShare.feePercentage (contract fallback)
+    //   TIER 3: hardcoded 5.5% (platform default)
     let serviceFeeRate: number;
     let rateFallbackWarning: string | undefined;
+    let feeSource:
+      | 'event_override'
+      | 'merchant_default'
+      | 'contract_fallback'
+      | 'platform_default';
     const config = this.merchantConfigModel
       ? await this.merchantConfigModel.findOne({ tenantId }).lean().exec()
       : null;
 
+    // F-043 TIER 0 lookup — event override match raceId AND effective_from <= periodFrom
+    // (BR-43-07 versioning theo ngày).
+    // periodFrom format YYYY-MM-DD string compare lexicographically with effective_from string.
+    const periodFromCheck = periodFilter?.periodFrom
+      ? this.toIsoDate(periodFilter.periodFrom)
+      : null;
+    const override = config?.event_fee_overrides?.find(
+      (o) =>
+        o.raceId === mysqlRaceId &&
+        // Effective check: nếu chưa có periodFrom (vd: fee-breakdown endpoint không truyền period),
+        // áp override unconditionally. Nếu có periodFrom, override apply khi effective_from <= periodFrom.
+        (!periodFromCheck || o.effective_from <= periodFromCheck),
+    );
+
     const c = contract as unknown as { revenueShare?: { feePercentage?: number } };
-    if (config?.service_fee_rate != null) {
+    if (override?.service_fee_rate != null) {
+      // TIER 0 — event override
+      serviceFeeRate = Number(override.service_fee_rate);
+      feeSource = 'event_override';
+    } else if (config?.service_fee_rate != null) {
+      // TIER 1 — merchant default
       serviceFeeRate = Number(config.service_fee_rate);
+      feeSource = 'merchant_default';
     } else if (
       c.revenueShare?.feePercentage != null &&
       Number.isFinite(c.revenueShare.feePercentage)
     ) {
+      // TIER 2 — contract fallback
       serviceFeeRate = Number(c.revenueShare.feePercentage);
+      feeSource = 'contract_fallback';
       rateFallbackWarning =
         'MerchantConfig.service_fee_rate null — dùng contract.revenueShare.feePercentage';
     } else {
+      // TIER 3 — platform default
       serviceFeeRate = 5.5;
+      feeSource = 'platform_default';
       rateFallbackWarning =
         'MerchantConfig + contract feePercentage cả 2 null - dùng default 5.5%';
       this.logger.warn(
@@ -618,7 +651,9 @@ export class FeeService {
       );
     }
 
-    const manualFeePerTicket = config?.manual_fee_per_ticket ?? 5000;
+    // F-043 BR-43-06 — manual_fee_per_ticket cascade 3-tier independent (no contract fallback)
+    const manualFeePerTicket =
+      override?.manual_fee_per_ticket ?? config?.manual_fee_per_ticket ?? 5000;
 
     // Period filter — clip to YYYY-MM-DD strings for MySQL
     const periodFromStr = periodFilter?.periodFrom
@@ -724,6 +759,8 @@ export class FeeService {
       feeManual,
       grossGMV,
       rateFallbackWarning,
+      // F-043 BR-43-16 — expose feeSource cho reconciliation preview UI badge
+      feeSource,
     };
 
     if (periodFromStr) slice.periodGapStart = periodFromStr;

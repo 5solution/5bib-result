@@ -11,11 +11,13 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import type { Redis } from 'ioredis';
 import { Repository } from 'typeorm';
 import { Model } from 'mongoose';
+import { ConflictException } from '@nestjs/common';
 import { Tenant } from './entities/tenant.entity';
 import {
   MerchantConfig,
   MerchantConfigDocument,
   ContractStatus,
+  EventFeeOverride,
 } from './schemas/merchant-config.schema';
 import {
   MerchantFeeHistory,
@@ -25,6 +27,13 @@ import { SearchMerchantsDto } from './dto/search-merchants.dto';
 import { UpdateMerchantFeeDto } from './dto/update-merchant-fee.dto';
 import { UpdateMerchantCompanyDto } from './dto/update-merchant-company.dto';
 import { ApproveMerchantDto } from './dto/approve-merchant.dto';
+import {
+  CreateEventFeeOverrideDto,
+  UpdateEventFeeOverrideDto,
+  EventFeeOverrideResponseDto,
+} from './dto/event-fee-override.dto';
+// F-043: Cross-DB validation raceId via RaceReadonly entity (named connection 'platform')
+import { RaceReadonly } from '../promo-hub/entities/race-readonly.entity';
 
 @Injectable()
 export class MerchantService {
@@ -33,6 +42,10 @@ export class MerchantService {
   constructor(
     @InjectRepository(Tenant, 'platform')
     private readonly tenantRepo: Repository<Tenant>,
+
+    // F-043 BR-43-10: Cross-DB validation raceId via RaceReadonly (named conn 'platform')
+    @InjectRepository(RaceReadonly, 'platform')
+    private readonly raceRepo: Repository<RaceReadonly>,
 
     @InjectModel(MerchantConfig.name)
     private readonly configModel: Model<MerchantConfigDocument>,
@@ -432,5 +445,387 @@ export class MerchantService {
       // Timestamps
       created_on: t.created_on,
     };
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // F-043 — Event-level fee override CRUD
+  // ════════════════════════════════════════════════════════════
+
+  /**
+   * F-043 BR-43-10 — Validate raceId tồn tại trong MySQL platform `races`.
+   * Throw 400 nếu raceId không hợp lệ. Trả về race entity nếu OK.
+   */
+  private async validateRaceExists(raceId: number): Promise<RaceReadonly> {
+    // RaceReadonly.raceId là bigint string (MySQL `races.race_id`) — convert.
+    const race = await this.raceRepo.findOne({
+      where: { raceId: String(raceId) },
+    });
+    if (!race) {
+      throw new BadRequestException({
+        message: `Sự kiện #${raceId} không tồn tại trong hệ thống`,
+        code: 'RACE_NOT_FOUND',
+      });
+    }
+    return race;
+  }
+
+  /**
+   * F-043 BR-43-12 — Insert audit log per field change.
+   * fee_field naming: `event_override.<raceId>.<field>` để phân biệt với
+   * regular merchant-level fee history.
+   */
+  private async logEventOverrideAudit(
+    tenantId: number,
+    raceId: number,
+    field: 'service_fee_rate' | 'manual_fee_per_ticket' | 'fee_vat_rate',
+    oldVal: number | null | undefined,
+    newVal: number | null | undefined,
+    adminId: number | null,
+    note?: string | null,
+  ): Promise<void> {
+    // Skip nếu không thay đổi (treat undefined == null cho comparison)
+    if ((oldVal ?? null) === (newVal ?? null)) return;
+    await this.feeHistoryModel.create({
+      tenantId,
+      fee_field: `event_override.${raceId}.${field}`,
+      old_value: oldVal != null ? String(oldVal) : null,
+      new_value: newVal != null ? String(newVal) : null,
+      changed_by: adminId,
+      note: note ?? null,
+    });
+  }
+
+  /**
+   * F-043 — Format override sub-document → response DTO với raceName joined.
+   * Skip raceName join nếu race không còn tồn tại (graceful — admin sẽ thấy "—").
+   */
+  private async formatOverrideResponse(
+    override: EventFeeOverride,
+  ): Promise<EventFeeOverrideResponseDto> {
+    let raceName: string | null = null;
+    try {
+      const race = await this.raceRepo.findOne({
+        where: { raceId: String(override.raceId) },
+      });
+      raceName = race?.title ?? null;
+    } catch {
+      // Cross-DB unreachable → graceful null (UI render "—")
+    }
+    return {
+      raceId: override.raceId,
+      raceName,
+      service_fee_rate: override.service_fee_rate,
+      manual_fee_per_ticket: override.manual_fee_per_ticket,
+      fee_vat_rate: override.fee_vat_rate,
+      effective_from: override.effective_from,
+      note: override.note,
+      createdBy: override.createdBy,
+      createdAt: override.createdAt,
+      updatedAt: override.updatedAt,
+    };
+  }
+
+  /**
+   * F-043 — GET list event fee overrides của 1 merchant.
+   * Sort by effective_from DESC. Race name joined for UI display.
+   */
+  async listEventFeeOverrides(
+    tenantId: number,
+  ): Promise<EventFeeOverrideResponseDto[]> {
+    // Verify tenant exists
+    const tenant = await this.tenantRepo.findOne({
+      where: { id: tenantId, deleted: false },
+    });
+    if (!tenant) {
+      throw new NotFoundException(`Merchant #${tenantId} không tồn tại`);
+    }
+
+    const config = await this.configModel.findOne({ tenantId }).lean();
+    const overrides = (config?.event_fee_overrides ?? []) as EventFeeOverride[];
+
+    // Sort by effective_from DESC (latest first)
+    const sorted = [...overrides].sort((a, b) =>
+      b.effective_from.localeCompare(a.effective_from),
+    );
+
+    // Format mỗi entry với raceName joined
+    return Promise.all(sorted.map((o) => this.formatOverrideResponse(o)));
+  }
+
+  /**
+   * F-043 — Create event fee override.
+   * BR-43-04: Unique (tenantId, raceId) — 409 nếu duplicate.
+   * BR-43-10: Validate raceId cross-DB.
+   * BR-43-12: Audit log per field set.
+   * BR-43-14: Flush cache patterns sau mutation.
+   */
+  async createEventFeeOverride(
+    tenantId: number,
+    dto: CreateEventFeeOverrideDto,
+    adminId: number | null,
+  ): Promise<EventFeeOverrideResponseDto> {
+    const tenant = await this.tenantRepo.findOne({
+      where: { id: tenantId, deleted: false },
+    });
+    if (!tenant) {
+      throw new NotFoundException(`Merchant #${tenantId} không tồn tại`);
+    }
+
+    // BR-43-10 Cross-DB validation
+    await this.validateRaceExists(dto.raceId);
+
+    // Get or create MerchantConfig (lazy)
+    let config = await this.configModel.findOne({ tenantId });
+    if (!config) {
+      config = new this.configModel({ tenantId });
+    }
+
+    // BR-43-04 Unique constraint check
+    const existing = config.event_fee_overrides?.find(
+      (o) => o.raceId === dto.raceId,
+    );
+    if (existing) {
+      throw new ConflictException({
+        message: `Override cho sự kiện #${dto.raceId} đã tồn tại — dùng PUT để cập nhật`,
+        code: 'EVENT_OVERRIDE_DUPLICATE',
+      });
+    }
+
+    // Build new override (timestamps auto by sub-schema)
+    const newOverride: Partial<EventFeeOverride> = {
+      raceId: dto.raceId,
+      service_fee_rate: dto.service_fee_rate ?? null,
+      manual_fee_per_ticket: dto.manual_fee_per_ticket ?? null,
+      fee_vat_rate: dto.fee_vat_rate ?? null,
+      effective_from: dto.effective_from,
+      note: dto.note ?? null,
+      createdBy: adminId,
+    };
+    config.event_fee_overrides = [
+      ...(config.event_fee_overrides ?? []),
+      newOverride as EventFeeOverride,
+    ];
+    await config.save();
+
+    // BR-43-12 Audit log — only fields explicitly set (non-null)
+    await Promise.all([
+      this.logEventOverrideAudit(
+        tenantId,
+        dto.raceId,
+        'service_fee_rate',
+        null,
+        dto.service_fee_rate,
+        adminId,
+        dto.note,
+      ),
+      this.logEventOverrideAudit(
+        tenantId,
+        dto.raceId,
+        'manual_fee_per_ticket',
+        null,
+        dto.manual_fee_per_ticket,
+        adminId,
+        dto.note,
+      ),
+      this.logEventOverrideAudit(
+        tenantId,
+        dto.raceId,
+        'fee_vat_rate',
+        null,
+        dto.fee_vat_rate,
+        adminId,
+        dto.note,
+      ),
+    ]);
+
+    // BR-43-14 Cache flush
+    await this.flushPnLCacheForTenant(tenantId);
+    await this.flushEventOverrideCache(tenantId);
+
+    const saved = config.event_fee_overrides[config.event_fee_overrides.length - 1];
+    return this.formatOverrideResponse(saved);
+  }
+
+  /**
+   * F-043 — Update existing event fee override (raceId immutable, từ path).
+   * Throw 404 nếu override không tồn tại.
+   */
+  async updateEventFeeOverride(
+    tenantId: number,
+    raceId: number,
+    dto: UpdateEventFeeOverrideDto,
+    adminId: number | null,
+  ): Promise<EventFeeOverrideResponseDto> {
+    const tenant = await this.tenantRepo.findOne({
+      where: { id: tenantId, deleted: false },
+    });
+    if (!tenant) {
+      throw new NotFoundException(`Merchant #${tenantId} không tồn tại`);
+    }
+
+    const config = await this.configModel.findOne({ tenantId });
+    const override = config?.event_fee_overrides?.find(
+      (o) => o.raceId === raceId,
+    );
+    if (!config || !override) {
+      throw new NotFoundException(
+        `Override cho sự kiện #${raceId} của merchant #${tenantId} không tồn tại`,
+      );
+    }
+
+    // Capture old values for audit
+    const oldRate = override.service_fee_rate;
+    const oldManual = override.manual_fee_per_ticket;
+    const oldVat = override.fee_vat_rate;
+
+    // Apply patch (only fields present in dto)
+    if (dto.service_fee_rate !== undefined) {
+      override.service_fee_rate = dto.service_fee_rate;
+    }
+    if (dto.manual_fee_per_ticket !== undefined) {
+      override.manual_fee_per_ticket = dto.manual_fee_per_ticket;
+    }
+    if (dto.fee_vat_rate !== undefined) {
+      override.fee_vat_rate = dto.fee_vat_rate;
+    }
+    if (dto.effective_from !== undefined) {
+      override.effective_from = dto.effective_from;
+    }
+    if (dto.note !== undefined) {
+      override.note = dto.note ?? null;
+    }
+
+    // Mongoose mutates nested array — need to mark modified
+    config.markModified('event_fee_overrides');
+    await config.save();
+
+    // Audit per field change (helper skips if old===new)
+    if (dto.service_fee_rate !== undefined) {
+      await this.logEventOverrideAudit(
+        tenantId,
+        raceId,
+        'service_fee_rate',
+        oldRate,
+        dto.service_fee_rate,
+        adminId,
+        dto.note,
+      );
+    }
+    if (dto.manual_fee_per_ticket !== undefined) {
+      await this.logEventOverrideAudit(
+        tenantId,
+        raceId,
+        'manual_fee_per_ticket',
+        oldManual,
+        dto.manual_fee_per_ticket,
+        adminId,
+        dto.note,
+      );
+    }
+    if (dto.fee_vat_rate !== undefined) {
+      await this.logEventOverrideAudit(
+        tenantId,
+        raceId,
+        'fee_vat_rate',
+        oldVat,
+        dto.fee_vat_rate,
+        adminId,
+        dto.note,
+      );
+    }
+
+    await this.flushPnLCacheForTenant(tenantId);
+    await this.flushEventOverrideCache(tenantId);
+
+    return this.formatOverrideResponse(override);
+  }
+
+  /**
+   * F-043 — Delete event fee override.
+   * Audit 3 history docs (1 per field) với new_value=null.
+   */
+  async deleteEventFeeOverride(
+    tenantId: number,
+    raceId: number,
+    adminId: number | null,
+  ): Promise<{ success: true; deletedRaceId: number }> {
+    const tenant = await this.tenantRepo.findOne({
+      where: { id: tenantId, deleted: false },
+    });
+    if (!tenant) {
+      throw new NotFoundException(`Merchant #${tenantId} không tồn tại`);
+    }
+
+    const config = await this.configModel.findOne({ tenantId });
+    const override = config?.event_fee_overrides?.find(
+      (o) => o.raceId === raceId,
+    );
+    if (!config || !override) {
+      throw new NotFoundException(
+        `Override cho sự kiện #${raceId} của merchant #${tenantId} không tồn tại`,
+      );
+    }
+
+    // Capture old values trước khi xoá để audit
+    const oldRate = override.service_fee_rate;
+    const oldManual = override.manual_fee_per_ticket;
+    const oldVat = override.fee_vat_rate;
+
+    // Filter out the override
+    config.event_fee_overrides = config.event_fee_overrides.filter(
+      (o) => o.raceId !== raceId,
+    );
+    await config.save();
+
+    // Audit — 3 docs với new_value=null
+    await Promise.all([
+      this.logEventOverrideAudit(
+        tenantId,
+        raceId,
+        'service_fee_rate',
+        oldRate,
+        null,
+        adminId,
+        'Override deleted',
+      ),
+      this.logEventOverrideAudit(
+        tenantId,
+        raceId,
+        'manual_fee_per_ticket',
+        oldManual,
+        null,
+        adminId,
+        'Override deleted',
+      ),
+      this.logEventOverrideAudit(
+        tenantId,
+        raceId,
+        'fee_vat_rate',
+        oldVat,
+        null,
+        adminId,
+        'Override deleted',
+      ),
+    ]);
+
+    await this.flushPnLCacheForTenant(tenantId);
+    await this.flushEventOverrideCache(tenantId);
+
+    return { success: true, deletedRaceId: raceId };
+  }
+
+  /**
+   * F-043 BR-43-14 — Flush event override cache key (TTL 3600s).
+   * Pattern: `merchant:fee-overrides:<tenantId>`
+   */
+  private async flushEventOverrideCache(tenantId: number): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.del(`merchant:fee-overrides:${tenantId}`);
+    } catch (e) {
+      this.logger.warn(
+        `[F-043] flushEventOverrideCache fail tenantId=${tenantId}: ${(e as Error).message}`,
+      );
+    }
   }
 }

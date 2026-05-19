@@ -2002,6 +2002,27 @@ F-006 added 4 fields → all 3 DTO synced. Pre-commit check: POST với new fiel
 
 ---
 
+## 📝 IMPLEMENTATION_NOTES.md — Coder reviewer's guide (Danny 2026-05-19 directive)
+
+**Mandate:** Mỗi `/5bib-code` complete, Coder PHẢI output 2 files thay vì 1:
+1. `03-coder-implementation.md` — formal handoff (existing)
+2. **`IMPLEMENTATION_NOTES.md` (HOẶC `.html`) — reviewer's guide (NEW)**
+
+**4 sections BẮT BUỘC trong IMPLEMENTATION_NOTES.md:**
+- **Section 1: 🚧 Deviations from Spec (intentional)** — Spec said X, I did Y, Why, Reviewer check
+- **Section 2: ⚙️ Forced Changes (reality ≠ spec)** — PRD assumed X, Reality Y, Workaround, BA/Manager action
+- **Section 3: ⚖️ Tradeoffs Considered** — Bảng: Decision | Option chosen | Alternative | Why | **Cost paid** (MANDATORY cost rõ, KHÔNG "no cost")
+- **Section 4: 🔬 Reviewer Notes** — files priority order + concurrency hotspots + edge cases tested/deferred + type safety narrowed casts + security self-checklist + perf numbers
+
+**Workflow integration:**
+- QC `/5bib-qc` Phase 1 đọc Section 4 FIRST để biết focus area
+- Manager `/5bib-deploy` Code Review đọc Section 1+2 FIRST → spot-check 5 files theo Section 4 priority list
+- Manager BLOCK deploy nếu: file thiếu / section thiếu / Section 1 deviation conflict BR critical (financial/auth/fee)
+
+**Rationale:** F-035 cost field drop bug (~$10K rework) chứng minh — code looks correct vẫn có deviation chết người. Reviewer guide giúp Manager + QC focus chính xác, KHÔNG miss hotspot.
+
+---
+
 ## ✏️ Cách Manager update file này
 
 Khi feature mới ship (`/5bib-deploy`):
