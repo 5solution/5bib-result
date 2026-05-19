@@ -542,11 +542,66 @@ export function getDownloadUrl(
   );
 }
 
-/** Returns the binary blob — admin can save to user disk via anchor + URL.createObjectURL. */
+/**
+ * Parse `Content-Disposition` response header → extract `filename` value.
+ *
+ * F-044 BR-44-11 — RFC 5987 escape parsing.
+ *
+ * Backend `controllers/contracts.controller.ts` (download/stream endpoint)
+ * encodes filename via RFC 5987 (`filename*=UTF-8''<percent-encoded>`) to
+ * preserve VN diacritics + spaces. This helper extracts the original
+ * Unicode filename for use as `a.download` attribute trên admin frontend.
+ *
+ * Priority:
+ *   1. `filename*=UTF-8''<encoded>` (RFC 5987 — preferred, handles Unicode)
+ *   2. `filename="..."` (plain ASCII fallback)
+ *   3. null — caller dùng fallback pattern
+ *
+ * Example header value:
+ *   `attachment; filename="10.05.2026.HDDV.CTTFA-5BIB-6 - Race - Hop dong.docx"; filename*=UTF-8''10.05.2026.HDDV.CTTFA-5BIB-6%20-%20C%C3%A1t%20Ti%C3%AAn%20-%20H%E1%BB%A3p%20%C4%91%E1%BB%93ng.docx`
+ *
+ * Returns: `10.05.2026.HDDV.CTTFA-5BIB-6 - Cát Tiên - Hợp đồng.docx`
+ */
+function parseFilenameFromContentDisposition(
+  header: string | null,
+): string | null {
+  if (!header) return null;
+  // Priority 1: RFC 5987 `filename*=UTF-8''<encoded>`
+  const rfc5987Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (rfc5987Match?.[1]) {
+    try {
+      return decodeURIComponent(rfc5987Match[1].trim());
+    } catch {
+      // Malformed percent-encoding → fall through to plain filename
+    }
+  }
+  // Priority 2: plain `filename="..."` or `filename=...`
+  const plainMatch = header.match(/filename="([^"]+)"|filename=([^;]+)/i);
+  if (plainMatch) {
+    const raw = (plainMatch[1] ?? plainMatch[2] ?? '').trim();
+    if (raw) return raw;
+  }
+  return null;
+}
+
+/**
+ * Returns binary blob + parsed filename from `Content-Disposition` header.
+ *
+ * F-044 BR-44-11 + Adjustment #2 — Caller (document-download-btn.tsx) uses
+ * `filename` for `a.download` attribute thay vì hardcode pattern
+ * `${DOCTYPE_LABEL[docType]}-${contractId}.${format}` (bypass leak).
+ *
+ * Backend filename pattern (F-044 HYBRID Option C):
+ *   `[ContractNumber] - [RaceName] - [DocType].ext`
+ * (per `buildDocumentFilename` in backend/src/modules/contracts/utils/build-filename.ts)
+ *
+ * Falls back to `filename === null` khi backend không emit header (e.g.,
+ * proxy strip header). Caller must handle fallback with default pattern.
+ */
 export async function streamDownloadBlob(
   id: string,
   s3Key: string,
-): Promise<Blob> {
+): Promise<{ blob: Blob; filename: string | null }> {
   const res = await fetch(
     `/api/contracts/${encodeURIComponent(id)}/download/stream${toQs({ s3Key })}`,
   );
@@ -554,7 +609,12 @@ export async function streamDownloadBlob(
     const body = await res.json().catch(() => ({}));
     throw new ContractsApiError(res.status, extractMessage(body, res.status));
   }
-  return await res.blob();
+  // Parse Content-Disposition BEFORE consuming body (res.blob() closes stream).
+  const filename = parseFilenameFromContentDisposition(
+    res.headers.get("Content-Disposition"),
+  );
+  const blob = await res.blob();
+  return { blob, filename };
 }
 
 // ────────────────────────────────────────────────────────────────────────────

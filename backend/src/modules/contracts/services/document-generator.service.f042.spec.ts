@@ -183,7 +183,10 @@ describe('F-042 — Contract + BBNT DOCX render với DB context', () => {
   });
 
   describe('TC-42-03: Contract DOCX RACEKIT — no 36.180.000 hardcoded', () => {
-    it('renders subtotal correctly + verify no hardcoded sample value', async () => {
+    // F-044 BUGFIX #1 (2026-05-19): câu "Tổng giá trị Hợp đồng (đã bao gồm 8% VAT)"
+    // dùng {totalAmount} (KHÔNG dùng {subtotal} như F-042 đã sai). Updated
+    // assertion: verify totalAmount rendering, NOT subtotal.
+    it('renders totalAmount correctly (post F-044 bugfix #1) + verify no hardcoded sample value', async () => {
       const ctx = {
         ...REAL_CONTRACT_CONTEXT,
         contractType: 'RACEKIT',
@@ -192,13 +195,16 @@ describe('F-042 — Contract + BBNT DOCX render với DB context', () => {
         totalAmount: 54000000,
       };
       const buf = await svc.renderDocx('contract-racekit.docx', ctx);
-      await assertDocxContains(buf, ['50.000.000']);
+      // Câu "Tổng giá trị (đã bao gồm 8% VAT)" hiển thị 54M (totalAmount),
+      // line item table vẫn hiển thị 50M (line item amount).
+      await assertDocxContains(buf, ['54.000.000']);
       await assertDocxNotContains(buf, ['36.180.000']);
     });
   });
 
   describe('TC-42-04: Contract DOCX OPERATIONS — no 264.888.360 hardcoded', () => {
-    it('renders subtotal correctly + verify no hardcoded sample value', async () => {
+    // F-044 BUGFIX #1: same fix as RACEKIT — assert totalAmount not subtotal.
+    it('renders totalAmount correctly (post F-044 bugfix #1) + verify no hardcoded sample value', async () => {
       const ctx = {
         ...REAL_CONTRACT_CONTEXT,
         contractType: 'OPERATIONS',
@@ -207,7 +213,7 @@ describe('F-042 — Contract + BBNT DOCX render với DB context', () => {
         totalAmount: 108000000,
       };
       const buf = await svc.renderDocx('contract-operations.docx', ctx);
-      await assertDocxContains(buf, ['100.000.000']);
+      await assertDocxContains(buf, ['108.000.000']);
       await assertDocxNotContains(buf, ['264.888.360']);
     });
   });

@@ -14,6 +14,14 @@
  *   - Test riêng (8+ cases) không cần mock DocumentGeneratorService
  *   - Re-use cho downloadDocument (contracts.service.ts) + có thể frontend
  *     replicate logic nếu cần (admin SDK).
+ *
+ * F-044 — HYBRID Option C pattern: `[ContractNumber] - [RaceName] - [DocType].ext`
+ *   - Activated khi cả `contractNumber` + `raceName` truthy
+ *   - Sanitize contractNumber: `/` → `.` (filesystem safe + readable)
+ *   - Falls back to F-024 pattern khi missing data (Quotation/Pre-contract flows
+ *     không có contractNumber yet, hoặc contract chưa link raceId).
+ *   - Example output:
+ *     `10.05.2026.HDDV.CTTFA-5BIB-6 - Cát Tiên Trail Family Adventure - Hợp đồng.docx`
  */
 
 export type GeneratedDocType =
@@ -41,6 +49,19 @@ export interface BuildFilenameInput {
   signDate?: Date | string | null;
   fallbackDate?: Date | string | null;
   format: DocFormat;
+  /**
+   * F-044 BR-44-08/12 — Mã hợp đồng (contractNumber từ DB).
+   * Khi BOTH `contractNumber` + `raceName` truthy → HYBRID Option C pattern
+   * `[ContractNumber] - [RaceName] - [DocType].ext` được sử dụng.
+   * Khi nullable/empty → fallback F-024 pattern (backward compat cho
+   * Quotation/Pre-contract flows chưa có contractNumber).
+   */
+  contractNumber?: string | null;
+  /**
+   * F-044 BR-44-08/10 — Tên sự kiện (raceName) cho HYBRID Option C pattern.
+   * Sanitize giống partnerName (`/`,`\` → `-`, strip control chars, max 80).
+   */
+  raceName?: string | null;
 }
 
 /** Map providerId → abbrev hiển thị trong filename. */
@@ -68,6 +89,14 @@ const SERVICE_NAME: Record<ContractType, string> = {
 /** Hard limit chiều dài tên đối tác trong filename (UX + filesystem safety). */
 const MAX_PARTNER_NAME_LENGTH = 100;
 
+/** F-044 — Hard limit chiều dài mã hợp đồng + race name trong HYBRID pattern. */
+const MAX_CONTRACT_NUMBER_LENGTH = 80;
+const MAX_RACE_NAME_LENGTH = 80;
+
+/** F-044 fallback labels khi data thiếu (BR-44-09/10). */
+const FALLBACK_CONTRACT_NUMBER = '(chưa cấp số)';
+const FALLBACK_RACE_NAME = '(chưa gắn sự kiện)';
+
 /**
  * Sanitize tên đối tác:
  *   - Replace `/` `\` → `-` (filesystem reserved)
@@ -93,6 +122,59 @@ function sanitizePartnerName(name: string): string {
   return s;
 }
 
+/**
+ * F-044 BR-44-09 — Sanitize mã hợp đồng cho filename.
+ *
+ *   - Replace `/` → `.` (filesystem safe + readable for VN contract number conventions)
+ *   - Strip control chars + Windows-reserved characters `\<>:|?*"`
+ *   - Collapse whitespace
+ *   - Truncate quá MAX_CONTRACT_NUMBER_LENGTH với ellipsis
+ *
+ * Falsy/empty input → `(chưa cấp số)` fallback.
+ *
+ * Examples:
+ *   `10.05/2026/HDDV/CTTFA-5BIB-6` → `10.05.2026.HDDV.CTTFA-5BIB-6`
+ *   `25.02-HDDV-5BIB-TAM` → `25.02-HDDV-5BIB-TAM` (đã filesystem-safe)
+ *   `null` / `''` → `(chưa cấp số)`
+ */
+function sanitizeContractNumber(cn: string | null | undefined): string {
+  if (!cn || typeof cn !== 'string') return FALLBACK_CONTRACT_NUMBER;
+  let s = cn
+    .replace(/\//g, '.')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f\\<>:|?*"]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!s) return FALLBACK_CONTRACT_NUMBER;
+  if (s.length > MAX_CONTRACT_NUMBER_LENGTH) {
+    s = `${s.slice(0, MAX_CONTRACT_NUMBER_LENGTH).trim()}...`;
+  }
+  return s;
+}
+
+/**
+ * F-044 BR-44-10 — Sanitize tên sự kiện (raceName).
+ *
+ * Reuses sanitizePartnerName-like rules: `/`,`\` → `-`, strip control chars,
+ * truncate at MAX_RACE_NAME_LENGTH. Falsy → `(chưa gắn sự kiện)` fallback.
+ *
+ * Giữ dấu tiếng Việt (RFC 5987 filename* handles Unicode trong header layer).
+ */
+function sanitizeRaceName(name: string | null | undefined): string {
+  if (!name || typeof name !== 'string') return FALLBACK_RACE_NAME;
+  let s = name
+    .replace(/[\\/]/g, '-')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f"<>:|?*]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!s) return FALLBACK_RACE_NAME;
+  if (s.length > MAX_RACE_NAME_LENGTH) {
+    s = `${s.slice(0, MAX_RACE_NAME_LENGTH).trim()}...`;
+  }
+  return s;
+}
+
 /** Format date → "DD.MM.YYYY" (dot separator) cho filename. */
 function formatDateDot(input: Date | string | null | undefined): string | null {
   if (input == null) return null;
@@ -114,9 +196,26 @@ function formatDateDot(input: Date | string | null | undefined): string | null {
  *   - Tên đối tác > 100 chars → truncate + ellipsis
  */
 export function buildDocumentFilename(input: BuildFilenameInput): string {
+  const docLabel = DOC_TYPE_LABEL[input.docType];
+
+  // F-044 BR-44-08/12 — HYBRID Option C pattern.
+  // Activated khi cả contractNumber + raceName truthy.
+  // Format: `[ContractNumber] - [RaceName] - [DocType].ext`
+  // Example: `10.05.2026.HDDV.CTTFA-5BIB-6 - Cát Tiên Trail Family Adventure - Hợp đồng.docx`
+  //
+  // Lý do dùng HYBRID thay vì REPLACE F-024:
+  //   - Backward compat: Quotation flow chưa có contractNumber → fallback F-024
+  //   - Pre-contract flow (DRAFT chưa generate contract number) → fallback
+  //   - Danny request 2026-05-19: tên file phải có mã HĐ + tên race rõ ràng
+  //     thay vì ObjectId opaque (`Hợp đồng-6a0bcab66042f47bde4eb9d7.docx`).
+  if (input.contractNumber && input.raceName) {
+    const cn = sanitizeContractNumber(input.contractNumber);
+    const race = sanitizeRaceName(input.raceName);
+    return `${cn} - ${race} - ${docLabel}.${input.format}`;
+  }
+
   const provider = PROVIDER_ABBREV[input.providerId] ?? input.providerId;
   const partner = sanitizePartnerName(input.partnerName);
-  const docLabel = DOC_TYPE_LABEL[input.docType];
   const serviceLabel = SERVICE_NAME[input.contractType];
 
   // ACCEPTANCE_REPORT + PAYMENT_REQUEST không có biến thể dịch vụ trong UI label,

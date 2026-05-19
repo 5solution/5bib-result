@@ -29,8 +29,11 @@ module.exports = {
   // useKioskIdle / useKioskSound / IncidentForm / StateMachineTimeline / etc.)
   // require RTL + jsdom which are NOT installed in admin. Switch this regex to
   // '.*\\.spec\\.(ts|tsx)$' once admin gains the test stack (TD-F013-TESTSTACK).
+  // F-044 EXTEND: also matches contracts-api.f044.spec.ts (pure TS unit test —
+  // streamDownloadBlob refactor + Content-Disposition RFC 5987 parsing).
+  // No RTL/jsdom needed — mocks `global.fetch` + uses Node 18+ Blob/Headers.
   testRegex:
-    '.*(kiosk\\.types\\.spec\\.ts|result-display-config\\.spec\\.ts|medical\\.types\\.spec\\.ts|awards\\.types\\.spec\\.ts)$',
+    '.*(kiosk\\.types\\.spec\\.ts|result-display-config\\.spec\\.ts|medical\\.types\\.spec\\.ts|awards\\.types\\.spec\\.ts|contracts-api\\.f044\\.spec\\.ts)$',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
   transform: {
     '^.+\\.tsx?$': [

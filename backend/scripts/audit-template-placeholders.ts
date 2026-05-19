@@ -33,6 +33,10 @@ const ALL_TEMPLATES = [
 
 // Context shape (mirror keys returned by ContractsService.buildRenderContext).
 // Dot-notation cho nested access (client.entityName).
+//
+// F-044 BR-44-14 update: Sync với F-042 + F-044 flatten keys.
+// F-042 flatten 11 keys (acceptanceReport.* top-level) + F-044 1 NEW key
+// (remainingBalanceInWords) added.
 const CONTEXT_KEYS = new Set<string>([
   'contractNumber',
   'contractType',
@@ -66,6 +70,13 @@ const CONTEXT_KEYS = new Set<string>([
   'acceptanceReport.advancePaid', 'acceptanceReport.remainingBalance',
   'acceptanceReport.verdict', 'acceptanceReport.notes',
   'acceptanceReport.actualValues',
+  // F-042 flatten keys (top-level acceptanceReport.*)
+  'actualSubtotal', 'actualVatAmount', 'actualTotalWithVat',
+  'contractSubtotal', 'diffAmount', 'advancePaid', 'remainingBalance',
+  'actualTotalWithVatInWords',
+  'reportDay', 'reportMonth', 'reportYear',
+  // F-044 NEW flatten key (BR-44-05 / BR-44-14)
+  'remainingBalanceInWords',
   'paymentRequest', 'paymentRequest.requestDate', 'paymentRequest.totalAmount',
   'paymentRequest.advancePaid', 'paymentRequest.amountDue',
   'paymentRequest.amountDueInWords',
@@ -83,7 +94,20 @@ const CONTEXT_KEYS = new Set<string>([
 ]);
 
 // Patterns suspicious as hardcoded leaks from sample (e.g., still present after inject).
+//
+// F-044 BR-44-13 extension — 4 distinct hardcoded leak pattern classes:
+//   1. Legacy F-024 sample text (entity names, taxIds, etc.) — preserved
+//   2. F-042 vi-VN currency numbers (`152.000.000` etc.)
+//   3. F-044 contract number text — `\d{2}\.\d{2}/\d{4}/H[DĐ]+V?/[A-Z\-0-9]+`
+//      OR `\d{2}\.\d{2}-HDDV-[A-Z0-9\-]+` (covers slash + dash formats)
+//   4. F-044 VN amount-in-words — sequences like "Ba mươi sáu triệu..."
+//
+// Post-edit zero-hardcoded gate: pattern class 2+3+4 MUST all report 0 occurrences
+// in financial sections — per BR-44-15. Pattern class 1 remains informational
+// (templates may still legitimately include certain F-024 sample entity names
+// in placeholder-default articles edited via admin UI).
 const HARDCODED_LEAK_PATTERNS = [
+  // Class 1 — Legacy F-024 sample leak detectors
   /Hành Trình Theo Chân Bác/i,
   /THÀNH AN MEDIA/i,
   /Vũ Phan Anh/i,
@@ -97,6 +121,33 @@ const HARDCODED_LEAK_PATTERNS = [
   /11\.04\/2026\/H[ĐD]DV/i,
   /14\.04\/2026\/H[ĐD]DV/i,
   /164\.160\.000/,
+  // Class 2 — F-042 vi-VN currency hardcoded (financial leak)
+  /[0-9]{1,3}\.[0-9]{3}\.[0-9]{3}/,
+  // Class 3 — F-044 contract number text (slash format)
+  // e.g. "10.04/2026/HĐDV/TAM-5BIB", "11.04/2026/HDDV/ABC-XYZ"
+  /\d{2}\.\d{2}\/\d{4}\/H[ĐD]+V?\/[A-Z\-0-9]+/,
+  // Class 3 (dash format) — F-044 contract number text (TICKET_SALES style)
+  // e.g. "25.02-HDDV-5BIB-TAM", "17.01-HDDV-5BIB-VUD"
+  /\d{2}\.\d{2}-HDDV-[A-Z0-9\-]+/,
+  // Class 4 — F-044 VN amount-in-words
+  // Match sequences like "Ba mươi sáu triệu...", "Một trăm ba mươi...".
+  // Use Unicode property classes via plain alternation to keep ts-node compat.
+  /(?:Một|Hai|Ba|Bốn|Năm|Sáu|Bảy|Tám|Chín|Mười)\s+(?:trăm|mươi|triệu|tỷ|nghìn|ngàn)\s+/,
+  // Class 5 — F-045 Bank account hardcoded (exact F-030 registry values only)
+  // KHÔNG dùng generic `\d{9}` để avoid false-positive với phone/MST.
+  /\b110398986\b/,
+  /\b111213998\b/,
+  // Class 6 — F-045 Bank branch hardcoded
+  /MB chi nhánh (Thụy Khuê|Hai Bà Trưng)/,
+  /Ngân hàng TMCP Quân Đội \(MB\) – Chi nhánh/,
+  // Class 6 — F-045 Provider name hardcoded (4 variants)
+  // CÔNG TY CỔ PHẦN 5BIB (UPPER) — negative lookahead exclude false-positive
+  // với "CÔNG TY CỔ PHẦN 5BIB KHÔNG..." (placeholder default articles
+  // có thể chứa entity name nhưng theo dạng khác).
+  /CÔNG TY CỔ PHẦN 5BIB(?!\s+KHÔNG)/,
+  /CÔNG TY CỔ PHẦN CÔNG NGHỆ 5SOLUTION/,
+  /Công ty Cổ phần 5BIB/,
+  /CONG TY CO PHAN 5BIB/,
 ];
 
 const PLACEHOLDER_RE = /\{([#/]?[\w.\-]+)\}/g;

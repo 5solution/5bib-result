@@ -789,6 +789,143 @@ Reuse candidates: bulk delete admin actions (athletes, sponsors, contracts), bul
 
 ## Entries
 
+## 2026-05-19 FEATURE-045: Contract DOCX Phase 3 — Legacy hardcoded bank account + provider name + taxId fix
+
+**PR/Commit:** Same branch `feat/F-044-contract-docx-phase-2` extended (combined Option B với F-044), pending Danny push + release branch decision
+**Type:** BUGFIX (MED severity multi-provider data leak risk)
+
+### Files changed
+- ✏️ Modified: `backend/scripts/audit-template-placeholders.ts` (+24 LoC)
+  - Class 5: `\b110398986\b` + `\b111213998\b` exact-match bank account regex (F-030 values)
+  - Class 6: bank branch + provider name 4 variants (CÔNG TY CỔ PHẦN 5BIB UPPER/proper/no-diacritic + CÔNG TY CỔ PHẦN CÔNG NGHỆ 5SOLUTION)
+- ✏️ Modified: `backend/assets/contract-templates/acceptance-racekit.docx` — 10 replacements (5 provider + 2 bank acct + 2 branch + 1 service label BR-45-10 "vận hành racekit")
+- ✏️ Modified: `backend/assets/contract-templates/acceptance-timing.docx` — 9 replacements (TIMING preserves "dịch vụ tính giờ" per BR-45-11)
+- ✏️ Modified: `backend/assets/contract-templates/acceptance-operations.docx` — 13 replacements incl Adjustment #1 taxId `Mã số thuế: 0111213998` → `{provider.taxId}` + service label BR-45-09 "vận hành"
+- ✏️ Modified: `backend/assets/contract-templates/contract-ticket-sales.docx` — 1 complex line rewrite (bank acct + branch + entity)
+- ✏️ Modified: `backend/assets/contract-templates/contract-operations.docx` (Manager scope extension 2026-05-19) — 7 replacements (2 provider + 2 bank acct + 1 branch + 2 taxId)
+- ➕ Added: 5 backup `.backup/<type>-20260519-pre-f045.docx`
+- ➕ Added: `backend/src/modules/contracts/services/document-generator.service.f045.spec.ts` — TC-45-01..07 (multi-provider 5BIB + 5SOLUTION variants incl OVERRIDE scenarios) + TC-45-09/10 (F-042/F-044 regression)
+- ➕ Added: `backend/src/modules/contracts/services/audit-script.f045.spec.ts` — TC-45-08 audit zero hardcoded per template + 6 regex source patterns verify
+- ➕ Added: `backend/src/modules/contracts/services/f045-multi-provider-render-verify.spec.ts` — Manager content review tool: render 5 × 2 = 10 outputs to /tmp
+- ➕ Added: `.5bib-workflow/features/FEATURE-045-contract-docx-phase-3-legacy-hardcoded-bank-provider/` (00-init + 01-prd + 02-plan + 03-impl + 04-qc + 05-deploy)
+
+### Architecture impact
+- ZERO change to service decomposition, ZERO new module
+- F-045 = template binary fix + audit regex extension only
+
+### Conventions impact
+NEW patterns added to `conventions.md` (post-deploy update):
+1. **Multi-provider DOCX render verify spec** — Asymmetric provider override scenarios MANDATORY for every template-affecting feature. Pattern: render N templates × 2 providers = 2N outputs to `/tmp/.../output/`. Manager eyeball read.
+2. **Audit script Class 5+6 reusable regex set** — Class 5 bank account exact match (NOT generic `\d{9}`) + Class 6 bank branch + provider name 4 variants. Future feature classes extend Class 7+.
+3. **XML run-split workarounds — 3 patterns** (3rd application):
+   - Unique-suffix pattern (F-044 BUGFIX#1 `{advancePaid} VNĐ`)
+   - Within-run `</w:t>` boundary (F-044/F-045 service label "về dịch vụ tính giờ</w:t>")
+   - Drop-prefix when prefix in upstream run (F-045 contract-ticket-sales line)
+
+### DB / Cache impact
+- ❌ MongoDB: NO change
+- ❌ MySQL platform: NO change
+- ❌ Redis: NO change
+- ❌ F-030 provider-entities.ts: NO change (registry unchanged)
+- ✅ DOCX templates binary: 5 modify + 5 backup
+- ✅ AWS S3: new DOCX uploads via existing flow
+
+### Tech debt còn lại (moved to known-issues.md)
+- TD-F045-PROD-AUDIT-REGEN-DEFERRED (MED) — Combined F-042+F-044+F-045 regen batch + Finance sign-off
+- TD-F045-MULTI-VIEWER-VERIFY-DEFERRED (LOW) — MS Word + LibreOffice + Google Docs verify
+- TD-F045-PYTHON-FIX-SCRIPT-NOT-COMMITTED (INFO) — `/tmp/docx-extract/fix_templates_f045.py`
+- TD-F045-CONTRACT-OPERATIONS-ROW-FORMAT (LOW) — Trailing-space cosmetic
+- ✅ RESOLVED: TD-F044-LEGACY-HARDCODED-BANK-PROVIDER (F-045 closes)
+- ✏️ Extended: TD-F044-COMM-STRATEGY-PHASE2-COMBINED → covers F-042+F-044+F-045 single comm cycle
+
+### Lessons learned
+1. **Manager audit catches BA gaps** — Manager spot-check during Plan phase phát hiện `contract-operations.docx` cũng có 5SOLUTION hardcoded (out of BA inventory of 4 templates). Scope extended +1 template via Manager Adjustment without rewrite cycle.
+2. **Order critical for regex with substring collision** — Adjustment #2: taxId `0111213998` contains bank `111213998` substring. Fix order: taxId regex FIRST (specific match `Mã số thuế: 0111213998`), then bank account regex (context-anchored `Tài khoản: 111213998`). Reverse order would collapse both fields into bankAccount placeholder.
+3. **XML run-split is recurring issue** — 3rd application in template fixes (F-044 typo + F-044 service label + F-045 multiple positions). Establish 3 workaround patterns as conventions. Future template features should expect run-split + use within-run boundary patterns.
+4. **Multi-provider override is critical test** — Default provider per contract type per BR-CM-01 hides bug. Override scenarios (RACEKIT + 5SOLUTION, OPERATIONS + 5BIB) expose latent hardcoded. TC-45-03/04 are non-negotiable for any template change.
+5. **DOCX Content Review Protocol (F-044 lesson) WORKS** — F-045 demonstrates Manager render review caught contract-operations scope extension via render audit grep. Workflow validated.
+
+## 2026-05-19 FEATURE-044: Contract DOCX Phase 2 — TEXT hardcoded fix + filename HYBRID + BUGFIX#1 số ≠ chữ
+
+**PR/Commit:** Branch `feat/F-044-contract-docx-phase-2` (worktree `funny-kirch-90e777`), pending Danny decision on release branch strategy
+**Type:** BUGFIX (HIGH severity legal/finance — follow-up F-042 missed TEXT scope)
+
+### Files changed
+- ✏️ Modified: `backend/src/modules/contracts/services/contracts.service.ts` (+14 LoC)
+  - Line 1281-1289: flatten extension `remainingBalanceInWords: vndAmountInWords(contract.acceptanceReport.remainingBalance ?? 0)` (BR-44-05). vndAmountInWords(0)="Không đồng", null/undefined→''.
+  - Line 1462-1471: `downloadDocument()` pass `contractNumber: c.contractNumber ?? null` + `raceName: c.raceName ?? null` to `buildDocumentFilename` (BR-44-12 HYBRID Option C trigger).
+- ✏️ Modified: `backend/src/modules/contracts/utils/build-filename.ts` (+101 LoC)
+  - Extended `BuildFilenameInput` interface với 2 new fields (BR-44-08/10/12)
+  - Added `MAX_CONTRACT_NUMBER_LENGTH=80` + `MAX_RACE_NAME_LENGTH=80` constants + fallback labels `(chưa cấp số)` / `(chưa gắn sự kiện)`
+  - Added `sanitizeContractNumber()` helper: `/` → `.` (filesystem safe), strip `\<>:|?*"` + control chars, collapse whitespace, truncate 80 + ellipsis (BR-44-09)
+  - Added `sanitizeRaceName()` helper similar to `sanitizePartnerName` nhưng MAX=80 (BR-44-10)
+  - HYBRID branch in `buildDocumentFilename`: activate when BOTH `contractNumber` + `raceName` truthy → `[CN sanitized] - [Race sanitized] - [DocType].ext`; else F-024 fallback preserved (backward compat Quotation/Pre-contract flows)
+- ✏️ Modified: `backend/scripts/audit-template-placeholders.ts` (+37 LoC)
+  - Extended HARDCODED_LEAK_PATTERNS với 4 pattern classes (BR-44-13): Class 1 legacy F-024 + Class 2 F-042 vi-VN currency + Class 3 F-044 CN slash format + Class 3 F-044 CN dash format + Class 4 F-044 VN amount-in-words sentence prefix
+  - Extended CONTEXT_KEYS Set với 11 F-042 flatten keys + 1 F-044 NEW `remainingBalanceInWords` (BR-44-14) — closes TD-F042-TEMPLATE-PLACEHOLDER-STATIC-AUDIT
+- ✏️ Modified: `backend/assets/contract-templates/contract-racekit.docx` — Mapping Table A: 1 CN `10.04/2026/HĐDV/TAM-5BIB` → `{contractNumber}` + 1 in-words → `{totalAmountInWords}` + BUGFIX#1 `{subtotal}` → `{totalAmount}` (1 occurrence) in "Tổng giá trị Hợp đồng (đã bao gồm 8% VAT)" — số 50M → 54M để khớp chữ "Năm mươi tư triệu"
+- ✏️ Modified: `backend/assets/contract-templates/contract-operations.docx` — Mapping Table B: 1 in-words → `{totalAmountInWords}` + BUGFIX#1 `{subtotal}` → `{totalAmount}` (1 occurrence) — số 100M → 108M để khớp chữ "Một trăm lẻ tám triệu"
+- ✏️ Modified: `backend/assets/contract-templates/contract-ticket-sales.docx` — Mapping Table C: 2 CN `25.02-HDDV-5BIB-TAM` + `17.01-HDDV-5BIB-VUD` → `{contractNumber}` (header + Phụ lục 1)
+- ✏️ Modified: `backend/assets/contract-templates/acceptance-timing.docx` — Mapping Table D: 3 in-words `Tám mươi lăm triệu...` → `{remainingBalanceInWords}` (PRD says 2 but actual was 3 — `count=0` absorbs)
+- ✏️ Modified: `backend/assets/contract-templates/acceptance-racekit.docx` — Mapping Table E + Adjustment #1 typo fix: 6 CN → `{contractNumber}` + 1 totalAmount in-words → `{totalAmountInWords}` + 3 remainingBalance in-words → `{remainingBalanceInWords}` + 3× `{advancePaid}` → `{remainingBalance}` in "còn lại" sentences (KEEP 1 `{advancePaid}` in "tạm ứng" line). Position #3 fix required unique-suffix `{advancePaid} VNĐ` workaround due to XML run split.
+- ✏️ Modified: `backend/assets/contract-templates/acceptance-operations.docx` — Mapping Table F: 3 in-words `Một trăm ba mươi ba triệu...` → `{remainingBalanceInWords}`
+- ✏️ Modified: `admin/src/lib/contracts-api.ts` (+60 LoC)
+  - Added `parseFilenameFromContentDisposition()` helper with RFC 5987 `filename*=UTF-8''<encoded>` priority + plain `filename="..."` fallback + null final fallback. Wrapped `decodeURIComponent` in try/catch (malformed %ZZ falls through gracefully).
+  - Refactored `streamDownloadBlob()` return type: `Promise<Blob>` → `Promise<{ blob: Blob; filename: string | null }>` (BR-44-11 + Adjustment #2). Parse header BEFORE `res.blob()` (blob consume closes stream).
+- ✏️ Modified: `admin/src/app/(dashboard)/contracts/_components/document-download-btn.tsx:71-77` (4 LoC change)
+  - Destructure `{ blob, filename }` from `streamDownloadBlob` return
+  - `a.download = filename ?? <legacy fallback pattern>` — preserves backward compat khi backend không emit header
+- ✏️ Modified: `backend/src/modules/contracts/services/document-generator.service.f042.spec.ts` (TC-42-03/04 assertion update post BUGFIX#1)
+  - Updated assertion: assert `54.000.000` / `108.000.000` (totalAmount) thay vì `50.000.000` / `100.000.000` (subtotal) ở câu "Tổng giá trị (đã bao gồm 8% VAT)"
+- ✏️ Modified: `admin/jest.kiosk.config.cjs` (+3 LoC) — testRegex extension include `contracts-api.f044.spec.ts` (CI test discovery cho admin F-044 spec)
+- ➕ Added: `backend/src/modules/contracts/services/document-generator.service.f044.spec.ts` — TC-44-01..06 (DOCX render content per Mapping Tables A-F + asymmetric split verification for Adjustment #1)
+- ➕ Added: `backend/src/modules/contracts/services/contracts.service.f044-context.spec.ts` — TC-44-12..15 (flatten extension + remainingBalance=0 edge + acceptanceReport null edge + 30/70 asymmetric split surfaces typo)
+- ➕ Added: `backend/src/modules/contracts/services/audit-script.f044.spec.ts` — TC-44-10..11 (post-fix audit zero hardcoded per 4 pattern classes + CONTEXT_KEYS contains F-042 11 + F-044 1 flatten keys)
+- ➕ Added: `backend/src/modules/contracts/utils/build-filename.f044.spec.ts` — TC-44-07..09 (HYBRID happy path + backward compat F-024 fallback + sanitize edge cases: slash/backslash/control chars/truncate/diacritics/whitespace)
+- ➕ Added: `admin/src/lib/contracts-api.f044.spec.ts` — TC-44-16 (streamDownloadBlob returns `{blob, filename}` shape + RFC 5987 priority + plain fallback + null fallback + malformed encoding graceful)
+- ➕ Added: `backend/src/modules/contracts/services/document-generator.service.f044-bugfix1.spec.ts` — 5 regression cases for BUGFIX#1 (số khớp chữ semantic match for contract-racekit + contract-operations + 1B+ scale + 2 regression guards `{subtotal}` placeholder gone)
+- ➕ Added: `backend/src/modules/contracts/services/f044-manager-render-verify.spec.ts` — Manager content review one-shot tool: render 6 templates với realistic fixture + write `.txt` to /tmp for eyeball read
+- ➕ Added: `backend/src/modules/contracts/services/f044-cn-coverage-verify.spec.ts` — 22 tests across 8 contract×doc combinations: contractNumber DB resolved + zero hardcoded sample + appears after "Số:" prefix
+- ➕ Added: `backend/scripts/f044-render-verify.ts` — one-shot Manager ops script (optional, used during content review)
+- ➕ Added: 6 backup files `.backup/<type>-20260519-pre-f044.docx` (per F-024 BACKUP_DIRNAME convention)
+- ➕ Added: `.5bib-workflow/features/FEATURE-044-contract-docx-phase-2-text-hardcoded-fix/` workflow folder (00-init, 01-prd, 02-plan, 03-impl, 04-qc, 05-deploy, MANAGER-CONTENT-REVIEW.md)
+- ➕ Added: `.5bib-workflow/features/FEATURE-045-contract-docx-phase-3-legacy-hardcoded-bank-provider/00-manager-init.md` — deferred follow-up cho legacy bank account + provider name hardcoded data trong 5 templates
+
+### Architecture impact
+- ZERO change to service decomposition, ZERO new module, ZERO API contract field change
+- F-044 = pure template binary fix + minor service/utility extension + 1 frontend line + new helpers
+
+### Conventions impact
+NEW patterns added to `conventions.md`:
+1. **HYBRID Option C filename pattern** — `[ContractNumber sanitized] - [RaceName sanitized] - [DocType].ext` with F-024 legacy fallback when either field missing. Activated only when BOTH inputs truthy. Sanitizers strip Windows-reserved chars + truncate 80 + ellipsis.
+2. **RFC 5987 Content-Disposition filename parsing helper** — priority `filename*=UTF-8''<encoded>` (Unicode VN diacritics) → plain `filename="..."` → null. `decodeURIComponent` wrapped in try/catch for graceful degradation on malformed encoding.
+3. **DOCX Template Content Review Protocol (F-044 lesson)** — for every feature touching templates: MUST have `*-manager-render-verify.spec.ts` rendering với realistic fixture (asymmetric splits + VAT non-zero + 1B+ scale + multi-provider). MANDATORY Manager eyeball read output `.txt` files. Every "số + Bằng chữ" pair must have dedicated unit test verifying `vndAmountInWords(X) === <chữ rendered>`. Automation gates không catch semantic inconsistency — Manager render-and-eyeball is final defense for legal/finance documents.
+
+### DB / Cache impact
+- ❌ MongoDB: no schema change, no migration
+- ❌ MySQL platform: no change
+- ❌ Redis: no key pattern change
+- ✅ AWS S3: new DOCX renders upload (existing flow), old buggy versions preserved via 5y retention
+- ✅ DOCX templates binary: 6 modified + 6 backup `.backup/<type>-20260519-pre-f044.docx`
+
+### Tech debt còn lại (moved to known-issues.md)
+- TD-F044-MULTI-VIEWER-VERIFY-DEFERRED (MED) — Manual MS Word + LibreOffice + Google Docs verify post-deploy
+- TD-F044-CONTENT-DISPOSITION-NETWORK-VERIFY (LOW) — Real browser Network tab end-to-end (unit tests cover parsing logic)
+- TD-F044-RFC5987-CROSS-BROWSER (LOW) — Safari + Firefox + Edge verify VN diacritics
+- TD-F044-PROD-AUDIT-REGEN-DEFERRED (MED) — Combined F-042+F-044 regen batch on PROD (Danny + Finance sign-off mandatory)
+- **TD-F044-COMM-STRATEGY-PHASE2-COMBINED (HIGH business)** — Finance team chốt re-send strategy trong 1 tuần
+- TD-F044-AUDIT-AGGREGATE-FIRST-MATCH-ONLY (INFO) — Audit script uses non-global `text.match()` → only first match per regex. Doesn't affect zero-gate semantics. Future: `matchAll()`.
+- TD-F044-PYTHON-FIX-SCRIPT-NOT-COMMITTED (INFO) — `/tmp/docx-extract/fix_templates_f044.py` + `/tmp/f044-bugfix1.py` per F-042 ops convention
+- → F-045 INITIATED — legacy hardcoded bank/provider data trong 5 templates (acceptance-racekit, acceptance-timing, acceptance-operations, contract-ticket-sales bank account 110398986 + branch Thụy Khuê / Hai Bà Trưng + provider name CÔNG TY CỔ PHẦN 5BIB)
+- ✅ RESOLVED: TD-F042-TEMPLATE-PLACEHOLDER-STATIC-AUDIT — F-044 closes via BR-44-13/14 (audit script extended regex + CONTEXT_KEYS sync)
+
+### Lessons learned
+1. **Manager render-and-eyeball IS THE FINAL GATE for legal/finance DOCX** — 238 tests PASS + audit zero hardcoded + QC ✅ APPROVED initial — NHƯNG render with realistic fixture phát hiện bug #1 (số `50M` ≠ chữ `Năm mươi tư triệu`). Automation `assertDocxContains(['50.000.000'])` không assert "số bên cạnh chữ phải khớp".
+2. **F-042 latent bugs amplified by F-044** — F-042 `{subtotal}` mapping at "đã bao gồm VAT" position semantically incorrect (should be `{totalAmount}`). Bug hidden because F-042 fixture had `subtotal ≈ totalAmount` AND in-words was still hardcoded sample. F-044 added `{totalAmountInWords}` exposing inconsistency. → Future template work: render with realistic + asymmetric data, KHÔNG dùng symmetric/round-number fixture.
+3. **XML run split workaround** — Word splits text across `<w:r>` runs unpredictably. Context-aware prefix regex `(prefix)\{placeholder\}` may fail if prefix and placeholder cross run boundary. Workaround: unique-suffix pattern (verify uniqueness via grep first). Used in Adjustment #1 position #3 fix.
+4. **PRD count discrepancy benign with `count=0`** — PRD Mapping Tables D/E/F said 2 in-words occurrences but actual XML had 3. `re.subn(..., count=0)` replaces all → no fix needed. Coder didn't need to escalate.
+5. **3 Critical Adjustments from Manager Code Review post BA PRD valuable** — BA missed (1) 3× typo vs 1, (2) streamDownloadBlob impl detail (Option 1 invalid). Manager spot-check pre-APPROVED Plan caught both → no NEEDS_REVISION cycle.
+
 ## 2026-05-08 ROLLBACK FEATURE-015: Check-In Kiosk SCRAPPED — duplicate of ORG.5bib.com
 
 **Reason:** Strategic Scout failed to discover existing pickup module on ORG.5bib.com (Vietnamese organizer admin platform — separate codebase from 5bib-result). F-015 shipped 50 files of duplicate functionality. Danny called it out: "cái phát bib là bên ORG.5bib.com có r mày làm làm gì thừa ra".

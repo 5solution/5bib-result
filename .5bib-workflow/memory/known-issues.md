@@ -677,3 +677,52 @@ For ANY cross-app/cross-domain rewrite or proxy proposal, MUST verify upstream a
 | **TD-MAN-NUMBER-COLLISION** | LOW workflow | F-037 number REUSED — V1 = DOCX colspan widths 2026-05-15, V2 = on-sale-race-detail-page 2026-05-18. Same as F-036 collision precedent. Both kept in log distinguished by "(V2 *)" label. **Hardening:** `/5bib-init` skill should bump counter immediately on init (not at deploy) + grep existing folder names before assigning. |
 
 
+
+---
+
+## 🚨 Manager workflow lesson — DOCX/Template content review MANDATORY render-and-eyeball (F-044 post-mortem 2026-05-19)
+
+### Issue captured
+F-044 (Contract DOCX Phase 2) đã pass:
+- ✅ Coder 10-step Self-Review pipeline
+- ✅ Coder 51 unit tests PASS + 210 regression PASS
+- ✅ QC 6-phase walkthrough with Adjustment #1/#2/#3 verification
+- ✅ Audit script extended regex reports `Hardcoded leaks (unique): 0` across 4 pattern classes
+- ✅ QC verdict `✅ APPROVED`
+
+**NHƯNG** Manager render verify với fixture realistic (Danny case 30/70 asymmetric) phát hiện:
+
+🔴 **CRITICAL BUG #1** — `contract-racekit.docx` + `contract-operations.docx`:
+> "Tổng giá trị Hợp đồng (đã bao gồm 8% VAT): **50.000.000 VND** (Bằng chữ: **Năm mươi tư triệu đồng**)"
+>
+> Số ≠ chữ → **hợp đồng vô hiệu pháp lý**
+
+Root cause: F-042 đặt `{subtotal}` ở vị trí "đã bao gồm VAT" (semantic phải `{totalAmount}`). F-044 thêm `{totalAmountInWords}` expose latent inconsistency.
+
+### Why automation didn't catch
+- `assertDocxContains(['50.000.000'])` không assert "số bên cạnh chữ phải khớp"
+- Unit tests dùng symmetric fixture (subtotal ≈ totalAmount) hide bug
+- Audit grep hardcoded number/text patterns nhưng KHÔNG check placeholder semantic placement
+- Coder Self-Review Step 6 "UI/UX self-inspection" marked N/A vì "no UI" — nhưng DOCX content IS a form of UI inspection
+- QC Phase 5 PRD Compliance check BR exists, không cross-check số/chữ pair
+
+### New Manager mandate (cho mọi feature đụng template/DOCX/PDF)
+
+`/5bib-deploy` BLOCK conditions extended:
+
+1. Phải có file `*-manager-render-verify.spec.ts` render mọi template đã đụng với fixture realistic
+2. Output `.txt` files phải được Manager eyeball read sentence-by-sentence
+3. Mọi cặp "số + Bằng chữ" phải có dedicated unit test verify `vndAmountInWords(X) === <chữ rendered>`
+4. Fixture mandatory: asymmetric splits (30/70 hoặc 70/30) + VAT non-zero + 1B+ scale + multi-provider variation
+
+### Severity classification new
+- **🔴 LEGAL/FINANCE invalidity** (số ≠ chữ): MUST block deploy + QC re-review
+- **🟡 Template hardcoded entity data** (bank account, provider name): track as separate feature (F-045 case), không block hiện tại nhưng phải fix sớm
+
+### Detailed protocol
+Xem `conventions.md` section "DOCX Template Content Review Protocol (F-044 lesson)".
+
+### Reference
+- F-044 Manager Content Review: `.5bib-workflow/features/FEATURE-044-contract-docx-phase-2-text-hardcoded-fix/MANAGER-CONTENT-REVIEW.md`
+- F-044 BUGFIX #1 regression spec: `backend/src/modules/contracts/services/document-generator.service.f044-bugfix1.spec.ts`
+- Render verify spec template: `backend/src/modules/contracts/services/f044-manager-render-verify.spec.ts`

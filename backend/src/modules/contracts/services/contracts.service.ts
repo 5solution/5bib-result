@@ -1281,6 +1281,14 @@ export class ContractsService {
             actualTotalWithVatInWords: vndAmountInWords(
               contract.acceptanceReport.actualTotalWithVat ?? 0,
             ),
+            // F-044 BR-44-05: VN amount-in-words for `remainingBalance` —
+            // template "Bằng chữ" sentences in `acceptance-*.docx` use this
+            // placeholder for the "còn lại" amount (asymmetric advance/remaining
+            // splits are properly rendered, unlike F-042 50/50 hidden bug).
+            // vndAmountInWords(0) returns "Không đồng", null/undefined → ''.
+            remainingBalanceInWords: vndAmountInWords(
+              contract.acceptanceReport.remainingBalance ?? 0,
+            ),
             reportDay: contract.acceptanceReport.reportDate
               ? String(
                   new Date(contract.acceptanceReport.reportDate).getDate(),
@@ -1454,6 +1462,13 @@ export class ContractsService {
       // Fallback: dùng generatedAt của document entry; nếu null → createdAt của contract.
       fallbackDate: doc.generatedAt ?? c.createdAt ?? null,
       format,
+      // F-044 BR-44-12 — HYBRID Option C pattern inputs.
+      // Khi cả contractNumber + raceName truthy, buildDocumentFilename trả về
+      //   `[ContractNumber] - [RaceName] - [DocType].ext`
+      // (Danny request 2026-05-19 — replace ID-based filename leak).
+      // Else falls back to F-024 pattern (Quotation/Pre-contract flows).
+      contractNumber: c.contractNumber ?? null,
+      raceName: c.raceName ?? null,
     });
     return { body, contentType, filename };
   }

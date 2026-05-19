@@ -3775,3 +3775,44 @@ return {
 **Safeguard cho paid/finalized state:** Log WARN + emit special audit event với flag. Don't block regen — finalized resources unchanged by regen, but Finance team needs filter pattern for traceability.
 
 **Reference:** F-042 deploy 2026-05-18 — 3 patterns minted from real bug fix (Manager Adjustment for paid contract safeguard beyond BA PRD).
+
+---
+
+## 🆕 DOCX Template Content Review Protocol (F-044 lesson — 2026-05-19)
+
+> **Bài học đắt giá:** F-044 ship qua Coder Self-Review (10 bước) + QC (6 phase) + Adjustment #3 audit script PASS — nhưng KHÔNG ai render template với fixture realistic + đọc output. Manager content review 2026-05-19 phát hiện **bug số ≠ chữ** trong `contract-racekit` + `contract-operations`:
+>
+> > "Tổng giá trị Hợp đồng (đã bao gồm 8% VAT): **50.000.000 VND** (Bằng chữ: **Năm mươi tư triệu đồng**)"
+>
+> Số `50M` ≠ chữ "Năm mươi tư triệu" (= 54M). **Hợp đồng vô hiệu pháp lý theo Bộ luật Dân sự** (số ghi bằng chữ là căn cứ chính khi mâu thuẫn).
+>
+> Root cause: F-042 đã đặt `{subtotal}` cho câu "Tổng giá trị (đã bao gồm VAT)" — sai semantic (phải là `{totalAmount}`). F-044 thêm `{totalAmountInWords}` expose latent inconsistency. Pattern bị mask vì F-042 sample test data có subtotal ≈ totalAmount; chỉ phát hiện khi render với VAT realistic.
+
+### Mandate cho mọi DOCX/template change
+
+Manager `/5bib-deploy` MUST verify trước khi APPROVED close:
+
+1. **Render verify spec phải tồn tại** — file `*-manager-render-verify.spec.ts` trong scope feature, render mọi template đã đụng với fixture realistic (KHÔNG 50/50 split, KHÔNG round numbers, dùng asymmetric + VAT-realistic values)
+2. **Output `.txt` files phải được Manager đọc** — eyeball từng câu, đặc biệt các cặp "số + Bằng chữ"
+3. **Semantic match assertion** — mọi cặp số/chữ pair phải có unit test verify cùng giá trị (`vndAmountInWords(X) === <chữ rendered>`)
+4. **Realistic fixture mandatory** (mở rộng F-024 real-world data convention):
+   - Asymmetric advance/remaining splits (30/70 hoặc 70/30, KHÔNG 50/50)
+   - VAT non-zero (8% standard)
+   - totalAmount ≠ subtotal explicitly (vì có VAT)
+   - 1B+ scale variations
+   - Multi-provider (5BIB + 5SOLUTION) to expose hardcoded provider data
+
+### Why automation tests don't catch this
+
+- `assertDocxContains(['50.000.000'])` PASS nhưng KHÔNG check rằng cạnh nó là chữ "Năm mươi triệu" hay "Năm mươi tư triệu"
+- Audit script grep hardcoded patterns nhưng KHÔNG verify semantic correctness của placeholder placement
+- Unit test mock data thường symmetric (subtotal = totalAmount) hide the bug
+- Coder + QC focus on "0 hardcoded leak" gate — bỏ qua "render output makes legal sense"
+
+→ **Manager render-and-read** là gate cuối CRITICAL cho legal/finance documents. Đừng trust automation alone.
+
+### Reference
+
+- F-044 Manager Content Review 2026-05-19: phát hiện bug số ≠ chữ post QC ✅ APPROVED
+- F-044 BUGFIX #1: 2 templates × 1-line regex replace `{subtotal}` → `{totalAmount}` + 3 NEW regression spec to prevent recurrence
+- F-045 (mở mới sau F-044 ship): legacy hardcoded data trong 5 templates (bank account `110398986` + branch `Thụy Khuê` / `Hai Bà Trưng` + provider name `CÔNG TY CỔ PHẦN 5BIB`) — pre-existing F-024 bugs, NOT in F-044 scope

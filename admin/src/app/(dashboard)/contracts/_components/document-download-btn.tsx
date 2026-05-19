@@ -68,11 +68,17 @@ export function DocumentDownloadBtn({
         );
         return;
       }
-      const blob = await streamDownloadBlob(contractId, key);
+      const { blob, filename } = await streamDownloadBlob(contractId, key);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${DOCTYPE_LABEL[docType]}-${contractId}.${format.toLowerCase()}`;
+      // F-044 BR-44-11 — Use backend-provided filename from Content-Disposition
+      // (HYBRID Option C pattern: `[Mã HĐ] - [Tên sự kiện] - [DocType].ext`).
+      // Falls back to legacy ID-based pattern khi backend không emit header
+      // (e.g., proxy strip, dev-mode CORS).
+      a.download =
+        filename ??
+        `${DOCTYPE_LABEL[docType]}-${contractId}.${format.toLowerCase()}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
