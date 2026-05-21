@@ -18,12 +18,23 @@ const withSerwist = withSerwistInit({
  * paths. Khi đó:
  *   - `5bib.com/hub/<slug>` → asset URL = `https://result.5bib.com/_next/...` ✓
  *   - `result.5bib.com/hub/<slug>` direct → asset URL = `https://result.5bib.com/_next/...` ✓
- *     (same origin, no CORS, no perf impact)
  *
- * Env override: `NEXT_PUBLIC_ASSET_PREFIX` cho local dev / preview environments.
+ * **F-056 fix 2026-05-21:** Default removed (was `'https://result.5bib.com'`).
+ * Root cause incident: DEV build inherited PROD URL as default → HTML
+ * referenced PROD CDN chunks → F-056 new chunk hashes 404 trên PROD CDN →
+ * DEV UI vỡ.
+ *
+ * Build-time env var `NEXT_PUBLIC_ASSET_PREFIX` MUST be set explicitly per
+ * environment via Docker build args / CI workflow:
+ *   - PROD build: NEXT_PUBLIC_ASSET_PREFIX=https://result.5bib.com (cho F-027 rewrite)
+ *   - DEV build: NEXT_PUBLIC_ASSET_PREFIX='' (empty = relative URLs same-origin)
+ *   - Local dev: '' (default Next.js dev server)
+ *
+ * F-027 Promo Hub rewrite at 5bib.com/hub/[slug] requires PROD build to set
+ * absolute URL — if unset, Vercel rewrite path will 404 chunks (separate fix
+ * needed via CI build args for PROD release branches).
  */
-const ASSET_PREFIX =
-  process.env.NEXT_PUBLIC_ASSET_PREFIX ?? 'https://result.5bib.com'
+const ASSET_PREFIX = process.env.NEXT_PUBLIC_ASSET_PREFIX ?? ''
 
 const nextConfig: NextConfig = {
   output: 'standalone',
