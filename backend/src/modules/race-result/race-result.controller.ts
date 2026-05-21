@@ -56,6 +56,13 @@ import {
 } from './services/result-image.service';
 import { BadgeService } from './services/badge.service';
 import { ShareEventService } from './services/share-event.service';
+import { AthleteProfileService } from './services/athlete-profile.service';
+import { AthleteProfileResponseDto } from './dto/athlete-profile-response.dto';
+// F-056 — RaceRecapService wiring (Manager Plan Clarification #2: F-046 endpoint
+// was NEVER wired to controller — latent bug; resolved as part of this scope).
+import { RaceRecapService } from './services/race-recap.service';
+import { RaceRecapResponseDto } from './dto/race-recap-response.dto';
+import { RecapInsightPublicDto } from './dto/recap-insight.dto';
 import {
   LogShareEventDto,
   ShareStatsDto,
@@ -79,7 +86,208 @@ export class RaceResultController {
     private readonly shareEventService: ShareEventService,
     private readonly racesService: RacesService,
     private readonly uploadService: UploadService,
+    private readonly athleteProfileService: AthleteProfileService,
+    // F-056 wiring — Manager Plan Clarification #2
+    private readonly raceRecapService: RaceRecapService,
   ) { }
+
+  /**
+   * F-046 + F-056 — Public race recap aggregated data.
+   *
+   * Manager Plan Clarification #2: F-046 RecapService + DTO + schema were built
+   * but the public REST endpoint was never wired in F-046. F-056 closes this gap.
+   *
+   * Param `raceId` accepts the Mongo ObjectId of the race (frontend resolves
+   * raceSlug → race.id via existing `getRaceBySlug()`).
+   */
+  @Get('recap/:raceId')
+  @ApiOperation({
+    summary: 'F-046+F-056 — Race recap aggregated data (public, no auth)',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ObjectId' })
+  @ApiResponse({ status: 200, type: RaceRecapResponseDto })
+  @ApiResponse({ status: 404, description: 'Race not ended / no results yet / not found' })
+  async getRaceRecap(
+    @Param('raceId') raceId: string,
+  ): Promise<RaceRecapResponseDto> {
+    return this.raceRecapService.getRecap(raceId);
+  }
+
+  /**
+   * F-046 + F-056 — Public race recap editorial insight (5BIB editorial team).
+   * Returns published insight only; draft never leaks (BR-46-13).
+   */
+  @Get('recap/:raceId/insight')
+  @ApiOperation({
+    summary: 'F-046+F-056 — Race recap editorial insight (public, no auth)',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ObjectId' })
+  @ApiResponse({ status: 200, type: RecapInsightPublicDto })
+  async getRaceRecapInsight(
+    @Param('raceId') raceId: string,
+  ): Promise<RecapInsightPublicDto> {
+    return this.raceRecapService.getPublicInsight(raceId);
+  }
+
+  /**
+   * F-056 Phase 4 — Admin: regenerate auto-articles for a race.
+   * Flow: delete all S3 markdown for race → invalidate Redis recap cache →
+   * next public GET /recap/:raceId triggers fresh generate + persist.
+   */
+  @Post('recap/:raceId/regenerate-articles')
+  @UseGuards(LogtoAdminGuard)
+  @ApiOperation({
+    summary: 'F-056 Phase 4 — Admin regenerate recap auto-articles (S3 + cache invalidate)',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ObjectId' })
+  @ApiResponse({
+    status: 200,
+    description: 'Articles deleted; next public GET regenerates',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        deletedCount: { type: 'number' },
+      },
+    },
+  })
+  async regenerateRecapArticles(
+    @Param('raceId') raceId: string,
+  ): Promise<{ success: boolean; deletedCount: number }> {
+    const deleted = await this.raceRecapService.regenerateArticles(raceId);
+    return { success: true, deletedCount: deleted };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // F-056 Phase 5 PAUSED — Public athletes discover endpoints disabled
+  // (2026-05-21, Danny + biz-strategist consult). Rationale: PII compliance
+  // VN Nghị định 13/2023 + brand risk + data moat leakage. See
+  // frontend/app/(main)/runners/page.tsx header for full context.
+  //
+  // Service methods (getPublicStats / getSpotlightOfMonth / getFeatured90Days
+  // / listPublicAthletes) remain in athlete-profile.service.ts for future
+  // F-057 opt-in consent flow restore. Endpoints return 404 to prevent
+  // public access.
+  //
+  // KEEP: /athletes/:slug (individual profile detail — F-047, race-specific
+  // results = athlete consent ngầm khi đăng ký race per industry norm).
+  // ─────────────────────────────────────────────────────────────────────
+
+  @Get('athletes-stats')
+  @ApiOperation({
+    summary: 'F-056 P5 PAUSED — public stats disabled pending consent flow',
+    deprecated: true,
+  })
+  @ApiResponse({ status: 404, description: 'Paused — F-057 opt-in flow' })
+  async getAthletesStats(): Promise<never> {
+    throw new NotFoundException(
+      'Public athletes discover hard-paused per F-056 P5 decision 2026-05-21. ' +
+        'Restore in F-057 with opt-in consent flow.',
+    );
+  }
+
+  @Get('athletes-spotlight')
+  @ApiOperation({
+    summary: 'F-056 P5 PAUSED — spotlight disabled pending consent flow',
+    deprecated: true,
+  })
+  @ApiResponse({ status: 404, description: 'Paused — F-057 opt-in flow' })
+  async getAthletesSpotlight(): Promise<never> {
+    throw new NotFoundException(
+      'Public athletes discover hard-paused per F-056 P5 decision 2026-05-21.',
+    );
+  }
+
+  @Get('athletes-featured-90d')
+  @ApiOperation({
+    summary: 'F-056 P5 PAUSED — featured-90d disabled pending consent flow',
+    deprecated: true,
+  })
+  @ApiResponse({ status: 404, description: 'Paused — F-057 opt-in flow' })
+  async getAthletesFeatured90d(): Promise<never> {
+    throw new NotFoundException(
+      'Public athletes discover hard-paused per F-056 P5 decision 2026-05-21.',
+    );
+  }
+
+  /**
+   * F-056 Phase 5 PAUSED — Public athletes listing returns 404 to prevent
+   * aggregate cross-race PII exposure. F-057 will restore with opt-in
+   * claim flow (athlete proactively enables public discover).
+   */
+  @Get('athletes')
+  @ApiOperation({
+    summary: 'F-056 P5 PAUSED — athletes listing disabled pending consent flow',
+    deprecated: true,
+  })
+  @ApiQuery({ name: 'letter', required: false })
+  @ApiQuery({ name: 'province', required: false })
+  @ApiQuery({ name: 'gender', required: false, enum: ['male', 'female'] })
+  @ApiQuery({ name: 'ageGroup', required: false })
+  @ApiQuery({ name: 'specialty', required: false, enum: ['marathon', 'hm', 'trail', 'ultra', 'road'] })
+  @ApiQuery({ name: 'minRaces', required: false, type: Number })
+  @ApiQuery({ name: 'maxRaces', required: false, type: Number })
+  @ApiQuery({ name: 'sort', required: false, enum: ['az', 'recent', 'most-races', 'fastest-pr'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiResponse({ status: 404, description: 'Paused — F-057 opt-in flow' })
+  async listAthletes(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('letter') _letter?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('province') _province?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('gender') _gender?: 'male' | 'female',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('ageGroup') _ageGroup?: string,
+    @Query('specialty')
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('minRaces') _minRaces?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('maxRaces') _maxRaces?: string,
+    @Query('sort')
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _sort?: 'az' | 'recent' | 'most-races' | 'fastest-pr',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('page') _page?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('pageSize') _pageSize?: string,
+  ): Promise<never> {
+    throw new NotFoundException(
+      'Public athletes discover hard-paused per F-056 P5 decision 2026-05-21. ' +
+        'Restore in F-057 with opt-in consent flow.',
+    );
+    // Original Phase 5 implementation (restore in F-057):
+    /*
+    return this.athleteProfileService.listPublicAthletes({
+      letter, province, gender, ageGroup, specialty,
+      minRaces: minRaces ? parseInt(minRaces, 10) : undefined,
+      maxRaces: maxRaces ? parseInt(maxRaces, 10) : undefined,
+      sort,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
+    */
+  }
+
+  /**
+   * F-047 Phase 1C wiring — public athlete profile by slug.
+   * Used by frontend `/runners/[slug]/page.tsx` SSR.
+   * Slug format: `<bib>-<name-kebab>` (e.g. `9897-nguyen-binh-minh`).
+   */
+  @Get('athletes/:slug')
+  @ApiOperation({
+    summary: 'F-047 — Public athlete profile by URL slug (cross-race identity)',
+  })
+  @ApiParam({ name: 'slug', type: 'string', description: 'Athlete URL slug `<bib>-<name-kebab>`' })
+  @ApiResponse({ status: 200, type: AthleteProfileResponseDto })
+  @ApiResponse({ status: 404, description: 'Athlete profile not found' })
+  async getAthleteProfileBySlug(@Param('slug') slug: string) {
+    // service throws NotFoundException internally if slug invalid or profile inactive
+    return this.athleteProfileService.getProfile(slug);
+  }
 
   @Get('distances')
   @ApiOperation({ summary: 'Get available race distances/types' })

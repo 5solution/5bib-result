@@ -5,8 +5,11 @@ import { RaceAthleteAdminDto } from '../dto/race-athlete-admin.dto';
 
 /**
  * Map MySQL legacy athlete (with relations loaded) → MongoDB schema doc.
- * KHÔNG include PII fields — caller decide khi nào cần PII (admin endpoint
- * load thêm bằng `select('+email +contact_phone +id_number')`).
+ *
+ * F-048 BR-48-05: NOW POPULATES PII fields (email/contact_phone/id_number)
+ * directly into race_athletes. Defense via Mongoose `select: false` at schema
+ * level — default queries return PII as undefined. Admin caller MUST explicit
+ * `.select('+email +contact_phone +id_number')` (BR-48-07).
  *
  * Course name resolution paths (giữ pattern từ chip-cache.service legacy):
  *   1. PRIMARY: athlete → subinfo → order_line_item → ticket_type → race_course
@@ -46,6 +49,11 @@ export function mapMysqlAthleteToSchema(
     last_status: a.last_status ?? null,
     racekit_received: Number(a.racekit_recieved ?? 0) === 1,
     racekit_received_at: a.racekit_recieved_time ?? null,
+    // F-048 BR-48-05 PII populate (select:false at schema level prevents leak)
+    // CRITICAL FIX 2026-05-20: email is in athletes table, phone/CCCD in subinfo
+    email: a.email?.trim()?.toLowerCase() || null,
+    contact_phone: a.subinfo?.contact_phone?.trim() || null,
+    id_number: a.subinfo?.id_number?.trim() || null,
     source: 'mysql_platform',
     legacy_modified_on: a.modified_on ?? null,
     synced_at: new Date(),

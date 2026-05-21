@@ -38,7 +38,11 @@
   },
   "nav": {
     "home": "Home",
-    "calendar": "Events",
+    "calendar": "Calendar",
+    "results": "Results",
+    "buyTickets": "Buy race tickets",
+    "athletes": "Athletes",
+    "recap": "Recap",
     "searchAthlete": "Find athletes"
   },
   "footer": {

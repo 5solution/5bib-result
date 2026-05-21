@@ -133,6 +133,22 @@ export class Race {
   _id: string;
 
   @Prop({ index: true }) productId: string;
+
+  /**
+   * F-048 BR-48-01 — Bridge to MySQL platform `races.race_id` for cross-DB
+   * identity merge + race-master-data sync trigger.
+   *
+   * Populated via migration `2026-05-21-backfill-races-mysql-id.ts` which uses
+   * hybrid 2-tier matching (BR-48-02):
+   *   - Tier 1: MongoDB `slug` ↔ MySQL `url_name` exact match (confidence 1.0)
+   *   - Tier 2: Fuzzy slug similarity ≥0.85 + endDate ±7 days (confidence 0.85)
+   *   - Tier 3: Manual admin review queue
+   *
+   * Sparse index: most MongoDB races already mapped, allow null for orphans.
+   */
+  @Prop({ type: Number, index: true, sparse: true })
+  mysql_race_id?: number | null;
+
   @Prop({ required: true }) title: string;
   @Prop() slug: string;
   @Prop({ default: 'pre_race' }) status: string; // draft | pre_race | live | ended

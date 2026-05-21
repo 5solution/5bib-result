@@ -39,6 +39,8 @@ import {
   ScrollText,
   Coins,
   Sparkles,
+  UsersRound,
+  DatabaseZap,
 } from "lucide-react";
 
 export type NavItem = {
@@ -84,6 +86,23 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "team", href: "/team-management", label: "Quản lý nhân sự", icon: Users },
       { id: "claims", href: "/claims", label: "Khiếu nại", icon: FileWarning, dot: true },
       { id: "timing-leads", href: "/timing-leads", label: "Timing Leads", icon: Timer },
+      // F-048 Phase 3 — Athlete identity clusters management
+      {
+        id: "identity-clusters",
+        href: "/athletes/identity-clusters",
+        label: "Nhận dạng VĐV",
+        icon: UsersRound,
+        badge: "NEW",
+        requireRole: "admin",
+      },
+      {
+        id: "bulk-sync-control",
+        href: "/race-master-data/sync-control",
+        label: "Bulk Sync",
+        icon: DatabaseZap,
+        badge: "NEW",
+        requireRole: "admin",
+      },
     ],
   },
   {
