@@ -159,6 +159,52 @@ export class RaceResultController {
   }
 
   /**
+   * F-056 scope expansion 2026-05-21 — Public athletes index for /runners
+   * frontend listing. Returns most-active athletes sorted by lastRaceDate DESC.
+   * No auth, public read. Used to populate athlete discover page.
+   */
+  @Get('athletes')
+  @ApiOperation({
+    summary: 'F-056 — Public athletes index (most-recently active sorted DESC)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of active athletes (PII-stripped summary)',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          canonicalName: { type: 'string' },
+          primaryBib: { type: 'string' },
+          gender: { type: 'string', nullable: true },
+          nationality: { type: 'string', nullable: true },
+          totalRaces: { type: 'number' },
+          totalFinished: { type: 'number' },
+          lastRaceDate: { type: 'string', nullable: true },
+          avatarUrl: { type: 'string', nullable: true },
+        },
+      },
+    },
+  })
+  async listAthletes(): Promise<
+    Array<{
+      slug: string;
+      canonicalName: string;
+      primaryBib: string;
+      gender?: 'male' | 'female' | 'other' | null;
+      nationality?: string;
+      totalRaces: number;
+      totalFinished: number;
+      lastRaceDate?: string;
+      avatarUrl?: string;
+    }>
+  > {
+    return this.athleteProfileService.listPublicAthletes(60);
+  }
+
+  /**
    * F-047 Phase 1C wiring — public athlete profile by slug.
    * Used by frontend `/runners/[slug]/page.tsx` SSR.
    * Slug format: `<bib>-<name-kebab>` (e.g. `9897-nguyen-binh-minh`).

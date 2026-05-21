@@ -39,6 +39,15 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     'a',
     'br',
     'blockquote',
+    // QC 2026-05-21 fix — course-difficulty template emits pipe tables.
+    // Sanitize allowlist must mirror markdownToHtml output OR table rows
+    // would be stripped on cold-path PUT to S3.
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'th',
+    'td',
   ],
   allowedAttributes: { a: ['href', 'rel', 'target'] },
   transformTags: {

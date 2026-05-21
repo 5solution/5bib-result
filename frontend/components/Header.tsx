@@ -17,14 +17,42 @@ export default function Header() {
 
   // Nav order matches design page-recap.jsx top nav:
   // TRANG CHỦ · LỊCH GIẢI · KẾT QUẢ · VĐV · RECAP
-  // /recap index landing lists ended races; each item links to per-race
-  // /giai-chay/[slug]/recap magazine page.
-  const navLinks = [
-    { href: '/', label: t('nav.home') },
-    { href: '/calendar', label: t('nav.calendar') },
-    { href: '/giai-chay', label: t('nav.results') },
-    { href: '/search', label: t('nav.athletes') },
-    { href: '/recap', label: t('nav.recap') },
+  // Custom matcher per link to handle overlap (vd: /giai-chay/X/recap should
+  // highlight "Recap" not "Kết quả"; /runners/X should highlight "VĐV").
+  const navLinks: Array<{
+    href: string;
+    label: string;
+    isActive: (path: string) => boolean;
+  }> = [
+    {
+      href: '/',
+      label: t('nav.home'),
+      isActive: (p) => p === '/',
+    },
+    {
+      href: '/calendar',
+      label: t('nav.calendar'),
+      isActive: (p) => p.startsWith('/calendar'),
+    },
+    {
+      href: '/giai-chay',
+      label: t('nav.results'),
+      // /giai-chay listing + /giai-chay/X race detail — but NOT /giai-chay/X/recap
+      isActive: (p) =>
+        p.startsWith('/giai-chay') && !p.endsWith('/recap') && !p.includes('/recap'),
+    },
+    {
+      href: '/runners',
+      label: t('nav.athletes'),
+      // VĐV: /runners index + /runners/X profile + global /search athlete
+      isActive: (p) => p.startsWith('/runners') || p.startsWith('/search'),
+    },
+    {
+      href: '/recap',
+      label: t('nav.recap'),
+      // /recap index + any per-race recap /giai-chay/X/recap
+      isActive: (p) => p.startsWith('/recap') || p.endsWith('/recap'),
+    },
   ];
 
   if (pathname?.startsWith('/timing')) return null;
@@ -43,7 +71,7 @@ export default function Header() {
           {/* Desktop Nav — centered */}
           <nav className="hidden md:flex items-stretch flex-1 justify-center">
             {navLinks.map((link) => {
-              const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href.split('?')[0]);
+              const isActive = link.isActive(pathname);
               return (
                 <Link
                   key={link.href}
@@ -84,7 +112,7 @@ export default function Header() {
         <div className="md:hidden bg-blue-700 border-t border-blue-600">
           <nav className="px-4 py-3 space-y-1">
             {navLinks.map((link) => {
-              const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href.split('?')[0]);
+              const isActive = link.isActive(pathname);
               return (
                 <Link
                   key={link.href}

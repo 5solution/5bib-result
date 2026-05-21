@@ -332,6 +332,56 @@ export class AthleteProfileService {
     };
   }
 
+  /**
+   * F-056 scope expansion 2026-05-21 — Public list of active athletes for
+   * /runners discover page. PII-stripped summary, sorted by lastRaceDate DESC.
+   */
+  async listPublicAthletes(limit = 60): Promise<
+    Array<{
+      slug: string;
+      canonicalName: string;
+      primaryBib: string;
+      gender?: 'male' | 'female' | 'other' | null;
+      nationality?: string;
+      totalRaces: number;
+      totalFinished: number;
+      lastRaceDate?: string;
+      avatarUrl?: string;
+    }>
+  > {
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const profiles = await this.profileModel
+      .find({ active: true, deletedAt: { $exists: false } })
+      .sort({ lastRaceDate: -1 })
+      .limit(safeLimit)
+      .select({
+        slug: 1,
+        canonicalName: 1,
+        primaryBib: 1,
+        gender: 1,
+        nationality: 1,
+        totalRaces: 1,
+        totalFinished: 1,
+        lastRaceDate: 1,
+        avatarUrl: 1,
+      })
+      .lean()
+      .exec();
+    return profiles.map((p) => ({
+      slug: p.slug,
+      canonicalName: p.canonicalName,
+      primaryBib: p.primaryBib,
+      gender: p.gender ?? null,
+      nationality: p.nationality ?? undefined,
+      totalRaces: p.totalRaces ?? 0,
+      totalFinished: p.totalFinished ?? 0,
+      lastRaceDate: p.lastRaceDate
+        ? new Date(p.lastRaceDate).toISOString()
+        : undefined,
+      avatarUrl: p.avatarUrl ?? undefined,
+    }));
+  }
+
   /** Sitemap support: top N most-active for /sitemap-athletes.xml. */
   async getSitemapEntries(
     limit = 50000,
