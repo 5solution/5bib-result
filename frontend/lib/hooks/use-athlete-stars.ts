@@ -73,52 +73,79 @@ export function useStarredBibsByCourse(
     queryKey: ['athlete-stars', 'by-course', raceId, courseId, isAuthenticated],
     enabled: !isLoading && !!raceId && !!courseId,
     queryFn: async () => {
-      if (!isAuthenticated) {
-        return new Set<string>(
-          filterByCourse(raceId!, courseId!).map((i) => i.bib),
+      const localFallback = () =>
+        new Set<string>(filterByCourse(raceId!, courseId!).map((i) => i.bib));
+      if (!isAuthenticated) return localFallback();
+      try {
+        const res = await fetch(
+          `/api/athlete-stars/by-course?raceId=${encodeURIComponent(
+            raceId!,
+          )}&courseId=${encodeURIComponent(courseId!)}`,
         );
+        // 401/403 → silent fallback (Logto resource scope not granted).
+        if (res.status === 401 || res.status === 403) return localFallback();
+        if (!res.ok) throw new Error('Fetch starred bibs failed');
+        const json = await res.json();
+        return new Set<string>(json.data || []);
+      } catch {
+        return localFallback();
       }
-      const res = await fetch(
-        `/api/athlete-stars/by-course?raceId=${encodeURIComponent(
-          raceId!,
-        )}&courseId=${encodeURIComponent(courseId!)}`,
-      );
-      if (!res.ok) throw new Error('Fetch starred bibs failed');
-      const json = await res.json();
-      return new Set<string>(json.data || []);
     },
     staleTime: 30_000,
+    retry: false,
   });
 }
 
 export function useStarredList(pageNo = 1, pageSize = 50) {
   const { isAuthenticated, isLoading } = useUser();
+
+  // Helper: localStorage fallback shape (mirrors API response shape).
+  const buildLocalFallback = () => {
+    const items = readWatchlist();
+    const start = (pageNo - 1) * pageSize;
+    const page = items.slice(start, start + pageSize);
+    return {
+      data: page.map(localToRecord),
+      total: items.length,
+      pageNo,
+      pageSize,
+    };
+  };
+
   return useQuery({
     queryKey: ['athlete-stars', 'list', pageNo, pageSize, isAuthenticated],
     enabled: !isLoading,
     queryFn: async () => {
-      if (!isAuthenticated) {
-        const items = readWatchlist();
-        const start = (pageNo - 1) * pageSize;
-        const page = items.slice(start, start + pageSize);
-        return {
-          data: page.map(localToRecord),
-          total: items.length,
-          pageNo,
-          pageSize,
+      if (!isAuthenticated) return buildLocalFallback();
+      // Authenticated session may still 401 if Logto user lacks "5BIB Result
+      // API" resource scope grant — silently fall back to localStorage
+      // instead of throwing (UX: red Network error noise gone).
+      try {
+        const res = await fetch(
+          `/api/athlete-stars?pageNo=${pageNo}&pageSize=${pageSize}`,
+        );
+        if (res.status === 401 || res.status === 403) {
+          return buildLocalFallback();
+        }
+        if (!res.ok) throw new Error('Fetch starred list failed');
+        return (await res.json()) as {
+          data: AthleteStarRecord[];
+          total: number;
+          pageNo: number;
+          pageSize: number;
         };
+      } catch (err) {
+        // Network/CORS/etc. — graceful fallback (same as unauth path)
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.debug('[useStarredList] fallback to localStorage:', err);
+        }
+        return buildLocalFallback();
       }
-      const res = await fetch(
-        `/api/athlete-stars?pageNo=${pageNo}&pageSize=${pageSize}`,
-      );
-      if (!res.ok) throw new Error('Fetch starred list failed');
-      return res.json() as Promise<{
-        data: AthleteStarRecord[];
-        total: number;
-        pageNo: number;
-        pageSize: number;
-      }>;
     },
+    // Silence React Query default retry on 401 (3 retries was creating
+    // 3× 401 noise in DevTools). Single attempt with graceful fallback.
+    retry: false,
   });
 }
 
@@ -287,12 +314,22 @@ export function useWatchlistCount() {
     enabled: !isLoading,
     queryFn: async () => {
       if (!isAuthenticated) return readWatchlist().length;
-      const res = await fetch('/api/athlete-stars?pageNo=1&pageSize=1');
-      if (!res.ok) return 0;
-      const json = await res.json();
-      return (json.total as number) ?? 0;
+      // 401/403 fallback to localStorage count silent (same rationale as
+      // useStarredList — Logto resource scope may not be granted).
+      try {
+        const res = await fetch('/api/athlete-stars?pageNo=1&pageSize=1');
+        if (res.status === 401 || res.status === 403) {
+          return readWatchlist().length;
+        }
+        if (!res.ok) return 0;
+        const json = await res.json();
+        return (json.total as number) ?? 0;
+      } catch {
+        return readWatchlist().length;
+      }
     },
     staleTime: 15_000,
+    retry: false,
   });
 }
 
