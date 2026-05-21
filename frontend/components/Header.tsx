@@ -15,17 +15,19 @@ export default function Header() {
   const pathname = usePathname();
   const { t } = useTranslation();
 
-  // Nav matches design page-recap.jsx top nav:
-  // TRANG CHỦ · LỊCH GIẢI · KẾT QUẢ · VĐV · RECAP
+  // Nav 2026-05-21 (Danny restructure):
+  // TRANG CHỦ · LỊCH GIẢI · KẾT QUẢ · MUA VÉ GIẢI CHẠY · RECAP
   //
-  // F-056 Phase 5 PAUSE (2026-05-21): VĐV link points to /search (athlete
-  // search) instead of /runners discover index — privacy/PII concerns
-  // documented in /runners/page.tsx header comment. /runners/[slug] profile
-  // pages (F-047) remain accessible via direct link / search results.
-  // Restore /runners nav target in F-057 after opt-in consent flow ships.
+  // Changes:
+  //   - "Lịch giải" → /giai-chay (was /calendar — race listing đồng nghĩa lịch giải VN)
+  //   - "Kết quả"  → /calendar  (was /giai-chay — ended races với kết quả)
+  //   - "VĐV" removed; replaced với external "Mua vé giải chạy" → https://5bib.com
+  //   - /runners discover hard-paused (F-057). /runners/[slug] athlete profile
+  //     pages (F-047) accessible via search results / direct link, không có nav entry.
   const navLinks: Array<{
     href: string;
     label: string;
+    external?: boolean;
     isActive: (path: string) => boolean;
   }> = [
     {
@@ -34,22 +36,23 @@ export default function Header() {
       isActive: (p) => p === '/',
     },
     {
-      href: '/calendar',
-      label: t('nav.calendar'),
-      isActive: (p) => p.startsWith('/calendar'),
-    },
-    {
       href: '/giai-chay',
-      label: t('nav.results'),
-      // /giai-chay listing + /giai-chay/X race detail — but NOT /giai-chay/X/recap
+      label: t('nav.calendar'),
+      // /giai-chay listing + /giai-chay/X race detail — NOT /giai-chay/X/recap
       isActive: (p) =>
         p.startsWith('/giai-chay') && !p.endsWith('/recap') && !p.includes('/recap'),
     },
     {
-      href: '/search',
-      label: t('nav.athletes'),
-      // VĐV: athlete search + individual profile pages (F-047)
-      isActive: (p) => p.startsWith('/search') || p.startsWith('/runners'),
+      href: '/calendar',
+      label: t('nav.results'),
+      isActive: (p) => p.startsWith('/calendar'),
+    },
+    {
+      // External — purchase tickets on 5bib.com main marketplace
+      href: 'https://5bib.com',
+      label: t('nav.buyTickets'),
+      external: true,
+      isActive: () => false, // external link, never active in this app
     },
     {
       href: '/recap',
@@ -76,15 +79,36 @@ export default function Header() {
           <nav className="hidden md:flex items-stretch flex-1 justify-center">
             {navLinks.map((link) => {
               const isActive = link.isActive(pathname);
+              const className = `relative flex items-center px-5 text-sm font-semibold transition-colors duration-200 group/nav ${
+                isActive ? 'text-white' : 'text-blue-200 hover:text-white'
+              }`;
+              // External link (e.g., Mua vé giải chạy → 5bib.com): use plain
+              // <a> with target=_blank rel security. Internal links use Next
+              // Link for client-side nav.
+              if (link.external) {
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={className}
+                  >
+                    {link.label}
+                    <span className="ml-1 text-[10px] opacity-70" aria-hidden>
+                      ↗
+                    </span>
+                  </a>
+                );
+              }
               return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`relative flex items-center px-5 text-sm font-semibold transition-colors duration-200 group/nav ${isActive ? 'text-white' : 'text-blue-200 hover:text-white'
-                    }`}
-                >
+                <Link key={link.href} href={link.href} className={className}>
                   {link.label}
-                  <span className={`absolute bottom-0 left-0 h-[3px] bg-white transition-all duration-300 ${isActive ? 'w-full' : 'w-0 group-hover/nav:w-full'}`} />
+                  <span
+                    className={`absolute bottom-0 left-0 h-[3px] bg-white transition-all duration-300 ${
+                      isActive ? 'w-full' : 'w-0 group-hover/nav:w-full'
+                    }`}
+                  />
                 </Link>
               );
             })}
@@ -117,13 +141,34 @@ export default function Header() {
           <nav className="px-4 py-3 space-y-1">
             {navLinks.map((link) => {
               const isActive = link.isActive(pathname);
+              const className = `block px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                isActive
+                  ? 'text-white border-l-2 border-white'
+                  : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
+              }`;
+              if (link.external) {
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={className}
+                  >
+                    {link.label}
+                    <span className="ml-1 text-[10px] opacity-70" aria-hidden>
+                      ↗
+                    </span>
+                  </a>
+                );
+              }
               return (
                 <Link
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-semibold transition-all duration-200 ${isActive ? 'text-white border-l-2 border-white' : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
-                    }`}
+                  className={className}
                 >
                   {link.label}
                 </Link>
