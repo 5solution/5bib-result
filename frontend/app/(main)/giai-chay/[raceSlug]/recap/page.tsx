@@ -406,10 +406,18 @@ export default async function RaceRecapPage({
     { id: 'insight', label: 'Insight' },
   ];
   // Course pills: prefer `name` (e.g. "21KM" with unit) over `distance` (raw
-  // numeric "21" — would lose unit). BR-56-07 v1 read-only visual.
-  const courseLabels = race.courses
-    ?.map((c) => c.name ?? c.distance)
-    .filter((s): s is string => !!s) ?? [];
+  // numeric "21" — would lose unit). 2026-05-21+: clickable, scrolls to
+  // per-course podium anchor (id="course-${courseId}"). Mirrors recap.podiums
+  // courseId so we get one pill per course block in podium section.
+  const navCourses = (recap.podiums ?? [])
+    .map((p) => {
+      // Prefer courseName ("21KM" with unit) over distance ("21" numeric).
+      const label = p.courseName ?? p.distance;
+      return label
+        ? { label, anchorId: `course-${p.courseId}` }
+        : null;
+    })
+    .filter((x): x is { label: string; anchorId: string } => !!x);
 
   // F-056 scope expansion 2026-05-21 — Hero stat tiles (4-tile ngang).
   // Hide tile if data null (esp. elevationGain — most races don't have).
@@ -589,7 +597,7 @@ export default async function RaceRecapPage({
       ) : null}
 
       {/* ═══ STICKY NAV (client island) ═══ */}
-      <StickyRecapNav sections={sections} courses={courseLabels} />
+      <StickyRecapNav sections={sections} courses={navCourses} />
 
       {/* ═══ MAIN CONTENT ═══ */}
       <main className="max-w-7xl mx-auto px-6 md:px-8 pt-16 md:pt-20 pb-12 md:pb-16">
@@ -672,7 +680,11 @@ export default async function RaceRecapPage({
             <p className="text-stone-500 italic">Chưa có dữ liệu podium.</p>
           ) : (
             recap.podiums.map((p) => (
-              <div key={p.courseId} className="mb-10 last:mb-0">
+              <div
+                key={p.courseId}
+                id={`course-${p.courseId}`}
+                className="mb-10 last:mb-0 scroll-mt-32"
+              >
                 {recap.podiums.length > 1 ? (
                   <h3 className="font-heading font-bold uppercase text-[18px] tracking-tight text-stone-700 mb-4">
                     {p.distance ?? p.courseName}
