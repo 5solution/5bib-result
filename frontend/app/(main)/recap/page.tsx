@@ -11,7 +11,22 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getAllRaces } from '@/lib/seo-api';
 
-export const revalidate = 3600;
+/**
+ * F-056 hotfix 2026-05-21: `force-dynamic` thay vì ISR.
+ *
+ * Lý do: Docker build container KHÔNG reach được BACKEND_URL nội bộ
+ * (`http://5bib-result-backend:8081` chỉ resolve ở runtime). Build-time
+ * prerender → `getAllRaces()` fail/empty → cache HTML "0 giải có recap" →
+ * Nginx `s-maxage=3600` đóng băng empty 1h. PROD post-deploy verify thấy
+ * `x-nextjs-prerender: 1` + 0 race cards trong khi `/api/races?pageSize=500`
+ * trả 55 races đầy đủ.
+ *
+ * Fix: bắt SSR per-request runtime, lúc đó backend reachable.
+ * Trade-off: bỏ ISR cache, mỗi request hit backend 1 lần qua `/api/races` —
+ * route low-traffic (recap landing), chấp nhận được. Khi nào build context
+ * có access backend (separate infra fix) thì revert lại `revalidate = 3600`.
+ */
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Race Recap — Tổng kết các giải chạy đã kết thúc | 5BIB',
