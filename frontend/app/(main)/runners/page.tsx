@@ -1,248 +1,258 @@
 /**
- * FEATURE-056 scope expansion 2026-05-21 — /runners/ index landing page.
+ * /runners — public discover page for athletes (F-056 Phase 5).
  *
- * Public discover page for athletes. Linked from main nav "VĐV" item.
- * Server Component, ISR 30min cache. Lists 60 most-recently active athletes
- * sorted by lastRaceDate DESC.
+ * Server Component, ISR revalidate=1800s. Reads searchParams (letter, page,
+ * province, gender, ageGroup, specialty, minRaces, maxRaces, sort) and renders:
+ *   - Hero + 4 stat tiles (athletes-stats)
+ *   - A→Z alphabet jumper (byLetter map)
+ *   - Filter sidebar (form GET) + listing (athletes paginated)
+ *   - First-letter monogram header when ?letter is set
+ *   - VĐV của tháng spotlight (athletes-spotlight)
+ *   - Featured 90d carousel (athletes-featured-90d)
+ *
+ * All filter state lives in URL search params — no client useState.
  */
 
 import type { Metadata } from 'next';
-import Link from 'next/link';
+
+import AlphabetJumper from '@/components/runners/AlphabetJumper';
+import AthleteCard from '@/components/runners/AthleteCard';
+import Featured90dCarousel from '@/components/runners/Featured90dCarousel';
+import FilterSidebar from '@/components/runners/FilterSidebar';
+import HeroStatsTiles from '@/components/runners/HeroStatsTiles';
+import LetterMonogramHeader from '@/components/runners/LetterMonogramHeader';
+import Pagination from '@/components/runners/Pagination';
+import SortDropdown from '@/components/runners/SortDropdown';
+import SpotlightOfMonthCard from '@/components/runners/SpotlightOfMonthCard';
+import type {
+  AthletesFeatured90d,
+  AthletesListResponse,
+  AthletesSpotlight,
+  AthletesStats,
+  RunnersSearchParams,
+} from '@/components/runners/types';
 
 export const revalidate = 1800;
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081';
+const PAGE_SIZE = 12;
 
 export const metadata: Metadata = {
   title: 'Vận động viên — Profile & thành tích | 5BIB',
   description:
-    'Khám phá profile các vận động viên Việt Nam — thành tích Personal Records, lịch sử race, badge thành tựu. Cập nhật từ giải chạy chính thức.',
+    'Khám phá hơn 54.000 vận động viên Việt Nam — Personal Records, badge thành tựu, lịch sử race trên 87 giải chạy chính thức.',
   alternates: { canonical: 'https://5bib.com/runners' },
   openGraph: {
     title: 'Vận động viên 5BIB',
-    description: 'Profile + thành tích VĐV trên các giải chạy Việt Nam.',
+    description:
+      'Profile + thành tích VĐV trên các giải chạy Việt Nam — A→Z directory + spotlight tháng + top 90 ngày.',
     url: 'https://5bib.com/runners',
     type: 'website',
   },
 };
 
-interface AthleteSummary {
-  slug: string;
-  canonicalName: string;
-  primaryBib: string;
-  gender?: 'male' | 'female' | 'other' | null;
-  nationality?: string;
-  totalRaces: number;
-  totalFinished: number;
-  lastRaceDate?: string;
-  avatarUrl?: string;
-}
+// ───────────────────────── data fetchers ─────────────────────────
 
-async function getAthletes(): Promise<AthleteSummary[]> {
+async function getStats(): Promise<AthletesStats> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/race-results/athletes`, {
-      next: {
-        revalidate: 1800,
-        tags: ['runners:index'],
-      },
+    const res = await fetch(`${BACKEND_URL}/api/race-results/athletes-stats`, {
+      next: { revalidate: 1800, tags: ['runners:stats'] },
     });
-    if (!res.ok) return [];
-    return (await res.json()) as AthleteSummary[];
+    if (!res.ok)
+      return {
+        totalAthletes: 0,
+        totalRaces: 0,
+        totalProvinces: 0,
+        totalChipTimes: 0,
+      };
+    return (await res.json()) as AthletesStats;
   } catch {
-    return [];
+    return {
+      totalAthletes: 0,
+      totalRaces: 0,
+      totalProvinces: 0,
+      totalChipTimes: 0,
+    };
   }
 }
 
-function formatVN(d?: string): string {
-  if (!d) return '—';
-  const date = new Date(d);
-  if (isNaN(date.getTime())) return '—';
-  return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1)
-    .toString()
-    .padStart(2, '0')}/${date.getFullYear()}`;
+async function getAthletes(
+  sp: RunnersSearchParams,
+): Promise<AthletesListResponse> {
+  const q = new URLSearchParams();
+  if (sp.letter) q.set('letter', sp.letter);
+  if (sp.province) q.set('province', sp.province);
+  if (sp.gender) q.set('gender', sp.gender);
+  if (sp.ageGroup) q.set('ageGroup', sp.ageGroup);
+  if (sp.specialty) q.set('specialty', sp.specialty);
+  if (sp.minRaces) q.set('minRaces', sp.minRaces);
+  if (sp.maxRaces) q.set('maxRaces', sp.maxRaces);
+  q.set('sort', sp.sort ?? 'az');
+  q.set('page', sp.page ?? '1');
+  q.set('pageSize', String(PAGE_SIZE));
+
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/api/race-results/athletes?${q.toString()}`,
+      { next: { revalidate: 1800, tags: ['runners:list'] } },
+    );
+    if (!res.ok)
+      return {
+        data: [],
+        total: 0,
+        pageNo: 1,
+        pageSize: PAGE_SIZE,
+        byLetter: {},
+      };
+    return (await res.json()) as AthletesListResponse;
+  } catch {
+    return {
+      data: [],
+      total: 0,
+      pageNo: 1,
+      pageSize: PAGE_SIZE,
+      byLetter: {},
+    };
+  }
 }
 
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
-  return (
-    (parts[0][0]?.toUpperCase() ?? '') +
-    (parts[parts.length - 1][0]?.toUpperCase() ?? '')
-  );
+async function getSpotlight(): Promise<AthletesSpotlight> {
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/api/race-results/athletes-spotlight`,
+      { next: { revalidate: 1800, tags: ['runners:spotlight'] } },
+    );
+    if (!res.ok)
+      return { topOne: null, topFive: [], month: nowMonth() };
+    return (await res.json()) as AthletesSpotlight;
+  } catch {
+    return { topOne: null, topFive: [], month: nowMonth() };
+  }
 }
 
-export default async function RunnersIndexPage() {
-  const athletes = await getAthletes();
+async function getFeatured90d(): Promise<AthletesFeatured90d> {
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/api/race-results/athletes-featured-90d`,
+      { next: { revalidate: 1800, tags: ['runners:featured'] } },
+    );
+    if (!res.ok) return { items: [], windowDays: 90 };
+    return (await res.json()) as AthletesFeatured90d;
+  } catch {
+    return { items: [], windowDays: 90 };
+  }
+}
+
+function nowMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+}
+
+// ───────────────────────── page ─────────────────────────
+
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+/** Coerce searchParams to typed string|undefined record (Next.js 16 quirk: arrays possible). */
+function normalize(raw: Record<string, string | string[] | undefined>): RunnersSearchParams {
+  const pick = (k: string): string | undefined => {
+    const v = raw[k];
+    if (Array.isArray(v)) return v[0];
+    return v;
+  };
+  return {
+    letter: pick('letter'),
+    province: pick('province'),
+    gender: pick('gender'),
+    ageGroup: pick('ageGroup'),
+    specialty: pick('specialty'),
+    minRaces: pick('minRaces'),
+    maxRaces: pick('maxRaces'),
+    sort: pick('sort'),
+    page: pick('page'),
+  };
+}
+
+export default async function RunnersIndexPage(props: PageProps) {
+  const sp = normalize(await props.searchParams);
+  const currentPage = Math.max(1, parseInt(sp.page ?? '1', 10) || 1);
+
+  const [stats, list, spotlight, featured] = await Promise.all([
+    getStats(),
+    getAthletes(sp),
+    getSpotlight(),
+    getFeatured90d(),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
+  const displayedLetterLabel = sp.letter ? `vần '${sp.letter}'` : 'tất cả VĐV';
 
   return (
     <div className="bg-stone-50 min-h-screen">
-      {/* ─── Header strip ─── */}
-      <section
-        className="relative overflow-hidden text-white"
-        style={{
-          background: 'linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)',
-          minHeight: 280,
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-6 md:px-8 pt-24 pb-12 md:pt-28 md:pb-16">
-          <div
-            className="inline-flex items-center px-3 py-1 rounded-sm font-mono font-extrabold uppercase text-[10px] tracking-[0.2em] mb-4"
-            style={{ background: '#FF0E65', color: '#fff' }}
-          >
-            5BIB ATHLETES
-          </div>
-          <h1
-            className="font-heading font-black uppercase m-0"
-            style={{
-              fontSize: 'clamp(32px, 5vw, 64px)',
-              lineHeight: 0.95,
-              letterSpacing: '-0.03em',
-            }}
-          >
-            Vận động{' '}
-            <span style={{ color: '#FB923C', fontStyle: 'italic' }}>viên</span>
-          </h1>
-          <p
-            className="mt-4 font-body italic"
-            style={{
-              maxWidth: 600,
-              fontSize: 16,
-              lineHeight: 1.6,
-              color: 'rgba(255,255,255,0.82)',
-            }}
-          >
-            Khám phá profile các vận động viên Việt Nam — thành tích Personal
-            Records, lịch sử race và badge thành tựu.
-          </p>
+      {/* ─── Section A: Hero + Stats ─── */}
+      <HeroStatsTiles stats={stats} />
 
-          {/* Quick action: search link */}
-          <div className="mt-6">
-            <Link
-              href="/search"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-blue-700 font-body font-bold text-[13px] hover:bg-stone-100 transition-colors"
-            >
-              <span aria-hidden>🔎</span>
-              Tìm theo BIB / tên VĐV
-            </Link>
-          </div>
+      {/* ─── Section B: Alphabet jumper ─── */}
+      <AlphabetJumper
+        byLetter={list.byLetter}
+        active={sp.letter}
+        searchParams={sp}
+      />
+
+      {/* ─── Section C: Filter sidebar + listing ─── */}
+      <main className="max-w-7xl mx-auto px-6 md:px-8 py-10 md:py-14">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-10 items-start">
+          <FilterSidebar searchParams={sp} />
+
+          <section className="flex-1 min-w-0">
+            {/* Listing header: count + sort */}
+            <header className="flex items-center justify-between gap-4 flex-wrap mb-5">
+              <div>
+                <div className="font-mono font-bold uppercase text-[11px] tracking-[0.18em] text-stone-500 mb-1">
+                  Hiển thị · {displayedLetterLabel}
+                </div>
+                <div className="font-heading font-black uppercase text-stone-900 text-[22px] tracking-tight">
+                  {list.total.toLocaleString('vi-VN')} VĐV
+                </div>
+              </div>
+              <SortDropdown />
+            </header>
+
+            {/* First-letter monogram header when ?letter set */}
+            {sp.letter ? (
+              <LetterMonogramHeader letter={sp.letter} athletes={list.data} />
+            ) : null}
+
+            {list.data.length === 0 ? (
+              <div className="bg-white border border-stone-200 rounded-2xl p-10 text-center">
+                <p className="font-body italic text-stone-500">
+                  Không có VĐV nào khớp với điều kiện lọc. Thử nới rộng bộ lọc
+                  hoặc xoá để xem toàn bộ.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+                {list.data.map((a) => (
+                  <AthleteCard key={a.slug} athlete={a} />
+                ))}
+              </div>
+            )}
+
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              searchParams={sp}
+            />
+          </section>
         </div>
-        {/* Accent strip */}
-        <div
-          aria-hidden
-          className="absolute bottom-0 left-0 right-0"
-          style={{
-            height: 6,
-            background:
-              'linear-gradient(90deg, var(--5bib-energy, #ea580c), #1d4ed8 60%, #FB923C)',
-          }}
-        />
-      </section>
-
-      {/* ─── Grid ─── */}
-      <main className="max-w-7xl mx-auto px-6 md:px-8 py-12 md:py-16">
-        <header className="mb-7 md:mb-9">
-          <div className="font-mono font-bold uppercase text-[11px] tracking-[0.2em] text-stone-500 mb-2">
-            01 · Hoạt động gần nhất
-          </div>
-          <h2
-            className="font-heading font-black uppercase m-0"
-            style={{
-              fontSize: 'clamp(22px, 2.8vw, 36px)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {athletes.length.toLocaleString('vi-VN')} VĐV gần đây
-          </h2>
-        </header>
-
-        {athletes.length === 0 ? (
-          <p className="text-stone-500 italic">
-            Chưa có dữ liệu VĐV. Quay lại sau khi giải chạy đầu tiên kết thúc.
-          </p>
-        ) : (
-          <div className="grid gap-3 md:gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {athletes.map((a) => {
-              const genderLabel =
-                a.gender === 'female'
-                  ? 'Nữ'
-                  : a.gender === 'male'
-                    ? 'Nam'
-                    : null;
-              const genderColor =
-                a.gender === 'female' ? '#ea580c' : '#1d4ed8';
-              return (
-                <Link
-                  key={a.slug}
-                  href={`/runners/${a.slug}`}
-                  className="group relative bg-white border border-stone-200 rounded-2xl overflow-hidden p-4 md:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
-                  style={{ boxShadow: 'var(--shadow-xs)' }}
-                >
-                  <div className="flex items-center gap-4">
-                    {/* Avatar circle */}
-                    {a.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={a.avatarUrl}
-                        alt={a.canonicalName}
-                        className="w-14 h-14 rounded-full object-cover ring-2 ring-stone-200"
-                      />
-                    ) : (
-                      <div
-                        className="w-14 h-14 rounded-full flex items-center justify-center font-heading font-black text-white text-[18px] shrink-0"
-                        style={{
-                          background: `linear-gradient(135deg, ${genderColor}, ${genderColor}cc)`,
-                        }}
-                      >
-                        {getInitials(a.canonicalName)}
-                      </div>
-                    )}
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span
-                          className="font-mono font-bold text-[10px] uppercase tracking-wider text-stone-500"
-                          style={{ fontVariantNumeric: 'tabular-nums' }}
-                        >
-                          BIB {a.primaryBib}
-                        </span>
-                        {genderLabel ? (
-                          <span
-                            className="font-mono font-bold text-[10px] uppercase tracking-wider"
-                            style={{ color: genderColor }}
-                          >
-                            · {genderLabel}
-                          </span>
-                        ) : null}
-                      </div>
-                      <h3
-                        className="font-heading font-bold text-stone-900 group-hover:text-blue-700 transition-colors truncate"
-                        style={{
-                          fontSize: 16,
-                          lineHeight: 1.25,
-                          letterSpacing: '-0.005em',
-                        }}
-                        title={a.canonicalName}
-                      >
-                        {a.canonicalName}
-                      </h3>
-                      <div
-                        className="font-mono text-[11px] text-stone-500 mt-1"
-                        style={{ fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        <strong className="text-stone-900">
-                          {a.totalFinished}
-                        </strong>
-                        /{a.totalRaces} giải · cuối {formatVN(a.lastRaceDate)}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
       </main>
+
+      {/* ─── Section D: Spotlight VĐV của tháng ─── */}
+      <SpotlightOfMonthCard spotlight={spotlight} />
+
+      {/* ─── Section E: Featured 90d carousel ─── */}
+      <Featured90dCarousel featured={featured} />
     </div>
   );
 }
