@@ -256,11 +256,42 @@ export async function generateMetadata({
     `Phân tích chi tiết kết quả ${recap.raceTitle} ${year}: ${medianText}` +
     (negPct ? `, ${negPct}` : '') +
     `, top podium theo AG. Số liệu từ 5BIB.`;
+  const descTrimmed = description.slice(0, 160);
+
+  // F-056 BUG-UX-1 fix 2026-05-21 (per BA pre-golive audit) — add social
+  // share meta tags + canonical URL. JSON-LD Article schema (F-051) covers
+  // Google indexing; this adds Facebook/Twitter card + canonical for SEO.
+  const canonicalUrl = `https://5bib.com/giai-chay/${raceSlug}/recap`;
+  const ogImage =
+    race.bannerUrl ?? race.imageUrl ?? race.logoUrl ?? undefined;
 
   return {
     title,
-    description: description.slice(0, 160),
-    openGraph: { title, description, type: 'article' },
+    description: descTrimmed,
+    alternates: { canonical: canonicalUrl },
+    openGraph: {
+      title,
+      description: descTrimmed,
+      type: 'article',
+      url: canonicalUrl,
+      siteName: '5BIB',
+      locale: 'vi_VN',
+      ...(ogImage && {
+        images: [
+          {
+            url: ogImage,
+            alt: recap.raceTitle,
+          },
+        ],
+      }),
+      ...(recap.endDate && { publishedTime: recap.endDate }),
+    },
+    twitter: {
+      card: ogImage ? 'summary_large_image' : 'summary',
+      title,
+      description: descTrimmed,
+      ...(ogImage && { images: [ogImage] }),
+    },
   };
 }
 
