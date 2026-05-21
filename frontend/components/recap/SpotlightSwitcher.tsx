@@ -18,6 +18,13 @@ export interface SpotlightSwitcherPodiumCell {
   name: string;
   bib: string;
   chipTime: string;
+  /**
+   * Winner's INDIVIDUAL pace (chipTime / distance), e.g. "4:06/km".
+   * F-056 bugfix 2026-05-21: trước đây dùng chung `medianPace` của course
+   * → cả NAM + NỮ + finisher cuối đều show identical pace (7:09/km cho 10KM
+   * race), không đại diện hiệu năng winner. Giờ pass pace per-cell.
+   */
+  pace?: string;
   category?: string;
   city?: string;
 }
@@ -27,7 +34,6 @@ export interface SpotlightSwitcherCourse {
   label: string;            // "70KM" / "Trail 50Km"
   male?: SpotlightSwitcherPodiumCell;     // Top 1 NAM
   female?: SpotlightSwitcherPodiumCell;   // Top 1 NỮ
-  medianPace?: string;                     // Used for both cards' PACE field
 }
 
 export interface SpotlightSwitcherProps {
@@ -89,7 +95,7 @@ export default function SpotlightSwitcher({
             city={active.male.city}
             ageGroup={active.male.category}
             chipTime={active.male.chipTime}
-            pace={active.medianPace}
+            pace={active.male.pace}
           />
         ) : (
           <EmptyCard label={`OVERALL · NAM · ${active.label}`} />
@@ -102,7 +108,7 @@ export default function SpotlightSwitcher({
             city={active.female.city}
             ageGroup={active.female.category}
             chipTime={active.female.chipTime}
-            pace={active.medianPace}
+            pace={active.female.pace}
           />
         ) : (
           <EmptyCard label={`OVERALL · NỮ · ${active.label}`} />
