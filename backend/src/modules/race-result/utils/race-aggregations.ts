@@ -355,6 +355,55 @@ export function computeNegSplit(rows: RaceResultLean[]): NegSplitResult {
   };
 }
 
+/**
+ * F-056 scope expansion 2026-05-21 — Per-course distribution row for
+ * Variation B finisher distribution bar chart.
+ *
+ * Returns finisher count + median pace + best chip time. All formatted.
+ * Skip course entirely if `rows` empty (caller filters out null).
+ *
+ * BR-56-28: bar chart left-to-right sorted by distance ASC (caller responsibility).
+ */
+export interface CourseDistributionResult {
+  finisherCount: number;
+  medianPace?: string;
+  bestChipTime?: string;
+}
+
+export function computeCourseDistribution(
+  rows: RaceResultLean[],
+): CourseDistributionResult {
+  const finishers = rows.filter((r) => isFinisherChipTime(r.chipTime));
+  if (finishers.length === 0) {
+    return { finisherCount: 0 };
+  }
+  // Median pace (reuse computePaceStats logic but no distribution buckets needed).
+  const paceSeconds = finishers
+    .map((r) => paceToSeconds(r.pace))
+    .filter((s) => s > 0)
+    .sort((a, b) => a - b);
+  const medianPace =
+    paceSeconds.length > 0
+      ? secondsToPace(paceSeconds[Math.floor(paceSeconds.length / 2)])
+      : undefined;
+  // Best chip time = min seconds. Preserve raw string (no reformatting per
+  // DATA INTEGRITY mandate — but here we sort by seconds and return raw).
+  let best = finishers[0];
+  let bestSec = chipTimeToSeconds(best.chipTime);
+  for (const r of finishers) {
+    const sec = chipTimeToSeconds(r.chipTime);
+    if (sec > 0 && (bestSec <= 0 || sec < bestSec)) {
+      best = r;
+      bestSec = sec;
+    }
+  }
+  return {
+    finisherCount: finishers.length,
+    medianPace,
+    bestChipTime: best.chipTime ?? undefined,
+  };
+}
+
 // ─── Internal helpers ──────────────────────────────────────────────────
 
 function toCell(r: RaceResultLean, index: number): AggregatedPodiumCell {

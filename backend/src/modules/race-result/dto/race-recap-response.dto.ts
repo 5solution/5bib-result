@@ -23,6 +23,52 @@ export class RecapHeroStatsDto {
   /** F-056 BR-56-13 — Total registered (sum all status). Used for "Tổng X / Y" header. */
   @ApiPropertyOptional({ description: 'F-056 Tổng số VĐV đăng ký (mọi trạng thái)' })
   registered?: number;
+
+  // F-056 scope expansion 2026-05-21 — Variation A 4-tile hero stat row.
+
+  /** F-056 BR-56-26 — Winning chip time of male overall (course có distance lớn nhất). */
+  @ApiPropertyOptional({ description: 'F-056 Winning time Nam overall (longest course)' })
+  winningTimeMale?: string;
+
+  /** F-056 BR-56-26 — Winning male athlete name (mirrors podium[0].male[0].name). */
+  @ApiPropertyOptional() winningNameMale?: string;
+
+  /** F-056 BR-56-26 — Winning chip time of female overall. */
+  @ApiPropertyOptional({ description: 'F-056 Winning time Nữ overall' })
+  winningTimeFemale?: string;
+
+  /** F-056 BR-56-26 — Winning female athlete name. */
+  @ApiPropertyOptional() winningNameFemale?: string;
+
+  /**
+   * F-056 BR-56-27 / PAUSE-56-09 — Total elevation gain in meters across courses
+   * (max of `race.courses[i].elevationGain` per PAUSE confirm A). Null if no
+   * course has elevationGain populated yet (admin not entered + no GPX upload).
+   */
+  @ApiPropertyOptional({ description: 'F-056 Tổng elevation gain (m) — max across courses' })
+  elevationGain?: number;
+
+  /** F-056 BR-56-27 — Number of segments với 800m+ gain. Null if no GPX parsed. */
+  @ApiPropertyOptional({ description: 'F-056 Số đoạn dốc 800m+' })
+  elevationSegments?: number;
+}
+
+/**
+ * F-056 scope expansion 2026-05-21 — Variation B finisher distribution bar chart.
+ * Per-course aggregate row (count + median pace + best chip time).
+ */
+export class RecapCourseDistributionDto {
+  @ApiProperty() courseId!: string;
+  @ApiProperty() courseName!: string;
+  @ApiPropertyOptional() distance?: string;
+  @ApiProperty({ description: 'Total finishers on this course (FIN status)' })
+  finisherCount!: number;
+
+  /** Median pace formatted as "mm:ss/km" (null if 0 finishers). */
+  @ApiPropertyOptional() medianPace?: string;
+
+  /** Best chip time across all finishers (winner) — "h:mm:ss" or "mm:ss". */
+  @ApiPropertyOptional() bestChipTime?: string;
 }
 
 export class RecapPodiumCellDto {
@@ -173,4 +219,11 @@ export class RaceRecapResponseDto {
   /** F-056 GAP #3 — Spotlight editorial per podium winner per course. */
   @ApiPropertyOptional({ type: [RecapSpotlightPerCourseDto] })
   spotlightStoriesByCourse?: RecapSpotlightPerCourseDto[];
+
+  /**
+   * F-056 BR-56-28 — Per-course finisher distribution (Variation B body dashboard).
+   * Sorted by `distance` ASC for bar chart left-to-right rendering.
+   */
+  @ApiPropertyOptional({ type: [RecapCourseDistributionDto] })
+  finisherDistribution?: RecapCourseDistributionDto[];
 }

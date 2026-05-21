@@ -55,6 +55,7 @@ import {
   RecapAGBucketDto,
   RecapSpotlightPerCourseDto,
   RecapSpotlightStoryDto,
+  RecapCourseDistributionDto,
 } from '../dto/race-recap-response.dto';
 import {
   RecapInsightPublicDto,
@@ -67,6 +68,7 @@ import {
   computeAGBreakdown as computeAGBreakdownHelper,
   computeStatusCounts as computeStatusCountsHelper,
   computeNegSplit as computeNegSplitHelper,
+  computeCourseDistribution as computeCourseDistributionHelper,
   chipTimeToSeconds,
   type RaceResultLean,
   type AggregatedPodiumCell,
@@ -104,6 +106,8 @@ interface CourseInfo {
   courseId: string;
   name: string;
   distance?: string;
+  /** F-056 scope expansion 2026-05-21 PAUSE-56-09 — per-course elevation gain (m). */
+  elevationGain?: number;
 }
 
 /**
@@ -376,6 +380,9 @@ export class RaceRecapService {
       courseId: string;
       name?: string;
       distance?: string;
+      // F-056 scope expansion 2026-05-21 PAUSE-56-09 — elevationGain from race
+      // schema (admin-input field). Used to derive hero.elevationGain (max).
+      elevationGain?: number;
     }>;
     for (const c of racesCourses) {
       if (c.courseId) {
@@ -383,6 +390,7 @@ export class RaceRecapService {
           courseId: c.courseId,
           name: c.name ?? c.courseId,
           distance: c.distance,
+          elevationGain: c.elevationGain ?? undefined,
         });
       }
     }
@@ -396,12 +404,16 @@ export class RaceRecapService {
     // DATA INTEGRITY: hero counts derived from FULL result set (all statuses),
     // helper applies status classification per RaceResult.started + chipTime.
     const heroCounts = computeStatusCountsHelper(allResults);
-    const hero = this.computeHero(heroCounts, race.title);
+    // Hero with extra fields built AFTER per-course loop (needs longest-course
+    // podium winner + max elevationGain). Placeholder, overridden below.
+    let hero = this.computeHero(heroCounts, race.title);
 
     const podiums: RecapPodiumPerCourseDto[] = [];
     const paceStats: RecapPaceStatsDto[] = [];
     const negativeSplits: RecapNegativeSplitDto[] = [];
     const agBreakdowns: RecapAGBreakdownPerCourseDto[] = [];
+    // F-056 scope expansion 2026-05-21 BR-56-28 — Variation B distribution chart.
+    const finisherDistribution: RecapCourseDistributionDto[] = [];
 
     // Load admin-curated insight (if any) up front so spotlight builder can
     // merge curated vs auto-gen entries per BR-56-03 fallback chain.
@@ -490,7 +502,60 @@ export class RaceRecapService {
           stories,
         });
       }
+
+      // ── Finisher distribution (F-056 scope expansion BR-56-28) ────────
+      const distRaw = computeCourseDistributionHelper(
+        courseResults as RaceResultLean[],
+      );
+      finisherDistribution.push({
+        courseId: course.courseId,
+        courseName: course.name,
+        distance: course.distance,
+        finisherCount: distRaw.finisherCount,
+        medianPace: distRaw.medianPace,
+        bestChipTime: distRaw.bestChipTime,
+      });
     }
+
+    // F-056 scope expansion 2026-05-21 — Sort distribution by numeric distance
+    // ASC for left-to-right bar chart render (BR-56-28).
+    finisherDistribution.sort((a, b) => {
+      const da = parseFloat((a.distance ?? '0').replace(',', '.'));
+      const db = parseFloat((b.distance ?? '0').replace(',', '.'));
+      return da - db;
+    });
+
+    // F-056 scope expansion 2026-05-21 BR-56-26 — Hero winning M/F from the
+    // longest-distance course (cinematic header). Picks last sorted distance.
+    const longestCourseDist = [...finisherDistribution].sort((a, b) => {
+      const da = parseFloat((a.distance ?? '0').replace(',', '.'));
+      const db = parseFloat((b.distance ?? '0').replace(',', '.'));
+      return db - da;
+    })[0];
+    const longestCoursePodium = longestCourseDist
+      ? podiums.find((p) => p.courseId === longestCourseDist.courseId)
+      : podiums[0];
+    const winnerMale = longestCoursePodium?.male[0];
+    const winnerFemale = longestCoursePodium?.female[0];
+
+    // F-056 scope expansion 2026-05-21 PAUSE-56-09 — elevationGain = max across
+    // course.elevationGain (admin input). Null if no course has data → hide
+    // tile in UI.
+    const elevationGains = courses
+      .map((c) => c.elevationGain)
+      .filter((g): g is number => typeof g === 'number' && g > 0);
+    const elevationGain =
+      elevationGains.length > 0 ? Math.max(...elevationGains) : undefined;
+
+    // Merge extra hero fields (winning M/F + elevation) per scope expansion.
+    hero = {
+      ...hero,
+      winningTimeMale: winnerMale?.chipTime,
+      winningNameMale: winnerMale?.name,
+      winningTimeFemale: winnerFemale?.chipTime,
+      winningNameFemale: winnerFemale?.name,
+      elevationGain,
+    };
 
     return {
       raceId,
@@ -506,6 +571,8 @@ export class RaceRecapService {
         spotlightStoriesByCourse.length > 0
           ? spotlightStoriesByCourse
           : undefined,
+      finisherDistribution:
+        finisherDistribution.length > 0 ? finisherDistribution : undefined,
       computedAt: new Date().toISOString(),
     };
   }
