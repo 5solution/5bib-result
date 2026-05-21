@@ -40,6 +40,7 @@ import AGBreakdownTable from '@/components/recap/AGBreakdownTable';
 import EditorialBlock from '@/components/recap/EditorialBlock';
 import RecapActionBar from '@/components/recap/RecapActionBar';
 import PaceCurveNarrativeBlock from '@/components/recap/PaceCurveNarrativeBlock';
+import RecapStoryCard from '@/components/recap/RecapStoryCard';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081';
 
@@ -124,6 +125,23 @@ interface RecapCourseDistribution {
   bestChipTime?: string;
 }
 
+interface RecapArticleMeta {
+  slug: string;
+  title: string;
+  summary: string;
+  category:
+    | 'race-narrative'
+    | 'winner-profile'
+    | 'pacing'
+    | 'course-difficulty'
+    | 'age-group'
+    | 'pace-distribution';
+  readMinutes: number;
+  source: 'auto' | 'admin';
+  html: string;
+  publishedAt: string;
+}
+
 interface RaceRecap {
   raceId: string;
   raceTitle: string;
@@ -150,6 +168,7 @@ interface RaceRecap {
   agBreakdowns: RecapAGBreakdown[];
   spotlightStoriesByCourse?: RecapSpotlightPerCourse[];
   finisherDistribution?: RecapCourseDistribution[];
+  recapArticles?: RecapArticleMeta[];
   computedAt: string;
 }
 
@@ -444,6 +463,9 @@ export default async function RaceRecapPage({
     { id: 'pace', label: 'Pace' },
     { id: 'negsplit', label: 'Negative Split' },
     { id: 'ag', label: 'Age Group' },
+    ...(recap.recapArticles && recap.recapArticles.length > 0
+      ? [{ id: 'stories', label: 'Stories' }]
+      : []),
     { id: 'insight', label: 'Insight' },
   ];
   // Course pills: prefer `name` (e.g. "21KM" with unit) over `distance` (raw
@@ -832,9 +854,43 @@ export default async function RaceRecapPage({
           )}
         </section>
 
+        {/* ── 5BIB STORIES (auto-generated articles per Phase 4) ── */}
+        {recap.recapArticles && recap.recapArticles.length > 0 ? (
+          <section id="stories" className="mb-16 md:mb-20 scroll-mt-32">
+            <SectionHeading
+              number="06"
+              eyebrow="5BIB Stories"
+              title="BÀI VIẾT TỪ HỆ THỐNG"
+              action={
+                <span
+                  className="font-mono text-[12px] text-stone-500"
+                  style={{ letterSpacing: '0.08em' }}
+                >
+                  {recap.recapArticles.length} BÀI · TỰ ĐỘNG TỔNG HỢP
+                </span>
+              }
+            />
+            <div className="grid gap-4 md:gap-5 md:grid-cols-2">
+              {recap.recapArticles.map((article) => (
+                <RecapStoryCard
+                  key={article.slug}
+                  slug={article.slug}
+                  title={article.title}
+                  summary={article.summary}
+                  category={article.category}
+                  readMinutes={article.readMinutes}
+                  html={article.html}
+                  source={article.source}
+                  publishedAt={article.publishedAt}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {/* ── INSIGHT ── */}
         <section id="insight" className="mb-12 scroll-mt-32">
-          <SectionHeading number="06" eyebrow="5BIB Editorial" title="INSIGHT" />
+          <SectionHeading number="07" eyebrow="5BIB Editorial" title="INSIGHT" />
           <InsightEditorial
             insightHtml={insight?.insightHtml ?? null}
             byline={`5BIB EDITORIAL TEAM${recap.endDate ? ` · ${formatVN(recap.endDate)}` : ''}`}
