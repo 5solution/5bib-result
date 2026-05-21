@@ -130,6 +130,35 @@ export class RaceResultController {
   }
 
   /**
+   * F-056 Phase 4 — Admin: regenerate auto-articles for a race.
+   * Flow: delete all S3 markdown for race → invalidate Redis recap cache →
+   * next public GET /recap/:raceId triggers fresh generate + persist.
+   */
+  @Post('recap/:raceId/regenerate-articles')
+  @UseGuards(LogtoAdminGuard)
+  @ApiOperation({
+    summary: 'F-056 Phase 4 — Admin regenerate recap auto-articles (S3 + cache invalidate)',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ObjectId' })
+  @ApiResponse({
+    status: 200,
+    description: 'Articles deleted; next public GET regenerates',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        deletedCount: { type: 'number' },
+      },
+    },
+  })
+  async regenerateRecapArticles(
+    @Param('raceId') raceId: string,
+  ): Promise<{ success: boolean; deletedCount: number }> {
+    const deleted = await this.raceRecapService.regenerateArticles(raceId);
+    return { success: true, deletedCount: deleted };
+  }
+
+  /**
    * F-047 Phase 1C wiring — public athlete profile by slug.
    * Used by frontend `/runners/[slug]/page.tsx` SSR.
    * Slug format: `<bib>-<name-kebab>` (e.g. `9897-nguyen-binh-minh`).

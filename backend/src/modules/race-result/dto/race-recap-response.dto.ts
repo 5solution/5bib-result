@@ -226,4 +226,53 @@ export class RaceRecapResponseDto {
    */
   @ApiPropertyOptional({ type: [RecapCourseDistributionDto] })
   finisherDistribution?: RecapCourseDistributionDto[];
+
+  /**
+   * F-056 BR-56-29 Phase 4 (2026-05-21) — Auto-generated editorial articles
+   * for the recap page "5BIB Stories" section. Persisted to S3
+   * `recap-articles/{raceId}/{slug}.md` per CLAUDE.md S3 lifecycle rule 7.
+   */
+  @ApiPropertyOptional({ type: () => [RecapArticleMetaDto] })
+  recapArticles?: RecapArticleMetaDto[];
+}
+
+/**
+ * F-056 BR-56-29 Phase 4 — Recap article metadata + pre-rendered HTML body.
+ * Source-of-truth markdown lives in S3; this DTO is the public read shape.
+ */
+export class RecapArticleMetaDto {
+  @ApiProperty({ description: 'URL-safe slug (unique within race scope)' })
+  slug!: string;
+
+  @ApiProperty() title!: string;
+  @ApiProperty({ description: 'Teaser (max 240 chars)' }) summary!: string;
+
+  @ApiProperty({
+    enum: [
+      'race-narrative',
+      'winner-profile',
+      'pacing',
+      'course-difficulty',
+      'age-group',
+      'pace-distribution',
+    ],
+  })
+  category!:
+    | 'race-narrative'
+    | 'winner-profile'
+    | 'pacing'
+    | 'course-difficulty'
+    | 'age-group'
+    | 'pace-distribution';
+
+  @ApiProperty() readMinutes!: number;
+
+  @ApiProperty({ enum: ['auto', 'admin'] })
+  source!: 'auto' | 'admin';
+
+  @ApiProperty({ description: 'Pre-rendered sanitized HTML body' })
+  html!: string;
+
+  @ApiProperty({ description: 'ISO timestamp when article was generated' })
+  publishedAt!: string;
 }

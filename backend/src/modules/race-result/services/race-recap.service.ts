@@ -29,6 +29,7 @@ import {
   Logger,
   NotFoundException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectRedis } from '@nestjs-modules/ioredis';
@@ -56,6 +57,7 @@ import {
   RecapSpotlightPerCourseDto,
   RecapSpotlightStoryDto,
   RecapCourseDistributionDto,
+  RecapArticleMetaDto,
 } from '../dto/race-recap-response.dto';
 import {
   RecapInsightPublicDto,
@@ -74,6 +76,8 @@ import {
   type AggregatedPodiumCell,
 } from '../utils/race-aggregations';
 import { deriveCity } from '../utils/city-derive';
+import { RecapArticleGenerator, type GeneratedRecapArticle } from './recap-article-generator.service';
+import { RecapArticleStorage } from './recap-article-storage.service';
 
 const SANITIZE_ALLOWLIST: sanitizeHtml.IOptions = {
   allowedTags: [
@@ -157,6 +161,10 @@ export class RaceRecapService {
     private readonly insightModel: Model<RaceRecapInsightDocument>,
     @InjectRedis() private readonly redis: Redis,
     private readonly racesService: RacesService,
+    // F-056 Phase 4 — Auto-articles generator + S3 storage. Optional via DI
+    // (tests inject undefined → graceful skip).
+    @Optional() private readonly articleGenerator?: RecapArticleGenerator,
+    @Optional() private readonly articleStorage?: RecapArticleStorage,
   ) {}
 
   async getRecap(raceId: string): Promise<RaceRecapResponseDto> {
@@ -557,7 +565,7 @@ export class RaceRecapService {
       elevationGain,
     };
 
-    return {
+    const response: RaceRecapResponseDto = {
       raceId,
       raceTitle: race.title,
       raceSlug: race.slug ?? raceId,
@@ -575,6 +583,63 @@ export class RaceRecapService {
         finisherDistribution.length > 0 ? finisherDistribution : undefined,
       computedAt: new Date().toISOString(),
     };
+
+    // F-056 Phase 4 — Auto-articles: try S3 read first, fallback generate +
+    // write back. Best-effort: if S3 fails, generator runs inline and articles
+    // returned without persistence (UX preserved, S3 retry next call).
+    response.recapArticles = await this.assembleArticles(raceId, response);
+
+    return response;
+  }
+
+  /**
+   * F-056 Phase 4 — Admin trigger: delete all S3 articles for race + invalidate
+   * recap cache so next public GET regenerates fresh. Returns deleted count.
+   */
+  async regenerateArticles(raceId: string): Promise<number> {
+    if (!this.articleStorage) return 0;
+    const deleted = await this.articleStorage.deleteAllForRace(raceId);
+    await this.invalidateRecapCache(raceId);
+    return deleted;
+  }
+
+  /**
+   * F-056 Phase 4 — Fetch articles from S3 if present, else generate + persist.
+   * Returns DTO shape (re-renders HTML from markdown to keep sanitize allowlist
+   * consistent even for older S3 entries).
+   */
+  private async assembleArticles(
+    raceId: string,
+    recap: RaceRecapResponseDto,
+  ): Promise<RecapArticleMetaDto[] | undefined> {
+    if (!this.articleGenerator || !this.articleStorage) {
+      return undefined; // DI optional — graceful skip in tests
+    }
+    try {
+      let stored = await this.articleStorage.getArticles(raceId);
+      if (!stored || stored.length === 0) {
+        // Cold path: generate + write to S3
+        const generated = this.articleGenerator.generateForRace(recap);
+        if (generated.length === 0) return undefined;
+        await this.articleStorage.putArticles(raceId, generated);
+        stored = generated;
+      } else {
+        // Warm path: re-render HTML from markdown for fresh sanitize.
+        // Storage layer leaves html field empty by design (avoid drift).
+        stored = stored.map((a) => ({
+          ...a,
+          html: this.articleGenerator
+            ? rerenderMarkdownToSanitizedHtml(a.markdown)
+            : a.html,
+        }));
+      }
+      return stored.map(toArticleMetaDto);
+    } catch (err) {
+      this.logger.warn(
+        `[assembleArticles] race=${raceId} failed: ${(err as Error).message} — articles skipped`,
+      );
+      return undefined;
+    }
   }
 
   /**
@@ -882,4 +947,152 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ─── F-056 Phase 4 helpers ──────────────────────────────────────────────
+
+/**
+ * Re-render markdown body to sanitized HTML when serving from S3.
+ * Uses sanitize-html allowlist matching RecapArticleGenerator output.
+ * Lightweight regex-based markdown (mirrors generator's markdownToHtml).
+ */
+function rerenderMarkdownToSanitizedHtml(md: string): string {
+  // Mirror generator's lightweight markdown → HTML; sanitize on result.
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let inUl = false;
+  let inOl = false;
+  let inTable = false;
+
+  const escape = (s: string): string =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const inline = (s: string): string => {
+    let r = escape(s);
+    r = r.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    r = r.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+    r = r.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    return r;
+  };
+
+  const closeLists = () => {
+    if (inUl) {
+      out.push('</ul>');
+      inUl = false;
+    }
+    if (inOl) {
+      out.push('</ol>');
+      inOl = false;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.length === 0) {
+      closeLists();
+      if (inTable) {
+        out.push('</tbody></table>');
+        inTable = false;
+      }
+      continue;
+    }
+    if (line.startsWith('### ')) {
+      closeLists();
+      out.push(`<h3>${inline(line.slice(4))}</h3>`);
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      closeLists();
+      out.push(`<h2>${inline(line.slice(3))}</h2>`);
+      continue;
+    }
+    if (line.startsWith('# ')) {
+      closeLists();
+      continue;
+    }
+    if (line.startsWith('|') && line.endsWith('|')) {
+      const next = (lines[i + 1] ?? '').trim();
+      if (next.startsWith('|') && /[-:]+/.test(next)) {
+        closeLists();
+        const headers = line
+          .slice(1, -1)
+          .split('|')
+          .map((h) => h.trim());
+        out.push(
+          '<table><thead><tr>' +
+            headers.map((h) => `<th>${inline(h)}</th>`).join('') +
+            '</tr></thead><tbody>',
+        );
+        inTable = true;
+        i++;
+        continue;
+      }
+      if (inTable) {
+        const cells = line
+          .slice(1, -1)
+          .split('|')
+          .map((c) => c.trim());
+        out.push(
+          '<tr>' +
+            cells.map((c) => `<td>${inline(c)}</td>`).join('') +
+            '</tr>',
+        );
+        continue;
+      }
+    }
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      if (inOl) {
+        out.push('</ol>');
+        inOl = false;
+      }
+      if (!inUl) {
+        out.push('<ul>');
+        inUl = true;
+      }
+      out.push(`<li>${inline(line.slice(2))}</li>`);
+      continue;
+    }
+    const ol = line.match(/^\d+\.\s+(.*)$/);
+    if (ol) {
+      if (inUl) {
+        out.push('</ul>');
+        inUl = false;
+      }
+      if (!inOl) {
+        out.push('<ol>');
+        inOl = true;
+      }
+      out.push(`<li>${inline(ol[1])}</li>`);
+      continue;
+    }
+    closeLists();
+    out.push(`<p>${inline(line)}</p>`);
+  }
+  closeLists();
+  if (inTable) out.push('</tbody></table>');
+
+  const html = out.join('\n');
+  return sanitizeHtml(html, {
+    allowedTags: ['p', 'h2', 'h3', 'strong', 'em', 'ul', 'ol', 'li', 'a', 'br', 'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+    allowedAttributes: { a: ['href', 'rel', 'target'] },
+    transformTags: {
+      a: sanitizeHtml.simpleTransform('a', {
+        rel: 'nofollow noopener',
+        target: '_blank',
+      }),
+    },
+  });
+}
+
+function toArticleMetaDto(a: GeneratedRecapArticle): RecapArticleMetaDto {
+  return {
+    slug: a.slug,
+    title: a.title,
+    summary: a.summary,
+    category: a.category,
+    readMinutes: a.readMinutes,
+    source: a.source,
+    html: a.html,
+    publishedAt: a.publishedAt,
+  };
 }
