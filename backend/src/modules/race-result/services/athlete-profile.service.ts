@@ -249,11 +249,31 @@ export class AthleteProfileService {
       lastRaceDate?: Date;
     };
 
-    // Build race history live from race_results filtered by linkedBibs
-    const liveResults = await this.resultModel
-      .find({ bib: { $in: p.linkedBibs } })
+    // Build race history live from race_results filtered by linkedBibs.
+    //
+    // BUG FIX 2026-05-21 (Danny screenshot: Anh Thư Nữ shown "Hạng 1 Nam 50-54"):
+    // BIB numbers are NOT unique across races — bib=5114 is shared by 12 different
+    // athletes across history. Filtering by bib alone pulled in 11 strangers' results.
+    // Defense-in-depth: filter by linkedRaceIds (precise curated set) AND post-filter
+    // by name slug (catches cron drift if linkedRaceIds drifts vs real records).
+    const parsed = this.parseSlug(slug);
+    const candidates = await this.resultModel
+      .find({
+        bib: { $in: p.linkedBibs },
+        // restrict to curated races when available — efficient Mongo $in filter
+        ...(p.linkedRaceIds && p.linkedRaceIds.length > 0
+          ? { raceId: { $in: p.linkedRaceIds } }
+          : {}),
+      })
       .lean<ResultRow[]>()
       .exec();
+
+    // Post-filter by canonical name slug (defense against cross-athlete bib collision)
+    const liveResults = parsed
+      ? candidates.filter(
+          (r) => r.name && slugifyVN(r.name) === parsed.nameSlug,
+        )
+      : candidates;
 
     const raceMetas = await this.fetchRaceMetas(
       Array.from(new Set(liveResults.map((r) => r.raceId))),
