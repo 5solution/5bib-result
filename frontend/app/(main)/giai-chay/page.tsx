@@ -17,7 +17,14 @@ import {
   getAllKnownCitySlugs,
 } from "@/lib/province-normalize";
 
-export const revalidate = 3600;
+/**
+ * F-056 hotfix 2026-05-21: `force-dynamic` thay vì ISR (same root cause `/recap`).
+ *
+ * Docker build container không reach BACKEND_URL → build-time prerender ra
+ * HTML "0 giải" → Nginx `s-maxage=3600` cache empty. SSR per-request fix.
+ * Revert sau khi infra cho build context reach được backend.
+ */
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Lịch giải chạy bộ Việt Nam 2026 — Đăng ký & Kết quả | 5BIB",
