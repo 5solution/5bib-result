@@ -361,7 +361,16 @@ export class AthleteProfileService {
     totalProvinces: number;
     totalChipTimes: number;
   }> {
-    const baseFilter = { active: true, deletedAt: { $exists: false } };
+    // Data quality — mirror listPublicAthletes filter so stats match listing.
+    const baseFilter = {
+      active: true,
+      deletedAt: { $exists: false },
+      canonicalName: {
+        $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+        $options: 'i',
+      },
+      totalRaces: { $gte: 1 },
+    };
     const [totalAthletes, distinctProvinces, sumAgg] = await Promise.all([
       this.profileModel.countDocuments(baseFilter).exec(),
       this.profileModel
@@ -441,9 +450,22 @@ export class AthleteProfileService {
     const pageSize = Math.min(Math.max(1, params.pageSize ?? 12), 60);
     const sort = params.sort ?? 'recent';
 
+    // Data quality filter — exclude garbage profiles from public discover.
+    // Real names must:
+    //   - Start with letter (not digit/#/dash) — excludes BIB-fallback names
+    //     ("16661"), Excel parse errors ("#VALUE!"), leading dashes ("-TRAN")
+    //   - Contain at least one whitespace (first + last name)
+    //   - Length >= 4 chars (excludes single-word noise)
+    // Plus totalRaces >= 1 (active means at least 1 race finished, not just
+    // registered).
     const baseFilter: Record<string, unknown> = {
       active: true,
       deletedAt: { $exists: false },
+      canonicalName: {
+        $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+        $options: 'i',
+      },
+      totalRaces: { $gte: 1 },
     };
 
     // Apply filters
@@ -458,15 +480,17 @@ export class AthleteProfileService {
     }
     if (params.letter && /^[A-Za-z]$/.test(params.letter)) {
       // Vietnamese first-letter — must match canonicalName start (case-insensitive).
-      // For accented (Đ/Ô/etc.) caller passes ASCII equivalent (D/O); allow regex.
+      // Merge with quality filter to preserve garbage exclusion.
       baseFilter.canonicalName = {
-        $regex: `^${params.letter}`,
+        $regex: `^${params.letter}[^\\d#].{2,}\\s.+`,
         $options: 'i',
       };
     }
     if (params.minRaces != null || params.maxRaces != null) {
-      const rangeFilter: Record<string, number> = {};
-      if (params.minRaces != null) rangeFilter.$gte = params.minRaces;
+      // Merge with quality floor $gte: 1
+      const rangeFilter: Record<string, number> = { $gte: 1 };
+      if (params.minRaces != null)
+        rangeFilter.$gte = Math.max(1, params.minRaces);
       if (params.maxRaces != null) rangeFilter.$lte = params.maxRaces;
       baseFilter.totalRaces = rangeFilter;
     }
@@ -518,7 +542,18 @@ export class AthleteProfileService {
         .exec(),
       this.profileModel
         .aggregate<{ _id: string; count: number }>([
-          { $match: { active: true, deletedAt: { $exists: false } } },
+          {
+            $match: {
+              active: true,
+              deletedAt: { $exists: false },
+              // Same quality filter as listing — jumper counts must match
+              canonicalName: {
+                $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+                $options: 'i',
+              },
+              totalRaces: { $gte: 1 },
+            },
+          },
           {
             $project: {
               firstLetter: {
@@ -592,6 +627,11 @@ export class AthleteProfileService {
         active: true,
         deletedAt: { $exists: false },
         lastRaceDate: { $gte: monthStart },
+        canonicalName: {
+          $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+          $options: 'i',
+        },
+        totalRaces: { $gte: 1 },
       })
       .sort({ totalRaces: -1, lastRaceDate: -1 })
       .limit(6)
@@ -648,6 +688,11 @@ export class AthleteProfileService {
         active: true,
         deletedAt: { $exists: false },
         lastRaceDate: { $gte: ninetyDaysAgo },
+        canonicalName: {
+          $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+          $options: 'i',
+        },
+        totalRaces: { $gte: 1 },
       })
       .sort({ totalRaces: -1, lastRaceDate: -1 })
       .limit(10)

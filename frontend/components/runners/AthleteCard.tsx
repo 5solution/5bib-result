@@ -33,8 +33,12 @@ function genderBadgeLabel(a: AthleteSummary): string | null {
 export default function AthleteCard({ athlete: a }: Props) {
   const genderColor = a.gender === 'female' ? '#ea580c' : '#1d4ed8';
   const genderBadge = genderBadgeLabel(a);
+  // Hide generic "Viet Nam" (country fallback, no city info) — only show
+  // when nationality is specific province / city.
+  const rawNat = a.nationality?.trim() ?? '';
+  const GENERIC_NATIONALITY = new Set(['viet nam', 'vietnam', 'việt nam']);
   const nationality =
-    a.nationality && a.nationality.trim() !== '' ? a.nationality.trim() : null;
+    rawNat && !GENERIC_NATIONALITY.has(rawNat.toLowerCase()) ? rawNat : null;
   const specialtyKey = a.specialty;
 
   return (
