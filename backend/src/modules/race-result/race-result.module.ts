@@ -11,6 +11,9 @@ import { RaceResultController } from './race-result.controller';
 import { RaceResultService } from './services/race-result.service';
 // F-046 — Programmatic SEO Race Recap
 import { RaceRecapService } from './services/race-recap.service';
+// F-056 Phase 4 — Auto-generated editorial articles
+import { RecapArticleGenerator } from './services/recap-article-generator.service';
+import { RecapArticleStorage } from './services/recap-article-storage.service';
 import {
   RaceRecapInsight,
   RaceRecapInsightSchema,
@@ -120,6 +123,9 @@ import {
     ShareNurtureCron,
     // F-046 — Race recap aggregation engine
     RaceRecapService,
+    // F-056 Phase 4 — Recap article generator + S3 storage
+    RecapArticleGenerator,
+    RecapArticleStorage,
     // F-047 — Athlete profile aggregation engine
     AthleteProfileService,
     // F-047 Phase 1B — Identity merge + photo + cron

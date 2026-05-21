@@ -156,6 +156,12 @@ describe('RaceRecapService (FEATURE-046)', () => {
         mockCountChain(results.length),
       );
       resultModel.find.mockReturnValue(mockQueryChain(results));
+      // F-056 refactor — computeRecap loads admin insight doc to merge spotlightStories.
+      // Default: no curated insight → auto-gen fallback path.
+      insightModel.findOne.mockReturnValue({
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(null),
+      });
     }
 
     it('TC-46-01 happy path — 4 finishers with 2 gender → podium + pace + neg split + AG', async () => {
@@ -630,6 +636,538 @@ describe('RaceRecapService (FEATURE-046)', () => {
       const raceId = 'race-invalidate';
       await service.invalidateRecapCache(raceId);
       expect(redis.del).toHaveBeenCalledWith(`recap:race:${raceId}`);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // FEATURE-056 — TC-56-XX extension (14 cases, Manager Plan §Unit tests)
+  // ═══════════════════════════════════════════════════════════════════════
+  describe('FEATURE-056 — Race Recap UI Upgrade extension', () => {
+    const raceId = 'race-f056';
+
+    function setupEndedRace(results: Array<Record<string, unknown>>) {
+      racesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: {
+          _id: raceId,
+          title: 'Hà Giang Discovery 2026',
+          slug: 'ha-giang-discovery-2026',
+          endDate: new Date('2026-05-03T00:00:00Z'),
+          status: 'ended',
+          courses: [{ courseId: 'c-42k', name: '42K', distance: '42K' }],
+        },
+      });
+      resultModel.countDocuments.mockReturnValue(mockCountChain(results.length));
+      resultModel.find.mockReturnValue(mockQueryChain(results));
+      // Default: no admin insight curated → auto-gen spotlight fallback path.
+      insightModel.findOne.mockReturnValue({
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(null),
+      });
+    }
+
+    it('TC-56-01 happy path — response includes new optional fields (city, registered, negSplit detail, spotlight)', async () => {
+      setupEndedRace([
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1024',
+          name: 'Nguyễn Văn Khôi',
+          chipTime: '2:38:14',
+          gender: 'male',
+          category: 'M30-39',
+          pace: '3:45/km',
+          genderRankNumeric: 1,
+          nationality: 'Hà Nội',
+          chiptimes: JSON.stringify({ Start: '0:00', '21K': '1:18:00', Finish: '2:38:14' }),
+        },
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '5811',
+          name: 'Vũ Hoàng Lan',
+          chipTime: '3:09:47',
+          gender: 'female',
+          category: 'F30-39',
+          pace: '4:30/km',
+          genderRankNumeric: 1,
+          club: 'Hanoi Runners',
+          chiptimes: JSON.stringify({ Start: '0:00', '21K': '1:30:00', Finish: '3:09:47' }),
+        },
+      ]);
+
+      const result = await service.getRecap(raceId);
+
+      // Hero new field: registered count present
+      expect(result.hero.registered).toBe(2);
+
+      // Podium city derived: M from nationality, F from club
+      expect(result.podiums[0].male[0].city).toBe('Hà Nội');
+      expect(result.podiums[0].female[0].city).toBe('Hà Nội');
+      expect(result.podiums[0].maleFinisherCount).toBe(1);
+      expect(result.podiums[0].femaleFinisherCount).toBe(1);
+
+      // NegSplit GAP #2 fields present
+      const ns = result.negativeSplits[0];
+      expect(ns.avgFirstHalf).toBeDefined();
+      expect(ns.avgSecondHalf).toBeDefined();
+      expect(typeof ns.deltaSeconds).toBe('number');
+      expect(typeof ns.finishersAnalyzed).toBe('number');
+      expect(ns.benchmark).toBe(40);
+      expect(ns.interpretation).toBeDefined();
+
+      // Spotlight present (auto-gen fallback for both genders)
+      expect(result.spotlightStoriesByCourse).toBeDefined();
+      expect(result.spotlightStoriesByCourse![0].stories).toHaveLength(2);
+      expect(result.spotlightStoriesByCourse![0].stories[0].source).toBe('auto');
+      expect(result.spotlightStoriesByCourse![0].stories[0].markdown).toContain('Nguyễn Văn Khôi');
+    });
+
+    it('TC-56-02 negSplit detail via helper — finisher analyzed count + avg formats', async () => {
+      setupEndedRace([
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1',
+          name: 'Athlete 1',
+          chipTime: '3:00:00',
+          gender: 'male',
+          chiptimes: JSON.stringify({ Start: '0:00', '21K': '1:25:00', Finish: '3:00:00' }),
+        },
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '2',
+          name: 'Athlete 2',
+          chipTime: '3:30:00',
+          gender: 'male',
+          chiptimes: JSON.stringify({ Start: '0:00', '21K': '1:50:00', Finish: '3:30:00' }),
+        },
+      ]);
+      const result = await service.getRecap(raceId);
+      const ns = result.negativeSplits[0];
+      expect(ns.finishersAnalyzed).toBe(2);
+      expect(ns.avgFirstHalf).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+      expect(ns.avgSecondHalf).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    });
+
+    it('TC-56-03 city derivation fallback chain', async () => {
+      setupEndedRace([
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: 'A',
+          name: 'A',
+          chipTime: '3:00:00',
+          gender: 'male',
+          nationality: 'Hà Nội',
+          genderRankNumeric: 1,
+        },
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: 'B',
+          name: 'B',
+          chipTime: '3:01:00',
+          gender: 'male',
+          club: 'Hanoi Runners Club',
+          genderRankNumeric: 2,
+        },
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: 'C',
+          name: 'C',
+          chipTime: '3:02:00',
+          gender: 'male',
+          club: '5BIB Crew', // no province token → null
+          genderRankNumeric: 3,
+        },
+      ]);
+      const result = await service.getRecap(raceId);
+      const males = result.podiums[0].male;
+      expect(males[0].city).toBe('Hà Nội');
+      expect(males[1].city).toBe('Hà Nội');
+      expect(males[2].city).toBeUndefined();
+    });
+
+    it('TC-56-04 spotlightStories — admin curated wins over auto-gen', async () => {
+      racesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: {
+          _id: raceId,
+          title: 'X',
+          slug: 'x',
+          status: 'ended',
+          endDate: new Date(),
+          courses: [{ courseId: 'c-42k', name: '42K' }],
+        },
+      });
+      const results = [
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1024',
+          name: 'Nguyễn Văn Khôi',
+          chipTime: '2:38:14',
+          gender: 'male',
+          genderRankNumeric: 1,
+        },
+      ];
+      resultModel.countDocuments.mockReturnValue(mockCountChain(results.length));
+      resultModel.find.mockReturnValue(mockQueryChain(results));
+      insightModel.findOne.mockReturnValue({
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue({
+          spotlightStories: [
+            {
+              courseId: 'c-42k',
+              gender: 'M',
+              winnerBib: '1024',
+              markdown: '**Custom editorial**',
+              html: '<p><strong>Custom editorial</strong></p>',
+            },
+          ],
+        }),
+      });
+      const result = await service.getRecap(raceId);
+      const story = result.spotlightStoriesByCourse![0].stories[0];
+      expect(story.source).toBe('admin');
+      expect(story.markdown).toContain('Custom editorial');
+      expect(story.html).toContain('<strong>Custom editorial</strong>');
+    });
+
+    it('TC-56-05 endpoint wiring smoke — service getRecap callable for valid race', async () => {
+      // Demonstrates the public callable path used by new controller route (Clarification #2).
+      setupEndedRace([
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1',
+          name: 'A',
+          chipTime: '3:00:00',
+          gender: 'male',
+          genderRankNumeric: 1,
+        },
+      ]);
+      const result = await service.getRecap(raceId);
+      expect(result.raceId).toBe(raceId);
+    });
+
+    it('TC-56-06 cache hit returns cached recap (warm path) — F-056 fields preserved', async () => {
+      setupEndedRace([
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1',
+          name: 'A',
+          chipTime: '3:00:00',
+          gender: 'male',
+          genderRankNumeric: 1,
+        },
+      ]);
+      const first = await service.getRecap(raceId);
+      const before = resultModel.find.mock.calls.length;
+      const second = await service.getRecap(raceId);
+      expect(resultModel.find.mock.calls.length).toBe(before);
+      expect(second).toEqual(first);
+    });
+
+    it('TC-56-07 endpoint 404 when race not ended (still propagates)', async () => {
+      racesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: { _id: raceId, status: 'live' },
+      });
+      await expect(service.getRecap(raceId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('TC-56-08 endpoint 404 when no race found', async () => {
+      racesService.getRaceById.mockResolvedValue({ success: false });
+      await expect(service.getRecap(raceId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('TC-56-09 backward compat — older clients reading without new fields still parseable', async () => {
+      setupEndedRace([
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1',
+          name: 'A',
+          chipTime: '3:00:00',
+          gender: 'male',
+          genderRankNumeric: 1,
+        },
+      ]);
+      const result = await service.getRecap(raceId);
+      // Destructure ONLY existing F-046 fields → should not throw / fields all present
+      const { hero, podiums, paceStats, negativeSplits, agBreakdowns } = result;
+      expect(hero).toBeDefined();
+      expect(Array.isArray(podiums)).toBe(true);
+      expect(Array.isArray(paceStats)).toBe(true);
+      expect(Array.isArray(negativeSplits)).toBe(true);
+      expect(Array.isArray(agBreakdowns)).toBe(true);
+    });
+
+    it('TC-56-10 XSS sanitize — auto-gen spotlight strips dangerous HTML (no executable <script> tag)', async () => {
+      // Athlete name with embedded script (worst-case vendor data)
+      setupEndedRace([
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1',
+          name: '<script>alert(1)</script>Evil',
+          chipTime: '3:00:00',
+          gender: 'male',
+          genderRankNumeric: 1,
+        },
+      ]);
+      const result = await service.getRecap(raceId);
+      const story = result.spotlightStoriesByCourse![0].stories[0];
+      // Critical: no executable <script> tag (text inside escaped is XSS-safe).
+      expect(story.html).not.toMatch(/<script\b/i);
+      // Angle brackets in name must be HTML-escaped, not raw.
+      expect(story.html).toContain('&lt;script&gt;');
+    });
+
+    it('TC-56-11 spotlightStories array order matches podium per course', async () => {
+      racesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: {
+          _id: raceId,
+          title: 'X',
+          slug: 'x',
+          status: 'ended',
+          endDate: new Date(),
+          courses: [
+            { courseId: 'c-21k', name: '21K' },
+            { courseId: 'c-42k', name: '42K' },
+          ],
+        },
+      });
+      const results = [
+        { raceId, courseId: 'c-21k', bib: 'M21', name: 'M21', chipTime: '1:30:00', gender: 'male', genderRankNumeric: 1 },
+        { raceId, courseId: 'c-21k', bib: 'F21', name: 'F21', chipTime: '1:50:00', gender: 'female', genderRankNumeric: 1 },
+        { raceId, courseId: 'c-42k', bib: 'M42', name: 'M42', chipTime: '3:00:00', gender: 'male', genderRankNumeric: 1 },
+      ];
+      resultModel.countDocuments.mockReturnValue(mockCountChain(results.length));
+      resultModel.find.mockReturnValue(mockQueryChain(results));
+      insightModel.findOne.mockReturnValue({ lean: jest.fn().mockReturnThis(), exec: jest.fn().mockResolvedValue(null) });
+      const result = await service.getRecap(raceId);
+
+      const map = new Map(
+        result.spotlightStoriesByCourse!.map((c) => [c.courseId, c.stories]),
+      );
+      expect(map.get('c-21k')!.map((s) => s.gender)).toEqual(['M', 'F']);
+      expect(map.get('c-42k')!.map((s) => s.gender)).toEqual(['M']); // F42 missing
+    });
+
+    it('TC-56-12 empty state — race ended, all rows DNS → no spotlight, no podium', async () => {
+      setupEndedRace([
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1',
+          name: 'DNS',
+          chipTime: '0:00:00',
+          gender: 'male',
+        },
+      ]);
+      const result = await service.getRecap(raceId);
+      expect(result.podiums[0].male).toHaveLength(0);
+      expect(result.podiums[0].female).toHaveLength(0);
+      expect(result.spotlightStoriesByCourse).toBeUndefined();
+    });
+
+    it('TC-56-13 perf — cold compute <800ms for 2000 finisher mock', async () => {
+      const big: Array<Record<string, unknown>> = [];
+      for (let i = 0; i < 2000; i++) {
+        big.push({
+          raceId,
+          courseId: 'c-42k',
+          bib: String(i),
+          name: `R${i}`,
+          chipTime: '3:30:00',
+          gender: i % 2 === 0 ? 'male' : 'female',
+          category: i % 2 === 0 ? 'M30-39' : 'F30-39',
+          pace: '5:00/km',
+          genderRankNumeric: i,
+          chiptimes: JSON.stringify({ Start: '0:00', '21K': '1:40:00', Finish: '3:30:00' }),
+          nationality: 'Hà Nội',
+        });
+      }
+      setupEndedRace(big);
+      const start = Date.now();
+      const result = await service.getRecap(raceId);
+      const elapsed = Date.now() - start;
+      expect(elapsed).toBeLessThan(800);
+      expect(result.hero.totalFinishers).toBe(2000);
+    });
+
+    it('TC-56-14 invalidate cache flow — invalidateRecapCache DEL key', async () => {
+      await service.invalidateRecapCache(raceId);
+      expect(redis.del).toHaveBeenCalledWith(`recap:race:${raceId}`);
+    });
+
+    // ───────────────────────────────────────────────────────────────────
+    // F-056 SCOPE EXPANSION 2026-05-21 — Variation A enrich + Variation B
+    // body dashboard (PAUSE 09 A + 10 SKIP + 11 A + 12 D chốt).
+    // ───────────────────────────────────────────────────────────────────
+
+    it('TC-56-15 BR-56-26 hero — winning Male/Female times present from longest course', async () => {
+      racesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: {
+          _id: raceId,
+          title: 'Hà Giang Discovery 2026',
+          slug: 'ha-giang-discovery-2026',
+          endDate: new Date('2026-05-03T00:00:00Z'),
+          status: 'ended',
+          courses: [
+            { courseId: 'c-10k', name: '10K', distance: '10' },
+            { courseId: 'c-42k', name: '42K', distance: '42' },
+          ],
+        },
+      });
+      const rows = [
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '1024',
+          name: 'Nguyễn Văn Khôi',
+          chipTime: '2:38:14',
+          gender: 'male',
+          pace: '3:45/km',
+          genderRankNumeric: 1,
+        },
+        {
+          raceId,
+          courseId: 'c-42k',
+          bib: '5811',
+          name: 'Vũ Hoàng Lan',
+          chipTime: '3:09:47',
+          gender: 'female',
+          pace: '4:30/km',
+          genderRankNumeric: 1,
+        },
+        {
+          raceId,
+          courseId: 'c-10k',
+          bib: '2000',
+          name: 'Should Not Win Hero',
+          chipTime: '0:35:00',
+          gender: 'male',
+          pace: '3:30/km',
+          genderRankNumeric: 1,
+        },
+      ];
+      resultModel.countDocuments.mockReturnValue(mockCountChain(rows.length));
+      resultModel.find.mockReturnValue(mockQueryChain(rows));
+      insightModel.findOne.mockReturnValue({
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await service.getRecap(raceId);
+
+      // Winner picked from longest course (42K, not 10K)
+      expect(result.hero.winningTimeMale).toBe('2:38:14');
+      expect(result.hero.winningNameMale).toBe('Nguyễn Văn Khôi');
+      expect(result.hero.winningTimeFemale).toBe('3:09:47');
+      expect(result.hero.winningNameFemale).toBe('Vũ Hoàng Lan');
+    });
+
+    it('TC-56-16 BR-56-27 hero — elevationGain max across courses (PAUSE-56-09 chốt A)', async () => {
+      racesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: {
+          _id: raceId,
+          title: 'Hà Giang Discovery 2026',
+          slug: 'ha-giang-discovery-2026',
+          endDate: new Date('2026-05-03T00:00:00Z'),
+          status: 'ended',
+          courses: [
+            { courseId: 'c-10k', name: '10K', distance: '10', elevationGain: 320 },
+            { courseId: 'c-42k', name: '42K', distance: '42', elevationGain: 1420 },
+          ],
+        },
+      });
+      const dummy = [{ raceId, courseId: 'c-42k', bib: '1', name: 'Dummy', chipTime: '3:00:00', gender: 'male', genderRankNumeric: 1 }];
+      resultModel.countDocuments.mockReturnValue(mockCountChain(dummy.length));
+      resultModel.find.mockReturnValue(mockQueryChain(dummy));
+      insightModel.findOne.mockReturnValue({
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await service.getRecap(raceId);
+
+      // Max across courses, not sum
+      expect(result.hero.elevationGain).toBe(1420);
+    });
+
+    it('TC-56-17 BR-56-27 hero — elevationGain undefined when no course has data', async () => {
+      racesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: {
+          _id: raceId,
+          title: 'Race Without Elev',
+          slug: 'no-elev',
+          endDate: new Date('2026-05-03T00:00:00Z'),
+          status: 'ended',
+          courses: [{ courseId: 'c-21k', name: '21K', distance: '21' }],
+        },
+      });
+      const dummy = [{ raceId, courseId: 'c-21k', bib: '1', name: 'Dummy', chipTime: '1:30:00', gender: 'male', genderRankNumeric: 1 }];
+      resultModel.countDocuments.mockReturnValue(mockCountChain(dummy.length));
+      resultModel.find.mockReturnValue(mockQueryChain(dummy));
+      insightModel.findOne.mockReturnValue({
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await service.getRecap(raceId);
+
+      // Field must be undefined (not 0) so frontend hides tile
+      expect(result.hero.elevationGain).toBeUndefined();
+    });
+
+    it('TC-56-18 BR-56-28 finisherDistribution — per-course row sorted by distance ASC', async () => {
+      racesService.getRaceById.mockResolvedValue({
+        success: true,
+        data: {
+          _id: raceId,
+          title: 'Multi Course',
+          slug: 'multi',
+          endDate: new Date('2026-05-03T00:00:00Z'),
+          status: 'ended',
+          courses: [
+            { courseId: 'c-42k', name: '42K', distance: '42' },
+            { courseId: 'c-10k', name: '10K', distance: '10' },
+            { courseId: 'c-21k', name: '21K', distance: '21' },
+          ],
+        },
+      });
+      const rows = [
+        { raceId, courseId: 'c-42k', bib: '1', name: 'A', chipTime: '3:00:00', gender: 'male', pace: '4:00/km', genderRankNumeric: 1 },
+        { raceId, courseId: 'c-21k', bib: '2', name: 'B', chipTime: '1:30:00', gender: 'male', pace: '4:00/km', genderRankNumeric: 1 },
+        { raceId, courseId: 'c-21k', bib: '3', name: 'C', chipTime: '1:35:00', gender: 'male', pace: '4:10/km', genderRankNumeric: 2 },
+        { raceId, courseId: 'c-10k', bib: '4', name: 'D', chipTime: '0:40:00', gender: 'male', pace: '4:00/km', genderRankNumeric: 1 },
+      ];
+      resultModel.countDocuments.mockReturnValue(mockCountChain(rows.length));
+      resultModel.find.mockReturnValue(mockQueryChain(rows));
+      insightModel.findOne.mockReturnValue({
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await service.getRecap(raceId);
+
+      expect(result.finisherDistribution).toBeDefined();
+      expect(result.finisherDistribution!.map((d) => d.distance)).toEqual([
+        '10', '21', '42',
+      ]);
+      expect(result.finisherDistribution!.find((d) => d.distance === '21')?.finisherCount).toBe(2);
+      expect(result.finisherDistribution!.find((d) => d.distance === '10')?.bestChipTime).toBe('0:40:00');
     });
   });
 });

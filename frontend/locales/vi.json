@@ -38,7 +38,11 @@
   },
   "nav": {
     "home": "Trang chủ",
-    "calendar": "Lịch sự kiện",
+    "calendar": "Lịch giải",
+    "results": "Kết quả",
+    "buyTickets": "Mua vé giải chạy",
+    "athletes": "VĐV",
+    "recap": "Recap",
     "searchAthlete": "Tìm vận động viên"
   },
   "footer": {

@@ -15,9 +15,51 @@ export default function Header() {
   const pathname = usePathname();
   const { t } = useTranslation();
 
-  const navLinks = [
-    { href: '/', label: t('nav.home') },
-    { href: '/calendar', label: t('nav.calendar') },
+  // Nav 2026-05-21 (Danny restructure):
+  // TRANG CHỦ · LỊCH GIẢI · KẾT QUẢ · MUA VÉ GIẢI CHẠY · RECAP
+  //
+  // Changes:
+  //   - "Lịch giải" → /giai-chay (was /calendar — race listing đồng nghĩa lịch giải VN)
+  //   - "Kết quả"  → /calendar  (was /giai-chay — ended races với kết quả)
+  //   - "VĐV" removed; replaced với external "Mua vé giải chạy" → https://5bib.com
+  //   - /runners discover hard-paused (F-057). /runners/[slug] athlete profile
+  //     pages (F-047) accessible via search results / direct link, không có nav entry.
+  const navLinks: Array<{
+    href: string;
+    label: string;
+    external?: boolean;
+    isActive: (path: string) => boolean;
+  }> = [
+    {
+      href: '/',
+      label: t('nav.home'),
+      isActive: (p) => p === '/',
+    },
+    {
+      href: '/giai-chay',
+      label: t('nav.calendar'),
+      // /giai-chay listing + /giai-chay/X race detail — NOT /giai-chay/X/recap
+      isActive: (p) =>
+        p.startsWith('/giai-chay') && !p.endsWith('/recap') && !p.includes('/recap'),
+    },
+    {
+      href: '/calendar',
+      label: t('nav.results'),
+      isActive: (p) => p.startsWith('/calendar'),
+    },
+    {
+      // External — purchase tickets on 5bib.com main marketplace
+      href: 'https://5bib.com',
+      label: t('nav.buyTickets'),
+      external: true,
+      isActive: () => false, // external link, never active in this app
+    },
+    {
+      href: '/recap',
+      label: t('nav.recap'),
+      // /recap index + any per-race recap /giai-chay/X/recap
+      isActive: (p) => p.startsWith('/recap') || p.endsWith('/recap'),
+    },
   ];
 
   if (pathname?.startsWith('/timing')) return null;
@@ -36,16 +78,37 @@ export default function Header() {
           {/* Desktop Nav — centered */}
           <nav className="hidden md:flex items-stretch flex-1 justify-center">
             {navLinks.map((link) => {
-              const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href.split('?')[0]);
+              const isActive = link.isActive(pathname);
+              const className = `relative flex items-center px-5 text-sm font-semibold transition-colors duration-200 group/nav ${
+                isActive ? 'text-white' : 'text-blue-200 hover:text-white'
+              }`;
+              // External link (e.g., Mua vé giải chạy → 5bib.com): use plain
+              // <a> with target=_blank rel security. Internal links use Next
+              // Link for client-side nav.
+              if (link.external) {
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={className}
+                  >
+                    {link.label}
+                    <span className="ml-1 text-[10px] opacity-70" aria-hidden>
+                      ↗
+                    </span>
+                  </a>
+                );
+              }
               return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`relative flex items-center px-5 text-sm font-semibold transition-colors duration-200 group/nav ${isActive ? 'text-white' : 'text-blue-200 hover:text-white'
-                    }`}
-                >
+                <Link key={link.href} href={link.href} className={className}>
                   {link.label}
-                  <span className={`absolute bottom-0 left-0 h-[3px] bg-white transition-all duration-300 ${isActive ? 'w-full' : 'w-0 group-hover/nav:w-full'}`} />
+                  <span
+                    className={`absolute bottom-0 left-0 h-[3px] bg-white transition-all duration-300 ${
+                      isActive ? 'w-full' : 'w-0 group-hover/nav:w-full'
+                    }`}
+                  />
                 </Link>
               );
             })}
@@ -77,14 +140,35 @@ export default function Header() {
         <div className="md:hidden bg-blue-700 border-t border-blue-600">
           <nav className="px-4 py-3 space-y-1">
             {navLinks.map((link) => {
-              const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href.split('?')[0]);
+              const isActive = link.isActive(pathname);
+              const className = `block px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                isActive
+                  ? 'text-white border-l-2 border-white'
+                  : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
+              }`;
+              if (link.external) {
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={className}
+                  >
+                    {link.label}
+                    <span className="ml-1 text-[10px] opacity-70" aria-hidden>
+                      ↗
+                    </span>
+                  </a>
+                );
+              }
               return (
                 <Link
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-semibold transition-all duration-200 ${isActive ? 'text-white border-l-2 border-white' : 'text-blue-100 hover:text-white hover:border-l-2 hover:border-white/50'
-                    }`}
+                  className={className}
                 >
                   {link.label}
                 </Link>

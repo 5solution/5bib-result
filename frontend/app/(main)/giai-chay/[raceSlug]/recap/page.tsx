@@ -1,23 +1,46 @@
 /**
- * FEATURE-046 — Programmatic SEO Race Recap page `/giai-chay/[raceSlug]/recap`.
+ * FEATURE-056 — Race Recap page `/giai-chay/[raceSlug]/recap`.
  *
- * Server Component SSR (Next.js 16 App Router). 6 blocks render order per
- * BR-46-06: Hero → Podium → Pace → NegSplit → AG → 5BIB Insight.
+ * Variation A "Editorial Magazine" — full rewrite per Manager Plan APPROVED.
+ * Server Component SSR preserves F-051 JSON-LD Article schema + F-046 data layer.
  *
- * Per Manager Plan Adjustment #2: backend pre-renders markdown → insightHtml.
- * Frontend renders via dangerouslySetInnerHTML (backend sanitized).
+ * Single client island: `<StickyRecapNav>` (IntersectionObserver scroll-spy).
  *
- * Per F-036/F-037 pattern: dual-source `getRaceBySlug()` MongoDB-first, fall
- * back to on-sale (though on-sale won't have recap — caught by service 404).
+ * DATA INTEGRITY (Danny "k nó kiện đấy" mandate):
+ *  - Chip times rendered AS-IS from vendor.
+ *  - Athlete names AS-IS (no canonicalize).
+ *  - City chip hidden when backend returns null (no guessing — defamation safety).
+ *  - Auto-gen spotlight uses backend neutral factual template.
  *
- * Components inline rather than 6 separate files (Phase 1 simplification —
- * documented in IMPLEMENTATION_NOTES Section 1 Deviations).
+ * BR coverage: BR-56-01..25 + F-046 BR-46-06/23/24/27 preserved.
  */
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { getRaceBySlug } from '@/lib/seo-api';
+import { classifyRaceType, classificationLabel } from '@/lib/race-classifier';
+import { PodiumCard } from '@/components/recap/PodiumCard';
+import {
+  InsightEditorial,
+  SpotlightCards,
+} from '@/components/recap/InsightEditorial';
+import { StickyRecapNav } from '@/components/recap/StickyRecapNav';
+// F-056 scope expansion 2026-05-21 — Variation A enrich + Variation B body dashboard.
+// SpotlightWinCard used via SpotlightSwitcher internally (no direct import here).
+import SpotlightSwitcher, {
+  type SpotlightSwitcherCourse,
+} from '@/components/recap/SpotlightSwitcher';
+import HeroStatTilesRow from '@/components/recap/HeroStatTilesRow';
+import HeroPhotoLayer from '@/components/recap/HeroPhotoLayer';
+import FinisherDistributionBars from '@/components/recap/FinisherDistributionBars';
+import OverallChampionsCard from '@/components/recap/OverallChampionsCard';
+import NegSplitDonutLarge from '@/components/recap/NegSplitDonutLarge';
+import AGBreakdownTable from '@/components/recap/AGBreakdownTable';
+import EditorialBlock from '@/components/recap/EditorialBlock';
+import RecapActionBar from '@/components/recap/RecapActionBar';
+import PaceCurveNarrativeBlock from '@/components/recap/PaceCurveNarrativeBlock';
+import RecapStoryCard from '@/components/recap/RecapStoryCard';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081';
 
@@ -29,7 +52,8 @@ interface RecapPodiumCell {
   chipTime: string;
   category?: string;
   medal: 'gold' | 'silver' | 'bronze';
-  avatarUrl?: string; // F-046 Phase 1.5 — public-shareable
+  avatarUrl?: string;
+  city?: string;
 }
 
 interface RecapPodium {
@@ -38,6 +62,8 @@ interface RecapPodium {
   distance?: string;
   male: RecapPodiumCell[];
   female: RecapPodiumCell[];
+  maleFinisherCount?: number;
+  femaleFinisherCount?: number;
 }
 
 interface RecapPaceStats {
@@ -55,9 +81,14 @@ interface RecapNegativeSplit {
   courseName: string;
   negativeSplitPercent: number;
   interpretation: string;
+  avgFirstHalf?: string;
+  avgSecondHalf?: string;
+  deltaSeconds?: number;
+  finishersAnalyzed?: number;
+  benchmark?: number;
 }
 
-interface RecapAGBucket {
+interface RecapAGBucketShape {
   category: string;
   finisherCount: number;
   top5: RecapPodiumCell[];
@@ -66,7 +97,49 @@ interface RecapAGBucket {
 interface RecapAGBreakdown {
   courseId: string;
   courseName: string;
-  buckets: RecapAGBucket[];
+  buckets: RecapAGBucketShape[];
+}
+
+interface RecapSpotlightStory {
+  courseId: string;
+  gender: 'M' | 'F';
+  winnerBib: string;
+  winnerName: string;
+  markdown: string;
+  html: string;
+  source: 'admin' | 'auto';
+}
+
+interface RecapSpotlightPerCourse {
+  courseId: string;
+  courseName: string;
+  stories: RecapSpotlightStory[];
+}
+
+interface RecapCourseDistribution {
+  courseId: string;
+  courseName: string;
+  distance?: string;
+  finisherCount: number;
+  medianPace?: string;
+  bestChipTime?: string;
+}
+
+interface RecapArticleMeta {
+  slug: string;
+  title: string;
+  summary: string;
+  category:
+    | 'race-narrative'
+    | 'winner-profile'
+    | 'pacing'
+    | 'course-difficulty'
+    | 'age-group'
+    | 'pace-distribution';
+  readMinutes: number;
+  source: 'auto' | 'admin';
+  html: string;
+  publishedAt: string;
 }
 
 interface RaceRecap {
@@ -80,11 +153,22 @@ interface RaceRecap {
     dnfCount: number;
     dsqCount: number;
     headline: string;
+    registered?: number;
+    // F-056 scope expansion 2026-05-21
+    winningTimeMale?: string;
+    winningNameMale?: string;
+    winningTimeFemale?: string;
+    winningNameFemale?: string;
+    elevationGain?: number;
+    elevationSegments?: number;
   };
   podiums: RecapPodium[];
   paceStats: RecapPaceStats[];
   negativeSplits: RecapNegativeSplit[];
   agBreakdowns: RecapAGBreakdown[];
+  spotlightStoriesByCourse?: RecapSpotlightPerCourse[];
+  finisherDistribution?: RecapCourseDistribution[];
+  recapArticles?: RecapArticleMeta[];
   computedAt: string;
 }
 
@@ -110,13 +194,9 @@ async function getRaceRecap(raceId: string): Promise<RaceRecap | null> {
       },
     );
     if (res.status === 404) return null;
-    if (!res.ok) {
-      console.error(`[recap] backend returned ${res.status}`);
-      return null;
-    }
+    if (!res.ok) return null;
     return (await res.json()) as RaceRecap;
-  } catch (err) {
-    console.error('[recap] fetch failed:', err);
+  } catch {
     return null;
   }
 }
@@ -139,7 +219,7 @@ async function getRecapInsight(raceId: string): Promise<RecapInsight | null> {
   }
 }
 
-// ─── generateMetadata (BR-46-23/24) ──────────────────────────────────────
+// ─── generateMetadata (F-046 BR-46-23/24 preserved) ──────────────────────
 
 export async function generateMetadata({
   params,
@@ -151,7 +231,6 @@ export async function generateMetadata({
   if (!race) {
     return { title: 'Recap không tồn tại | 5BIB' };
   }
-
   const recap = await getRaceRecap(race.id);
   if (!recap) {
     return {
@@ -177,19 +256,46 @@ export async function generateMetadata({
     `Phân tích chi tiết kết quả ${recap.raceTitle} ${year}: ${medianText}` +
     (negPct ? `, ${negPct}` : '') +
     `, top podium theo AG. Số liệu từ 5BIB.`;
+  const descTrimmed = description.slice(0, 160);
+
+  // F-056 BUG-UX-1 fix 2026-05-21 (per BA pre-golive audit) — add social
+  // share meta tags + canonical URL. JSON-LD Article schema (F-051) covers
+  // Google indexing; this adds Facebook/Twitter card + canonical for SEO.
+  const canonicalUrl = `https://5bib.com/giai-chay/${raceSlug}/recap`;
+  const ogImage =
+    race.bannerUrl ?? race.imageUrl ?? race.logoUrl ?? undefined;
 
   return {
     title,
-    description: description.slice(0, 160),
+    description: descTrimmed,
+    alternates: { canonical: canonicalUrl },
     openGraph: {
       title,
-      description,
+      description: descTrimmed,
       type: 'article',
+      url: canonicalUrl,
+      siteName: '5BIB',
+      locale: 'vi_VN',
+      ...(ogImage && {
+        images: [
+          {
+            url: ogImage,
+            alt: recap.raceTitle,
+          },
+        ],
+      }),
+      ...(recap.endDate && { publishedTime: recap.endDate }),
+    },
+    twitter: {
+      card: ogImage ? 'summary_large_image' : 'summary',
+      title,
+      description: descTrimmed,
+      ...(ogImage && { images: [ogImage] }),
     },
   };
 }
 
-// ─── JSON-LD Article schema (BR-46-27) ───────────────────────────────────
+// ─── JSON-LD Article schema (F-051 + BR-46-27 preserved) ─────────────────
 
 function buildJsonLd(
   recap: RaceRecap,
@@ -198,8 +304,7 @@ function buildJsonLd(
 ): string {
   const datePublished =
     insight?.publishedAt ?? recap.endDate ?? new Date().toISOString();
-  const dateModified =
-    insight?.updatedAt ?? recap.endDate ?? recap.computedAt;
+  const dateModified = insight?.updatedAt ?? recap.endDate ?? recap.computedAt;
   const articleBody = insight?.insightMarkdown
     ? insight.insightMarkdown.slice(0, 1500)
     : `${recap.hero.headline}. ${recap.negativeSplits[0]?.interpretation ?? ''}`;
@@ -210,18 +315,11 @@ function buildJsonLd(
     headline: `Recap ${recap.raceTitle}`,
     datePublished,
     dateModified,
-    author: {
-      '@type': 'Organization',
-      name: '5BIB',
-      url: 'https://5bib.com',
-    },
+    author: { '@type': 'Organization', name: '5BIB', url: 'https://5bib.com' },
     publisher: {
       '@type': 'Organization',
       name: '5BIB',
-      logo: {
-        '@type': 'ImageObject',
-        url: 'https://5bib.com/logo.png',
-      },
+      logo: { '@type': 'ImageObject', url: 'https://5bib.com/logo.png' },
     },
     mainEntityOfPage: {
       '@type': 'WebPage',
@@ -233,7 +331,72 @@ function buildJsonLd(
   return JSON.stringify(ld).replace(/</g, '\\u003c');
 }
 
-// ─── Page component (Server) ─────────────────────────────────────────────
+// ─── Display helpers ─────────────────────────────────────────────────────
+
+function formatVN(d: string | undefined | null): string {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return '—';
+  return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1)
+    .toString()
+    .padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+/**
+ * Editorial title rendering per design Variation A — RAW raceTitle as-is
+ * from system (Danny mandate 2026-05-21: "hệ thống thế nào hiện vậy đừng
+ * override"). NO trim, NO strip prefix, NO split at "-".
+ *
+ * Apply italic+orange accent overlay ONLY when an editorial keyword is
+ * present (MARATHON / ULTRA / TRAIL / RUN / CHẠY). This wraps the matching
+ * word in a styled <span> without modifying the source text.
+ *
+ * If no keyword match → return raw title unchanged.
+ */
+function renderEditorialTitle(rawTitle: string): React.ReactNode {
+  const accentRegex = /\b(MARATHON|ULTRA TRAIL|ULTRA|TRAIL|RUN|CHẠY)\b/i;
+  const match = rawTitle.match(accentRegex);
+  if (!match || match.index === undefined) {
+    return <span>{rawTitle}</span>;
+  }
+  const idx = match.index;
+  const before = rawTitle.slice(0, idx);
+  const accent = rawTitle.slice(idx, idx + match[0].length);
+  const after = rawTitle.slice(idx + match[0].length);
+  return (
+    <>
+      <span>{before}</span>
+      <span
+        style={{
+          color: '#FB923C',
+          fontStyle: 'italic',
+          fontWeight: 800,
+        }}
+      >
+        {accent}
+      </span>
+      <span>{after}</span>
+    </>
+  );
+}
+
+function paceSpread(p10: string, p90: string): string {
+  const parse = (s: string): number => {
+    const m = s.replace('/km', '').split(':');
+    if (m.length !== 2) return 0;
+    const a = parseInt(m[0], 10);
+    const b = parseInt(m[1], 10);
+    if (isNaN(a) || isNaN(b)) return 0;
+    return a * 60 + b;
+  };
+  const diff = parse(p90) - parse(p10);
+  if (diff <= 0) return '—';
+  const m = Math.floor(diff / 60);
+  const s = diff % 60;
+  return `${m}:${s.toString().padStart(2, '0')} min`;
+}
+
+// ─── Page component (Server) ────────────────────────────────────────────
 
 export default async function RaceRecapPage({
   params,
@@ -251,448 +414,667 @@ export default async function RaceRecapPage({
   const jsonLd = buildJsonLd(recap, insight, raceSlug);
 
   const bannerUrl = race.bannerUrl ?? race.imageUrl ?? race.logoUrl ?? null;
+  const firstCourse = race.courses?.[0];
+  const classification = classifyRaceType({
+    raceType:
+      race.courses && race.courses.length > 0
+        ? (race.courses[0] as { raceType?: string }).raceType ?? null
+        : null,
+    distanceKm: firstCourse?.distanceKm ?? null,
+    distance: firstCourse?.distance ?? recap.podiums[0]?.distance ?? null,
+  });
+
+  // Hero stats
+  const firstPace = recap.paceStats[0];
+  const medianPace = firstPace?.medianPace ?? '—';
+  const finishersFormatted = recap.hero.totalFinishers.toLocaleString('vi-VN');
+  const registered = recap.hero.registered ?? recap.hero.totalFinishers + recap.hero.dnfCount + recap.hero.dnsCount + recap.hero.dsqCount;
+
+  // F-056 scope expansion 2026-05-21 — pick longest-distance course for
+  // Variation A Spotlight + Variation B Overall Champions cards.
+  const longestCourseDist = (() => {
+    const dist = recap.finisherDistribution ?? [];
+    if (dist.length === 0) return undefined;
+    return [...dist].sort((a, b) => {
+      const da = parseFloat((a.distance ?? '0').replace(',', '.'));
+      const db = parseFloat((b.distance ?? '0').replace(',', '.'));
+      return db - da;
+    })[0];
+  })();
+  const longestPodium = longestCourseDist
+    ? recap.podiums.find((p) => p.courseId === longestCourseDist.courseId)
+    : recap.podiums[0];
+
+  // F-056 scope expansion 2026-05-21 — Danny mandate "công bằng + đổi cự ly":
+  // Build per-course Top1 NAM + Top1 NỮ data for SpotlightSwitcher tabs.
+  // Order: longest distance first (most prestigious as default visible).
+  const spotlightCourses: SpotlightSwitcherCourse[] = [...recap.podiums]
+    .sort((a, b) => {
+      const da = parseFloat((a.distance ?? '0').replace(',', '.'));
+      const db = parseFloat((b.distance ?? '0').replace(',', '.'));
+      return db - da;
+    })
+    .map((p) => {
+      const matchingPace = recap.paceStats.find(
+        (ps) => ps.courseId === p.courseId,
+      );
+      return {
+        courseId: p.courseId,
+        label: p.courseName ?? p.distance ?? p.courseId,
+        male: p.male[0]
+          ? {
+              name: p.male[0].name,
+              bib: p.male[0].bib,
+              chipTime: p.male[0].chipTime,
+              category: p.male[0].category,
+              city: p.male[0].city,
+            }
+          : undefined,
+        female: p.female[0]
+          ? {
+              name: p.female[0].name,
+              bib: p.female[0].bib,
+              chipTime: p.female[0].chipTime,
+              category: p.female[0].category,
+              city: p.female[0].city,
+            }
+          : undefined,
+        medianPace: matchingPace?.medianPace,
+      };
+    });
+  const watermarkText =
+    longestCourseDist?.distance != null
+      ? `${longestCourseDist.distance.replace(',', '.')}K`
+      : longestPodium?.distance ?? '';
+
+  const sections = [
+    { id: 'spotlight', label: 'Spotlight' },
+    { id: 'podium', label: 'Podium' },
+    { id: 'distribution', label: 'Distribution' },
+    { id: 'pace', label: 'Pace' },
+    { id: 'negsplit', label: 'Negative Split' },
+    { id: 'ag', label: 'Age Group' },
+    ...(recap.recapArticles && recap.recapArticles.length > 0
+      ? [{ id: 'stories', label: 'Stories' }]
+      : []),
+    { id: 'insight', label: 'Insight' },
+  ];
+  // Course pills: prefer `name` (e.g. "21KM" with unit) over `distance` (raw
+  // numeric "21" — would lose unit). 2026-05-21+: clickable, scrolls to
+  // per-course podium anchor (id="course-${courseId}"). Mirrors recap.podiums
+  // courseId so we get one pill per course block in podium section.
+  const navCourses = (recap.podiums ?? [])
+    .map((p) => {
+      // Prefer courseName ("21KM" with unit) over distance ("21" numeric).
+      const label = p.courseName ?? p.distance;
+      return label
+        ? { label, anchorId: `course-${p.courseId}` }
+        : null;
+    })
+    .filter((x): x is { label: string; anchorId: string } => !!x);
+
+  // F-056 scope expansion 2026-05-21 — Hero stat tiles (4-tile ngang).
+  // Hide tile if data null (esp. elevationGain — most races don't have).
+  const heroTiles: Array<{
+    label: string;
+    value: string;
+    meta?: string;
+    accent?: 'blue' | 'magenta' | 'orange' | 'green';
+  }> = [];
+  if (recap.hero.winningTimeMale) {
+    heroTiles.push({
+      label: 'WINNING TIME · NAM',
+      value: recap.hero.winningTimeMale,
+      meta: recap.hero.winningNameMale,
+      accent: 'blue',
+    });
+  }
+  if (recap.hero.winningTimeFemale) {
+    heroTiles.push({
+      label: 'WINNING TIME · NỮ',
+      value: recap.hero.winningTimeFemale,
+      meta: recap.hero.winningNameFemale,
+      accent: 'magenta',
+    });
+  }
+  heroTiles.push({
+    label: 'MEDIAN PACE /km',
+    value: medianPace.replace('/km', ''),
+    meta: 'Toàn cuộc đua',
+    accent: 'orange',
+  });
+  if (recap.hero.elevationGain != null && recap.hero.elevationGain > 0) {
+    heroTiles.push({
+      label: 'ELEV GAIN',
+      value: `${recap.hero.elevationGain.toLocaleString('vi-VN')}m`,
+      meta:
+        recap.hero.elevationSegments != null
+          ? `${recap.hero.elevationSegments} đoạn dốc 800m+`
+          : undefined,
+      accent: 'green',
+    });
+  }
 
   return (
-    <div>
+    <div className="bg-stone-50 min-h-screen">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
 
-      {/* F-046 Phase 1.5 — Hero banner (race.bannerUrl) full-width above fold */}
-      {bannerUrl && (
-        <div
-          className="relative h-48 w-full bg-stone-200 md:h-64 lg:h-80"
-          style={{
-            backgroundImage: `url(${bannerUrl})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-          aria-hidden="true"
-        >
-          {/* Gradient overlay for text contrast */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-black/60" />
-          <div className="absolute bottom-0 left-0 right-0 px-4 py-6 md:px-8 md:py-10">
-            <div className="mx-auto max-w-5xl">
-              <span className="inline-block rounded-full bg-blue-700/90 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
-                Phân tích race
-              </span>
-              <h1 className="mt-2 text-2xl font-bold text-white drop-shadow-lg md:text-4xl">
-                Recap {recap.raceTitle}
-              </h1>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ═══ HERO (Variation A — Editorial Magazine cover) ═══ */}
+      <section
+        className="relative overflow-hidden text-white"
+        style={{
+          minHeight: 'clamp(560px, 70vh, 760px)',
+        }}
+      >
+        {/* Background photo + watermark (PAUSE-56-11 A: reuse race banner). */}
+        <HeroPhotoLayer
+          bannerUrl={bannerUrl}
+          watermarkText={watermarkText}
+        />
 
-      <div className="mx-auto max-w-5xl px-4 py-8 md:py-12">
+        {/* Topo SVG overlay (desktop only — perf on mobile) */}
+        <svg
+          aria-hidden
+          className="absolute inset-0 hidden md:block"
+          preserveAspectRatio="none"
+          viewBox="0 0 1440 640"
+          style={{ width: '100%', height: '100%' }}
+        >
+          {Array.from({ length: 18 }).map((_, i) => (
+            <path
+              key={i}
+              d={`M -50 ${80 + i * 38} Q ${300 + i * 12} ${30 + i * 40} ${720} ${100 + i * 36} T ${1500} ${80 + i * 40}`}
+              fill="none"
+              stroke="rgba(255,255,255,0.07)"
+              strokeWidth="1"
+            />
+          ))}
+        </svg>
+
         {/* Breadcrumb */}
-        <nav className="mb-6 text-sm text-stone-600" aria-label="Breadcrumb">
-          <Link href="/" className="hover:text-blue-700">
-            Trang chủ
-          </Link>{' '}
-          <span className="mx-2">›</span>
-          <Link href="/giai-chay" className="hover:text-blue-700">
-            Giải chạy
-          </Link>{' '}
-          <span className="mx-2">›</span>
-          <Link
-            href={`/giai-chay/${raceSlug}`}
-            className="hover:text-blue-700"
-          >
-            {recap.raceTitle}
-          </Link>{' '}
-          <span className="mx-2">›</span>
-          <span className="text-stone-900">Recap</span>
+        <nav
+          aria-label="Breadcrumb"
+          className="absolute top-5 left-6 md:left-12 font-mono font-semibold text-[11px] tracking-[0.08em] z-20"
+          style={{ color: 'rgba(255,255,255,0.7)' }}
+        >
+          5BIB · GIẢI CHẠY · {(race.location ?? '').toUpperCase()} ·{' '}
+          <span style={{ color: '#fff' }}>RECAP</span>
         </nav>
 
-        {/* Fallback H1 if no banner */}
-        {!bannerUrl && (
-          <h1 className="mb-8 text-3xl font-bold text-stone-900 md:text-4xl">
-            Recap {recap.raceTitle}
-          </h1>
-        )}
-
-      {/* ─── Block 1: Hero stats ─── */}
-      <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-stone-900">
-          {recap.hero.headline}
-        </h2>
-        <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-          <StatCard
-            label="Về đích"
-            value={recap.hero.totalFinishers.toLocaleString('vi-VN')}
-            color="text-blue-700"
-          />
-          <StatCard
-            label="DNS"
-            value={recap.hero.dnsCount.toLocaleString('vi-VN')}
-            color="text-stone-600"
-          />
-          <StatCard
-            label="DNF"
-            value={recap.hero.dnfCount.toLocaleString('vi-VN')}
-            color="text-orange-600"
-          />
-          <StatCard
-            label="DSQ"
-            value={recap.hero.dsqCount.toLocaleString('vi-VN')}
-            color="text-red-600"
-          />
+        {/* Eyebrow tag top-left below breadcrumb — Hình 1 "5BIB RECAP · JUST DROPPED" */}
+        <div
+          aria-hidden
+          className="absolute top-16 left-6 md:left-12 z-20 inline-flex items-center px-3 py-1 rounded-sm font-mono font-extrabold uppercase text-[10px] tracking-[0.2em]"
+          style={{ background: '#FF0E65', color: '#fff' }}
+        >
+          5BIB RECAP · JUST DROPPED
         </div>
-      </section>
 
-      {/* ─── Block 2: Podium ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">Podium</h2>
-        <div className="space-y-8">
-          {recap.podiums.map((podium) => (
-            <PodiumCard key={podium.courseId} podium={podium} />
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Block 3: Pace Analysis ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">
-          Phân tích pace
-        </h2>
-        <div className="space-y-6">
-          {recap.paceStats.map((pace) => (
-            <PaceCard key={pace.courseId} pace={pace} />
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Block 4: Negative Split ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">
-          Tỷ lệ Negative Split
-        </h2>
-        <div className="space-y-4">
-          {recap.negativeSplits.map((ns) => (
-            <NegSplitCard key={ns.courseId} ns={ns} />
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Block 5: AG Breakdown ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">
-          Top theo nhóm tuổi
-        </h2>
-        <div className="space-y-8">
-          {recap.agBreakdowns.map((ag) => (
-            <AGSection key={ag.courseId} ag={ag} />
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Block 6: 5BIB Insight (editorial 70/30) ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">
-          5BIB Insight
-        </h2>
-        {insight?.insightHtml ? (
-          <article
-            className="prose prose-stone max-w-none rounded-lg border border-stone-200 bg-white p-6"
-            dangerouslySetInnerHTML={{ __html: insight.insightHtml }}
-          />
-        ) : (
-          <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-8 text-center">
-            <p className="text-stone-700">
-              Bài phân tích chi tiết đang được biên tập. Quay lại sau nhé!
-            </p>
-          </div>
-        )}
-        {insight?.authorName && (
-          <p className="mt-2 text-sm text-stone-500">
-            — {insight.authorName}
-            {insight.publishedAt && (
-              <span>
-                {' '}
-                · {new Date(insight.publishedAt).toLocaleDateString('vi-VN')}
+        {/* Content — magazine cover layout */}
+        <div className="relative z-10 flex min-h-full flex-col justify-end px-6 pt-32 pb-10 md:px-14 md:pt-36 md:pb-14">
+          <div className="max-w-[1200px]">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-4">
+              {classification ? (
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-bold uppercase text-[10.5px] tracking-[0.18em] border"
+                  style={{ borderColor: 'rgba(255,255,255,0.4)', color: 'rgba(255,255,255,0.95)' }}
+                >
+                  <span aria-hidden style={{ color: '#FB923C' }}>♀</span>
+                  {classificationLabel(classification)}
+                </span>
+              ) : null}
+              <span
+                className="font-mono font-semibold text-[11px] md:text-[12px] tracking-[0.08em]"
+                style={{ color: 'rgba(255,255,255,0.8)' }}
+              >
+                {formatVN(recap.endDate)} · {race.location ?? '—'}
               </span>
-            )}
-          </p>
-        )}
+            </div>
+            <h1
+              className="font-heading font-black uppercase m-0"
+              style={{
+                // Variation A: 88px desktop hero magazine cover scale.
+                fontSize: 'clamp(40px, 6vw, 96px)',
+                lineHeight: 0.92,
+                letterSpacing: '-0.035em',
+                overflowWrap: 'break-word',
+              }}
+              title={recap.raceTitle}
+            >
+              {renderEditorialTitle(recap.raceTitle)}
+            </h1>
+            <div
+              className="mt-5 font-body italic"
+              style={{
+                maxWidth: 540,
+                fontSize: 16,
+                lineHeight: 1.6,
+                color: 'rgba(255,255,255,0.85)',
+              }}
+            >
+              &ldquo;Tổng kết hành trình đường chạy, podium, phân bố pace và câu
+              chuyện phía sau những con số.&rdquo;
+            </div>
+
+            {/* Action bar (Variation B) — Kết quả đầy đủ / CSV / Share */}
+            <div className="mt-6">
+              <RecapActionBar
+                fullResultsHref={`/giai-chay/${raceSlug}/ket-qua`}
+                csvHref={undefined}
+                shareHref={undefined}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Accent strip */}
+        <div
+          aria-hidden
+          className="absolute bottom-0 left-0 right-0"
+          style={{
+            height: 6,
+            background:
+              'linear-gradient(90deg, var(--5bib-energy, #ea580c), #1d4ed8 60%, #FB923C)',
+          }}
+        />
       </section>
 
-      {/* Footer actions */}
-      <footer className="flex flex-wrap gap-3 border-t border-stone-200 pt-8">
-        <Link
-          href={`/giai-chay/${raceSlug}/ket-qua`}
-          className="rounded-lg bg-stone-900 px-5 py-3 text-sm font-medium text-white hover:opacity-90"
-        >
-          Xem kết quả đầy đủ →
-        </Link>
-        <Link
-          href={`/giai-chay/${raceSlug}`}
-          className="rounded-lg border border-stone-300 bg-white px-5 py-3 text-sm font-medium text-stone-700 hover:border-stone-900"
-        >
-          Trang giải
-        </Link>
-        <p className="ml-auto self-center text-xs text-stone-500">
-          Cập nhật:{' '}
-          {new Date(
-            insight?.updatedAt ?? recap.endDate ?? recap.computedAt,
-          ).toLocaleDateString('vi-VN')}
-        </p>
-      </footer>
-      </div>
+      {/* ═══ HERO STAT TILES (4 tile ngang — Variation B header stats) ═══
+          Lifted with -mt-12 to overlap hero accent strip subtly. */}
+      {heroTiles.length > 0 ? (
+        <div className="relative z-20 max-w-7xl mx-auto px-6 md:px-8 -mt-12 md:-mt-14">
+          <HeroStatTilesRow tiles={heroTiles} />
+        </div>
+      ) : null}
+
+      {/* ═══ STICKY NAV (client island) ═══ */}
+      <StickyRecapNav sections={sections} courses={navCourses} />
+
+      {/* ═══ MAIN CONTENT ═══ */}
+      <main className="max-w-7xl mx-auto px-6 md:px-8 pt-16 md:pt-20 pb-12 md:pb-16">
+        {/* ── SPOTLIGHT THE WIN (Variation A signature, gender-balanced) ──
+            Danny mandate 2026-05-21 "cân bằng + nút đổi cự ly": tab switcher
+            per course, 2 big cards (NAM + NỮ) cùng size — không bias gender. */}
+        {spotlightCourses.length > 0 ? (
+          <section id="spotlight" className="mb-16 md:mb-20 scroll-mt-32">
+            <SectionHeading
+              number="00"
+              eyebrow="Spotlight"
+              title="THE WIN"
+              action={
+                <span
+                  className="font-mono text-[12px] text-stone-500"
+                  style={{ letterSpacing: '0.08em' }}
+                >
+                  TOP 1 NAM &middot; TOP 1 NỮ MỖI CỰ LY
+                </span>
+              }
+            />
+            <SpotlightSwitcher courses={spotlightCourses} defaultIndex={0} />
+          </section>
+        ) : null}
+
+        {/* ── PODIUM (per course M|F) ── */}
+        <section id="podium" className="mb-16 md:mb-20 scroll-mt-32">
+          <SectionHeading
+            number="01"
+            eyebrow="Bảng vinh danh per course"
+            title={
+              recap.podiums.length === 1
+                ? `PODIUM ${recap.podiums[0].distance ?? recap.podiums[0].courseName}`
+                : 'PODIUM TỪNG CỰ LY'
+            }
+            action={
+              <span
+                className="font-mono text-[13px] text-stone-500"
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                Tổng <b className="text-stone-900">{finishersFormatted}</b> /{' '}
+                {registered.toLocaleString('vi-VN')} VĐV · DNF{' '}
+                {recap.hero.dnfCount.toLocaleString('vi-VN')}
+              </span>
+            }
+          />
+          {recap.podiums.length === 0 ? (
+            <p className="text-stone-500 italic">Chưa có dữ liệu podium.</p>
+          ) : (
+            recap.podiums.map((p) => (
+              <div
+                key={p.courseId}
+                id={`course-${p.courseId}`}
+                className="mb-10 last:mb-0 scroll-mt-32"
+              >
+                {recap.podiums.length > 1 ? (
+                  <h3 className="font-heading font-bold uppercase text-[18px] tracking-tight text-stone-700 mb-4">
+                    {p.distance ?? p.courseName}
+                  </h3>
+                ) : null}
+                <div className="grid gap-6 md:gap-8 md:grid-cols-2">
+                  <PodiumGroup
+                    label="OVERALL · NAM"
+                    accent="#1d4ed8"
+                    finisherCount={p.maleFinisherCount}
+                    cells={p.male}
+                  />
+                  <PodiumGroup
+                    label="OVERALL · NỮ"
+                    accent="#ea580c"
+                    finisherCount={p.femaleFinisherCount}
+                    cells={p.female}
+                  />
+                </div>
+              </div>
+            ))
+          )}
+        </section>
+
+        {/* ── DISTRIBUTION (Variation B bar chart + Champions card) ── */}
+        {recap.finisherDistribution && recap.finisherDistribution.length > 0 ? (
+          <section id="distribution" className="mb-16 md:mb-20 scroll-mt-32">
+            <SectionHeading number="02" eyebrow="Theo course" title="FINISHER DISTRIBUTION" />
+            <div className="grid gap-6 md:gap-8 md:grid-cols-[1.5fr_1fr]">
+              <FinisherDistributionBars
+                rows={recap.finisherDistribution}
+                total={recap.hero.totalFinishers}
+              />
+              {longestPodium ? (
+                <OverallChampionsCard
+                  courseLabel={longestPodium.distance ?? longestPodium.courseName}
+                  male={
+                    longestPodium.male[0]
+                      ? {
+                          name: longestPodium.male[0].name,
+                          bib: longestPodium.male[0].bib,
+                          chipTime: longestPodium.male[0].chipTime,
+                          city: longestPodium.male[0].city,
+                        }
+                      : undefined
+                  }
+                  female={
+                    longestPodium.female[0]
+                      ? {
+                          name: longestPodium.female[0].name,
+                          bib: longestPodium.female[0].bib,
+                          chipTime: longestPodium.female[0].chipTime,
+                          city: longestPodium.female[0].city,
+                        }
+                      : undefined
+                  }
+                  ctaHref={`/giai-chay/${raceSlug}/ket-qua`}
+                />
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {/* ── PACE (Variation A 2-col narrative) ── */}
+        <section id="pace" className="mb-16 md:mb-20 scroll-mt-32">
+          <SectionHeading number="03" eyebrow="The shape of the race" title="PACE CURVE" />
+          {firstPace ? (
+            <PaceCurveNarrativeBlock
+              distribution={firstPace.distribution}
+              medianPace={firstPace.medianPace}
+              p10Pace={firstPace.p10Pace}
+              p90Pace={firstPace.p90Pace}
+              finisherCount={firstPace.finisherCount}
+              storyHeadline={`Một cuộc đua ${firstPace.medianPace.replace('/km', '/km')} median — hai nửa hoàn toàn khác nhau.`}
+              storyBody={`Median pace toàn cuộc đua dừng ở ${firstPace.medianPace.replace('/km', '/km')} — top 10% chạy dưới ${firstPace.p10Pace.replace('/km', '/km')}, bottom 10% trên ${firstPace.p90Pace.replace('/km', '/km')}. ${paceSpread(firstPace.p10Pace, firstPace.p90Pace)} spread giữa các nhóm pace.`}
+            />
+          ) : (
+            <p className="text-stone-500 italic">Chưa có dữ liệu pace.</p>
+          )}
+        </section>
+
+        {/* ── NEG SPLIT (Variation B donut to + half-time table) ── */}
+        <section id="negsplit" className="mb-16 md:mb-20 scroll-mt-32">
+          <SectionHeading number="04" eyebrow="Pacing strategy" title="NEGATIVE SPLIT %" />
+          {recap.negativeSplits.length > 0 ? (
+            <NegSplitDonutLarge
+              percent={recap.negativeSplits[0].negativeSplitPercent}
+              benchmark={recap.negativeSplits[0].benchmark ?? 40}
+              avgFirstHalf={recap.negativeSplits[0].avgFirstHalf}
+              avgSecondHalf={recap.negativeSplits[0].avgSecondHalf}
+              deltaSeconds={recap.negativeSplits[0].deltaSeconds}
+              finishersAnalyzed={recap.negativeSplits[0].finishersAnalyzed ?? 0}
+              interpretation={recap.negativeSplits[0].interpretation}
+            />
+          ) : (
+            <p className="text-stone-500 italic">Chưa có dữ liệu split.</p>
+          )}
+        </section>
+
+        {/* ── AG BREAKDOWN (Variation B table với filter tabs static) ── */}
+        <section id="ag" className="mb-16 md:mb-20 scroll-mt-32">
+          <SectionHeading
+            number="05"
+            eyebrow="Age group"
+            title="TOP 3 MỖI BRACKET"
+            action={
+              <Link
+                href={`/giai-chay/${raceSlug}/ket-qua`}
+                className="font-body font-bold text-[13px] text-stone-600 hover:text-stone-900 transition-colors"
+              >
+                Xem tất cả →
+              </Link>
+            }
+          />
+          {recap.agBreakdowns.length === 0 ? (
+            <p className="text-stone-500 italic">Chưa có dữ liệu AG.</p>
+          ) : (
+            <AGBreakdownTable
+              rows={recap.agBreakdowns.flatMap((ag) =>
+                ag.buckets.map((b) => ({
+                  courseId: ag.courseId,
+                  courseName: ag.courseName,
+                  bucket: {
+                    category: b.category,
+                    finisherCount: b.finisherCount,
+                    top5: b.top5.map((t) => ({
+                      name: t.name,
+                      bib: t.bib,
+                      chipTime: t.chipTime,
+                      medal: t.medal,
+                    })),
+                  },
+                })),
+              )}
+            />
+          )}
+        </section>
+
+        {/* ── 5BIB STORIES (auto-generated articles per Phase 4) ── */}
+        {recap.recapArticles && recap.recapArticles.length > 0 ? (
+          <section id="stories" className="mb-16 md:mb-20 scroll-mt-32">
+            <SectionHeading
+              number="06"
+              eyebrow="5BIB Stories"
+              title="BÀI VIẾT TỪ HỆ THỐNG"
+              action={
+                <span
+                  className="font-mono text-[12px] text-stone-500"
+                  style={{ letterSpacing: '0.08em' }}
+                >
+                  {recap.recapArticles.length} BÀI · TỰ ĐỘNG TỔNG HỢP
+                </span>
+              }
+            />
+            <div className="grid gap-4 md:gap-5 md:grid-cols-2">
+              {recap.recapArticles.map((article) => (
+                <RecapStoryCard
+                  key={article.slug}
+                  slug={article.slug}
+                  title={article.title}
+                  summary={article.summary}
+                  category={article.category}
+                  readMinutes={article.readMinutes}
+                  html={article.html}
+                  source={article.source}
+                  publishedAt={article.publishedAt}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* ── INSIGHT ── */}
+        <section id="insight" className="mb-12 scroll-mt-32">
+          <SectionHeading number="07" eyebrow="5BIB Editorial" title="INSIGHT" />
+          <InsightEditorial
+            insightHtml={insight?.insightHtml ?? null}
+            byline={`5BIB EDITORIAL TEAM${recap.endDate ? ` · ${formatVN(recap.endDate)}` : ''}`}
+            fallbackLead={`${recap.raceTitle} kết thúc với ${finishersFormatted} VĐV hoàn thành.`}
+            spotlightCards={
+              recap.spotlightStoriesByCourse &&
+              recap.spotlightStoriesByCourse.length > 0 ? (
+                <SpotlightCards groups={recap.spotlightStoriesByCourse} />
+              ) : null
+            }
+            cta={
+              <>
+                <Link
+                  href={`/giai-chay/${raceSlug}/ket-qua`}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-body font-bold text-[14px] text-white transition-all hover:brightness-110"
+                  style={{ background: 'var(--5bib-blue, #1d4ed8)' }}
+                >
+                  Xem toàn bộ kết quả
+                  <span aria-hidden>→</span>
+                </Link>
+                <Link
+                  href={`/giai-chay/${raceSlug}`}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-body font-bold text-[14px] text-stone-700 border border-stone-300 hover:border-stone-500 hover:text-stone-900 transition-colors"
+                >
+                  Trang giải
+                </Link>
+              </>
+            }
+          />
+        </section>
+      </main>
     </div>
   );
 }
 
-// ─── Inline block components ─────────────────────────────────────────────
+// ─── Inline sub-components (page-local, single-use) ─────────────────────
 
-function StatCard({
+function SectionHeading({
+  number,
+  eyebrow,
+  title,
+  action,
+}: {
+  number: string;
+  eyebrow: string;
+  title: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    // BUG FIX 2026-05-21: mobile column stack → desktop row. flex-1 min-w-0
+    // on title wrapper prevents action button from squeezing title into
+    // single-word-per-line vertical stack (Danny screenshot mobile bug).
+    <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 sm:gap-4 mb-7 md:mb-9">
+      <div className="flex-1 min-w-0">
+        <div
+          className="font-mono font-bold uppercase text-[11px] tracking-[0.2em] text-stone-500 mb-2"
+        >
+          {number} · {eyebrow}
+        </div>
+        <h2
+          className="font-heading font-black uppercase m-0"
+          style={{
+            fontSize: 'clamp(22px, 2.8vw, 36px)',
+            letterSpacing: '-0.02em',
+            lineHeight: 1.1,
+            overflowWrap: 'break-word',
+          }}
+        >
+          {title}
+        </h2>
+      </div>
+      {action ? <div className="sm:shrink-0">{action}</div> : null}
+    </header>
+  );
+}
+
+function PodiumGroup({
   label,
-  value,
-  color,
+  accent,
+  finisherCount,
+  cells,
 }: {
   label: string;
-  value: string;
-  color: string;
+  accent: string;
+  finisherCount?: number;
+  cells: RecapPodiumCell[];
 }) {
-  return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className={`text-3xl font-bold ${color}`}>{value}</div>
-      <div className="mt-1 text-sm text-stone-600">{label}</div>
-    </div>
-  );
-}
-
-function PodiumCard({ podium }: { podium: RecapPodium }) {
-  if (podium.male.length === 0 && podium.female.length === 0) {
+  if (cells.length === 0) {
     return (
-      <div className="rounded-lg border border-stone-200 bg-white p-6">
-        <h3 className="text-lg font-semibold">
-          {podium.courseName}
-          {podium.distance && (
-            <span className="ml-2 text-sm font-normal text-stone-500">
-              · {podium.distance}
-            </span>
-          )}
-        </h3>
-        <p className="mt-2 text-sm text-stone-500">Chưa có dữ liệu podium</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6">
-      <h3 className="mb-4 text-lg font-semibold">
-        {podium.courseName}
-        {podium.distance && (
-          <span className="ml-2 text-sm font-normal text-stone-500">
-            · {podium.distance}
-          </span>
-        )}
-      </h3>
-      <div className="grid gap-6 md:grid-cols-2">
-        {podium.male.length > 0 && (
-          <div>
-            <div className="mb-2 text-sm font-medium text-blue-700">Nam</div>
-            <PodiumList cells={podium.male} />
-          </div>
-        )}
-        {podium.female.length > 0 && (
-          <div>
-            <div className="mb-2 text-sm font-medium text-pink-700">Nữ</div>
-            <PodiumList cells={podium.female} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PodiumList({ cells }: { cells: RecapPodiumCell[] }) {
-  return (
-    <ol className="space-y-2">
-      {cells.map((cell) => (
-        <li
-          key={cell.bib}
-          className="flex items-center justify-between rounded border border-stone-100 bg-stone-50 px-3 py-2"
-        >
-          <div className="flex items-center gap-2.5">
-            <span className="text-lg">
-              {cell.medal === 'gold' ? '🥇' : cell.medal === 'silver' ? '🥈' : '🥉'}
-            </span>
-            {/* F-046 Phase 1.5 — athlete avatar (public-shareable, fallback initials) */}
-            <AthleteAvatar
-              avatarUrl={cell.avatarUrl}
-              name={cell.name}
-              medal={cell.medal}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-stone-900">
-                {cell.name}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-stone-500">
-                <span>#{cell.bib}</span>
-                {cell.category && (
-                  <span className="rounded bg-stone-200 px-1.5 py-0.5">
-                    {cell.category}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <span className="ml-2 shrink-0 font-mono text-sm font-semibold text-stone-700">
-            {cell.chipTime}
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function AthleteAvatar({
-  avatarUrl,
-  name,
-  medal,
-}: {
-  avatarUrl?: string;
-  name: string;
-  medal: 'gold' | 'silver' | 'bronze';
-}) {
-  const ringColor =
-    medal === 'gold'
-      ? 'ring-yellow-400'
-      : medal === 'silver'
-        ? 'ring-stone-400'
-        : 'ring-orange-600';
-
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(-2)
-    .join('')
-    .toUpperCase();
-
-  if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        className={`h-9 w-9 shrink-0 rounded-full object-cover ring-2 ${ringColor}`}
-        loading="lazy"
-      />
-    );
-  }
-
-  return (
-    <div
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-300 text-xs font-semibold text-stone-700 ring-2 ${ringColor}`}
-      aria-hidden="true"
-    >
-      {initials || '?'}
-    </div>
-  );
-}
-
-function PaceCard({ pace }: { pace: RecapPaceStats }) {
-  if (pace.finisherCount === 0) {
-    return (
-      <div className="rounded-lg border border-stone-200 bg-white p-6">
-        <h3 className="text-lg font-semibold">{pace.courseName}</h3>
-        <p className="mt-2 text-sm text-stone-500">Chưa có dữ liệu pace</p>
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6">
-      <h3 className="mb-4 text-lg font-semibold">{pace.courseName}</h3>
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Median" value={pace.medianPace} color="text-blue-700" />
-        <StatCard
-          label="Top 10%"
-          value={pace.p10Pace}
-          color="text-green-700"
-        />
-        <StatCard
-          label="Bottom 10%"
-          value={pace.p90Pace}
-          color="text-orange-600"
-        />
-      </div>
-      <div className="mt-4">
-        <PaceDistribution distribution={pace.distribution} />
-      </div>
-      <p className="mt-2 text-xs text-stone-500">
-        {pace.finisherCount.toLocaleString('vi-VN')} VĐV có data pace
-      </p>
-    </div>
-  );
-}
-
-function PaceDistribution({ distribution }: { distribution: number[] }) {
-  const max = Math.max(...distribution, 1);
-  return (
-    <div className="flex items-end gap-1 h-24">
-      {distribution.map((count, i) => (
-        <div
-          key={i}
-          className="flex-1 rounded-t bg-blue-500"
-          style={{ height: `${(count / max) * 100}%` }}
-          title={`Bucket ${i + 1}: ${count} VĐV`}
-        />
-      ))}
-    </div>
-  );
-}
-
-function NegSplitCard({ ns }: { ns: RecapNegativeSplit }) {
-  return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6">
-      <h3 className="text-lg font-semibold">{ns.courseName}</h3>
-      <div className="mt-3 text-5xl font-bold text-blue-700">
-        {ns.negativeSplitPercent}%
-      </div>
-      <p className="mt-3 text-sm text-stone-700">{ns.interpretation}</p>
-    </div>
-  );
-}
-
-function AGSection({ ag }: { ag: RecapAGBreakdown }) {
-  if (ag.buckets.length === 0) {
-    return (
-      <div className="rounded-lg border border-stone-200 bg-white p-6">
-        <h3 className="text-lg font-semibold">{ag.courseName}</h3>
-        <p className="mt-2 text-sm text-stone-500">
-          Chưa có dữ liệu nhóm tuổi
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <span
+            aria-hidden
+            style={{
+              display: 'inline-block',
+              width: 4,
+              height: 22,
+              background: accent,
+              borderRadius: 2,
+            }}
+          />
+          <h3 className="font-heading font-bold uppercase text-[18px] tracking-tight m-0">
+            {label}
+          </h3>
+        </div>
+        <p className="text-stone-400 italic text-sm">
+          Chưa có finisher cho nhóm này.
         </p>
       </div>
     );
   }
+
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6">
-      <h3 className="mb-4 text-lg font-semibold">{ag.courseName}</h3>
-      <div className="space-y-3">
-        {ag.buckets.map((bucket) => (
-          <details
-            key={bucket.category}
-            className="rounded border border-stone-200"
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <span
+          aria-hidden
+          style={{
+            display: 'inline-block',
+            width: 4,
+            height: 22,
+            background: accent,
+            borderRadius: 2,
+          }}
+        />
+        <h3 className="font-heading font-bold uppercase text-[18px] tracking-tight m-0">
+          {label}
+        </h3>
+        {typeof finisherCount === 'number' ? (
+          <span
+            className="ml-auto font-mono font-bold uppercase text-[11px] tracking-wider text-stone-500"
+            style={{ fontVariantNumeric: 'tabular-nums' }}
           >
-            <summary className="cursor-pointer px-4 py-2 font-medium hover:bg-stone-50">
-              {bucket.category}
-              <span className="ml-2 text-xs text-stone-500">
-                ({bucket.finisherCount} VĐV)
-              </span>
-            </summary>
-            <div className="border-t border-stone-200 p-3">
-              <PodiumList cells={bucket.top5} />
-            </div>
-          </details>
+            {finisherCount.toLocaleString('vi-VN')} finisher
+          </span>
+        ) : null}
+      </div>
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+        {cells.map((c, i) => (
+          <PodiumCard
+            key={`${c.bib}-${i}`}
+            rank={(i + 1) as 1 | 2 | 3}
+            variant={c.medal}
+            size={i === 0 ? 'md' : 'sm'}
+            name={c.name}
+            bib={c.bib}
+            chipTime={c.chipTime}
+            ag={c.category}
+            city={c.city}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-// ISR 1 hour — race ended ≈ immutable
-export const revalidate = 3600;

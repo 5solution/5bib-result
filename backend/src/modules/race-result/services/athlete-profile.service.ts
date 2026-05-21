@@ -42,6 +42,7 @@ import {
   AthleteDistanceSpecialistDto,
 } from '../dto/athlete-profile-response.dto';
 import { slugifyVN } from '../../../common/utils/slugify';
+import { canonicalizeProvince } from '../../../common/utils/province-normalize';
 import { AthletePhotoService } from './athlete-photo.service';
 
 // Reuse F-046 chipTime parser via local helper to avoid cross-service DI complexity
@@ -100,6 +101,24 @@ interface RaceMeta {
 
 const PR_DISTANCES = ['5K', '10K', 'HM', 'FM'] as const;
 type PRDistance = (typeof PR_DISTANCES)[number];
+
+/**
+ * F-056 Phase 5 — Public summary shape for athlete listing / spotlight /
+ * featured carousel. PII-stripped (no email/phone/DOB).
+ */
+export interface AthleteSummary {
+  slug: string;
+  canonicalName: string;
+  primaryBib: string;
+  gender?: 'male' | 'female' | 'other' | null;
+  nationality?: string;
+  ageGroup?: string;
+  totalRaces: number;
+  totalFinished: number;
+  lastRaceDate?: string;
+  avatarUrl?: string;
+  specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road' | null;
+}
 
 @Injectable()
 export class AthleteProfileService {
@@ -249,11 +268,31 @@ export class AthleteProfileService {
       lastRaceDate?: Date;
     };
 
-    // Build race history live from race_results filtered by linkedBibs
-    const liveResults = await this.resultModel
-      .find({ bib: { $in: p.linkedBibs } })
+    // Build race history live from race_results filtered by linkedBibs.
+    //
+    // BUG FIX 2026-05-21 (Danny screenshot: Anh Thư Nữ shown "Hạng 1 Nam 50-54"):
+    // BIB numbers are NOT unique across races — bib=5114 is shared by 12 different
+    // athletes across history. Filtering by bib alone pulled in 11 strangers' results.
+    // Defense-in-depth: filter by linkedRaceIds (precise curated set) AND post-filter
+    // by name slug (catches cron drift if linkedRaceIds drifts vs real records).
+    const parsed = this.parseSlug(slug);
+    const candidates = await this.resultModel
+      .find({
+        bib: { $in: p.linkedBibs },
+        // restrict to curated races when available — efficient Mongo $in filter
+        ...(p.linkedRaceIds && p.linkedRaceIds.length > 0
+          ? { raceId: { $in: p.linkedRaceIds } }
+          : {}),
+      })
       .lean<ResultRow[]>()
       .exec();
+
+    // Post-filter by canonical name slug (defense against cross-athlete bib collision)
+    const liveResults = parsed
+      ? candidates.filter(
+          (r) => r.name && slugifyVN(r.name) === parsed.nameSlug,
+        )
+      : candidates;
 
     const raceMetas = await this.fetchRaceMetas(
       Array.from(new Set(liveResults.map((r) => r.raceId))),
@@ -276,9 +315,14 @@ export class AthleteProfileService {
         p.ageGroupSnapshot)
       : p.ageGroupSnapshot;
 
+    // BUG FIX 2026-05-21 (Gap #10) — re-compute canonical name from live results
+    // instead of using stored p.canonicalName (which may have vendor casing drift /
+    // whitespace inconsistency from when cron last ran).
+    const canonicalName = this.pickCanonicalName(liveResults) ?? p.canonicalName;
+
     return {
       slug,
-      canonicalName: p.canonicalName,
+      canonicalName,
       primaryBib: p.primaryBib,
       gender: p.gender,
       nationality: p.nationality,
@@ -304,6 +348,436 @@ export class AthleteProfileService {
       distanceSpecialist,
       provinces,
     };
+  }
+
+  /**
+   * F-056 Phase 5 — Public hero stats summary for /runners landing page.
+   * Returns aggregate counts: totalAthletes / totalRaces / totalProvinces /
+   * totalChipTimes. Cache Redis 1h via caller (not heavy enough for SETNX).
+   */
+  async getPublicStats(): Promise<{
+    totalAthletes: number;
+    totalRaces: number;
+    totalProvinces: number;
+    totalChipTimes: number;
+  }> {
+    // Data quality — mirror listPublicAthletes filter so stats match listing.
+    const baseFilter = {
+      active: true,
+      deletedAt: { $exists: false },
+      canonicalName: {
+        $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+        $options: 'i',
+      },
+      totalRaces: { $gte: 1 },
+    };
+    const [totalAthletes, distinctProvinces, sumAgg] = await Promise.all([
+      this.profileModel.countDocuments(baseFilter).exec(),
+      this.profileModel
+        .distinct('nationality', { ...baseFilter, nationality: { $ne: null } })
+        .exec(),
+      this.profileModel
+        .aggregate<{ _id: null; totalRaces: number; totalChipTimes: number }>([
+          { $match: baseFilter },
+          {
+            $group: {
+              _id: null,
+              totalRaces: { $sum: '$totalRaces' },
+              totalChipTimes: { $sum: '$totalFinished' },
+            },
+          },
+        ])
+        .exec(),
+    ]);
+    const sums = sumAgg[0] ?? { totalRaces: 0, totalChipTimes: 0 };
+    return {
+      totalAthletes,
+      totalRaces: sums.totalRaces,
+      totalProvinces: distinctProvinces.filter((p): p is string => !!p).length,
+      totalChipTimes: sums.totalChipTimes,
+    };
+  }
+
+  /**
+   * F-056 Phase 5 — Public list of active athletes for /runners discover page
+   * with full filter/sort/pagination support. PII-stripped summary.
+   *
+   * Query params (all optional):
+   *   - letter: 'A'..'Z' first-letter filter on canonicalName
+   *   - province: nationality exact match
+   *   - gender: 'male'|'female'
+   *   - ageGroup: substring match on category snapshot (e.g. "30-39")
+   *   - specialty: 'marathon'|'hm'|'trail'|'ultra'|'road' — derived from prRecords
+   *   - minRaces / maxRaces: totalRaces range
+   *   - sort: 'az'|'recent'|'most-races'|'fastest-pr' (default recent)
+   *   - page / pageSize: pagination (default 1 / 12, max pageSize 60)
+   *
+   * Returns { data, total, pageNo, pageSize, byLetter, totalAfterFilter }
+   */
+  async listPublicAthletes(
+    params: {
+      letter?: string;
+      province?: string;
+      gender?: 'male' | 'female';
+      ageGroup?: string;
+      specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road';
+      minRaces?: number;
+      maxRaces?: number;
+      sort?: 'az' | 'recent' | 'most-races' | 'fastest-pr';
+      page?: number;
+      pageSize?: number;
+    } = {},
+  ): Promise<{
+    data: Array<{
+      slug: string;
+      canonicalName: string;
+      primaryBib: string;
+      gender?: 'male' | 'female' | 'other' | null;
+      nationality?: string;
+      ageGroup?: string;
+      totalRaces: number;
+      totalFinished: number;
+      lastRaceDate?: string;
+      avatarUrl?: string;
+      specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road' | null;
+    }>;
+    total: number;
+    pageNo: number;
+    pageSize: number;
+    byLetter: Record<string, number>;
+  }> {
+    const pageNo = Math.max(1, params.page ?? 1);
+    const pageSize = Math.min(Math.max(1, params.pageSize ?? 12), 60);
+    const sort = params.sort ?? 'recent';
+
+    // Data quality filter — exclude garbage profiles from public discover.
+    // Real names must:
+    //   - Start with letter (not digit/#/dash) — excludes BIB-fallback names
+    //     ("16661"), Excel parse errors ("#VALUE!"), leading dashes ("-TRAN")
+    //   - Contain at least one whitespace (first + last name)
+    //   - Length >= 4 chars (excludes single-word noise)
+    // Plus totalRaces >= 1 (active means at least 1 race finished, not just
+    // registered).
+    const baseFilter: Record<string, unknown> = {
+      active: true,
+      deletedAt: { $exists: false },
+      canonicalName: {
+        $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+        $options: 'i',
+      },
+      totalRaces: { $gte: 1 },
+    };
+
+    // Apply filters
+    if (params.province) baseFilter.nationality = params.province;
+    if (params.gender) baseFilter.gender = params.gender;
+    if (params.ageGroup) {
+      // Substring case-insensitive — matches "30-39" within "Male 30-39"
+      baseFilter.ageGroupSnapshot = {
+        $regex: this.escapeRegex(params.ageGroup),
+        $options: 'i',
+      };
+    }
+    if (params.letter && /^[A-Za-z]$/.test(params.letter)) {
+      // Vietnamese first-letter — must match canonicalName start (case-insensitive).
+      // Merge with quality filter to preserve garbage exclusion.
+      baseFilter.canonicalName = {
+        $regex: `^${params.letter}[^\\d#].{2,}\\s.+`,
+        $options: 'i',
+      };
+    }
+    if (params.minRaces != null || params.maxRaces != null) {
+      // Merge with quality floor $gte: 1
+      const rangeFilter: Record<string, number> = { $gte: 1 };
+      if (params.minRaces != null)
+        rangeFilter.$gte = Math.max(1, params.minRaces);
+      if (params.maxRaces != null) rangeFilter.$lte = params.maxRaces;
+      baseFilter.totalRaces = rangeFilter;
+    }
+
+    // Sort spec
+    const sortSpec: Record<string, 1 | -1> = (() => {
+      switch (sort) {
+        case 'az':
+          return { canonicalName: 1 };
+        case 'most-races':
+          return { totalRaces: -1, lastRaceDate: -1 };
+        case 'fastest-pr':
+          // No persistent PR-fastest sort; fallback to most-races (PR
+          // requires computed across distances — Phase 6).
+          return { totalRaces: -1 };
+        case 'recent':
+        default:
+          return { lastRaceDate: -1 };
+      }
+    })();
+
+    // Pre-specialty filter total (specialty derived post-query)
+    const [totalBeforeSpecialty, pageProfiles, byLetterAgg] = await Promise.all([
+      this.profileModel.countDocuments(baseFilter).exec(),
+      this.profileModel
+        .find(baseFilter)
+        .sort(sortSpec)
+        // Over-fetch for specialty filter post-process if specialty requested.
+        // Cap factor 3× page size, max 200 to bound memory.
+        .limit(
+          params.specialty
+            ? Math.min(200, pageSize * 3 + (pageNo - 1) * pageSize)
+            : pageNo * pageSize,
+        )
+        .select({
+          slug: 1,
+          canonicalName: 1,
+          primaryBib: 1,
+          gender: 1,
+          nationality: 1,
+          ageGroupSnapshot: 1,
+          totalRaces: 1,
+          totalFinished: 1,
+          lastRaceDate: 1,
+          avatarUrl: 1,
+          prRecords: 1,
+        })
+        .lean()
+        .exec(),
+      this.profileModel
+        .aggregate<{ _id: string; count: number }>([
+          {
+            $match: {
+              active: true,
+              deletedAt: { $exists: false },
+              // Same quality filter as listing — jumper counts must match
+              canonicalName: {
+                $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+                $options: 'i',
+              },
+              totalRaces: { $gte: 1 },
+            },
+          },
+          {
+            $project: {
+              firstLetter: {
+                $toUpper: { $substrCP: ['$canonicalName', 0, 1] },
+              },
+            },
+          },
+          { $group: { _id: '$firstLetter', count: { $sum: 1 } } },
+        ])
+        .exec(),
+    ]);
+
+    // Map letter aggregate
+    const byLetter: Record<string, number> = {};
+    for (const row of byLetterAgg) {
+      const normalized = this.normalizeAccent(row._id);
+      byLetter[normalized] = (byLetter[normalized] ?? 0) + row.count;
+    }
+
+    // Specialty post-derive + filter
+    const enriched = pageProfiles.map((p) => ({
+      slug: p.slug,
+      canonicalName: p.canonicalName,
+      primaryBib: p.primaryBib,
+      gender: p.gender ?? null,
+      nationality: p.nationality ?? undefined,
+      ageGroup: p.ageGroupSnapshot ?? undefined,
+      totalRaces: p.totalRaces ?? 0,
+      totalFinished: p.totalFinished ?? 0,
+      lastRaceDate: p.lastRaceDate
+        ? new Date(p.lastRaceDate).toISOString()
+        : undefined,
+      avatarUrl: p.avatarUrl ?? undefined,
+      specialty: this.deriveSpecialty(p.prRecords),
+    }));
+
+    const filtered = params.specialty
+      ? enriched.filter((a) => a.specialty === params.specialty)
+      : enriched;
+
+    // Paginate post-filter (only matters if specialty filter applied)
+    const startIdx = (pageNo - 1) * pageSize;
+    const pageSlice = filtered.slice(startIdx, startIdx + pageSize);
+    const total = params.specialty ? filtered.length : totalBeforeSpecialty;
+
+    return {
+      data: pageSlice,
+      total,
+      pageNo,
+      pageSize,
+      byLetter,
+    };
+  }
+
+  /**
+   * F-056 Phase 5 — VĐV của tháng (spotlight #1 + top 5 sidebar) based on
+   * race-completion count in current calendar month. Cache via caller.
+   * Falls back to lastRaceDate sort if no current-month data.
+   */
+  async getSpotlightOfMonth(): Promise<{
+    topOne: AthleteSummary | null;
+    topFive: AthleteSummary[];
+    month: string; // 'YYYY-MM'
+  }> {
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const profiles = await this.profileModel
+      .find({
+        active: true,
+        deletedAt: { $exists: false },
+        lastRaceDate: { $gte: monthStart },
+        canonicalName: {
+          $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+          $options: 'i',
+        },
+        totalRaces: { $gte: 1 },
+      })
+      .sort({ totalRaces: -1, lastRaceDate: -1 })
+      .limit(6)
+      .select({
+        slug: 1,
+        canonicalName: 1,
+        primaryBib: 1,
+        gender: 1,
+        nationality: 1,
+        ageGroupSnapshot: 1,
+        totalRaces: 1,
+        totalFinished: 1,
+        lastRaceDate: 1,
+        avatarUrl: 1,
+        prRecords: 1,
+      })
+      .lean()
+      .exec();
+
+    const list: AthleteSummary[] = profiles.map((p) => ({
+      slug: p.slug,
+      canonicalName: p.canonicalName,
+      primaryBib: p.primaryBib,
+      gender: p.gender ?? null,
+      nationality: p.nationality ?? undefined,
+      ageGroup: p.ageGroupSnapshot ?? undefined,
+      totalRaces: p.totalRaces ?? 0,
+      totalFinished: p.totalFinished ?? 0,
+      lastRaceDate: p.lastRaceDate
+        ? new Date(p.lastRaceDate).toISOString()
+        : undefined,
+      avatarUrl: p.avatarUrl ?? undefined,
+      specialty: this.deriveSpecialty(p.prRecords),
+    }));
+
+    return {
+      topOne: list[0] ?? null,
+      topFive: list.slice(1, 6),
+      month,
+    };
+  }
+
+  /**
+   * F-056 Phase 5 — Top 10 featured athletes by race-count in last 90 days.
+   * Cache via caller (1h Redis recommended).
+   */
+  async getFeatured90Days(): Promise<{
+    items: AthleteSummary[];
+    windowDays: number;
+  }> {
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 3600 * 1000);
+    const profiles = await this.profileModel
+      .find({
+        active: true,
+        deletedAt: { $exists: false },
+        lastRaceDate: { $gte: ninetyDaysAgo },
+        canonicalName: {
+          $regex: '^[A-Za-zĐĂÂÊÔƠƯ][^\\d#].{2,}\\s.+',
+          $options: 'i',
+        },
+        totalRaces: { $gte: 1 },
+      })
+      .sort({ totalRaces: -1, lastRaceDate: -1 })
+      .limit(10)
+      .select({
+        slug: 1,
+        canonicalName: 1,
+        primaryBib: 1,
+        gender: 1,
+        nationality: 1,
+        ageGroupSnapshot: 1,
+        totalRaces: 1,
+        totalFinished: 1,
+        lastRaceDate: 1,
+        avatarUrl: 1,
+        prRecords: 1,
+      })
+      .lean()
+      .exec();
+
+    const items: AthleteSummary[] = profiles.map((p) => ({
+      slug: p.slug,
+      canonicalName: p.canonicalName,
+      primaryBib: p.primaryBib,
+      gender: p.gender ?? null,
+      nationality: p.nationality ?? undefined,
+      ageGroup: p.ageGroupSnapshot ?? undefined,
+      totalRaces: p.totalRaces ?? 0,
+      totalFinished: p.totalFinished ?? 0,
+      lastRaceDate: p.lastRaceDate
+        ? new Date(p.lastRaceDate).toISOString()
+        : undefined,
+      avatarUrl: p.avatarUrl ?? undefined,
+      specialty: this.deriveSpecialty(p.prRecords),
+    }));
+
+    return { items, windowDays: 90 };
+  }
+
+  // ─── Internal helpers ───────────────────────────────────────────────────
+
+  /**
+   * F-056 Phase 5 — Derive athlete specialty from prRecords distance counts.
+   * Returns the distance category they have most PRs for, mapped to UI label.
+   * Returns null if no PRs.
+   */
+  private deriveSpecialty(
+    prRecords?: Array<{ distance: string }>,
+  ): 'marathon' | 'hm' | 'trail' | 'ultra' | 'road' | null {
+    if (!prRecords || prRecords.length === 0) return null;
+    // Counts: FM=marathon, HM=hm, 10K/5K=road
+    const counts = { fm: 0, hm: 0, road: 0 };
+    for (const pr of prRecords) {
+      if (pr.distance === 'FM') counts.fm++;
+      else if (pr.distance === 'HM') counts.hm++;
+      else if (pr.distance === '10K' || pr.distance === '5K') counts.road++;
+    }
+    const max = Math.max(counts.fm, counts.hm, counts.road);
+    if (max === 0) return null;
+    if (counts.fm === max) return 'marathon';
+    if (counts.hm === max) return 'hm';
+    return 'road';
+  }
+
+  /**
+   * F-056 Phase 5 — Normalize Vietnamese first-letter accent → ASCII for
+   * alphabet grouping. Đ/Ơ/Ô/Ư → D/O/O/U. Match design A→Z picker only
+   * shows ASCII letters.
+   */
+  private normalizeAccent(c: string): string {
+    if (!c) return '#';
+    const map: Record<string, string> = {
+      Á: 'A', À: 'A', Ả: 'A', Ã: 'A', Ạ: 'A', Ă: 'A', Â: 'A',
+      É: 'E', È: 'E', Ẻ: 'E', Ẽ: 'E', Ẹ: 'E', Ê: 'E',
+      Í: 'I', Ì: 'I', Ỉ: 'I', Ĩ: 'I', Ị: 'I',
+      Ó: 'O', Ò: 'O', Ỏ: 'O', Õ: 'O', Ọ: 'O', Ô: 'O', Ơ: 'O',
+      Ú: 'U', Ù: 'U', Ủ: 'U', Ũ: 'U', Ụ: 'U', Ư: 'U',
+      Ý: 'Y', Ỳ: 'Y', Ỷ: 'Y', Ỹ: 'Y', Ỵ: 'Y',
+      Đ: 'D',
+    };
+    const upper = c.toUpperCase();
+    return map[upper] ?? upper;
+  }
+
+  private escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /** Sitemap support: top N most-active for /sitemap-athletes.xml. */
@@ -379,6 +853,12 @@ export class AthleteProfileService {
     });
     const latest = matched[0];
 
+    // BUG FIX 2026-05-21 (Gap #10 — data mapping audit):
+    // canonicalName picker — most-frequent name variant (case + whitespace normalized).
+    // Vendor data has typos / casing drift ("Nguyen Thi Trang" vs "NGUYỄN THỊ TRANG")
+    // — naive "latest.name" picks arbitrary vendor casing. Mode-pick gives stability.
+    const canonicalName = this.pickCanonicalName(matched) ?? latest.name ?? '';
+
     // Fetch race meta in parallel
     const raceIds = Array.from(new Set(matched.map((r) => r.raceId)));
     const raceMetas = await this.fetchRaceMetas(raceIds);
@@ -413,7 +893,7 @@ export class AthleteProfileService {
 
     return {
       slug,
-      canonicalName: latest.name ?? '',
+      canonicalName,
       primaryBib: parsed.bib,
       gender: this.normalizeGender(latest.gender),
       nationality: latest.nationality,
@@ -609,6 +1089,51 @@ export class AthleteProfileService {
     return parseChipTimeSeconds(r.chipTime) > 0;
   }
 
+  /**
+   * BUG FIX 2026-05-21 (Gap #10) — pick most-frequent name variant.
+   *
+   * Vendor name data drifts: "Nguyen Thi Trang" / "NGUYỄN THỊ TRANG" /
+   * "nguyễn thị trang" — all same person but display picks arbitrary vendor casing.
+   *
+   * Strategy:
+   *   1. Group by canonical key (trim + collapse whitespace + lowercase + slugifyVN)
+   *   2. Within each group, count occurrences
+   *   3. Return the EXACT variant that occurs most (mode); tie-break by longest
+   *      (more characters = more complete name with full diacritics preserved)
+   */
+  private pickCanonicalName(rows: ResultRow[]): string | null {
+    const counts = new Map<string, number>();
+    const variants = new Map<string, string>(); // key → most-representative variant
+    for (const r of rows) {
+      const name = r.name?.trim().replace(/\s+/g, ' ');
+      if (!name) continue;
+      // Use slugified key for grouping (handles casing + spaces + diacritics)
+      const key = slugifyVN(name);
+      if (!key) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      // Prefer LONGER variant in tie (preserves diacritics over ASCII fallback)
+      const prev = variants.get(key);
+      if (!prev || name.length > prev.length) variants.set(key, name);
+    }
+    if (counts.size === 0) return null;
+    // Pick mode (highest count). Tie-break: longest stored variant.
+    let bestKey: string | null = null;
+    let bestCount = 0;
+    let bestLen = 0;
+    for (const [key, count] of counts.entries()) {
+      const variantLen = (variants.get(key) ?? '').length;
+      if (
+        count > bestCount ||
+        (count === bestCount && variantLen > bestLen)
+      ) {
+        bestKey = key;
+        bestCount = count;
+        bestLen = variantLen;
+      }
+    }
+    return bestKey ? variants.get(bestKey) ?? null : null;
+  }
+
   // ─── F-050 race-ops helpers ───────────────────────────────────────────
 
   /**
@@ -639,9 +1164,11 @@ export class AthleteProfileService {
       return 'trail';
     }
 
-    // Heuristic: distance ≥50K with no explicit trail type is still ultra-distance
-    // (rare road ultra). Keep classification informative for trail-style display.
-    if (distanceKm !== null && distanceKm >= 50) return 'ultra_trail';
+    // BUG FIX 2026-05-21 (Gap #5 — data mapping audit):
+    // Previous heuristic assumed distance ≥50K = ultra_trail regardless of raceType.
+    // But rare road ultra exists (UTMB-style road ultras, IAU 100K certified courses)
+    // — these should remain 'road' classification (vendor `raceType` is source of truth).
+    // Only escalate to ultra_trail when EXPLICIT trail signal present.
 
     // Default to 'road' only when we have ANY signal (raceType or distance);
     // truly unknown returns undefined so frontend can hide the icon.
@@ -689,6 +1216,11 @@ export class AthleteProfileService {
 
   /**
    * F-050 — unique provinces visited from race meta. Dedup via Set, preserve sorted order (VN locale).
+   *
+   * BUG FIX 2026-05-21 (data mapping audit Gap #2):
+   * Vendor province data inconsistent — "Hà Nội" / "Thành phố Hà Nội" / "TP Hà Nội"
+   * treated as 3 different provinces, inflating geographic badge count.
+   * canonicalizeProvince() strips administrative prefixes + applies alias map.
    */
   computeProvinces(
     raceHistory: AthleteRaceHistoryRowDto[],
@@ -697,8 +1229,8 @@ export class AthleteProfileService {
     const set = new Set<string>();
     for (const row of raceHistory) {
       const meta = raceMetas.get(row.raceId);
-      const province = meta?.province?.trim();
-      if (province) set.add(province);
+      const canonical = canonicalizeProvince(meta?.province);
+      if (canonical) set.add(canonical);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'));
   }
