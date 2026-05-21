@@ -159,49 +159,106 @@ export class RaceResultController {
   }
 
   /**
-   * F-056 scope expansion 2026-05-21 — Public athletes index for /runners
-   * frontend listing. Returns most-active athletes sorted by lastRaceDate DESC.
-   * No auth, public read. Used to populate athlete discover page.
+   * F-056 Phase 5 — Public athletes hero stats for /runners landing.
+   * Returns totalAthletes / totalRaces / totalProvinces / totalChipTimes.
    */
-  @Get('athletes')
+  @Get('athletes-stats')
   @ApiOperation({
-    summary: 'F-056 — Public athletes index (most-recently active sorted DESC)',
+    summary: 'F-056 P5 — Public hero stats summary for /runners landing',
   })
   @ApiResponse({
     status: 200,
-    description: 'List of active athletes (PII-stripped summary)',
     schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          slug: { type: 'string' },
-          canonicalName: { type: 'string' },
-          primaryBib: { type: 'string' },
-          gender: { type: 'string', nullable: true },
-          nationality: { type: 'string', nullable: true },
-          totalRaces: { type: 'number' },
-          totalFinished: { type: 'number' },
-          lastRaceDate: { type: 'string', nullable: true },
-          avatarUrl: { type: 'string', nullable: true },
-        },
+      type: 'object',
+      properties: {
+        totalAthletes: { type: 'number' },
+        totalRaces: { type: 'number' },
+        totalProvinces: { type: 'number' },
+        totalChipTimes: { type: 'number' },
       },
     },
   })
-  async listAthletes(): Promise<
-    Array<{
-      slug: string;
-      canonicalName: string;
-      primaryBib: string;
-      gender?: 'male' | 'female' | 'other' | null;
-      nationality?: string;
-      totalRaces: number;
-      totalFinished: number;
-      lastRaceDate?: string;
-      avatarUrl?: string;
-    }>
-  > {
-    return this.athleteProfileService.listPublicAthletes(60);
+  async getAthletesStats(): Promise<{
+    totalAthletes: number;
+    totalRaces: number;
+    totalProvinces: number;
+    totalChipTimes: number;
+  }> {
+    return this.athleteProfileService.getPublicStats();
+  }
+
+  /**
+   * F-056 Phase 5 — VĐV của tháng (spotlight #1 + top 5 sidebar) based on
+   * current calendar month race activity.
+   */
+  @Get('athletes-spotlight')
+  @ApiOperation({
+    summary: 'F-056 P5 — VĐV của tháng spotlight + top 5 sidebar',
+  })
+  @ApiResponse({ status: 200 })
+  async getAthletesSpotlight() {
+    return this.athleteProfileService.getSpotlightOfMonth();
+  }
+
+  /**
+   * F-056 Phase 5 — Top 10 featured athletes in last 90 days for homepage
+   * carousel section.
+   */
+  @Get('athletes-featured-90d')
+  @ApiOperation({
+    summary: 'F-056 P5 — Top 10 featured athletes last 90 days',
+  })
+  @ApiResponse({ status: 200 })
+  async getAthletesFeatured90d() {
+    return this.athleteProfileService.getFeatured90Days();
+  }
+
+  /**
+   * F-056 Phase 5 — Public athletes index with full filter / sort /
+   * pagination for /runners discover page. Returns paginated data + byLetter
+   * count map for alphabet jumper.
+   */
+  @Get('athletes')
+  @ApiOperation({
+    summary: 'F-056 P5 — Public athletes index with filter/sort/pagination',
+  })
+  @ApiQuery({ name: 'letter', required: false, description: 'A..Z first-letter filter' })
+  @ApiQuery({ name: 'province', required: false })
+  @ApiQuery({ name: 'gender', required: false, enum: ['male', 'female'] })
+  @ApiQuery({ name: 'ageGroup', required: false, description: 'Substring e.g. "30-39"' })
+  @ApiQuery({ name: 'specialty', required: false, enum: ['marathon', 'hm', 'trail', 'ultra', 'road'] })
+  @ApiQuery({ name: 'minRaces', required: false, type: Number })
+  @ApiQuery({ name: 'maxRaces', required: false, type: Number })
+  @ApiQuery({ name: 'sort', required: false, enum: ['az', 'recent', 'most-races', 'fastest-pr'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'pageSize', required: false, type: Number })
+  @ApiResponse({ status: 200 })
+  async listAthletes(
+    @Query('letter') letter?: string,
+    @Query('province') province?: string,
+    @Query('gender') gender?: 'male' | 'female',
+    @Query('ageGroup') ageGroup?: string,
+    @Query('specialty')
+    specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road',
+    @Query('minRaces') minRaces?: string,
+    @Query('maxRaces') maxRaces?: string,
+    @Query('sort')
+    sort?: 'az' | 'recent' | 'most-races' | 'fastest-pr',
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.athleteProfileService.listPublicAthletes({
+      letter,
+      province,
+      gender,
+      ageGroup,
+      specialty,
+      minRaces: minRaces ? parseInt(minRaces, 10) : undefined,
+      maxRaces: maxRaces ? parseInt(maxRaces, 10) : undefined,
+      sort,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
   }
 
   /**

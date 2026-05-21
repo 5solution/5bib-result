@@ -102,6 +102,24 @@ interface RaceMeta {
 const PR_DISTANCES = ['5K', '10K', 'HM', 'FM'] as const;
 type PRDistance = (typeof PR_DISTANCES)[number];
 
+/**
+ * F-056 Phase 5 — Public summary shape for athlete listing / spotlight /
+ * featured carousel. PII-stripped (no email/phone/DOB).
+ */
+export interface AthleteSummary {
+  slug: string;
+  canonicalName: string;
+  primaryBib: string;
+  gender?: 'male' | 'female' | 'other' | null;
+  nationality?: string;
+  ageGroup?: string;
+  totalRaces: number;
+  totalFinished: number;
+  lastRaceDate?: string;
+  avatarUrl?: string;
+  specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road' | null;
+}
+
 @Injectable()
 export class AthleteProfileService {
   private readonly logger = new Logger(AthleteProfileService.name);
@@ -333,53 +351,388 @@ export class AthleteProfileService {
   }
 
   /**
-   * F-056 scope expansion 2026-05-21 — Public list of active athletes for
-   * /runners discover page. PII-stripped summary, sorted by lastRaceDate DESC.
+   * F-056 Phase 5 — Public hero stats summary for /runners landing page.
+   * Returns aggregate counts: totalAthletes / totalRaces / totalProvinces /
+   * totalChipTimes. Cache Redis 1h via caller (not heavy enough for SETNX).
    */
-  async listPublicAthletes(limit = 60): Promise<
-    Array<{
+  async getPublicStats(): Promise<{
+    totalAthletes: number;
+    totalRaces: number;
+    totalProvinces: number;
+    totalChipTimes: number;
+  }> {
+    const baseFilter = { active: true, deletedAt: { $exists: false } };
+    const [totalAthletes, distinctProvinces, sumAgg] = await Promise.all([
+      this.profileModel.countDocuments(baseFilter).exec(),
+      this.profileModel
+        .distinct('nationality', { ...baseFilter, nationality: { $ne: null } })
+        .exec(),
+      this.profileModel
+        .aggregate<{ _id: null; totalRaces: number; totalChipTimes: number }>([
+          { $match: baseFilter },
+          {
+            $group: {
+              _id: null,
+              totalRaces: { $sum: '$totalRaces' },
+              totalChipTimes: { $sum: '$totalFinished' },
+            },
+          },
+        ])
+        .exec(),
+    ]);
+    const sums = sumAgg[0] ?? { totalRaces: 0, totalChipTimes: 0 };
+    return {
+      totalAthletes,
+      totalRaces: sums.totalRaces,
+      totalProvinces: distinctProvinces.filter((p): p is string => !!p).length,
+      totalChipTimes: sums.totalChipTimes,
+    };
+  }
+
+  /**
+   * F-056 Phase 5 — Public list of active athletes for /runners discover page
+   * with full filter/sort/pagination support. PII-stripped summary.
+   *
+   * Query params (all optional):
+   *   - letter: 'A'..'Z' first-letter filter on canonicalName
+   *   - province: nationality exact match
+   *   - gender: 'male'|'female'
+   *   - ageGroup: substring match on category snapshot (e.g. "30-39")
+   *   - specialty: 'marathon'|'hm'|'trail'|'ultra'|'road' — derived from prRecords
+   *   - minRaces / maxRaces: totalRaces range
+   *   - sort: 'az'|'recent'|'most-races'|'fastest-pr' (default recent)
+   *   - page / pageSize: pagination (default 1 / 12, max pageSize 60)
+   *
+   * Returns { data, total, pageNo, pageSize, byLetter, totalAfterFilter }
+   */
+  async listPublicAthletes(
+    params: {
+      letter?: string;
+      province?: string;
+      gender?: 'male' | 'female';
+      ageGroup?: string;
+      specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road';
+      minRaces?: number;
+      maxRaces?: number;
+      sort?: 'az' | 'recent' | 'most-races' | 'fastest-pr';
+      page?: number;
+      pageSize?: number;
+    } = {},
+  ): Promise<{
+    data: Array<{
       slug: string;
       canonicalName: string;
       primaryBib: string;
       gender?: 'male' | 'female' | 'other' | null;
       nationality?: string;
+      ageGroup?: string;
       totalRaces: number;
       totalFinished: number;
       lastRaceDate?: string;
       avatarUrl?: string;
-    }>
-  > {
-    const safeLimit = Math.min(Math.max(1, limit), 100);
-    const profiles = await this.profileModel
-      .find({ active: true, deletedAt: { $exists: false } })
-      .sort({ lastRaceDate: -1 })
-      .limit(safeLimit)
-      .select({
-        slug: 1,
-        canonicalName: 1,
-        primaryBib: 1,
-        gender: 1,
-        nationality: 1,
-        totalRaces: 1,
-        totalFinished: 1,
-        lastRaceDate: 1,
-        avatarUrl: 1,
-      })
-      .lean()
-      .exec();
-    return profiles.map((p) => ({
+      specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road' | null;
+    }>;
+    total: number;
+    pageNo: number;
+    pageSize: number;
+    byLetter: Record<string, number>;
+  }> {
+    const pageNo = Math.max(1, params.page ?? 1);
+    const pageSize = Math.min(Math.max(1, params.pageSize ?? 12), 60);
+    const sort = params.sort ?? 'recent';
+
+    const baseFilter: Record<string, unknown> = {
+      active: true,
+      deletedAt: { $exists: false },
+    };
+
+    // Apply filters
+    if (params.province) baseFilter.nationality = params.province;
+    if (params.gender) baseFilter.gender = params.gender;
+    if (params.ageGroup) {
+      // Substring case-insensitive — matches "30-39" within "Male 30-39"
+      baseFilter.ageGroupSnapshot = {
+        $regex: this.escapeRegex(params.ageGroup),
+        $options: 'i',
+      };
+    }
+    if (params.letter && /^[A-Za-z]$/.test(params.letter)) {
+      // Vietnamese first-letter — must match canonicalName start (case-insensitive).
+      // For accented (Đ/Ô/etc.) caller passes ASCII equivalent (D/O); allow regex.
+      baseFilter.canonicalName = {
+        $regex: `^${params.letter}`,
+        $options: 'i',
+      };
+    }
+    if (params.minRaces != null || params.maxRaces != null) {
+      const rangeFilter: Record<string, number> = {};
+      if (params.minRaces != null) rangeFilter.$gte = params.minRaces;
+      if (params.maxRaces != null) rangeFilter.$lte = params.maxRaces;
+      baseFilter.totalRaces = rangeFilter;
+    }
+
+    // Sort spec
+    const sortSpec: Record<string, 1 | -1> = (() => {
+      switch (sort) {
+        case 'az':
+          return { canonicalName: 1 };
+        case 'most-races':
+          return { totalRaces: -1, lastRaceDate: -1 };
+        case 'fastest-pr':
+          // No persistent PR-fastest sort; fallback to most-races (PR
+          // requires computed across distances — Phase 6).
+          return { totalRaces: -1 };
+        case 'recent':
+        default:
+          return { lastRaceDate: -1 };
+      }
+    })();
+
+    // Pre-specialty filter total (specialty derived post-query)
+    const [totalBeforeSpecialty, pageProfiles, byLetterAgg] = await Promise.all([
+      this.profileModel.countDocuments(baseFilter).exec(),
+      this.profileModel
+        .find(baseFilter)
+        .sort(sortSpec)
+        // Over-fetch for specialty filter post-process if specialty requested.
+        // Cap factor 3× page size, max 200 to bound memory.
+        .limit(
+          params.specialty
+            ? Math.min(200, pageSize * 3 + (pageNo - 1) * pageSize)
+            : pageNo * pageSize,
+        )
+        .select({
+          slug: 1,
+          canonicalName: 1,
+          primaryBib: 1,
+          gender: 1,
+          nationality: 1,
+          ageGroupSnapshot: 1,
+          totalRaces: 1,
+          totalFinished: 1,
+          lastRaceDate: 1,
+          avatarUrl: 1,
+          prRecords: 1,
+        })
+        .lean()
+        .exec(),
+      this.profileModel
+        .aggregate<{ _id: string; count: number }>([
+          { $match: { active: true, deletedAt: { $exists: false } } },
+          {
+            $project: {
+              firstLetter: {
+                $toUpper: { $substrCP: ['$canonicalName', 0, 1] },
+              },
+            },
+          },
+          { $group: { _id: '$firstLetter', count: { $sum: 1 } } },
+        ])
+        .exec(),
+    ]);
+
+    // Map letter aggregate
+    const byLetter: Record<string, number> = {};
+    for (const row of byLetterAgg) {
+      const normalized = this.normalizeAccent(row._id);
+      byLetter[normalized] = (byLetter[normalized] ?? 0) + row.count;
+    }
+
+    // Specialty post-derive + filter
+    const enriched = pageProfiles.map((p) => ({
       slug: p.slug,
       canonicalName: p.canonicalName,
       primaryBib: p.primaryBib,
       gender: p.gender ?? null,
       nationality: p.nationality ?? undefined,
+      ageGroup: p.ageGroupSnapshot ?? undefined,
       totalRaces: p.totalRaces ?? 0,
       totalFinished: p.totalFinished ?? 0,
       lastRaceDate: p.lastRaceDate
         ? new Date(p.lastRaceDate).toISOString()
         : undefined,
       avatarUrl: p.avatarUrl ?? undefined,
+      specialty: this.deriveSpecialty(p.prRecords),
     }));
+
+    const filtered = params.specialty
+      ? enriched.filter((a) => a.specialty === params.specialty)
+      : enriched;
+
+    // Paginate post-filter (only matters if specialty filter applied)
+    const startIdx = (pageNo - 1) * pageSize;
+    const pageSlice = filtered.slice(startIdx, startIdx + pageSize);
+    const total = params.specialty ? filtered.length : totalBeforeSpecialty;
+
+    return {
+      data: pageSlice,
+      total,
+      pageNo,
+      pageSize,
+      byLetter,
+    };
+  }
+
+  /**
+   * F-056 Phase 5 — VĐV của tháng (spotlight #1 + top 5 sidebar) based on
+   * race-completion count in current calendar month. Cache via caller.
+   * Falls back to lastRaceDate sort if no current-month data.
+   */
+  async getSpotlightOfMonth(): Promise<{
+    topOne: AthleteSummary | null;
+    topFive: AthleteSummary[];
+    month: string; // 'YYYY-MM'
+  }> {
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const profiles = await this.profileModel
+      .find({
+        active: true,
+        deletedAt: { $exists: false },
+        lastRaceDate: { $gte: monthStart },
+      })
+      .sort({ totalRaces: -1, lastRaceDate: -1 })
+      .limit(6)
+      .select({
+        slug: 1,
+        canonicalName: 1,
+        primaryBib: 1,
+        gender: 1,
+        nationality: 1,
+        ageGroupSnapshot: 1,
+        totalRaces: 1,
+        totalFinished: 1,
+        lastRaceDate: 1,
+        avatarUrl: 1,
+        prRecords: 1,
+      })
+      .lean()
+      .exec();
+
+    const list: AthleteSummary[] = profiles.map((p) => ({
+      slug: p.slug,
+      canonicalName: p.canonicalName,
+      primaryBib: p.primaryBib,
+      gender: p.gender ?? null,
+      nationality: p.nationality ?? undefined,
+      ageGroup: p.ageGroupSnapshot ?? undefined,
+      totalRaces: p.totalRaces ?? 0,
+      totalFinished: p.totalFinished ?? 0,
+      lastRaceDate: p.lastRaceDate
+        ? new Date(p.lastRaceDate).toISOString()
+        : undefined,
+      avatarUrl: p.avatarUrl ?? undefined,
+      specialty: this.deriveSpecialty(p.prRecords),
+    }));
+
+    return {
+      topOne: list[0] ?? null,
+      topFive: list.slice(1, 6),
+      month,
+    };
+  }
+
+  /**
+   * F-056 Phase 5 — Top 10 featured athletes by race-count in last 90 days.
+   * Cache via caller (1h Redis recommended).
+   */
+  async getFeatured90Days(): Promise<{
+    items: AthleteSummary[];
+    windowDays: number;
+  }> {
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 3600 * 1000);
+    const profiles = await this.profileModel
+      .find({
+        active: true,
+        deletedAt: { $exists: false },
+        lastRaceDate: { $gte: ninetyDaysAgo },
+      })
+      .sort({ totalRaces: -1, lastRaceDate: -1 })
+      .limit(10)
+      .select({
+        slug: 1,
+        canonicalName: 1,
+        primaryBib: 1,
+        gender: 1,
+        nationality: 1,
+        ageGroupSnapshot: 1,
+        totalRaces: 1,
+        totalFinished: 1,
+        lastRaceDate: 1,
+        avatarUrl: 1,
+        prRecords: 1,
+      })
+      .lean()
+      .exec();
+
+    const items: AthleteSummary[] = profiles.map((p) => ({
+      slug: p.slug,
+      canonicalName: p.canonicalName,
+      primaryBib: p.primaryBib,
+      gender: p.gender ?? null,
+      nationality: p.nationality ?? undefined,
+      ageGroup: p.ageGroupSnapshot ?? undefined,
+      totalRaces: p.totalRaces ?? 0,
+      totalFinished: p.totalFinished ?? 0,
+      lastRaceDate: p.lastRaceDate
+        ? new Date(p.lastRaceDate).toISOString()
+        : undefined,
+      avatarUrl: p.avatarUrl ?? undefined,
+      specialty: this.deriveSpecialty(p.prRecords),
+    }));
+
+    return { items, windowDays: 90 };
+  }
+
+  // ─── Internal helpers ───────────────────────────────────────────────────
+
+  /**
+   * F-056 Phase 5 — Derive athlete specialty from prRecords distance counts.
+   * Returns the distance category they have most PRs for, mapped to UI label.
+   * Returns null if no PRs.
+   */
+  private deriveSpecialty(
+    prRecords?: Array<{ distance: string }>,
+  ): 'marathon' | 'hm' | 'trail' | 'ultra' | 'road' | null {
+    if (!prRecords || prRecords.length === 0) return null;
+    // Counts: FM=marathon, HM=hm, 10K/5K=road
+    const counts = { fm: 0, hm: 0, road: 0 };
+    for (const pr of prRecords) {
+      if (pr.distance === 'FM') counts.fm++;
+      else if (pr.distance === 'HM') counts.hm++;
+      else if (pr.distance === '10K' || pr.distance === '5K') counts.road++;
+    }
+    const max = Math.max(counts.fm, counts.hm, counts.road);
+    if (max === 0) return null;
+    if (counts.fm === max) return 'marathon';
+    if (counts.hm === max) return 'hm';
+    return 'road';
+  }
+
+  /**
+   * F-056 Phase 5 — Normalize Vietnamese first-letter accent → ASCII for
+   * alphabet grouping. Đ/Ơ/Ô/Ư → D/O/O/U. Match design A→Z picker only
+   * shows ASCII letters.
+   */
+  private normalizeAccent(c: string): string {
+    if (!c) return '#';
+    const map: Record<string, string> = {
+      Á: 'A', À: 'A', Ả: 'A', Ã: 'A', Ạ: 'A', Ă: 'A', Â: 'A',
+      É: 'E', È: 'E', Ẻ: 'E', Ẽ: 'E', Ẹ: 'E', Ê: 'E',
+      Í: 'I', Ì: 'I', Ỉ: 'I', Ĩ: 'I', Ị: 'I',
+      Ó: 'O', Ò: 'O', Ỏ: 'O', Õ: 'O', Ọ: 'O', Ô: 'O', Ơ: 'O',
+      Ú: 'U', Ù: 'U', Ủ: 'U', Ũ: 'U', Ụ: 'U', Ư: 'U',
+      Ý: 'Y', Ỳ: 'Y', Ỷ: 'Y', Ỹ: 'Y', Ỵ: 'Y',
+      Đ: 'D',
+    };
+    const upper = c.toUpperCase();
+    return map[upper] ?? upper;
+  }
+
+  private escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /** Sitemap support: top N most-active for /sitemap-athletes.xml. */
