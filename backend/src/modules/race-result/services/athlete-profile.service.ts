@@ -42,6 +42,7 @@ import {
   AthleteDistanceSpecialistDto,
 } from '../dto/athlete-profile-response.dto';
 import { slugifyVN } from '../../../common/utils/slugify';
+import { canonicalizeProvince } from '../../../common/utils/province-normalize';
 import { AthletePhotoService } from './athlete-photo.service';
 
 // Reuse F-046 chipTime parser via local helper to avoid cross-service DI complexity
@@ -296,9 +297,14 @@ export class AthleteProfileService {
         p.ageGroupSnapshot)
       : p.ageGroupSnapshot;
 
+    // BUG FIX 2026-05-21 (Gap #10) — re-compute canonical name from live results
+    // instead of using stored p.canonicalName (which may have vendor casing drift /
+    // whitespace inconsistency from when cron last ran).
+    const canonicalName = this.pickCanonicalName(liveResults) ?? p.canonicalName;
+
     return {
       slug,
-      canonicalName: p.canonicalName,
+      canonicalName,
       primaryBib: p.primaryBib,
       gender: p.gender,
       nationality: p.nationality,
@@ -399,6 +405,12 @@ export class AthleteProfileService {
     });
     const latest = matched[0];
 
+    // BUG FIX 2026-05-21 (Gap #10 — data mapping audit):
+    // canonicalName picker — most-frequent name variant (case + whitespace normalized).
+    // Vendor data has typos / casing drift ("Nguyen Thi Trang" vs "NGUYỄN THỊ TRANG")
+    // — naive "latest.name" picks arbitrary vendor casing. Mode-pick gives stability.
+    const canonicalName = this.pickCanonicalName(matched) ?? latest.name ?? '';
+
     // Fetch race meta in parallel
     const raceIds = Array.from(new Set(matched.map((r) => r.raceId)));
     const raceMetas = await this.fetchRaceMetas(raceIds);
@@ -433,7 +445,7 @@ export class AthleteProfileService {
 
     return {
       slug,
-      canonicalName: latest.name ?? '',
+      canonicalName,
       primaryBib: parsed.bib,
       gender: this.normalizeGender(latest.gender),
       nationality: latest.nationality,
@@ -629,6 +641,51 @@ export class AthleteProfileService {
     return parseChipTimeSeconds(r.chipTime) > 0;
   }
 
+  /**
+   * BUG FIX 2026-05-21 (Gap #10) — pick most-frequent name variant.
+   *
+   * Vendor name data drifts: "Nguyen Thi Trang" / "NGUYỄN THỊ TRANG" /
+   * "nguyễn thị trang" — all same person but display picks arbitrary vendor casing.
+   *
+   * Strategy:
+   *   1. Group by canonical key (trim + collapse whitespace + lowercase + slugifyVN)
+   *   2. Within each group, count occurrences
+   *   3. Return the EXACT variant that occurs most (mode); tie-break by longest
+   *      (more characters = more complete name with full diacritics preserved)
+   */
+  private pickCanonicalName(rows: ResultRow[]): string | null {
+    const counts = new Map<string, number>();
+    const variants = new Map<string, string>(); // key → most-representative variant
+    for (const r of rows) {
+      const name = r.name?.trim().replace(/\s+/g, ' ');
+      if (!name) continue;
+      // Use slugified key for grouping (handles casing + spaces + diacritics)
+      const key = slugifyVN(name);
+      if (!key) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      // Prefer LONGER variant in tie (preserves diacritics over ASCII fallback)
+      const prev = variants.get(key);
+      if (!prev || name.length > prev.length) variants.set(key, name);
+    }
+    if (counts.size === 0) return null;
+    // Pick mode (highest count). Tie-break: longest stored variant.
+    let bestKey: string | null = null;
+    let bestCount = 0;
+    let bestLen = 0;
+    for (const [key, count] of counts.entries()) {
+      const variantLen = (variants.get(key) ?? '').length;
+      if (
+        count > bestCount ||
+        (count === bestCount && variantLen > bestLen)
+      ) {
+        bestKey = key;
+        bestCount = count;
+        bestLen = variantLen;
+      }
+    }
+    return bestKey ? variants.get(bestKey) ?? null : null;
+  }
+
   // ─── F-050 race-ops helpers ───────────────────────────────────────────
 
   /**
@@ -659,9 +716,11 @@ export class AthleteProfileService {
       return 'trail';
     }
 
-    // Heuristic: distance ≥50K with no explicit trail type is still ultra-distance
-    // (rare road ultra). Keep classification informative for trail-style display.
-    if (distanceKm !== null && distanceKm >= 50) return 'ultra_trail';
+    // BUG FIX 2026-05-21 (Gap #5 — data mapping audit):
+    // Previous heuristic assumed distance ≥50K = ultra_trail regardless of raceType.
+    // But rare road ultra exists (UTMB-style road ultras, IAU 100K certified courses)
+    // — these should remain 'road' classification (vendor `raceType` is source of truth).
+    // Only escalate to ultra_trail when EXPLICIT trail signal present.
 
     // Default to 'road' only when we have ANY signal (raceType or distance);
     // truly unknown returns undefined so frontend can hide the icon.
@@ -709,6 +768,11 @@ export class AthleteProfileService {
 
   /**
    * F-050 — unique provinces visited from race meta. Dedup via Set, preserve sorted order (VN locale).
+   *
+   * BUG FIX 2026-05-21 (data mapping audit Gap #2):
+   * Vendor province data inconsistent — "Hà Nội" / "Thành phố Hà Nội" / "TP Hà Nội"
+   * treated as 3 different provinces, inflating geographic badge count.
+   * canonicalizeProvince() strips administrative prefixes + applies alias map.
    */
   computeProvinces(
     raceHistory: AthleteRaceHistoryRowDto[],
@@ -717,8 +781,8 @@ export class AthleteProfileService {
     const set = new Set<string>();
     for (const row of raceHistory) {
       const meta = raceMetas.get(row.raceId);
-      const province = meta?.province?.trim();
-      if (province) set.add(province);
+      const canonical = canonicalizeProvince(meta?.province);
+      if (canonical) set.add(canonical);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'));
   }
