@@ -15,9 +15,16 @@ export default function Header() {
   const pathname = usePathname();
   const { t } = useTranslation();
 
+  // Nav order matches design page-recap.jsx top nav:
+  // TRANG CHỦ · LỊCH GIẢI · KẾT QUẢ · VĐV · RECAP
+  // /recap index landing lists ended races; each item links to per-race
+  // /giai-chay/[slug]/recap magazine page.
   const navLinks = [
     { href: '/', label: t('nav.home') },
     { href: '/calendar', label: t('nav.calendar') },
+    { href: '/giai-chay', label: t('nav.results') },
+    { href: '/search', label: t('nav.athletes') },
+    { href: '/recap', label: t('nav.recap') },
   ];
 
   if (pathname?.startsWith('/timing')) return null;

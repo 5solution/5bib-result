@@ -38,7 +38,10 @@
   },
   "nav": {
     "home": "Home",
-    "calendar": "Events",
+    "calendar": "Calendar",
+    "results": "Results",
+    "athletes": "Athletes",
+    "recap": "Recap",
     "searchAthlete": "Find athletes"
   },
   "footer": {

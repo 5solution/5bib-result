@@ -38,7 +38,10 @@
   },
   "nav": {
     "home": "Trang chủ",
-    "calendar": "Lịch sự kiện",
+    "calendar": "Lịch giải",
+    "results": "Kết quả",
+    "athletes": "VĐV",
+    "recap": "Recap",
     "searchAthlete": "Tìm vận động viên"
   },
   "footer": {
