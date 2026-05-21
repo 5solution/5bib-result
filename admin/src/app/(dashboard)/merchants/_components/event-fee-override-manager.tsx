@@ -107,7 +107,7 @@ export function EventFeeOverrideManager({ tenantId, races }: Props) {
       setLoading(true);
       setError(null);
       const res = await fetch(`${API_BASE}/${tenantId}/event-fee-overrides`, {
-        headers: await authHeaders(),
+        headers: authHeaders().headers,
       });
       if (!res.ok) {
         if (res.status === 403) throw new Error("Chỉ admin mới có quyền cấu hình override");
@@ -191,7 +191,7 @@ export function EventFeeOverrideManager({ tenantId, races }: Props) {
       const res = await fetch(url, {
         method,
         headers: {
-          ...(await authHeaders()),
+          ...authHeaders().headers,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -226,7 +226,7 @@ export function EventFeeOverrideManager({ tenantId, races }: Props) {
     try {
       const res = await fetch(`${API_BASE}/${tenantId}/event-fee-overrides/${raceId}`, {
         method: "DELETE",
-        headers: await authHeaders(),
+        headers: authHeaders().headers,
       });
       if (!res.ok) {
         toast.error(`Lỗi xoá: HTTP ${res.status}`);
@@ -385,7 +385,7 @@ export function EventFeeOverrideManager({ tenantId, races }: Props) {
               ) : (
                 <Select
                   value={form.raceId}
-                  onValueChange={(v) => setForm((f) => ({ ...f, raceId: v }))}
+                  onValueChange={(v) => setForm((f) => ({ ...f, raceId: v ?? "" }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Chọn sự kiện..." />
