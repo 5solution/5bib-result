@@ -15,10 +15,14 @@ export default function Header() {
   const pathname = usePathname();
   const { t } = useTranslation();
 
-  // Nav order matches design page-recap.jsx top nav:
+  // Nav matches design page-recap.jsx top nav:
   // TRANG CHỦ · LỊCH GIẢI · KẾT QUẢ · VĐV · RECAP
-  // Custom matcher per link to handle overlap (vd: /giai-chay/X/recap should
-  // highlight "Recap" not "Kết quả"; /runners/X should highlight "VĐV").
+  //
+  // F-056 Phase 5 PAUSE (2026-05-21): VĐV link points to /search (athlete
+  // search) instead of /runners discover index — privacy/PII concerns
+  // documented in /runners/page.tsx header comment. /runners/[slug] profile
+  // pages (F-047) remain accessible via direct link / search results.
+  // Restore /runners nav target in F-057 after opt-in consent flow ships.
   const navLinks: Array<{
     href: string;
     label: string;
@@ -42,10 +46,10 @@ export default function Header() {
         p.startsWith('/giai-chay') && !p.endsWith('/recap') && !p.includes('/recap'),
     },
     {
-      href: '/runners',
+      href: '/search',
       label: t('nav.athletes'),
-      // VĐV: /runners index + /runners/X profile + global /search athlete
-      isActive: (p) => p.startsWith('/runners') || p.startsWith('/search'),
+      // VĐV: athlete search + individual profile pages (F-047)
+      isActive: (p) => p.startsWith('/search') || p.startsWith('/runners'),
     },
     {
       href: '/recap',

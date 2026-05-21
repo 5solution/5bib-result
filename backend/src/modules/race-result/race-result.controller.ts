@@ -158,107 +158,118 @@ export class RaceResultController {
     return { success: true, deletedCount: deleted };
   }
 
-  /**
-   * F-056 Phase 5 — Public athletes hero stats for /runners landing.
-   * Returns totalAthletes / totalRaces / totalProvinces / totalChipTimes.
-   */
+  // ─────────────────────────────────────────────────────────────────────
+  // F-056 Phase 5 PAUSED — Public athletes discover endpoints disabled
+  // (2026-05-21, Danny + biz-strategist consult). Rationale: PII compliance
+  // VN Nghị định 13/2023 + brand risk + data moat leakage. See
+  // frontend/app/(main)/runners/page.tsx header for full context.
+  //
+  // Service methods (getPublicStats / getSpotlightOfMonth / getFeatured90Days
+  // / listPublicAthletes) remain in athlete-profile.service.ts for future
+  // F-057 opt-in consent flow restore. Endpoints return 404 to prevent
+  // public access.
+  //
+  // KEEP: /athletes/:slug (individual profile detail — F-047, race-specific
+  // results = athlete consent ngầm khi đăng ký race per industry norm).
+  // ─────────────────────────────────────────────────────────────────────
+
   @Get('athletes-stats')
   @ApiOperation({
-    summary: 'F-056 P5 — Public hero stats summary for /runners landing',
+    summary: 'F-056 P5 PAUSED — public stats disabled pending consent flow',
+    deprecated: true,
   })
-  @ApiResponse({
-    status: 200,
-    schema: {
-      type: 'object',
-      properties: {
-        totalAthletes: { type: 'number' },
-        totalRaces: { type: 'number' },
-        totalProvinces: { type: 'number' },
-        totalChipTimes: { type: 'number' },
-      },
-    },
-  })
-  async getAthletesStats(): Promise<{
-    totalAthletes: number;
-    totalRaces: number;
-    totalProvinces: number;
-    totalChipTimes: number;
-  }> {
-    return this.athleteProfileService.getPublicStats();
+  @ApiResponse({ status: 404, description: 'Paused — F-057 opt-in flow' })
+  async getAthletesStats(): Promise<never> {
+    throw new NotFoundException(
+      'Public athletes discover hard-paused per F-056 P5 decision 2026-05-21. ' +
+        'Restore in F-057 with opt-in consent flow.',
+    );
   }
 
-  /**
-   * F-056 Phase 5 — VĐV của tháng (spotlight #1 + top 5 sidebar) based on
-   * current calendar month race activity.
-   */
   @Get('athletes-spotlight')
   @ApiOperation({
-    summary: 'F-056 P5 — VĐV của tháng spotlight + top 5 sidebar',
+    summary: 'F-056 P5 PAUSED — spotlight disabled pending consent flow',
+    deprecated: true,
   })
-  @ApiResponse({ status: 200 })
-  async getAthletesSpotlight() {
-    return this.athleteProfileService.getSpotlightOfMonth();
+  @ApiResponse({ status: 404, description: 'Paused — F-057 opt-in flow' })
+  async getAthletesSpotlight(): Promise<never> {
+    throw new NotFoundException(
+      'Public athletes discover hard-paused per F-056 P5 decision 2026-05-21.',
+    );
   }
 
-  /**
-   * F-056 Phase 5 — Top 10 featured athletes in last 90 days for homepage
-   * carousel section.
-   */
   @Get('athletes-featured-90d')
   @ApiOperation({
-    summary: 'F-056 P5 — Top 10 featured athletes last 90 days',
+    summary: 'F-056 P5 PAUSED — featured-90d disabled pending consent flow',
+    deprecated: true,
   })
-  @ApiResponse({ status: 200 })
-  async getAthletesFeatured90d() {
-    return this.athleteProfileService.getFeatured90Days();
+  @ApiResponse({ status: 404, description: 'Paused — F-057 opt-in flow' })
+  async getAthletesFeatured90d(): Promise<never> {
+    throw new NotFoundException(
+      'Public athletes discover hard-paused per F-056 P5 decision 2026-05-21.',
+    );
   }
 
   /**
-   * F-056 Phase 5 — Public athletes index with full filter / sort /
-   * pagination for /runners discover page. Returns paginated data + byLetter
-   * count map for alphabet jumper.
+   * F-056 Phase 5 PAUSED — Public athletes listing returns 404 to prevent
+   * aggregate cross-race PII exposure. F-057 will restore with opt-in
+   * claim flow (athlete proactively enables public discover).
    */
   @Get('athletes')
   @ApiOperation({
-    summary: 'F-056 P5 — Public athletes index with filter/sort/pagination',
+    summary: 'F-056 P5 PAUSED — athletes listing disabled pending consent flow',
+    deprecated: true,
   })
-  @ApiQuery({ name: 'letter', required: false, description: 'A..Z first-letter filter' })
+  @ApiQuery({ name: 'letter', required: false })
   @ApiQuery({ name: 'province', required: false })
   @ApiQuery({ name: 'gender', required: false, enum: ['male', 'female'] })
-  @ApiQuery({ name: 'ageGroup', required: false, description: 'Substring e.g. "30-39"' })
+  @ApiQuery({ name: 'ageGroup', required: false })
   @ApiQuery({ name: 'specialty', required: false, enum: ['marathon', 'hm', 'trail', 'ultra', 'road'] })
   @ApiQuery({ name: 'minRaces', required: false, type: Number })
   @ApiQuery({ name: 'maxRaces', required: false, type: Number })
   @ApiQuery({ name: 'sort', required: false, enum: ['az', 'recent', 'most-races', 'fastest-pr'] })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
-  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 404, description: 'Paused — F-057 opt-in flow' })
   async listAthletes(
-    @Query('letter') letter?: string,
-    @Query('province') province?: string,
-    @Query('gender') gender?: 'male' | 'female',
-    @Query('ageGroup') ageGroup?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('letter') _letter?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('province') _province?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('gender') _gender?: 'male' | 'female',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('ageGroup') _ageGroup?: string,
     @Query('specialty')
-    specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road',
-    @Query('minRaces') minRaces?: string,
-    @Query('maxRaces') maxRaces?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('minRaces') _minRaces?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('maxRaces') _maxRaces?: string,
     @Query('sort')
-    sort?: 'az' | 'recent' | 'most-races' | 'fastest-pr',
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-  ) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _sort?: 'az' | 'recent' | 'most-races' | 'fastest-pr',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('page') _page?: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Query('pageSize') _pageSize?: string,
+  ): Promise<never> {
+    throw new NotFoundException(
+      'Public athletes discover hard-paused per F-056 P5 decision 2026-05-21. ' +
+        'Restore in F-057 with opt-in consent flow.',
+    );
+    // Original Phase 5 implementation (restore in F-057):
+    /*
     return this.athleteProfileService.listPublicAthletes({
-      letter,
-      province,
-      gender,
-      ageGroup,
-      specialty,
+      letter, province, gender, ageGroup, specialty,
       minRaces: minRaces ? parseInt(minRaces, 10) : undefined,
       maxRaces: maxRaces ? parseInt(maxRaces, 10) : undefined,
       sort,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
     });
+    */
   }
 
   /**
