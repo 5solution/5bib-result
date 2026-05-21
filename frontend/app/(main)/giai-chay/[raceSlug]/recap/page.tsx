@@ -44,6 +44,49 @@ import RecapStoryCard from '@/components/recap/RecapStoryCard';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081';
 
+// ─── Pace helpers (F-056 bugfix 2026-05-21) ──────────────────────────────
+// Winner pace tính từ chipTime / distanceKm — không dùng course medianPace
+// (course median = pace average của tất cả finisher, KHÔNG đại diện hiệu năng
+// winner). User Danny 2026-05-21 report: race 10KM Thái Nguyên 2026, LINH TOM
+// 41:00 + LÊ THỊ LAN 52:02 cả 2 đều show 7:09/km (= median 10KM toàn race).
+
+/** Parse "MM:SS" or "HH:MM:SS" or "H:MM:SS" string → total seconds. */
+function parseChipTimeToSeconds(t: string | undefined | null): number {
+  if (!t) return 0;
+  const parts = t.trim().split(':').map((p) => parseInt(p, 10));
+  if (parts.some((n) => !Number.isFinite(n))) return 0;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
+/** Parse "10Km" / "21KM" / "42.2km" / "5K" → kilometers (float). */
+function parseDistanceKm(d: string | undefined | null): number {
+  if (!d) return 0;
+  const m = /(\d+(?:[.,]\d+)?)/.exec(d);
+  if (!m) return 0;
+  return parseFloat(m[1].replace(',', '.'));
+}
+
+/** Format seconds-per-km as "M:SS/km". Returns undefined if invalid. */
+function formatPacePerKm(secsPerKm: number): string | undefined {
+  if (!Number.isFinite(secsPerKm) || secsPerKm <= 0) return undefined;
+  const m = Math.floor(secsPerKm / 60);
+  const s = Math.floor(secsPerKm % 60);
+  return `${m}:${s.toString().padStart(2, '0')}/km`;
+}
+
+/** Compute winner's individual pace from chipTime + distance string. */
+function computeWinnerPace(
+  chipTime: string | undefined | null,
+  distance: string | undefined | null,
+): string | undefined {
+  const totalSec = parseChipTimeToSeconds(chipTime);
+  const km = parseDistanceKm(distance);
+  if (!totalSec || !km) return undefined;
+  return formatPacePerKm(totalSec / km);
+}
+
 // ─── Backend DTO shape (mirrors race-recap-response.dto.ts) ──────────────
 
 interface RecapPodiumCell {
@@ -448,6 +491,8 @@ export default async function RaceRecapPage({
   // F-056 scope expansion 2026-05-21 — Danny mandate "công bằng + đổi cự ly":
   // Build per-course Top1 NAM + Top1 NỮ data for SpotlightSwitcher tabs.
   // Order: longest distance first (most prestigious as default visible).
+  // F-056 bugfix 2026-05-21: pace per-winner (chipTime / distance), KHÔNG dùng
+  // course medianPace (đã làm cả NAM + NỮ show identical 7:09/km cho 10KM).
   const spotlightCourses: SpotlightSwitcherCourse[] = [...recap.podiums]
     .sort((a, b) => {
       const da = parseFloat((a.distance ?? '0').replace(',', '.'));
@@ -455,9 +500,7 @@ export default async function RaceRecapPage({
       return db - da;
     })
     .map((p) => {
-      const matchingPace = recap.paceStats.find(
-        (ps) => ps.courseId === p.courseId,
-      );
+      const distanceForPace = p.distance ?? p.courseName;
       return {
         courseId: p.courseId,
         label: p.courseName ?? p.distance ?? p.courseId,
@@ -468,6 +511,7 @@ export default async function RaceRecapPage({
               chipTime: p.male[0].chipTime,
               category: p.male[0].category,
               city: p.male[0].city,
+              pace: computeWinnerPace(p.male[0].chipTime, distanceForPace),
             }
           : undefined,
         female: p.female[0]
@@ -477,9 +521,9 @@ export default async function RaceRecapPage({
               chipTime: p.female[0].chipTime,
               category: p.female[0].category,
               city: p.female[0].city,
+              pace: computeWinnerPace(p.female[0].chipTime, distanceForPace),
             }
           : undefined,
-        medianPace: matchingPace?.medianPace,
       };
     });
   const watermarkText =
