@@ -1,23 +1,37 @@
 /**
- * FEATURE-046 — Programmatic SEO Race Recap page `/giai-chay/[raceSlug]/recap`.
+ * FEATURE-056 — Race Recap page `/giai-chay/[raceSlug]/recap`.
  *
- * Server Component SSR (Next.js 16 App Router). 6 blocks render order per
- * BR-46-06: Hero → Podium → Pace → NegSplit → AG → 5BIB Insight.
+ * Variation A "Editorial Magazine" — full rewrite per Manager Plan APPROVED.
+ * Server Component SSR preserves F-051 JSON-LD Article schema + F-046 data layer.
  *
- * Per Manager Plan Adjustment #2: backend pre-renders markdown → insightHtml.
- * Frontend renders via dangerouslySetInnerHTML (backend sanitized).
+ * Single client island: `<StickyRecapNav>` (IntersectionObserver scroll-spy).
  *
- * Per F-036/F-037 pattern: dual-source `getRaceBySlug()` MongoDB-first, fall
- * back to on-sale (though on-sale won't have recap — caught by service 404).
+ * DATA INTEGRITY (Danny "k nó kiện đấy" mandate):
+ *  - Chip times rendered AS-IS from vendor.
+ *  - Athlete names AS-IS (no canonicalize).
+ *  - City chip hidden when backend returns null (no guessing — defamation safety).
+ *  - Auto-gen spotlight uses backend neutral factual template.
  *
- * Components inline rather than 6 separate files (Phase 1 simplification —
- * documented in IMPLEMENTATION_NOTES Section 1 Deviations).
+ * BR coverage: BR-56-01..25 + F-046 BR-46-06/23/24/27 preserved.
  */
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { getRaceBySlug } from '@/lib/seo-api';
+import { classifyRaceType, classificationLabel } from '@/lib/race-classifier';
+import { PodiumCard } from '@/components/recap/PodiumCard';
+import { PaceDistributionChart } from '@/components/recap/PaceDistributionChart';
+import { NegSplitDonut } from '@/components/recap/NegSplitDonut';
+import {
+  AGBreakdownAccordion,
+  type AGBucket,
+} from '@/components/recap/AGBreakdownAccordion';
+import {
+  InsightEditorial,
+  SpotlightCards,
+} from '@/components/recap/InsightEditorial';
+import { StickyRecapNav } from '@/components/recap/StickyRecapNav';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8081';
 
@@ -29,7 +43,8 @@ interface RecapPodiumCell {
   chipTime: string;
   category?: string;
   medal: 'gold' | 'silver' | 'bronze';
-  avatarUrl?: string; // F-046 Phase 1.5 — public-shareable
+  avatarUrl?: string;
+  city?: string;
 }
 
 interface RecapPodium {
@@ -38,6 +53,8 @@ interface RecapPodium {
   distance?: string;
   male: RecapPodiumCell[];
   female: RecapPodiumCell[];
+  maleFinisherCount?: number;
+  femaleFinisherCount?: number;
 }
 
 interface RecapPaceStats {
@@ -55,9 +72,14 @@ interface RecapNegativeSplit {
   courseName: string;
   negativeSplitPercent: number;
   interpretation: string;
+  avgFirstHalf?: string;
+  avgSecondHalf?: string;
+  deltaSeconds?: number;
+  finishersAnalyzed?: number;
+  benchmark?: number;
 }
 
-interface RecapAGBucket {
+interface RecapAGBucketShape {
   category: string;
   finisherCount: number;
   top5: RecapPodiumCell[];
@@ -66,7 +88,23 @@ interface RecapAGBucket {
 interface RecapAGBreakdown {
   courseId: string;
   courseName: string;
-  buckets: RecapAGBucket[];
+  buckets: RecapAGBucketShape[];
+}
+
+interface RecapSpotlightStory {
+  courseId: string;
+  gender: 'M' | 'F';
+  winnerBib: string;
+  winnerName: string;
+  markdown: string;
+  html: string;
+  source: 'admin' | 'auto';
+}
+
+interface RecapSpotlightPerCourse {
+  courseId: string;
+  courseName: string;
+  stories: RecapSpotlightStory[];
 }
 
 interface RaceRecap {
@@ -80,11 +118,13 @@ interface RaceRecap {
     dnfCount: number;
     dsqCount: number;
     headline: string;
+    registered?: number;
   };
   podiums: RecapPodium[];
   paceStats: RecapPaceStats[];
   negativeSplits: RecapNegativeSplit[];
   agBreakdowns: RecapAGBreakdown[];
+  spotlightStoriesByCourse?: RecapSpotlightPerCourse[];
   computedAt: string;
 }
 
@@ -110,13 +150,9 @@ async function getRaceRecap(raceId: string): Promise<RaceRecap | null> {
       },
     );
     if (res.status === 404) return null;
-    if (!res.ok) {
-      console.error(`[recap] backend returned ${res.status}`);
-      return null;
-    }
+    if (!res.ok) return null;
     return (await res.json()) as RaceRecap;
-  } catch (err) {
-    console.error('[recap] fetch failed:', err);
+  } catch {
     return null;
   }
 }
@@ -139,7 +175,7 @@ async function getRecapInsight(raceId: string): Promise<RecapInsight | null> {
   }
 }
 
-// ─── generateMetadata (BR-46-23/24) ──────────────────────────────────────
+// ─── generateMetadata (F-046 BR-46-23/24 preserved) ──────────────────────
 
 export async function generateMetadata({
   params,
@@ -151,7 +187,6 @@ export async function generateMetadata({
   if (!race) {
     return { title: 'Recap không tồn tại | 5BIB' };
   }
-
   const recap = await getRaceRecap(race.id);
   if (!recap) {
     return {
@@ -181,15 +216,11 @@ export async function generateMetadata({
   return {
     title,
     description: description.slice(0, 160),
-    openGraph: {
-      title,
-      description,
-      type: 'article',
-    },
+    openGraph: { title, description, type: 'article' },
   };
 }
 
-// ─── JSON-LD Article schema (BR-46-27) ───────────────────────────────────
+// ─── JSON-LD Article schema (F-051 + BR-46-27 preserved) ─────────────────
 
 function buildJsonLd(
   recap: RaceRecap,
@@ -198,8 +229,7 @@ function buildJsonLd(
 ): string {
   const datePublished =
     insight?.publishedAt ?? recap.endDate ?? new Date().toISOString();
-  const dateModified =
-    insight?.updatedAt ?? recap.endDate ?? recap.computedAt;
+  const dateModified = insight?.updatedAt ?? recap.endDate ?? recap.computedAt;
   const articleBody = insight?.insightMarkdown
     ? insight.insightMarkdown.slice(0, 1500)
     : `${recap.hero.headline}. ${recap.negativeSplits[0]?.interpretation ?? ''}`;
@@ -210,18 +240,11 @@ function buildJsonLd(
     headline: `Recap ${recap.raceTitle}`,
     datePublished,
     dateModified,
-    author: {
-      '@type': 'Organization',
-      name: '5BIB',
-      url: 'https://5bib.com',
-    },
+    author: { '@type': 'Organization', name: '5BIB', url: 'https://5bib.com' },
     publisher: {
       '@type': 'Organization',
       name: '5BIB',
-      logo: {
-        '@type': 'ImageObject',
-        url: 'https://5bib.com/logo.png',
-      },
+      logo: { '@type': 'ImageObject', url: 'https://5bib.com/logo.png' },
     },
     mainEntityOfPage: {
       '@type': 'WebPage',
@@ -233,7 +256,34 @@ function buildJsonLd(
   return JSON.stringify(ld).replace(/</g, '\\u003c');
 }
 
-// ─── Page component (Server) ─────────────────────────────────────────────
+// ─── Display helpers ─────────────────────────────────────────────────────
+
+function formatVN(d: string | undefined | null): string {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return '—';
+  return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1)
+    .toString()
+    .padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+function paceSpread(p10: string, p90: string): string {
+  const parse = (s: string): number => {
+    const m = s.replace('/km', '').split(':');
+    if (m.length !== 2) return 0;
+    const a = parseInt(m[0], 10);
+    const b = parseInt(m[1], 10);
+    if (isNaN(a) || isNaN(b)) return 0;
+    return a * 60 + b;
+  };
+  const diff = parse(p90) - parse(p10);
+  if (diff <= 0) return '—';
+  const m = Math.floor(diff / 60);
+  const s = diff % 60;
+  return `${m}:${s.toString().padStart(2, '0')} min`;
+}
+
+// ─── Page component (Server) ────────────────────────────────────────────
 
 export default async function RaceRecapPage({
   params,
@@ -251,202 +301,358 @@ export default async function RaceRecapPage({
   const jsonLd = buildJsonLd(recap, insight, raceSlug);
 
   const bannerUrl = race.bannerUrl ?? race.imageUrl ?? race.logoUrl ?? null;
+  const firstCourse = race.courses?.[0];
+  const classification = classifyRaceType({
+    raceType:
+      race.courses && race.courses.length > 0
+        ? (race.courses[0] as { raceType?: string }).raceType ?? null
+        : null,
+    distanceKm: firstCourse?.distanceKm ?? null,
+    distance: firstCourse?.distance ?? recap.podiums[0]?.distance ?? null,
+  });
+
+  // Hero stats
+  const firstPace = recap.paceStats[0];
+  const medianPace = firstPace?.medianPace ?? '—';
+  const winningTime = recap.podiums[0]?.male[0]?.chipTime ?? recap.podiums[0]?.female[0]?.chipTime ?? '—';
+  const finishersFormatted = recap.hero.totalFinishers.toLocaleString('vi-VN');
+  const registered = recap.hero.registered ?? recap.hero.totalFinishers + recap.hero.dnfCount + recap.hero.dnsCount + recap.hero.dsqCount;
+
+  const sections = [
+    { id: 'podium', label: 'Podium' },
+    { id: 'pace', label: 'Pace' },
+    { id: 'negsplit', label: 'Negative Split' },
+    { id: 'ag', label: 'Age Group' },
+    { id: 'insight', label: 'Insight' },
+  ];
+  const courseLabels = race.courses
+    ?.map((c) => c.distance ?? c.name)
+    .filter((s): s is string => !!s) ?? [];
 
   return (
-    <div>
+    <div className="bg-stone-50 min-h-screen">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLd }}
       />
 
-      {/* F-046 Phase 1.5 — Hero banner (race.bannerUrl) full-width above fold */}
-      {bannerUrl && (
+      {/* ═══ HERO ═══ */}
+      <section
+        className="relative overflow-hidden text-white"
+        style={{
+          height: 'clamp(380px, 60vh, 640px)',
+          background: bannerUrl
+            ? undefined
+            : 'linear-gradient(135deg, #1B2238, #2A3354)',
+        }}
+      >
+        {bannerUrl && (
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url(${bannerUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              filter: 'saturate(0.85) brightness(0.6)',
+            }}
+          />
+        )}
         <div
-          className="relative h-48 w-full bg-stone-200 md:h-64 lg:h-80"
+          aria-hidden
+          className="absolute inset-0"
           style={{
-            backgroundImage: `url(${bannerUrl})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            background:
+              'linear-gradient(180deg, rgba(11,27,59,0.4) 0%, rgba(11,27,59,0.75) 60%, rgba(11,27,59,0.95) 100%)',
           }}
-          aria-hidden="true"
+        />
+        {/* Topo SVG overlay (desktop only — perf on mobile) */}
+        <svg
+          aria-hidden
+          className="absolute inset-0 hidden md:block"
+          preserveAspectRatio="none"
+          viewBox="0 0 1440 640"
+          style={{ width: '100%', height: '100%' }}
         >
-          {/* Gradient overlay for text contrast */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-black/60" />
-          <div className="absolute bottom-0 left-0 right-0 px-4 py-6 md:px-8 md:py-10">
-            <div className="mx-auto max-w-5xl">
-              <span className="inline-block rounded-full bg-blue-700/90 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
-                Phân tích race
-              </span>
-              <h1 className="mt-2 text-2xl font-bold text-white drop-shadow-lg md:text-4xl">
-                Recap {recap.raceTitle}
+          {Array.from({ length: 18 }).map((_, i) => (
+            <path
+              key={i}
+              d={`M -50 ${80 + i * 38} Q ${300 + i * 12} ${30 + i * 40} ${720} ${100 + i * 36} T ${1500} ${80 + i * 40}`}
+              fill="none"
+              stroke="rgba(255,255,255,0.07)"
+              strokeWidth="1"
+            />
+          ))}
+        </svg>
+
+        {/* Breadcrumb */}
+        <nav
+          aria-label="Breadcrumb"
+          className="absolute top-5 left-6 md:left-12 font-mono font-semibold text-[11px] tracking-[0.08em]"
+          style={{ color: 'rgba(255,255,255,0.7)' }}
+        >
+          5BIB · GIẢI CHẠY · {(race.location ?? '').toUpperCase()} ·{' '}
+          <span style={{ color: '#fff' }}>RECAP</span>
+        </nav>
+
+        {/* Content */}
+        <div className="absolute inset-0 flex flex-col justify-end px-6 pb-8 md:px-14 md:pb-12">
+          <div className="grid gap-6 md:gap-12 items-end md:grid-cols-[1.5fr_1fr]">
+            <div>
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <span
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold uppercase text-[10.5px] tracking-[0.18em]"
+                  style={{ background: '#fff', color: '#1B2238' }}
+                >
+                  {race.status === 'ended' ? 'RACE RECAP' : race.status === 'live' ? 'ĐANG DIỄN RA' : 'SẮP DIỄN RA'}
+                </span>
+                {classification ? (
+                  <span
+                    className="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold uppercase text-[10.5px] tracking-[0.18em] border"
+                    style={{ borderColor: 'rgba(255,255,255,0.4)', color: 'rgba(255,255,255,0.9)' }}
+                  >
+                    {classificationLabel(classification)}
+                  </span>
+                ) : null}
+                <span
+                  className="font-mono font-semibold text-[12px] tracking-[0.08em]"
+                  style={{ color: 'rgba(255,255,255,0.8)' }}
+                >
+                  {formatVN(recap.endDate)} · {race.location ?? '—'}
+                </span>
+              </div>
+              <h1
+                className="font-heading font-black uppercase m-0"
+                style={{
+                  fontSize: 'clamp(44px, 7vw, 88px)',
+                  lineHeight: 0.92,
+                  letterSpacing: '-0.035em',
+                }}
+              >
+                {recap.raceTitle}
               </h1>
+              <div
+                className="mt-5 max-w-2xl font-body italic"
+                style={{
+                  fontSize: 'clamp(14px, 1.4vw, 16px)',
+                  lineHeight: 1.6,
+                  color: 'rgba(255,255,255,0.78)',
+                }}
+              >
+                Tổng kết hành trình đường chạy, podium, phân bố pace và câu chuyện
+                phía sau những con số tại {recap.raceTitle}.
+              </div>
+            </div>
+            <div className="grid gap-3">
+              <HeroStat label="FINISHERS" value={finishersFormatted} color="#fff" />
+              <HeroStat label="MEDIAN PACE /km" value={medianPace.replace('/km', '')} color="#FB923C" />
+              <HeroStat label="WINNING TIME" value={winningTime} color="#22D3EE" />
             </div>
           </div>
         </div>
-      )}
 
-      <div className="mx-auto max-w-5xl px-4 py-8 md:py-12">
-        {/* Breadcrumb */}
-        <nav className="mb-6 text-sm text-stone-600" aria-label="Breadcrumb">
-          <Link href="/" className="hover:text-blue-700">
-            Trang chủ
-          </Link>{' '}
-          <span className="mx-2">›</span>
-          <Link href="/giai-chay" className="hover:text-blue-700">
-            Giải chạy
-          </Link>{' '}
-          <span className="mx-2">›</span>
-          <Link
-            href={`/giai-chay/${raceSlug}`}
-            className="hover:text-blue-700"
-          >
-            {recap.raceTitle}
-          </Link>{' '}
-          <span className="mx-2">›</span>
-          <span className="text-stone-900">Recap</span>
-        </nav>
-
-        {/* Fallback H1 if no banner */}
-        {!bannerUrl && (
-          <h1 className="mb-8 text-3xl font-bold text-stone-900 md:text-4xl">
-            Recap {recap.raceTitle}
-          </h1>
-        )}
-
-      {/* ─── Block 1: Hero stats ─── */}
-      <section className="mb-12">
-        <h2 className="text-2xl font-semibold text-stone-900">
-          {recap.hero.headline}
-        </h2>
-        <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-          <StatCard
-            label="Về đích"
-            value={recap.hero.totalFinishers.toLocaleString('vi-VN')}
-            color="text-blue-700"
-          />
-          <StatCard
-            label="DNS"
-            value={recap.hero.dnsCount.toLocaleString('vi-VN')}
-            color="text-stone-600"
-          />
-          <StatCard
-            label="DNF"
-            value={recap.hero.dnfCount.toLocaleString('vi-VN')}
-            color="text-orange-600"
-          />
-          <StatCard
-            label="DSQ"
-            value={recap.hero.dsqCount.toLocaleString('vi-VN')}
-            color="text-red-600"
-          />
-        </div>
+        {/* Accent strip */}
+        <div
+          aria-hidden
+          className="absolute bottom-0 left-0 right-0"
+          style={{
+            height: 6,
+            background:
+              'linear-gradient(90deg, var(--5bib-energy, #ea580c), #1d4ed8 60%, #FB923C)',
+          }}
+        />
       </section>
 
-      {/* ─── Block 2: Podium ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">Podium</h2>
-        <div className="space-y-8">
-          {recap.podiums.map((podium) => (
-            <PodiumCard key={podium.courseId} podium={podium} />
-          ))}
-        </div>
-      </section>
+      {/* ═══ STICKY NAV (client island) ═══ */}
+      <StickyRecapNav sections={sections} courses={courseLabels} />
 
-      {/* ─── Block 3: Pace Analysis ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">
-          Phân tích pace
-        </h2>
-        <div className="space-y-6">
-          {recap.paceStats.map((pace) => (
-            <PaceCard key={pace.courseId} pace={pace} />
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Block 4: Negative Split ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">
-          Tỷ lệ Negative Split
-        </h2>
-        <div className="space-y-4">
-          {recap.negativeSplits.map((ns) => (
-            <NegSplitCard key={ns.courseId} ns={ns} />
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Block 5: AG Breakdown ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">
-          Top theo nhóm tuổi
-        </h2>
-        <div className="space-y-8">
-          {recap.agBreakdowns.map((ag) => (
-            <AGSection key={ag.courseId} ag={ag} />
-          ))}
-        </div>
-      </section>
-
-      {/* ─── Block 6: 5BIB Insight (editorial 70/30) ─── */}
-      <section className="mb-12">
-        <h2 className="mb-6 text-2xl font-semibold text-stone-900">
-          5BIB Insight
-        </h2>
-        {insight?.insightHtml ? (
-          <article
-            className="prose prose-stone max-w-none rounded-lg border border-stone-200 bg-white p-6"
-            dangerouslySetInnerHTML={{ __html: insight.insightHtml }}
-          />
-        ) : (
-          <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-8 text-center">
-            <p className="text-stone-700">
-              Bài phân tích chi tiết đang được biên tập. Quay lại sau nhé!
-            </p>
-          </div>
-        )}
-        {insight?.authorName && (
-          <p className="mt-2 text-sm text-stone-500">
-            — {insight.authorName}
-            {insight.publishedAt && (
-              <span>
-                {' '}
-                · {new Date(insight.publishedAt).toLocaleDateString('vi-VN')}
+      {/* ═══ MAIN CONTENT ═══ */}
+      <main className="max-w-7xl mx-auto px-6 md:px-8 py-12 md:py-16">
+        {/* ── PODIUM ── */}
+        <section id="podium" className="mb-16 md:mb-20 scroll-mt-32">
+          <SectionHeading
+            number="01"
+            eyebrow="Bảng vinh danh"
+            title={
+              recap.podiums.length === 1
+                ? `PODIUM ${recap.podiums[0].distance ?? recap.podiums[0].courseName}`
+                : 'PODIUM TỪNG CỰ LY'
+            }
+            action={
+              <span
+                className="font-mono text-[13px] text-stone-500"
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                Tổng <b className="text-stone-900">{finishersFormatted}</b> /{' '}
+                {registered.toLocaleString('vi-VN')} VĐV · DNF{' '}
+                {recap.hero.dnfCount.toLocaleString('vi-VN')}
               </span>
-            )}
-          </p>
-        )}
-      </section>
+            }
+          />
+          {recap.podiums.length === 0 ? (
+            <p className="text-stone-500 italic">Chưa có dữ liệu podium.</p>
+          ) : (
+            recap.podiums.map((p) => (
+              <div key={p.courseId} className="mb-10 last:mb-0">
+                {recap.podiums.length > 1 ? (
+                  <h3 className="font-heading font-bold uppercase text-[18px] tracking-tight text-stone-700 mb-4">
+                    {p.distance ?? p.courseName}
+                  </h3>
+                ) : null}
+                <div className="grid gap-6 md:gap-8 md:grid-cols-2">
+                  <PodiumGroup
+                    label="OVERALL · NAM"
+                    accent="#1d4ed8"
+                    finisherCount={p.maleFinisherCount}
+                    cells={p.male}
+                  />
+                  <PodiumGroup
+                    label="OVERALL · NỮ"
+                    accent="#ea580c"
+                    finisherCount={p.femaleFinisherCount}
+                    cells={p.female}
+                  />
+                </div>
+              </div>
+            ))
+          )}
+        </section>
 
-      {/* Footer actions */}
-      <footer className="flex flex-wrap gap-3 border-t border-stone-200 pt-8">
-        <Link
-          href={`/giai-chay/${raceSlug}/ket-qua`}
-          className="rounded-lg bg-stone-900 px-5 py-3 text-sm font-medium text-white hover:opacity-90"
-        >
-          Xem kết quả đầy đủ →
-        </Link>
-        <Link
-          href={`/giai-chay/${raceSlug}`}
-          className="rounded-lg border border-stone-300 bg-white px-5 py-3 text-sm font-medium text-stone-700 hover:border-stone-900"
-        >
-          Trang giải
-        </Link>
-        <p className="ml-auto self-center text-xs text-stone-500">
-          Cập nhật:{' '}
-          {new Date(
-            insight?.updatedAt ?? recap.endDate ?? recap.computedAt,
-          ).toLocaleDateString('vi-VN')}
-        </p>
-      </footer>
-      </div>
+        {/* ── PACE ── */}
+        <section id="pace" className="mb-16 md:mb-20 scroll-mt-32">
+          <SectionHeading number="02" eyebrow="Phân bố pace" title="DÒNG CHẢY TỐC ĐỘ" />
+          {firstPace ? (
+            <div className="grid gap-6 md:gap-8 md:grid-cols-[1.5fr_1fr]">
+              <div
+                className="bg-white border border-stone-200 rounded-2xl p-6 md:p-7"
+                style={{ boxShadow: 'var(--shadow-sm)' }}
+              >
+                <PaceDistributionChart distribution={firstPace.distribution} />
+                <p
+                  className="font-body italic text-[13px] leading-relaxed mt-3 text-stone-500"
+                >
+                  Phân bố pace nghiêng phải — phần đông VĐV chạy quanh{' '}
+                  <span
+                    className="font-mono font-bold text-stone-900"
+                    style={{ fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {firstPace.medianPace.replace('/km', '')}/km
+                  </span>
+                  . Top 10% giữ pace dưới{' '}
+                  <span
+                    className="font-mono font-bold"
+                    style={{ color: '#166534', fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {firstPace.p10Pace.replace('/km', '')}
+                  </span>
+                  .
+                </p>
+              </div>
+              <div className="grid gap-3 content-start">
+                <PaceStat label="Median pace" value={firstPace.medianPace.replace('/km', '')} unit="/km" color="#1d4ed8" sub="Toàn cuộc đua" />
+                <PaceStat label="Fastest 10%" value={firstPace.p10Pace.replace('/km', '')} unit="/km" color="#166534" sub={`P10 · ${Math.floor(firstPace.finisherCount * 0.1).toLocaleString('vi-VN')} VĐV`} />
+                <PaceStat label="Slowest 10%" value={firstPace.p90Pace.replace('/km', '')} unit="/km" color="#DC2626" sub="P90" />
+                <PaceStat label="Pace spread" value={paceSpread(firstPace.p10Pace, firstPace.p90Pace)} unit="" color="#78716C" sub="P10 → P90" />
+              </div>
+            </div>
+          ) : (
+            <p className="text-stone-500 italic">Chưa có dữ liệu pace.</p>
+          )}
+        </section>
+
+        {/* ── NEG SPLIT ── */}
+        <section id="negsplit" className="mb-16 md:mb-20 scroll-mt-32">
+          <SectionHeading number="03" eyebrow="Pacing strategy" title="NEGATIVE SPLIT" />
+          {recap.negativeSplits.length > 0 ? (
+            <NegSplitDonut
+              value={recap.negativeSplits[0].negativeSplitPercent}
+              benchmark={recap.negativeSplits[0].benchmark ?? 40}
+              interpretation={recap.negativeSplits[0].interpretation}
+              avgFirstHalf={recap.negativeSplits[0].avgFirstHalf}
+              avgSecondHalf={recap.negativeSplits[0].avgSecondHalf}
+              deltaSeconds={recap.negativeSplits[0].deltaSeconds}
+              finishersAnalyzed={recap.negativeSplits[0].finishersAnalyzed}
+            />
+          ) : (
+            <p className="text-stone-500 italic">Chưa có dữ liệu split.</p>
+          )}
+        </section>
+
+        {/* ── AG BREAKDOWN ── */}
+        <section id="ag" className="mb-16 md:mb-20 scroll-mt-32">
+          <SectionHeading
+            number="04"
+            eyebrow="Age group"
+            title="THEO NHÓM TUỔI"
+            action={
+              <Link
+                href={`/giai-chay/${raceSlug}/ket-qua`}
+                className="font-body font-bold text-[13px] text-stone-600 hover:text-stone-900 transition-colors"
+              >
+                Xem tất cả →
+              </Link>
+            }
+          />
+          {recap.agBreakdowns.length === 0 ? (
+            <p className="text-stone-500 italic">Chưa có dữ liệu AG.</p>
+          ) : (
+            recap.agBreakdowns.map((ag) => (
+              <div key={ag.courseId} className="mb-8 last:mb-0">
+                {recap.agBreakdowns.length > 1 ? (
+                  <h3 className="font-heading font-bold uppercase text-[16px] text-stone-700 mb-3">
+                    {ag.courseName}
+                  </h3>
+                ) : null}
+                <AGBreakdownAccordion
+                  buckets={ag.buckets as AGBucket[]}
+                  defaultOpen={Math.min(2, ag.buckets.length)}
+                />
+              </div>
+            ))
+          )}
+        </section>
+
+        {/* ── INSIGHT ── */}
+        <section id="insight" className="mb-12 scroll-mt-32">
+          <SectionHeading number="05" eyebrow="5BIB Editorial" title="INSIGHT" />
+          <InsightEditorial
+            insightHtml={insight?.insightHtml ?? null}
+            byline={`5BIB EDITORIAL TEAM${recap.endDate ? ` · ${formatVN(recap.endDate)}` : ''}`}
+            fallbackLead={`${recap.raceTitle} kết thúc với ${finishersFormatted} VĐV hoàn thành.`}
+            spotlightCards={
+              recap.spotlightStoriesByCourse &&
+              recap.spotlightStoriesByCourse.length > 0 ? (
+                <SpotlightCards groups={recap.spotlightStoriesByCourse} />
+              ) : null
+            }
+            cta={
+              <>
+                <Link
+                  href={`/giai-chay/${raceSlug}/ket-qua`}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-body font-bold text-[14px] text-white transition-all hover:brightness-110"
+                  style={{ background: 'var(--5bib-blue, #1d4ed8)' }}
+                >
+                  Xem toàn bộ kết quả
+                  <span aria-hidden>→</span>
+                </Link>
+                <Link
+                  href={`/giai-chay/${raceSlug}`}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-body font-bold text-[14px] text-stone-700 border border-stone-300 hover:border-stone-500 hover:text-stone-900 transition-colors"
+                >
+                  Trang giải
+                </Link>
+              </>
+            }
+          />
+        </section>
+      </main>
     </div>
   );
 }
 
-// ─── Inline block components ─────────────────────────────────────────────
+// ─── Inline sub-components (page-local, single-use) ─────────────────────
 
-function StatCard({
+function HeroStat({
   label,
   value,
   color,
@@ -456,243 +662,188 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className={`text-3xl font-bold ${color}`}>{value}</div>
-      <div className="mt-1 text-sm text-stone-600">{label}</div>
-    </div>
-  );
-}
-
-function PodiumCard({ podium }: { podium: RecapPodium }) {
-  if (podium.male.length === 0 && podium.female.length === 0) {
-    return (
-      <div className="rounded-lg border border-stone-200 bg-white p-6">
-        <h3 className="text-lg font-semibold">
-          {podium.courseName}
-          {podium.distance && (
-            <span className="ml-2 text-sm font-normal text-stone-500">
-              · {podium.distance}
-            </span>
-          )}
-        </h3>
-        <p className="mt-2 text-sm text-stone-500">Chưa có dữ liệu podium</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6">
-      <h3 className="mb-4 text-lg font-semibold">
-        {podium.courseName}
-        {podium.distance && (
-          <span className="ml-2 text-sm font-normal text-stone-500">
-            · {podium.distance}
-          </span>
-        )}
-      </h3>
-      <div className="grid gap-6 md:grid-cols-2">
-        {podium.male.length > 0 && (
-          <div>
-            <div className="mb-2 text-sm font-medium text-blue-700">Nam</div>
-            <PodiumList cells={podium.male} />
-          </div>
-        )}
-        {podium.female.length > 0 && (
-          <div>
-            <div className="mb-2 text-sm font-medium text-pink-700">Nữ</div>
-            <PodiumList cells={podium.female} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PodiumList({ cells }: { cells: RecapPodiumCell[] }) {
-  return (
-    <ol className="space-y-2">
-      {cells.map((cell) => (
-        <li
-          key={cell.bib}
-          className="flex items-center justify-between rounded border border-stone-100 bg-stone-50 px-3 py-2"
-        >
-          <div className="flex items-center gap-2.5">
-            <span className="text-lg">
-              {cell.medal === 'gold' ? '🥇' : cell.medal === 'silver' ? '🥈' : '🥉'}
-            </span>
-            {/* F-046 Phase 1.5 — athlete avatar (public-shareable, fallback initials) */}
-            <AthleteAvatar
-              avatarUrl={cell.avatarUrl}
-              name={cell.name}
-              medal={cell.medal}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-stone-900">
-                {cell.name}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-stone-500">
-                <span>#{cell.bib}</span>
-                {cell.category && (
-                  <span className="rounded bg-stone-200 px-1.5 py-0.5">
-                    {cell.category}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <span className="ml-2 shrink-0 font-mono text-sm font-semibold text-stone-700">
-            {cell.chipTime}
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function AthleteAvatar({
-  avatarUrl,
-  name,
-  medal,
-}: {
-  avatarUrl?: string;
-  name: string;
-  medal: 'gold' | 'silver' | 'bronze';
-}) {
-  const ringColor =
-    medal === 'gold'
-      ? 'ring-yellow-400'
-      : medal === 'silver'
-        ? 'ring-stone-400'
-        : 'ring-orange-600';
-
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(-2)
-    .join('')
-    .toUpperCase();
-
-  if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        className={`h-9 w-9 shrink-0 rounded-full object-cover ring-2 ${ringColor}`}
-        loading="lazy"
-      />
-    );
-  }
-
-  return (
     <div
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-300 text-xs font-semibold text-stone-700 ring-2 ${ringColor}`}
-      aria-hidden="true"
+      className="flex items-baseline justify-between gap-3 pb-2"
+      style={{ borderBottom: '1px solid rgba(255,255,255,0.18)' }}
     >
-      {initials || '?'}
+      <div
+        className="font-heading font-black"
+        style={{
+          fontSize: 'clamp(34px, 4vw, 56px)',
+          color,
+          letterSpacing: '-0.04em',
+          lineHeight: 1,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {value}
+      </div>
+      <div
+        className="font-body font-extrabold text-[10px]"
+        style={{
+          letterSpacing: '0.2em',
+          color: 'rgba(255,255,255,0.6)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </div>
     </div>
   );
 }
 
-function PaceCard({ pace }: { pace: RecapPaceStats }) {
-  if (pace.finisherCount === 0) {
-    return (
-      <div className="rounded-lg border border-stone-200 bg-white p-6">
-        <h3 className="text-lg font-semibold">{pace.courseName}</h3>
-        <p className="mt-2 text-sm text-stone-500">Chưa có dữ liệu pace</p>
-      </div>
-    );
-  }
+function SectionHeading({
+  number,
+  eyebrow,
+  title,
+  action,
+}: {
+  number: string;
+  eyebrow: string;
+  title: string;
+  action?: React.ReactNode;
+}) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6">
-      <h3 className="mb-4 text-lg font-semibold">{pace.courseName}</h3>
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Median" value={pace.medianPace} color="text-blue-700" />
-        <StatCard
-          label="Top 10%"
-          value={pace.p10Pace}
-          color="text-green-700"
-        />
-        <StatCard
-          label="Bottom 10%"
-          value={pace.p90Pace}
-          color="text-orange-600"
-        />
-      </div>
-      <div className="mt-4">
-        <PaceDistribution distribution={pace.distribution} />
-      </div>
-      <p className="mt-2 text-xs text-stone-500">
-        {pace.finisherCount.toLocaleString('vi-VN')} VĐV có data pace
-      </p>
-    </div>
-  );
-}
-
-function PaceDistribution({ distribution }: { distribution: number[] }) {
-  const max = Math.max(...distribution, 1);
-  return (
-    <div className="flex items-end gap-1 h-24">
-      {distribution.map((count, i) => (
+    <header className="flex items-end justify-between gap-4 mb-7 md:mb-9">
+      <div>
         <div
-          key={i}
-          className="flex-1 rounded-t bg-blue-500"
-          style={{ height: `${(count / max) * 100}%` }}
-          title={`Bucket ${i + 1}: ${count} VĐV`}
-        />
-      ))}
-    </div>
-  );
-}
-
-function NegSplitCard({ ns }: { ns: RecapNegativeSplit }) {
-  return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6">
-      <h3 className="text-lg font-semibold">{ns.courseName}</h3>
-      <div className="mt-3 text-5xl font-bold text-blue-700">
-        {ns.negativeSplitPercent}%
+          className="font-mono font-bold uppercase text-[11px] tracking-[0.2em] text-stone-500 mb-2"
+        >
+          {number} · {eyebrow}
+        </div>
+        <h2
+          className="font-heading font-black uppercase tracking-tight m-0"
+          style={{
+            fontSize: 'clamp(24px, 3vw, 36px)',
+            letterSpacing: '-0.02em',
+          }}
+        >
+          {title}
+        </h2>
       </div>
-      <p className="mt-3 text-sm text-stone-700">{ns.interpretation}</p>
-    </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </header>
   );
 }
 
-function AGSection({ ag }: { ag: RecapAGBreakdown }) {
-  if (ag.buckets.length === 0) {
+function PodiumGroup({
+  label,
+  accent,
+  finisherCount,
+  cells,
+}: {
+  label: string;
+  accent: string;
+  finisherCount?: number;
+  cells: RecapPodiumCell[];
+}) {
+  if (cells.length === 0) {
     return (
-      <div className="rounded-lg border border-stone-200 bg-white p-6">
-        <h3 className="text-lg font-semibold">{ag.courseName}</h3>
-        <p className="mt-2 text-sm text-stone-500">
-          Chưa có dữ liệu nhóm tuổi
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <span
+            aria-hidden
+            style={{
+              display: 'inline-block',
+              width: 4,
+              height: 22,
+              background: accent,
+              borderRadius: 2,
+            }}
+          />
+          <h3 className="font-heading font-bold uppercase text-[18px] tracking-tight m-0">
+            {label}
+          </h3>
+        </div>
+        <p className="text-stone-400 italic text-sm">
+          Chưa có finisher cho nhóm này.
         </p>
       </div>
     );
   }
+
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6">
-      <h3 className="mb-4 text-lg font-semibold">{ag.courseName}</h3>
-      <div className="space-y-3">
-        {ag.buckets.map((bucket) => (
-          <details
-            key={bucket.category}
-            className="rounded border border-stone-200"
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <span
+          aria-hidden
+          style={{
+            display: 'inline-block',
+            width: 4,
+            height: 22,
+            background: accent,
+            borderRadius: 2,
+          }}
+        />
+        <h3 className="font-heading font-bold uppercase text-[18px] tracking-tight m-0">
+          {label}
+        </h3>
+        {typeof finisherCount === 'number' ? (
+          <span
+            className="ml-auto font-mono font-bold uppercase text-[11px] tracking-wider text-stone-500"
+            style={{ fontVariantNumeric: 'tabular-nums' }}
           >
-            <summary className="cursor-pointer px-4 py-2 font-medium hover:bg-stone-50">
-              {bucket.category}
-              <span className="ml-2 text-xs text-stone-500">
-                ({bucket.finisherCount} VĐV)
-              </span>
-            </summary>
-            <div className="border-t border-stone-200 p-3">
-              <PodiumList cells={bucket.top5} />
-            </div>
-          </details>
+            {finisherCount.toLocaleString('vi-VN')} finisher
+          </span>
+        ) : null}
+      </div>
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+        {cells.map((c, i) => (
+          <PodiumCard
+            key={`${c.bib}-${i}`}
+            rank={(i + 1) as 1 | 2 | 3}
+            variant={c.medal}
+            size={i === 0 ? 'md' : 'sm'}
+            name={c.name}
+            bib={c.bib}
+            chipTime={c.chipTime}
+            ag={c.category}
+            city={c.city}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-// ISR 1 hour — race ended ≈ immutable
-export const revalidate = 3600;
+function PaceStat({
+  label,
+  value,
+  unit,
+  color,
+  sub,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  color: string;
+  sub: string;
+}) {
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl px-5 py-3.5 flex items-baseline gap-4">
+      <div
+        className="font-mono font-bold tracking-tight"
+        style={{
+          fontSize: 26,
+          color,
+          letterSpacing: '-0.02em',
+          minWidth: 90,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {value}
+        {unit ? (
+          <span className="text-[13px] text-stone-400 ml-1 font-normal">
+            {unit}
+          </span>
+        ) : null}
+      </div>
+      <div>
+        <div className="font-body font-extrabold uppercase text-[11.5px] tracking-[0.12em] text-stone-900">
+          {label}
+        </div>
+        <div className="font-body text-[11px] text-stone-500">{sub}</div>
+      </div>
+    </div>
+  );
+}

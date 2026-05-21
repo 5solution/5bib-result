@@ -58,6 +58,11 @@ import { BadgeService } from './services/badge.service';
 import { ShareEventService } from './services/share-event.service';
 import { AthleteProfileService } from './services/athlete-profile.service';
 import { AthleteProfileResponseDto } from './dto/athlete-profile-response.dto';
+// F-056 — RaceRecapService wiring (Manager Plan Clarification #2: F-046 endpoint
+// was NEVER wired to controller — latent bug; resolved as part of this scope).
+import { RaceRecapService } from './services/race-recap.service';
+import { RaceRecapResponseDto } from './dto/race-recap-response.dto';
+import { RecapInsightPublicDto } from './dto/recap-insight.dto';
 import {
   LogShareEventDto,
   ShareStatsDto,
@@ -82,7 +87,47 @@ export class RaceResultController {
     private readonly racesService: RacesService,
     private readonly uploadService: UploadService,
     private readonly athleteProfileService: AthleteProfileService,
+    // F-056 wiring — Manager Plan Clarification #2
+    private readonly raceRecapService: RaceRecapService,
   ) { }
+
+  /**
+   * F-046 + F-056 — Public race recap aggregated data.
+   *
+   * Manager Plan Clarification #2: F-046 RecapService + DTO + schema were built
+   * but the public REST endpoint was never wired in F-046. F-056 closes this gap.
+   *
+   * Param `raceId` accepts the Mongo ObjectId of the race (frontend resolves
+   * raceSlug → race.id via existing `getRaceBySlug()`).
+   */
+  @Get('recap/:raceId')
+  @ApiOperation({
+    summary: 'F-046+F-056 — Race recap aggregated data (public, no auth)',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ObjectId' })
+  @ApiResponse({ status: 200, type: RaceRecapResponseDto })
+  @ApiResponse({ status: 404, description: 'Race not ended / no results yet / not found' })
+  async getRaceRecap(
+    @Param('raceId') raceId: string,
+  ): Promise<RaceRecapResponseDto> {
+    return this.raceRecapService.getRecap(raceId);
+  }
+
+  /**
+   * F-046 + F-056 — Public race recap editorial insight (5BIB editorial team).
+   * Returns published insight only; draft never leaks (BR-46-13).
+   */
+  @Get('recap/:raceId/insight')
+  @ApiOperation({
+    summary: 'F-046+F-056 — Race recap editorial insight (public, no auth)',
+  })
+  @ApiParam({ name: 'raceId', type: 'string', description: 'Race ObjectId' })
+  @ApiResponse({ status: 200, type: RecapInsightPublicDto })
+  async getRaceRecapInsight(
+    @Param('raceId') raceId: string,
+  ): Promise<RecapInsightPublicDto> {
+    return this.raceRecapService.getPublicInsight(raceId);
+  }
 
   /**
    * F-047 Phase 1C wiring — public athlete profile by slug.
