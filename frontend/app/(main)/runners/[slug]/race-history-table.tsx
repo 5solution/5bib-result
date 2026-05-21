@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 /**
  * FEATURE-050 — Race History table with race-ops columns + Gun Time toggle.
  *
@@ -65,11 +67,35 @@ function formatElevation(meters: number | undefined): string | null {
   return `D+ ${meters.toLocaleString('vi-VN')}m`;
 }
 
-function renderRankCell(row: RaceHistoryRow): string {
-  if (row.status === 'finished') return row.overallRank ?? '—';
-  if (row.status === 'dnf') return 'DNF';
-  if (row.status === 'dns') return 'DNS';
-  return 'DSQ';
+/**
+ * UI polish — status badge with color-coded pill instead of plain text.
+ * Finished = numeric rank (no pill, just bold number).
+ * DNF / DNS / DSQ = colored pills with consistent visual weight.
+ */
+function renderRankCell(row: RaceHistoryRow): React.ReactElement {
+  if (row.status === 'finished') {
+    const rank = row.overallRank ?? '—';
+    return (
+      <span className="font-mono text-sm font-semibold tabular-nums text-stone-900">
+        {rank}
+      </span>
+    );
+  }
+  const statusMeta = {
+    dnf: 'bg-orange-100 text-orange-800 ring-orange-200',
+    dns: 'bg-stone-100 text-stone-600 ring-stone-200',
+    dsq: 'bg-red-100 text-red-800 ring-red-200',
+  } as const;
+  const label = row.status.toUpperCase();
+  return (
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider ring-1 ${
+        statusMeta[row.status as 'dnf' | 'dns' | 'dsq']
+      }`}
+    >
+      {label}
+    </span>
+  );
 }
 
 export function RaceHistoryTable({ rows }: { rows: RaceHistoryRow[] }) {
@@ -105,15 +131,15 @@ export function RaceHistoryTable({ rows }: { rows: RaceHistoryRow[] }) {
   const anyAgRank = rows.some((r) => Boolean(r.categoryRank));
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+    <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-stone-200">
       {anyGunTime && (
-        <div className="flex items-center justify-end gap-2 border-b border-stone-100 bg-stone-50 px-3 py-2 text-xs">
-          <label className="inline-flex cursor-pointer items-center gap-2 text-stone-700">
+        <div className="flex items-center justify-end gap-2 border-b border-stone-100 bg-gradient-to-r from-stone-50 to-stone-50/70 px-4 py-2.5 text-xs">
+          <label className="inline-flex cursor-pointer select-none items-center gap-2 font-medium text-stone-700 transition hover:text-stone-900">
             <input
               type="checkbox"
               checked={showGunTime}
               onChange={toggle}
-              className="h-4 w-4 rounded border-stone-300 text-blue-700 focus:ring-blue-600"
+              className="h-4 w-4 rounded border-stone-300 text-blue-700 focus:ring-blue-600 focus:ring-offset-0"
               aria-label="Hiện cột Gun Time"
               disabled={!hydrated}
             />
@@ -121,104 +147,138 @@ export function RaceHistoryTable({ rows }: { rows: RaceHistoryRow[] }) {
           </label>
         </div>
       )}
-      <table className="w-full text-sm">
-        <thead className="bg-stone-50 text-xs uppercase tracking-wider text-stone-600">
-          <tr>
-            <th className="px-3 py-2 text-left">Ngày</th>
-            <th className="px-3 py-2 text-left">Race</th>
-            <th className="px-3 py-2 text-left">Cự ly</th>
-            <th className="px-3 py-2 text-right">Chip Time</th>
-            {showGunTime && anyGunTime && (
-              <th className="px-3 py-2 text-right">Gun Time</th>
-            )}
-            <th className="px-3 py-2 text-right">Rank</th>
-            {anyAgRank && <th className="px-3 py-2 text-right">AG Rank</th>}
-            {anyItra && <th className="px-3 py-2 text-right">ITRA</th>}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-stone-100">
-          {rows.map((row, i) => {
-            const cls = row.raceClassification
-              ? CLASSIFICATION_META[row.raceClassification]
-              : null;
-            const elev = formatElevation(row.elevationGain);
-            return (
-              <tr key={`${row.raceId}-${i}`} className="hover:bg-stone-50">
-                <td className="px-3 py-2 text-xs text-stone-600">
-                  {row.raceDate
-                    ? new Date(row.raceDate).toLocaleDateString('vi-VN')
-                    : '—'}
-                </td>
-                <td className="px-3 py-2">
-                  <Link
-                    href={`/giai-chay/${row.raceSlug}`}
-                    className="font-medium text-stone-900 hover:text-blue-700"
-                  >
-                    {row.raceTitle}
-                  </Link>
-                  {(cls || elev) && (
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
-                      {cls && (
-                        <span
-                          className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${cls.className}`}
-                          title={cls.label}
-                        >
-                          <span aria-hidden="true">{cls.icon}</span>
-                          {cls.label}
-                        </span>
-                      )}
-                      {elev && (
-                        <span className="font-mono text-[11px] text-stone-600">
-                          {elev}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-stone-700">
-                  {row.distance ?? row.courseName}
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">
-                  {row.chipTime || '—'}
-                </td>
-                {showGunTime && anyGunTime && (
-                  <td className="px-3 py-2 text-right font-mono text-stone-600">
-                    {row.gunTime && row.gunTime.trim() ? row.gunTime : '—'}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-stone-200 bg-stone-50/50 text-[10px] font-bold uppercase tracking-[0.18em] text-stone-500">
+            <tr>
+              <th className="px-4 py-3 text-left">Ngày</th>
+              <th className="px-4 py-3 text-left">Race</th>
+              <th className="px-4 py-3 text-left">Cự ly</th>
+              <th className="px-4 py-3 text-right">Chip Time</th>
+              {showGunTime && anyGunTime && (
+                <th className="px-4 py-3 text-right">Gun Time</th>
+              )}
+              <th className="px-4 py-3 text-right">Rank</th>
+              {anyAgRank && <th className="px-4 py-3 text-right">AG Rank</th>}
+              {anyItra && <th className="px-4 py-3 text-right">ITRA</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {rows.map((row, i) => {
+              const cls = row.raceClassification
+                ? CLASSIFICATION_META[row.raceClassification]
+                : null;
+              const elev = formatElevation(row.elevationGain);
+              const isFinished = row.status === 'finished';
+              return (
+                <tr
+                  key={`${row.raceId}-${i}`}
+                  className="group relative transition hover:bg-stone-50/70"
+                >
+                  {/* hover row left-edge accent indicator */}
+                  <td className="relative w-0 p-0">
+                    <span
+                      aria-hidden="true"
+                      className={`absolute inset-y-0 left-0 w-0.5 transition-all duration-300 group-hover:w-1 ${
+                        isFinished
+                          ? 'bg-blue-700/0 group-hover:bg-blue-700'
+                          : 'bg-stone-400/0 group-hover:bg-stone-400'
+                      }`}
+                    />
                   </td>
-                )}
-                <td className="px-3 py-2 text-right text-xs">{renderRankCell(row)}</td>
-                {anyAgRank && (
-                  <td className="px-3 py-2 text-right text-xs">
-                    {row.status === 'finished' && row.categoryRank ? (
-                      <div>
-                        <div className="font-semibold text-stone-900">
-                          {row.categoryRank}
-                        </div>
-                        {row.agBracket && (
-                          <div className="text-[10px] text-stone-500">
-                            {row.agBracket}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                )}
-                {anyItra && (
-                  <td className="px-3 py-2 text-right font-mono text-xs text-stone-700">
-                    {typeof row.itraPoints === 'number' && row.itraPoints > 0
-                      ? row.itraPoints
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-[11px] text-stone-500 tabular-nums">
+                    {row.raceDate
+                      ? new Date(row.raceDate).toLocaleDateString('vi-VN')
                       : '—'}
                   </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div className="border-t border-stone-200 p-3 text-center text-xs text-stone-500">
-        Tổng {rows.length} giải đã tham gia
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/giai-chay/${row.raceSlug}`}
+                      className="block font-medium text-stone-900 transition hover:text-blue-700"
+                    >
+                      <span className="bg-gradient-to-r from-blue-700 to-blue-700 bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size] duration-300 group-hover:bg-[length:100%_1px]">
+                        {row.raceTitle}
+                      </span>
+                    </Link>
+                    {(cls || elev) && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        {cls && (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${cls.className}`}
+                            title={cls.label}
+                          >
+                            <span aria-hidden="true">{cls.icon}</span>
+                            {cls.label}
+                          </span>
+                        )}
+                        {elev && (
+                          <span className="font-mono text-[10px] font-medium text-stone-500">
+                            {elev}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-stone-700">
+                    {row.distance ?? row.courseName}
+                  </td>
+                  <td
+                    className={`whitespace-nowrap px-4 py-3 text-right font-mono text-sm font-bold tabular-nums ${
+                      isFinished ? 'text-stone-900' : 'text-stone-300'
+                    }`}
+                  >
+                    {row.chipTime || '—'}
+                  </td>
+                  {showGunTime && anyGunTime && (
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-xs tabular-nums text-stone-500">
+                      {row.gunTime && row.gunTime.trim() ? row.gunTime : '—'}
+                    </td>
+                  )}
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    {renderRankCell(row)}
+                  </td>
+                  {anyAgRank && (
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      {row.status === 'finished' && row.categoryRank ? (
+                        <div>
+                          <div className="font-mono text-sm font-bold tabular-nums text-stone-900">
+                            {row.categoryRank}
+                          </div>
+                          {row.agBracket && (
+                            <div className="mt-0.5 text-[10px] font-medium text-stone-500">
+                              {row.agBracket}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-stone-300">—</span>
+                      )}
+                    </td>
+                  )}
+                  {anyItra && (
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-xs font-medium tabular-nums text-stone-700">
+                      {typeof row.itraPoints === 'number' && row.itraPoints > 0
+                        ? row.itraPoints
+                        : '—'}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center justify-between border-t border-stone-100 bg-stone-50/30 px-4 py-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400">
+          Race Log
+        </span>
+        <span className="text-xs text-stone-500">
+          Tổng{' '}
+          <span className="font-mono font-bold tabular-nums text-stone-900">
+            {rows.length}
+          </span>{' '}
+          giải đã tham gia
+        </span>
       </div>
     </div>
   );

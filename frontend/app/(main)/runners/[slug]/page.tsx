@@ -526,168 +526,300 @@ export default async function AthleteProfilePage({
         />
       )}
 
-      {/* Hero block — gradient bg + avatar + name + chips */}
-      <div className="relative h-48 w-full bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700 md:h-56">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40" />
-        <div className="absolute bottom-0 left-0 right-0 px-4 py-6 md:px-8 md:py-8">
-          <div className="mx-auto flex max-w-5xl items-end gap-4">
-            {profile.avatarUrl ? (
-              <img
-                src={profile.avatarUrl}
-                alt=""
-                className="h-20 w-20 rounded-full object-cover ring-4 ring-white shadow-xl md:h-24 md:w-24"
-              />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-2xl font-bold text-blue-700 ring-4 ring-white shadow-xl md:h-24 md:w-24 md:text-3xl">
-                {initials || '?'}
-              </div>
-            )}
+      {/* ── HERO — editorial magazine layout. Topo SVG overlay + oversized
+            race count as floating display number. Avatar with ambient conic
+            spin (.ap-avatar-ring from globals.css). Diagonal gradient accent
+            bottom for athletic-broadcast vibe. */}
+      <div className="relative isolate overflow-hidden bg-gradient-to-br from-blue-800 via-blue-700 to-indigo-900">
+        {/* topographic line pattern overlay — trail/race-day texture */}
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.07] mix-blend-screen"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <pattern id="topo" width="240" height="240" patternUnits="userSpaceOnUse">
+              <path d="M0 60 Q60 20 120 60 T240 60" fill="none" stroke="white" strokeWidth="1" />
+              <path d="M0 120 Q60 80 120 120 T240 120" fill="none" stroke="white" strokeWidth="1" />
+              <path d="M0 180 Q60 140 120 180 T240 180" fill="none" stroke="white" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#topo)" />
+        </svg>
+        {/* warm-tone gradient wash for depth + readable text contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+        {/* diagonal accent strip — 5BIB blue↗orange (energy) bar across bottom */}
+        <div
+          className="absolute bottom-0 left-0 h-1.5 w-full"
+          style={{
+            background:
+              'linear-gradient(90deg, var(--5bib-accent) 0%, var(--5bib-accent) 55%, var(--5bib-energy) 100%)',
+          }}
+        />
+
+        <div className="relative mx-auto flex min-h-[18rem] max-w-6xl flex-col justify-end px-4 py-10 md:min-h-[22rem] md:px-8 md:py-14">
+          <div className="flex items-end gap-5 md:gap-8">
+            {/* Avatar with conic ambient ring — perpetually subtle motion */}
+            <div className="ap-avatar-ring shrink-0">
+              {profile.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt=""
+                  className="h-24 w-24 rounded-full object-cover ring-[3px] ring-white/95 shadow-2xl md:h-32 md:w-32"
+                />
+              ) : (
+                <div
+                  className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-white to-stone-100 text-3xl font-bold text-blue-800 ring-[3px] ring-white/95 shadow-2xl md:h-32 md:w-32 md:text-4xl"
+                  style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}
+                >
+                  {initials || '?'}
+                </div>
+              )}
+            </div>
+
             <div className="flex-1 min-w-0">
-              <span className="inline-block rounded-full bg-blue-100/90 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-900">
-                Vận động viên
-              </span>
-              <h1 className="mt-1 text-2xl font-bold text-white drop-shadow-lg md:text-4xl">
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.8)]" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-100/90">
+                  Vận động viên
+                </span>
+              </div>
+              <h1
+                className="mt-2 text-3xl font-bold leading-[1.05] text-white drop-shadow-lg md:text-5xl"
+                style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}
+              >
                 {profile.canonicalName}
               </h1>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded bg-white/20 px-2 py-1 text-xs font-medium text-white backdrop-blur">
-                  #{profile.primaryBib}
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-white/15 px-2.5 py-1 font-mono text-xs font-semibold text-white backdrop-blur-sm ring-1 ring-white/20">
+                  <span className="opacity-60">BIB</span>
+                  <span className="tabular-nums">{profile.primaryBib}</span>
                 </span>
                 {profile.gender && (
-                  <span className="rounded bg-white/20 px-2 py-1 text-xs font-medium text-white backdrop-blur">
-                    {profile.gender === 'male' ? 'Nam' : profile.gender === 'female' ? 'Nữ' : '—'}
+                  <span className="inline-block rounded-md bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm ring-1 ring-white/20">
+                    {profile.gender === 'male'
+                      ? 'Nam'
+                      : profile.gender === 'female'
+                        ? 'Nữ'
+                        : '—'}
                   </span>
                 )}
                 {profile.ageGroupSnapshot && (
-                  /* F-050 — promote AG bracket to highlighted amber chip (race-day signal). */
-                  <span className="rounded bg-amber-400/30 px-2 py-1 text-xs font-semibold text-white backdrop-blur ring-1 ring-amber-200/60">
-                    🏷️ {profile.ageGroupSnapshot}
+                  /* AG bracket promoted to MEDAL-style amber pill */
+                  <span className="inline-flex items-center gap-1 rounded-md bg-gradient-to-br from-amber-300/95 to-amber-500/90 px-2.5 py-1 text-xs font-semibold text-amber-950 shadow-[0_0_0_1px_rgba(252,211,77,0.6),inset_0_1px_0_rgba(255,255,255,0.4)]">
+                    <span aria-hidden="true">🏷️</span>
+                    <span>{profile.ageGroupSnapshot}</span>
                   </span>
                 )}
                 {profile.club && (
-                  <span className="rounded bg-white/20 px-2 py-1 text-xs font-medium text-white backdrop-blur">
-                    🏃 {profile.club}
+                  <span className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm ring-1 ring-white/20">
+                    <span aria-hidden="true">🏃</span>
+                    <span className="truncate max-w-[160px]">{profile.club}</span>
                   </span>
                 )}
-                <span className="rounded bg-white/30 px-2 py-1 text-xs font-bold text-white">
-                  VĐV {profile.totalRaces} giải
-                </span>
+              </div>
+            </div>
+
+            {/* Oversized race count — editorial display number. Hidden mobile,
+                visible md+ as RIGHT-aligned hero stat. */}
+            <div className="hidden md:flex md:flex-col md:items-end md:justify-end md:self-end md:pl-4">
+              <div
+                className="text-7xl font-bold leading-none text-white tabular-nums drop-shadow-lg"
+                style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.04em' }}
+              >
+                {profile.totalRaces}
+              </div>
+              <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-100/80">
+                Giải đã tham gia
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-8 md:py-10">
-        {/* F-051 PAUSE-51-03 — AI-friendly lead paragraph.
-            Always in DOM for crawlers + AI search engines (Google SGE / ChatGPT /
-            Perplexity / Gemini). Hidden visually on mobile to preserve hero focus,
-            visible desktop as factual lede. */}
+      <div className="mx-auto max-w-6xl px-4 py-10 md:py-14">
+        {/* Breadcrumb — refined, smaller, with custom chevron + uppercase */}
+        <nav
+          className="mb-8 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500"
+          aria-label="Breadcrumb"
+        >
+          <Link href="/" className="hover:text-blue-700">
+            Trang chủ
+          </Link>
+          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+          <Link href="/giai-chay" className="hover:text-blue-700">
+            Giải chạy
+          </Link>
+          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+          <span className="truncate text-stone-900">{profile.canonicalName}</span>
+        </nav>
+
+        {/* F-051 PAUSE-51-03 — AI-friendly lead paragraph. Editorial italic
+            treatment with left accent bar. Always in DOM for crawlers + AI
+            search engines (SGE / ChatGPT / Perplexity / Gemini). */}
         <p
-          className="mb-6 sr-only text-sm leading-relaxed text-stone-700 md:not-sr-only md:rounded-lg md:border md:border-stone-200 md:bg-stone-50 md:p-4 md:text-base"
+          className="mb-10 sr-only italic leading-relaxed text-stone-700 md:not-sr-only md:relative md:border-l-2 md:border-blue-700 md:pl-5 md:text-[15px] md:[font-family:var(--font-display)] md:before:absolute md:before:-left-[2px] md:before:top-0 md:before:h-2 md:before:w-2 md:before:-translate-x-1/2 md:before:rounded-full md:before:bg-blue-700"
           data-seo="lead"
         >
           {leadParagraph}
         </p>
 
-        {/* Breadcrumb */}
-        <nav className="mb-6 text-sm text-stone-600" aria-label="Breadcrumb">
-          <Link href="/" className="hover:text-blue-700">
-            Trang chủ
-          </Link>{' '}
-          <span className="mx-2">›</span>
-          <Link href="/giai-chay" className="hover:text-blue-700">
-            Giải chạy
-          </Link>{' '}
-          <span className="mx-2">›</span>
-          <span className="text-stone-900">{profile.canonicalName}</span>
-        </nav>
-
         {/* F-050 — Thành tích nổi bật badges (streak + specialist + geographic).
-            Block hidden entirely when no badges qualify. */}
+            Sculpted segmented pills with icon left + text right. */}
         {hasAnyBadge && (
-          <section className="mb-8">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-500">
+          <section className="mb-10">
+            <h2
+              className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
               Thành tích nổi bật
             </h2>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5">
               {streakBadge && (
-                <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1.5 text-sm font-semibold text-orange-800 ring-1 ring-orange-200">
-                  {streakBadge}
+                /* Streak — orange with subtle pulse on the flame */
+                <span className="group inline-flex items-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-orange-200 transition hover:-translate-y-0.5 hover:shadow-md">
+                  <span className="flex h-8 items-center bg-gradient-to-br from-orange-500 to-orange-600 px-3 text-base text-white">
+                    🔥
+                  </span>
+                  <span className="px-3.5 py-1.5 text-sm font-semibold text-orange-900">
+                    {streakBadge.replace('🔥 ', '')}
+                  </span>
                 </span>
               )}
               {specialistBadges.map((b) => (
                 <span
                   key={b}
-                  className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1.5 text-sm font-semibold text-blue-800 ring-1 ring-blue-200"
+                  className="group inline-flex items-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-blue-200 transition hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  {b}
+                  <span className="flex h-8 items-center bg-gradient-to-br from-blue-600 to-blue-700 px-3 text-base text-white">
+                    🎯
+                  </span>
+                  <span className="px-3.5 py-1.5 text-sm font-semibold text-blue-900">
+                    {b.replace('🎯 ', '')}
+                  </span>
                 </span>
               ))}
               {geographicBadge && (
-                <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1.5 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
-                  {geographicBadge}
+                <span className="group inline-flex items-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-emerald-200 transition hover:-translate-y-0.5 hover:shadow-md">
+                  <span className="flex h-8 items-center bg-gradient-to-br from-emerald-600 to-emerald-700 px-3 text-base text-white">
+                    🌍
+                  </span>
+                  <span className="px-3.5 py-1.5 text-sm font-semibold text-emerald-900">
+                    {geographicBadge.replace('🌍 ', '')}
+                  </span>
                 </span>
               )}
             </div>
           </section>
         )}
 
-        {/* Block 1: PR Records (4 cards grid) */}
-        <section className="mb-10">
-          <h2 className="mb-4 text-xl font-semibold text-stone-900">
-            Personal Records
-          </h2>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {/* ── PR Records — 4 cards with color-coded distance accent bar (Strava-style)
+              + oversized mono chip time (display font) + race link with underline reveal. */}
+        <section className="mb-12">
+          <div className="mb-5 flex items-baseline justify-between">
+            <h2
+              className="text-2xl font-bold text-stone-900"
+              style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}
+            >
+              Personal Records
+            </h2>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-400">
+              Best Times
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {(['5K', '10K', 'HM', 'FM'] as const).map((distance) => {
               const pr = profile.prRecords.find((p) => p.distance === distance);
+              const accent = PR_DISTANCE_ACCENT[distance];
               return (
                 <div
                   key={distance}
-                  className="rounded-lg border border-stone-200 bg-white p-4"
+                  className="group relative overflow-hidden rounded-xl bg-white p-5 shadow-sm ring-1 ring-stone-200 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:ring-stone-300"
                 >
-                  <div className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                    {distance === 'HM' ? 'Half Marathon' : distance === 'FM' ? 'Marathon' : distance}
+                  {/* color-coded vertical accent bar on left edge */}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute inset-y-0 left-0 w-1 ${accent.bar}`}
+                  />
+                  <div className="flex items-center justify-between">
+                    <div
+                      className={`text-[10px] font-bold uppercase tracking-[0.18em] ${accent.label}`}
+                    >
+                      {distance === 'HM' ? 'Half Marathon' : distance === 'FM' ? 'Marathon' : distance + ' Race'}
+                    </div>
+                    {pr && (
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${accent.dot}`}
+                        aria-hidden="true"
+                      >
+                        ★
+                      </span>
+                    )}
                   </div>
-                  <div className={`mt-1 font-mono text-xl font-bold ${pr ? 'text-blue-700' : 'text-stone-300'}`}>
-                    {pr ? pr.chipTime : '—'}
+                  <div
+                    className={`mt-2 font-mono text-3xl font-bold tabular-nums tracking-tight md:text-[2rem] ${
+                      pr ? accent.time : 'text-stone-300'
+                    }`}
+                  >
+                    {pr ? pr.chipTime : '—:—:—'}
                   </div>
-                  {pr && (
+                  {pr ? (
                     <Link
                       href={`/giai-chay/${pr.raceSlug}`}
-                      className="mt-2 block truncate text-xs text-stone-600 hover:text-blue-700"
+                      className="mt-3 block truncate text-xs font-medium text-stone-600 transition hover:text-stone-900"
                       title={pr.raceTitle}
                     >
-                      {pr.raceTitle}
+                      <span className="bg-gradient-to-r from-stone-900 to-stone-900 bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size] duration-500 group-hover:bg-[length:100%_1px]">
+                        {pr.raceTitle}
+                      </span>
                     </Link>
+                  ) : (
+                    <div className="mt-3 text-xs italic text-stone-400">
+                      Chưa có PR
+                    </div>
                   )}
-                  {!pr && <div className="mt-2 text-xs text-stone-400">Chưa có PR</div>}
                 </div>
               );
             })}
           </div>
 
-          {/* F-050 — Best AG performance card. Show only when categoryRank is available
-              in at least one finished race. Graceful hide otherwise. */}
+          {/* F-050 — Best AG performance — medal/ribbon treatment */}
           {profile.bestAgRank && (
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
-              <div className="flex items-center gap-3">
-                <div className="text-2xl" aria-hidden="true">
-                  🏅
+            <div className="relative mt-5 overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 via-yellow-50/50 to-orange-50/40 p-5 shadow-sm ring-1 ring-amber-200/80">
+              {/* subtle gold shimmer corner */}
+              <div
+                aria-hidden="true"
+                className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-amber-200/40 to-transparent blur-2xl"
+              />
+              <div className="relative flex items-center gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-3xl shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_4px_12px_rgba(217,119,6,0.3)]">
+                  <span aria-hidden="true">🏅</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-amber-800">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-800">
                     Thành tích AG xuất sắc nhất
                   </div>
-                  <div className="mt-1 text-base font-semibold text-stone-900">
-                    Hạng {profile.bestAgRank.rank}
-                    {profile.bestAgRank.bracket
-                      ? ` — ${profile.bestAgRank.bracket}`
-                      : ''}
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span
+                      className="text-2xl font-bold leading-none text-stone-900 tabular-nums md:text-3xl"
+                      style={{ fontFamily: 'var(--font-display)' }}
+                    >
+                      Hạng {profile.bestAgRank.rank}
+                    </span>
+                    {profile.bestAgRank.bracket && (
+                      <span className="text-sm font-medium text-stone-700">
+                        · {profile.bestAgRank.bracket}
+                      </span>
+                    )}
                   </div>
                   <Link
                     href={`/giai-chay/${profile.bestAgRank.raceSlug}`}
-                    className="mt-1 block truncate text-sm text-stone-600 hover:text-blue-700"
+                    className="mt-1.5 block truncate text-sm text-stone-600 transition hover:text-amber-800 hover:underline"
                     title={profile.bestAgRank.raceTitle}
                   >
                     {profile.bestAgRank.raceTitle}
@@ -698,27 +830,76 @@ export default async function AthleteProfilePage({
           )}
         </section>
 
-        {/* Block 2: Stats */}
-        <section className="mb-10">
-          <h2 className="mb-4 text-xl font-semibold text-stone-900">Thống kê</h2>
+        {/* ── Stats — 5-card grid with vertical color accent + oversized
+              tabular-nums numbers. Hover lift micro-interaction. */}
+        <section className="mb-12">
+          <div className="mb-5 flex items-baseline justify-between">
+            <h2
+              className="text-2xl font-bold text-stone-900"
+              style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}
+            >
+              Thống kê
+            </h2>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-400">
+              Career Totals
+            </span>
+          </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <StatCard label="Tổng giải" value={profile.totalRaces} color="text-stone-900" />
-            <StatCard label="Về đích" value={profile.totalFinished} color="text-blue-700" />
-            <StatCard label="DNF" value={profile.totalDNF} color="text-orange-600" />
-            <StatCard label="DNS" value={profile.totalDNS ?? 0} color="text-stone-500" />
-            <StatCard label="DSQ" value={profile.totalDSQ ?? 0} color="text-red-600" />
+            <StatCard
+              label="Tổng giải"
+              value={profile.totalRaces}
+              accent="bg-stone-900"
+              valueColor="text-stone-900"
+            />
+            <StatCard
+              label="Về đích"
+              value={profile.totalFinished}
+              accent="bg-blue-700"
+              valueColor="text-blue-700"
+            />
+            <StatCard
+              label="DNF"
+              value={profile.totalDNF}
+              accent="bg-orange-500"
+              valueColor="text-orange-600"
+            />
+            <StatCard
+              label="DNS"
+              value={profile.totalDNS ?? 0}
+              accent="bg-stone-400"
+              valueColor="text-stone-500"
+            />
+            <StatCard
+              label="DSQ"
+              value={profile.totalDSQ ?? 0}
+              accent="bg-red-500"
+              valueColor="text-red-600"
+            />
           </div>
         </section>
 
-        {/* Block 3: Race History table — F-050 client component with race-ops columns
-            (classification icon, D+, AG rank) + gun time toggle persisted in localStorage. */}
-        <section className="mb-10">
-          <h2 className="mb-4 text-xl font-semibold text-stone-900">
-            Lịch sử race ({profile.raceHistory.length})
-          </h2>
+        {/* ── Race History table — F-050 client component. */}
+        <section className="mb-12">
+          <div className="mb-5 flex items-baseline justify-between">
+            <h2
+              className="text-2xl font-bold text-stone-900"
+              style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}
+            >
+              Lịch sử race{' '}
+              <span className="ml-2 text-base font-medium text-stone-400 tabular-nums">
+                {profile.raceHistory.length}
+              </span>
+            </h2>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-400">
+              Race Log
+            </span>
+          </div>
           {profile.raceHistory.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-8 text-center text-stone-600">
-              Chưa có dữ liệu race
+            <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-12 text-center">
+              <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-stone-200 text-2xl">
+                🏁
+              </div>
+              <p className="text-sm text-stone-600">Chưa có dữ liệu race</p>
             </div>
           ) : (
             <RaceHistoryTable rows={profile.raceHistory} />
@@ -729,31 +910,88 @@ export default async function AthleteProfilePage({
         <PhotosBlock slug={slug} />
 
 
-        {/* Footer info */}
-        <footer className="mt-8 border-t border-stone-200 pt-4 text-xs text-stone-500">
-          Cập nhật: {new Date(profile.computedAt).toLocaleString('vi-VN')}
+        {/* Footer info — refined with brand mark + mono timestamp */}
+        <footer className="mt-12 flex items-center justify-between border-t border-stone-200 pt-5">
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-700" />
+            <span>5BIB Athlete Profile</span>
+          </div>
+          <div className="font-mono text-[11px] text-stone-500 tabular-nums">
+            Cập nhật {new Date(profile.computedAt).toLocaleString('vi-VN')}
+          </div>
         </footer>
       </div>
     </div>
   );
 }
 
+/**
+ * F-050 + UI polish — Stat card with vertical color accent bar (Strava-style),
+ * oversized tabular-nums display number, and hover lift micro-interaction.
+ */
 function StatCard({
   label,
   value,
-  color,
+  accent,
+  valueColor,
 }: {
   label: string;
   value: number;
-  color: string;
+  accent: string;
+  valueColor: string;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className={`text-3xl font-bold ${color}`}>{value.toLocaleString('vi-VN')}</div>
-      <div className="mt-1 text-sm text-stone-600">{label}</div>
+    <div className="group relative overflow-hidden rounded-xl bg-white p-4 shadow-sm ring-1 ring-stone-200 transition duration-300 hover:-translate-y-0.5 hover:shadow-md hover:ring-stone-300">
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 w-1 ${accent}`}
+      />
+      <div
+        className={`text-4xl font-bold leading-none tabular-nums ${valueColor}`}
+        style={{ fontFamily: 'var(--font-display)', letterSpacing: '-0.03em' }}
+      >
+        {value.toLocaleString('vi-VN')}
+      </div>
+      <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500">
+        {label}
+      </div>
     </div>
   );
 }
+
+/**
+ * PR distance accent palette — color-coded per distance to give visual rhythm
+ * across the 4-card grid (mirrors Strava's distance-level color system).
+ */
+const PR_DISTANCE_ACCENT: Record<
+  '5K' | '10K' | 'HM' | 'FM',
+  { bar: string; label: string; time: string; dot: string }
+> = {
+  '5K': {
+    bar: 'bg-sky-500',
+    label: 'text-sky-700',
+    time: 'text-sky-700',
+    dot: 'bg-sky-100 text-sky-700',
+  },
+  '10K': {
+    bar: 'bg-blue-700',
+    label: 'text-blue-700',
+    time: 'text-blue-700',
+    dot: 'bg-blue-100 text-blue-700',
+  },
+  HM: {
+    bar: 'bg-orange-500',
+    label: 'text-orange-700',
+    time: 'text-orange-600',
+    dot: 'bg-orange-100 text-orange-700',
+  },
+  FM: {
+    bar: 'bg-red-600',
+    label: 'text-red-700',
+    time: 'text-red-700',
+    dot: 'bg-red-100 text-red-700',
+  },
+};
 
 interface PhotoItem {
   id: string;
