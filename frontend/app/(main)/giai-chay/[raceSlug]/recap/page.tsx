@@ -267,6 +267,44 @@ function formatVN(d: string | undefined | null): string {
     .padStart(2, '0')}/${date.getFullYear()}`;
 }
 
+/**
+ * Editorial title rendering per design Variation A — RAW raceTitle as-is
+ * from system (Danny mandate 2026-05-21: "hệ thống thế nào hiện vậy đừng
+ * override"). NO trim, NO strip prefix, NO split at "-".
+ *
+ * Apply italic+orange accent overlay ONLY when an editorial keyword is
+ * present (MARATHON / ULTRA / TRAIL / RUN / CHẠY). This wraps the matching
+ * word in a styled <span> without modifying the source text.
+ *
+ * If no keyword match → return raw title unchanged.
+ */
+function renderEditorialTitle(rawTitle: string): React.ReactNode {
+  const accentRegex = /\b(MARATHON|ULTRA TRAIL|ULTRA|TRAIL|RUN|CHẠY)\b/i;
+  const match = rawTitle.match(accentRegex);
+  if (!match || match.index === undefined) {
+    return <span>{rawTitle}</span>;
+  }
+  const idx = match.index;
+  const before = rawTitle.slice(0, idx);
+  const accent = rawTitle.slice(idx, idx + match[0].length);
+  const after = rawTitle.slice(idx + match[0].length);
+  return (
+    <>
+      <span>{before}</span>
+      <span
+        style={{
+          color: '#FB923C',
+          fontStyle: 'italic',
+          fontWeight: 800,
+        }}
+      >
+        {accent}
+      </span>
+      <span>{after}</span>
+    </>
+  );
+}
+
 function paceSpread(p10: string, p90: string): string {
   const parse = (s: string): number => {
     const m = s.replace('/km', '').split(':');
@@ -325,8 +363,10 @@ export default async function RaceRecapPage({
     { id: 'ag', label: 'Age Group' },
     { id: 'insight', label: 'Insight' },
   ];
+  // Course pills: prefer `name` (e.g. "21KM" with unit) over `distance` (raw
+  // numeric "21" — would lose unit). BR-56-07 v1 read-only visual.
   const courseLabels = race.courses
-    ?.map((c) => c.distance ?? c.name)
+    ?.map((c) => c.name ?? c.distance)
     .filter((s): s is string => !!s) ?? [];
 
   return (
@@ -340,7 +380,8 @@ export default async function RaceRecapPage({
       <section
         className="relative overflow-hidden text-white"
         style={{
-          height: 'clamp(380px, 60vh, 640px)',
+          // BUG FIX 2026-05-21: increase min height + auto-grow for long VN titles
+          minHeight: 'clamp(520px, 65vh, 720px)',
           background: bannerUrl
             ? undefined
             : 'linear-gradient(135deg, #1B2238, #2A3354)',
@@ -395,11 +436,13 @@ export default async function RaceRecapPage({
           <span style={{ color: '#fff' }}>RECAP</span>
         </nav>
 
-        {/* Content */}
-        <div className="absolute inset-0 flex flex-col justify-end px-6 pb-8 md:px-14 md:pb-12">
-          <div className="grid gap-6 md:gap-12 items-end md:grid-cols-[1.5fr_1fr]">
-            <div>
-              <div className="flex flex-wrap items-center gap-3 mb-4">
+        {/* Content — BUG FIX 2026-05-21: pt-24 to clear fixed header (h-14)
+            + breadcrumb (top-5). Use relative grid with constrained title col
+            to prevent VN long-title overflow into stats column. */}
+        <div className="relative z-10 flex min-h-full flex-col justify-end px-6 pt-24 pb-10 md:px-14 md:pt-28 md:pb-14">
+          <div className="grid gap-8 md:gap-12 items-end md:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-4">
                 <span
                   className="inline-flex items-center px-2.5 py-0.5 rounded-full font-bold uppercase text-[10.5px] tracking-[0.18em]"
                   style={{ background: '#fff', color: '#1B2238' }}
@@ -415,7 +458,7 @@ export default async function RaceRecapPage({
                   </span>
                 ) : null}
                 <span
-                  className="font-mono font-semibold text-[12px] tracking-[0.08em]"
+                  className="font-mono font-semibold text-[11px] md:text-[12px] tracking-[0.08em]"
                   style={{ color: 'rgba(255,255,255,0.8)' }}
                 >
                   {formatVN(recap.endDate)} · {race.location ?? '—'}
@@ -424,26 +467,31 @@ export default async function RaceRecapPage({
               <h1
                 className="font-heading font-black uppercase m-0"
                 style={{
-                  fontSize: 'clamp(44px, 7vw, 88px)',
+                  // Match design Variation A: 88px desktop hero scale.
+                  // Adaptive clamp keeps long VN titles (60+ chars) readable.
+                  fontSize: 'clamp(40px, 6vw, 88px)',
                   lineHeight: 0.92,
                   letterSpacing: '-0.035em',
+                  overflowWrap: 'break-word',
                 }}
+                title={recap.raceTitle}
               >
-                {recap.raceTitle}
+                {renderEditorialTitle(recap.raceTitle)}
               </h1>
               <div
-                className="mt-5 max-w-2xl font-body italic"
+                className="mt-5 font-body italic"
                 style={{
-                  fontSize: 'clamp(14px, 1.4vw, 16px)',
+                  maxWidth: 540,
+                  fontSize: 16,
                   lineHeight: 1.6,
                   color: 'rgba(255,255,255,0.78)',
                 }}
               >
                 Tổng kết hành trình đường chạy, podium, phân bố pace và câu chuyện
-                phía sau những con số tại {recap.raceTitle}.
+                phía sau những con số.
               </div>
             </div>
-            <div className="grid gap-3">
+            <div className="grid gap-3 min-w-0">
               <HeroStat label="FINISHERS" value={finishersFormatted} color="#fff" />
               <HeroStat label="MEDIAN PACE /km" value={medianPace.replace('/km', '')} color="#FB923C" />
               <HeroStat label="WINNING TIME" value={winningTime} color="#22D3EE" />
@@ -669,7 +717,8 @@ function HeroStat({
       <div
         className="font-heading font-black"
         style={{
-          fontSize: 'clamp(34px, 4vw, 56px)',
+          // Match design Variation A: 56px hero stats
+          fontSize: 'clamp(32px, 4vw, 56px)',
           color,
           letterSpacing: '-0.04em',
           lineHeight: 1,
@@ -704,24 +753,29 @@ function SectionHeading({
   action?: React.ReactNode;
 }) {
   return (
-    <header className="flex items-end justify-between gap-4 mb-7 md:mb-9">
-      <div>
+    // BUG FIX 2026-05-21: mobile column stack → desktop row. flex-1 min-w-0
+    // on title wrapper prevents action button from squeezing title into
+    // single-word-per-line vertical stack (Danny screenshot mobile bug).
+    <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 sm:gap-4 mb-7 md:mb-9">
+      <div className="flex-1 min-w-0">
         <div
           className="font-mono font-bold uppercase text-[11px] tracking-[0.2em] text-stone-500 mb-2"
         >
           {number} · {eyebrow}
         </div>
         <h2
-          className="font-heading font-black uppercase tracking-tight m-0"
+          className="font-heading font-black uppercase m-0"
           style={{
-            fontSize: 'clamp(24px, 3vw, 36px)',
+            fontSize: 'clamp(22px, 2.8vw, 36px)',
             letterSpacing: '-0.02em',
+            lineHeight: 1.1,
+            overflowWrap: 'break-word',
           }}
         >
           {title}
         </h2>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="sm:shrink-0">{action}</div> : null}
     </header>
   );
 }

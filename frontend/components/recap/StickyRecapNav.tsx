@@ -120,18 +120,27 @@ export function StickyRecapNav({
           <>
             <div className="flex-1" />
             <div
-              className="flex items-center gap-1.5 p-1 rounded-full bg-stone-100"
+              className="hidden sm:flex items-center gap-1 p-1 rounded-full bg-stone-100"
               aria-label="Cự ly trong giải"
             >
-              {courses.map((c, i) => (
-                <span
-                  key={`${c}-${i}`}
-                  className="px-3 py-1 rounded-full font-mono font-bold text-[11px] text-stone-500 whitespace-nowrap"
-                  style={{ fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {c}
-                </span>
-              ))}
+              {courses.map((c, i) => {
+                // BR-56-07: v1 race-level route only — course pills are read-only
+                // visual. Highlight first course as default active per design.
+                const isActive = i === 0;
+                return (
+                  <span
+                    key={`${c}-${i}`}
+                    className={`px-3 py-1 rounded-full font-mono font-bold text-[11px] whitespace-nowrap transition-all duration-150 ${
+                      isActive
+                        ? 'bg-white text-blue-700 shadow-sm'
+                        : 'text-stone-500 hover:text-stone-900'
+                    }`}
+                    style={{ fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {c}
+                  </span>
+                );
+              })}
             </div>
           </>
         ) : null}
