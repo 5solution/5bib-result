@@ -29,6 +29,26 @@ export class AthleteReadonly {
   name: string | null;
 
   /**
+   * F-048 PII — email is the ONLY identity field in `athletes` table.
+   *
+   * **CRITICAL FIX 2026-05-20 (QC catch — staged_10 sync 10/10 failed):**
+   * Original Adjustment #1 claimed athletes.contact_phone + id_number exist.
+   * PROD MySQL verify revealed: contact_phone + id_number live in
+   * `athlete_subinfo` table (NOT athletes). Removed from this entity →
+   * sourced via subinfo relation in mapper (a.subinfo?.contact_phone).
+   *
+   * **PRIVACY (BR-48-15 PII strict 5-layer defense):**
+   *   - Stored MongoDB with `select: false` (admin-only access)
+   *   - NEVER returned in public DTO (toPublicView strips)
+   *   - SHA256 hash before use as identity cluster anchor
+   *   - Logger output uses `[emailHash:abc12345]` proxy
+   *
+   * Coverage post-F-048 sync: email ≥80% (athletes table direct).
+   */
+  @Column({ nullable: true, type: 'varchar', length: 255 })
+  email: string | null;
+
+  /**
    * F-019 v2 — Date of Birth.
    * Source: MySQL `athletes.dob` (DATE), coverage ~95% (92506/97155 toàn DB).
    *

@@ -171,6 +171,7 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `awards:lock:<raceId>:<courseId>` | F-019 SETNX anti-stampede compute lock during recompute orchestration | 30s |
 | `awards:state-lock:<podiumId>` | F-019 SETNX lock on concurrent podium state transitions (port pattern F-018 medical:incident-lock) | 5s |
 | `awards:eligibility:<raceId>` | F-019 v2 AG Eligibility Report cache (DOB coverage + bracket distribution + vendor health) — DEL on recompute | 60s |
+| `races:title:byMysqlId:<mysql_race_id>` | F-049 admin UX humanization — race title lookup cache for identity cluster admin endpoint enrichment (`enrichClustersWithRaceContext` joins `races.title` via mysql_race_id batch `$in` from MongoDB). No invalidation required (1h staleness acceptable, race title rarely changes). Try/catch Redis fail → fallback MongoDB query. | 3600s |
 
 Cache invalidation: any admin write (create/update/publish/unpublish/delete/restore on articles OR categories) flushes ALL `articles:*` keys via `scanStream` + pipeline. Rate-limit keys use a different `ratelimit:*` prefix so they survive cache flushes — view/vote dedup state is preserved across admin edits.
 

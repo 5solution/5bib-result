@@ -28,6 +28,26 @@ import { RaceAthleteLookupService } from './services/race-athlete-lookup.service
 import { RaceMasterDeltaSyncCron } from './jobs/race-master-delta-sync.cron';
 import { RaceMasterDataAdminController } from './controllers/race-master-data-admin.controller';
 import { LogtoAuthModule } from '../logto-auth';
+// F-048 Phase 1A — Race mapping migration (BR-48-01/02)
+import { Race, RaceSchema } from '../races/schemas/race.schema';
+import { RaceReadonly } from '../promo-hub/entities/race-readonly.entity';
+import { RaceMysqlIdBackfillService } from './services/race-mysql-id-backfill.service';
+import { RaceMysqlIdBackfillController } from './controllers/race-mysql-id-backfill.controller';
+// F-048 Phase 2 — Identity clustering (BR-48-11..19)
+import {
+  AthleteIdentityCluster,
+  AthleteIdentityClusterSchema,
+} from './schemas/athlete-identity-cluster.schema';
+import { AthleteIdentityClusteringService } from './services/athlete-identity-clustering.service';
+import { AthleteIdentityClusteringCron } from './jobs/athlete-identity-clustering.cron';
+import {
+  IdentityClusterAdminController,
+  IdentityCoverageStatsController,
+} from './controllers/identity-cluster-admin.controller';
+// F-048 Phase 1B — Bulk sync orchestrator + ended-race cron (BR-48-06/09)
+import { BulkSyncOrchestratorService } from './services/bulk-sync-orchestrator.service';
+import { BulkSyncController } from './controllers/bulk-sync.controller';
+import { EndedRaceMasterSyncCron } from './jobs/ended-race-master-sync.cron';
 
 /**
  * Race Master Data — Foundation module.
@@ -54,6 +74,13 @@ import { LogtoAuthModule } from '../logto-auth';
       // chip_verify_enabled races. Schema cũng đăng ký ở chip-verification
       // module — forFeature multi-register OK trong Mongoose.
       { name: ChipRaceConfig.name, schema: ChipRaceConfigSchema },
+      // F-048 BR-48-01 — race.mysql_race_id field write access for migration
+      { name: Race.name, schema: RaceSchema },
+      // F-048 Phase 2 BR-48-11 — Identity clusters collection
+      {
+        name: AthleteIdentityCluster.name,
+        schema: AthleteIdentityClusterSchema,
+      },
     ]),
     TypeOrmModule.forFeature(
       [
@@ -63,17 +90,35 @@ import { LogtoAuthModule } from '../logto-auth';
         TicketTypeReadonly,
         RaceCourseReadonly,
         CodeReadonly,
+        // F-048 Adjustment #3 — cross-module entity reuse for migration lookup
+        RaceReadonly,
       ],
       'platform',
     ),
     LogtoAuthModule,
   ],
-  controllers: [RaceMasterDataAdminController],
+  controllers: [
+    RaceMasterDataAdminController,
+    RaceMysqlIdBackfillController,
+    // F-048 Phase 2 — Identity cluster admin endpoints
+    IdentityClusterAdminController,
+    IdentityCoverageStatsController,
+    // F-048 Phase 1B — Bulk sync admin endpoints
+    BulkSyncController,
+  ],
   providers: [
     RaceMasterCacheService,
     RaceAthleteSyncService,
     RaceAthleteLookupService,
     RaceMasterDeltaSyncCron,
+    // F-048 Phase 1A — Migration service
+    RaceMysqlIdBackfillService,
+    // F-048 Phase 2 — Identity clustering
+    AthleteIdentityClusteringService,
+    AthleteIdentityClusteringCron,
+    // F-048 Phase 1B — Bulk sync + ended-race cron
+    BulkSyncOrchestratorService,
+    EndedRaceMasterSyncCron,
   ],
   exports: [RaceAthleteLookupService],
 })

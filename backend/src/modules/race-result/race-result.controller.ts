@@ -56,6 +56,8 @@ import {
 } from './services/result-image.service';
 import { BadgeService } from './services/badge.service';
 import { ShareEventService } from './services/share-event.service';
+import { AthleteProfileService } from './services/athlete-profile.service';
+import { AthleteProfileResponseDto } from './dto/athlete-profile-response.dto';
 import {
   LogShareEventDto,
   ShareStatsDto,
@@ -79,7 +81,25 @@ export class RaceResultController {
     private readonly shareEventService: ShareEventService,
     private readonly racesService: RacesService,
     private readonly uploadService: UploadService,
+    private readonly athleteProfileService: AthleteProfileService,
   ) { }
+
+  /**
+   * F-047 Phase 1C wiring — public athlete profile by slug.
+   * Used by frontend `/runners/[slug]/page.tsx` SSR.
+   * Slug format: `<bib>-<name-kebab>` (e.g. `9897-nguyen-binh-minh`).
+   */
+  @Get('athletes/:slug')
+  @ApiOperation({
+    summary: 'F-047 — Public athlete profile by URL slug (cross-race identity)',
+  })
+  @ApiParam({ name: 'slug', type: 'string', description: 'Athlete URL slug `<bib>-<name-kebab>`' })
+  @ApiResponse({ status: 200, type: AthleteProfileResponseDto })
+  @ApiResponse({ status: 404, description: 'Athlete profile not found' })
+  async getAthleteProfileBySlug(@Param('slug') slug: string) {
+    // service throws NotFoundException internally if slug invalid or profile inactive
+    return this.athleteProfileService.getProfile(slug);
+  }
 
   @Get('distances')
   @ApiOperation({ summary: 'Get available race distances/types' })

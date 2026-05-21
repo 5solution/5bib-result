@@ -2,12 +2,41 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { HttpModule } from '@nestjs/axios';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { RaceResult, RaceResultSchema } from './schemas/race-result.schema';
 import { SyncLog, SyncLogSchema } from './schemas/sync-log.schema';
 import { ResultClaim, ResultClaimSchema } from './schemas/result-claim.schema';
 import { ShareEvent, ShareEventSchema } from './schemas/share-event.schema';
 import { RaceResultController } from './race-result.controller';
 import { RaceResultService } from './services/race-result.service';
+// F-046 — Programmatic SEO Race Recap
+import { RaceRecapService } from './services/race-recap.service';
+import {
+  RaceRecapInsight,
+  RaceRecapInsightSchema,
+} from './schemas/race-recap-insight.schema';
+// F-047 — Athlete Profile Pages programmatic SEO
+import { AthleteProfileService } from './services/athlete-profile.service';
+// F-047 Phase 1B — Cross-race identity merge + photo upload + admin + cron + sitemap
+import {
+  AthleteProfile,
+  AthleteProfileSchema,
+} from './schemas/athlete-profile.schema';
+import {
+  AthletePhoto,
+  AthletePhotoSchema,
+} from './schemas/athlete-photo.schema';
+import { AthleteIdentityMergeService } from './services/athlete-identity-merge.service';
+import { AthletePhotoService } from './services/athlete-photo.service';
+import { AthleteProfileBackfillCron } from './cron/athlete-profile-backfill.cron';
+import { AthleteAdminController } from './admin/athlete-admin.controller';
+// F-047 RESUME — cluster + race schema registration for cross-module identity lookup
+import {
+  AthleteIdentityCluster,
+  AthleteIdentityClusterSchema,
+} from '../race-master-data/schemas/athlete-identity-cluster.schema';
+import { Race, RaceSchema } from '../races/schemas/race.schema';
+import { S3Client } from '@aws-sdk/client-s3';
 import { RaceResultApiService } from './services/race-result-api.service';
 import { ResultImageService } from './services/result-image.service';
 import { BadgeService } from './services/badge.service';
@@ -42,7 +71,24 @@ import {
       // F-010 BR-FC-10/11 — register TimingAlertConfig schema for read-only
       // pace_alert_threshold lookup in RaceResultService.getPaceAlertThreshold().
       { name: TimingAlertConfig.name, schema: TimingAlertConfigSchema },
+      // F-046 — Race recap insight (editorial 70/30 layer)
+      { name: RaceRecapInsight.name, schema: RaceRecapInsightSchema },
+      // F-047 Phase 1B — Athlete profile collection + photo collection
+      { name: AthleteProfile.name, schema: AthleteProfileSchema },
+      { name: AthletePhoto.name, schema: AthletePhotoSchema },
+      // F-047 RESUME — cluster + race cross-module read for identity merge.
+      // We re-register here (vs importing RaceMasterData/RacesModule for the
+      // schemas) because RacesModule already imported above provides services
+      // but does NOT re-export the @InjectModel(Race.name) token. Same pattern
+      // as TimingAlertConfig above for cross-module schema injection.
+      {
+        name: AthleteIdentityCluster.name,
+        schema: AthleteIdentityClusterSchema,
+      },
+      { name: Race.name, schema: RaceSchema },
     ]),
+    // F-047 Phase 1B — Cron scheduling for backfill
+    ScheduleModule.forRoot(),
     HttpModule,
     // Module-scoped throttler so @Throttle decorators on result-image /
     // share-count endpoints apply without colliding with other modules.
@@ -63,7 +109,7 @@ import {
     // F-029 HIGH-RR-01 — OptionalLogtoAuthGuard cho GET /race-results.
     LogtoAuthModule,
   ],
-  controllers: [RaceResultController],
+  controllers: [RaceResultController, AthleteAdminController],
   providers: [
     RaceResultApiService,
     RaceResultService,
@@ -72,6 +118,27 @@ import {
     RaceSyncCron,
     ShareEventService,
     ShareNurtureCron,
+    // F-046 — Race recap aggregation engine
+    RaceRecapService,
+    // F-047 — Athlete profile aggregation engine
+    AthleteProfileService,
+    // F-047 Phase 1B — Identity merge + photo + cron
+    AthleteIdentityMergeService,
+    AthletePhotoService,
+    AthleteProfileBackfillCron,
+    {
+      provide: S3Client,
+      useFactory: () =>
+        new S3Client({
+          region: process.env.AWS_REGION ?? 'ap-southeast-1',
+          credentials: process.env.AWS_ACCESS_KEY_ID
+            ? {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
+              }
+            : undefined,
+        }),
+    },
   ],
   // Phase 0 — export `RaceResultApiService` để Timing Alert module reuse
   // shared HTTP client (axios timeout, error handling, URL masking) thay vì
@@ -84,4 +151,4 @@ import {
     ShareEventService,
   ],
 })
-export class RaceResultModule { }
+export class RaceResultModule {}
