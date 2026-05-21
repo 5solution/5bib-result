@@ -27,7 +27,10 @@ import {
 } from '@/components/recap/InsightEditorial';
 import { StickyRecapNav } from '@/components/recap/StickyRecapNav';
 // F-056 scope expansion 2026-05-21 — Variation A enrich + Variation B body dashboard.
-import SpotlightWinCard from '@/components/recap/SpotlightWinCard';
+// SpotlightWinCard used via SpotlightSwitcher internally (no direct import here).
+import SpotlightSwitcher, {
+  type SpotlightSwitcherCourse,
+} from '@/components/recap/SpotlightSwitcher';
 import HeroStatTilesRow from '@/components/recap/HeroStatTilesRow';
 import HeroPhotoLayer from '@/components/recap/HeroPhotoLayer';
 import FinisherDistributionBars from '@/components/recap/FinisherDistributionBars';
@@ -391,6 +394,44 @@ export default async function RaceRecapPage({
   const longestPodium = longestCourseDist
     ? recap.podiums.find((p) => p.courseId === longestCourseDist.courseId)
     : recap.podiums[0];
+
+  // F-056 scope expansion 2026-05-21 — Danny mandate "công bằng + đổi cự ly":
+  // Build per-course Top1 NAM + Top1 NỮ data for SpotlightSwitcher tabs.
+  // Order: longest distance first (most prestigious as default visible).
+  const spotlightCourses: SpotlightSwitcherCourse[] = [...recap.podiums]
+    .sort((a, b) => {
+      const da = parseFloat((a.distance ?? '0').replace(',', '.'));
+      const db = parseFloat((b.distance ?? '0').replace(',', '.'));
+      return db - da;
+    })
+    .map((p) => {
+      const matchingPace = recap.paceStats.find(
+        (ps) => ps.courseId === p.courseId,
+      );
+      return {
+        courseId: p.courseId,
+        label: p.courseName ?? p.distance ?? p.courseId,
+        male: p.male[0]
+          ? {
+              name: p.male[0].name,
+              bib: p.male[0].bib,
+              chipTime: p.male[0].chipTime,
+              category: p.male[0].category,
+              city: p.male[0].city,
+            }
+          : undefined,
+        female: p.female[0]
+          ? {
+              name: p.female[0].name,
+              bib: p.female[0].bib,
+              chipTime: p.female[0].chipTime,
+              category: p.female[0].category,
+              city: p.female[0].city,
+            }
+          : undefined,
+        medianPace: matchingPace?.medianPace,
+      };
+    });
   const watermarkText =
     longestCourseDist?.distance != null
       ? `${longestCourseDist.distance.replace(',', '.')}K`
@@ -601,57 +642,25 @@ export default async function RaceRecapPage({
 
       {/* ═══ MAIN CONTENT ═══ */}
       <main className="max-w-7xl mx-auto px-6 md:px-8 pt-16 md:pt-20 pb-12 md:pb-16">
-        {/* ── SPOTLIGHT WIN (Variation A signature) ── */}
-        {longestPodium && (longestPodium.male[0] || longestPodium.female[0]) ? (
+        {/* ── SPOTLIGHT THE WIN (Variation A signature, gender-balanced) ──
+            Danny mandate 2026-05-21 "cân bằng + nút đổi cự ly": tab switcher
+            per course, 2 big cards (NAM + NỮ) cùng size — không bias gender. */}
+        {spotlightCourses.length > 0 ? (
           <section id="spotlight" className="mb-16 md:mb-20 scroll-mt-32">
             <SectionHeading
               number="00"
               eyebrow="Spotlight"
               title="THE WIN"
+              action={
+                <span
+                  className="font-mono text-[12px] text-stone-500"
+                  style={{ letterSpacing: '0.08em' }}
+                >
+                  TOP 1 NAM &middot; TOP 1 NỮ MỖI CỰ LY
+                </span>
+              }
             />
-            <div className="grid gap-6 md:gap-8 md:grid-cols-[1.6fr_1fr]">
-              {/* Big gold spotlight card — top male winner from longest course */}
-              {longestPodium.male[0] ? (
-                <SpotlightWinCard
-                  courseLabel={`OVERALL · NAM · ${longestPodium.distance ?? longestPodium.courseName}`}
-                  name={longestPodium.male[0].name}
-                  bib={longestPodium.male[0].bib}
-                  city={longestPodium.male[0].city}
-                  ageGroup={longestPodium.male[0].category}
-                  chipTime={longestPodium.male[0].chipTime}
-                  pace={firstPace?.medianPace}
-                />
-              ) : null}
-              {/* Right sidebar — Top 2 + Top 3 + Top 1 female (Hình 1 style) */}
-              <div className="grid gap-3 content-start">
-                {longestPodium.male.slice(1, 3).map((cell, i) => (
-                  <PodiumCard
-                    key={`m2-${i}`}
-                    rank={(i + 2) as 2 | 3}
-                    variant={cell.medal}
-                    size="sm"
-                    name={cell.name}
-                    bib={cell.bib}
-                    city={cell.city}
-                    ag={cell.category}
-                    chipTime={cell.chipTime}
-                  />
-                ))}
-                {longestPodium.female[0] ? (
-                  <PodiumCard
-                    key="f1"
-                    rank={1}
-                    variant="gold"
-                    size="sm"
-                    name={longestPodium.female[0].name}
-                    bib={longestPodium.female[0].bib}
-                    city={longestPodium.female[0].city}
-                    ag={longestPodium.female[0].category}
-                    chipTime={longestPodium.female[0].chipTime}
-                  />
-                ) : null}
-              </div>
-            </div>
+            <SpotlightSwitcher courses={spotlightCourses} defaultIndex={0} />
           </section>
         ) : null}
 
