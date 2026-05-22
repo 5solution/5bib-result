@@ -15,14 +15,24 @@
  * TC-58-08: MANUAL category uses manual_fee_per_ticket (not rate)
  * TC-58-09: Multi-race aggregate — orders mixed across races
  * TC-58-10: Idempotent — same input → same output
+ *
+ * Endpoint-level verdict coverage (F-058 BR-58-08/09 — added per QC rework 2026-05-22):
+ * TC-58-11: MATCH verdict       — analytics ≈ reconciliation (deltaPct ≤ 0.1%)
+ * TC-58-12: MINOR_DRIFT verdict — 0.1% < deltaPct < 1%
+ * TC-58-13: MAJOR_DRIFT verdict — deltaPct ≥ 1% (finance escalate)
+ * TC-58-14: NO_RECONCILIATION   — reconciliation chưa tạo cho period
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { getModelToken } from '@nestjs/mongoose';
+import { getDataSourceToken } from '@nestjs/typeorm';
 import { FeeService } from '../finance/services/fee.service';
 import { MerchantConfig } from '../merchant/schemas/merchant-config.schema';
+import { Reconciliation } from '../reconciliation/schemas/reconciliation.schema';
 import { OrderReadonly } from '../finance/entities/order-readonly.entity';
 import { Tenant } from '../merchant/entities/tenant.entity';
+import { AnalyticsService } from './analytics.service';
+import { ReconciliationService } from '../reconciliation/reconciliation.service';
 import type { OrderForFeeAggregate } from '../finance/dto/fee-aggregate.dto';
 
 describe('F-058 — FeeService.computeFeeForOrdersAggregate (Analytics cascade)', () => {
@@ -464,5 +474,160 @@ describe('F-058 — FeeService.computeFeeForOrdersAggregate (Analytics cascade)'
     });
 
     expect(r1).toEqual(r2);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// F-058 — AnalyticsService.getDiscrepancyCheck() endpoint verdict tests
+// (BR-58-08/09 — added per QC rework 2026-05-22)
+//
+// Thresholds (per analytics.service.ts:1226-1227):
+//   - MATCH        : |delta| ≤ 1000 VND  OR  |pct| ≤ 0.1%
+//   - MINOR_DRIFT  : 0.1% < pct < 1%
+//   - MAJOR_DRIFT  : pct ≥ 1%
+//   - NO_RECONCILIATION : reconCount === 0
+// ────────────────────────────────────────────────────────────────────────────
+describe('F-058 — AnalyticsService.getDiscrepancyCheck (4 verdict branches)', () => {
+  let analyticsService: AnalyticsService;
+  let reconciliationService: { getTotalsByTenantMonth: jest.Mock };
+  let feeService: { computeFeeForOrdersAggregate: jest.Mock };
+
+  function buildAnalyticsResult(totalFee: number) {
+    return {
+      totalServiceFee: totalFee,
+      totalManualFee: 0,
+      totalVat: 0,
+      totalFee,
+      feeSourceBreakdown: [],
+      appliedOverrides: [],
+      warnings: [],
+    };
+  }
+
+  function buildReconTotals(opts: { totalFee?: number; reconCount?: number }) {
+    return {
+      totalServiceFee: opts.totalFee ?? 0,
+      totalManualFee: 0,
+      totalVat: 0,
+      totalFee: opts.totalFee ?? 0,
+      totalNetGmv: 0,
+      reconCount: opts.reconCount ?? 1,
+      reconciliationIds: opts.reconCount && opts.reconCount > 0 ? ['recon-abc'] : [],
+    };
+  }
+
+  async function buildAnalyticsModule(opts: {
+    analyticsTotalFee: number;
+    reconTotalFee: number;
+    reconCount: number;
+  }) {
+    feeService = {
+      computeFeeForOrdersAggregate: jest
+        .fn()
+        .mockResolvedValue(buildAnalyticsResult(opts.analyticsTotalFee)),
+    };
+    reconciliationService = {
+      getTotalsByTenantMonth: jest.fn().mockResolvedValue(
+        buildReconTotals({
+          totalFee: opts.reconTotalFee,
+          reconCount: opts.reconCount,
+        }),
+      ),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AnalyticsService,
+        { provide: getDataSourceToken('platform'), useValue: { query: jest.fn().mockResolvedValue([]) } },
+        { provide: getModelToken(MerchantConfig.name), useValue: { findOne: jest.fn() } },
+        { provide: getModelToken(Reconciliation.name), useValue: { find: jest.fn() } },
+        { provide: 'default_IORedisModuleConnectionToken', useValue: { get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue('OK') } },
+        { provide: FeeService, useValue: feeService },
+        { provide: ReconciliationService, useValue: reconciliationService },
+      ],
+    }).compile();
+    return module.get(AnalyticsService);
+  }
+
+  // ─── TC-58-11 ──────────────────────────────────────────────────────────
+  it('TC-58-11 — MATCH verdict: analytics ≈ reconciliation (deltaPct ≤ 0.1%)', async () => {
+    // analytics 10,000,500 vs recon 10,000,000 → delta 500 VND, pct = 0.005% (≤ 0.1%)
+    analyticsService = await buildAnalyticsModule({
+      analyticsTotalFee: 10_000_500,
+      reconTotalFee: 10_000_000,
+      reconCount: 1,
+    });
+
+    const result = await analyticsService.getDiscrepancyCheck({
+      tenantId: 100,
+      month: '2026-04',
+    });
+
+    expect(result.verdict).toBe('MATCH');
+    expect(result.delta?.absVnd).toBe(500);
+    expect(result.delta?.pctOfReconciliation).toBeCloseTo(0.01, 2);
+    expect(result.thresholdAbsVnd).toBe(1000);
+    expect(result.thresholdPct).toBe(0.1);
+    expect(reconciliationService.getTotalsByTenantMonth).toHaveBeenCalledWith(100, '2026-04');
+  });
+
+  // ─── TC-58-12 ──────────────────────────────────────────────────────────
+  it('TC-58-12 — MINOR_DRIFT verdict: 0.1% < deltaPct < 1%', async () => {
+    // analytics 10,050,000 vs recon 10,000,000 → delta 50,000 VND, pct = 0.5% (in (0.1%, 1%))
+    analyticsService = await buildAnalyticsModule({
+      analyticsTotalFee: 10_050_000,
+      reconTotalFee: 10_000_000,
+      reconCount: 1,
+    });
+
+    const result = await analyticsService.getDiscrepancyCheck({
+      tenantId: 101,
+      month: '2026-04',
+    });
+
+    expect(result.verdict).toBe('MINOR_DRIFT');
+    expect(result.delta?.absVnd).toBe(50_000);
+    expect(result.delta?.pctOfReconciliation).toBeCloseTo(0.5, 2);
+  });
+
+  // ─── TC-58-13 ──────────────────────────────────────────────────────────
+  it('TC-58-13 — MAJOR_DRIFT verdict: deltaPct ≥ 1% (finance escalate)', async () => {
+    // analytics 10,500,000 vs recon 10,000,000 → delta 500,000 VND, pct = 5% (≥ 1%)
+    analyticsService = await buildAnalyticsModule({
+      analyticsTotalFee: 10_500_000,
+      reconTotalFee: 10_000_000,
+      reconCount: 1,
+    });
+
+    const result = await analyticsService.getDiscrepancyCheck({
+      tenantId: 102,
+      month: '2026-04',
+    });
+
+    expect(result.verdict).toBe('MAJOR_DRIFT');
+    expect(result.delta?.absVnd).toBe(500_000);
+    expect(result.delta?.pctOfReconciliation).toBeCloseTo(5, 2);
+    expect(result.reconciliationAggregate.reconCount).toBe(1);
+  });
+
+  // ─── TC-58-14 ──────────────────────────────────────────────────────────
+  it('TC-58-14 — NO_RECONCILIATION verdict: reconciliation chưa tạo cho period', async () => {
+    // reconCount = 0 → short-circuit verdict, delta = null
+    analyticsService = await buildAnalyticsModule({
+      analyticsTotalFee: 12_345_000,
+      reconTotalFee: 0,
+      reconCount: 0,
+    });
+
+    const result = await analyticsService.getDiscrepancyCheck({
+      tenantId: 103,
+      month: '2026-04',
+    });
+
+    expect(result.verdict).toBe('NO_RECONCILIATION');
+    expect(result.delta).toBeNull();
+    expect(result.reconciliationAggregate.reconCount).toBe(0);
+    expect(result.reconciliationAggregate.reconciliationIds).toEqual([]);
+    expect(result.analyticsAggregate.totalFee).toBe(12_345_000);
   });
 });

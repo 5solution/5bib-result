@@ -464,12 +464,9 @@ export class AnalyticsService {
         // Filter orders thuộc raceIds tránh tính fee thừa
         const scoped = orders.filter((o) => raceIds.includes(o.raceId));
         if (scoped.length === 0) continue;
-        const result = await this.feeService.computeFeeForOrdersAggregate(
-          tenantId,
-          scoped,
-          { from: periodWindow.from, to: periodWindow.to },
-        );
-        // Re-attribute per race: re-run aggregate per race ID
+        // Re-attribute per race: run aggregate per race ID. Outer-tenant
+        // aggregate was wasted work — only per-race totals are surfaced
+        // in the TopRaces response (each row has its own platformFee).
         for (const raceId of raceIds) {
           const raceOrders = scoped.filter((o) => o.raceId === raceId);
           if (raceOrders.length === 0) continue;
@@ -480,7 +477,6 @@ export class AnalyticsService {
           );
           feeByRace.set(raceId, subResult.totalFee);
         }
-        void result;
       }
 
       return rows.map((r: any) => {
