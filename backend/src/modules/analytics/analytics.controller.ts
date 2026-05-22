@@ -34,6 +34,11 @@ import {
   RefundCancelResponseDto,
 } from './dto/refund-cancel.dto';
 import { PeriodKind, CompareKind } from './services/period-resolver';
+// F-058 — Discrepancy check DTO
+import {
+  DiscrepancyCheckQueryDto,
+  DiscrepancyCheckResponseDto,
+} from './dto/analytics-discrepancy.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -230,5 +235,24 @@ export class AnalyticsController {
       to: q.to,
       raceId: q.raceId,
     });
+  }
+
+  // ─── F-058 — Discrepancy check (finance ad-hoc reconcile) ─────────────────
+
+  @Get('discrepancy-check')
+  @ApiOperation({
+    summary:
+      'F-058 BR-58-08 — Compare Analytics aggregate vs Reconciliation totals per (tenant, month)',
+    description:
+      'Finance team ad-hoc reconcile khi nghi ngờ Analytics dashboard lệch so với Reconciliation. Read-only, no cache.',
+  })
+  @ApiResponse({ status: 200, type: DiscrepancyCheckResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid tenantId/month params' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getDiscrepancyCheck(
+    @Query() query: DiscrepancyCheckQueryDto,
+  ): Promise<DiscrepancyCheckResponseDto> {
+    return this.analyticsService.getDiscrepancyCheck(query);
   }
 }

@@ -328,6 +328,81 @@ export class ReconciliationService {
     return configs.map((c) => c.tenantId);
   }
 
+  /**
+   * F-058 BR-58-08 — Aggregate Reconciliation totals per (tenantId, month) cho
+   * discrepancy-check endpoint.
+   *
+   * Match logic:
+   *   - tenant_id === tenantId
+   *   - period_start <= monthEnd AND period_end >= monthStart (overlap)
+   *   - status ∈ ['signed','reviewed','completed','sent'] (finalized only)
+   *
+   * Trả về tổng fee + GMV + danh sách _id của các doc đã aggregate.
+   * Read-only. Idempotent.
+   */
+  async getTotalsByTenantMonth(
+    tenantId: number,
+    month: string,
+  ): Promise<{
+    totalServiceFee: number;
+    totalManualFee: number;
+    totalVat: number;
+    totalFee: number;
+    totalNetGmv: number;
+    reconCount: number;
+    reconciliationIds: string[];
+  }> {
+    // Validate month YYYY-MM
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      throw new NotFoundException(`Invalid month format: ${month}`);
+    }
+    const { period_start, period_end } = this.parsePeriod(month);
+
+    // Aggregate reconciliations với period overlap tháng đó
+    const docs = await this.reconciliationModel
+      .find(
+        {
+          tenant_id: tenantId,
+          status: { $in: ['signed', 'reviewed', 'completed', 'sent'] },
+          period_start: { $lte: period_end },
+          period_end: { $gte: period_start },
+        },
+        {
+          _id: 1,
+          fee_amount: 1,
+          fee_vat_amount: 1,
+          manual_fee_amount: 1,
+          net_revenue: 1,
+        },
+      )
+      .lean()
+      .exec();
+
+    let totalServiceFee = 0;
+    let totalManualFee = 0;
+    let totalVat = 0;
+    let totalNetGmv = 0;
+    const ids: string[] = [];
+
+    for (const d of docs) {
+      totalServiceFee += Number(d.fee_amount ?? 0);
+      totalVat += Number(d.fee_vat_amount ?? 0);
+      totalManualFee += Number(d.manual_fee_amount ?? 0);
+      totalNetGmv += Number(d.net_revenue ?? 0);
+      ids.push(String((d as { _id: unknown })._id));
+    }
+
+    return {
+      totalServiceFee: Math.round(totalServiceFee),
+      totalManualFee: Math.round(totalManualFee),
+      totalVat: Math.round(totalVat),
+      totalFee: Math.round(totalServiceFee + totalManualFee + totalVat),
+      totalNetGmv: Math.round(totalNetGmv),
+      reconCount: docs.length,
+      reconciliationIds: ids,
+    };
+  }
+
   async findAll(filters: {
     tenant_id?: number;
     mysql_race_id?: number;

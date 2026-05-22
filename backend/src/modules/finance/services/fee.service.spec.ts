@@ -790,3 +790,59 @@ describe('F-040 FeeService.getFeeForContract', () => {
     expect(r.breakdown.selfCompute).toBeUndefined();
   });
 });
+
+// ─── F-058 — Performance benchmark for computeFeeForOrdersAggregate ────
+describe('F-058 FeeService.computeFeeForOrdersAggregate (perf)', () => {
+  it('TC-58-PERF — 5000 orders aggregate under 200ms (Tier 0 override + 50% pro-rate)', async () => {
+    const configModel = buildMerchantConfigModel({
+      tenantId: 999,
+      service_fee_rate: 5,
+      manual_fee_per_ticket: 5000,
+      fee_vat_rate: 10,
+      event_fee_overrides: [
+        {
+          raceId: 12345,
+          service_fee_rate: 7,
+          manual_fee_per_ticket: null,
+          fee_vat_rate: null,
+          effective_from: '2026-06-15',
+        },
+      ],
+    });
+    const svc = new FeeService(
+      null as never,
+      undefined,
+      null,
+      configModel as never,
+      null as never,
+    );
+
+    // Build 5000 orders mix: 4000 ORDINARY across 10 races, 1000 MANUAL
+    const orders = Array.from({ length: 5000 }, (_, i) => ({
+      id: i + 1,
+      raceId: 12345 + (i % 10),
+      totalPrice: 1_000_000,
+      totalDiscounts: 0,
+      orderCategory: i < 1000 ? 'MANUAL' : 'ORDINARY',
+      // 50% pre-effective_from, 50% post — exercise per-order pro-rate branch
+      createdAt: i % 2 === 0 ? '2026-06-10' : '2026-06-20',
+      manualTicketCount: i < 1000 ? 1 : undefined,
+    }));
+
+    const start = Date.now();
+    const result = await svc.computeFeeForOrdersAggregate(999, orders, {
+      from: '2026-06-01',
+      to: '2026-06-30',
+    });
+    const elapsed = Date.now() - start;
+
+    // Soft assertion — flaky CI tolerance. Threshold ample for 5000 orders.
+    // p95 baseline: ~50ms local. < 200ms = 4× headroom over PAUSE-58-09 2× budget.
+    expect(elapsed).toBeLessThan(200);
+    expect(result.totalFee).toBeGreaterThan(0);
+    // Sanity: 4000 ORDINARY → expect service_fee on 4000 × 1M = 4G GMV
+    expect(result.totalServiceFee).toBeGreaterThan(0);
+    // 1000 MANUAL × 1 ticket × 5000 (Tier 1, no override on manual) = 5,000,000
+    expect(result.totalManualFee).toBe(5_000_000);
+  });
+});

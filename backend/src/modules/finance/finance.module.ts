@@ -91,6 +91,6 @@ import { CostSuggestionsController } from './controllers/cost-suggestions.contro
     // its own consumers; both bindings query the same Mongo + MySQL.
     ReconciliationQueryService,
   ],
-  exports: [PnLService, CostItemsService],
+  exports: [PnLService, CostItemsService, FeeService],
 })
 export class FinanceModule {}

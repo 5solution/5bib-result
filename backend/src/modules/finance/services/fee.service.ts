@@ -27,6 +27,13 @@ import {
   SelfComputeSliceDto,
 } from '../dto/pnl-response.dto';
 import type { ContractDocument } from '../../contracts/schemas/contract.schema';
+// F-058 — Analytics aggregate fee DTO + interface
+import type {
+  AnalyticsFeeAggregateResultDto,
+  AppliedOverrideEntryDto,
+  FeeSourceBreakdownEntryDto,
+  OrderForFeeAggregate,
+} from '../dto/fee-aggregate.dto';
 
 /**
  * F-028 BR-PNL-04 + BR-PNL-22 — cross-DB MySQL platform pull cho TICKET_SALES.
@@ -1037,6 +1044,227 @@ export class FeeService {
     }
 
     return result;
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // F-058 — Analytics aggregate fee với Tier 0 cascade per-order pro-rate
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * F-058 BR-58-01..05 — Aggregate fee computation cho Analytics dashboard.
+   *
+   * Khác với `computeSelfFee()` (per-contract per-race period-level Tier 0
+   * check), method này nhận orders array đã pull sẵn từ Analytics service,
+   * apply per-order pro-rate (PAUSE-58-03 = C):
+   *   - `order.createdAt >= override.effective_from` → áp override
+   *   - else → áp default Tier 1
+   *
+   * Cascade 3-field independent (PAUSE-58-02 = A):
+   *   - service_fee_rate
+   *   - manual_fee_per_ticket (cho MANUAL category)
+   *   - fee_vat_rate
+   *
+   * Mỗi field tự cascade 4 tier (TIER 0 event override → TIER 1 merchant
+   * default → TIER 2 contract — ONLY rate, không có cho manual/vat — →
+   * TIER 3 platform default 5.5% / 5000 / 0).
+   *
+   * Read-only. Idempotent. KHÔNG side effect.
+   *
+   * **IMPORTANT:** Method này KHÔNG modify `computeSelfFee()` existing
+   * (F-040 + F-043 territory protected). Cascade logic được duplicate có chủ ý
+   * vì semantics khác (per-order vs per-period). Future refactor → F-059.
+   */
+  async computeFeeForOrdersAggregate(
+    tenantId: number,
+    orders: OrderForFeeAggregate[],
+    _period: { from: Date | string; to: Date | string },
+  ): Promise<AnalyticsFeeAggregateResultDto> {
+    void _period; // period đã được Analytics filter trước khi pass orders, giữ làm tham số docs
+
+    const warnings: string[] = [];
+
+    // 1. Load MerchantConfig 1 lần. Empty config → fallback Tier 3 (BR-58-15).
+    const config = this.merchantConfigModel
+      ? await this.merchantConfigModel.findOne({ tenantId }).lean().exec()
+      : null;
+
+    if (!config) {
+      warnings.push(
+        `MerchantConfig không tồn tại cho tenantId=${tenantId} — fallback Tier 3 platform default 5.5% / 5000 VND / 0% VAT`,
+      );
+      this.logger.warn(
+        `[F-058] MerchantConfig missing tenantId=${tenantId} — Tier 3 fallback applied`,
+      );
+    }
+
+    // 2. Tier 1 defaults
+    const defaultRate = config?.service_fee_rate ?? 5.5;
+    const defaultManual = config?.manual_fee_per_ticket ?? 5000;
+    const defaultVat = config?.fee_vat_rate ?? 0;
+
+    // 3. Build raceId → override map (Tier 0 lookup; per-field nullable)
+    const overrideByRace = new Map<number, {
+      service_fee_rate: number | null;
+      manual_fee_per_ticket: number | null;
+      fee_vat_rate: number | null;
+      effective_from: string;
+    }>();
+    for (const o of config?.event_fee_overrides ?? []) {
+      overrideByRace.set(o.raceId, {
+        service_fee_rate: o.service_fee_rate,
+        manual_fee_per_ticket: o.manual_fee_per_ticket,
+        fee_vat_rate: o.fee_vat_rate,
+        effective_from: o.effective_from,
+      });
+    }
+
+    // 4. Per-order cascade + pro-rate
+    let totalServiceFee = 0;
+    let totalManualFee = 0;
+    let totalVat = 0;
+    let totalNetGmv = 0;
+
+    const sourceCounter: Record<string, { totalFee: number; orderCount: number }> = {
+      event_override: { totalFee: 0, orderCount: 0 },
+      merchant_default: { totalFee: 0, orderCount: 0 },
+      contract_fallback: { totalFee: 0, orderCount: 0 },
+      platform_default: { totalFee: 0, orderCount: 0 },
+    };
+    const appliedOverridesSet = new Map<string, AppliedOverrideEntryDto>();
+
+    const fiveBibCats = FeeService.FIVE_BIB_CATEGORIES;
+
+    for (const order of orders) {
+      const orderDate =
+        order.createdAt instanceof Date
+          ? order.createdAt.toISOString().slice(0, 10)
+          : String(order.createdAt).slice(0, 10);
+
+      const override = overrideByRace.get(order.raceId);
+      const overrideEligible = !!override && override.effective_from <= orderDate;
+
+      // Per-field cascade (BR-58-02 independent)
+      // Rate (BR-58-02 row 1)
+      let appliedRate: number;
+      let rateSource: 'event_override' | 'merchant_default' | 'platform_default';
+      if (overrideEligible && override!.service_fee_rate != null) {
+        appliedRate = Number(override!.service_fee_rate);
+        rateSource = 'event_override';
+        const key = `${order.raceId}|service_fee_rate`;
+        if (!appliedOverridesSet.has(key)) {
+          appliedOverridesSet.set(key, {
+            raceId: order.raceId,
+            field: 'service_fee_rate',
+            value: appliedRate,
+            effectiveFrom: override!.effective_from,
+          });
+        }
+      } else if (config?.service_fee_rate != null) {
+        appliedRate = Number(defaultRate);
+        rateSource = 'merchant_default';
+      } else {
+        appliedRate = 5.5;
+        rateSource = 'platform_default';
+      }
+
+      // Manual fee per ticket (BR-58-02 row 2)
+      let appliedManualFee: number;
+      if (overrideEligible && override!.manual_fee_per_ticket != null) {
+        appliedManualFee = Number(override!.manual_fee_per_ticket);
+        const key = `${order.raceId}|manual_fee_per_ticket`;
+        if (!appliedOverridesSet.has(key)) {
+          appliedOverridesSet.set(key, {
+            raceId: order.raceId,
+            field: 'manual_fee_per_ticket',
+            value: appliedManualFee,
+            effectiveFrom: override!.effective_from,
+          });
+        }
+      } else {
+        appliedManualFee = defaultManual;
+      }
+
+      // VAT (BR-58-02 row 3)
+      let appliedVatRate: number;
+      if (overrideEligible && override!.fee_vat_rate != null) {
+        appliedVatRate = Number(override!.fee_vat_rate);
+        const key = `${order.raceId}|fee_vat_rate`;
+        if (!appliedOverridesSet.has(key)) {
+          appliedOverridesSet.set(key, {
+            raceId: order.raceId,
+            field: 'fee_vat_rate',
+            value: appliedVatRate,
+            effectiveFrom: override!.effective_from,
+          });
+        }
+      } else {
+        appliedVatRate = defaultVat;
+      }
+
+      // Compute fee per order
+      const cat = order.orderCategory;
+      const isManual = cat === 'MANUAL';
+      const is5bib = fiveBibCats.includes(cat);
+
+      let orderServiceFee = 0;
+      let orderManualFee = 0;
+      let orderVat = 0;
+      let orderNetGmv = 0;
+
+      if (is5bib) {
+        const netGmv = Math.max(
+          Number(order.totalPrice) - Number(order.totalDiscounts ?? 0),
+          0,
+        );
+        orderNetGmv = netGmv;
+        orderServiceFee = (netGmv * appliedRate) / 100;
+        orderVat = (orderServiceFee * appliedVatRate) / 100;
+      } else if (isManual) {
+        const tickets = Number(order.manualTicketCount ?? 0);
+        orderManualFee = tickets * appliedManualFee;
+        // MANUAL không có VAT trên fee theo F-043 BR-43-06 — VAT chỉ áp cho service_fee
+      }
+
+      totalServiceFee += orderServiceFee;
+      totalManualFee += orderManualFee;
+      totalVat += orderVat;
+      totalNetGmv += orderNetGmv;
+
+      // Source attribution — phân theo rate source (dominant cho 5BIB orders)
+      const orderFee = orderServiceFee + orderManualFee + orderVat;
+      const bucket = sourceCounter[rateSource];
+      bucket.totalFee += orderFee;
+      bucket.orderCount += 1;
+    }
+
+    // Round to integer VND
+    totalServiceFee = Math.round(totalServiceFee);
+    totalManualFee = Math.round(totalManualFee);
+    totalVat = Math.round(totalVat);
+    totalNetGmv = Math.round(totalNetGmv);
+    const totalFee = totalServiceFee + totalManualFee + totalVat;
+
+    const feeSourceBreakdown: FeeSourceBreakdownEntryDto[] = Object.entries(
+      sourceCounter,
+    )
+      .filter(([, v]) => v.orderCount > 0)
+      .map(([source, v]) => ({
+        source: source as FeeSourceBreakdownEntryDto['source'],
+        totalFee: Math.round(v.totalFee),
+        orderCount: v.orderCount,
+      }));
+
+    return {
+      tenantId,
+      totalServiceFee,
+      totalManualFee,
+      totalVat,
+      totalFee,
+      totalNetGmv,
+      feeSourceBreakdown,
+      appliedOverrides: Array.from(appliedOverridesSet.values()),
+      warnings,
+    };
   }
 }
 

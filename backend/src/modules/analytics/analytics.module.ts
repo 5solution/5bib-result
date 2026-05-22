@@ -22,6 +22,11 @@ import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsCron } from './analytics.cron';
 
+// F-058 — Import FinanceModule (export FeeService) + ReconciliationModule
+// (export ReconciliationService) for analytics fee cascade + discrepancy check.
+import { FinanceModule } from '../finance/finance.module';
+import { ReconciliationModule } from '../reconciliation/reconciliation.module';
+
 // F-026 services + cron
 import { RepeatAthleteService } from './services/repeat-athlete.service';
 import { MerchantChurnService } from './services/merchant-churn.service';
@@ -40,6 +45,9 @@ import { AnalyticsAggregatorCron } from './services/analytics-aggregator.cron';
       { name: ResultClaim.name, schema: ResultClaimSchema },
       { name: RaceResult.name, schema: RaceResultSchema },
     ]),
+    // F-058 — FeeService delegation + ReconciliationService for discrepancy-check
+    FinanceModule,
+    ReconciliationModule,
   ],
   controllers: [AnalyticsController],
   providers: [

@@ -817,15 +817,58 @@ export class MerchantService {
   /**
    * F-043 BR-43-14 — Flush event override cache key (TTL 3600s).
    * Pattern: `merchant:fee-overrides:<tenantId>`
+   *
+   * F-058 BR-58-06 — Extend flush thêm 6 analytics pattern qua scanStream
+   * (per conventions.md Pattern 1: Dual-pattern cache flush helper).
+   * Trigger trên POST/PUT/DELETE event override.
    */
   private async flushEventOverrideCache(tenantId: number): Promise<void> {
     if (!this.redis) return;
+
+    // F-043 — single-key DEL existing
     try {
       await this.redis.del(`merchant:fee-overrides:${tenantId}`);
     } catch (e) {
       this.logger.warn(
         `[F-043] flushEventOverrideCache fail tenantId=${tenantId}: ${(e as Error).message}`,
       );
+    }
+
+    // F-058 — 6 analytics pattern flush. Override mutation invalidates ALL
+    // analytics cache vì cascade Tier 0 ảnh hưởng aggregate per tenant.
+    const ANALYTICS_FLUSH_PATTERNS = [
+      'analytics:overview:*',
+      'analytics:daily:*',
+      'analytics:top-races:*',
+      'analytics:rev-by-cat:*',
+      'analytics:merchants:*',
+      'analytics:races:*',
+    ];
+    for (const pattern of ANALYTICS_FLUSH_PATTERNS) {
+      try {
+        const stream = (
+          this.redis as unknown as {
+            scanStream: (opts: { match: string; count: number }) => NodeJS.ReadableStream;
+          }
+        ).scanStream({ match: pattern, count: 200 });
+        const pipeline = this.redis.pipeline();
+        let count = 0;
+        await new Promise<void>((resolve, reject) => {
+          stream.on('data', (keys: string[]) => {
+            for (const k of keys) {
+              pipeline.del(k);
+              count++;
+            }
+          });
+          stream.on('end', () => resolve());
+          stream.on('error', (err: Error) => reject(err));
+        });
+        if (count > 0) await pipeline.exec();
+      } catch (e) {
+        this.logger.warn(
+          `[F-058] flush ${pattern} fail tenantId=${tenantId}: ${(e as Error).message}`,
+        );
+      }
     }
   }
 }

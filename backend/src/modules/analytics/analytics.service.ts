@@ -18,6 +18,14 @@ import {
   ReconciliationDocument,
 } from '../reconciliation/schemas/reconciliation.schema';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto';
+import { FeeService } from '../finance/services/fee.service';
+import type { OrderForFeeAggregate } from '../finance/dto/fee-aggregate.dto';
+import { ReconciliationService } from '../reconciliation/reconciliation.service';
+import {
+  DiscrepancyCheckQueryDto,
+  DiscrepancyCheckResponseDto,
+  DiscrepancyVerdict,
+} from './dto/analytics-discrepancy.dto';
 
 /** Current month: 15 min. Historical months: 24 h (data doesn't change). */
 const TTL_CURRENT = 900;   // 15 minutes
@@ -45,6 +53,10 @@ export class AnalyticsService {
     @InjectModel(Reconciliation.name)
     private readonly reconciliationModel: Model<ReconciliationDocument>,
     @InjectRedis() private readonly redis: Redis,
+    // F-058 — Delegate fee cascade to FeeService (PAUSE-58-01 = A)
+    private readonly feeService: FeeService,
+    // F-058 — Reconciliation aggregate for discrepancy-check (PAUSE-58-08 = A)
+    private readonly reconciliationService: ReconciliationService,
   ) {}
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -116,18 +128,104 @@ export class AnalyticsService {
     return { clause: '', params: [] };
   }
 
-  private async getFeeConfigs(): Promise<
-    Map<number, { fee_rate: number; manual_fee: number }>
-  > {
-    const configs = await this.configModel.find({}).lean().exec();
-    const map = new Map<number, { fee_rate: number; manual_fee: number }>();
-    for (const c of configs) {
-      map.set(c.tenantId, {
-        fee_rate: c.service_fee_rate ?? 5.5,
-        manual_fee: c.manual_fee_per_ticket ?? 5000,
-      });
+  // F-058 — `getFeeConfigs()` DELETED. Was Tier 1 only — bypassed F-043 Tier 0
+  // event override cascade. All call sites now use `feeService.computeFeeForOrdersAggregate()`
+  // which applies full 4-tier cascade + per-order pro-rate.
+
+  /**
+   * F-058 helper — Resolve period boundary (YYYY-MM-DD) from AnalyticsQueryDto
+   * for fee aggregate calls. Defaults: month → first/last day; from/to → as-is.
+   */
+  private resolvePeriodWindow(query: AnalyticsQueryDto): { from: string; to: string } {
+    if (query.month) {
+      const [year, mon] = query.month.split('-').map(Number);
+      const start = `${year}-${String(mon).padStart(2, '0')}-01`;
+      const lastDay = new Date(Date.UTC(year, mon, 0)).getUTCDate();
+      const end = `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      return { from: start, to: end };
     }
-    return map;
+    if (query.from || query.to) {
+      return {
+        from: query.from ?? '1970-01-01',
+        to: query.to ?? new Date().toISOString().slice(0, 10),
+      };
+    }
+    return {
+      from: new Date().toISOString().slice(0, 7) + '-01',
+      to: new Date().toISOString().slice(0, 10),
+    };
+  }
+
+  /**
+   * F-058 helper — Pull orders raw từ MySQL group by (tenant, race) cho 1 period.
+   * Trả về Map<tenantId, OrderForFeeAggregate[]> để feed `computeFeeForOrdersAggregate`.
+   *
+   * Hint scope: optional `tenantId` filter + optional `raceId` filter để giới
+   * hạn query size (TopRaces, RaceDetail).
+   */
+  private async pullOrdersForFeeAggregate(
+    clause: string,
+    params: any[],
+    filter?: { tenantId?: number; raceId?: number },
+  ): Promise<Map<number, OrderForFeeAggregate[]>> {
+    const whereClause = clause ? `AND ${clause}` : '';
+    const extraConds: string[] = [];
+    const extraParams: any[] = [];
+    if (filter?.tenantId) {
+      extraConds.push('r.tenant_id = ?');
+      extraParams.push(filter.tenantId);
+    }
+    if (filter?.raceId) {
+      extraConds.push('om.race_id = ?');
+      extraParams.push(filter.raceId);
+    }
+    const extraWhere = extraConds.length > 0 ? `AND ${extraConds.join(' AND ')}` : '';
+
+    const rows: Array<{
+      id: number;
+      tenant_id: number;
+      race_id: number;
+      total_price: string | number;
+      total_discounts: string | number | null;
+      order_category: string;
+      created_at: Date | string;
+      manual_ticket_count: string | number | null;
+    }> = await this.db.query(
+      `SELECT
+        om.id,
+        r.tenant_id,
+        om.race_id,
+        om.total_price,
+        om.total_discounts,
+        om.order_category,
+        om.created_at,
+        oli_agg.total_quantity AS manual_ticket_count
+      FROM order_metadata om
+      JOIN races r ON r.race_id = om.race_id
+      LEFT JOIN (
+        SELECT order_id, SUM(quantity) AS total_quantity
+        FROM order_line_item GROUP BY order_id
+      ) oli_agg ON oli_agg.order_id = om.id
+      WHERE om.financial_status = 'paid' ${whereClause} ${extraWhere}`,
+      [...params, ...extraParams],
+    );
+
+    const byTenant = new Map<number, OrderForFeeAggregate[]>();
+    for (const r of rows) {
+      const tid = Number(r.tenant_id);
+      const arr = byTenant.get(tid) ?? [];
+      arr.push({
+        id: Number(r.id),
+        raceId: Number(r.race_id),
+        totalPrice: Number(r.total_price ?? 0),
+        totalDiscounts: Number(r.total_discounts ?? 0),
+        orderCategory: r.order_category,
+        createdAt: r.created_at,
+        manualTicketCount: r.manual_ticket_count != null ? Number(r.manual_ticket_count) : undefined,
+      });
+      byTenant.set(tid, arr);
+    }
+    return byTenant;
   }
 
   private monthShift(month: string, delta: number): string {
@@ -211,33 +309,20 @@ export class AnalyticsService {
       `SELECT COUNT(*) as open_races FROM races WHERE status = 'GENERATED_CODE' AND is_delete = 0`,
     );
 
-    // 6. Platform fee — per-tenant GMV × service_fee_rate + MANUAL tickets × manual_fee
-    const tenantGmvRows = await this.db.query(
-      `SELECT r.tenant_id,
-        SUM(CASE WHEN om.order_category != 'MANUAL'
-          THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END) as net_gmv,
-        SUM(CASE WHEN om.order_category = 'MANUAL'
-          THEN IFNULL(oli_agg.total_quantity, 0) ELSE 0 END) as manual_tickets
-      FROM order_metadata om
-      JOIN races r ON r.race_id = om.race_id
-      LEFT JOIN (
-        SELECT order_id, SUM(quantity) as total_quantity
-        FROM order_line_item GROUP BY order_id
-      ) oli_agg ON oli_agg.order_id = om.id
-      WHERE om.financial_status = 'paid' AND ${curClause}
-      GROUP BY r.tenant_id`,
-      curParams,
-    );
+    // 6. Platform fee — F-058: delegate FeeService với Tier 0 cascade per-order
+    // pro-rate. Pull orders raw → group by tenant → call computeFeeForOrdersAggregate
+    // per tenant (sequential giữ memory + Mongo connection budget).
+    const ordersByTenant = await this.pullOrdersForFeeAggregate(curClause, curParams);
+    const periodWindow = this.resolvePeriodWindow({ month } as AnalyticsQueryDto);
 
-    const feeConfigs = await this.getFeeConfigs();
     let platformFee = 0;
-    for (const row of tenantGmvRows) {
-      const cfg = feeConfigs.get(Number(row.tenant_id)) ?? {
-        fee_rate: 5.5,
-        manual_fee: 5000,
-      };
-      platformFee += (Number(row.net_gmv) * cfg.fee_rate) / 100;
-      platformFee += Number(row.manual_tickets) * cfg.manual_fee;
+    for (const [tenantId, orders] of ordersByTenant) {
+      const result = await this.feeService.computeFeeForOrdersAggregate(
+        tenantId,
+        orders,
+        { from: periodWindow.from, to: periodWindow.to },
+      );
+      platformFee += result.totalFee;
     }
 
     // 7. Pending reconciliations from MongoDB
@@ -363,23 +448,53 @@ export class AnalyticsService {
         [...params, limit],
       );
 
-      const feeConfigs = await this.getFeeConfigs();
+      // F-058 — per-race fee via FeeService Tier 0 cascade. Pull orders cho
+      // tất cả race trong top list, group by (tenant, race) → call FeeService.
+      const periodWindow = this.resolvePeriodWindow(query);
+      const raceIds = rows.map((r: any) => Number(r.race_id));
+
+      // Per-tenant aggregate map: tenantId → tenantOrders[]
+      const ordersByTenant = raceIds.length > 0
+        ? await this.pullOrdersForFeeAggregate(clause, params)
+        : new Map<number, OrderForFeeAggregate[]>();
+
+      // Per-race fee map: raceId → platformFee
+      const feeByRace = new Map<number, number>();
+      for (const [tenantId, orders] of ordersByTenant) {
+        // Filter orders thuộc raceIds tránh tính fee thừa
+        const scoped = orders.filter((o) => raceIds.includes(o.raceId));
+        if (scoped.length === 0) continue;
+        const result = await this.feeService.computeFeeForOrdersAggregate(
+          tenantId,
+          scoped,
+          { from: periodWindow.from, to: periodWindow.to },
+        );
+        // Re-attribute per race: re-run aggregate per race ID
+        for (const raceId of raceIds) {
+          const raceOrders = scoped.filter((o) => o.raceId === raceId);
+          if (raceOrders.length === 0) continue;
+          const subResult = await this.feeService.computeFeeForOrdersAggregate(
+            tenantId,
+            raceOrders,
+            { from: periodWindow.from, to: periodWindow.to },
+          );
+          feeByRace.set(raceId, subResult.totalFee);
+        }
+        void result;
+      }
 
       return rows.map((r: any) => {
-        const cfg = feeConfigs.get(Number(r.tenant_id)) ?? {
-          fee_rate: 5.5,
-          manual_fee: 5000,
-        };
+        const raceId = Number(r.race_id);
         const netGmv = Number(r.net_gmv);
         return {
-          raceId: Number(r.race_id),
+          raceId,
           raceName: r.race_name,
           tenantName: r.tenant_name,
           raceType: r.race_type,
           orderCount: Number(r.order_count),
           grossGmv: Number(r.gross_gmv),
           netGmv,
-          platformFee: Math.round((netGmv * cfg.fee_rate) / 100),
+          platformFee: feeByRace.get(raceId) ?? 0,
         };
       });
     });
@@ -510,21 +625,36 @@ export class AnalyticsService {
     );
     const total = Number(countRows[0]?.total ?? 0);
 
-    const feeConfigs = await this.getFeeConfigs();
+    // F-058 — per-race fee via FeeService Tier 0 cascade
+    const periodWindow = this.resolvePeriodWindow(query);
+    const raceIds = rows.map((r: any) => Number(r.race_id));
+    const ordersByTenant = raceIds.length > 0
+      ? await this.pullOrdersForFeeAggregate(clause, params)
+      : new Map<number, OrderForFeeAggregate[]>();
+    const feeByRace = new Map<number, number>();
+    for (const [tenantId, orders] of ordersByTenant) {
+      for (const raceId of raceIds) {
+        const raceOrders = orders.filter((o) => o.raceId === raceId);
+        if (raceOrders.length === 0) continue;
+        const result = await this.feeService.computeFeeForOrdersAggregate(
+          tenantId,
+          raceOrders,
+          { from: periodWindow.from, to: periodWindow.to },
+        );
+        feeByRace.set(raceId, result.totalFee);
+      }
+    }
 
     const data = rows.map((r: any) => {
-      const cfg = feeConfigs.get(Number(r.tenant_id)) ?? {
-        fee_rate: 5.5,
-        manual_fee: 5000,
-      };
       const paidOrders = Number(r.paid_orders);
       const voidedOrders = Number(r.voided_orders);
-      const total = paidOrders + voidedOrders;
+      const totalRow = paidOrders + voidedOrders;
       const netGmv = Number(r.net_gmv);
       const grossGmv = Number(r.gross_gmv);
+      const raceId = Number(r.race_id);
 
       return {
-        raceId: Number(r.race_id),
+        raceId,
         raceName: r.race_name,
         tenantName: r.tenant_name,
         tenantId: Number(r.tenant_id),
@@ -536,10 +666,10 @@ export class AnalyticsService {
         uniqueRunners: Number(r.unique_runners),
         grossGmv,
         netGmv,
-        platformFee: Math.round((netGmv * cfg.fee_rate) / 100),
+        platformFee: feeByRace.get(raceId) ?? 0,
         avgOrderValue: paidOrders > 0 ? Math.round(grossGmv / paidOrders) : 0,
         voidedRate:
-          total > 0 ? Math.round((voidedOrders / total) * 10000) / 100 : 0,
+          totalRow > 0 ? Math.round((voidedOrders / totalRow) * 10000) / 100 : 0,
       };
     });
 
@@ -634,10 +764,30 @@ export class AnalyticsService {
       ),
     ]);
 
-    const feeConfigs = await this.getFeeConfigs();
+    // F-058 — Tier 0 cascade fee via FeeService for this specific race
     const tenantId = Number(summary.tenant_id);
-    const cfg = feeConfigs.get(tenantId) ?? { fee_rate: 5.5, manual_fee: 5000 };
     const netGmv = Number(summary.net_gmv);
+    const periodWindow = this.resolvePeriodWindow(query);
+    const ordersByTenant = await this.pullOrdersForFeeAggregate(
+      clause,
+      params,
+      { tenantId, raceId },
+    );
+    const orders = ordersByTenant.get(tenantId) ?? [];
+    const feeResult = await this.feeService.computeFeeForOrdersAggregate(
+      tenantId,
+      orders,
+      { from: periodWindow.from, to: periodWindow.to },
+    );
+
+    // Compute effective rate for legacy `feeRate` field
+    // (best-effort: derive from result; fallback to MerchantConfig.service_fee_rate)
+    const config = await this.configModel.findOne({ tenantId }).lean().exec();
+    const fallbackRate = config?.service_fee_rate ?? 5.5;
+    // If only 1 source detected → use that source's effective rate; else fall back
+    const effectiveRate =
+      feeResult.appliedOverrides.find((o) => o.field === 'service_fee_rate')?.value ??
+      fallbackRate;
 
     return {
       raceId: Number(summary.race_id),
@@ -655,8 +805,8 @@ export class AnalyticsService {
       uniqueRunners: Number(summary.unique_runners),
       grossGmv: Number(summary.gross_gmv),
       netGmv,
-      platformFee: Math.round((netGmv * cfg.fee_rate) / 100),
-      feeRate: cfg.fee_rate,
+      platformFee: feeResult.totalFee,
+      feeRate: effectiveRate,
       categoryBreakdown: categoryRows.map((r: any) => ({
         category: r.order_category,
         orderCount: Number(r.order_count),
@@ -721,30 +871,53 @@ export class AnalyticsService {
         params,
       );
 
-      const feeConfigs = await this.getFeeConfigs();
+      // F-058 — per-tenant fee via FeeService Tier 0 cascade
+      const periodWindow = this.resolvePeriodWindow(query);
+      const ordersByTenant = await this.pullOrdersForFeeAggregate(clause, params);
+      const feeByTenant = new Map<number, { totalFee: number; rate: number }>();
+      // Per-tenant MerchantConfig lookup cho `feeRate` display field (default rate)
+      const tenantIds = rows.map((r: any) => Number(r.tenant_id));
+      const configs = await this.configModel
+        .find({ tenantId: { $in: tenantIds } })
+        .lean()
+        .exec();
+      const configMap = new Map<number, { rate: number }>();
+      for (const c of configs) {
+        configMap.set(c.tenantId, { rate: c.service_fee_rate ?? 5.5 });
+      }
+
+      for (const [tenantId, orders] of ordersByTenant) {
+        const result = await this.feeService.computeFeeForOrdersAggregate(
+          tenantId,
+          orders,
+          { from: periodWindow.from, to: periodWindow.to },
+        );
+        feeByTenant.set(tenantId, {
+          totalFee: result.totalFee,
+          rate: configMap.get(tenantId)?.rate ?? 5.5,
+        });
+      }
 
       return rows.map((r: any) => {
-        const cfg = feeConfigs.get(Number(r.tenant_id)) ?? {
-          fee_rate: 5.5,
-          manual_fee: 5000,
-        };
+        const tenantId = Number(r.tenant_id);
         const paidOrders = Number(r.paid_orders);
         const voidedOrders = Number(r.voided_orders);
-        const total = paidOrders + voidedOrders;
+        const totalRow = paidOrders + voidedOrders;
         const grossGmv = Number(r.gross_gmv);
         const netGmv = Number(r.net_gmv);
         const manualOrders = Number(r.manual_orders);
+        const feeEntry = feeByTenant.get(tenantId);
 
         return {
-          tenantId: Number(r.tenant_id),
+          tenantId,
           merchantName: r.merchant_name,
-          feeRate: cfg.fee_rate,
+          feeRate: feeEntry?.rate ?? configMap.get(tenantId)?.rate ?? 5.5,
           raceCount: Number(r.race_count),
           paidOrders,
           voidedOrders,
           grossGmv,
           netGmv,
-          platformFee: Math.round((netGmv * cfg.fee_rate) / 100),
+          platformFee: feeEntry?.totalFee ?? 0,
           manualOrders,
           manualOrderPct:
             paidOrders > 0
@@ -752,7 +925,7 @@ export class AnalyticsService {
               : 0,
           avgOrderValue: paidOrders > 0 ? Math.round(grossGmv / paidOrders) : 0,
           voidedRate:
-            total > 0 ? Math.round((voidedOrders / total) * 10000) / 100 : 0,
+            totalRow > 0 ? Math.round((voidedOrders / totalRow) * 10000) / 100 : 0,
           lastOrderDate: r.last_order_date,
         };
       });
@@ -1007,5 +1180,105 @@ export class AnalyticsService {
         })),
       };
     });
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // F-058 — Discrepancy check endpoint (BR-58-08)
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * F-058 BR-58-08/09/17 — Compare Analytics aggregate vs Reconciliation totals
+   * for finance team ad-hoc reconcile. Read-only, no cache, idempotent.
+   *
+   * Verdict thresholds (BR-58-09):
+   *   - MATCH        : abs(delta) <= 1000 VND OR abs(pct) <= 0.1%
+   *   - MINOR_DRIFT  : pct between 0.1% and 1%
+   *   - MAJOR_DRIFT  : pct >= 1% (suspect bug)
+   *   - NO_RECONCILIATION : no reconciliation doc tháng đó
+   */
+  async getDiscrepancyCheck(
+    query: DiscrepancyCheckQueryDto,
+  ): Promise<DiscrepancyCheckResponseDto> {
+    const { tenantId, month } = query;
+    const periodWindow = this.resolvePeriodWindow({ month } as AnalyticsQueryDto);
+
+    // 1. Analytics aggregate via FeeService Tier 0 cascade
+    const { clause, params } = this.buildDateFilter(undefined, undefined, month);
+    const ordersByTenant = await this.pullOrdersForFeeAggregate(
+      clause,
+      params,
+      { tenantId },
+    );
+    const orders = ordersByTenant.get(tenantId) ?? [];
+    const analyticsResult = await this.feeService.computeFeeForOrdersAggregate(
+      tenantId,
+      orders,
+      { from: periodWindow.from, to: periodWindow.to },
+    );
+
+    // 2. Reconciliation totals
+    const reconTotals = await this.reconciliationService.getTotalsByTenantMonth(
+      tenantId,
+      month,
+    );
+
+    // 3. Compute delta + verdict
+    const THRESHOLD_ABS_VND = 1000;
+    const THRESHOLD_PCT = 0.1;
+
+    let delta: { absVnd: number; pctOfReconciliation: number | null } | null = null;
+    let verdict: DiscrepancyVerdict;
+
+    if (reconTotals.reconCount === 0) {
+      verdict = 'NO_RECONCILIATION';
+    } else {
+      const absVnd = analyticsResult.totalFee - reconTotals.totalFee;
+      const pct =
+        reconTotals.totalFee > 0
+          ? Math.round((Math.abs(absVnd) / reconTotals.totalFee) * 10000) / 100
+          : null;
+      delta = {
+        absVnd,
+        pctOfReconciliation:
+          pct != null
+            ? // preserve sign for direction
+              absVnd < 0
+              ? -pct
+              : pct
+            : null,
+      };
+      const absPct = pct ?? 0;
+      if (Math.abs(absVnd) <= THRESHOLD_ABS_VND || absPct <= THRESHOLD_PCT) {
+        verdict = 'MATCH';
+      } else if (absPct < 1) {
+        verdict = 'MINOR_DRIFT';
+      } else {
+        verdict = 'MAJOR_DRIFT';
+      }
+    }
+
+    return {
+      tenantId,
+      month,
+      analyticsAggregate: {
+        totalServiceFee: analyticsResult.totalServiceFee,
+        totalManualFee: analyticsResult.totalManualFee,
+        totalVat: analyticsResult.totalVat,
+        totalFee: analyticsResult.totalFee,
+      },
+      reconciliationAggregate: {
+        totalServiceFee: reconTotals.totalServiceFee,
+        totalManualFee: reconTotals.totalManualFee,
+        totalVat: reconTotals.totalVat,
+        totalFee: reconTotals.totalFee,
+        totalNetGmv: reconTotals.totalNetGmv,
+        reconCount: reconTotals.reconCount,
+        reconciliationIds: reconTotals.reconciliationIds,
+      },
+      delta,
+      verdict,
+      thresholdAbsVnd: THRESHOLD_ABS_VND,
+      thresholdPct: THRESHOLD_PCT,
+    };
   }
 }
