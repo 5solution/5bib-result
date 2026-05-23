@@ -844,7 +844,20 @@ export class MerchantService {
       'analytics:merchants:*',
       'analytics:races:*',
     ];
-    for (const pattern of ANALYTICS_FLUSH_PATTERNS) {
+    // F-059 — 2 dashboard pattern flush. Override mutation invalidates KPI
+    // (TTL 60s `dashboard:kpi:mtd`) + sparkline (TTL 3600s
+    // `dashboard:sparkline:30d`) vì cascade Tier 0 ảnh hưởng admin homepage.
+    const DASHBOARD_FLUSH_PATTERNS = [
+      'dashboard:kpi:*',
+      'dashboard:sparkline:*',
+    ];
+    const ALL_FLUSH_PATTERNS = [
+      ...ANALYTICS_FLUSH_PATTERNS,
+      ...DASHBOARD_FLUSH_PATTERNS,
+    ];
+    for (const pattern of ALL_FLUSH_PATTERNS) {
+      const isDashboard = pattern.startsWith('dashboard:');
+      const logPrefix = isDashboard ? '[F-059]' : '[F-058]';
       try {
         const stream = (
           this.redis as unknown as {
@@ -866,7 +879,7 @@ export class MerchantService {
         if (count > 0) await pipeline.exec();
       } catch (e) {
         this.logger.warn(
-          `[F-058] flush ${pattern} fail tenantId=${tenantId}: ${(e as Error).message}`,
+          `${logPrefix} flush ${pattern} fail tenantId=${tenantId}: ${(e as Error).message}`,
         );
       }
     }

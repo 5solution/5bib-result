@@ -11,7 +11,12 @@ import {
   Reconciliation,
   ReconciliationSchema,
 } from '../reconciliation/schemas/reconciliation.schema';
+import {
+  MerchantConfig,
+  MerchantConfigSchema,
+} from '../merchant/schemas/merchant-config.schema';
 import { AuditModule } from '../audit/audit.module';
+import { FinanceModule } from '../finance/finance.module';
 import { DashboardController } from './dashboard.controller';
 import { DashboardKpiService } from './services/kpi.service';
 import { DashboardSparklineService } from './services/sparkline.service';
@@ -39,7 +44,11 @@ import { DashboardAggregatorCron } from './services/dashboard-aggregator.cron';
       { name: Race.name, schema: RaceSchema },
       { name: ResultClaim.name, schema: ResultClaimSchema },
       { name: Reconciliation.name, schema: ReconciliationSchema },
+      // F-059 — MerchantConfig pre-load for sparkline 30-day cascade fee
+      { name: MerchantConfig.name, schema: MerchantConfigSchema },
     ]),
+    // F-059 — FeeService.computeFeeForOrdersAggregate() delegation (F-058 reuse)
+    FinanceModule,
   ],
   controllers: [DashboardController],
   providers: [

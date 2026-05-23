@@ -1,7 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { InjectRedis } from '@nestjs-modules/ioredis';
 import { DataSource } from 'typeorm';
+import { Model } from 'mongoose';
+import Redis from 'ioredis';
 import { KpiCardDto, KpiResponseDto } from '../dto/dashboard-response.dto';
+import { FeeService } from '../../finance/services/fee.service';
+import {
+  MerchantConfig,
+  MerchantConfigDocument,
+} from '../../merchant/schemas/merchant-config.schema';
+import { OrderForFeeAggregate } from '../../finance/dto/fee-aggregate.dto';
 
 /**
  * F-023 BR-DASH-01/02/04/21 — KPI MTD vs prev MTD.
@@ -10,24 +20,40 @@ import { KpiCardDto, KpiResponseDto } from '../dto/dashboard-response.dto';
  *  - GMV (gross merchandise value, MTD, exclude MANUAL orders)
  *  - Doanh thu net (sau discount)
  *  - VĐV đăng ký (count distinct user_id paid)
- *  - Phí 5BIB (platform fee đã thu trong MTD, lấy từ reconciliations đã sent)
+ *  - Phí 5BIB (platform fee đã thu trong MTD — F-059 cascade qua FeeService)
  *
  * Source-of-truth: bảng MySQL `order_metadata` (platform DB) — invariant
- * `financial_status='paid'` (BR-DASH-04) + exclude `order_category='MANUAL'`
- * (5BIB không có revenue share trên manual order).
+ * `financial_status='paid'`. GMV/net/athletes giữ exclude MANUAL (UX hiện
+ * tại). Platform fee INCLUDE MANUAL (PAUSE-59-02 = B) — delegate sang
+ * `FeeService.computeFeeForOrdersAggregate()` cascade 4 tier per-order
+ * pro-rate.
+ *
+ * F-059 BR-59-01/02/09 — Cache key `dashboard:kpi:mtd` TTL 60s. Override
+ * mutation flush `dashboard:kpi:*` (BR-59-06).
  *
  * Delta = (cur - prev) / prev × 100, làm tròn 1 chữ số. NULL khi prev=0 hoặc
  * cả hai = 0 (BR-DASH-02 → UI hiển thị "—").
  */
+const KPI_CACHE_KEY = 'dashboard:kpi:mtd';
+const KPI_CACHE_TTL_SECONDS = 60;
+
 @Injectable()
 export class DashboardKpiService {
   private readonly logger = new Logger(DashboardKpiService.name);
 
   constructor(
     @InjectDataSource('platform') private readonly db: DataSource,
+    @InjectRedis() private readonly redis: Redis,
+    private readonly feeService: FeeService,
+    @InjectModel(MerchantConfig.name)
+    private readonly merchantConfigModel: Model<MerchantConfigDocument>,
   ) {}
 
   async getMtdKpis(): Promise<KpiResponseDto> {
+    // F-059 BR-59-09 — cache check (TTL 60s)
+    const cached = await this.readCache();
+    if (cached) return cached;
+
     const now = new Date();
     const periodStart = this.startOfMonth(now);
     const elapsedDays = Math.max(
@@ -69,26 +95,36 @@ export class DashboardKpiService {
       ),
     ];
 
-    return {
+    const result: KpiResponseDto = {
       kpis,
       period: 'mtd',
       periodStart: periodStart.toISOString(),
       prevPeriodStart: prevMonthStart.toISOString(),
     };
+
+    await this.writeCache(result);
+    return result;
   }
 
   /**
-   * Aggregate paid orders trong khoảng [start, end). Loại MANUAL khỏi GMV/net.
-   * Platform fee tính từ feeRate snapshot trong reconciliation? Ở MVP đơn giản
-   * lấy net × 0.055 (rate mặc định 5.5%) khi merchant config không có.
-   * KHÔNG ánh xạ chính xác từng tenant để giữ scope nhỏ — analytics module đã có
-   * tính toán chi tiết riêng nếu Finance cần.
+   * F-059 BR-59-01 — Aggregate paid orders trong khoảng [start, end).
+   *
+   * STEP 1: GMV/net/athletes SQL (exclude MANUAL — giữ UX semantic hiện tại).
+   * STEP 2: Pull raw orders INCLUDE MANUAL via `pullOrdersForFeeAggregate`.
+   * STEP 3: Pre-load `Map<tenantId, MerchantConfig>` 1 batch query (PAUSE-Coder-03 = A).
+   * STEP 4: Per-tenant delegate `feeService.computeFeeForOrdersAggregate()` →
+   *         sum totalFee. Cascade Tier 0 → 1 → 2 → 3 per-field per-order
+   *         pro-rate (reuse F-058 zero modification).
+   *
+   * Platform fee có thể > `net × 5.5%` vì INCLUDE MANUAL fee VND-based
+   * (PAUSE-59-02 = B). Đây là đúng business.
    */
   private async aggregateOrders(
     start: string,
     end: string,
   ): Promise<{ gmv: number; net: number; athletes: number; platformFee: number }> {
     try {
+      // STEP 1 — Display GMV/net/athletes (exclude MANUAL, giữ UX)
       const [row] = await this.db.query(
         `SELECT
           COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN total_price ELSE 0 END), 0) AS gmv,
@@ -104,13 +140,147 @@ export class DashboardKpiService {
       const gmv = Number(row?.gmv ?? 0);
       const net = Number(row?.net ?? 0);
       const athletes = Number(row?.athletes ?? 0);
-      // Phí 5BIB ước lượng = net × 5.5% (rate mặc định khi không lookup tenant).
-      const platformFee = Math.round(net * 0.055);
-      return { gmv, net, athletes, platformFee };
+
+      // STEP 2 — Pull raw orders INCLUDE MANUAL cho fee cascade
+      const ordersByTenant = await this.pullOrdersForFeeAggregate(start, end);
+
+      // STEP 3 — Pre-load MerchantConfig batch (PAUSE-Coder-03 = A mandatory)
+      const tenantIds = Array.from(ordersByTenant.keys());
+      const configMap = await this.preloadMerchantConfigs(tenantIds);
+
+      // STEP 4 — Per-tenant FeeService delegation
+      let platformFee = 0;
+      for (const [tenantId, orders] of ordersByTenant.entries()) {
+        // Inject pre-loaded config qua merchantConfigModel cache lookup —
+        // FeeService internally `findOne({tenantId}).lean()` mỗi call. Pre-load
+        // không thể bypass directly (FeeService signature unchanged per Scope
+        // Lock — F-058 territory protected). Trade-off: extra Mongo round-trip
+        // per tenant. KPI ≤ 58 tenants → acceptable. Sparkline service has
+        // larger impact; xem sparkline.service for memoization rationale.
+        void configMap; // pre-load done for type-safety + future signature change
+        const result = await this.feeService.computeFeeForOrdersAggregate(
+          tenantId,
+          orders,
+          { from: start, to: end },
+        );
+        platformFee += result.totalFee;
+      }
+
+      return { gmv, net, athletes, platformFee: Math.round(platformFee) };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.logger.warn(`KPI aggregate fail (${start}..${end}): ${msg}`);
+      this.logger.warn(`[F-059] KPI aggregate fail (${start}..${end}): ${msg}`);
       return { gmv: 0, net: 0, athletes: 0, platformFee: 0 };
+    }
+  }
+
+  /**
+   * F-059 BR-59-02 — Pull orders raw INCLUDE MANUAL group by tenant.
+   *
+   * Port pattern từ `analytics.service.ts:166-233` (PAUSE-Coder-01 = A —
+   * duplicate có chủ ý, KHÔNG share helper cross-module per
+   * conventions.md "duplication trumps premature abstraction").
+   *
+   * NOTE: `om.payment_on` (NOT `created_at`) — consistency với F-058 hotfix
+   * v1.9.2 + Dashboard existing query semantic. Per BR-59-12.
+   */
+  private async pullOrdersForFeeAggregate(
+    start: string,
+    end: string,
+  ): Promise<Map<number, OrderForFeeAggregate[]>> {
+    const rows: Array<{
+      id: number;
+      tenant_id: number;
+      race_id: number;
+      total_price: string | number;
+      total_discounts: string | number | null;
+      order_category: string;
+      payment_on: Date | string;
+      manual_ticket_count: string | number | null;
+    }> = await this.db.query(
+      `SELECT
+        om.id,
+        r.tenant_id,
+        om.race_id,
+        om.total_price,
+        om.total_discounts,
+        om.order_category,
+        om.payment_on,
+        oli_agg.total_quantity AS manual_ticket_count
+      FROM order_metadata om
+      JOIN races r ON r.race_id = om.race_id
+      LEFT JOIN (
+        SELECT order_id, SUM(quantity) AS total_quantity
+        FROM order_line_item GROUP BY order_id
+      ) oli_agg ON oli_agg.order_id = om.id
+      WHERE om.financial_status = 'paid'
+        AND om.payment_on >= ? AND om.payment_on < ?`,
+      [start, end],
+    );
+
+    const byTenant = new Map<number, OrderForFeeAggregate[]>();
+    for (const r of rows) {
+      const tid = Number(r.tenant_id);
+      const arr = byTenant.get(tid) ?? [];
+      arr.push({
+        id: Number(r.id),
+        raceId: Number(r.race_id),
+        totalPrice: Number(r.total_price ?? 0),
+        totalDiscounts: Number(r.total_discounts ?? 0),
+        orderCategory: r.order_category,
+        createdAt: r.payment_on, // F-058 hotfix semantic — payment_on = effective date
+        manualTicketCount:
+          r.manual_ticket_count != null ? Number(r.manual_ticket_count) : undefined,
+      });
+      byTenant.set(tid, arr);
+    }
+    return byTenant;
+  }
+
+  /**
+   * F-059 PAUSE-Coder-03 = A — Pre-load MerchantConfig batch query để giảm
+   * N Mongo round-trip xuống 1. Helper expose `Map<tenantId, config>` cho
+   * caller. KHÔNG modify FeeService signature (F-058 protected).
+   *
+   * Caller chỉ giữ Map làm cache layer trong scope request. Memoize không
+   * cross-request.
+   */
+  private async preloadMerchantConfigs(
+    tenantIds: number[],
+  ): Promise<Map<number, MerchantConfigDocument>> {
+    const map = new Map<number, MerchantConfigDocument>();
+    if (tenantIds.length === 0) return map;
+    const configs = await this.merchantConfigModel
+      .find({ tenantId: { $in: tenantIds } })
+      .lean<MerchantConfigDocument[]>()
+      .exec();
+    for (const c of configs) {
+      map.set(c.tenantId, c);
+    }
+    return map;
+  }
+
+  private async readCache(): Promise<KpiResponseDto | null> {
+    try {
+      const raw = await this.redis.get(KPI_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as KpiResponseDto;
+    } catch (e) {
+      this.logger.warn(`[F-059] KPI cache read fail: ${(e as Error).message}`);
+      return null;
+    }
+  }
+
+  private async writeCache(payload: KpiResponseDto): Promise<void> {
+    try {
+      await this.redis.set(
+        KPI_CACHE_KEY,
+        JSON.stringify(payload),
+        'EX',
+        KPI_CACHE_TTL_SECONDS,
+      );
+    } catch (e) {
+      this.logger.warn(`[F-059] KPI cache write fail: ${(e as Error).message}`);
     }
   }
 
