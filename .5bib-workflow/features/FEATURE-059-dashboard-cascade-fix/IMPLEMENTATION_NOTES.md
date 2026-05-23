@@ -8,12 +8,19 @@
 
 ## Section 1 — 🚧 Deviations from Spec (intentional)
 
-### [Deviation #1] Files Changed = 7 (Manager Plan said 8)
+### [Deviation #1] Files Changed = 9 (Manager Plan said 8) — corrected after QC rework 2026-05-23
 
 - **Spec said:** Manager Plan Scope Lock 2 NEW + 6 MODIFY = 8 files. File #8 = "Existing dashboard spec extend OR new — regression baseline TC".
-- **I did:** 2 NEW + 5 MODIFY = 7 files. Regression baseline TC merged into new spec file `kpi.service.f059.spec.ts` as TC-59-01.
-- **Why:** No existing `kpi.service.spec.ts` hoặc `sparkline.service.spec.ts` file trong codebase — searched `backend/src/modules/dashboard/services/` no `*.spec.ts` existed pre-F-059. Manager Plan said "OR new" — chọn "new" = merge regression vào new spec is acceptable per plan wording.
-- **Reviewer should check:** TC-59-01 `Regression baseline — tenant no override + no MANUAL → fee = net × 5.5%` asserting mathematical equivalence pre-F-059. Sufficient coverage of BR-59-11 invariant.
+- **I did (corrected):** 2 NEW + 5 MODIFY (production) + **2 MODIFY (legacy specs)** = 9 files. Regression baseline TC merged into new spec file `kpi.service.f059.spec.ts` as TC-59-01, AND the two pre-existing legacy specs were updated for the new DI signature.
+- **QC rework 2026-05-23 — false claim corrected:** Original note "No existing `kpi.service.spec.ts` hoặc `sparkline.service.spec.ts`" was **WRONG**. Specs DO exist in `backend/src/modules/dashboard/__tests__/` (a sibling folder to `services/`, which I missed in the initial grep). After F-059 refactor those specs failed (12 failures) because the constructors gained `FeeService` + `MerchantConfigModel` + Redis dependencies.
+- **Resolution chosen (Option A — UPDATE legacy specs):** Added the 3 new DI mocks to both `__tests__/kpi.service.spec.ts` and `__tests__/sparkline.service.spec.ts`. Preserved coverage of behaviors NOT in the new f059 specs:
+  - `kpi.service.spec.ts`: delta NULL semantics (cur=0/prev=0, prev=0/cur>0), DB-error resilience, SQL `financial_status='paid'` + `order_category != 'MANUAL'` invariants.
+  - `sparkline.service.spec.ts`: cache hit short-circuits DB, `refreshCache()` ignores cache, SQL invariants, backfill 30 points from sparse rows.
+- **Adaptations forced by F-059:**
+  - Sparkline cache key updated `dashboard:sparklines:30d` → `dashboard:sparkline:30d` (matches Deviation #2 rename).
+  - Legacy assertion `platform_fee point = round(net × 0.055)` dropped — fee is now FeeService-cascaded; that numeric path is owned by `sparkline.service.f059.spec.ts`. Legacy test now asserts series shape only (4 series, ≥28 points) — value correctness is covered upstream.
+- **Why Option A (not delete):** Legacy specs hold edge cases (BR-DASH-02 delta NULL + DB resilience) that the f059 specs do not retest. Keeping them = stronger regression net.
+- **Reviewer should check:** `npx jest src/modules/dashboard` → 10 suites, 59 tests, 0 failures.
 
 ### [Deviation #2] Cache key rename `dashboard:sparklines:30d` → `dashboard:sparkline:30d`
 
