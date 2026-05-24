@@ -74,6 +74,12 @@ export const viewport: Viewport = {
 };
 
 export default function SolutionLayout({ children }: { children: React.ReactNode }) {
+  /**
+   * DEAD CODE — route excluded from public nginx routing.
+   * DO NOT COPY-PASTE aggregateRating pattern. See FEATURE-060 BR-15(d):
+   * aggregateRating must be source-verifiable (NPS log / audit doc) or OMITTED.
+   * Phase 1 of FEATURE-060 OMIT rating cho all 4 active landing.
+   */
   // JSON-LD structured data — helps Google SERP for 5BIB as a SoftwareApplication
   const jsonLd = {
     '@context': 'https://schema.org',

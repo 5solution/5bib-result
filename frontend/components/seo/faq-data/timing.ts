@@ -15,7 +15,7 @@ export const timingFaqs: FAQItem[] = [
   },
   {
     q: '5BIB dùng thiết bị timing của hãng nào?',
-    a: '5BIB là đối tác chính thức của RaceResult (Đức) — hãng timing được dùng tại Berlin Marathon, UTMB, Ironman. Hệ thống đo bằng RFID UHF, chip dán BIB, độ chính xác công bố 0.01 giây.',
+    a: '5BIB là đối tác chính thức của RaceResult (Đức) — hãng timing được dùng tại Berlin Marathon, UTMB, Ironman. Hệ thống đo bằng RFID UHF, chip dán BIB, độ chính xác ±0.1 giây end-to-end (theo World Athletics TR19.2 standard cho passive UHF chip timing), với decoder timestamp resolution 1ms.',
   },
   {
     q: 'Chip time và gun time khác nhau như thế nào?',
@@ -23,7 +23,7 @@ export const timingFaqs: FAQItem[] = [
   },
   {
     q: '5BIB đã làm timing cho bao nhiêu giải?',
-    a: 'Tính đến tháng 5/2026, 5BIB đã triển khai timing cho 100+ giải chạy, hỗ trợ 94,000+ VĐV finisher, trải dài từ giải nội bộ doanh nghiệp đến marathon quốc gia 5000+ slot.',
+    a: 'Tính đến tháng 5/2026, 5BIB đã triển khai timing cho 195 giải chạy, hỗ trợ 94,000+ VĐV finisher, trải dài từ giải nội bộ doanh nghiệp đến marathon quốc gia 5000+ slot.',
   },
   {
     q: 'Dịch vụ có bao gồm in BIB và phát BIB không?',
@@ -35,7 +35,7 @@ export const timingFaqs: FAQItem[] = [
   },
   {
     q: 'Sai số timing của 5BIB là bao nhiêu?',
-    a: 'Độ chính xác đo lường 0.01 giây (10ms) trên timing mat — đáp ứng chuẩn World Athletics / AIMS cho chứng nhận PB. Sai số end-to-end (bao gồm sync clock các mat) thường <0.5s.',
+    a: 'Độ chính xác ±0.1 giây end-to-end (theo World Athletics TR19.2 standard cho passive UHF chip timing), với decoder timestamp resolution 1ms — đáp ứng chuẩn World Athletics / AIMS cho chứng nhận PB. Sai số end-to-end đã bao gồm sync clock giữa các mat.',
   },
   {
     q: '5BIB có timing được giải trail / ultra trail nhiều CP không?',

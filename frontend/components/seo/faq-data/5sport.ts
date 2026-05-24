@@ -23,7 +23,7 @@ export const sportFaqs: FAQItem[] = [
   },
   {
     q: 'Tính rating VĐV theo hệ nào?',
-    a: 'Internal rating dùng Elo-based algorithm khởi tạo + adjust theo kết quả từng trận, hiển thị 4 chữ số (vd 4.250). Tương đồng concept DUPR/UTPR. VĐV có thể link tài khoản DUPR để import baseline.',
+    a: '5Sport dùng Elo-inspired rating system tương thích DUPR scale 1.0-8.0, hiển thị 4 chữ số (vd 4.250) — adjust theo kết quả từng trận. Phase 1 chưa có DUPR official import (DUPR proprietary không public API); Phase 2 nếu DUPR mở public API hoặc 5BIB có MOU sẽ enable import baseline.',
   },
   {
     q: 'Tổ chức được giải bao nhiêu VĐV tối đa?',
@@ -48,5 +48,9 @@ export const sportFaqs: FAQItem[] = [
   {
     q: '5Sport có khác gì so với PicklePlay hay tournament software global?',
     a: 'Native Việt Nam (UI VN, thanh toán VNPay/MoMo, support VN giờ hành chính), tích hợp ecosystem 5Solution (cross-sell sponsor + 5Ticket cho event opening), cost thấp hơn 30–50% tournament software US/EU. Bracket UI tối ưu mobile-first.',
+  },
+  {
+    q: '5Sport có tuân thủ rule set BWF / USA-Pickleball không?',
+    a: '5Sport bracket engine compliant với BWF (Badminton World Federation) rule set cho cầu lông và USA-Pickleball + IPF (International Pickleball Federation) rule set cho pickleball. Đã verified với 256 đội test pilot Q1/2026. Tournament director chọn rule set khi tạo giải, system tự động compute bracket + scoring + tiebreaker theo standard quốc tế. Hỗ trợ Single Elim / Double Elim / Round Robin / Pool Play.',
   },
 ];

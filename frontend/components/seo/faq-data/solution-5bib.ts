@@ -49,4 +49,8 @@ export const solutionFaqs: FAQItem[] = [
     q: 'Bao nhiêu ngôn ngữ được hỗ trợ?',
     a: 'Native VN + EN. Có thể thêm JP, KR, CN, TH cho giải international. Translation pack được provide bởi 5BIB hoặc BTC custom override từng key.',
   },
+  {
+    q: '5BIB Solution khác gì các nền tảng đăng ký giải chạy khác?',
+    a: '5BIB Solution là nền tảng duy nhất tại Việt Nam khép kín full lifecycle: đăng ký → thanh toán → BIB → wave assignment → check-in QR → chip timing → certificate → photo gallery → community. Đối thủ quốc tế như RunSignup hay Race Roster chỉ làm registration + payment, mọi step còn lại BTC phải tích hợp 3rd-party. 195 giải đã chạy, 120K runner, 58 BTC tin dùng. Time-to-launch 72 giờ.',
+  },
 ];

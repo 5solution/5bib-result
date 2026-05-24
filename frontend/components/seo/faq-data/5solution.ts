@@ -19,11 +19,11 @@ export const fiveSolutionFaqs: FAQItem[] = [
   },
   {
     q: '5Solution có hợp tác với liên đoàn thể thao chính thức không?',
-    a: 'Có. 5Solution là đối tác công nghệ của nhiều giải thuộc hệ thống Liên đoàn điền kinh và Sở VHTT các tỉnh. RaceResult Đức partnership chính thức tại VN.',
+    a: '5Solution là technology vendor cho giải thuộc Sở Văn hóa Thể thao + một số giải liên đoàn địa phương. Phase 2 đang đàm phán MOU với Liên đoàn Điền kinh Việt Nam. RaceResult Đức partnership chính thức tại VN.',
   },
   {
     q: 'Quy mô 5Solution tính đến nay?',
-    a: '195 giải tổ chức (timing hoặc registration), 42,000+ order tickets/BIB, 120K+ runner unique reach, 100+ giải chip timing, 58 merchant tenant active, footprint toàn quốc 63 tỉnh.',
+    a: '195 giải tổ chức (timing hoặc registration), 42,000+ order tickets/BIB, 120K+ runner unique reach, 195 giải chip timing, 58 merchant tenant active, footprint toàn quốc 63 tỉnh.',
   },
   {
     q: 'Doanh nghiệp muốn tổ chức event nội bộ thì dùng sản phẩm nào?',

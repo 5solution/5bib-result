@@ -88,11 +88,13 @@ export default function TimingLayout({ children }: { children: React.ReactNode }
       />
       {/* BR-04..06: Service + AggregateOffer for timing-as-a-service. */}
       {/* aggregateRating OMITTED Phase 1 — Danny confirm B 2026-05-24 per BR-15(d). Phase 2 add khi có NPS audit doc. */}
+      {/* BR-05 price aligned với FAQ Q1 (35-90M VND) post-QC v2 fix.
+          Danny biz verify post-deploy — nếu range khác báo Manager update. */}
       <ServiceJsonLd
         host="timing.5bib.com"
         serviceType="Chip Timing"
         description="Hệ thống chip timing duy nhất tại Việt Nam có 2-layer independent verify — 5BIB tự tính ranking từ raw chip data và cross-check với vendor field, phát hiện anomaly trước khi công bố podium. Đối tác chính thức RaceResult Đức."
-        offer={{ lowPrice: '15000000', highPrice: '80000000', priceCurrency: 'VND' }}
+        offer={{ lowPrice: '35000000', highPrice: '90000000', priceCurrency: 'VND' }}
       />
       <FAQJsonLd host="timing.5bib.com" faqs={timingFaqs} />
       <BreadcrumbJsonLd
