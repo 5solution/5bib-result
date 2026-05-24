@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
+import { OrganizationJsonLd } from '@/components/seo/organization-jsonld';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://solution.5sport.vn'),
@@ -68,34 +69,14 @@ export const viewport: Viewport = {
 };
 
 export default function Sport5Layout({ children }: { children: React.ReactNode }) {
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'Organization',
-        '@id': 'https://solution.5sport.vn/#org',
-        name: '5Solution JSC',
-        url: 'https://solution.5sport.vn',
-        sameAs: ['https://5bib.com', 'https://facebook.com/5sport.vn'],
-      },
-      {
-        '@type': 'SoftwareApplication',
-        name: '5Sport — Tournament & Community Platform',
-        operatingSystem: 'Web, iOS, Android',
-        applicationCategory: 'SportsApplication',
-        offers: { '@type': 'Offer', priceCurrency: 'VND', price: '0' },
-        provider: { '@id': 'https://solution.5sport.vn/#org' },
-      },
-    ],
-  };
-
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-css-tags */}
       <link rel="stylesheet" href="/solution-5sport/solution-5sport.css" />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      <OrganizationJsonLd
+        host="solution.5sport.vn"
+        description="Sàn vé thi đấu, cộng đồng tìm người chơi và công cụ vận hành giải đấu — cho cầu lông & pickleball."
+        includeSoftwareApp
       />
 
       {/* ── Google Tag Manager — GTM-PLR9LHLZ ───────────────────────────────── */}

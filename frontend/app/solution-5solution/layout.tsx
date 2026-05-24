@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
+import { OrganizationJsonLd } from '@/components/seo/organization-jsonld';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://5solution.vn'),
@@ -75,46 +76,6 @@ export default function Solution5Layout({
 }: {
   children: React.ReactNode;
 }) {
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'Organization',
-        '@id': 'https://5solution.vn/#org',
-        name: '5Solution JSC',
-        legalName: 'Công ty Cổ phần 5BIB',
-        url: 'https://5solution.vn',
-        logo: 'https://5solution.vn/solution-5solution/logos/5bib-logo.png',
-        sameAs: [
-          'https://5bib.com',
-          'https://solution.5bib.com',
-          'https://solution.5sport.vn',
-        ],
-        address: {
-          '@type': 'PostalAddress',
-          streetAddress: 'Tầng 9, Hồ Gươm Plaza, 102 Trần Phú',
-          addressLocality: 'Hà Đông, Hà Nội',
-          addressCountry: 'VN',
-        },
-        contactPoint: {
-          '@type': 'ContactPoint',
-          telephone: '+84-986-587-345',
-          contactType: 'sales',
-          email: 'contact@5bib.com',
-          areaServed: 'VN',
-          availableLanguage: ['Vietnamese', 'English'],
-        },
-      },
-      {
-        '@type': 'WebSite',
-        url: 'https://5solution.vn',
-        name: '5Solution',
-        publisher: { '@id': 'https://5solution.vn/#org' },
-        inLanguage: 'vi-VN',
-      },
-    ],
-  };
-
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-css-tags */}
@@ -136,9 +97,9 @@ export default function Solution5Layout({
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
       />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      <OrganizationJsonLd
+        host="5solution.vn"
+        description="Hệ sinh thái giải pháp toàn diện cho ngành sự kiện thể thao Việt Nam — 5BIB, 5Ticket, 5Pix, 5Sport, 5Tech."
       />
 
       {/* ── Google Tag Manager — GTM-WNJV5PD9 ───────────────────────────── */}

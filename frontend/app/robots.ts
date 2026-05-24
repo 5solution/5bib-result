@@ -1,27 +1,65 @@
 import type { MetadataRoute } from 'next';
+import { headers } from 'next/headers';
 
-export default function robots(): MetadataRoute.Robots {
+/**
+ * 5BIB / 5Solution multi-host robots.
+ *
+ * Each subdomain's `/robots.txt` MUST point to its OWN sitemap (not a
+ * cross-host sitemap) and declare its OWN canonical host — otherwise
+ * Google treats them as duplicate / orphan.
+ *
+ * Shared rules across all hosts:
+ *   - Disallow /api/, /admin/, /_next/
+ *   - F-056 Phase 5: Disallow /runners exact, allow /runners/* profiles
+ *
+ * Explicit allow for AI crawlers (GPTBot, ChatGPT-User, PerplexityBot,
+ * ClaudeBot, Claude-Web, Google-Extended, CCBot, anthropic-ai,
+ * Applebot-Extended) — listing them by name signals "we expect you,
+ * please cite us" and avoids accidental block via aggressive UA filters
+ * at the reverse-proxy layer.
+ *
+ * FEATURE-A · SEO Uplift v1
+ */
+
+function detectHost(rawHost: string | null): string {
+  const host = (rawHost ?? '').toLowerCase().split(':')[0];
+  if (host.endsWith('5solution.vn')) return '5solution.vn';
+  if (host.startsWith('timing.')) return 'timing.5bib.com';
+  if (host.startsWith('solution.5sport')) return 'solution.5sport.vn';
+  if (host.startsWith('solution.')) return 'solution.5bib.com';
+  return '5bib.com';
+}
+
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const hdr = await headers();
+  const host = detectHost(hdr.get('host'));
+
+  const wildcardRule = {
+    userAgent: '*',
+    allow: ['/', '/runners/*'],
+    disallow: ['/api/', '/admin/', '/_next/', '/runners$'],
+  };
+
+  const aiCrawlerNames = [
+    'GPTBot',
+    'ChatGPT-User',
+    'PerplexityBot',
+    'ClaudeBot',
+    'Claude-Web',
+    'Google-Extended',
+    'CCBot',
+    'anthropic-ai',
+    'Applebot-Extended',
+  ];
+
+  const aiRules = aiCrawlerNames.map((ua) => ({
+    userAgent: ua,
+    allow: '/',
+  }));
+
   return {
-    rules: [
-      {
-        userAgent: '*',
-        // F-056 Phase 5 PAUSED 2026-05-21 — explicit allow /runners/* sub-paths
-        // (athlete profile pages F-047 keep indexable; per-race result page is
-        // industry consent norm) while disallowing /runners exact listing.
-        allow: ['/', '/runners/*'],
-        disallow: [
-          '/api/',
-          '/admin/',
-          '/_next/',
-          // Block search engine indexing of /runners listing index only.
-          // Most crawlers honor Allow specificity over Disallow when path
-          // matches a longer Allow pattern (`/runners/*` more specific than
-          // `/runners`). Belt-and-suspenders with page.tsx notFound().
-          '/runners$',
-        ],
-      },
-    ],
-    sitemap: 'https://5bib.com/sitemap.xml',
-    host: 'https://5bib.com',
+    rules: [wildcardRule, ...aiRules],
+    sitemap: `https://${host}/sitemap.xml`,
+    host: `https://${host}`,
   };
 }
