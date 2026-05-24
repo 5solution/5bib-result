@@ -149,19 +149,16 @@ export class DashboardKpiService {
       const configMap = await this.preloadMerchantConfigs(tenantIds);
 
       // STEP 4 — Per-tenant FeeService delegation
+      // F-059 hotfix 2026-05-24: inject pre-loaded config qua 4th arg để bypass
+      // FeeService internal `findOne({tenantId}).lean()` (N+1 query fix).
+      // Drop: KPI N findOne → 1 batch $in. Sparkline cũng dùng pattern này.
       let platformFee = 0;
       for (const [tenantId, orders] of ordersByTenant.entries()) {
-        // Inject pre-loaded config qua merchantConfigModel cache lookup —
-        // FeeService internally `findOne({tenantId}).lean()` mỗi call. Pre-load
-        // không thể bypass directly (FeeService signature unchanged per Scope
-        // Lock — F-058 territory protected). Trade-off: extra Mongo round-trip
-        // per tenant. KPI ≤ 58 tenants → acceptable. Sparkline service has
-        // larger impact; xem sparkline.service for memoization rationale.
-        void configMap; // pre-load done for type-safety + future signature change
         const result = await this.feeService.computeFeeForOrdersAggregate(
           tenantId,
           orders,
           { from: start, to: end },
+          configMap.get(tenantId) ?? null,
         );
         platformFee += result.totalFee;
       }

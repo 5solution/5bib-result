@@ -202,11 +202,14 @@ export class DashboardSparklineService {
         const dayEnd = this.nextDayStr(date);
         for (const [tenantId, orders] of tenantsForDay.entries()) {
           try {
-            void configMap; // pre-loaded; FeeService internal reads same Mongo
+            // F-059 hotfix 2026-05-24: inject pre-loaded config qua 4th arg để
+            // bypass FeeService internal findOne. N tenants × D days = 58 × 30 =
+            // 1740 findOne calls → 1 batch $in query.
             const result = await this.feeService.computeFeeForOrdersAggregate(
               tenantId,
               orders,
               { from: date, to: dayEnd },
+              configMap.get(tenantId) ?? null,
             );
             dailyFee += result.totalFee;
           } catch (e) {

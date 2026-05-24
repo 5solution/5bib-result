@@ -1078,15 +1078,24 @@ export class FeeService {
     tenantId: number,
     orders: OrderForFeeAggregate[],
     _period: { from: Date | string; to: Date | string },
+    // F-059 hotfix 2026-05-24: optional pre-loaded config injection.
+    // Dashboard KPI/Sparkline batch pre-loads MerchantConfig via $in query then
+    // passes per-tenant config here → avoids N internal findOne calls (N+1 fix).
+    // Backward compat: analytics callers (F-058) omit this arg → fallback findOne.
+    injectedConfig?: MerchantConfigDocument | null,
   ): Promise<AnalyticsFeeAggregateResultDto> {
     void _period; // period đã được Analytics filter trước khi pass orders, giữ làm tham số docs
 
     const warnings: string[] = [];
 
     // 1. Load MerchantConfig 1 lần. Empty config → fallback Tier 3 (BR-58-15).
-    const config = this.merchantConfigModel
-      ? await this.merchantConfigModel.findOne({ tenantId }).lean().exec()
-      : null;
+    //    Pre-loaded `injectedConfig` được prefer; chỉ findOne nếu undefined (F-059).
+    const config =
+      injectedConfig !== undefined
+        ? injectedConfig
+        : this.merchantConfigModel
+          ? await this.merchantConfigModel.findOne({ tenantId }).lean().exec()
+          : null;
 
     if (!config) {
       warnings.push(

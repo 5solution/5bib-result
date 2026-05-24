@@ -411,4 +411,35 @@ describe('F-059 — DashboardKpiService (cascade fee)', () => {
     expect(result.kpis.find((k) => k.key === 'platform_fee')!.value).toBe(0);
     expect(mockFeeService.computeFeeForOrdersAggregate).not.toHaveBeenCalled();
   });
+
+  // ─── TC-59-09 ──────────────────────────────────────────────────────────
+  // F-059 hotfix 2026-05-24: verify pre-loaded MerchantConfig is INJECTED into
+  // FeeService (4th arg) instead of being silently dropped (`void configMap`).
+  // Without this assertion, FeeService falls back to internal findOne per tenant
+  // → N+1 query regression. KPI: 58 tenants × 1 call = 58 findOne vs 1 batch $in.
+  it('TC-59-09 — Pre-loaded config injected into FeeService (NOT N internal findOne)', async () => {
+    const curAgg = { gmv: 100_000_000, net: 100_000_000, athletes: 100 };
+    const curOrders = [
+      { id: 1, tenant_id: 200, race_id: 1, total_price: 50_000_000, total_discounts: 0, order_category: 'ORDINARY', payment_on: '2026-05-10', manual_ticket_count: null },
+      { id: 2, tenant_id: 201, race_id: 2, total_price: 50_000_000, total_discounts: 0, order_category: 'ORDINARY', payment_on: '2026-05-11', manual_ticket_count: null },
+    ];
+    setupDbMock(curAgg, curOrders, { gmv: 0, net: 0, athletes: 0 }, []);
+
+    mockFeeService.computeFeeForOrdersAggregate.mockResolvedValue(makeFeeResult(2_750_000));
+
+    service = await buildModule();
+    await service.getMtdKpis();
+
+    // Critical 1: mockConfigModel.find called EXACTLY 1 time (batch $in pre-load).
+    expect(mockConfigModel.find).toHaveBeenCalledTimes(1);
+
+    // Critical 2: every FeeService call MUST receive 4th arg (NOT undefined).
+    expect(mockFeeService.computeFeeForOrdersAggregate).toHaveBeenCalled();
+    for (const call of mockFeeService.computeFeeForOrdersAggregate.mock.calls) {
+      const injectedConfig = call[3];
+      // null is OK (tenant has no config row); undefined means dashboard forgot
+      // to inject → FeeService falls back to internal findOne (regression).
+      expect(injectedConfig).not.toBeUndefined();
+    }
+  });
 });

@@ -112,7 +112,7 @@ describe('F-059 — DashboardSparklineService (cascade fee)', () => {
   });
 
   // ─── TC-59-10 ──────────────────────────────────────────────────────────
-  it('TC-59-10 — Pre-load configs called 1 time (NOT N tenants × 30 days)', async () => {
+  it('TC-59-10 — Pre-load configs called 1 time AND FeeService receives injected config (NOT N internal findOne)', async () => {
     // 3 tenants × 30 days = naive 90 queries; pre-load = 1 query
     const orderRows = [
       { id: 1, tenant_id: 100, race_id: 1, total_price: 1_000_000, total_discounts: 0, order_category: 'ORDINARY', payment_on: '2026-05-01', manual_ticket_count: null },
@@ -124,11 +124,23 @@ describe('F-059 — DashboardSparklineService (cascade fee)', () => {
     service = await buildModule();
     await service.getSparklines();
 
-    // Critical: configModel.find called EXACTLY 1 time (batch query)
+    // Critical 1: configModel.find called EXACTLY 1 time (batch query)
     expect(mockConfigModel.find).toHaveBeenCalledTimes(1);
     // And called with $in array of unique tenant IDs
     const findCall = mockConfigModel.find.mock.calls[0][0];
     expect(findCall.tenantId.$in.sort()).toEqual([100, 101, 102]);
+
+    // Critical 2 (F-059 hotfix 2026-05-24): every FeeService call MUST receive
+    // an injectedConfig as 4th arg (NOT undefined). This guards against the
+    // `void configMap` regression where pre-load was dropped → FeeService
+    // internally findOne'd per tenant (N+1).
+    expect(mockFeeService.computeFeeForOrdersAggregate).toHaveBeenCalled();
+    for (const call of mockFeeService.computeFeeForOrdersAggregate.mock.calls) {
+      const injectedConfig = call[3];
+      // injectedConfig MUST be passed (not undefined). null is OK (missing config),
+      // but undefined means dashboard forgot to inject → FeeService falls back to findOne.
+      expect(injectedConfig).not.toBeUndefined();
+    }
   });
 
   // ─── TC-59-11 ──────────────────────────────────────────────────────────
