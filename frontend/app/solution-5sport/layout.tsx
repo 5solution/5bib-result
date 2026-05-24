@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import { OrganizationJsonLd } from '@/components/seo/organization-jsonld';
+import { FAQJsonLd } from '@/components/seo/faq-jsonld';
+import { BreadcrumbJsonLd } from '@/components/seo/breadcrumb-jsonld';
+import { sportFaqs } from '@/components/seo/faq-data/5sport';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://solution.5sport.vn'),
@@ -73,10 +76,23 @@ export default function Sport5Layout({ children }: { children: React.ReactNode }
     <>
       {/* eslint-disable-next-line @next/next/no-css-tags */}
       <link rel="stylesheet" href="/solution-5sport/solution-5sport.css" />
+      {/* BR-14: AggregateOffer override (Free / Club ₫500K / Federation ₫2.5M) per biz-strategist § 4.C. */}
+      {/* aggregateRating OMITTED Phase 1 — Danny confirm B 2026-05-24 per BR-15(d). Phase 2 add khi có NPS audit doc. */}
       <OrganizationJsonLd
         host="solution.5sport.vn"
         description="Sàn vé thi đấu, cộng đồng tìm người chơi và công cụ vận hành giải đấu — cho cầu lông & pickleball."
         includeSoftwareApp
+        offersOverride={{
+          lowPrice: '0',
+          highPrice: '2500000',
+          priceCurrency: 'VND',
+          description: 'Free / Club ₫500K / Federation ₫2.5M',
+        }}
+      />
+      <FAQJsonLd host="solution.5sport.vn" faqs={sportFaqs} />
+      <BreadcrumbJsonLd
+        host="solution.5sport.vn"
+        crumbs={[{ name: 'Trang chủ', url: 'https://solution.5sport.vn' }]}
       />
 
       {/* ── Google Tag Manager — GTM-PLR9LHLZ ───────────────────────────────── */}

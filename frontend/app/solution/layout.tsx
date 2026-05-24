@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import { OrganizationJsonLd } from '@/components/seo/organization-jsonld';
+import { FAQJsonLd } from '@/components/seo/faq-jsonld';
+import { BreadcrumbJsonLd } from '@/components/seo/breadcrumb-jsonld';
+import { solutionFaqs } from '@/components/seo/faq-data/solution-5bib';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://solution.5bib.com'),
@@ -79,10 +82,23 @@ export default function SolutionLayout({ children }: { children: React.ReactNode
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
       />
+      {/* BR-09: AggregateOffer override (Free / Standard ₫5M / Premium ₫15M + 1.5-2% transaction fee) per biz-strategist § 2.C. */}
+      {/* aggregateRating OMITTED Phase 1 — Danny confirm B 2026-05-24 per BR-15(d). Phase 2 add khi có NPS audit doc. */}
       <OrganizationJsonLd
         host="solution.5bib.com"
         description="Cổng đăng ký, thanh toán, BIB, wave, check-in QR và quản lý VĐV cho giải chạy."
         includeSoftwareApp
+        offersOverride={{
+          lowPrice: '0',
+          highPrice: '15000000',
+          priceCurrency: 'VND',
+          description: 'Free / Standard ₫5M / Premium ₫15M + 1.5-2% transaction fee',
+        }}
+      />
+      <FAQJsonLd host="solution.5bib.com" faqs={solutionFaqs} />
+      <BreadcrumbJsonLd
+        host="solution.5bib.com"
+        crumbs={[{ name: 'Trang chủ', url: 'https://solution.5bib.com' }]}
       />
 
       {/* GTM */}
