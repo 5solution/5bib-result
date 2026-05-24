@@ -189,12 +189,15 @@ export class AnalyticsService {
       total_discounts: string | number | null;
       order_category: string;
       payment_on: Date | string;
+      payment_ref: string | null;
       manual_ticket_count: string | number | null;
     }> = await this.db.query(
       // HOTFIX F-058 2026-05-22: column thực tế là `payment_on` (NOT
       // `created_at` — order_metadata table không có column đó). Verified
       // bằng existing dashboard/kpi.service.ts pattern + entity OrderReadonly.
       // Semantic: `payment_on` chuẩn hơn cho fee calc (chỉ áp khi tiền vào).
+      // F-061 BR-61-08: thêm `om.payment_ref` để FeeService cascade phân biệt
+      // 5BIB-eligible (ref truthy) vs MANUAL semantic (ref empty/null).
       `SELECT
         om.id,
         r.tenant_id,
@@ -203,6 +206,7 @@ export class AnalyticsService {
         om.total_discounts,
         om.order_category,
         om.payment_on,
+        om.payment_ref,
         oli_agg.total_quantity AS manual_ticket_count
       FROM order_metadata om
       JOIN races r ON r.race_id = om.race_id
@@ -225,6 +229,7 @@ export class AnalyticsService {
         totalDiscounts: Number(r.total_discounts ?? 0),
         orderCategory: r.order_category,
         createdAt: r.payment_on,  // F-058 hotfix: MySQL column `payment_on` → TS field `createdAt` (semantic: order paid time = effective date for fee cascade)
+        paymentRef: r.payment_ref ?? null, // F-061 BR-61-08
         manualTicketCount: r.manual_ticket_count != null ? Number(r.manual_ticket_count) : undefined,
       });
       byTenant.set(tid, arr);

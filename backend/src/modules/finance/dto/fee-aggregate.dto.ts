@@ -31,6 +31,17 @@ export interface OrderForFeeAggregate {
   createdAt: Date | string;
   /** Chỉ áp dụng cho MANUAL — total ticket count qua order_line_item join */
   manualTicketCount?: number;
+  /**
+   * F-061 BR-61-07 — MySQL `order_metadata.payment_ref`.
+   * Truthy (non-empty trimmed string) = 5BIB thu hộ qua gateway → 5BIB GMV path.
+   * Falsy (null / undefined / empty / whitespace) = MANUAL semantic CHO
+   * category ∈ SPLIT_BY_PAYMENT_REF (= 6 categories sau F-061).
+   *
+   * Backward compat: optional → caller cũ (pre-F-061) không inject →
+   * undefined → fallback MANUAL khi cat ∈ SPLIT. Atomic B fix (PAUSE-61-03)
+   * đảm bảo Analytics + 2 Dashboard SQL pull đồng bộ thêm column.
+   */
+  paymentRef?: string | null;
 }
 
 export class FeeSourceBreakdownEntryDto {

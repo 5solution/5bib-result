@@ -275,8 +275,11 @@ export class DashboardSparklineService {
       total_discounts: string | number | null;
       order_category: string;
       payment_on: Date | string;
+      payment_ref: string | null;
       manual_ticket_count: string | number | null;
     }> = await this.db.query(
+      // F-061 BR-61-10 — thêm `om.payment_ref` cho FeeService cascade phân biệt
+      // 5BIB-eligible (ref truthy) vs MANUAL semantic (ref empty/null).
       `SELECT
         om.id,
         r.tenant_id,
@@ -285,6 +288,7 @@ export class DashboardSparklineService {
         om.total_discounts,
         om.order_category,
         om.payment_on,
+        om.payment_ref,
         oli_agg.total_quantity AS manual_ticket_count
       FROM order_metadata om
       JOIN races r ON r.race_id = om.race_id
@@ -310,6 +314,7 @@ export class DashboardSparklineService {
         totalDiscounts: Number(r.total_discounts ?? 0),
         orderCategory: r.order_category,
         createdAt: r.payment_on, // F-058 semantic
+        paymentRef: r.payment_ref ?? null, // F-061 BR-61-10
         manualTicketCount:
           r.manual_ticket_count != null ? Number(r.manual_ticket_count) : undefined,
         dateKey,

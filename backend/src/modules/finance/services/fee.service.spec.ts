@@ -817,7 +817,8 @@ describe('F-058 FeeService.computeFeeForOrdersAggregate (perf)', () => {
       null as never,
     );
 
-    // Build 5000 orders mix: 4000 ORDINARY across 10 races, 1000 MANUAL
+    // Build 5000 orders mix: 4000 ORDINARY across 10 races, 1000 MANUAL.
+    // F-061: ORDINARY now requires truthy `paymentRef` to land in 5BIB path.
     const orders = Array.from({ length: 5000 }, (_, i) => ({
       id: i + 1,
       raceId: 12345 + (i % 10),
@@ -826,6 +827,7 @@ describe('F-058 FeeService.computeFeeForOrdersAggregate (perf)', () => {
       orderCategory: i < 1000 ? 'MANUAL' : 'ORDINARY',
       // 50% pre-effective_from, 50% post — exercise per-order pro-rate branch
       createdAt: i % 2 === 0 ? '2026-06-10' : '2026-06-20',
+      paymentRef: i < 1000 ? null : `VNPAY-${i}`, // F-061 5BIB-eligible needs truthy
       manualTicketCount: i < 1000 ? 1 : undefined,
     }));
 

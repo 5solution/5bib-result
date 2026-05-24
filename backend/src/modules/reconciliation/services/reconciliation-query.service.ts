@@ -8,32 +8,33 @@ import {
   Reconciliation,
   ReconciliationDocument,
 } from '../schemas/reconciliation.schema';
+import {
+  FIVE_BIB_CATEGORIES as SHARED_FIVE_BIB_CATEGORIES,
+  SPLIT_BY_PAYMENT_REF,
+  isPaymentRefEmpty,
+} from '../../../common/constants/order-classification';
 
 /**
- * FEATURE-016 v1.6.5 — extend FIVE_BIB_CATEGORIES.
+ * FEATURE-016 v1.6.5 — extend FIVE_BIB_CATEGORIES to 6 categories.
+ * FEATURE-061 v1.9.5 — unify SPLIT_BY_PAYMENT_REF logic.
  *
- * Trước F-016: array thiếu GROUP_BUY, GROUP_BUY_FIXED, CODE_TRANSFER → drop silently.
- * Sau F-016 (BR-01): include 6 categories với % fee theo CLAUDE.md business invariant.
+ * Trước F-016: array thiếu GROUP_BUY/GROUP_BUY_FIXED/CODE_TRANSFER → drop silently.
+ * Sau F-016 (BR-01): 6 categories trong FIVE_BIB_CATEGORIES.
  *
- * BR-02 — payment_ref split pattern:
- *   - Categories trong SPLIT_BY_PAYMENT_REF: có payment_ref → 5BIB GMV; không → manual fallback.
- *   - ORDINARY + CHANGE_COURSE: KHÔNG split (BR-03 preserve existing behavior).
+ * Trước F-061: SPLIT_BY_PAYMENT_REF chỉ chứa 4 categories
+ *   (PERSONAL_GROUP/GROUP_BUY/GROUP_BUY_FIXED/CODE_TRANSFER).
+ *   ORDINARY + CHANGE_COURSE bị treat "pass-through 5BIB regardless" (BR-03 legacy)
+ *   → bug 19 race MOU thu hộ ngoài 5BIB vẫn miss phí MANUAL ~25-40M VND/period.
+ *
+ * Sau F-061 (BR-61-01/02): cả 6 categories uniformly split theo payment_ref.
+ *   - payment_ref truthy → 5BIB GMV path
+ *   - payment_ref falsy/empty/whitespace → MANUAL semantic (intentional MOU)
+ *
+ * Shared constants moved sang `common/constants/order-classification.ts`
+ * (PAUSE-61-BA-B) — 1 source of truth cho Reconciliation + Finance + Analytics
+ * + Dashboard.
  */
-const FIVE_BIB_CATEGORIES = new Set([
-  'ORDINARY',
-  'PERSONAL_GROUP',
-  'CHANGE_COURSE',
-  'GROUP_BUY',
-  'GROUP_BUY_FIXED',
-  'CODE_TRANSFER',
-]);
-
-const SPLIT_BY_PAYMENT_REF = new Set([
-  'PERSONAL_GROUP',
-  'GROUP_BUY',
-  'GROUP_BUY_FIXED',
-  'CODE_TRANSFER',
-]);
+const FIVE_BIB_CATEGORIES = new Set(SHARED_FIVE_BIB_CATEGORIES);
 
 export interface QueryOrdersResult {
   fiveBibOrders: Record<string, unknown>[];
@@ -141,6 +142,11 @@ export class ReconciliationQueryService {
     const fiveBibOrders: Record<string, unknown>[] = [];
     const manualOrders: Record<string, unknown>[] = [];
     const unknownRows: Record<string, unknown>[] = [];
+    // F-061 BR-61-04 — track orders that fell into MANUAL bucket BECAUSE
+    // SPLIT-category had empty/missing payment_ref (intentional MOU per
+    // PAUSE-61-01 = A). Preflight emit WARNING (not ERROR) cho Sales Admin
+    // verify giao kèo MOU trước khi finalize recon.
+    const missingPaymentRefFallback: Record<string, unknown>[] = [];
 
     for (const r of rows) {
       const category = r.order_category as string | null | undefined;
@@ -161,18 +167,27 @@ export class ReconciliationQueryService {
         continue;
       }
 
-      // BR-02 — payment_ref split for 4 categories (PERSONAL_GROUP + 3 mới)
+      // F-061 BR-61-01/02 — unified payment_ref split cho TẤT CẢ 6 categories.
+      // Trước F-061 có BR-03 special-case "ORDINARY/CHANGE_COURSE pass-through
+      // 5BIB regardless" đã được DROP — giờ uniform logic 1 source of truth.
+      // payment_ref empty/whitespace/null → MANUAL semantic (intentional MOU
+      // organizer self-collect). Sales Admin có WARNING preflight verify intent.
       if (SPLIT_BY_PAYMENT_REF.has(category)) {
-        if (r.payment_ref) {
-          fiveBibOrders.push(r);
-        } else {
+        const paymentRef = r.payment_ref as string | null | undefined;
+        if (isPaymentRefEmpty(paymentRef)) {
           manualOrders.push(r);
+          missingPaymentRefFallback.push(r);
+        } else {
+          fiveBibOrders.push(r);
         }
         continue;
       }
 
-      // ORDINARY + CHANGE_COURSE: BR-03 preserve — pass through to 5BIB regardless of payment_ref
-      fiveBibOrders.push(r);
+      // Defensive — không trúng nhánh nào ở trên (lý thuyết KHÔNG xảy ra vì
+      // FIVE_BIB_CATEGORIES === SPLIT_BY_PAYMENT_REF sau F-061). Giữ làm
+      // safety net cho future extend FIVE_BIB_CATEGORIES mà quên thêm vào
+      // SPLIT_BY_PAYMENT_REF.
+      unknownRows.push(r);
     }
 
     if (unknownRows.length > 0) {
@@ -191,7 +206,11 @@ export class ReconciliationQueryService {
       });
     }
 
-    const missingPaymentRef = fiveBibOrders.filter((r) => !r.payment_ref);
+    // F-061 BR-61-04 — `missingPaymentRef` semantic NOW = orders that landed
+    // in MANUAL bucket DO TO empty payment_ref under SPLIT category (formerly
+    // ORDINARY/CHANGE_COURSE were treated as "5BIB regardless"). Preflight
+    // uses this to emit WARNING (severity downgrade) khi count > 0.
+    const missingPaymentRef = missingPaymentRefFallback;
 
     return {
       fiveBibOrders,

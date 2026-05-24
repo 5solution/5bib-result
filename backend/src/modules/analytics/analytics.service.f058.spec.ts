@@ -70,6 +70,10 @@ describe('F-058 — FeeService.computeFeeForOrdersAggregate (Analytics cascade)'
       totalDiscounts: o.totalDiscounts ?? 0,
       orderCategory: o.orderCategory ?? 'ORDINARY',
       createdAt: o.createdAt ?? '2026-06-15',
+      // F-061 — default truthy paymentRef so ORDINARY orders land in 5BIB path
+      // (preserves F-058 baseline semantics). Tests that want MANUAL fallback
+      // must explicitly pass `paymentRef: null`.
+      paymentRef: o.paymentRef !== undefined ? o.paymentRef : `VNPAY-${o.id ?? 1}`,
       manualTicketCount: o.manualTicketCount,
     };
   }

@@ -40,6 +40,8 @@ import { AuditModule } from './audit/audit.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 // FEATURE-036 — SEO subdirectory routes admin endpoints (sync-slugs trigger + logs)
 import { AdminSeoModule } from './admin-seo/admin-seo.module';
+// F-061 — Admin internal post-deploy ops (flush fee cache endpoint)
+import { AdminInternalModule } from './admin-internal/admin-internal.module';
 import { RaceMasterDataModule } from './race-master-data/race-master-data.module';
 import { AthleteReadonly } from './race-master-data/entities/athlete-readonly.entity';
 import { AthleteSubinfoReadonly } from './race-master-data/entities/athlete-subinfo-readonly.entity';
@@ -225,6 +227,8 @@ const volunteerDbModules = env.volunteerDb.host
     AuditModule,
     // FEATURE-036 — Admin SEO sync endpoints (POST /api/admin/seo/sync-slugs + GET sync-logs)
     AdminSeoModule,
+    // F-061 — Admin internal post-deploy ops (flush fee cache endpoint).
+    AdminInternalModule,
   ],
 })
 export class AppModule {}

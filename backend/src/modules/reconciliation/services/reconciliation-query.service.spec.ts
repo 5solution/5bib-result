@@ -62,10 +62,10 @@ describe('ReconciliationQueryService — categorize (FEATURE-016 v1.6.5)', () =>
   }
 
   // ============================================================
-  // BR-03 — ORDINARY preserve (KHÔNG split by payment_ref)
+  // F-061 BR-61-01/02 — ORDINARY uniform split by payment_ref (drop BR-03 special)
   // ============================================================
 
-  describe('BR-03 ORDINARY preserve', () => {
+  describe('F-061 ORDINARY uniform split', () => {
     it('TC-CAT-Q-01: ORDINARY w/ payment_ref → fiveBibOrders', async () => {
       const result = await categorizeRows([
         { order_category: 'ORDINARY', payment_ref: 'VNPAY-123', subtotal_price: 500000 },
@@ -75,13 +75,15 @@ describe('ReconciliationQueryService — categorize (FEATURE-016 v1.6.5)', () =>
       expect(result.unknownCategoryCount).toBe(0);
     });
 
-    it('TC-CAT-Q-02: ORDINARY w/o payment_ref → fiveBibOrders (preserve existing behavior)', async () => {
+    it('TC-CAT-Q-02 (F-061 NEW): ORDINARY w/o payment_ref → manualOrders (MOU intentional)', async () => {
       const result = await categorizeRows([
         { order_category: 'ORDINARY', payment_ref: null, subtotal_price: 100000 },
         { order_category: 'ORDINARY', payment_ref: '', subtotal_price: 100000 },
       ]);
-      expect(result.fiveBibOrders).toHaveLength(2);
-      expect(result.manualOrders).toHaveLength(0);
+      // F-061 — empty payment_ref → MANUAL fallback (drop BR-03 5BIB-regardless)
+      expect(result.fiveBibOrders).toHaveLength(0);
+      expect(result.manualOrders).toHaveLength(2);
+      // missingPaymentRef semantic now flags SPLIT-fallback orders
       expect(result.missingPaymentRef).toHaveLength(2);
     });
   });
@@ -109,10 +111,10 @@ describe('ReconciliationQueryService — categorize (FEATURE-016 v1.6.5)', () =>
   });
 
   // ============================================================
-  // BR-03 — CHANGE_COURSE preserve
+  // F-061 BR-61-01/02 — CHANGE_COURSE uniform split (drop BR-03 special)
   // ============================================================
 
-  describe('BR-03 CHANGE_COURSE preserve', () => {
+  describe('F-061 CHANGE_COURSE uniform split', () => {
     it('TC-CAT-Q-05: CHANGE_COURSE w/ payment_ref → fiveBibOrders', async () => {
       const result = await categorizeRows([
         { order_category: 'CHANGE_COURSE', payment_ref: 'VNPAY-789', subtotal_price: 100000 },
@@ -120,12 +122,14 @@ describe('ReconciliationQueryService — categorize (FEATURE-016 v1.6.5)', () =>
       expect(result.fiveBibOrders).toHaveLength(1);
     });
 
-    it('TC-CAT-Q-06: CHANGE_COURSE w/o payment_ref → fiveBibOrders (preserve existing behavior)', async () => {
+    it('TC-CAT-Q-06 (F-061 NEW): CHANGE_COURSE w/o payment_ref → manualOrders', async () => {
       const result = await categorizeRows([
         { order_category: 'CHANGE_COURSE', payment_ref: null, subtotal_price: 50000 },
       ]);
-      expect(result.fiveBibOrders).toHaveLength(1);
-      expect(result.manualOrders).toHaveLength(0);
+      // F-061 — empty payment_ref → MANUAL fallback (drop BR-03 5BIB-regardless)
+      expect(result.fiveBibOrders).toHaveLength(0);
+      expect(result.manualOrders).toHaveLength(1);
+      expect(result.missingPaymentRef).toHaveLength(1);
     });
   });
 

@@ -34,6 +34,12 @@ import type {
   FeeSourceBreakdownEntryDto,
   OrderForFeeAggregate,
 } from '../dto/fee-aggregate.dto';
+// F-061 — shared classification constants (PAUSE-61-BA-B)
+import {
+  SPLIT_BY_PAYMENT_REF,
+  isPaymentRefEmpty,
+  FIVE_BIB_SQL_LIST,
+} from '../../../common/constants/order-classification';
 
 /**
  * F-028 BR-PNL-04 + BR-PNL-22 — cross-DB MySQL platform pull cho TICKET_SALES.
@@ -671,9 +677,16 @@ export class FeeService {
       : null;
 
     // D1 Option A — 1 query with CASE statement (raw SQL via manager.query)
-    const fiveBibCatsJoined = FeeService.FIVE_BIB_CATEGORIES.map(
-      (c2) => `'${c2}'`,
-    ).join(',');
+    // F-061 BR-61-06 — Split 5BIB branch by payment_ref. Orders với cat ∈
+    // FIVE_BIB_CATEGORIES nhưng payment_ref NULL / empty / whitespace → MANUAL
+    // semantic (organizer self-collect, KHÔNG charge service_fee). 5BIB-eligible
+    // path REQUIRES truthy non-empty trimmed payment_ref. Shared list from
+    // common/constants/order-classification.ts.
+    const fiveBibCatsJoined = FIVE_BIB_SQL_LIST;
+    // SQL truthiness mirrors `isPaymentRefEmpty` TS helper: NOT NULL AND
+    // TRIM(payment_ref) != '' — covers null/empty/whitespace defensively.
+    const hasPaymentRefSql =
+      "o.payment_ref IS NOT NULL AND TRIM(o.payment_ref) <> ''";
     const periodClause =
       periodFromStr && periodToStr
         ? ' AND o.processed_on >= ? AND o.processed_on <= ?'
@@ -683,26 +696,37 @@ export class FeeService {
       SELECT
         COALESCE(SUM(CASE
           WHEN o.order_category IN (${fiveBibCatsJoined})
+            AND (${hasPaymentRefSql})
           THEN o.total_price * (? / 100.0)
           ELSE 0
         END), 0) AS fee_5bib,
         COALESCE(SUM(CASE
           WHEN o.order_category IN (${fiveBibCatsJoined})
+            AND (${hasPaymentRefSql})
           THEN o.total_price
           ELSE 0
         END), 0) AS gross_5bib,
         SUM(CASE
           WHEN o.order_category IN (${fiveBibCatsJoined})
+            AND (${hasPaymentRefSql})
           THEN 1
           ELSE 0
         END) AS count_5bib,
         SUM(CASE
           WHEN o.order_category = 'MANUAL'
+            OR (
+              o.order_category IN (${fiveBibCatsJoined})
+              AND NOT (${hasPaymentRefSql})
+            )
           THEN 1
           ELSE 0
         END) AS count_manual,
         COALESCE(SUM(CASE
           WHEN o.order_category = 'MANUAL'
+            OR (
+              o.order_category IN (${fiveBibCatsJoined})
+              AND NOT (${hasPaymentRefSql})
+            )
           THEN (
             SELECT COALESCE(SUM(oli2.quantity), 0)
             FROM order_line_item oli2
@@ -1211,9 +1235,20 @@ export class FeeService {
       }
 
       // Compute fee per order
+      // F-061 BR-61-05 — extend `isManual` detection.
+      // Cascade: cat === 'MANUAL' (native) OR cat ∈ SPLIT_BY_PAYMENT_REF AND
+      // payment_ref empty (intentional MOU per PAUSE-61-01 = A).
+      // Backward compat (BR-61-07): caller cũ KHÔNG inject paymentRef →
+      // `paymentRef` field undefined → `isPaymentRefEmpty(undefined) = true`
+      // → cat ∈ SPLIT bị classify MANUAL. Atomic B fix đã update 3 caller
+      // (Analytics + 2 Dashboard) cùng inject paymentRef qua SQL pull.
       const cat = order.orderCategory;
-      const isManual = cat === 'MANUAL';
-      const is5bib = fiveBibCats.includes(cat);
+      const isSplitCat = SPLIT_BY_PAYMENT_REF.has(cat);
+      const isPaymentEmpty = isPaymentRefEmpty(order.paymentRef);
+      const isManual =
+        cat === 'MANUAL' || (isSplitCat && isPaymentEmpty);
+      // 5BIB-eligible CHỈ khi cat 5BIB AND payment_ref truthy (sau F-061).
+      const is5bib = fiveBibCats.includes(cat) && !isManual;
 
       let orderServiceFee = 0;
       let orderManualFee = 0;

@@ -133,11 +133,16 @@ export class ReconciliationPreflightService {
       });
 
       // --- Race-level warnings ---
+      // F-061 BR-61-04 — severity downgrade ERROR → WARNING + message update.
+      // Sau F-061, ORDINARY/CHANGE_COURSE/PERSONAL_GROUP/etc thiếu payment_ref
+      // = intentional MOU semantic (organizer self-collect, 5BIB charge phí
+      // MANUAL 5000đ/vé). Preflight giữ WARNING level cho Sales Admin verify
+      // giao kèo (PAUSE-61-04 = B) — KHÔNG block recon creation.
       if (missingPaymentRef.length > 0) {
         warnings.push({
           type: 'MISSING_PAYMENT_REF',
-          severity: 'ERROR',
-          message: `${missingPaymentRef.length} đơn ORDINARY thiếu payment_ref tại "${raceName}" — cần kiểm tra trước khi tạo`,
+          severity: 'WARNING',
+          message: `${missingPaymentRef.length} đơn ORDINARY/CHANGE_COURSE/nhóm thiếu payment_ref tại "${raceName}" — sẽ được tính như đơn thủ công (phí MANUAL). Xác nhận đúng giao kèo MOU?`,
           count: missingPaymentRef.length,
         });
       }
@@ -293,11 +298,12 @@ export class ReconciliationPreflightService {
         ordinary_missing_payment_ref: missingPaymentRef.length,
       });
 
+      // F-061 BR-61-04 — same downgrade trong runRange flow.
       if (missingPaymentRef.length > 0) {
         warnings.push({
           type: 'MISSING_PAYMENT_REF',
-          severity: 'ERROR',
-          message: `${missingPaymentRef.length} đơn ORDINARY thiếu payment_ref tại "${raceName}" — cần kiểm tra trước khi tạo`,
+          severity: 'WARNING',
+          message: `${missingPaymentRef.length} đơn ORDINARY/CHANGE_COURSE/nhóm thiếu payment_ref tại "${raceName}" — sẽ được tính như đơn thủ công (phí MANUAL). Xác nhận đúng giao kèo MOU?`,
           count: missingPaymentRef.length,
         });
       }
