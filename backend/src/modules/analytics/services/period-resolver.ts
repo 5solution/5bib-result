@@ -81,6 +81,48 @@ export function addYearsUtc(date: Date, years: number): Date {
 }
 
 /**
+ * F-062 Wave 2A NEW (TD-F062-MOM-BOUNDARY-ROLLOVER fix 2026-05-22).
+ *
+ * Shift date by N months WITHOUT JavaScript's setUTCMonth rollover bug.
+ *
+ * Naive `Date.setUTCMonth(target)` keeps source day even when target month
+ * has fewer days → rolls over to next month:
+ *   `new Date('2026-05-31').setUTCMonth(3)` → `'2026-05-01'` (BUG!)
+ *
+ * shiftMonthClamped clamps day to last-day-of-target-month:
+ *   `shiftMonthClamped(2026-05-31, -1)` → `2026-04-30` (correct)
+ *   `shiftMonthClamped(2026-01-31, -1)` → `2025-12-31` (Dec has 31, no clamp)
+ *   `shiftMonthClamped(2024-03-29, -1)` → `2024-02-29` (leap year OK)
+ *
+ * Used by `resolveCompare('mom')` for Month-over-Month comparison.
+ */
+export function shiftMonthClamped(date: Date, months: number): Date {
+  const sourceYear = date.getUTCFullYear();
+  const sourceMonth = date.getUTCMonth();
+  const sourceDay = date.getUTCDate();
+  // Compute target year/month theo offset (handle negative cross-year correctly)
+  const targetTotalMonths = sourceYear * 12 + sourceMonth + months;
+  const targetYear = Math.floor(targetTotalMonths / 12);
+  const targetMonth = targetTotalMonths - targetYear * 12; // 0-11
+  // Day 0 of (target month + 1) = last day of target month (handle 28/29/30/31)
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(targetYear, targetMonth + 1, 0),
+  ).getUTCDate();
+  const clampedDay = Math.min(sourceDay, lastDayOfTargetMonth);
+  return new Date(
+    Date.UTC(
+      targetYear,
+      targetMonth,
+      clampedDay,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds(),
+    ),
+  );
+}
+
+/**
  * Resolve current period range theo PeriodInput.
  */
 export function resolvePeriod(input: PeriodInput): ResolvedRange {
@@ -209,11 +251,14 @@ export function resolveCompare(
   }
 
   if (compare.kind === 'mom') {
-    // Month-over-Month: lùi 1 calendar month (handle 28/29/30/31-day month).
-    const from = new Date(curFrom.getTime());
-    from.setUTCMonth(from.getUTCMonth() - 1);
-    const to = new Date(curTo.getTime());
-    to.setUTCMonth(to.getUTCMonth() - 1);
+    // Month-over-Month: lùi 1 calendar month với day-clamp (handle 28/29/30/31).
+    // F-062 Wave 2A fix (TD-F062-MOM-BOUNDARY-ROLLOVER 2026-05-22 Manager finding):
+    // Naive `setUTCMonth(-1)` rolls over khi source day > target month days.
+    // VD: 2026-05-31 setUTCMonth(3) → April 31 KHÔNG tồn tại → JS rolls to May 1
+    //     (current month, NOT previous!) → MoM growth metric SAI.
+    // Fix: shiftMonthClamped clamps day to last-day-of-target-month.
+    const from = shiftMonthClamped(curFrom, -1);
+    const to = shiftMonthClamped(curTo, -1);
     return {
       fromIso: from.toISOString(),
       toIso: to.toISOString(),

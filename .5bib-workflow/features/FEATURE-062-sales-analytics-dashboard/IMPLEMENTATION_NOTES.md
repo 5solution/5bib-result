@@ -138,3 +138,102 @@
 - [x] **Bước 9:** Generated SDK regen — N/A Wave 1 (no backend DTO changed). Wave 2 backend service work sẽ trigger SDK regen.
 - [x] **Bước 10:** Unit tests PASS với output pasted vào 03-coder-implementation.md
 - [x] **Bước 11:** IMPLEMENTATION_NOTES.md viết với 4 sections đầy đủ (Deviations + Forced + Tradeoffs + Reviewer Notes). KHÔNG section nào trống/skip.
+
+---
+
+# Wave 2A — Foundation Fixes (2026-05-22) — Manager BLOCKING TD resolutions
+
+**Scope:** ~160 LoC delta (3 files). Fix 2 TDs từ Wave 1 Manager review trước khi proceed Wave 2B backend services.
+
+## 🚧 Section 1 — Deviations from Spec (Wave 2A)
+
+### [Deviation #5] `shiftMonthClamped()` exported public (not private helper)
+
+- **Spec said:** MANAGER_WAVE1_REVIEW.md code suggestion proposes `shiftMonthClamped` as helper function "trong cùng file period-resolver.ts" (implicit private).
+- **I did:** Export `shiftMonthClamped` from period-resolver.ts (added to module exports).
+- **Why:** (1) Pattern reusable cho future date arithmetic features (vd: WoY week-over-year, QoQ quarter-over-quarter). (2) Allow standalone unit tests cho boundary cases (Section 1B in spec file). (3) Symmetric với existing exported helpers (`addDaysUtc`, `addYearsUtc`, `startOfDayUtc`).
+- **Reviewer should check:** Section 1B test block (8 tests) standalone helper coverage + line 84-127 in period-resolver.ts export declaration.
+
+### [Deviation #6] QC TD claim slightly over-broad (1 endpoint, not 6)
+
+- **Spec said:** TD-F062-F026-SILENT-CAPABILITY-EXPANSION claims "Adj #1 CompareKind extend silently adds wow/mom capability cho **6 F-026 endpoint** hiện tại".
+- **I did:** Verified via grep — only **1 endpoint** has `compareWith` field (`repeat-athlete-rate`). The other 5 F-026 endpoints (merchant-churn, time-to-fill, claim-rate, geographic-demographic, refund-cancel-rate) don't accept compareWith.
+- **Why:** QC's adversarial probe assumption was theoretical (CompareKind type extension affects ANY consumer). Reality: only repeat-athlete-rate DTO has compareWith field declared.
+- **Reviewer should check:** `analytics.controller.ts:157` (only 1 occurrence of `q.compareWith`). Update TD-F062-F026-SILENT-CAPABILITY-EXPANSION text "6 endpoint" → "1 endpoint" + adjust QC's "market as feature" recommendation accordingly.
+
+## ⚙️ Section 2 — Forced Changes (Wave 2A)
+
+### [Forced #4] DTO @IsIn already exists (not adding @IsEnum from scratch)
+
+- **PRD assumed:** TD-F062-VALIDATION-COMPAREKIND text "add `@IsEnum` decorator" implies decorator absent. Wave 1 QC probe finding said "cast `q.compareWith as CompareKind` accept any string".
+- **Reality:** `repeat-athlete-rate.dto.ts:35` already has `@IsIn(['prev', 'yoy', 'custom', 'none'])`. Class-validator DOES reject invalid values at DTO level. Coder's earlier QC report was inaccurate ("accept any string from query param").
+- **Workaround:** Update existing `@IsIn` array to include `'wow' | 'mom'` (extend not add). Use `@IsIn` instead of `@IsEnum` to match codebase convention (other F-026 DTOs use `@IsIn`).
+- **Manager/BA action:** Update TD-F062-VALIDATION-COMPAREKIND text trong known-issues.md sau Wave 2A close — DTO had validation, was just out-of-sync với extended type. Wave 2A fixed enum array alignment.
+
+## ⚖️ Section 3 — Tradeoffs Considered (Wave 2A)
+
+| Decision | Option chosen | Alternative | Why chose | Cost paid |
+|----------|---------------|-------------|-----------|-----------|
+| Day-clamp month shift | `shiftMonthClamped` separate function | Inline if-else within mom branch | Reusable + testable + symmetric với `addDaysUtc`/`addYearsUtc` family | +30 LoC helper file size |
+| Helper visibility | Public export | Private file-scoped function | Allows boundary unit tests + future date math features reuse | Adds to module export surface (minor) |
+| Last-day calculation | `new Date(Date.UTC(year, month+1, 0))` (day 0 trick) | Manual table lookup with leap year detection | Battle-tested JS idiom, handles leap year automatically | None — leverages JS spec |
+| `@IsIn` extend vs `@IsEnum` migration | `@IsIn` array extension | Refactor to `@IsEnum(CompareKindEnum)` TS enum | Match existing codebase convention (5 other F-026 DTOs use `@IsIn`) | Doesn't align với formal enum type (CompareKind is string union, not enum) |
+| Boundary test scope | 5 specific cases (May 31, Jan 31, Mar 29 leap/non-leap, Mar 31 leap) + 8 standalone | Property-based testing với fast-check | Targeted cases cover known bug + critical scenarios; fast-check overkill cho 30-min Wave 2A | If new edge case discovered → manual add to test file |
+
+## 🔬 Section 4 — Reviewer Notes (Wave 2A)
+
+### Files cần review kỹ (priority order Wave 2A)
+
+1. **`backend/src/modules/analytics/services/period-resolver.ts:84-127`** — NEW `shiftMonthClamped()` helper. Verify day=0-trick correctness (`new Date(Date.UTC(year, month+1, 0))` = last day of month).
+2. **`backend/src/modules/analytics/services/period-resolver.ts:225-238`** — Updated mom branch in `resolveCompare()`. Verify NO MORE `setUTCMonth(-1)` call.
+3. **`backend/src/modules/analytics/__tests__/period-resolver.f062.spec.ts:73-115`** — NEW Section 1B `shiftMonthClamped()` tests (8 boundary cases).
+4. **`backend/src/modules/analytics/__tests__/period-resolver.f062.spec.ts:155-210`** — NEW mom boundary regression tests (5 cases including Manager bug case May 31 → April 30).
+5. **`backend/src/modules/analytics/dto/repeat-athlete-rate.dto.ts:28-40`** — `@IsIn` enum extended `+wow +mom`. ApiProperty enum array updated.
+
+### Verification of Manager BLOCKING TD (TD-F062-MOM-BOUNDARY-ROLLOVER)
+
+✅ **Manager bug case verified fixed:**
+- Before: `2026-05-31 setUTCMonth(-1)` → `2026-05-01` (BUG — rolls to current month)
+- After: `shiftMonthClamped(2026-05-31, -1)` → `2026-04-30` (correct — last day of April)
+- Test: `period-resolver.f062.spec.ts:160-173` covers this exact case
+- Node REPL verification: 7/7 boundary cases PASS pre-test (May 31, Jan 31 cross-year, Mar 29 leap, Mar 29 non-leap, Mar 31 leap, time preservation, day 0 shift)
+
+### Concurrency hotspots (Wave 2A)
+- **None** — Wave 2A = pure helper + DTO validation. No service state, no cache write, no SQL.
+
+### Edge cases tested vs DEFERRED (Wave 2A)
+
+#### ✅ Tested (104/104 PASS — Wave 1 77 + Wave 2A 13 new + F-058 14 = 104):
+- shiftMonthClamped: day=22 safe, day=31 clamp May 31 → April 30, Jan 31 cross-year (no clamp), Mar 29 leap (no clamp), Mar 29 non-leap (clamp to 28), Mar 31 leap (clamp to 29), +1 month positive shift, 0 month no-op, time preservation HH/MM/SS/MS
+- resolveCompare('mom'): all 5 boundary cases via real resolvePeriod() input
+- DTO `@IsIn` array updated cho compareWith — class-validator runtime reject invalid
+
+#### ⚠️ Deferred (acceptable Wave 2A scope):
+- Property-based fuzz testing với `fast-check` cho shiftMonthClamped — manual targeted cases sufficient v1
+- DTO `@IsIn` validation E2E test (curl with `?compareWith=banana` → 400) — unit test of decorator behavior covered by class-validator library tests, app-level smoke pending Wave 2B endpoint integration
+- Audit other F-062 NEW DTOs cho `@IsIn` consistency — Wave 2B sẽ define new DTOs với `@IsIn`/`@IsEnum` per BR-SA spec
+
+### Type safety narrowed casts (Manager grep `as unknown as`)
+- **None** trong Wave 2A files. shiftMonthClamped uses explicit Date constructors only.
+
+### Security checklist self-applied (Wave 2A)
+- [x] **shiftMonthClamped** — pure date arithmetic, no DB query, no external input parsing
+- [x] **DTO @IsIn extend** — class-validator runtime reject invalid values at DTO level (400 vs silent fallback per QC TD)
+- [x] **Period-resolver mom branch** — no SQL, no cache, no Redis key generation
+
+### Performance numbers measured (Wave 2A)
+- N/A Wave 2A — pure helpers. No SQL queries, no cache reads. Defer Wave 2B backend services k6 benchmarks.
+
+### Self-Review Pipeline checklist 11 bước (Wave 2A)
+
+- [x] **Bước 1:** tsc clean cho 3 Wave 2A files (pre-existing errors in `upload/*.spec.ts` Vitest `vi` import UNRELATED to F-062)
+- [x] **Bước 2:** PRD strict adherence — TD-F062-MOM-BOUNDARY-ROLLOVER fix per MANAGER_WAVE1_REVIEW.md code suggestion + boundary tests per Manager directive
+- [x] **Bước 3:** Anti-pattern scan clean — 0 matches across 3 Wave 2A files
+- [x] **Bước 4:** Hand-pick mapping audit — N/A Wave 2A (no schema change, no `.map((li)=>`)
+- [x] **Bước 5:** PROD-readiness — 104/104 analytics tests PASS. Wave 2A no new endpoint → no curl smoke needed. shiftMonthClamped covered by 8 unit tests.
+- [x] **Bước 6:** UI/UX self-inspection — N/A Wave 2A (no UI changes, pure backend helpers + DTO)
+- [x] **Bước 7:** Real-world data sanity — Boundary tests use real-world VN race day scenarios (month-end periods natural for marketing reports)
+- [x] **Bước 8:** Files Changed vs Scope Lock — 3 files all within Manager Plan v2 backend Scope Lock (period-resolver.ts EXTEND, period-resolver.f062.spec.ts NEW, repeat-athlete-rate.dto.ts EXTEND per TD fix scope)
+- [x] **Bước 9:** Generated SDK regen — DEFER Wave 2B (DTO change `compareWith` enum array extend technically affects SDK type, but value still `string` after `@IsIn` validation — backward compat. Will regen end of Wave 2B with all NEW DTOs)
+- [x] **Bước 10:** Unit tests PASS 104/104 với output verifiable above
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2A section đầy đủ 4 sub-sections (Deviations #5+#6 + Forced #4 + Tradeoffs 5 + Reviewer Notes)

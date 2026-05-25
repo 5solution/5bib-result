@@ -15,6 +15,7 @@ import {
   resolveBucketSize,
   calcDeltaPercent,
   buildMetricCacheKey,
+  shiftMonthClamped,
   type GranularityKind,
   type CompareKind,
   type PeriodKind,
@@ -57,6 +58,52 @@ describe('Period Resolver — F-062 v3 (Adj #1 GranularityKind + CompareKind ext
   });
 
   // ────────────────────────────────────────────────────────────────────
+  // SECTION 1B — shiftMonthClamped() (NEW helper, Wave 2A fix TD-F062-MOM-BOUNDARY-ROLLOVER)
+  // ────────────────────────────────────────────────────────────────────
+
+  describe('shiftMonthClamped() — NEW (Wave 2A fix, public helper)', () => {
+    it('preserves day when target month has enough days (May 22 → April 22)', () => {
+      const result = shiftMonthClamped(new Date('2026-05-22T00:00:00Z'), -1);
+      expect(result.toISOString()).toBe('2026-04-22T00:00:00.000Z');
+    });
+
+    it('clamps day to last-day-of-target-month (May 31 → April 30, the Manager bug case)', () => {
+      const result = shiftMonthClamped(new Date('2026-05-31T00:00:00Z'), -1);
+      expect(result.toISOString()).toBe('2026-04-30T00:00:00.000Z');
+    });
+
+    it('handles cross-year backward (Jan 31 → Dec 31, no clamp because Dec has 31)', () => {
+      const result = shiftMonthClamped(new Date('2026-01-31T00:00:00Z'), -1);
+      expect(result.toISOString()).toBe('2025-12-31T00:00:00.000Z');
+    });
+
+    it('handles leap year (Mar 29 → Feb 29 in 2024)', () => {
+      const result = shiftMonthClamped(new Date('2024-03-29T00:00:00Z'), -1);
+      expect(result.toISOString()).toBe('2024-02-29T00:00:00.000Z');
+    });
+
+    it('handles non-leap year clamp (Mar 29 → Feb 28 in 2025)', () => {
+      const result = shiftMonthClamped(new Date('2025-03-29T00:00:00Z'), -1);
+      expect(result.toISOString()).toBe('2025-02-28T00:00:00.000Z');
+    });
+
+    it('handles positive shift (+1 month)', () => {
+      const result = shiftMonthClamped(new Date('2026-01-31T00:00:00Z'), 1);
+      expect(result.toISOString()).toBe('2026-02-28T00:00:00.000Z'); // Feb 28 (non-leap clamp)
+    });
+
+    it('preserves time components (HH/MM/SS/MS)', () => {
+      const result = shiftMonthClamped(new Date('2026-05-22T23:59:59.123Z'), -1);
+      expect(result.toISOString()).toBe('2026-04-22T23:59:59.123Z');
+    });
+
+    it('handles 0 months shift (no-op)', () => {
+      const result = shiftMonthClamped(new Date('2026-05-22T10:00:00Z'), 0);
+      expect(result.toISOString()).toBe('2026-05-22T10:00:00.000Z');
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
   // SECTION 2 — resolveCompare() extend với wow + mom (BR-SA-04 v3)
   // ────────────────────────────────────────────────────────────────────
 
@@ -85,6 +132,63 @@ describe('Period Resolver — F-062 v3 (Adj #1 GranularityKind + CompareKind ext
       expect(prevFromDate.getUTCMonth()).toBe(curFromDate.getUTCMonth() - 1);
       expect(prevFromDate.getUTCDate()).toBe(curFromDate.getUTCDate());
       expect(result!.periodKey).toContain('mom:');
+    });
+
+    // F-062 Wave 2A NEW (TD-F062-MOM-BOUNDARY-ROLLOVER fix 2026-05-22 Manager finding):
+    // verify shiftMonthClamped pattern KHÔNG có rollover bug khi day > target month days.
+    it('mom: May 31 → April 30 WITHOUT rollover (Manager bug case)', () => {
+      const periodEndMay31 = resolvePeriod({
+        kind: 'custom',
+        from: '2026-05-31',
+        to: '2026-05-31',
+      });
+      const result = resolveCompare(periodEndMay31, { kind: 'mom' });
+      expect(result).not.toBeNull();
+      // Naive setUTCMonth(-1) from May 31 → April 31 (NOT exist) → JS rolls May 1
+      // shiftMonthClamped clamps day to April 30 (last day of April)
+      expect(result!.fromIso.slice(0, 10)).toBe('2026-04-30');
+      // Verify NOT rolled over to May (would be bug)
+      expect(result!.fromIso.slice(5, 7)).not.toBe('05');
+    });
+
+    it('mom: Jan 31 → Dec 31 (cross-year, no clamp because Dec has 31)', () => {
+      const periodJan31 = resolvePeriod({
+        kind: 'custom',
+        from: '2026-01-31',
+        to: '2026-01-31',
+      });
+      const result = resolveCompare(periodJan31, { kind: 'mom' });
+      expect(result!.fromIso.slice(0, 10)).toBe('2025-12-31');
+    });
+
+    it('mom: Mar 29 → Feb 29 LEAP YEAR (2024, no clamp)', () => {
+      const periodMar29Leap = resolvePeriod({
+        kind: 'custom',
+        from: '2024-03-29',
+        to: '2024-03-29',
+      });
+      const result = resolveCompare(periodMar29Leap, { kind: 'mom' });
+      expect(result!.fromIso.slice(0, 10)).toBe('2024-02-29');
+    });
+
+    it('mom: Mar 29 → Feb 28 NON-leap year (2025, CLAMP to 28)', () => {
+      const periodMar29NonLeap = resolvePeriod({
+        kind: 'custom',
+        from: '2025-03-29',
+        to: '2025-03-29',
+      });
+      const result = resolveCompare(periodMar29NonLeap, { kind: 'mom' });
+      expect(result!.fromIso.slice(0, 10)).toBe('2025-02-28');
+    });
+
+    it('mom: Mar 31 → Feb 29 LEAP YEAR (2024, CLAMP from 31 to 29)', () => {
+      const periodMar31Leap = resolvePeriod({
+        kind: 'custom',
+        from: '2024-03-31',
+        to: '2024-03-31',
+      });
+      const result = resolveCompare(periodMar31Leap, { kind: 'mom' });
+      expect(result!.fromIso.slice(0, 10)).toBe('2024-02-29');
     });
 
     it('yoy: shifts current range lùi 1 calendar year (regression — F-026 backward compat)', () => {

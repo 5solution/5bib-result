@@ -27,12 +27,15 @@ export class RepeatAthleteRateQueryDto {
 
   @ApiProperty({
     required: false,
-    description: 'Compare mode',
-    enum: ['prev', 'yoy', 'custom', 'none'],
+    description:
+      'Compare mode. F-062 Wave 2A extend (TD-F062-VALIDATION-COMPAREKIND): ' +
+      'thêm "wow" (Week-over-Week) + "mom" (Month-over-Month) cho parity với F-062 CompareSelector. ' +
+      'F-026 backward compat: "prev" / "yoy" / "custom" / "none" giữ nguyên.',
+    enum: ['prev', 'yoy', 'custom', 'none', 'wow', 'mom'],
   })
   @IsOptional()
   @IsString()
-  @IsIn(['prev', 'yoy', 'custom', 'none'])
+  @IsIn(['prev', 'yoy', 'custom', 'none', 'wow', 'mom'])
   compareWith?: string;
 
   @ApiProperty({ required: false, description: 'Drill-down race id' })

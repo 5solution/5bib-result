@@ -237,3 +237,157 @@ Wave 1 ship Foundation only. Following items DEFERRED cho Wave 2+ trong cùng F-
 - Memory updates NOT yet — Wave 1 partial. Manager defer `/5bib-deploy` until full F-062 ships (Wave 5 complete).
 - Acceptable interim: branch `5bib_analytics_v2` carries Wave 1 + Wave 2+ commits incrementally. `/5bib-deploy` runs ONCE after all 5 waves done.
 - ALTERNATIVE: Mini-deploy gate per wave for safety — Manager + Danny decide which approach.
+
+---
+
+# Wave 2A — Foundation Fixes (2026-05-22) — Manager BLOCKING TD resolutions
+
+**Status:** 🟠 **READY_FOR_QC (Wave 2A)** — 2 BLOCKING TDs từ Wave 1 resolved trước khi tiếp Wave 2B backend services.
+**Scope:** ~160 LoC delta (3 files). Wave 2A = small focused fix scope per Danny choice "Foundation fixes only" 2026-05-22.
+
+## 🔍 Wave 2A Impact Assessment
+
+- **Backend:** period-resolver.ts NEW `shiftMonthClamped()` exported helper + updated `resolveCompare('mom')` branch. ZERO endpoint change, ZERO service mutation.
+- **DTO**: `repeat-athlete-rate.dto.ts` `@IsIn` array extend `+wow +mom`. Backward compat — existing 4 values preserved.
+- **SDK regen**: DEFER Wave 2B (DTO change technically affects SDK type, value stays string with `@IsIn` runtime reject — no breaking change for SDK consumers).
+- **Tests**: +13 new tests (8 shiftMonthClamped standalone + 5 mom boundary regression).
+
+## ⚠️ Wave 2A Edge Cases Covered
+
+- [x] May 31 → April 30 (Manager bug case, naive `setUTCMonth(-1)` rolls to May 1)
+- [x] Jan 31 → Dec 31 (cross-year backward, Dec has 31 days no clamp needed)
+- [x] Mar 29 → Feb 29 LEAP YEAR 2024 (no clamp, leap day preserved)
+- [x] Mar 29 → Feb 28 NON-LEAP 2025 (clamp from 29 to 28)
+- [x] Mar 31 → Feb 29 LEAP YEAR 2024 (clamp from 31 to 29)
+- [x] Positive shift +1 month (Jan 31 → Feb 28 non-leap clamp)
+- [x] Time preservation HH/MM/SS/MS (May 22 23:59:59.123 → April 22 23:59:59.123)
+- [x] 0 month no-op (returns same date)
+
+## 🧠 Wave 2A Logic & Architecture
+
+### Why `shiftMonthClamped` over inline if-else trong mom branch
+
+- **Reusable**: Future date arithmetic (WoY week-over-year, QoQ quarter-over-quarter) can leverage same pattern
+- **Testable**: 8 standalone unit tests cover all boundary cases without setup overhead
+- **Symmetric**: Joins existing exported helpers family (`addDaysUtc`, `addYearsUtc`, `startOfDayUtc`)
+
+### Why `@IsIn` extend instead of `@IsEnum` migration
+
+- **Codebase convention**: 5 other F-026 DTOs use `@IsIn` pattern. Switching to `@IsEnum` would require defining formal TypeScript enum (CompareKind is currently string union type, not enum).
+- **Backward compat**: Existing F-026 endpoints continue accepting 4 values + gain 2 new (wow/mom) — pure capability extension.
+- **Type alignment**: `@IsIn(['prev', 'yoy', 'custom', 'none', 'wow', 'mom'])` array EXACTLY matches `CompareKind` type union. Manual sync needed if type changes — tracked as TD-F062-CONVENTION-AUDIT in Wave 5 polish.
+
+## 💻 Wave 2A Files Changed
+
+### Backend (3 files / 160 LoC delta)
+- ✏️ Modified: `backend/src/modules/analytics/services/period-resolver.ts` (+55 LoC):
+  - NEW exported `shiftMonthClamped(date, months)` helper (lines 84-127)
+  - Updated `resolveCompare('mom')` branch to use new helper (lines 225-238)
+  - Doc comments explain TD-F062-MOM-BOUNDARY-ROLLOVER fix rationale
+- ✏️ Modified: `backend/src/modules/analytics/__tests__/period-resolver.f062.spec.ts` (+104 LoC):
+  - NEW Section 1B: `shiftMonthClamped()` standalone tests (8 boundary cases)
+  - NEW 5 mom boundary regression tests in Section 2 (May 31 / Jan 31 / Mar 29 leap / Mar 29 non-leap / Mar 31 leap)
+- ✏️ Modified: `backend/src/modules/analytics/dto/repeat-athlete-rate.dto.ts` (+9 LoC):
+  - `@IsIn` array extend từ 4 → 6 values (`+wow +mom`)
+  - `@ApiProperty.enum` array updated tương ứng
+  - `@ApiProperty.description` extended với F-062 Wave 2A note
+
+## 🧪 Wave 2A Tests Written
+
+### Unit tests — Backend
+
+**Test execution result (Jest):**
+
+```
+Test Suites: 11 passed, 11 total
+Tests:       104 passed, 104 total
+Snapshots:   0 total
+Time:        8.083 s
+Ran all test suites matching /analytics\/__tests__|analytics.service.f058/i.
+```
+
+### Coverage breakdown Wave 2A new tests
+- **Section 1B `shiftMonthClamped()` — 8 tests**:
+  - preserves day when target month has enough days (May 22 → April 22)
+  - clamps day to last-day-of-target-month (May 31 → April 30, Manager bug case)
+  - handles cross-year backward (Jan 31 → Dec 31, no clamp Dec has 31)
+  - handles leap year (Mar 29 → Feb 29 in 2024)
+  - handles non-leap year clamp (Mar 29 → Feb 28 in 2025)
+  - handles positive shift +1 month (Jan 31 → Feb 28 non-leap clamp)
+  - preserves time components HH/MM/SS/MS
+  - handles 0 months shift (no-op)
+
+- **Section 2 mom boundary regression — 5 tests**:
+  - May 31 → April 30 WITHOUT rollover (Manager bug case)
+  - Jan 31 → Dec 31 (cross-year, no clamp)
+  - Mar 29 → Feb 29 LEAP YEAR (2024, no clamp)
+  - Mar 29 → Feb 28 NON-leap year (2025, CLAMP to 28)
+  - Mar 31 → Feb 29 LEAP YEAR (2024, CLAMP from 31 to 29)
+
+### Regression assurance
+- All Wave 1 38 period-resolver tests PASS unchanged
+- F-026 6 F-026 service tests + analytics-invariants + analytics-aggregator.cron + F-058 discrepancy = 11 test files, 104 tests total PASS
+- ZERO break F-026 backward compat verified
+
+## 🛑 Wave 2A PAUSE/Confirmation log
+
+| Date | What | Danny's answer |
+|------|------|----------------|
+| 2026-05-22 | Wave 2 scope cho session (full 1800 LoC vs 250 LoC fixes only)? | Wave 2A Foundation fixes only ~250 LoC chosen |
+
+## 🚧 Wave 2A Scope creep
+
+- [x] **Không có scope creep.** 3 files đều trong Manager Plan v2 Scope Lock backend section:
+  - `period-resolver.ts` EXTEND ✓
+  - `period-resolver.f062.spec.ts` NEW (continued from Wave 1) ✓
+  - `repeat-athlete-rate.dto.ts` EXTEND (TD-F062-VALIDATION-COMPAREKIND fix per Wave 1 known-issues) ✓
+
+## 🐛 Wave 2A Known limitations / TDs
+
+### Resolved by Wave 2A
+- ✅ **TD-F062-MOM-BOUNDARY-ROLLOVER** 🟡 MED 🔴 BLOCKING Wave 2 — RESOLVED via shiftMonthClamped + 13 tests
+- ✅ **TD-F062-VALIDATION-COMPAREKIND** 🟢 LOW — RESOLVED via `@IsIn` array extend (already had validation, just out-of-sync với extended type)
+
+### Refined understanding (Wave 2A discovery)
+- **TD-F062-F026-SILENT-CAPABILITY-EXPANSION** 🟢 INFORMATIONAL — QC claim "6 endpoints" actually only 1 endpoint (repeat-athlete-rate) has compareWith. Other 5 F-026 endpoints (merchant-churn, time-to-fill, claim-rate, geographic-demographic, refund-cancel-rate) don't accept compareWith. Manager update known-issues.md TD text "6 → 1 endpoint" recommended.
+
+### Deferred Wave 2B+
+- 5 NEW backend services (runner-analytics + race-performance + merchant-comparison + ga4 + export)
+- 16 NEW DTOs
+- 12 NEW endpoints
+- `flushEventOverrideCache()` extend +13 patterns (BR-SA-18)
+- `pnpm install @google-analytics/data` PAUSE Wave 2B confirm Danny
+- Verify MySQL `races.type` column existence PAUSE-SA-07 trước Endpoint 15
+
+## ✅ Wave 2A Self-Review Pipeline checklist 11 bước
+
+- [x] **Bước 1:** tsc clean cho Wave 2A files (pre-existing errors trong `upload/*.spec.ts` Vitest `vi` import UNRELATED to F-062)
+- [x] **Bước 2:** PRD strict adherence — TD fixes per MANAGER_WAVE1_REVIEW.md code suggestion + boundary tests per Manager directive
+- [x] **Bước 3:** Anti-pattern scan clean — 0 console.log / 0 `: any` / 0 `as unknown as` trên 3 Wave 2A files
+- [x] **Bước 4:** Hand-pick mapping audit — N/A Wave 2A (no schema change)
+- [x] **Bước 5:** PROD-readiness — 104/104 analytics tests PASS. Wave 2A no new endpoint = no curl smoke.
+- [x] **Bước 6:** UI/UX self-inspection — N/A Wave 2A (no UI changes, pure backend)
+- [x] **Bước 7:** Real-world data sanity — Boundary tests use natural marketing/finance scenarios (month-end reports)
+- [x] **Bước 8:** Files Changed vs Scope Lock — 3 files ALL within Manager Plan v2 backend Scope Lock + TD fix scope
+- [x] **Bước 9:** Generated SDK regen — DEFER Wave 2B (compareWith still string type after `@IsIn` validation, no breaking change)
+- [x] **Bước 10:** Unit tests PASS 104/104 — output paste below
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2A section đầy đủ 4 sub-sections (Deviations #5+#6 + Forced #4 + Tradeoffs 5 + Reviewer Notes)
+
+→ **Status: 🟠 READY_FOR_QC (Wave 2A slice)**
+
+## 🔗 Wave 2A Next Step
+
+**For Manager Wave 2A spot-check (optional, recommended):**
+- Verify shiftMonthClamped Manager bug case fix via Node REPL `2026-05-31` → `2026-04-30`
+- Spot-check period-resolver.ts:84-127 helper implementation + lines 225-238 mom branch usage
+- Verify TD-F062-MOM-BOUNDARY-ROLLOVER closed in known-issues.md
+
+**For Wave 2B start (next Coder session):**
+- Begin Wave 2B backend services: 5 NEW services + 16 DTOs + 12 endpoints
+- PAUSE BEFORE `pnpm install @google-analytics/data` — confirm Danny
+- Verify MySQL `races.type` column existence — PAUSE-SA-07 (before Endpoint 15 implementation)
+- Target Wave 2B ~1,600 LoC backend + ~50 unit tests
+
+**For partial deploy decision (Danny choose):**
+- Mini-deploy Wave 2A alone? OR bundle with Wave 1 partial deploy (commit `b8cb87f`)?
+- QC re-test pass Wave 2A? Manager checkpoint update?
