@@ -7,6 +7,90 @@
 
 ---
 
+## [2026-05-25] FEATURE-062 Wave 2B-1 v2: Revenue Endpoints — 4 QC findings resolved (PARTIAL DEPLOY)
+
+**Branch:** `5bib_analytics_v2` 7 cumulative commits — Wave 2B-1 trilogy `d5e31b5` (v1 ship) + `a36d3b6` (v2 fix) + `cdac268` (QC v2 APPROVED doc) pushed origin
+**Type:** EXTEND_EXISTING + defense-in-depth fix cycle (Coder v1 ship → QC REJECT 4 findings → Coder v2 fix → QC APPROVED → Manager spot-check)
+**Wave scope:** Wave 2B-1 of larger F-062 feature (5 waves total)
+
+### Files changed (Wave 2B-1 trilogy)
+
+**Wave 2B-1 v1 (commit `d5e31b5`):**
+- ➕ Added: `backend/src/modules/analytics/dto/weekly-revenue.dto.ts` — `WeeklyRevenuePointDto` ISO 8601 week bucket (BR-SA-02 line 184 shape)
+- ➕ Added: `backend/src/modules/analytics/dto/monthly-revenue.dto.ts` — `MonthlyRevenuePointDto` calendar month bucket (BR-SA-03 line 193)
+- ➕ Added: `backend/src/modules/analytics/dto/comparison.dto.ts` — `ComparisonQueryDto` (extends AnalyticsQueryDto + `@IsIn(['wow','mom','yoy'])` compareWith) + `ComparisonMetricsDto` + `ComparisonDeltaDto` (nullable when base=0) + `ComparisonResponseDto` per BR-SA-04 lines 206-213
+- ➕ Added: `backend/src/modules/analytics/services/bucket-helpers.ts` — ISO 8601 week algorithm (Thursday rule), month range helpers, MySQL YEARWEEK conversion, VN labels (137 LoC)
+- ✏️ Modified: `backend/src/modules/analytics/analytics.service.ts` (+260 LoC) — 3 public methods `getWeeklyRevenue/getMonthlyRevenue/getComparison` + 3 private helpers `computeFeePerBucket/computePeriodSummary/formatComparisonLabel`
+- ✏️ Modified: `backend/src/modules/analytics/analytics.controller.ts` (+56 LoC) — 3 endpoints với full Swagger spec (BUT v1 had endpoint URL drift `/revenue/comparison` fixed v2)
+- ➕ Added: `backend/src/modules/analytics/__tests__/bucket-helpers.spec.ts` — 32 ISO 8601 boundary edge case tests (week 53, leap year, year boundary)
+- ➕ Added: `backend/src/modules/analytics/__tests__/revenue-endpoints.f062.spec.ts` — 25 invariant tests (SQL pattern + BR-SA + FeeService delegation + controller wiring)
+
+**Wave 2B-1 v2 fix (commit `a36d3b6`):**
+- ✏️ Modified: `backend/src/modules/analytics/services/period-resolver.ts` (+28 LoC) — EXTEND `buildMetricCacheKey` Wave 1 helper với `{ tenantId }` scope variant + optional `extra` 4th arg inserted GIỮA scope và periodKey per BR-SA-04 line 216
+- ✏️ Modified: `backend/src/modules/analytics/analytics.service.ts` (+52/-3 LoC) — 3 NEW private helpers (`resolveQueryScope` + `buildPeriodKey` + `applyDefaultPeriod`); 3 inline cache key strings replaced với `buildMetricCacheKey` composition; default 12 weeks/12 months pattern via spread (no mutation)
+- ✏️ Modified: `backend/src/modules/analytics/analytics.controller.ts` (+1/-1 LoC) — `@Get('revenue/comparison')` → `@Get('comparison')` per BR-SA-04 line 200 + description tag baked-in anti-regression hint
+- ✏️ Modified: `backend/src/modules/analytics/__tests__/revenue-endpoints.f062.spec.ts` (+60/-12 LoC) — update existing cache key assertions + add 5 NEW invariants (cache helper usage + default period + endpoint URL anti-pattern guard + extractMethodBody generalized for non-async)
+- ✏️ Modified: `backend/src/modules/analytics/__tests__/period-resolver.f062.spec.ts` (+28 LoC) — NEW 3 tests cho tenant scope + extra axis + backward compat
+
+**Wave 2B-1 v2 QC APPROVED docs (commit `cdac268`):**
+- ✏️ Modified: `.5bib-workflow/features/FEATURE-062-sales-analytics-dashboard/04-qc-report.md` (+445 LoC) — Wave 2B-1 v2 re-verify section, PRD Compliance 19/19, all 4 findings closed
+
+### Architecture impact
+- 3 NEW endpoints add to existing `AnalyticsController` (mounted `/analytics/revenue/weekly`, `/analytics/revenue/monthly`, `/analytics/comparison`)
+- `buildMetricCacheKey` Wave 1 helper signature extended (backward compat preserved — existing 3-arg + race scope calls unaffected)
+- New cache key namespaces: `analytics:metric:weekly-revenue:*`, `analytics:metric:monthly-revenue:*`, `analytics:metric:comparison:*` — BR-SA-18 invalidation hook ready
+- New bucket-helpers.ts as separate utility from period-resolver.ts (extracted for ISO 8601 math isolation)
+- FeeService Tier 0 cascade per-bucket: ≈700 calls/year worst-case (12 weeks × 58 tenants), cache TTL bảo vệ throughput
+
+### Conventions impact
+- `buildMetricCacheKey` scope variants WIDENED: `'platform' | { raceId } | { tenantId }` (was only `'platform' | { raceId }`)
+- Optional `extra` axis pattern for comparison-style endpoints inserted between scope và periodKey
+- Default period helper pattern (`applyDefaultPeriod`) returns NEW query (spread, no mutation) — set BEFORE validateDateRange to ensure cap applies on default-fill
+- `extractMethodBody` test util generalized to support non-async private methods (anticipate future helpers as utilities grow)
+- Wave 5 codify trong conventions.md "Cache Key Pattern" section + "Self-Review Bước 2" PRD adherence pattern
+
+### DB / Cache impact
+- MongoDB: no change
+- MySQL platform: no schema change (uses existing indexed `payment_on`)
+- Redis: 3 NEW key patterns (cache keys conform PRD spec)
+  - `analytics:metric:weekly-revenue:tenant:42:range:2026-01-01~2026-05-25` (TTL 900s current / 86400s historical via cachedQuery auto-detect)
+  - `analytics:metric:monthly-revenue:platform:month:2026-05`
+  - `analytics:metric:comparison:platform:mom:range:2026-04-25~2026-05-25`
+
+### Test results
+```
+Test Suites: 13 passed, 13 total
+Tests:       169 passed, 169 total (104 Wave 1+2A + 57 v1 Wave 2B-1 + 8 NEW v2 anti-regression)
+Time:        7.151 s
+```
+
+### Tech debt RESOLVED này wave (moved to known-issues.md history)
+- ✅ TD-F062-WAVE2B1-CACHE-KEY-DRIFT 🔴 BLOCKING → RESOLVED commit `a36d3b6` (cache keys conform PRD via buildMetricCacheKey helper composition)
+- ✅ TD-F062-WAVE2B1-ENDPOINT-URL-DRIFT 🔴 BLOCKING → RESOLVED commit `a36d3b6` (`@Get('comparison')` per BR-SA-04 line 200)
+- ✅ TD-F062-WAVE2B1-DEFAULT-PERIOD-MISSING 🟡 MED → RESOLVED commit `a36d3b6` (applyDefaultPeriod 84/365 days + DoS risk closed)
+- ✅ TD-F062-WAVE2B1-BUILDMETRICCACHEKEY-EXTEND 🟡 MED → RESOLVED commit `a36d3b6` (helper extended với tenant scope + extra axis backward compat)
+
+### Tech debt NEW (added to known-issues.md)
+- TD-F062-WAVE2B1-FEE-PERF 🟢 LOW — per-bucket fee aggregation cold cache ~3-5s p95 estimated (Wave 5 k6 benchmark; mitigation: redis pipeline OR cron pre-aggregate)
+- TD-F062-WAVE2B1-COMPARISON-LABEL-EDGE 🟢 LOW — YoY label same string for current/previous (UI side prop disambiguates)
+- TD-F062-WAVE2B1-RACE-FILTER-DEFER 🟡 MED — raceId filter Wave 2B-2/2C nếu BA confirm scope
+- TD-F062-WAVE2B1-LESSON-PRD-BULLET-GREP 🟢 INFORMATIONAL — lesson codified: Coder Bước 2 PRD adherence pattern check ALL bullet keywords (Endpoint / Response / Phí / Default / Cache) per BR-XX
+
+### Lessons learned (cho Wave 2B-2 + future waves)
+1. **Defense-in-depth value justified** — v1 had 161 tests PASS (Coder confident) BUT 4 PRD spec drifts; QC Phase 5 line-by-line PRD walk caught all 4; v2 + 8 NEW anti-regression invariants prevent re-introduction. Pattern continues Wave 1 (Manager caught MoM bug Coder+QC missed) reinforcing 4-gate workflow design.
+2. **Self-Review Bước 2 must grep ALL BR bullet keywords**, không chỉ Response shape. PRD section typically has Endpoint + Response + Phí + Default + Cache bullets — all spec-compliance items.
+3. **Wave 1 helpers must be USED FIRST** before writing inline equivalent. Coder had imported `buildMetricCacheKey` but forgot to USE for cache keys — would catch immediately if helper-first habit.
+4. **Endpoint URL is one-line spec — quick to verify but easy to miss because feels obvious.** Should be grep-checked explicitly (`grep "Endpoint" PRD-section`).
+5. **Helper extension pattern** (Wave 1 `buildMetricCacheKey` extended Wave 2B-1) is acceptable when backward-compat preserved + scope expansion makes sense semantically (revenue is tenant-scoped, not race-scoped).
+6. **Anti-regression invariants added at fix time** (8 NEW tests in v2) prevent re-introduction across future refactors. Cheaper than full E2E + catches semantic drift.
+7. **IMPLEMENTATION_NOTES Section 1 honest miss reporting** (Deviation #10 + #11) maintains psychological safety + codifies lessons for memory. Per Danny 2026-05-19 mandate.
+
+### Coder Honest Discovery Pattern (continued from Wave 2A)
+- IMPLEMENTATION_NOTES Section 1 Deviation #10 explicitly admits 4 PRD drifts initial miss + root-cause analysis ("pattern-matched Response shape only, didn't grep PRD bullet keywords"). Same level of transparency as Wave 2A Deviation #6 (QC TD scope refinement 6→1 endpoint).
+- This reinforces 4-gate workflow defense-in-depth: each agent (Coder + QC + Manager) catches different layer of issues. Coder catches type/logic; QC catches PRD compliance + security; Manager catches business semantics + cross-feature consistency.
+
+---
+
 ## [2026-05-22] FEATURE-062 Wave 2A: Foundation Fixes — 2 BLOCKING TDs resolved (PARTIAL DEPLOY)
 
 **Branch:** `5bib_analytics_v2` off main `e7284b0` — commits `0d1669a` (code) + `275ce81` (QC docs) pushed origin
