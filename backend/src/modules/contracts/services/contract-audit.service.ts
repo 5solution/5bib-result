@@ -16,10 +16,19 @@ import type { ContractUpdateDiff } from '../utils/contract-diff.util';
  * (e.g. test bench), this wrapper logs warn + returns silently.
  */
 
+/**
+ * Known contract-domain audit actions. Widened to `string` at the emit input
+ * level (QC F-067 rework Item 3) so this wrapper can route ALL existing
+ * `emitAudit()` call sites (contract.create / .cancel / .activate /
+ * .linkMysql / .acceptanceReport* / .paymentRequestUpsert / .markPaid /
+ * .delete / .convertFromQuotation / .generateDocument / quotation.* …) —
+ * not just the 3 F-067 actions. Centralization is the point.
+ */
 export type ContractAuditAction =
   | 'contract.update'
   | 'contract.update.force'
-  | 'contract.docRegenFail';
+  | 'contract.docRegenFail'
+  | string;
 
 export interface ContractAuditEmitInput {
   contractId: string;
@@ -30,7 +39,8 @@ export interface ContractAuditEmitInput {
   displayName?: string;
   /** Existing F-024 metadata (previousStatus, editedFields, error, …). */
   metadata?: Record<string, unknown>;
-  /** Optional structured diff (BR-67-11). */
+  /** Optional structured diff (BR-67-11). Sugar — equivalent to passing
+   *  `metadata.diff` directly. Kept for type-safe diff payloads. */
   diff?: ContractUpdateDiff;
 }
 

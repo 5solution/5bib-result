@@ -460,6 +460,36 @@ describe('F-067 — Contract DOCX Auto-Regenerate + Audit Diff', () => {
   });
 
   // ──────────────────────────────────────────────────────────────
+  // QC F-067 rework Item 3 — ContractAuditService integration
+  // ──────────────────────────────────────────────────────────────
+
+  it('TC-67-13: emitAudit delegates to ContractAuditService when wrapper bound', async () => {
+    const c = buildContract({ status: 'ACTIVE' });
+    mockModel.findOne.mockResolvedValue(c);
+    const auditEmit = jest.fn().mockResolvedValue(undefined);
+    const contractAuditEmit = jest.fn().mockResolvedValue(undefined);
+    // Wire BOTH: prove wrapper takes precedence over raw auditLog.
+    (svc as any).auditLog = { emit: auditEmit };
+    (svc as any).contractAudit = { emit: contractAuditEmit };
+
+    await svc.update('contract-067', {
+      raceName: 'Race via ContractAudit wrapper',
+    } as any);
+
+    // Wrapper called, raw auditLog NOT touched directly by emitAudit helper.
+    expect(contractAuditEmit).toHaveBeenCalled();
+    const forceCall = contractAuditEmit.mock.calls.find(
+      (call) => call[0].action === 'contract.update.force',
+    );
+    expect(forceCall).toBeDefined();
+    expect(forceCall[0].contractId).toBe('contract-067');
+    expect(forceCall[0].actorId).toBe('admin');
+    expect(forceCall[0].metadata.editedFields).toContain('raceName');
+    // emitAudit helper went through wrapper, not direct auditLog.emit.
+    expect(auditEmit).not.toHaveBeenCalled();
+  });
+
+  // ──────────────────────────────────────────────────────────────
   // DOC_AFFECTING_FIELDS allowlist sanity
   // ──────────────────────────────────────────────────────────────
 

@@ -221,13 +221,39 @@ export class ContractsService {
     }
   }
 
-  /** Emit audit log (best-effort). */
+  /**
+   * Emit audit log (best-effort).
+   *
+   * QC F-067 rework Item 3 — this helper now delegates to
+   * `ContractAuditService.emit()` when the wrapper is injected. The wrapper
+   * centralizes domain enrichment + diff typing + no-throw guards
+   * (F-023 contract). When no wrapper is bound (hand-written jest spec only
+   * passes positional ctor args), we fall back to direct
+   * `AuditLogService.emit` so existing test bench keeps working unchanged.
+   *
+   * KHÔNG widen the public surface — only `emitAudit` and the F-067
+   * regen path call into this. Other modules calling AuditLog directly is
+   * acceptable (F-023 pattern).
+   */
   private async emitAudit(
     action: string,
     contract: { _id: any; contractNumber?: string; contractType?: string },
     actorId: string,
     metadata?: Record<string, unknown>,
   ): Promise<void> {
+    const displayName =
+      contract.contractNumber ?? `${contract.contractType ?? 'CONTRACT'}`;
+    if (this.contractAudit) {
+      // Preferred route — domain wrapper handles best-effort + diff sugar.
+      await this.contractAudit.emit({
+        contractId: String(contract._id),
+        actorId,
+        action,
+        displayName,
+        metadata,
+      });
+      return;
+    }
     if (!this.auditLog) return;
     await this.auditLog.emit({
       actor: { userId: actorId },
@@ -235,8 +261,7 @@ export class ContractsService {
       entity: {
         type: 'contract',
         id: String(contract._id),
-        displayName:
-          contract.contractNumber ?? `${contract.contractType ?? 'CONTRACT'}`,
+        displayName,
       },
       metadata,
     });

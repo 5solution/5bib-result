@@ -186,3 +186,109 @@ Tests:       272 passed, 272 total
 ## 13. Status
 
 **Ready for** `/5bib-qc` per Manager workflow gate. Coder branch pushed to `feat/F-067-stale-docx-auto-regen`. Manager can merge into release/v1.9.8 or merge sau F-064 (v1.9.7) tuỳ branch sequencing.
+
+---
+
+## 14. QC Rework Items 3+4 (post-QC verdict APPROVED WITH MINOR REWORK, 2026-05-26)
+
+QC report `04-qc-report.md` verdict `✅ APPROVED WITH MINOR REWORK`. Items 1 + 2 deferred to Manager investigation (workflow artifact restore + guard tier confirm). Coder addressed Items 3 + 4 below.
+
+### 14.1 Item 3 (MEDIUM) — ContractAuditService dead code → integrated
+
+**Problem:** `ContractAuditService` (71 LoC NEW + provider registered in `contracts.module.ts`) had ZERO call sites in `contracts.service.ts`. All audit emits continued through the legacy `emitAudit()` helper → `auditLog.emit()`. 1/9 Scope Lock budget wasted.
+
+**Fix approach:** Refactored the `emitAudit()` private helper to delegate to `ContractAuditService.emit()` when the wrapper is injected, falling back to direct `AuditLogService.emit()` when not bound (preserves hand-written jest specs that use positional constructor without the wrapper).
+
+This routes **ALL existing contract-domain audit emits** (contract.create / .cancel / .activate / .update / .update.force / .linkMysql / .unlinkMysql / .acceptanceReport* / .paymentRequestUpsert / .markPaid / .delete / .convertFromQuotation / .generateDocument / quotation.accept / quotation.reject / .docRegenFail) through the wrapper without touching 18+ call sites. Single point of integration.
+
+**Changes:**
+
+| File | Change |
+|------|--------|
+| `backend/src/modules/contracts/services/contract-audit.service.ts` | Widened `ContractAuditAction` type to `string` (added union → string fallback) so the wrapper can route ALL audit actions, not just the original 3 F-067 actions. |
+| `backend/src/modules/contracts/services/contracts.service.ts` | `emitAudit()` helper (lines 224-260) — added delegation branch: if `this.contractAudit` injected, call `contractAudit.emit({contractId, actorId, action, displayName, metadata})`; else fall back to direct `auditLog.emit()`. |
+| `backend/src/modules/contracts/services/contracts.service.f067.spec.ts` | Added **TC-67-13** asserting wrapper delegation: wires BOTH `auditLog` AND `contractAudit` mocks, triggers `update()` with `raceName`, asserts wrapper called with correct shape AND raw `auditLog.emit` NOT called directly. |
+
+### 14.2 Item 4 (MEDIUM) — Test bench log noise → muted + assertions added
+
+**Problem:** Existing regression spec `contracts.update.spec.ts` triggered F-067 `regenerateContractDocxAsync` fire-and-forget hook because tests use `raceName` updates (∈ `DOC_AFFECTING_FIELDS`). Hook failed inside test because fixtures lacked `generatedDocuments` array — silent swallow log noise:
+
+```
+[F-067] auto-regen DOCX fail contract=contract-123 err=Cannot read properties of undefined (reading 'push')
+```
+
+Silent failure could mask future regressions in the hook predicate.
+
+**Fix approach:** Spy on the `regenerateContractDocxAsync` private method at the service instance level (`jest.spyOn(svc as any, ...)`) in `beforeEach`, restore in `afterEach`. Added explicit assertions in 3 critical tests so the F-067 trigger predicate is verified positively/negatively per scope:
+
+| Test | New assertion | Why |
+|------|--------------|-----|
+| `happy: DRAFT contract updates client.entityName + raceName` | `expect(regenSpy).not.toHaveBeenCalled()` | BR-67-03 DRAFT-skip guard |
+| `TC-F034-01: ACTIVE contract update — force-edit OK + audit contract.update.force` | `expect(regenSpy).toHaveBeenCalledTimes(1)` + `expect(regenSpy).toHaveBeenCalledWith('contract-123')` | BR-67-01 raceName ∈ allowlist + status ACTIVE ⇒ MUST fire |
+| `happy: TICKET_SALES ACTIVE — set link works` | `expect(regenSpy).not.toHaveBeenCalled()` | BR-67-04 idempotency — link fields ∉ allowlist |
+
+This converts the silent-noise pattern into **explicit positive/negative assertions** — future allowlist drift (someone adds/removes a field from `DOC_AFFECTING_FIELDS`) breaks these tests immediately.
+
+F-067 integration coverage (`contracts.service.f067.spec.ts`) remains unmocked — full pipeline still exercised end-to-end including `renderAndUpload`, `generateDocument`, audit emit on fail (TC-67-03).
+
+### 14.3 Files changed (diff stat vs commit 29c41d1)
+
+```
+backend/src/modules/contracts/services/contract-audit.service.ts          |  +10 / -3   (widened action type + docblock)
+backend/src/modules/contracts/services/contracts.service.ts               |  +21 / -4   (emitAudit delegation branch)
+backend/src/modules/contracts/services/contracts.service.f067.spec.ts     |  +29 / -1   (TC-67-13 new)
+backend/src/modules/contracts/services/contracts.update.spec.ts           |  +28 / -1   (regenSpy + 3 assertions)
+.5bib-workflow/features/FEATURE-067.../03-coder-implementation.md         |  +60       (this section)
+```
+
+### 14.4 Tests output
+
+**F-067 spec — 14/14 PASS (was 13, +TC-67-13):**
+```
+PASS src/modules/contracts/services/contracts.service.f067.spec.ts
+  F-067 — Contract DOCX Auto-Regenerate + Audit Diff
+    ✓ TC-67-01: line items edit → audit emit (diff) + fire-and-forget regen (2 ms)
+    ✓ TC-67-02: mutation response NOT blocked by regen (fire-and-forget)
+    ✓ TC-67-03: regen failure → audit contract.docRegenFail, mutation unaffected (1 ms)
+    ✓ TC-67-04: diff shape includes changedFields + totalAmount + vatRate
+    ✓ TC-67-05: line items diff — added/removed/modified detection by stt (1 ms)
+    ✓ TC-67-06: DRAFT contract update → skip regen (BR-67-03)
+    ✓ TC-67-07: idempotency — link-only DTO (no doc-affecting field) → no regen
+    ✓ TC-67-08: > 100 modified line items → diff truncated with count marker (1 ms)
+    ✓ TC-67-09: getHistory returns sorted entries with metadata
+    ✓ TC-67-10: getHistory clamps limit > 200 → max 200 (defense-in-depth)
+    ✓ TC-67-11: getHistory 404 cho contract gone (1 ms)
+    ✓ TC-67-12: backward compat — entry missing metadata still renders
+    ✓ TC-67-13: emitAudit delegates to ContractAuditService when wrapper bound
+    ✓ allowlist sanity: lineItems + vatRate + signDate ∈ DOC_AFFECTING_FIELDS (1 ms)
+Tests: 14 passed, 14 total
+```
+
+**Regression spec contracts.update.spec — 19/19 PASS (unchanged count, +3 assertions inside existing tests):**
+```
+PASS src/modules/contracts/services/contracts.update.spec.ts
+  ContractsService — F-024 update + manual race input
+    ✓ happy: DRAFT contract updates client.entityName + raceName (2 ms)
+    ✓ TC-F034-01: ACTIVE contract update — force-edit OK + audit contract.update.force (1 ms)
+    ... (17 more)
+Tests: 19 passed, 19 total
+```
+
+**Full contracts module — 27 suites / 273 tests PASS (was 272, +TC-67-13):**
+```
+Test Suites: 27 passed, 27 total
+Tests:       273 passed, 273 total
+Time:        8.01 s
+```
+
+**Log noise verification:**
+- Before rework: `grep -c 'auto-regen DOCX fail' = 3+` (from contracts.update.spec leak)
+- After rework: `grep -c 'auto-regen DOCX fail' = 1` (only the legitimate F-067 TC-67-03 failure-path assertion)
+
+**TSC clean check:** zero errors in contracts module (pre-existing errors in unrelated `upload` module use vitest `vi` global — out of scope).
+
+### 14.5 Commit pushed
+
+- Commit SHA: `3cb971f`
+- Branch: `feat/F-067-stale-docx-auto-regen` (pushed to origin)
+- Parent commit: `29c41d1` (original F-067 implementation)
