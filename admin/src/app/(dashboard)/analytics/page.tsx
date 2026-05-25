@@ -257,9 +257,6 @@ function AnalyticsOverviewPage() {
     }
   }, [token, month]);
 
-  // F-062 BUG-009 fix 2026-05-25: read granularity from URL → switch endpoint
-  // daily/weekly/monthly per BR-SA-13. AreaChart x-axis label adapts.
-  const granularityFromUrl = sp.get("granularity") ?? "daily";
   const fetchDailyRevenue = useCallback(async () => {
     if (!token) return;
     setLoadingDaily(true);
