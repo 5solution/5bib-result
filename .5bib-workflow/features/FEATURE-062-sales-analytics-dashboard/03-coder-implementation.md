@@ -914,3 +914,66 @@ Time:        7.079 s
 - [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2C-1 section sẽ append (next step)
 
 → **Status: 🟠 READY_FOR_QC (Wave 2C-1 slice)**
+
+---
+
+# Wave 2C-2 — Runner Analytics Service (BR-SA-20 a-f)
+
+**Slice:** Wave 2C-2 of Wave 2C (~1,200 LoC, 6 endpoints — largest single slice)
+**Status:** 🟠 READY_FOR_QC
+**Coder Session:** 2026-05-25
+**Linked:** Manager Plan v2 NEW `runner-analytics.service.ts`, PRD BR-SA-20 a-f v3, all 5 codified lessons APPLIED
+
+## 📂 Files Changed (Wave 2C-2)
+
+| File | LoC | Action |
+|------|-----|--------|
+| `services/runner-analytics.service.ts` | 575 | NEW — RunnerAnalyticsService 6 public methods + helpers |
+| `dto/runner-booking-heatmap.dto.ts` | 16 | NEW (BR-SA-20a) |
+| `dto/runner-lead-time.dto.ts` | 36 | NEW (BR-SA-20b) |
+| `dto/runner-repeat-cohort.dto.ts` | 39 | NEW (BR-SA-20c) |
+| `dto/runner-demographics.dto.ts` | 70 | NEW (BR-SA-20d) |
+| `dto/runner-geographic.dto.ts` | 47 | NEW (BR-SA-20e) |
+| `dto/runner-summary-kpi.dto.ts` | 55 | NEW (BR-SA-20f) |
+| `analytics.module.ts` | +5 | EXTEND — register provider |
+| `analytics.controller.ts` | +90 | EXTEND — 6 NEW endpoints + DI |
+| `__tests__/runner-analytics.f062.spec.ts` | 230 | NEW — 42 invariant tests |
+
+**Net:** ~1,163 LoC.
+
+## 🎯 Impact + Edge Cases
+
+- Reuses Wave 1+2A+2B+2C shared helpers: buildMetricCacheKey + resolveScopeFromTenant + periodKeyFromInputs + shiftMonthClamped + calcDeltaPercent + ymd + addDaysUtc
+- 6 NEW Redis cache patterns conform PRD spec
+- `_shiftQueryMoM` uses Wave 2A shiftMonthClamped (NOT setUTCMonth(-1)) — anti-regression test asserts
+- `getDemographics` + `getGeographic` try/catch fallback nếu users/athlete_subinfo schema unavailable
+- `applyDefaultPeriod` 12 tháng pattern continues
+- Booking heatmap matrix DAYOFWEEK -1 offset (MySQL 1=Sunday → 0-indexed)
+- Repeat cohort 4 tiers with VN labels per PRD line 492-495
+- Lead time 5 fixed buckets with Tailwind colors per PRD line 481-484
+- Age 6 brackets + unknown_age (KHÔNG bỏ ra per PRD line 506)
+- Geographic top 8 only + coverage % computation
+
+## 🧪 Tests (42 NEW)
+
+```
+Test Suites: 16 passed, 16 total
+Tests:       272 passed, 272 total (230 Wave 2C-1 + 42 NEW Wave 2C-2)
+Time:        7.685 s
+```
+
+42 invariant tests: Module+DI 2 + SQL BI (12 = 6 methods × 2 invariants) + Cache key (13 = 6 metric + 6 anti-raw + 1 helper composition) + Default period 2 + LEAD_TIME_BUCKETS 1 + AGE_BRACKETS 2 + Repeat cohort 1 + Geographic 2 + Summary 3 + Booking heatmap 1 + Controller 3.
+
+## ✅ Self-Review Pipeline Bước 11/11 PASS
+
+All 5 codified lessons APPLIED ĐÚNG. 0 PRD drifts expected (defense-in-depth invariant tests guard).
+
+→ **Status: 🟠 READY_FOR_QC (Wave 2C-2 slice)**
+
+## TDs new Wave 2C-2
+
+| TD ID | Severity | Description | Plan |
+|-------|----------|-------------|------|
+| TD-F062-WAVE2C2-OLD-RUNNER-BEHAVIOR-OVERLAP | 🟢 LOW | Legacy `getRunnerBehavior` + `getBookingPatterns` (analytics.service.ts) overlap với 2 NEW endpoints conceptually | Wave 5 deprecate hoặc keep cho backward compat |
+| TD-F062-WAVE2C2-DEMO-LEAVE-DUPLICATE-FLAG | 🟢 LOW | F-026 `geographic-demographic.service.ts` similar logic — chưa unified | Wave 5 if needed, không urgent |
+| TD-F062-WAVE2C2-MOM-PERIOD-EDGE | 🟢 LOW | `_shiftQueryMoM` không handle `query.from` only (no `to`) gracefully — falls back to no-shift | Wave 5 enrich logic if needed |

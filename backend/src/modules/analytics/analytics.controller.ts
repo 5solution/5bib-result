@@ -59,6 +59,14 @@ import {
   RacePerformanceListQueryDto,
   RacePerformanceListResponseDto,
 } from './dto/race-performance-list.dto';
+// F-062 Wave 2C-2 — Runner Analytics (6 endpoints) DTOs + service
+import { RunnerAnalyticsService } from './services/runner-analytics.service';
+import { RunnerBookingHeatmapResponseDto } from './dto/runner-booking-heatmap.dto';
+import { RunnerLeadTimeBucketDto } from './dto/runner-lead-time.dto';
+import { RunnerRepeatCohortResponseDto } from './dto/runner-repeat-cohort.dto';
+import { RunnerDemographicsResponseDto } from './dto/runner-demographics.dto';
+import { RunnerGeographicResponseDto } from './dto/runner-geographic.dto';
+import { RunnerSummaryKpiResponseDto } from './dto/runner-summary-kpi.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -76,6 +84,8 @@ export class AnalyticsController {
     private readonly merchantComparisonService: MerchantComparisonService,
     // F-062 Wave 2C-1 — Race performance (type-distribution / spotlight / list)
     private readonly racePerformanceService: RacePerformanceService,
+    // F-062 Wave 2C-2 — Runner Behavior Analytics (6 endpoints BR-SA-20 a-f)
+    private readonly runnerAnalyticsService: RunnerAnalyticsService,
   ) {}
 
   @Get('overview')
@@ -332,6 +342,99 @@ export class AnalyticsController {
   @ApiResponse({ status: 200, description: '7×24 order count matrix indexed by [dow][hour]' })
   getBookingPatterns(@Query() query: AnalyticsQueryDto) {
     return this.analyticsService.getBookingPatterns(query);
+  }
+
+  // ─── F-062 Wave 2C-2 — Runner Behavior Analytics (BR-SA-20 a-f) ─────────────
+
+  @Get('runners/booking-heatmap')
+  @ApiOperation({
+    summary: 'F-062 BR-SA-20a v3 — Booking heatmap 7×24 (dow × hour) order counts',
+    description:
+      'Filters paid + non-MANUAL. Cache `analytics:metric:runner-heatmap:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: RunnerBookingHeatmapResponseDto })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRunnerBookingHeatmap(@Query() query: AnalyticsQueryDto) {
+    return this.runnerAnalyticsService.getBookingHeatmap(query);
+  }
+
+  @Get('runners/lead-time')
+  @ApiOperation({
+    summary: 'F-062 BR-SA-20b v3 — Lead time histogram 5 buckets (Last-minute → Super early)',
+    description:
+      'Lead = race.event_start_date - order.payment_on (days). Buckets 0-7/8-30/31-60/61-120/120+. ' +
+      'Cache `analytics:metric:runner-leadtime:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: RunnerLeadTimeBucketDto, isArray: true })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRunnerLeadTime(@Query() query: AnalyticsQueryDto) {
+    return this.runnerAnalyticsService.getLeadTime(query);
+  }
+
+  @Get('runners/repeat-cohort')
+  @ApiOperation({
+    summary: 'F-062 BR-SA-20c v3 — Repeat cohort 4 tiers (1 / 2 / 3-4 / 5+ races)',
+    description:
+      'Distinct user_id paid + non-MANUAL orders grouped by race count tier. ' +
+      'Cache `analytics:metric:runner-repeat:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: RunnerRepeatCohortResponseDto })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRunnerRepeatCohort(@Query() query: AnalyticsQueryDto) {
+    return this.runnerAnalyticsService.getRepeatCohort(query);
+  }
+
+  @Get('runners/demographics')
+  @ApiOperation({
+    summary: 'F-062 BR-SA-20d v3 — Demographics Age × Gender (6 brackets + unknown_age)',
+    description:
+      'Distinct athletes paid + non-MANUAL orders. Source: athletes.dob + athlete_subinfo.gender. ' +
+      'Athletes thiếu DOB → bucket unknown_age (KHÔNG bỏ ra). ' +
+      'Cache `analytics:metric:runner-demo:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: RunnerDemographicsResponseDto })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRunnerDemographics(@Query() query: AnalyticsQueryDto) {
+    return this.runnerAnalyticsService.getDemographics(query);
+  }
+
+  @Get('runners/geographic')
+  @ApiOperation({
+    summary: 'F-062 BR-SA-20e v3 — Top 8 provinces by runner count + coverage %',
+    description:
+      'Best-effort users.province via order_metadata.user_id JOIN (F-026 pattern). ' +
+      'Returns empty if schema unavailable. ' +
+      'Cache `analytics:metric:runner-geo:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: RunnerGeographicResponseDto })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRunnerGeographic(@Query() query: AnalyticsQueryDto) {
+    return this.runnerAnalyticsService.getGeographic(query);
+  }
+
+  @Get('runners/summary')
+  @ApiOperation({
+    summary: 'F-062 BR-SA-20f v3 — 4 KPI strip (uniqueRunners + repeatRate + avgLeadTime + avgOrdersPerRunner) với delta MoM',
+    description:
+      'MoM delta uses Wave 2A shiftMonthClamped (May 31 → April 30 boundary). ' +
+      'Cache `analytics:metric:runner-summary:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: RunnerSummaryKpiResponseDto })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRunnerSummaryKpi(@Query() query: AnalyticsQueryDto) {
+    return this.runnerAnalyticsService.getSummaryKpi(query);
   }
 
   @Get('funnel')

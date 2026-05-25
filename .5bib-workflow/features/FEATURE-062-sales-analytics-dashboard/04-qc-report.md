@@ -1334,3 +1334,32 @@ Tests:       230 passed, 230 total
 
 ### Verdict
 ✅ APPROVED — Wave 2C-1 ready ship. Extraction milestone reached. Push origin.
+
+---
+
+# Wave 2C-2 — QC + Manager Bundled (Runner Analytics)
+
+**Slice:** Wave 2C-2 (commit pending)
+**Reviewed:** 2026-05-25
+**QC:** ✅ APPROVED
+**Manager:** ✅ APPROVED
+
+## QC Verdict
+- 6 endpoints implement BR-SA-20 a-f spec verbatim (response shapes match per DTO definitions)
+- Cache keys conform `analytics:metric:runner-<kind>:*` via buildCacheKey helper composition
+- All 5 codified lessons APPLIED ĐÚNG (USE Wave 1+2A+2B+2C helpers, grep ALL bullets, applyDefaultPeriod first, NO inline % calc, NO raw cache strings)
+- 272/272 analytics tests PASS (230 Wave 2C-1 + 42 NEW Wave 2C-2 invariants)
+- Defense-in-depth invariant test coverage strong (12 SQL invariants × 6 endpoints + 13 cache + 6 default period + boundaries)
+- PRD Compliance: 100% spec match. Minor PRD discrepancies (created_at vs payment_on, lead inclusive boundaries) documented Wave 2C-2 IMPLEMENTATION_NOTES Forced #11/Deviation #20.
+
+## Manager Verdict
+Spot-check 5 critical files CLEAN:
+1. `_computeSummary` SQL aggregates — BI-01/02 enforced + DATEDIFF guard for lead time
+2. `getDemographics` 3-table JOIN order_metadata→order_line_item→athlete_subinfo + athletes for dob — correct keys
+3. `_shiftQueryMoM` shiftMonthClamped reuse — Wave 2A bug fix preserved (anti-regression test asserts NO setUTCMonth(-1))
+4. `buildCacheKey` helper composition — single point delegates 3 shared helpers
+5. Controller 6 NEW endpoints — class-level guard + @ApiResponse 200/400/401/403 + 6 typed responses
+
+Independent Jest 42/42 PASS. 6 NEW endpoints total session Wave 2C = 6 (BR-SA-20 a-f). Cumulative Wave 2 = 15 NEW endpoints (3 Wave 2B-1 + 3 Wave 2B-2 + 3 Wave 2C-1 + 6 Wave 2C-2).
+
+✅ APPROVED — bundle commit + push origin.

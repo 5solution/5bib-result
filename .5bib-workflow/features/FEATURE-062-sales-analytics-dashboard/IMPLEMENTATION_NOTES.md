@@ -721,3 +721,63 @@
 - period-resolver.ts: cache key + period helpers (~430 LoC across 4 waves)
 - fee-aggregate.helpers.ts: NEW FeeService pre-aggregate helper (~88 LoC Wave 2C-1)
 - All shared cross 3 services with full backward compat
+
+---
+
+# Wave 2C-2 — Runner Analytics (BR-SA-20 a-f)
+
+**Date:** 2026-05-25
+**Slice:** Wave 2C-2 of Wave 2C (~1,200 LoC, 6 endpoints largest slice)
+**Status:** 🟠 READY_FOR_QC
+
+## Section 1: 🚧 Deviations
+
+### [Deviation #18] Demographics + Geographic try/catch fallback
+- **Spec said:** BR-SA-20d uses athletes.dob + athlete_subinfo.gender; BR-SA-20e uses users.province
+- **I did:** Wrapped SQL in try/catch; returns empty structured response if schema unavailable
+- **Why:** F-026 geographic-demographic.service.ts pattern (best-effort fallback). Schema may vary across environments.
+- **Reviewer check:** Try/catch logs warn — silent fallback prevents 500 errors at endpoint level.
+
+### [Deviation #19] _shiftQueryMoM only handles month + from/to (not from-only or to-only)
+- **Spec said:** BR-SA-20f delta MoM
+- **I did:** Implementation handles month + from+to; from-only / to-only fallback to no-shift (returns query unchanged)
+- **Why:** Edge cases rare (UI usually sends complete period). TD-WAVE2C2-MOM-PERIOD-EDGE LOW tracked.
+
+### [Deviation #20] Lead time inclusive boundaries
+- **Spec said:** Buckets "0-7 ngày" / "8-30 ngày" etc.
+- **I did:** Inclusive both ends `>= min && <= max`. So lead = 7 → 0-7d bucket (NOT 8-30d).
+- **Why:** Matches PRD label "0-7 ngày" intuitive reading.
+
+## Section 2: ⚙️ Forced Changes
+
+### [Forced #11] PRD line 473 says "orders.created_at" but actual column is `payment_on`
+- **Reality:** Same as Wave 2B-1 hotfix — actual MySQL column is `payment_on` (not `created_at`)
+- **Workaround:** Used `payment_on` for booking heatmap dow/hour grouping. Same as existing `getBookingPatterns`.
+- **Action:** BA update PRD references to `payment_on` in Wave 5.
+
+### [Forced #12] athlete_subinfo.gender via order_line_item.athlete_subinfo_id JOIN
+- **Reality:** Gender lives in `athlete_subinfo` table, joined via `order_line_item.athlete_subinfo_id` (F-026 pattern)
+- **Workaround:** 3-table JOIN order_metadata → order_line_item → athlete_subinfo (also need athletes for dob)
+
+## Section 3: ⚖️ Tradeoffs
+
+| # | Decision | Chosen | Rejected | Cost |
+|---|----------|--------|----------|------|
+| 22 | 6 separate DTO files | NEW per-DTO file | Single big runner-analytics.dto.ts | Consistency with Wave 2B convention |
+| 23 | In-memory bucket filter for lead-time | Pull lead_days raw, filter in JS | SQL CASE/WHEN buckets | Simpler JS code; ~10K orders max in period acceptable |
+| 24 | Try/catch fallback for demo/geo | Silent empty fallback | Throw 500 | Defensive vs strict — chose defensive for partial schema env |
+| 25 | _shiftQueryMoM shiftMonthClamped reuse | Wave 2A helper | Inline date math | DRY + Wave 2A bug fix already proven |
+| 26 | Heatmap timezone | MySQL server TZ (default) | UTC normalization in JS | PRD says "VN UTC+7" but server should be in VN TZ already; verify in Wave 5 PROD smoke |
+
+## Section 4: 🎯 Reviewer Notes — Priority List (top 5)
+
+1. **`runner-analytics.service.ts:_computeSummary` SQL aggregates** — verify BI-01/02 + lead time DATEDIFF guard
+2. **`runner-analytics.service.ts:getDemographics` 3-table JOIN** — verify athletes + athlete_subinfo + order_line_item JOIN keys
+3. **`runner-analytics.service.ts:_shiftQueryMoM` shiftMonthClamped reuse** — anti-regression test asserts NO setUTCMonth(-1)
+4. **`runner-analytics.service.ts:buildCacheKey` helper composition** — single point for cache key construction across 6 endpoints
+5. **`analytics.controller.ts` 6 NEW endpoints + DI** — class-level guard inherited + ApiResponse codes complete
+
+## ⚠️ Deferred (acceptable Wave 2C-2 scope)
+- Legacy /runners/behavior + /runners/booking-patterns endpoints preserved (backward compat)
+- F-026 geographic-demographic.service.ts overlap unified — Wave 5 cleanup
+- Heatmap timezone explicit normalization — Wave 5 PROD smoke verify

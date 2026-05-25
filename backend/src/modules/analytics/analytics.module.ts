@@ -42,6 +42,9 @@ import { MerchantComparisonService } from './services/merchant-comparison.servic
 // F-062 Wave 2C-1 — NEW race-performance service (BR-SA-21 a/b/c)
 import { RacePerformanceService } from './services/race-performance.service';
 
+// F-062 Wave 2C-2 — NEW runner-analytics service (BR-SA-20 a-f)
+import { RunnerAnalyticsService } from './services/runner-analytics.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Tenant], 'platform'),
@@ -70,6 +73,8 @@ import { RacePerformanceService } from './services/race-performance.service';
     MerchantComparisonService,
     // F-062 Wave 2C-1 — Race Performance Analytics (BR-SA-21)
     RacePerformanceService,
+    // F-062 Wave 2C-2 — Runner Behavior Analytics (BR-SA-20 a-f)
+    RunnerAnalyticsService,
   ],
 })
 export class AnalyticsModule {}
