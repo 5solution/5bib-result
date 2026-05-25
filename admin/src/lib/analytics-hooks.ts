@@ -299,17 +299,88 @@ export function useGa4Overview(query: BaseQuery, opts?: Partial<UseQueryOptions>
 }
 
 /**
+ * Resolve PeriodKind ('7d' | '30d' | 'quarter' | 'year' | 'rolling12m' | 'custom')
+ * → { from, to } YYYY-MM-DD theo timezone local (UTC+7 cho VN).
+ *
+ * BUG-002 fix: `?period=30d` không tự convert thành from/to. Now resolved
+ * client-side trước khi pass vào backend Wave 2 endpoints (which accept from/to only).
+ */
+function ymdLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function resolvePeriodToRange(
+  period: string,
+  customFrom?: string,
+  customTo?: string,
+): { from: string; to: string } | null {
+  const today = new Date();
+  const to = ymdLocal(today);
+
+  switch (period) {
+    case "7d": {
+      const from = new Date(today);
+      from.setDate(from.getDate() - 6); // inclusive 7 days
+      return { from: ymdLocal(from), to };
+    }
+    case "30d": {
+      const from = new Date(today);
+      from.setDate(from.getDate() - 29);
+      return { from: ymdLocal(from), to };
+    }
+    case "quarter": {
+      // Current quarter (Q1 = Jan-Mar, Q2 = Apr-Jun, etc.)
+      const q = Math.floor(today.getMonth() / 3);
+      const qStart = new Date(today.getFullYear(), q * 3, 1);
+      return { from: ymdLocal(qStart), to };
+    }
+    case "year": {
+      const yStart = new Date(today.getFullYear(), 0, 1);
+      return { from: ymdLocal(yStart), to };
+    }
+    case "rolling12m": {
+      const from = new Date(today);
+      from.setFullYear(from.getFullYear() - 1);
+      from.setDate(from.getDate() + 1);
+      return { from: ymdLocal(from), to };
+    }
+    case "custom": {
+      if (customFrom && customTo) return { from: customFrom, to: customTo };
+      return null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
  * Helper: convert URL searchParams → BaseQuery shape.
- * Pages call `useSearchParams()` then pass through `searchParamsToQuery(sp)`.
+ * BUG-002 fix 2026-05-25: resolve `?period=X` to from/to range client-side
+ * (backend Wave 2 endpoints only accept from/to/month/tenantId).
+ * BUG-003 fix: default period = "30d" (KHÔNG fall through to backend
+ * default 12 tháng — quá rộng, include race from last year).
  */
 export function searchParamsToQuery(sp: URLSearchParams): BaseQuery {
   const query: BaseQuery = {};
-  const from = sp.get("from");
-  const to = sp.get("to");
+  // Default '30d' khi URL chưa có period (matches FilterBar default UI state)
+  const period = sp.get("period") ?? "30d";
+  const customFrom = sp.get("from") ?? undefined;
+  const customTo = sp.get("to") ?? undefined;
   const month = sp.get("month");
   const tenantId = sp.get("tenantId");
-  if (from) query.from = from;
-  if (to) query.to = to;
+
+  const range = resolvePeriodToRange(period, customFrom, customTo);
+  if (range) {
+    query.from = range.from;
+    query.to = range.to;
+  } else {
+    // Period = custom but no from/to OR unknown period → leave query empty
+    if (customFrom) query.from = customFrom;
+    if (customTo) query.to = customTo;
+  }
   if (month) query.month = month;
   if (tenantId) query.tenantId = Number(tenantId);
   return query;
