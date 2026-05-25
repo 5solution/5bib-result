@@ -7,6 +7,74 @@
 
 ---
 
+## [2026-05-25] FEATURE-062 Wave 2C-1: Race Performance Service + Shared Helper Extract — PRD Compliance 18/18 PERFECT (PARTIAL DEPLOY)
+
+**Branch:** `5bib_analytics_v2` 10 cumulative commits — Wave 2C-1 `add014f` + Manager checkpoint
+**Type:** EXTEND_EXISTING (NEW service file per Manager Plan v2 line 67) + EXTRACTION milestone
+**Wave scope:** Wave 2C-1 of Wave 2C (~1,008 LoC, 1 of 2+ slices)
+
+### Files changed (Wave 2C-1)
+
+- ➕ Added: `backend/src/modules/analytics/services/race-performance.service.ts` (380 LoC) — RacePerformanceService 3 public methods + `_buildRaceAggregates` shared internal
+- ➕ Added: `backend/src/modules/analytics/services/fee-aggregate.helpers.ts` (88 LoC) — EXTRACT shared `pullOrdersForFeeAggregate` standalone function (3rd consumer threshold met)
+- ➕ Added: `backend/src/modules/analytics/dto/race-type-distribution.dto.ts` (BR-SA-21a)
+- ➕ Added: `backend/src/modules/analytics/dto/race-spotlight.dto.ts` (BR-SA-21b)
+- ➕ Added: `backend/src/modules/analytics/dto/race-performance-list.dto.ts` (BR-SA-21c — paginated + filtered DTOs)
+- ✏️ Modified: `backend/src/modules/analytics/analytics.service.ts` — private `pullOrdersForFeeAggregate` thin wrapper delegate (backward compat 18+ call sites)
+- ✏️ Modified: `backend/src/modules/analytics/services/merchant-comparison.service.ts` — direct shared import, removed private duplicate + unused OrderForFeeAggregate import
+- ✏️ Modified: `backend/src/modules/analytics/analytics.module.ts` — RacePerformanceService provider register
+- ✏️ Modified: `backend/src/modules/analytics/analytics.controller.ts` — 3 NEW endpoints + DI inject
+- ➕ Added: `backend/src/modules/analytics/__tests__/race-performance.f062.spec.ts` (320 LoC) — 33 invariant tests
+
+### Architecture impact
+- NEW NestJS service `RacePerformanceService` registered + 3 NEW endpoints
+- EXTRACTION milestone: shared `fee-aggregate.helpers.ts` hosts FeeService pre-aggregate helper used by 3 services (analytics + merchant-comparison + race-performance)
+- period-resolver.ts continues hosting cache key + period helpers
+- 9 NEW endpoints accumulated trong Wave 2 (3 Wave 2B-1 + 3 Wave 2B-2 + 3 Wave 2C-1)
+
+### Conventions impact
+- EXTRACTION pattern continues: Wave 2B-2 documented "defer until 3rd consumer", Wave 2C-1 executed extraction. Pattern: 1st consumer = inline; 2nd consumer = DRY violation acceptable (defer); 3rd consumer = extract to shared.
+- filtersHash pattern (SHA-256 truncated 12-char) for pagination cache keys với extra axis composition
+- Race type normalization với defensive OTHER fallback
+- Auto-generated VN insight text via toLocaleString('vi-VN')
+- Wave 5 codify trong conventions.md "Helper Extraction Threshold" + "filtersHash Cache Key Pattern"
+
+### DB / Cache impact
+- MySQL: no schema change (existing races.race_type + order_metadata + tenant)
+- MongoDB: no schema change
+- Redis: 3 NEW key patterns
+  - `analytics:metric:race-perf-type:platform:range:2026-01-01~2026-05-25`
+  - `analytics:metric:race-perf-spotlight:tenant:42:month:2026-05`
+  - `analytics:metric:race-perf-list:platform:range:...:<sha256hash12>` (extra axis)
+
+### Test results
+```
+Test Suites: 15 passed, 15 total
+Tests:       230 passed, 230 total (197 Wave 2B-2 + 33 NEW Wave 2C-1)
+Time:        7.079 s
+```
+
+### Tech debt RESOLVED (moved to known-issues.md RESOLVED status)
+- ✅ TD-F062-WAVE2B2-PULLORDERS-DUPLICATE 🟢 LOW → RESOLVED via Wave 2C-1 extraction (3rd consumer threshold). Net -62 LoC saving.
+
+### Tech debt NEW (added to known-issues.md)
+- TD-F062-WAVE2C1-IN-MEMORY-SORT-LIMIT 🟢 LOW (Wave 5 k6 if >10K races)
+- TD-F062-WAVE2C1-DATE-PROXY-VS-RACE-EVENT-DATE 🟢 LOW (Wave 2C-2 if BA confirms)
+- TD-F062-WAVE2C1-COLD-CACHE-3X 🟡 LOW-MED (same pattern Wave 2B-2 TD)
+
+### Lessons learned (defense-in-depth pattern continues maturing)
+1. **PRD Compliance Score evolution**: Wave 2B-1 v1 13/19 → v2 19/19 → Wave 2B-2 22/23 → **Wave 2C-1 18/18 PERFECT**. Defense-in-depth lessons internalized across waves. Anti-regression invariant tests work as designed.
+2. **Extraction threshold pattern proved sustainable**: Wave 2B-2 documented "defer until 3rd consumer", Wave 2C-1 executed cleanly. Avoids premature abstraction + achieves DRY when confirmed need.
+3. **Backward compat strategy via thin wrapper**: analytics.service.ts kept private wrapper (delegates to shared) instead of refactoring all 18+ internal call sites. Acceptable transition pattern for large diff avoidance — Wave 5 cleanup task if desired.
+4. **filtersHash via SHA-256 truncated 12-char** = 2^48 unique combos. Acceptable security + length. Pattern reusable cho future paginated cache scenarios.
+5. **In-memory sort acceptable cho small dataset** (~50-200 races/year). SQL-side dynamic sort needs whitelist validation. Trade-off OK at current scale.
+
+### Coder Honest Reporting Pattern (continued from Wave 2A + 2B-1 v2 + 2B-2)
+- Section 1 Deviation #15-#17 + Forced #10 + Tradeoffs 17-21 documented transparently
+- Wave 2C-1 reached PRD Compliance 18/18 perfect score by APPLYING all 5 codified lessons
+
+---
+
 ## [2026-05-25] FEATURE-062 Wave 2B-2: Merchant Comparison Service — Wave 2B-1 v2 lesson APPLIED (PARTIAL DEPLOY)
 
 **Branch:** `5bib_analytics_v2` 8 cumulative commits — Wave 2B-2 `053d050` + Manager checkpoint (this commit)

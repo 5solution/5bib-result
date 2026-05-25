@@ -1202,3 +1202,135 @@ NEW Wave 2B-2 invariant tests verifiable:
 - 3rd service `race-performance` may consume `pullOrdersForFeeAggregate` → time to extract to shared per TD-F062-WAVE2B2-PULLORDERS-DUPLICATE
 
 **Recommendation:** Bundle Wave 2B-2 commit `053d050` với Wave 2B-1 v2 trilogy (a36d3b6 + cdac268 + 5379076) for push origin — Manager checkpoint MANAGER_WAVE2B2_REVIEW.md write next.
+
+---
+
+# Wave 2C-1 — QC Report (Race Performance)
+
+**Slice:** Wave 2C-1 (commit `add014f`)
+**Reviewed:** 2026-05-25
+**Reviewer:** 5bib-qc-gatekeeper
+**Status:** ✅ **APPROVED — Wave 2C-1 (lessons APPLIED, extraction milestone)**
+
+## ✅ Pre-flight + Phase 1: Impact & Regression Audit
+
+### Coder got RIGHT (LESSONS APPLIED success continued)
+✓ **3 DTO shapes match PRD verbatim** — RaceTypeDistributionPoint (BR-SA-21a line 532), RaceSpotlight (BR-SA-21b line 539), RacePerformanceItem + paginated wrapper (BR-SA-21c line 553)
+✓ **Cache keys USE buildMetricCacheKey from start** — 0 raw strings, 3 keys conform PRD pattern + filtersHash extra axis for paginated list
+✓ **applyDefaultPeriod first line BEFORE validateDateRange** — Wave 2B-1 v2 lesson APPLIED, DoS closed
+✓ **FeeService Tier 0 cascade per (tenant, race)** — race-scoped aggregation correct, NO inline % calc
+✓ **EXTRACTION milestone (TD-WAVE2B2 RESOLVED)** — pullOrdersForFeeAggregate extracted to fee-aggregate.helpers.ts standalone, 3 consumers refactored, net -62 LoC saving
+✓ **Race type normalization với OTHER fallback** — defensive for legacy null DB rows
+✓ **Pagination clamping** — page ≥ 1, limit ≤ MAX_PAGE_SIZE 50, sortBy whitelist via @IsIn validator
+✓ **filtersHash SHA-256 truncated** — deterministic per-combo cache key stable
+✓ **Spotlight insight VN formatting** — toLocaleString('vi-VN') for numbers, null on empty period
+✓ **33 NEW invariant tests** — extraction completeness (5), SQL invariants (4), cache helper (4), default period (2), pagination (5), race type (1), spotlight (2), controller (6)
+
+### Coder MISSED
+**NONE.** Wave 2B-1 v2 + Wave 2B-2 LESSONS APPLIED ĐÚNG. 0 PRD drifts. Defense-in-depth invariant test coverage (33 NEW) prevents future regression.
+
+## 🛡️ Phase 2: Security Threat Model
+
+| Threat | Mitigation | Status |
+|--------|-----------|--------|
+| SQL injection (raceType, sortBy) | `@IsIn` validator + `?` placeholder | ✅ |
+| Pagination DoS | limit clamped MAX_PAGE_SIZE 50 + date range cap 366 days | ✅ |
+| Auth bypass | Class-level `@UseGuards(LogtoAdminGuard)` | ✅ |
+| PII leak | Response aggregates only — no athlete/order PII | ✅ |
+| filtersHash collision | SHA-256 truncated 12-char = 2^48 unique combos (safe) | ✅ |
+| Cache poisoning | Cache key composition deterministic | ✅ |
+
+**Net:** Security clean.
+
+## 📋 Phase 5: PRD Compliance
+
+### BR-SA-21a — Race Type Distribution
+| Spec | Status |
+|------|--------|
+| `GET /analytics/races/type-distribution` | ✅ |
+| Response `Array<{raceType, count, gmv, avgGmv}>` | ✅ |
+| Race types ROAD_MARATHON/ROAD_HALF_MARATHON/ULTRA_TRAIL_RACE/TRAIL_RACE | ✅ + OTHER fallback |
+| Cache `analytics:metric:race-perf-type:<scope>:<periodKey>` | ✅ |
+
+### BR-SA-21b — Race Spotlight
+| Spec | Status |
+|------|--------|
+| `GET /analytics/races/spotlight` | ✅ |
+| Response shape full (raceId/raceName/merchant/type/date/gmv/orders/avgPerOrder/platformFee/insight) | ✅ |
+| Insight VN text "Đóng góp X% tổng GMV, trung bình Y VND/đơn" | ✅ |
+| Cache `analytics:metric:race-perf-spotlight:<scope>:<periodKey>` | ✅ |
+
+### BR-SA-21c — Performance List
+| Spec | Status |
+|------|--------|
+| `GET /analytics/races/performance` | ✅ |
+| Filters raceType + tenantId + from/to | ✅ |
+| Sort gmv/orders/fee/avgPerOrder/voidedPct + asc/desc | ✅ |
+| Default sort gmv DESC | ✅ |
+| Page default 12, max 50 | ✅ |
+| Response `{data, total, page, limit, totalPages}` | ✅ |
+| 10 RacePerformanceItem fields | ✅ |
+| Cache `analytics:metric:race-perf-list:<scope>:<filters-hash>` | ✅ |
+
+### BR-SA-18 — Cache invalidation hook
+| Spec | Status |
+|------|--------|
+| Pattern `analytics:metric:race-perf-type:*` | ✅ |
+| Pattern `analytics:metric:race-perf-spotlight:*` | ✅ |
+| Pattern `analytics:metric:race-perf-list:*` | ✅ |
+
+**PRD Compliance Score: 18/18 ✅** 🎉 Perfect score (vs Wave 2B-2's 22/23, Wave 2B-1 v2's 19/19)
+
+## 👥 Phase 6: N/A pure backend — Wave 3 wires Tab 2 Race UI
+
+## 🚧 Tech Debt Remaining
+- TD-F062-WAVE2C1-IN-MEMORY-SORT-LIMIT 🟢 LOW (Wave 5 k6)
+- TD-F062-WAVE2C1-DATE-PROXY-VS-RACE-EVENT-DATE 🟢 LOW (Wave 2C-2 if BA confirms)
+- TD-F062-WAVE2C1-COLD-CACHE-3X 🟡 LOW-MED (Wave 5 mitigation)
+
+## ✅ Final Verdict v2
+
+**Status: ✅ APPROVED — Wave 2C-1 ready ship + Manager checkpoint**
+
+Defense-in-depth pattern DEMONSTRATED:
+- Wave 2B-1 v1 had 4 PRD drifts (defense-in-depth caught)
+- Wave 2B-1 v2 + 8 NEW anti-regression invariants prevented Wave 2B-2 drift
+- Wave 2B-2 + 28 NEW invariants prevented Wave 2C-1 drift
+- Wave 2C-1 PRD Compliance 18/18 ✅ Perfect score — lessons fully internalized
+
+Recommendation: bundle với Wave 2C-1 commit `add014f` for push origin.
+
+---
+
+# Wave 2C-1 — Manager Independent Review (per Manager 2026-05-17 directive)
+
+**Reviewed:** 2026-05-25
+**Reviewer:** 5bib-manager
+**Status:** ✅ **APPROVED**
+
+### BƯỚC 0 — Read IMPLEMENTATION_NOTES Wave 2C-1 ✅
+- Section 1 Deviation #15-#17: extraction milestone, in-memory sort tradeoff, date proxy
+- Section 2 Forced #10: analytics.service.ts kept thin wrapper for 18+ call sites backward compat
+- Section 3 Tradeoffs 17-21
+- Section 4 Reviewer Notes top-5
+
+### Spot-check 5 critical files
+
+| # | File | Verdict |
+|---|------|---------|
+| 1 | `fee-aggregate.helpers.ts` extracted standalone | ✅ CLEAN — DataSource arg, identical SQL semantics |
+| 2 | `race-performance.service.ts:_buildRaceAggregates` | ✅ CLEAN — BI-01/02 + GROUP BY race_type + FeeService per-race |
+| 3 | `race-performance.service.ts:getPerformanceList` pagination | ✅ CLEAN — clamping + filtersHash SHA-256 + sort default |
+| 4 | `race-performance.service.ts:getSpotlight` insight + null | ✅ CLEAN — VN format + divide-by-zero guard + null on empty |
+| 5 | Backport refactors (analytics.service + merchant-comparison) | ✅ CLEAN — thin wrapper + direct import patterns |
+
+### Independent Jest verify
+
+```
+PASS race-performance.f062.spec.ts (33 tests)
+Test Suites: 15 passed, 15 total
+Tests:       230 passed, 230 total
+```
+
+### Verdict
+✅ APPROVED — Wave 2C-1 ready ship. Extraction milestone reached. Push origin.
