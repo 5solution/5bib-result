@@ -42,6 +42,12 @@ import { Race } from '../../races/schemas/race.schema';
 import { vndAmountInWords } from '../utils/vn-num-to-words';
 import { escapeRegex } from '../utils/escape-regex';
 import {
+  deriveAthleteCount,
+  deriveExpoDate,
+  deriveSetupDate,
+  parseRaceDateIso,
+} from '../utils/event-date-derive';
+import {
   buildDocumentFilename,
   DocFormat,
 } from '../utils/build-filename';
@@ -1226,6 +1232,37 @@ export class ContractsService {
       contract.contractType === 'TICKET_SALES'
         ? stripGiaiChayPrefix(contract.raceName ?? '')
         : contract.raceName ?? '';
+
+    // F-064 Phase 4 — Event date + location + athlete count derive.
+    // PAUSE-64-02 = C (optional + fallback derive raceDate-N days).
+    // PAUSE-64-03 = A (derive line items quantity).
+    // PAUSE-64-05 = B (2 sign dates separate).
+    //
+    // Anti-leak rule (F-044 lesson): null/undefined → empty string render,
+    // NEVER hardcoded fallback (e.g. "29/05/2026"). `parseRaceDateIso`
+    // returns null for free-form text → setup/expo empty → template shows
+    // "Thời gian setup: " (no value, no leak).
+    const raceDateParsed = parseRaceDateIso(contract.raceDate);
+    const eventStartDate =
+      contract.eventStartDate ?? raceDateParsed ?? null;
+    const eventEndDate =
+      contract.eventEndDate ?? raceDateParsed ?? null;
+    const setupDate =
+      contract.setupDate ?? deriveSetupDate(contract.raceDate);
+    const expoDate =
+      contract.expoDate ?? deriveExpoDate(contract.raceDate);
+    const eventLocation =
+      contract.eventLocation || contract.raceLocation || '';
+    const athleteCountNum = deriveAthleteCount(
+      contract.lineItems ?? [],
+      contract.expectedAthleteCount,
+    );
+    // contractSignDate alias signDate (PAUSE-64-05 = B).
+    const contractSignDate = contract.signDate ?? null;
+    // acceptanceSignDate alias acceptanceReport.reportDate.
+    const acceptanceSignDate =
+      contract.acceptanceReport?.reportDate ?? null;
+
     return {
       contractNumber: contract.contractNumber ?? '',
       contractType: contract.contractType,
@@ -1244,6 +1281,18 @@ export class ContractsService {
       raceName,
       raceDate: contract.raceDate,
       raceLocation: contract.raceLocation ?? '',
+      // F-064 Phase 4 — flat new keys (PAUSE-64-01 = A flat naming).
+      // sanitizeContext() will format Date → dd/mm/yyyy + Number → vi-VN.
+      eventStartDate,
+      eventEndDate,
+      setupDate,
+      expoDate,
+      eventLocation,
+      // athleteCount as number — sanitizeContext converts via vi-VN locale.
+      // For "Số lượng VĐV: 3500" we want "3.500" (vi-VN thousand sep).
+      athleteCount: athleteCountNum,
+      contractSignDate,
+      acceptanceSignDate,
       lineItems: contract.lineItems ?? [],
       revenueShare: contract.revenueShare ?? {
         feePercentage: 0,
