@@ -84,7 +84,7 @@ backend/src/
     │
     ├── # Operations & Analytics
     ├── dashboard/              # ⭐ FEATURE-023 NEW: Admin Dashboard Redesign — homepage stats, recent-activity, KPIs (`dashboard.service.ts`). TD-F023-* tracked. N+1 fix `a7346d2` pipeline 2N+N→2 RTT.
-    ├── analytics/              # ⭐ FEATURE-026: Admin Analytics Redesign — revenue trend chart, repeat customer, period compare. TD-F026-REPEAT-TREND-FORMULA fixed (SQL subquery thật). TD-F026-CACHE-INVALIDATE pre-existing.
+    ├── analytics/              # ⭐ FEATURE-026 base + FEATURE-062 MAJOR EXPANSION (2026-05-25). 19 analytics endpoints total, `@UseGuards(LogtoAdminGuard)` class-level. analytics.service.ts + analytics.controller.ts + analytics.module.ts core. Services: period-resolver.ts (CompareKind/GranularityKind/resolveBucketSize/shiftMonthClamped/buildMetricCacheKey) + bucket-helpers.ts (ISO 8601 week) + fee-aggregate.helpers.ts (shared MySQL pull, extracted Wave 2C-1 3rd-consumer threshold) + merchant-comparison.service.ts (BR-SA-22 scatter/health/comparison) + race-performance.service.ts (BR-SA-21 type-dist/spotlight/list) + runner-analytics.service.ts (BR-SA-20 heatmap/lead/cohort/demographics/geo/kpi) + ga4.service.ts (BR-SA-11 GA4 Data API — requires GOOGLE_APPLICATION_CREDENTIALS) + export.service.ts (BR-SA-10 CSV/XLSX). 17 NEW DTOs in dto/. 7 spec files in __tests__/. F-026 legacy endpoints preserved + wave 2 endpoints additive.
     ├── audit/                  # ⭐ FEATURE-024 NEW: Audit log service (Optional inject pattern). Used by contracts, dashboard recent-activity, articles. ⚠ MED-AUDIT-01 gap: sponsored/sponsors/race-settings/awards mutations chưa emit audit log.
     ├── event-tracking/         # Event tracking. Throttle 100/sec ✅.
     ├── bug-reports/            # Bug reports. LogtoAdminGuard + ThrottlerGuard ✅. find-then-save 3 sites.
@@ -317,6 +317,13 @@ admin/src/app/
 │   │       └── timing-alerts/
 │   │           └── components/
 │   │               └── CheckpointDiscoveryDialog.tsx  # ⭐ FEATURE-001 — simplified mini editable table (drop coverage% + median cols)
+│   ├── analytics/              # ⭐ FEATURE-026 base + FEATURE-062 MAJOR EXPANSION (2026-05-25)
+│   │   ├── layout.tsx          # NEW F-062: 5-tab layout wrapper (Tab 1 Overview / 2 Merchants / 3 Races / 4 Runners / 5 GA4)
+│   │   ├── page.tsx            # Tab 1 — main analytics page, F-026 legacy + Wave 2 sections at top, F-026 accordion below
+│   │   ├── merchants/page.tsx  # Tab 2 — BR-SA-22 merchant comparison (scatter/health/table)
+│   │   ├── races/page.tsx      # Tab 3 — BR-SA-21 race performance (type dist/spotlight/list)
+│   │   ├── runners/page.tsx    # Tab 4 — BR-SA-20 runner behavior (heatmap/lead/cohort/demographics/geo/kpi)
+│   │   └── components/         # 14 shared analytics components (AnalyticsTabsNav + AnalyticsFilterBar + 12 feature components)
 │   ├── sponsors/               # Sponsor management (logo S3 upload)
 │   ├── claims/                 # Result claims
 │   ├── sync-logs/              # Data sync logs

@@ -1,7 +1,7 @@
 # 5BIB Result — Coding Conventions
 
 > **Owner:** 5bib-manager
-> **Last updated:** 2026-05-03 (bootstrap from CLAUDE.md "Development Rules")
+> **Last updated:** 2026-05-25 (F-062 patterns appended — filter bar URL sync, shared helper extraction threshold, ISO 8601 week buckets, buildDateFilter SQL safety)
 >
 > Quy ước thực tế — đã được team confirm trong CLAUDE.md.
 
@@ -3837,3 +3837,95 @@ Manager `/5bib-deploy` MUST verify trước khi APPROVED close:
 - F-044 Manager Content Review 2026-05-19: phát hiện bug số ≠ chữ post QC ✅ APPROVED
 - F-044 BUGFIX #1: 2 templates × 1-line regex replace `{subtotal}` → `{totalAmount}` + 3 NEW regression spec to prevent recurrence
 - F-045 (mở mới sau F-044 ship): legacy hardcoded data trong 5 templates (bank account `110398986` + branch `Thụy Khuê` / `Hai Bà Trưng` + provider name `CÔNG TY CỔ PHẦN 5BIB`) — pre-existing F-024 bugs, NOT in F-044 scope
+
+---
+
+## 📡 Analytics URL-Driven Filter Bar (F-062 pattern)
+
+**Context:** Analytics multi-tab dashboard needs filter state (granularity/period/compare/from/to) to persist across tab navigation.
+
+**Pattern:**
+```typescript
+// Read from URL on page render (safe for SSR + navigation)
+const sp = useSearchParams();
+const granularity = sp.get("granularity") ?? "daily";
+const period = sp.get("period") ?? "last_30_days";
+
+// Write to URL (replace, not push — avoid browser history pollution)
+const router = useRouter();
+const updateFilter = (key: string, value: string) => {
+  const params = new URLSearchParams(sp.toString());
+  params.set(key, value);
+  router.replace(`?${params.toString()}`, { scroll: false });
+};
+```
+
+**Why:**
+- Tab navigation (Link `href="/analytics/merchants"`) preserves query params
+- Shareable URLs — direct link to specific filter state
+- No React state sync needed across tabs (URL is single source of truth)
+- `{ scroll: false }` prevents page jump on filter change
+
+**Reference:** `admin/src/app/(dashboard)/analytics/components/AnalyticsFilterBar.tsx`
+
+---
+
+## 🔧 Shared Helper Extraction Threshold (F-062 pattern)
+
+**Rule:** Extract shared code into a helper module when the **3rd consumer** appears — not the 1st or 2nd.
+
+**Rationale:**
+- 1 consumer: no sharing needed
+- 2 consumers: might be coincidental similarity, too early to abstract
+- 3 consumers: proven need — extract creates clean abstraction with confirmed value
+
+**Applied in F-062:**
+- `fee-aggregate.helpers.ts` extracted Wave 2C-1 when race-performance.service.ts became 3rd consumer (after analytics.service.ts + merchant-comparison.service.ts)
+- `resolveScopeFromTenant` + `periodKeyFromInputs` extracted Wave 2B-2 for merchant-comparison + period-resolver reuse
+
+**Reference:** `backend/src/modules/analytics/services/fee-aggregate.helpers.ts` + Wave 2C-1 TD-F062-WAVE2B2-PULLORDERS-DUPLICATE RESOLVED entry
+
+---
+
+## 📅 buildDateFilter() SQL Safety Pattern (F-062)
+
+**Rule:** `buildDateFilter(from?, to?, month?)` always returns `{ clause: string; params: any[] }` where `clause` contains ONLY hardcoded SQL fragments with `?` placeholders — never user input directly in the string.
+
+**Safe pattern:**
+```typescript
+private buildDateFilter(from?, to?, month?): { clause: string; params: any[] } {
+  if (month) {
+    // compute start/end from month param
+    return {
+      clause: 'payment_on >= ? AND payment_on < ?',  // hardcoded SQL
+      params: [start, end],  // user values always in params array
+    };
+  }
+  // ...
+}
+
+// Usage — safe to interpolate clause into SQL template literal
+const { clause, params } = this.buildDateFilter(from, to, month);
+const whereClause = clause ? `AND ${clause}` : '';
+// `whereClause` contains only `?` placeholders — safe for parameterized query
+await this.db.query(`SELECT ... WHERE status = 'paid' ${whereClause}`, params);
+```
+
+**Anti-pattern:**
+```typescript
+// DANGEROUS: never do this
+const whereClause = `AND payment_on >= '${from}'`;  // SQL injection vector
+```
+
+**Reference:** `analytics.service.ts:121-151` `buildDateFilter()` implementation
+
+---
+
+## 📦 ISO 8601 Week Bucketing (F-062 bucket-helpers.ts)
+
+**Context:** Weekly revenue endpoint needs to group MySQL dates into ISO 8601 week buckets.
+
+**Pattern:** Use `bucket-helpers.ts` which computes week start Monday via `getISOWeekStart()`.
+
+**Reference:** `backend/src/modules/analytics/services/bucket-helpers.ts`
+

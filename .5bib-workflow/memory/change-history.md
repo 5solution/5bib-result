@@ -7,6 +7,95 @@
 
 ---
 
+## [2026-05-25] FEATURE-062: Sales Analytics Dashboard Multi-Tab Redesign — ✅ FULLY DEPLOYED
+
+**Branch:** `5bib_analytics_v2` merged main + `release/v1.9.0` deployed PROD
+**Type:** EXTEND_EXISTING (analytics module major expansion — 5 new services + 17 endpoints + admin multi-tab UI)
+**Commits:** 8 F-062 commits (`fa77fbe`→`f41f53e`) + wave history MANAGER_WAVE*_REVIEW.md checkpoints
+
+### Backend files changed (analytics module)
+
+**NEW services:**
+- `backend/src/modules/analytics/services/merchant-comparison.service.ts` — BR-SA-22 (scatter/health/comparison table)
+- `backend/src/modules/analytics/services/race-performance.service.ts` — BR-SA-21 (type distribution/spotlight/list)
+- `backend/src/modules/analytics/services/runner-analytics.service.ts` — BR-SA-20 a-f (heatmap/lead-time/cohort/demographics/geographic/kpi)
+- `backend/src/modules/analytics/services/ga4.service.ts` — BR-SA-11 (GA4 Data API wrapper, requires service account JSON)
+- `backend/src/modules/analytics/services/export.service.ts` — BR-SA-10 (CSV + XLSX export)
+- `backend/src/modules/analytics/services/fee-aggregate.helpers.ts` — NEW shared MySQL pull helper (extracted Wave 2C-1 at 3rd consumer threshold)
+- `backend/src/modules/analytics/services/bucket-helpers.ts` — ISO 8601 week bucketing helpers
+- `backend/src/modules/analytics/services/period-resolver.ts` — EXTENDED: CompareKind +wow/mom, resolveBucketSize(), shiftMonthClamped(), buildMetricCacheKey scoped variants, resolveQueryScope/buildPeriodKey/applyDefaultPeriod helpers
+
+**NEW DTOs (17):**
+- `dto/weekly-revenue.dto.ts`, `dto/monthly-revenue.dto.ts`, `dto/comparison.dto.ts`
+- `dto/merchant-scatter.dto.ts`, `dto/merchant-health-distribution.dto.ts`, `dto/merchant-comparison-table.dto.ts`
+- `dto/race-type-distribution.dto.ts`, `dto/race-spotlight.dto.ts`, `dto/race-performance-list.dto.ts`
+- `dto/runner-booking-heatmap.dto.ts`, `dto/runner-lead-time.dto.ts`, `dto/runner-repeat-cohort.dto.ts`
+- `dto/runner-demographics.dto.ts`, `dto/runner-geographic.dto.ts`, `dto/runner-summary-kpi.dto.ts`
+- `dto/ga4-overview.dto.ts`, `dto/export-analytics.dto.ts`
+
+**MODIFIED:**
+- `backend/src/modules/analytics/analytics.controller.ts` — EXTENDED: 19 endpoints registered, `@UseGuards(LogtoAdminGuard)` class-level, all with `@ApiResponse` 200/400/401/403
+- `backend/src/modules/analytics/analytics.service.ts` — EXTENDED: thin wrapper methods + buildDateFilter() shared + getWeeklyRevenue/getMonthlyRevenue/getComparison Wave 2B-1 + 3 period helpers
+- `backend/src/modules/analytics/analytics.module.ts` — EXTENDED: register 5 new services + shared helpers
+- `backend/src/modules/analytics/dto/analytics-query.dto.ts` — EXTENDED: BUG-010 @Matches month/from/to + BUG-011 @Min(1) tenantId
+- `backend/src/modules/analytics/dto/repeat-athlete-rate.dto.ts` — EXTENDED: CompareKind enum +wow/mom (Wave 2A fix)
+- `backend/src/common/constants/order-classification.ts` — NEW constants for category classification
+- `backend/src/modules/finance/services/fee.service.ts` + `.f061.spec.ts` — F-061 BR-61-08 paymentRef semantics
+- `backend/src/modules/reconciliation/services/reconciliation-query.service.ts` + `.f061.spec.ts` — F-061 companion fix
+
+**NEW test files (7):**
+- `analytics/__tests__/bucket-helpers.spec.ts`
+- `analytics/__tests__/period-resolver.f062.spec.ts`
+- `analytics/__tests__/revenue-endpoints.f062.spec.ts`
+- `analytics/__tests__/merchant-comparison.f062.spec.ts`
+- `analytics/__tests__/race-performance.f062.spec.ts`
+- `analytics/__tests__/runner-analytics.f062.spec.ts`
+- `analytics/__tests__/ga4-export.f062.spec.ts`
+
+### Admin files changed
+
+**NEW layout/nav:**
+- `admin/src/app/(dashboard)/analytics/layout.tsx` — NEW: 5-tab navigation layout
+- `admin/src/app/(dashboard)/analytics/components/AnalyticsTabsNav.tsx` — 5-tab nav with active state
+- `admin/src/app/(dashboard)/analytics/components/AnalyticsFilterBar.tsx` — URL-driven filter bar (granularity/period/compare/from/to persists across tab nav)
+
+**NEW components (14 total under analytics/components/):**
+- `CompareSelector.tsx`, `GranularityToggle.tsx`, `PeriodSelector.tsx` (Adj #3 split selector components)
+- `PeriodCompareSelector.tsx` (@deprecated wrapper for backward compat)
+- `ComparisonRow.tsx` — BR-SA-04 side-by-side comparison metric row
+- `MerchantHealthDistribution.tsx` — BR-SA-22b health score distribution bars
+- `RaceSpotlightCard.tsx` — BR-SA-21b top race card with metrics
+- `RaceTypeDistributionChart.tsx` — BR-SA-21a donut chart race types
+- `RunnerSummaryKpiStrip.tsx` — BR-SA-20f 4 KPI strip
+- `Ga4OverviewSection.tsx` — BR-SA-11 GA4 metrics with graceful fallback
+- `ExportButtonV2.tsx` — BR-SA-10 CSV + XLSX export button
+
+**NEW pages:**
+- `admin/src/app/(dashboard)/analytics/merchants/page.tsx` — Tab 2 merchant comparison
+- `admin/src/app/(dashboard)/analytics/races/page.tsx` — Tab 3 race performance
+- `admin/src/app/(dashboard)/analytics/runners/page.tsx` — Tab 4 runner behavior
+
+**MODIFIED:**
+- `admin/src/app/(dashboard)/analytics/page.tsx` — Tab 1 ARCH-001 fix (duplicate removed, Wave 2 sections at top, F-026 accordion below) + BUG-009 granularity switch
+- `admin/src/app/globals.css` — `--5s-blue` CSS alias token (Adj #5)
+- `admin/src/lib/analytics-labels.ts` — NEW: 15 label maps + ERROR_MESSAGE + labelOr helper (BR-SA-17 VN label dict)
+- `admin/src/lib/analytics-hooks.ts` — NEW: 17 TanStack Query wrappers for analytics SDK
+- `admin/src/lib/api-generated/index.ts`, `sdk.gen.ts`, `types.gen.ts` — SDK regen 17 NEW Wave 2 functions
+
+### Patterns added (see conventions.md)
+- Analytics filter bar URL state sync
+- Shared MySQL pull helper extraction threshold (3rd consumer)
+- ISO 8601 week bucketing via `bucket-helpers.ts`
+- `buildDateFilter()` SQL safety pattern
+
+### Tech debts post-ship
+- TD-F062-BUG-005: label density for 90d daily view (BUG-005 deferred, axis cramped)
+- TD-F062-BUG-008: legacy Manual % > 100% guard missing (pre-F-062 era, BUG-008)
+- TD-F062-GA4-SERVICE-ACCOUNT 🔴 HIGH: Tab 5 placeholder until `GOOGLE_APPLICATION_CREDENTIALS` env set on VPS
+- TD-F062-TOPRACE-INMEMORY: TopRaces in-memory sort (<200 races currently, acceptable)
+
+---
+
 ## [2026-05-25] FEATURE-062 Wave 2C-1: Race Performance Service + Shared Helper Extract — PRD Compliance 18/18 PERFECT (PARTIAL DEPLOY)
 
 **Branch:** `5bib_analytics_v2` 10 cumulative commits — Wave 2C-1 `add014f` + Manager checkpoint
