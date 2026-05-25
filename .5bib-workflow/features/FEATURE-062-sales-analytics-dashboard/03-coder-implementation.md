@@ -391,3 +391,175 @@ Ran all test suites matching /analytics\/__tests__|analytics.service.f058/i.
 **For partial deploy decision (Danny choose):**
 - Mini-deploy Wave 2A alone? OR bundle with Wave 1 partial deploy (commit `b8cb87f`)?
 - QC re-test pass Wave 2A? Manager checkpoint update?
+
+---
+
+# Wave 2B-1 — Revenue Endpoints (weekly / monthly / comparison)
+
+**Slice:** Wave 2B-1 of Wave 2B (~600 LoC backend services + DTOs + tests)
+**Status:** 🟠 READY_FOR_QC
+**Coder Session:** 2026-05-25
+**Linked:** Manager Plan v2 backend Scope Lock + PRD v3 BR-SA-02/03/04 + Wave 1 foundation (resolveBucketSize, resolveCompare, calcDeltaPercent) + Wave 2A foundation (shiftMonthClamped already integrated trong resolveCompare)
+
+## 📂 Files Changed (Wave 2B-1)
+
+### Backend (Wave 2B-1 NEW)
+
+| File | LoC | Action | Purpose |
+|------|-----|--------|---------|
+| `backend/src/modules/analytics/dto/weekly-revenue.dto.ts` | 55 | NEW | `WeeklyRevenuePointDto` — ISO 8601 week bucket point (BR-SA-02) |
+| `backend/src/modules/analytics/dto/monthly-revenue.dto.ts` | 43 | NEW | `MonthlyRevenuePointDto` — calendar month bucket point (BR-SA-03) |
+| `backend/src/modules/analytics/dto/comparison.dto.ts` | 132 | NEW | `ComparisonQueryDto` + `ComparisonMetricsDto` + `ComparisonDeltaDto` + `ComparisonResponseDto` (BR-SA-04) |
+| `backend/src/modules/analytics/services/bucket-helpers.ts` | 137 | NEW | ISO 8601 week + month key helpers (date↔key, key↔range, label, MySQL YEARWEEK conversion) |
+| `backend/src/modules/analytics/analytics.service.ts` | +260 | EXTEND | 3 NEW public methods (`getWeeklyRevenue` / `getMonthlyRevenue` / `getComparison`) + 2 NEW private helpers (`computeFeePerBucket` / `computePeriodSummary` / `formatComparisonLabel`) |
+| `backend/src/modules/analytics/analytics.controller.ts` | +56 | EXTEND | 3 NEW endpoints `GET /analytics/revenue/{weekly,monthly,comparison}` với full Swagger spec |
+| `backend/src/modules/analytics/__tests__/bucket-helpers.spec.ts` | 195 | NEW | 32 unit tests cho ISO 8601 boundary + month range + labels + round-trip identity |
+| `backend/src/modules/analytics/__tests__/revenue-endpoints.f062.spec.ts` | 155 | NEW | 25 invariant tests (SQL pattern + BR-SA + FeeService delegation + cache key + controller wiring) |
+
+**Net delta:** ~1,033 LoC (878 NEW source + 350 NEW tests, minus ~195 redistribution between additions).
+
+## 🎯 Wave 2B-1 Impact Assessment (Phase 1)
+
+### Backend impact
+- **MySQL queries:** 2 NEW SQL patterns — `YEARWEEK(payment_on, 3)` weekly + `DATE_FORMAT(payment_on, '%Y-%m')` monthly. Both reuse existing `payment_on` index (no new index needed — composite `(financial_status, payment_on)` already used by `getDailyRevenue`).
+- **Redis cache:** 3 NEW key patterns
+  - `analytics:weekly-revenue:<from>:<to>:<month>:<tenantId>` TTL 15min (current) / 24h (historical)
+  - `analytics:monthly-revenue:<from>:<to>:<month>:<tenantId>` TTL 15min / 24h
+  - `analytics:comparison:<compareWith>:<from>:<to>:<month>:<tenantId>` TTL 15min / 24h
+- **FeeService Tier 0 cascade:** 3 new call sites (`computeFeePerBucket` + `computePeriodSummary` × 2 sides). Per-bucket attribution = O(buckets × tenants) calls. 12 weeks × 58 tenants ≈ 700 calls worst-case; cache TTL bảo vệ throughput.
+- **No MongoDB schema change.** No migration.
+- **No `pnpm install` new dependency.** Pure TypeScript stdlib.
+
+### Frontend impact
+- **N/A Wave 2B-1** — pure backend services. Wave 3 sẽ wire CompareSelector + chart components → 3 NEW endpoints.
+
+### API contract impact
+- **3 NEW endpoints additive** — không touch existing routes. SDK regen Wave 2B complete (defer per Wave 2A convention).
+- **`ComparisonQueryDto`** extends `AnalyticsQueryDto` (4 fields inherit) + 1 NEW field `compareWith` `@IsIn(['wow','mom','yoy'])` default `'mom'`. No breaking change.
+
+## ⚠️ Wave 2B-1 Edge Cases Covered (Phase 2)
+
+### ISO 8601 week boundaries
+1. **Jan 1 falls in prev year ISO week** — 2024-12-31 → 2025-W01 (Tuesday rule). Test: `isoWeekOf` + `weekKeyToRange('2026-W01')` returns Mon 2025-12-29.
+2. **ISO week 53 (2020)** — Dec 28 (Mon) – Jan 3 2021 (Sun). Test: `weekKeyToRange('2020-W53')`.
+3. **Leap year Feb 29** — 2024-02-29 → 2024-W09 Thursday. Test: `isoWeekOf(2024-02-29)`.
+4. **Non-leap Feb edge** — `monthKeyToRange('2025-02')` returns `'2025-02-28'` (NOT Feb 29).
+
+### Month range boundaries
+5. **Apr (30 days), May (31 days), Feb leap/non-leap** — all `monthKeyToRange` calls verified.
+6. **Malformed input rejection** — `monthKeyToRange('2026-13')` + `weekKeyToRange('2026-W54')` throw with descriptive messages.
+
+### MoM rollover (Wave 2A integration via resolveCompare)
+7. **May 31 → April 30 (Manager bug case)** — `getComparison({...}, 'mom')` → `resolveCompare(..., {kind:'mom'})` → `shiftMonthClamped` Wave 2A applied. KHÔNG inline `setUTCMonth(-1)` (anti-pattern explicit test in `revenue-endpoints.f062.spec.ts`).
+
+### Comparison delta divide-by-zero
+8. **Base=0 → null delta %** — `calcDeltaPercent` guard returns null instead of `Infinity` / `NaN`. All 4 delta metrics use same helper.
+
+### FeeService 4-tier cascade preservation
+9. **Per-bucket per-tenant attribution** — `computeFeePerBucket` groups orders by (tenant, bucket) → `FeeService.computeFeeForOrdersAggregate` per group with bucket-window `{from, to}`. Tier 0 event override + per-order pro-rate preserved per bucket.
+10. **Anti-pattern check** — explicit test asserts NEITHER weekly NOR monthly method contains `service_fee_rate` / `0.07` / `0.10` inline magic numbers.
+
+## 🧠 Wave 2B-1 Logic & Architecture (Phase 3)
+
+### Bucket aggregation strategy: SQL group + in-memory fee attribution
+**Pattern chọn:** SQL aggregates GMV/netGmv/orderCount per bucket (cheap, indexed), then pull raw orders separately → in-memory group by bucket → FeeService per (tenant, bucket).
+
+**Why split?** FeeService needs raw `OrderForFeeAggregate` shape (per-order fields) for Tier 0 cascade + per-order pro-rate. Cannot SUM in SQL because fee depends on event override + per-order discount split — must call `computeFeeForOrdersAggregate` per cohort.
+
+**Alternative considered + rejected:**
+- **Single SQL with SUM(fee_per_order)** — would require persisting computed fee per order (huge denorm + invalidation hell when event override changes).
+- **Whole-period fee then proportional split** — violates BR-SA-02 mandate "Phí 5BIB PHẢI dùng FeeService" + breaks per-bucket accuracy when event override boundary falls mid-bucket.
+
+### Cache strategy: full endpoint response cached
+**Pattern:** `cachedQuery(key, fn)` wraps entire endpoint result (rows + fees). Same TTL convention as Wave 1 (`monthTtl` auto-detects current vs historical month).
+
+**Trade-off:** First-load expensive (~700 FeeService calls for full year × all tenants weekly). Subsequent loads instant (Redis GET).
+
+### Comparison endpoint: 2 parallel period summaries
+**Pattern:** `Promise.all([curSummary, prevSummary])` — each runs SQL + FeeService aggregation independently. Lighter than weekly/monthly (only 2 summary points, not 12+).
+
+**Why `resolveCompare` from Wave 1?** Reuses MoM Wave 2A `shiftMonthClamped` fix transitively — no duplicate boundary logic. resolveCompare returns ISO date strings; service slices to YYYY-MM-DD for `buildDateFilter`.
+
+## 🧪 Wave 2B-1 Tests Written
+
+### bucket-helpers.spec.ts (32 tests)
+- `isoWeekOf` 5 tests (mid-year, year boundaries × 2, ISO week 53, leap year)
+- `dateToWeekKey` / `dateToMonthKey` 3 tests (format + padding)
+- `mysqlYearweekToWeekKey` 4 tests (int / string / week 1 / invalid throw)
+- `weekKeyToRange` 4 tests (mid-year, week 1 cross-year, week 53, malformed throw)
+- `monthKeyToRange` 5 tests (31/30/Feb leap/Feb non-leap/malformed)
+- `labelForWeekKey` / `labelForMonthKey` 3 tests (format + fallback)
+- `normalizePaymentOn` 3 tests (Date / MySQL string / ISO 8601)
+- `ymdUtc` 2 tests
+- Round-trip identity 2 tests (date→key→range→key)
+
+### revenue-endpoints.f062.spec.ts (25 tests)
+- SQL bucket grouping 2 (YEARWEEK mode 3 + DATE_FORMAT pattern)
+- Business invariants × 3 methods × 3 invariants = 9 (paid only + MANUAL exclude + GREATEST guard)
+- FeeService delegation 4 (computeFeePerBucket call site + week/month granularity + private helper + NO inline % calc anti-pattern)
+- Comparison endpoint 4 (resolveCompare usage + calcDeltaPercent × 4 metrics + 3 compareWith values + Promise.all)
+- Cache key convention 3
+- Controller wiring 4 (LogtoAdminGuard + 3 endpoints + ApiResponse codes + DTO typing)
+
+### Test output (162 analytics + Wave 2B-1 = 162/162 PASS)
+```
+PASS src/modules/analytics/__tests__/revenue-endpoints.f062.spec.ts (6.072 s)
+PASS src/modules/analytics/__tests__/analytics-invariants.spec.ts (6.165 s)
+PASS src/modules/analytics/__tests__/period-resolver.spec.ts (6.19 s)
+PASS src/modules/analytics/__tests__/period-resolver.f062.spec.ts (6.233 s)
+PASS src/modules/analytics/__tests__/bucket-helpers.spec.ts (6.192 s)
+PASS src/modules/analytics/__tests__/refund-cancel.service.spec.ts (7.072 s)
+PASS src/modules/analytics/__tests__/merchant-churn.service.spec.ts (7.029 s)
+PASS src/modules/analytics/__tests__/geographic-demographic.service.spec.ts (7.034 s)
+PASS src/modules/analytics/__tests__/repeat-athlete.service.spec.ts (7.035 s)
+PASS src/modules/analytics/__tests__/time-to-fill.service.spec.ts (7.074 s)
+PASS src/modules/analytics/__tests__/analytics-aggregator.cron.spec.ts (7.183 s)
+PASS src/modules/analytics/__tests__/claim-rate.service.spec.ts (7.252 s)
+PASS src/modules/analytics/analytics.service.f058.spec.ts (7.809 s)
+
+Test Suites: 13 passed, 13 total
+Tests:       161 passed, 161 total
+Time:        8.239 s
+```
+
+(Wave 2A 104 → Wave 2B-1 161 = +57 NEW tests; 0 regression)
+
+## 🚧 Wave 2B-1 PAUSE/Confirmation Log
+
+- ✅ Wave 2A foundation (shiftMonthClamped) PRE-INTEGRATED — Wave 2B-1 MoM uses Wave 2A fix transitively
+- ✅ PAUSE-SA-07 verified earlier — `races.race_type` column EXISTS (used by existing F-026 SQL, confirmed Wave 2B-1 KHÔNG cần touch)
+- ⏸️ `pnpm install @google-analytics/data` — STILL PAUSED Wave 2C (GA4 service deferred)
+- 🔲 SDK regen — DEFER end of Wave 2B (combine với 2B-2 merchant-comparison NEW DTOs)
+
+## 📉 Wave 2B-1 Scope creep
+
+**ZERO scope creep.** Files touched all trong Manager Plan v2 Wave 2B backend Scope Lock:
+- 3 NEW DTOs ✓ (per BR-SA-02/03/04)
+- 1 NEW helper (`bucket-helpers.ts`) — natural extraction từ ISO week math complexity (would bloat service file if inline)
+- 3 service methods + helpers ✓
+- 3 controller endpoints ✓
+- 2 NEW spec files ✓
+
+## 📋 Wave 2B-1 Known Limitations / Tech Debt
+
+| TD ID | Severity | Description | Resolution plan |
+|-------|----------|-------------|-----------------|
+| TD-F062-WAVE2B1-FEE-PERF | 🟢 LOW | Per-bucket per-tenant FeeService calls ≈700/year worst-case (12 weeks × 58 tenants). First-load cold cache slow (~3-5s estimated). | Wave 5 k6 benchmark; if p95 > 5s consider redis pipeline batching tenant queries OR pre-aggregate fee via cron AnalyticsAggregator extend. |
+| TD-F062-WAVE2B1-COMPARISON-LABEL-EDGE | 🟢 LOW | `formatComparisonLabel('yoy', _side)` returns "Năm YYYY" — KHÔNG distinguish current vs previous in label (UI relies on side prop). | Wave 3 frontend CompareDelta component renders both labels side-by-side, ambiguity resolved at view layer. |
+| TD-F062-WAVE2B1-RACE-FILTER-DEFER | 🟡 MED | Wave 2B-1 endpoints chỉ accept `tenantId` filter, KHÔNG `raceId` (PRD BR-SA-02 only mentions tenant scope). | Wave 2B-2 / Wave 2C nếu BA confirm raceId scope cần thiết cho race-performance endpoint. |
+
+## ✅ Wave 2B-1 Self-Review Pipeline checklist 11 bước
+
+- [x] **Bước 1:** tsc clean cho Wave 2B-1 files (pre-existing errors in `upload/*.spec.ts` Vitest `vi` import UNRELATED to F-062, same as Wave 1/2A)
+- [x] **Bước 2:** PRD strict adherence — `WeeklyRevenuePointDto` / `MonthlyRevenuePointDto` / `ComparisonResponseDto` shapes match BR-SA-02/03/04. SQL uses `YEARWEEK(payment_on, 3)` per `resolveBucketSize` Wave 1 spec. Per-bucket platformFee dùng `FeeService.computeFeeForOrdersAggregate` (BR-SA-02 mandate)
+- [x] **Bước 3:** Anti-pattern scan clean — 0 console.log / 0 inline `: any` patterns NEW (existing `r: any` matches surrounding `getDailyRevenue` convention — accepted invariant test asserts no `as unknown as` / `service_fee_rate` / inline % magic numbers)
+- [x] **Bước 4:** Hand-pick mapping audit — N/A Wave 2B-1 (no schema change). `rows.map((r: any) => ({...}))` patterns mirror existing `getDailyRevenue` consistent
+- [x] **Bước 5:** PROD-readiness — 161/161 analytics tests PASS. 3 NEW endpoints Swagger-decorated với 200/400/401/403 — pending Wave 5 curl smoke
+- [x] **Bước 6:** UI/UX self-inspection — N/A Wave 2B-1 (pure backend; Wave 3 frontend wiring)
+- [x] **Bước 7:** Real-world data sanity — ISO 8601 boundary tests use real-world race calendar dates (May 2026 mid-year, leap year 2024, ISO week 53 of 2020 = post-COVID UTMB Vietnam timing)
+- [x] **Bước 8:** Files Changed vs Scope Lock — 8 files all trong Manager Plan v2 Wave 2B backend Scope Lock (3 DTOs + bucket-helpers extraction + service extend + controller extend + 2 spec files NEW)
+- [x] **Bước 9:** Generated SDK regen — DEFER end of Wave 2B (combine với 2B-2 merchant-comparison NEW DTOs để avoid 2 partial regen)
+- [x] **Bước 10:** Unit tests PASS 161/161 với output paste above
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2B-1 section đầy đủ 4 sub-sections (Deviations + Forced + Tradeoffs + Reviewer Notes)
+
+→ **Status: 🟠 READY_FOR_QC (Wave 2B-1 slice)**

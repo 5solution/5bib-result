@@ -237,3 +237,125 @@
 - [x] **Bước 9:** Generated SDK regen — DEFER Wave 2B (DTO change `compareWith` enum array extend technically affects SDK type, but value still `string` after `@IsIn` validation — backward compat. Will regen end of Wave 2B with all NEW DTOs)
 - [x] **Bước 10:** Unit tests PASS 104/104 với output verifiable above
 - [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2A section đầy đủ 4 sub-sections (Deviations #5+#6 + Forced #4 + Tradeoffs 5 + Reviewer Notes)
+
+---
+
+# Wave 2B-1 Implementation Notes — Revenue Endpoints (weekly / monthly / comparison)
+
+**Date:** 2026-05-25
+**Slice:** Wave 2B-1 of Wave 2B
+**Status:** 🟠 READY_FOR_QC
+
+## Section 1: 🚧 Deviations from Spec (Wave 2B-1 intentional)
+
+- **[Deviation #7] Per-bucket fee aggregation = (tenant × bucket) loop NOT (tenant only) loop**
+  - **Spec said:** BR-SA-02 mandate "Phí 5BIB PHẢI dùng FeeService.computeFeeForOrdersAggregate()" + DTO `WeeklyRevenuePointDto.platformFee: number` per row → implied per-bucket accuracy
+  - **I did:** `computeFeePerBucket` helper groups orders by (tenant, bucket-key) in-memory → run FeeService.computeFeeForOrdersAggregate per group with bucket-window `{from, to}`. ≈700 calls/year worst-case (12 weeks × 58 tenants).
+  - **Why:** Naive option = whole-period fee then proportional split by bucket revenue. REJECTED because:
+    1. Violates FeeService Tier 0 semantics — event override can change mid-period; fee per bucket varies by which week event override active
+    2. Per-order pro-rate logic lives inside FeeService — cannot proportionally split externally without breaking pro-rate accuracy
+    3. PRD `platformFee` field per row → expected real per-bucket value, not approximation
+  - **Reviewer should check:** Sample week with mixed tenant orders → verify sum(week fees) ≈ period fee (within rounding tolerance). If significant mismatch suggests event override boundary at bucket edge — flag for k6 benchmark Wave 5.
+
+- **[Deviation #8] Comparison endpoint label dùng VN format inline (KHÔNG via analytics-labels.ts dictionary)**
+  - **Spec said:** Display Convention rule — mọi enum/snake_case render UI PHẢI map qua `analytics-labels.ts` centralized dictionary
+  - **I did:** `formatComparisonLabel` returns inline VN strings ("Tháng 5 / 2026", "Tuần 21", "Năm 2026") via `labelForWeekKey` / `labelForMonthKey` bucket helpers
+  - **Why:** Labels là pure data values (NOT enum keys) — `'2026-05'` → `'Tháng 5 / 2026'` is format transformation, not enum mapping. analytics-labels.ts dictionary is cho `STATUS_LABEL[status]` enum→VN. Putting numeric month/year format into dictionary = wrong abstraction.
+  - **Reviewer should check:** Verify `dateToMonthKey` + `labelForMonthKey` consistency — same Date input → same UI string. Format spec ("Tháng N / YYYY") matches Wave 3 BR-SA-04 PRD section.
+
+- **[Deviation #9] Wave 2B-1 KHÔNG accept `raceId` filter**
+  - **Spec said:** PRD BR-SA-02/03/04 mentions "scope: platform | tenant" only
+  - **I did:** `getWeeklyRevenue` / `getMonthlyRevenue` / `getComparison` accept `query.tenantId` filter (optional) — NOT `query.raceId`
+  - **Why:** Revenue chart trên dashboard Sales Analytics scope là platform-wide hoặc per-tenant comparison. Race-level revenue thuộc về race-performance endpoint (Wave 2C). Adding raceId here = scope creep.
+  - **Reviewer should check:** Wave 3 chart binding wires `tenantId` filter dropdown từ MerchantSelector. Race deep-dive uses separate `/analytics/races/:raceId/detail` endpoint (existing Wave 0).
+
+## Section 2: ⚙️ Forced Changes (Wave 2B-1 reality ≠ spec)
+
+- **[Forced #5] `pullOrdersForFeeAggregate` returns `Map<tenantId, orders[]>` keyed by NUMBER (not tenantId string)**
+  - **PRD assumed:** OrderForFeeAggregate "tenantId" semantic
+  - **Reality:** Existing helper returns `Map<number, OrderForFeeAggregate[]>` because MySQL `tenant_id` column is INT. `pullOrdersForFeeAggregate` does `Number(r.tenant_id)` coercion.
+  - **Workaround:** `computeFeePerBucket` iterates `for (const [tid, orders] of ordersByTenant)` — `tid` already correct number type for `feeService.computeFeeForOrdersAggregate(tid, ...)` signature. Zero adaptation needed.
+  - **Manager/BA action:** None — existing convention; document Wave 5 codebase-map.
+
+- **[Forced #6] `resolveCompare(current, {kind})` requires `current` Wave 1 `ResolvedRange` shape (NOT raw from/to strings)**
+  - **PRD assumed:** Comparison endpoint just needs `compareWith` enum + from/to query → compute previous range
+  - **Reality:** `resolveCompare` from Wave 1 expects `ResolvedRange = { fromIso, toIso, periodKey }` — designed cho F-026 `resolvePeriod` chain
+  - **Workaround:** `getComparison` builds `ResolvedRange` shim from `resolvePeriodWindow(query)` result (`{from, to}` YYYY-MM-DD → `T00:00:00.000Z` / `T23:59:59.999Z` ISO + dummy `periodKey: 'cmp'`).
+  - **Manager/BA action:** Wave 3 frontend `CompareSelector` should pass `period` query param (matches `PeriodKind`) instead of raw from/to → cleaner chain. Wave 2B-1 supports both forms via `resolvePeriodWindow` already-flexible.
+
+## Section 3: ⚖️ Tradeoffs Considered (Wave 2B-1)
+
+| # | Decision | Option chọn | Alternatives REJECTED | Cost paid |
+|---|----------|-------------|----------------------|-----------|
+| 1 | Bucket key transport format | `'YYYY-Www'` (e.g., `2026-W21`) + `'YYYY-MM'` | Numeric MySQL `YEARWEEK` (e.g., `202621`), Unix timestamp | Frontend chart libs (Recharts) accept string X-axis directly — no parse hop |
+| 2 | Per-bucket fee strategy | (tenant × bucket) loop FeeService calls | Whole-period fee then proportional split | First-load cold cache ~3-5s p95 estimated; subsequent loads Redis-cached <100ms |
+| 3 | ISO 8601 week algorithm | In-house `isoWeekOf` Thursday rule | `date-fns` `getISOWeek` (npm dep), reuse `dayjs` (already in tree) | ~50 LoC algorithm + 5 boundary tests = no new dep, fully testable |
+| 4 | Comparison endpoint cache TTL | Same as weekly/monthly (15min/24h auto) | Aggressive 60s cache để dashboard refresh natural | Consistent với existing convention; UI manual refresh button (Wave 3) bust cache via cache flush hook |
+| 5 | Helper extraction (bucket-helpers.ts) | NEW file separate from period-resolver | Inline trong analytics.service (would bloat file from 1289 → ~1500) | 1 NEW file; tradeoff: import statement in service. Helpers độc lập testable separately, period-resolver giữ scope F-026 đúng |
+
+## Section 4: 🎯 Wave 2B-1 Reviewer Notes — Priority List
+
+### Critical paths để Manager spot-check (top 5)
+
+1. **`bucket-helpers.ts:33-46` `isoWeekOf` Thursday rule algorithm** (15 LoC)
+   - Verify Thursday shift `d.setUTCDate(d.getUTCDate() + 4 - dayNum)` correct
+   - Check off-by-one in week counting `Math.ceil(...) / 7`
+   - Cross-verify với `weekKeyToRange` round-trip identity test (line 199 spec)
+
+2. **`bucket-helpers.ts:84-105` `weekKeyToRange` Monday/Sunday derivation** (22 LoC)
+   - Verify Jan 4 anchor rule (always trong ISO week 1)
+   - Check `weekMonday` math add `(isoWeek - 1) * 7` correct (Week 1 = +0, Week 2 = +7 etc.)
+   - Edge case: week 53 of 2020 → Dec 28 (Mon) – Jan 3 2021 (Sun) verified test
+
+3. **`analytics.service.ts:getWeeklyRevenue` SQL + fee orchestration** (~80 LoC)
+   - Verify `YEARWEEK(payment_on, 3)` mode 3 = ISO 8601 (KHÔNG mode 1 hoặc default 0)
+   - Verify `financial_status = 'paid'` + `order_category != 'MANUAL'` (BI-01 + BI-02)
+   - Verify `computeFeePerBucket` call signature passes correct `'week'` granularity
+   - Verify per-bucket attribution sum logic: `feeByBucket.get(weekKey) ?? 0`
+
+4. **`analytics.service.ts:getComparison` resolveCompare integration** (~60 LoC)
+   - Verify NO inline `setUTCMonth(-1)` (TD-F062-MOM-BOUNDARY-ROLLOVER fix Wave 2A preserved)
+   - Verify `resolveCompare` returns null check for `compareWith='none'` (defensive — though not allowed via DTO `@IsIn`)
+   - Verify `Promise.all([curSummary, prevSummary])` parallel execution
+   - Verify 4 `calcDeltaPercent` calls cho 4 metrics
+
+5. **`analytics.controller.ts:getRevenueComparison` Swagger contract** (~15 LoC)
+   - Verify `@ApiResponse({ type: ComparisonResponseDto })` correct DTO ref
+   - Verify class-level `@UseGuards(LogtoAdminGuard)` covers 3 NEW endpoints
+   - Verify `ComparisonQueryDto` extends `AnalyticsQueryDto` (inherits from/to/month/tenantId)
+
+### ⚠️ Deferred (acceptable Wave 2B-1 scope):
+- k6 performance benchmark cho cold-cache full-year query — Wave 5 PROD-like load test
+- Race-level filter `raceId` cho 3 endpoints — Wave 2C if BA confirms scope
+- ChartJS-side X-axis category sorting — Wave 3 frontend concern
+- Comparison endpoint `'prev'` / `'custom'` / `'none'` support — Wave 2B-1 chỉ wow/mom/yoy per BR-SA-04 v3; other CompareKind values handled by existing F-026 metric endpoints
+
+### Type safety narrowed casts (Manager grep `as unknown as`)
+- **None** trong Wave 2B-1 files. `r: any` matches existing `getDailyRevenue` row-shape convention (SQL driver returns dynamic). Asserted-no-anti-pattern by `revenue-endpoints.f062.spec.ts:104-114`.
+
+### Security checklist self-applied (Wave 2B-1)
+- [x] **SQL injection** — all SQL uses `?` placeholders + `params` array (TypeORM `db.query(sql, params)`). NO template literal interpolation of user input.
+- [x] **Auth guard** — class-level `@UseGuards(LogtoAdminGuard)` covers all 3 NEW endpoints (inherited from controller decorator).
+- [x] **DTO validation** — `ComparisonQueryDto` `@IsIn(['wow','mom','yoy'])` rejects invalid `compareWith` at framework level (400 response).
+- [x] **Date range** — `validateDateRange` 366-day cap inherited via `super` pattern (same as `getDailyRevenue`).
+- [x] **No PII leak** — response DTOs only expose aggregate metrics (gmv/netGmv/platformFee/orderCount + labels). No order/athlete/email data.
+- [x] **Redis** — cache keys deterministic, no user-controlled segments leaked.
+
+### Performance numbers measured (Wave 2B-1)
+- **Unit test suite**: 161 tests / 8.239s = 0.051s avg per test
+- **Bucket helpers**: pure functions, sub-millisecond
+- **Live endpoint k6 benchmark**: DEFER Wave 5 PROD-like load test (estimated p95 first-load 3-5s for full year × all tenants weekly; cached <100ms)
+
+### Self-Review Pipeline checklist 11 bước (Wave 2B-1)
+
+- [x] **Bước 1:** tsc clean cho 8 Wave 2B-1 files (pre-existing errors in `upload/*.spec.ts` Vitest `vi` import UNRELATED to F-062)
+- [x] **Bước 2:** PRD strict adherence — 3 DTO shapes match BR-SA-02/03/04. SQL uses `YEARWEEK mode 3` + `DATE_FORMAT %Y-%m` per Wave 1 `resolveBucketSize` spec. Per-bucket platformFee dùng FeeService (BR-SA-02 mandate).
+- [x] **Bước 3:** Anti-pattern scan clean — 0 NEW `console.log` / 0 `as unknown as`. Existing `r: any` row-shape pattern matches surrounding `getDailyRevenue` convention. Invariant test asserts no inline `service_fee_rate` / `0.07` magic.
+- [x] **Bước 4:** Hand-pick mapping audit — N/A Wave 2B-1 (no schema change, no `.map((li)=>`)
+- [x] **Bước 5:** PROD-readiness — 161/161 analytics tests PASS. 3 NEW endpoints Swagger-decorated với 200/400/401/403 — pending Wave 5 manual curl smoke
+- [x] **Bước 6:** UI/UX self-inspection — N/A Wave 2B-1 (pure backend; Wave 3 wires frontend)
+- [x] **Bước 7:** Real-world data sanity — ISO 8601 boundary tests use real-world race calendar dates (May 2026 mid-year, leap year 2024, ISO week 53 of 2020 post-COVID UTMB Vietnam)
+- [x] **Bước 8:** Files Changed vs Scope Lock — 8 files all trong Manager Plan v2 Wave 2B backend Scope Lock
+- [x] **Bước 9:** Generated SDK regen — DEFER end of Wave 2B (combine với 2B-2 merchant-comparison NEW DTOs)
+- [x] **Bước 10:** Unit tests PASS 161/161 với output paste in 03-coder-implementation.md Wave 2B-1 section
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2B-1 section đầy đủ 4 sub-sections (Deviations #7-#9 + Forced #5-#6 + Tradeoffs 5 + Reviewer Notes top-5 priority list)

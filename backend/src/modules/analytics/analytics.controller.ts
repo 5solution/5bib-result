@@ -39,6 +39,13 @@ import {
   DiscrepancyCheckQueryDto,
   DiscrepancyCheckResponseDto,
 } from './dto/analytics-discrepancy.dto';
+// F-062 Wave 2B-1 — Revenue (weekly/monthly/comparison) DTOs
+import { WeeklyRevenuePointDto } from './dto/weekly-revenue.dto';
+import { MonthlyRevenuePointDto } from './dto/monthly-revenue.dto';
+import {
+  ComparisonQueryDto,
+  ComparisonResponseDto,
+} from './dto/comparison.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -71,6 +78,56 @@ export class AnalyticsController {
   })
   getDailyRevenue(@Query() query: AnalyticsQueryDto) {
     return this.analyticsService.getDailyRevenue(query);
+  }
+
+  // ─── F-062 Wave 2B-1 — Weekly / Monthly / Comparison revenue ───────────────
+
+  @Get('revenue/weekly')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-02 v3 — Weekly revenue bucketed by ISO 8601 week (Monday start)',
+    description:
+      'Group by YEARWEEK(payment_on, 3). Per-bucket platformFee via FeeService Tier 0 cascade. ' +
+      'Bucket key format YYYY-Www. Cache 15min (current) / 24h (historical).',
+  })
+  @ApiResponse({ status: 200, type: WeeklyRevenuePointDto, isArray: true })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getWeeklyRevenue(@Query() query: AnalyticsQueryDto) {
+    return this.analyticsService.getWeeklyRevenue(query);
+  }
+
+  @Get('revenue/monthly')
+  @ApiOperation({
+    summary: 'F-062 BR-SA-03 v3 — Monthly revenue bucketed by calendar month',
+    description:
+      'Group by DATE_FORMAT(payment_on, "%Y-%m"). Per-bucket platformFee via FeeService Tier 0 cascade. ' +
+      'Bucket key format YYYY-MM. Cache 15min (current) / 24h (historical).',
+  })
+  @ApiResponse({ status: 200, type: MonthlyRevenuePointDto, isArray: true })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getMonthlyRevenue(@Query() query: AnalyticsQueryDto) {
+    return this.analyticsService.getMonthlyRevenue(query);
+  }
+
+  @Get('revenue/comparison')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-04 v3 — Period-over-period comparison (wow/mom/yoy)',
+    description:
+      'Current vs previous summary cho 4 metric (gmv/netGmv/platformFee/orderCount). ' +
+      'Delta % nullable khi base=0 (calcDeltaPercent guard). ' +
+      'mom dùng Wave 2A shiftMonthClamped (handle 31→30 boundary).',
+  })
+  @ApiResponse({ status: 200, type: ComparisonResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid compareWith or date range' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRevenueComparison(@Query() query: ComparisonQueryDto) {
+    return this.analyticsService.getComparison(query, query.compareWith);
   }
 
   @Get('top-races')

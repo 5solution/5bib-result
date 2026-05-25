@@ -26,6 +26,21 @@ import {
   DiscrepancyCheckResponseDto,
   DiscrepancyVerdict,
 } from './dto/analytics-discrepancy.dto';
+// F-062 Wave 2B-1 — period comparison + bucket helpers
+import {
+  resolveCompare,
+  calcDeltaPercent,
+} from './services/period-resolver';
+import {
+  dateToWeekKey,
+  dateToMonthKey,
+  weekKeyToRange,
+  monthKeyToRange,
+  mysqlYearweekToWeekKey,
+  labelForWeekKey,
+  labelForMonthKey,
+  normalizePaymentOn,
+} from './services/bucket-helpers';
 
 /** Current month: 15 min. Historical months: 24 h (data doesn't change). */
 const TTL_CURRENT = 900;   // 15 minutes
@@ -423,6 +438,383 @@ export class AnalyticsService {
         netGmv: Number(r.net_gmv),
       }));
     });
+  }
+
+  // ─── F-062 Wave 2B-1 — Weekly / Monthly / Comparison endpoints ──────────────
+  // BR-SA-02/03/04 (PRD v3): chart data trên dashboard Sales Analytics.
+  // Phí 5BIB PHẢI dùng FeeService.computeFeeForOrdersAggregate per (tenant, bucket)
+  // — KHÔNG inline tính phí (BR-SA-02 mandate, F-040 4-tier cascade).
+
+  /**
+   * F-062 BR-SA-02 v3 — Weekly revenue bucketed by ISO 8601 week.
+   * Group by `YEARWEEK(payment_on, 3)` (Monday start, week 1 = first week ≥4 days
+   * in new year — khớp `dateToWeekKey` helper).
+   *
+   * Per-bucket platformFee tính qua FeeService Tier 0 cascade. Trade-off:
+   * pull orders raw full period → group in-memory by ISO week → run FeeService
+   * mỗi (tenant, week). 12 tuần × ~58 tenant ≈ 700 cuộc gọi/cache miss; cache TTL
+   * cho period current/historical bảo vệ throughput.
+   */
+  async getWeeklyRevenue(query: AnalyticsQueryDto) {
+    this.validateDateRange(query.from, query.to);
+    const cacheKey = `analytics:weekly-revenue:${query.from ?? ''}:${query.to ?? ''}:${query.month ?? ''}:${query.tenantId ?? ''}`;
+    return this.cachedQuery(cacheKey, async () => {
+      const { clause, params } = this.buildDateFilter(
+        query.from,
+        query.to,
+        query.month,
+      );
+      const whereClause = clause ? `AND ${clause}` : '';
+
+      let sql: string;
+      let sqlParams: any[];
+      if (query.tenantId) {
+        sql = `SELECT
+          YEARWEEK(om.payment_on, 3) as iso_yw,
+          COUNT(CASE WHEN om.order_category != 'MANUAL' THEN 1 END) as order_count,
+          COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN om.total_price ELSE 0 END), 0) as gmv,
+          COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
+        FROM order_metadata om
+        JOIN races r ON r.race_id = om.race_id
+        WHERE om.financial_status = 'paid' AND r.tenant_id = ? ${whereClause}
+        GROUP BY YEARWEEK(om.payment_on, 3)
+        ORDER BY iso_yw ASC`;
+        sqlParams = [query.tenantId, ...params];
+      } else {
+        sql = `SELECT
+          YEARWEEK(payment_on, 3) as iso_yw,
+          COUNT(CASE WHEN order_category != 'MANUAL' THEN 1 END) as order_count,
+          COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN total_price ELSE 0 END), 0) as gmv,
+          COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN GREATEST(total_price - IFNULL(total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
+        FROM order_metadata
+        WHERE financial_status = 'paid' ${whereClause}
+        GROUP BY YEARWEEK(payment_on, 3)
+        ORDER BY iso_yw ASC`;
+        sqlParams = params;
+      }
+
+      const rows = await this.db.query(sql, sqlParams);
+
+      // Per-bucket fee attribution via FeeService.
+      const feeByBucket = await this.computeFeePerBucket(
+        clause,
+        params,
+        query.tenantId,
+        'week',
+      );
+
+      return rows.map((r: any) => {
+        const weekKey = mysqlYearweekToWeekKey(r.iso_yw);
+        const { weekStart, weekEnd } = weekKeyToRange(weekKey);
+        return {
+          week: weekKey,
+          weekStart,
+          weekEnd,
+          gmv: Number(r.gmv),
+          netGmv: Number(r.net_gmv),
+          platformFee: Math.round(feeByBucket.get(weekKey) ?? 0),
+          orderCount: Number(r.order_count),
+        };
+      });
+    });
+  }
+
+  /**
+   * F-062 BR-SA-03 v3 — Monthly revenue bucketed by calendar month.
+   * Group by `DATE_FORMAT(payment_on, '%Y-%m')`.
+   *
+   * Per-bucket platformFee tính qua FeeService Tier 0 cascade. Cùng pattern
+   * weekly nhưng ít buckets hơn (12 month max trên 1y range).
+   */
+  async getMonthlyRevenue(query: AnalyticsQueryDto) {
+    this.validateDateRange(query.from, query.to);
+    const cacheKey = `analytics:monthly-revenue:${query.from ?? ''}:${query.to ?? ''}:${query.month ?? ''}:${query.tenantId ?? ''}`;
+    return this.cachedQuery(cacheKey, async () => {
+      const { clause, params } = this.buildDateFilter(
+        query.from,
+        query.to,
+        query.month,
+      );
+      const whereClause = clause ? `AND ${clause}` : '';
+
+      let sql: string;
+      let sqlParams: any[];
+      if (query.tenantId) {
+        sql = `SELECT
+          DATE_FORMAT(om.payment_on, '%Y-%m') as month_key,
+          COUNT(CASE WHEN om.order_category != 'MANUAL' THEN 1 END) as order_count,
+          COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN om.total_price ELSE 0 END), 0) as gmv,
+          COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
+        FROM order_metadata om
+        JOIN races r ON r.race_id = om.race_id
+        WHERE om.financial_status = 'paid' AND r.tenant_id = ? ${whereClause}
+        GROUP BY DATE_FORMAT(om.payment_on, '%Y-%m')
+        ORDER BY month_key ASC`;
+        sqlParams = [query.tenantId, ...params];
+      } else {
+        sql = `SELECT
+          DATE_FORMAT(payment_on, '%Y-%m') as month_key,
+          COUNT(CASE WHEN order_category != 'MANUAL' THEN 1 END) as order_count,
+          COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN total_price ELSE 0 END), 0) as gmv,
+          COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN GREATEST(total_price - IFNULL(total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
+        FROM order_metadata
+        WHERE financial_status = 'paid' ${whereClause}
+        GROUP BY DATE_FORMAT(payment_on, '%Y-%m')
+        ORDER BY month_key ASC`;
+        sqlParams = params;
+      }
+
+      const rows = await this.db.query(sql, sqlParams);
+
+      const feeByBucket = await this.computeFeePerBucket(
+        clause,
+        params,
+        query.tenantId,
+        'month',
+      );
+
+      return rows.map((r: any) => ({
+        month: String(r.month_key),
+        gmv: Number(r.gmv),
+        netGmv: Number(r.net_gmv),
+        platformFee: Math.round(feeByBucket.get(String(r.month_key)) ?? 0),
+        orderCount: Number(r.order_count),
+      }));
+    });
+  }
+
+  /**
+   * F-062 Wave 2B-1 helper — Per-bucket fee attribution.
+   * 1. Pull orders raw full period bằng `pullOrdersForFeeAggregate` (per-tenant Map)
+   * 2. Re-group orders by bucket key (`YYYY-Www` hoặc `YYYY-MM`) in-memory
+   * 3. Mỗi (tenant, bucket) → `computeFeeForOrdersAggregate` với bucket window
+   * 4. Sum fee qua tất cả tenant per bucket → Map<bucketKey, fee>
+   */
+  private async computeFeePerBucket(
+    clause: string,
+    params: any[],
+    tenantId: number | undefined,
+    granularity: 'week' | 'month',
+  ): Promise<Map<string, number>> {
+    const filter = tenantId ? { tenantId } : undefined;
+    const ordersByTenant = await this.pullOrdersForFeeAggregate(
+      clause,
+      params,
+      filter,
+    );
+    const feeByBucket = new Map<string, number>();
+
+    for (const [tid, orders] of ordersByTenant) {
+      // Group tenant orders → bucket
+      const ordersByBucket = new Map<string, OrderForFeeAggregate[]>();
+      for (const o of orders) {
+        const dt = normalizePaymentOn(o.createdAt);
+        const bucketKey =
+          granularity === 'week' ? dateToWeekKey(dt) : dateToMonthKey(dt);
+        const arr = ordersByBucket.get(bucketKey) ?? [];
+        arr.push(o);
+        ordersByBucket.set(bucketKey, arr);
+      }
+
+      for (const [bucketKey, bucketOrders] of ordersByBucket) {
+        const window =
+          granularity === 'week'
+            ? weekKeyToRange(bucketKey)
+            : monthKeyToRange(bucketKey);
+        const from =
+          granularity === 'week'
+            ? (window as { weekStart: string }).weekStart
+            : (window as { monthStart: string }).monthStart;
+        const to =
+          granularity === 'week'
+            ? (window as { weekEnd: string }).weekEnd
+            : (window as { monthEnd: string }).monthEnd;
+        const result = await this.feeService.computeFeeForOrdersAggregate(
+          tid,
+          bucketOrders,
+          { from, to },
+        );
+        feeByBucket.set(
+          bucketKey,
+          (feeByBucket.get(bucketKey) ?? 0) + result.totalFee,
+        );
+      }
+    }
+
+    return feeByBucket;
+  }
+
+  /**
+   * F-062 BR-SA-04 v3 — Period-over-period comparison.
+   * - `compareWith=wow` → lùi 7 ngày (Wave 1 `resolveCompare` symmetric)
+   * - `compareWith=mom` → lùi 1 calendar month với day-clamp (Wave 2A shiftMonthClamped)
+   * - `compareWith=yoy` → lùi 1 năm (F-026 backward compat)
+   *
+   * Trả về current + previous summary + delta % cho 4 metric (gmv/netGmv/
+   * platformFee/orderCount). Delta dùng `calcDeltaPercent` guard base=0 → null.
+   */
+  async getComparison(
+    query: AnalyticsQueryDto,
+    compareWith: 'wow' | 'mom' | 'yoy' = 'mom',
+  ) {
+    this.validateDateRange(query.from, query.to);
+    const cacheKey = `analytics:comparison:${compareWith}:${query.from ?? ''}:${query.to ?? ''}:${query.month ?? ''}:${query.tenantId ?? ''}`;
+    return this.cachedQuery(cacheKey, async () => {
+      // Resolve current window từ query (tái dùng buildDateFilter + resolvePeriodWindow)
+      const currentWindow = this.resolvePeriodWindow(query);
+      const curFromDate = new Date(`${currentWindow.from}T00:00:00.000Z`);
+      const curToDate = new Date(`${currentWindow.to}T23:59:59.999Z`);
+
+      // Resolve previous window
+      const prevRange = resolveCompare(
+        {
+          fromIso: curFromDate.toISOString(),
+          toIso: curToDate.toISOString(),
+          periodKey: 'cmp',
+        },
+        { kind: compareWith },
+      );
+      if (!prevRange) {
+        throw new BadRequestException(
+          `compareWith=${compareWith} không hỗ trợ`,
+        );
+      }
+      const prevFrom = prevRange.fromIso.slice(0, 10);
+      const prevTo = prevRange.toIso.slice(0, 10);
+
+      // 2 parallel summary aggregates: current + previous
+      const [current, previous] = await Promise.all([
+        this.computePeriodSummary(
+          currentWindow.from,
+          currentWindow.to,
+          query.tenantId,
+          compareWith,
+          'current',
+        ),
+        this.computePeriodSummary(
+          prevFrom,
+          prevTo,
+          query.tenantId,
+          compareWith,
+          'previous',
+        ),
+      ]);
+
+      return {
+        current,
+        previous,
+        delta: {
+          gmvPct: calcDeltaPercent(current.gmv, previous.gmv),
+          netGmvPct: calcDeltaPercent(current.netGmv, previous.netGmv),
+          platformFeePct: calcDeltaPercent(
+            current.platformFee,
+            previous.platformFee,
+          ),
+          orderCountPct: calcDeltaPercent(
+            current.orderCount,
+            previous.orderCount,
+          ),
+        },
+      };
+    });
+  }
+
+  /**
+   * F-062 Wave 2B-1 helper — Compute summary metrics cho 1 period range.
+   * Tái dùng pattern `_computeOverview` (gross/net/orderCount SQL + FeeService
+   * per tenant). Trả về `ComparisonMetricsDto` shape (cộng `label` cho UI).
+   */
+  private async computePeriodSummary(
+    from: string,
+    to: string,
+    tenantId: number | undefined,
+    compareWith: 'wow' | 'mom' | 'yoy',
+    side: 'current' | 'previous',
+  ): Promise<{
+    label: string;
+    from: string;
+    to: string;
+    gmv: number;
+    netGmv: number;
+    platformFee: number;
+    orderCount: number;
+  }> {
+    const { clause, params } = this.buildDateFilter(from, to);
+    const whereClause = clause ? `AND ${clause}` : '';
+
+    let sql: string;
+    let sqlParams: any[];
+    if (tenantId) {
+      sql = `SELECT
+        COUNT(CASE WHEN om.order_category != 'MANUAL' THEN 1 END) as order_count,
+        COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN om.total_price ELSE 0 END), 0) as gmv,
+        COALESCE(SUM(CASE WHEN om.order_category != 'MANUAL' THEN GREATEST(om.total_price - IFNULL(om.total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
+      FROM order_metadata om
+      JOIN races r ON r.race_id = om.race_id
+      WHERE om.financial_status = 'paid' AND r.tenant_id = ? ${whereClause}`;
+      sqlParams = [tenantId, ...params];
+    } else {
+      sql = `SELECT
+        COUNT(CASE WHEN order_category != 'MANUAL' THEN 1 END) as order_count,
+        COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN total_price ELSE 0 END), 0) as gmv,
+        COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN GREATEST(total_price - IFNULL(total_discounts, 0), 0) ELSE 0 END), 0) as net_gmv
+      FROM order_metadata
+      WHERE financial_status = 'paid' ${whereClause}`;
+      sqlParams = params;
+    }
+
+    const [row] = await this.db.query(sql, sqlParams);
+
+    // FeeService aggregate per tenant — BR-SA-02 mandate
+    const filter = tenantId ? { tenantId } : undefined;
+    const ordersByTenant = await this.pullOrdersForFeeAggregate(
+      clause,
+      params,
+      filter,
+    );
+    let platformFee = 0;
+    for (const [tid, orders] of ordersByTenant) {
+      const result = await this.feeService.computeFeeForOrdersAggregate(
+        tid,
+        orders,
+        { from, to },
+      );
+      platformFee += result.totalFee;
+    }
+
+    // Label phụ thuộc compareWith + side
+    const label = this.formatComparisonLabel(from, to, compareWith, side);
+
+    return {
+      label,
+      from: `${from}T00:00:00.000Z`,
+      to: `${to}T23:59:59.999Z`,
+      gmv: Number(row.gmv),
+      netGmv: Number(row.net_gmv),
+      platformFee: Math.round(platformFee),
+      orderCount: Number(row.order_count),
+    };
+  }
+
+  /**
+   * F-062 BR-SA-04 — UI label tiếng Việt cho period comparison panel.
+   * Pattern: mom → "Tháng MM / YYYY", yoy → "Năm YYYY", wow → "Tuần WW / YYYY".
+   */
+  private formatComparisonLabel(
+    from: string,
+    _to: string,
+    compareWith: 'wow' | 'mom' | 'yoy',
+    _side: 'current' | 'previous',
+  ): string {
+    const d = new Date(`${from}T00:00:00.000Z`);
+    if (compareWith === 'mom') {
+      return labelForMonthKey(dateToMonthKey(d));
+    }
+    if (compareWith === 'yoy') {
+      return `Năm ${d.getUTCFullYear()}`;
+    }
+    // wow
+    return labelForWeekKey(dateToWeekKey(d));
   }
 
   async getTopRaces(query: AnalyticsQueryDto) {
