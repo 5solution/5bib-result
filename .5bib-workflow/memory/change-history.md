@@ -7,6 +7,63 @@
 
 ---
 
+## [2026-05-22] FEATURE-062 Wave 2A: Foundation Fixes — 2 BLOCKING TDs resolved (PARTIAL DEPLOY)
+
+**Branch:** `5bib_analytics_v2` off main `e7284b0` — commits `0d1669a` (code) + `275ce81` (QC docs) pushed origin
+**Type:** BUGFIX (Manager BLOCKING TD resolutions) — Wave 2A of 5 (focused fix scope before Wave 2B backend services)
+**Status:** ⚠️ PARTIAL DEPLOY — `05-manager-deploy.md` slot reserved for Wave 5 full close. This entry = Wave 2A mini-deploy via `MANAGER_WAVE2A_REVIEW.md` checkpoint.
+**Linked:** `.5bib-workflow/features/FEATURE-062-sales-analytics-dashboard/{03-coder-implementation,IMPLEMENTATION_NOTES,04-qc-report,MANAGER_WAVE2A_REVIEW}.md` (all Wave 2A sections appended to existing Wave 1 files)
+
+### Why this fix
+Manager Wave 1 Independent Code Review (MANAGER_WAVE1_REVIEW.md) caught **TD-F062-MOM-BOUNDARY-ROLLOVER** 🟡 MED bug latent in Wave 1 period-resolver.ts mom branch. Coder + QC both missed (Coder claim "boundary handled correctly" only tested day=22 safe case). Manager Node REPL verify: `2026-05-31 setUTCMonth(-1)` → `2026-05-01` (BUG — rolls to current month) instead of `2026-04-30` (expected last day of April). Latent because Wave 1 has no consumer của 'mom' yet, but BLOCKING Wave 2 when wire CompareSelector → backend endpoints.
+
+Per Manager BLOCKING directive + Danny approve "Fix MoM FIRST" 2026-05-22, Wave 2A scope = focused fix 2 TDs before Wave 2B backend services start.
+
+### Files changed (3 files / 160 LoC delta)
+- ✏️ Modified: `backend/src/modules/analytics/services/period-resolver.ts` (+55 LoC):
+  - NEW exported `shiftMonthClamped(date, months)` helper (lines 99-123) clamps day to last-day-of-target-month via `Date.UTC(year, month+1, 0)` day-0 trick + Math.min(sourceDay, lastDayOfTargetMonth)
+  - Refactored `resolveCompare('mom')` branch (lines 225-238) to use shiftMonthClamped instead of buggy `setUTCMonth(-1)`
+  - Doc comments explain TD-F062-MOM-BOUNDARY-ROLLOVER fix rationale
+- ➕ Extended: `backend/src/modules/analytics/__tests__/period-resolver.f062.spec.ts` (+104 LoC, +13 tests):
+  - NEW Section 1B `shiftMonthClamped()` standalone tests (8 cases): day=22 safe / day=31 clamp May 31 → April 30 / Jan 31 cross-year no clamp / Mar 29 leap no clamp / Mar 29 non-leap clamp to 28 / +1 month positive / time preservation HH/MM/SS/MS / 0 month no-op
+  - NEW Section 2 mom boundary regression tests (5 cases): May 31 → April 30 Manager bug / Jan 31 → Dec 31 / Mar 29 → Feb 29 leap / Mar 29 → Feb 28 non-leap / Mar 31 → Feb 29 leap (clamp from 31 to 29)
+- ✏️ Modified: `backend/src/modules/analytics/dto/repeat-athlete-rate.dto.ts` (+9 LoC):
+  - `@IsIn` array extend từ 4 → 6 values: +`'wow'` +`'mom'` (parity với Wave 1 CompareKind type extension)
+  - `@ApiProperty.enum` array updated + description extended với F-062 Wave 2A note
+
+### Architecture impact (Wave 2A only)
+- NEW exported helper `shiftMonthClamped` (joins existing `addDaysUtc`/`addYearsUtc`/`startOfDayUtc` family). Reusable cho future date arithmetic (WoY, QoQ).
+- KHÔNG schema change, KHÔNG endpoint change, KHÔNG cache change
+
+### Conventions impact (DEFER formal codification Wave 5)
+- NEW pattern minted (will codify Wave 5): "Day-clamp month shift" helper pattern for avoiding `setUTCMonth` rollover
+
+### DB / Cache impact
+- ZERO — Wave 2A pure helper + DTO validation extension
+
+### Tech debt status post-Wave 2A
+- ✅ **TD-F062-MOM-BOUNDARY-ROLLOVER** RESOLVED commit `0d1669a` (defense-in-depth gate cleared)
+- ✅ **TD-F062-VALIDATION-COMPAREKIND** RESOLVED commit `0d1669a` (DTO @IsIn already existed — Wave 2A discovery refined from QC's original "accept any string" claim)
+- 🔄 **TD-F062-F026-SILENT-CAPABILITY-EXPANSION** REFINED scope "6 → 1 endpoint" (Coder Wave 2A grep verified only `repeat-athlete-rate.dto.ts` has compareWith field). Wave 5 decide market as feature.
+- ⏭️ TD-F062-PRD-SECTION-3.4-DTO-IMPORT-OVERLAP — UNCHANGED (Wave 3 scope)
+
+### Lessons learned
+- **Manager Independent Code Review caught real bug** Coder + QC both missed. Defense-in-depth justified — reinforces Manager 2026-05-17 directive (F-040 Danny challenge "mày review code chưa?").
+- **Visual scan ≠ semantic verify**: Coder claim "boundary handled correctly" was visual scan only (tested day=22 safe case). Boundary cases day=29/30/31 untested → bug latent. Always test exact-boundary cases cho date arithmetic.
+- **TD scope refinement via Coder audit**: Coder Wave 2A grep `compareWith` field discovered QC's original "6 endpoints" claim was theoretical (type extension affects ANY consumer). Reality: only 1 endpoint has compareWith. Healthy honest engineering — refined understanding documented IMPLEMENTATION_NOTES Section 1 Deviation #6.
+- **Wave 2A delivers exact Manager directive**: Fix MoM bug FIRST → 13 tests (8 standalone + 5 boundary) + 8 QC adversarial probes = 21 cases total cover comprehensively. Pattern works for partial wave deploy.
+- **DTO @IsIn extend cleaner than full @IsEnum migration**: Existing F-026 5 DTOs use `@IsIn` convention. Wave 2A extend array thay vì refactor to TypeScript enum maintains consistency.
+
+### Wave 2B roadmap (next Coder session)
+- Backend 5 NEW services (runner-analytics + race-performance + merchant-comparison + ga4 + export)
+- 16 NEW DTOs + 12 NEW endpoints
+- `flushEventOverrideCache()` extend +13 patterns
+- PAUSE `pnpm install @google-analytics/data` Danny confirm before install
+- Verify MySQL `races.type` column existence PAUSE-SA-07
+- Foundation Wave 1+2A complete — safe to wire CompareSelector → backend (MoM rollover bug fixed)
+
+---
+
 ## [2026-05-22] FEATURE-062 Wave 1 Foundation: Sales Analytics Dashboard infrastructure (PARTIAL DEPLOY)
 
 **Branch:** `5bib_analytics_v2` off main `e7284b0` — commit `53d2ec1` local only (push pending Danny approve)
