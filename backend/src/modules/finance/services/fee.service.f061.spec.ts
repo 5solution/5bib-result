@@ -337,6 +337,148 @@ describe('F-061 — FeeService.computeFeeForOrdersAggregate cascade extend', () 
     expect(result.totalManualFee).toBe(5000);
   });
 
+  // ─── TC-61.1-PROMO-FREE-1 (HOTFIX) ───────────────────────────────────
+  it('TC-61.1-PROMO-FREE-1: ORDINARY no_ref + total_price = 0 → SKIP fee (FREE promo, no over-charge)', async () => {
+    // Race 192 sample: 203 đơn promo 100% FREE qua discound_code_id.
+    // Pre-fix: bị classify MANUAL → over-charge ~1M VND fee ảo.
+    // Post-fix: SKIP entirely → manualFee = 0, serviceFee = 0.
+    configModel = makeMockConfigModel(
+      buildConfig({
+        tenantId: 14,
+        service_fee_rate: 5,
+        manual_fee_per_ticket: 5000,
+      }),
+    );
+    service = await buildModule(configModel);
+
+    const orders: OrderForFeeAggregate[] = [];
+    for (let i = 0; i < 203; i++)
+      orders.push(
+        buildOrder({
+          id: 4000 + i,
+          raceId: 192,
+          orderCategory: 'ORDINARY',
+          paymentRef: null, // no ref
+          totalPrice: 0, // 100% promo FREE
+          manualTicketCount: 1,
+        }),
+      );
+
+    const result = await service.computeFeeForOrdersAggregate(14, orders, {
+      from: '2026-05-01',
+      to: '2026-05-31',
+    });
+
+    // F-061.1 HOTFIX — FREE promo: cả 2 fee đều = 0
+    expect(result.totalServiceFee).toBe(0);
+    expect(result.totalManualFee).toBe(0);
+    expect(result.totalVat).toBe(0);
+    expect(result.totalNetGmv).toBe(0);
+    // feeSourceBreakdown KHÔNG inflate orderCount cho FREE orders
+    expect(result.feeSourceBreakdown).toEqual([]);
+  });
+
+  // ─── TC-61.1-PROMO-FREE-2 (HOTFIX MIXED) ─────────────────────────────
+  it('TC-61.1-PROMO-FREE-2: Mixed Pattern A + Pattern B → only A count MANUAL (Race 76 Hà Tĩnh sim)', async () => {
+    // Race 76 Hà Tĩnh: 863 paid no_ref (Pattern A MOU thu hộ) + 46 free no_ref
+    // (Pattern B promo) + 5 paid with-ref (5BIB).
+    // Pre-fix: tất cả 863 + 46 = 909 đều bị tính MANUAL → 909 × 5000 = 4.545M
+    // Post-fix: chỉ 863 Pattern A → 863 × 5000 = 4.315M, 46 Pattern B SKIP.
+    configModel = makeMockConfigModel(
+      buildConfig({
+        tenantId: 23,
+        service_fee_rate: 5,
+        manual_fee_per_ticket: 5000,
+      }),
+    );
+    service = await buildModule(configModel);
+
+    const orders: OrderForFeeAggregate[] = [];
+    // 863 paid no_ref (Pattern A — MOU thu hộ)
+    for (let i = 0; i < 863; i++)
+      orders.push(
+        buildOrder({
+          id: 5000 + i,
+          raceId: 76,
+          orderCategory: 'ORDINARY',
+          paymentRef: null,
+          totalPrice: 421_000, // > 0 → Pattern A MANUAL
+          manualTicketCount: 1,
+        }),
+      );
+    // 46 FREE promo no_ref (Pattern B)
+    for (let i = 0; i < 46; i++)
+      orders.push(
+        buildOrder({
+          id: 6000 + i,
+          raceId: 76,
+          orderCategory: 'ORDINARY',
+          paymentRef: null,
+          totalPrice: 0, // = 0 → Pattern B SKIP
+          manualTicketCount: 1,
+        }),
+      );
+    // 5 paid with-ref (5BIB)
+    for (let i = 0; i < 5; i++)
+      orders.push(
+        buildOrder({
+          id: 7000 + i,
+          raceId: 76,
+          orderCategory: 'ORDINARY',
+          paymentRef: `VNPAY-${i}`,
+          totalPrice: 421_000,
+        }),
+      );
+
+    const result = await service.computeFeeForOrdersAggregate(23, orders, {
+      from: '2026-05-01',
+      to: '2026-05-31',
+    });
+
+    // F-061.1 — chỉ 863 Pattern A đi MANUAL (46 Pattern B SKIP)
+    expect(result.totalManualFee).toBe(863 * 5000); // 4,315,000
+    // 5 paid 5BIB
+    expect(result.totalServiceFee).toBe(Math.round(5 * 421_000 * 0.05));
+    expect(result.totalNetGmv).toBe(5 * 421_000);
+  });
+
+  // ─── TC-61.1-PURE-A-PRESERVE (HOTFIX REGRESSION) ──────────────────────
+  it('TC-61.1-PURE-A-PRESERVE: Race 215 (PURE_A) — 79 paid no_ref → MANUAL 395K unchanged', async () => {
+    // Race 215 = PURE_A pattern (4 race trong cluster MOU thu hộ, total_price > 0).
+    // Hotfix KHÔNG được break PURE_A — Pattern A vẫn classify MANUAL như cũ.
+    configModel = makeMockConfigModel(
+      buildConfig({
+        tenantId: 14,
+        service_fee_rate: 0,
+        manual_fee_per_ticket: 5000,
+      }),
+    );
+    service = await buildModule(configModel);
+
+    const orders: OrderForFeeAggregate[] = [];
+    for (let i = 0; i < 79; i++)
+      orders.push(
+        buildOrder({
+          id: 8000 + i,
+          raceId: 215,
+          orderCategory: 'ORDINARY',
+          paymentRef: null,
+          totalPrice: 500_000, // > 0 → Pattern A
+          manualTicketCount: 1,
+        }),
+      );
+
+    const result = await service.computeFeeForOrdersAggregate(14, orders, {
+      from: '2026-05-01',
+      to: '2026-05-31',
+    });
+
+    // PURE_A unchanged: 79 × 5000 = 395,000
+    expect(result.totalManualFee).toBe(79 * 5000);
+    expect(result.totalServiceFee).toBe(0);
+    expect(result.totalNetGmv).toBe(0);
+  });
+
   // ─── TC-61-PERF Performance Benchmark race 76 ────────────────────────
   it('TC-61-PERF: race 76 (909 orders) — p95 budget < 50ms', async () => {
     configModel = makeMockConfigModel(

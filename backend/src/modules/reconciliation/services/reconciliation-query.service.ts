@@ -12,6 +12,7 @@ import {
   FIVE_BIB_CATEGORIES as SHARED_FIVE_BIB_CATEGORIES,
   SPLIT_BY_PAYMENT_REF,
   isPaymentRefEmpty,
+  isFreePromoOrder,
 } from '../../../common/constants/order-classification';
 
 /**
@@ -46,6 +47,12 @@ export interface QueryOrdersResult {
    * Defensive guard — KHÔNG silent drop dirty data.
    */
   unknownCategoryCount: number;
+  /**
+   * F-061.1 HOTFIX — Pattern B FREE promo orders (split cat + no payment_ref +
+   * total_price = 0). KHÔNG count vào manual hay 5bib (KHÔNG charge MANUAL
+   * fee ảo). Optional field (backward compat). Caller có thể log/audit.
+   */
+  freeOrders?: Record<string, unknown>[];
 }
 
 /**
@@ -147,6 +154,11 @@ export class ReconciliationQueryService {
     // PAUSE-61-01 = A). Preflight emit WARNING (not ERROR) cho Sales Admin
     // verify giao kèo MOU trước khi finalize recon.
     const missingPaymentRefFallback: Record<string, unknown>[] = [];
+    // F-061.1 HOTFIX — Pattern B FREE promo orders (split cat + no payment_ref
+    // + total_price = 0). KHÔNG count vào manual hay 5bib (KHÔNG charge ảo).
+    // Optional bucket cho log/audit only — Preflight có thể đếm để show
+    // INFO message "X đơn FREE promo skipped".
+    const freeOrders: Record<string, unknown>[] = [];
 
     for (const r of rows) {
       const category = r.order_category as string | null | undefined;
@@ -172,11 +184,28 @@ export class ReconciliationQueryService {
       // 5BIB regardless" đã được DROP — giờ uniform logic 1 source of truth.
       // payment_ref empty/whitespace/null → MANUAL semantic (intentional MOU
       // organizer self-collect). Sales Admin có WARNING preflight verify intent.
+      //
+      // F-061.1 HOTFIX — Pattern B FREE skip.
+      //   Pattern A: payment_ref empty + total_price > 0 → MANUAL (MOU thu hộ).
+      //   Pattern B: payment_ref empty + total_price = 0 → freeOrders bucket
+      //     (KHÔNG charge MANUAL fee ảo). VĐV không trả tiền (discount 100%)
+      //     → organizer cũng không thu → 5BIB cũng không thu.
       if (SPLIT_BY_PAYMENT_REF.has(category)) {
         const paymentRef = r.payment_ref as string | null | undefined;
         if (isPaymentRefEmpty(paymentRef)) {
-          manualOrders.push(r);
-          missingPaymentRefFallback.push(r);
+          const totalPrice = r.total_price as
+            | number
+            | string
+            | null
+            | undefined;
+          if (isFreePromoOrder(totalPrice)) {
+            // Pattern B: FREE promo — skip fee compute entirely.
+            freeOrders.push(r);
+          } else {
+            // Pattern A: MOU thu hộ — MANUAL semantic.
+            manualOrders.push(r);
+            missingPaymentRefFallback.push(r);
+          }
         } else {
           fiveBibOrders.push(r);
         }
@@ -217,6 +246,7 @@ export class ReconciliationQueryService {
       manualOrders,
       missingPaymentRef,
       unknownCategoryCount: unknownRows.length,
+      freeOrders,
     };
   }
 

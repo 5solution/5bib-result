@@ -135,6 +135,74 @@ describe('ReconciliationQueryService — categorize F-061', () => {
     expect(result.missingPaymentRef).toHaveLength(2);
   });
 
+  // ─── TC-61.1-PROMO-FREE-1 (HOTFIX) ─────────────────────────────────
+  it('TC-61.1-RECON-FREE-1: ORDINARY no_ref + total_price = 0 → freeOrders bucket (NOT manual)', async () => {
+    const result = await categorizeRows([
+      {
+        order_category: 'ORDINARY',
+        payment_ref: null,
+        total_price: 0, // 100% promo FREE
+        order_id: 100,
+      },
+    ]);
+    expect(result.fiveBibOrders).toHaveLength(0);
+    expect(result.manualOrders).toHaveLength(0);
+    expect(result.missingPaymentRef).toHaveLength(0);
+    expect(result.freeOrders).toHaveLength(1);
+    expect(result.unknownCategoryCount).toBe(0);
+  });
+
+  // ─── TC-61.1-PROMO-FREE-2 (HOTFIX MIXED) ───────────────────────────
+  it('TC-61.1-RECON-FREE-2: Mixed Pattern A + Pattern B — only A count manual', async () => {
+    const rows: Record<string, unknown>[] = [];
+    // 863 paid no_ref (Pattern A — MOU thu hộ)
+    for (let i = 0; i < 863; i++)
+      rows.push({
+        order_category: 'ORDINARY',
+        payment_ref: null,
+        total_price: 421_000,
+        order_id: 5000 + i,
+      });
+    // 46 FREE no_ref (Pattern B)
+    for (let i = 0; i < 46; i++)
+      rows.push({
+        order_category: 'ORDINARY',
+        payment_ref: null,
+        total_price: 0,
+        order_id: 6000 + i,
+      });
+    // 5 paid with-ref (5BIB)
+    for (let i = 0; i < 5; i++)
+      rows.push({
+        order_category: 'ORDINARY',
+        payment_ref: `VNPAY-${i}`,
+        total_price: 421_000,
+        order_id: 7000 + i,
+      });
+
+    const result = await categorizeRows(rows);
+    expect(result.fiveBibOrders).toHaveLength(5);
+    expect(result.manualOrders).toHaveLength(863); // Pattern A only
+    expect(result.missingPaymentRef).toHaveLength(863);
+    expect(result.freeOrders).toHaveLength(46); // Pattern B isolated
+  });
+
+  // ─── TC-61.1-PURE-A-PRESERVE (HOTFIX REGRESSION) ───────────────────
+  it('TC-61.1-RECON-PURE-A: Race 215 PURE_A (79 paid no_ref) → manualOrders unchanged', async () => {
+    const rows: Record<string, unknown>[] = [];
+    for (let i = 0; i < 79; i++)
+      rows.push({
+        order_category: 'ORDINARY',
+        payment_ref: null,
+        total_price: 500_000, // > 0 → Pattern A
+        order_id: 8000 + i,
+      });
+    const result = await categorizeRows(rows);
+    expect(result.manualOrders).toHaveLength(79);
+    expect(result.missingPaymentRef).toHaveLength(79);
+    expect(result.freeOrders).toHaveLength(0);
+  });
+
   it('TC-61-06: Realistic race 76 simulation — 850 ORDINARY no-ref + 50 ORDINARY with-ref + 9 MANUAL', async () => {
     const rows: Record<string, unknown>[] = [];
     for (let i = 0; i < 850; i++)
