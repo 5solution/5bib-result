@@ -405,7 +405,7 @@ function AnalyticsOverviewPage() {
   // F-062 Wave 3-2 — read filter from URL searchParams (driven by AnalyticsFilterBar layout)
   const sp = useSearchParams();
   const wave2Query = searchParamsToQuery(sp);
-  const compareWith = ((sp.get("compare") as CompareKindLabel) === "wow" ||
+  const wave2Compare = ((sp.get("compare") as CompareKindLabel) === "wow" ||
     (sp.get("compare") as CompareKindLabel) === "yoy"
     ? (sp.get("compare") as "wow" | "yoy")
     : "mom") as "wow" | "mom" | "yoy";
@@ -414,13 +414,13 @@ function AnalyticsOverviewPage() {
     <div className="flex flex-col gap-6">
       {/* F-062 Wave 2/4 NEW — Comparison Row + Export buttons + GA4 section */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-stone-900">Tổng quan kỳ ({compareWith.toUpperCase()})</h2>
+        <h2 className="text-lg font-semibold text-stone-900">Tổng quan kỳ ({wave2Compare.toUpperCase()})</h2>
         <div className="flex gap-2">
           <ExportButtonV2 reportType="overview" query={wave2Query} format="xlsx" />
           <ExportButtonV2 reportType="overview" query={wave2Query} format="csv" />
         </div>
       </div>
-      <ComparisonRow {...wave2Query} compareWith={compareWith} />
+      <ComparisonRow {...wave2Query} compareWith={wave2Compare} />
       <Ga4OverviewSection {...wave2Query} />
 
       {/* Header (legacy F-026 era — full analytics dashboard below) */}
