@@ -1,5 +1,23 @@
 "use client";
 
+/**
+ * @deprecated F-062 v3 (Manager Adjustment #3 v3, 2026-05-22) —
+ * Combined Period + Compare selector đã split thành 3 components RIÊNG BIỆT:
+ *   - `PeriodSelector.tsx` — 6 PeriodKind values + custom date range
+ *   - `CompareSelector.tsx` — 5 CompareKind values (none/prev/wow/mom/yoy)
+ *   - `GranularityToggle.tsx` — 3 GranularityKind values (daily/weekly/monthly)
+ *
+ * Reason: PRD v2 conflate Period vs Granularity vào 1 union — semantic flaw.
+ * F-062 v3 PRD tách Period (time range) / Granularity (bucket size) / Compare (delta)
+ * thành 3 concept rõ ràng. Component cũ duy trì BACKWARD COMPAT cho file in-flight
+ * vẫn import — sẽ XOÁ sau Phase 2 verify zero refs trong codebase.
+ *
+ * Migration path: Tab 1+2+3+4+5 page.tsx switch sang 3 NEW selectors qua
+ * shared `analytics/layout.tsx` (NEW per BR-SA-12 v3).
+ *
+ * TODO Phase 2: grep ref + remove import + delete file.
+ */
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export type PeriodKind = "7d" | "30d" | "quarter" | "year" | "rolling12m";

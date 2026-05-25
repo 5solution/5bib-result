@@ -110,6 +110,19 @@
   --5bib-info-dim: #0B36E6;
   --5bib-magenta: #FF0E65;
   --5bib-magenta-dim: #E60057;
+
+  /* F-062 Sales Analytics Dashboard — 5Solution brand token aliases (Manager Adjustment #5 v3).
+     Source: reference-ui-selling-web/design-system/tokens.css.
+     Maps to existing --5bib-* tokens to avoid duplicating hex literals.
+     Use in analytics components: `text-[var(--5s-blue)]` or `style={{ color: 'var(--5s-blue)' }}`. */
+  --5s-blue: var(--5bib-info);             /* #1D49FF — 5-family logo blue */
+  --5s-blue-600: var(--5bib-info-dim);     /* #0B36E6 */
+  --5s-blue-700: #0026B3;                  /* not in --5bib-*, original 5Solution token */
+  --5s-blue-400: #4A6EFF;                  /* not in --5bib-*, original 5Solution token */
+  --5s-blue-300: #88A2FF;                  /* not in --5bib-*, original 5Solution token */
+  --5s-blue-100: #DCE3FF;                  /* not in --5bib-*, original 5Solution token */
+  --5s-magenta: var(--5bib-magenta);       /* #FF0E65 — 5-family logo accent */
+  --5s-magenta-dim: var(--5bib-magenta-dim); /* #E60057 */
   --5bib-accent-warm: #d97706;
   --5bib-accent-glow: rgba(0, 102, 255, 0.25);
   --5bib-text: #1c1917;
