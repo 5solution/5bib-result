@@ -26,11 +26,13 @@ import {
   DiscrepancyCheckResponseDto,
   DiscrepancyVerdict,
 } from './dto/analytics-discrepancy.dto';
-// F-062 Wave 2B-1 — period comparison + bucket helpers + cache-key helper
+// F-062 Wave 2B-1+2B-2 — period comparison + bucket helpers + cache-key helpers
 import {
   resolveCompare,
   calcDeltaPercent,
   buildMetricCacheKey,
+  resolveScopeFromTenant,
+  periodKeyFromInputs,
   ymd,
   addDaysUtc,
 } from './services/period-resolver';
@@ -451,28 +453,28 @@ export class AnalyticsService {
   // via Wave 1 `buildMetricCacheKey` helper (extended Wave 2B-1 fix với tenant scope).
 
   /**
-   * F-062 Wave 2B-1 helper — derive scope từ query.tenantId.
+   * F-062 Wave 2B-1 helper (refactored Wave 2B-2 → delegate shared util).
    * BR-SA-02 spec: scope = 'platform' nếu no tenant filter, else 'tenant:<id>'.
+   * Implementation lives in `period-resolver.ts:resolveScopeFromTenant` —
+   * extracted Wave 2B-2 cho reuse trong merchant-comparison + future Wave 2C.
    */
   private resolveQueryScope(
     query: AnalyticsQueryDto,
   ): 'platform' | { tenantId: number } {
-    return query.tenantId ? { tenantId: query.tenantId } : 'platform';
+    return resolveScopeFromTenant(query.tenantId);
   }
 
   /**
-   * F-062 Wave 2B-1 helper — stable cache periodKey từ query input.
-   * Same query parameters → same periodKey (cache hit). Different equivalent
-   * inputs (vd `?month=2026-05` vs `?from=2026-05-01&to=2026-05-31`) get
-   * distinct keys — acceptable trade-off vì BR-SA-18 invalidation pattern
-   * sweeps tất cả keys cùng metric prefix.
+   * F-062 Wave 2B-1 helper (refactored Wave 2B-2 → delegate shared util).
+   * Same query parameters → same periodKey. Implementation in
+   * `period-resolver.ts:periodKeyFromInputs`.
    */
   private buildPeriodKey(query: AnalyticsQueryDto): string {
-    if (query.month) return `month:${query.month}`;
-    if (query.from && query.to) return `range:${query.from}~${query.to}`;
-    if (query.from) return `from:${query.from}`;
-    if (query.to) return `to:${query.to}`;
-    return 'default';
+    return periodKeyFromInputs({
+      month: query.month,
+      from: query.from,
+      to: query.to,
+    });
   }
 
   /**

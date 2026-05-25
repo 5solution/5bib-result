@@ -373,3 +373,41 @@ export function buildMetricCacheKey(
   const base = `analytics:metric:${metric}:${scopeStr}`;
   return extra ? `${base}:${extra}:${periodKey}` : `${base}:${periodKey}`;
 }
+
+/**
+ * F-062 Wave 2B-2 extract — Resolve cache scope từ optional tenantId.
+ *
+ * Extracted từ analytics.service.ts:resolveQueryScope (Wave 2B-1 v2) để reuse
+ * cho merchant-comparison.service.ts + future Wave 2C services without DRY violation.
+ *
+ * Returns:
+ *   - `'platform'` nếu no tenant filter (default scope)
+ *   - `{ tenantId: <id> }` discriminated union variant cho buildMetricCacheKey
+ */
+export function resolveScopeFromTenant(
+  tenantId?: number,
+): 'platform' | { tenantId: number } {
+  return tenantId ? { tenantId } : 'platform';
+}
+
+/**
+ * F-062 Wave 2B-2 extract — Stable periodKey từ query input.
+ *
+ * Extracted từ analytics.service.ts:buildPeriodKey (Wave 2B-1 v2) để reuse
+ * across Wave 2B-2 + Wave 2C services. Priority: month > range > from > to > default.
+ *
+ * Same query parameters → same periodKey (cache hit). Different equivalent inputs
+ * get distinct keys — acceptable trade-off vì BR-SA-18 invalidation pattern
+ * sweeps tất cả keys cùng metric prefix.
+ */
+export function periodKeyFromInputs(input: {
+  month?: string;
+  from?: string;
+  to?: string;
+}): string {
+  if (input.month) return `month:${input.month}`;
+  if (input.from && input.to) return `range:${input.from}~${input.to}`;
+  if (input.from) return `from:${input.from}`;
+  if (input.to) return `to:${input.to}`;
+  return 'default';
+}

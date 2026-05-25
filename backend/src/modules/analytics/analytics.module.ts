@@ -36,6 +36,9 @@ import { GeographicDemographicService } from './services/geographic-demographic.
 import { RefundCancelService } from './services/refund-cancel.service';
 import { AnalyticsAggregatorCron } from './services/analytics-aggregator.cron';
 
+// F-062 Wave 2B-2 — NEW merchant-comparison service (BR-SA-22 a/b/c)
+import { MerchantComparisonService } from './services/merchant-comparison.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Tenant], 'platform'),
@@ -60,6 +63,8 @@ import { AnalyticsAggregatorCron } from './services/analytics-aggregator.cron';
     GeographicDemographicService,
     RefundCancelService,
     AnalyticsAggregatorCron,
+    // F-062 Wave 2B-2 — Merchant Comparison Analytics (BR-SA-22)
+    MerchantComparisonService,
   ],
 })
 export class AnalyticsModule {}

@@ -46,6 +46,11 @@ import {
   ComparisonQueryDto,
   ComparisonResponseDto,
 } from './dto/comparison.dto';
+// F-062 Wave 2B-2 — Merchant Comparison (scatter / health-distribution / table) DTOs + service
+import { MerchantComparisonService } from './services/merchant-comparison.service';
+import { MerchantScatterPointDto } from './dto/merchant-scatter.dto';
+import { MerchantHealthDistributionTierDto } from './dto/merchant-health-distribution.dto';
+import { MerchantComparisonResponseDto } from './dto/merchant-comparison-table.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -59,6 +64,8 @@ export class AnalyticsController {
     private readonly claimRateService: ClaimRateService,
     private readonly geoDemoService: GeographicDemographicService,
     private readonly refundCancelService: RefundCancelService,
+    // F-062 Wave 2B-2 — Merchant comparison (scatter / health-distribution / table)
+    private readonly merchantComparisonService: MerchantComparisonService,
   ) {}
 
   @Get('overview')
@@ -167,10 +174,75 @@ export class AnalyticsController {
   @Get('merchants')
   @ApiOperation({
     summary: 'Merchant comparison — GMV, orders, estimated platform fee per tenant',
+    description:
+      'LEGACY F-026 endpoint — flat array, no totals. ' +
+      'F-062 Wave 2B-2 NEW endpoints at /merchants/scatter, /merchants/health-distribution, /merchants/comparison (BR-SA-22 a/b/c).',
   })
   @ApiResponse({ status: 200, description: 'List of merchant analytics records' })
   getMerchantComparison(@Query() query: AnalyticsQueryDto) {
     return this.analyticsService.getMerchantComparison(query);
+  }
+
+  // ─── F-062 Wave 2B-2 — Merchant Comparison Analytics (BR-SA-22) ─────────────
+
+  @Get('merchants/scatter')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-22a v3 — Merchant scatter chart (x=orders, y=gmv, size=gmv)',
+    description:
+      'Mỗi merchant = 1 bubble. Status drives quadrant labeling (★ HIGH VALUE top-right, ⚠ LOW ACTIVITY bottom-left). ' +
+      'Default 12 tháng gần nhất nếu không truyền from/to. ' +
+      'Cache `analytics:metric:merchant-comp-scatter:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: MerchantScatterPointDto,
+    isArray: true,
+  })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getMerchantScatter(@Query() query: AnalyticsQueryDto) {
+    return this.merchantComparisonService.getScatter(query);
+  }
+
+  @Get('merchants/health-distribution')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-22b v3 — Merchant Health Score 5-tier distribution',
+    description:
+      '5 tiers per BR-SA-07: EXCELLENT (80-100) / GOOD (60-79) / AVERAGE (40-59) / WEAK (20-39) / AT_RISK_SCORE (0-19). ' +
+      'Score = 0.4×recency + 0.3×frequency + 0.3×monetary (RFM). ' +
+      'Cache `analytics:metric:merchant-comp-dist:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: MerchantHealthDistributionTierDto,
+    isArray: true,
+  })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getMerchantHealthDistribution(@Query() query: AnalyticsQueryDto) {
+    return this.merchantComparisonService.getHealthDistribution(query);
+  }
+
+  @Get('merchants/comparison')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-22c v3 — Full merchant comparison table (10 columns + totals footer)',
+    description:
+      'Columns: tenantId, tenantName, feeRate, races, orders, gmv, fee, manualPct, voidedPct, status, healthScore. ' +
+      'Totals footer: orders, gmv, fee (sum across merchants). ' +
+      'Phí 5BIB qua FeeService Tier 0 cascade. ' +
+      'Cache `analytics:metric:merchant-comp-table:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: MerchantComparisonResponseDto })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getMerchantComparisonTable(@Query() query: AnalyticsQueryDto) {
+    return this.merchantComparisonService.getComparisonTable(query);
   }
 
   @Get('runners/behavior')

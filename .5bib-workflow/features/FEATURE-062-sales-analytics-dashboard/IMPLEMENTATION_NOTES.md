@@ -476,3 +476,129 @@
 **Lessons codified for memory (Wave 5 manager update):**
 - Self-review Bước 2 PRD adherence pattern check ALL bullet keywords (Endpoint / Response / Phí / Default / Cache) per BR, không chỉ Response shape
 - Wave 1 helpers always check IF EXISTS before writing inline equivalent
+
+---
+
+# Wave 2B-2 — Merchant Comparison Service (BR-SA-22)
+
+**Date:** 2026-05-25
+**Slice:** Wave 2B-2 of Wave 2B (~1,011 LoC ~720 NEW source + 285 tests + 6 refactor)
+**Status:** 🟠 READY_FOR_QC
+
+## Section 1: 🚧 Wave 2B-2 Deviations (intentional)
+
+### [Deviation #12] NEW MerchantComparisonService thay vì EXTEND analytics.service.ts
+- **Spec said:** Manager Plan v2 line 68 NEW file `merchant-comparison.service.ts`
+- **I did:** Created standalone NestJS service với own constructor injecting DataSource('platform') + MerchantConfig model + Redis + FeeService
+- **Why:** Per Manager Plan + clean separation of concerns. Existing `analytics.service.ts:getMerchantComparison` (legacy F-026 era) preserved as backward compat — different response shape, different consumer (Wave 0 vs Wave 3 frontend)
+- **Reviewer should check:** `analytics.module.ts` providers list includes `MerchantComparisonService`. Legacy `/analytics/merchants` endpoint preserved.
+
+### [Deviation #13] Extracted resolveScopeFromTenant + periodKeyFromInputs to shared (period-resolver.ts)
+- **Spec said:** Wave 2B-2 scope = NEW service file. No explicit ask for refactor.
+- **I did:** Extracted 2 private cache key helpers from `analytics.service.ts` (Wave 2B-1 v2 originals) → `period-resolver.ts` exported helpers. Refactored `analytics.service.ts` to thin wrappers delegating.
+- **Why:** Wave 2B-1 v2 lesson codified "USE Wave 1 helpers FIRST". 3 NEW Wave 2B-2 endpoints need same scope/periodKey logic. Option (a) Mirror in new service (DRY violation, 10 LoC × 2 = 20 LoC duplication); Option (b) Extract once (this option, cleaner). Cost: 6 LoC refactor in analytics.service.ts + 42 LoC NEW in period-resolver.ts. Net: -14 LoC vs duplication.
+- **Reviewer should check:** Backward compat — Wave 2B-1 v2 existing 8 invariant tests on `analytics.service.ts:resolveQueryScope` + `buildPeriodKey` still pass (delegate transparently); NEW Wave 2B-2 spec adds 3 pure-unit tests for extracted helpers.
+
+### [Deviation #14] Cold-cache 3× redundant aggregate accepted (LOW-MED TD)
+- **Spec said:** PRD defines 3 separate cache keys per endpoint (BR-SA-22 a/b/c).
+- **I did:** Each public method runs `_buildMerchantAggregates()` independently inside its own `cachedQuery` callback. Cold cache concurrent UI calls = 3× redundant SQL + FeeService aggregation.
+- **Why:** Avoid premature optimization. Cache TTL 15min current / 24h historical means redundancy only on cold-cache opening (rare). Internal Map cache per request would add complexity for marginal gain.
+- **Reviewer should check:** Wave 5 k6 benchmark cho cold-cache scenario. TD-F062-WAVE2B2-COLD-CACHE-3X tracked.
+
+## Section 2: ⚙️ Wave 2B-2 Forced Changes (reality ≠ spec)
+
+### [Forced #8] tenant table column name `created_on` (not `created_at`)
+- **PRD assumed:** Standard `created_at` column convention
+- **Reality:** `tenant.entity.ts:47` declares `@Column({ name: 'created_on', ... })` — MySQL platform DB uses `created_on`
+- **Workaround:** Service SQL uses `t.created_on as tenant_created_on` alias. Aggregate result field maps to `tenantCreatedOn` TS field.
+- **Manager/BA action:** Wave 5 update codebase-map.md MySQL platform schema section: tenant audit columns are `created_on` + `modified_on` (not `_at`).
+
+### [Forced #9] pullOrdersForFeeAggregate duplicated (not yet extracted)
+- **PRD assumed:** Shared helper pattern
+- **Reality:** Existing `analytics.service.ts:pullOrdersForFeeAggregate` is private. Extracting requires moving private method → 3-arg signature → testing.
+- **Workaround:** Mirror identical method body in `merchant-comparison.service.ts` (DRY violation, single ~30 LoC method).
+- **Manager/BA action:** TD-F062-WAVE2B2-PULLORDERS-DUPLICATE tracked LOW. Wave 2C if race-performance.service.ts ALSO needs same → extract to shared. Single extraction post-3rd consumer = avoid premature abstraction.
+
+## Section 3: ⚖️ Wave 2B-2 Tradeoffs Considered
+
+| # | Decision | Option chosen | Alternatives REJECTED | Cost paid |
+|---|----------|---------------|----------------------|-----------|
+| 11 | Health Score tier color encoding | Tailwind class names (`green-600`, `red-500`) | Hex codes (`#16a34a`), CSS custom properties | Tailwind class works directly với BR-SA-22b PRD field `color: string` + design system match. Hex would force frontend mapping. |
+| 12 | Status NEW threshold tenant age | 30 days exact per BR-SA-07 line 252 | Configurable env var | Hard-coded per PRD spec; if business changes threshold, single source-line update. |
+| 13 | RFM 90-day window source | Sliding `DATE_SUB(NOW(), INTERVAL 90 DAY)` | Cron pre-aggregate snapshot | Always fresh data (real-time score). Per-tenant query indexed. Pre-aggregate would add complexity for marginal staleness improvement. |
+| 14 | Default period 12 tháng | 365 days (~12 months) | 366 days (validateDateRange max), 30/60/90 days | Matches Wave 2B-1 v2 `applyDefaultPeriod('month')` pattern. Merchant rhythm = monthly (race lifecycle ~weeks). |
+| 15 | applyDefaultPeriod local impl vs Wave 2B-1 reuse | Local impl with inline ymdUtc | Reuse Wave 2B-1 analytics.service.ts:applyDefaultPeriod | Wave 2B-1's is private. Extract Wave 5 if 3rd service needs default-period helper. Local impl 8 LoC acceptable. |
+| 16 | Internal Map cache during request lifecycle | NOT implemented (each endpoint independent) | Per-request memoization decorator | Cold-cache 3× hit is rare; mitigation cost > benefit at Wave 2B-2 stage. Wave 5 k6 benchmark decide. |
+
+## Section 4: 🎯 Wave 2B-2 Reviewer Notes — Priority List
+
+### Critical paths để Manager spot-check (top 5)
+
+1. **`merchant-comparison.service.ts:_buildMerchantAggregates` SQL + FeeService orchestration** (~110 LoC)
+   - Verify main SQL (BI-01 paid + BI-02 MANUAL exclude + GREATEST netGmv guard)
+   - Verify 90d RFM sub-query has SAME paid+MANUAL filter (anti-bug: forgot filter → score inflated)
+   - Verify FeeService called per tenant với period-scoped window
+   - Verify MerchantConfig fallback feeRate 5.5%
+
+2. **`merchant-comparison.service.ts:computeHealthScore + classifyStatus`** (~50 LoC)
+   - Recency thresholds boundary inclusive (`<=` 7/14/30/60 days)
+   - HEALTH_WEIGHTS = 0.4/0.3/0.3 sum to 1.0
+   - Status NEW only when tenant ≤30d AND 0 orders
+   - Status CHURNED for >60 days last order (60-90 day gap = AT_RISK; >90 = CHURNED via fallthrough)
+
+3. **`period-resolver.ts:337-388` `buildMetricCacheKey` + `resolveScopeFromTenant` + `periodKeyFromInputs`** (refactor)
+   - Backward compat: existing 3-arg + race scope calls unchanged
+   - Tenant scope variant returns `tenant:<id>` (Wave 2B-1 v2 work preserved)
+   - 3 NEW pure-unit tests cover tenant variant + extracted helpers
+
+4. **`analytics.service.ts:resolveQueryScope` + `buildPeriodKey` post-refactor** (~6 LoC delegation)
+   - Verify thin wrappers delegate đúng to shared helpers (no logic change)
+   - Existing Wave 2B-1 v2 invariant tests still pass (no regression)
+
+5. **`analytics.controller.ts` 3 NEW endpoints + DI wiring** (~70 LoC)
+   - Class-level `@UseGuards(LogtoAdminGuard)` covers 3 NEW endpoints
+   - `@ApiResponse` 200/400/401/403 đầy đủ per endpoint
+   - Legacy `@Get('merchants')` preserved (backward compat for F-026 consumers)
+   - Constructor injects `merchantComparisonService` correctly
+
+### Anti-regression invariant tests added (28 NEW)
+- 25 invariant tests in `merchant-comparison.f062.spec.ts`
+- 3 pure-unit tests for extracted shared helpers
+
+### ⚠️ Deferred (acceptable Wave 2B-2 scope):
+- `pullOrdersForFeeAggregate` extraction to shared helper — defer until 3rd consumer (Wave 2C race-performance.service.ts)
+- Wave 5 codify `applyDefaultPeriod` shared helper if 3rd service needs default-period
+- Property-based fuzz testing cho computeHealthScore boundaries — manual targeted cases sufficient v1
+- k6 benchmark cho 3× cold-cache concurrent request scenario
+
+### Type safety narrowed casts (Manager grep `as unknown as`)
+- **None** trong Wave 2B-2 files. Service uses `db.query` returns dynamic — `r: any` matches existing convention (asserted invariant test no `as unknown as`).
+
+### Security checklist self-applied (Wave 2B-2)
+- [x] SQL injection — all `?` placeholders + `params` array. `tenantIds.map(() => '?').join(',')` for IN clause is safe (no user input in IN list).
+- [x] Auth guard — class-level `@UseGuards(LogtoAdminGuard)` inherited
+- [x] DTO validation — uses existing `AnalyticsQueryDto` (validated by class-validator)
+- [x] Date range — `validateDateRange` 366-day cap applied AFTER applyDefaultPeriod (DoS closed)
+- [x] No PII leak — response only aggregates (tenantName + counts + scores; no athlete/order PII)
+- [x] Redis — cache keys deterministic, no user-controlled segments
+
+### Performance numbers measured (Wave 2B-2)
+- Unit test suite 197 tests / 7.279s = 0.037s avg
+- 3 endpoint cold-cache estimated: 58 tenants × ~50ms FeeService call = ~3s p95 worst-case (k6 benchmark Wave 5)
+
+### Self-Review Pipeline checklist 11 bước (Wave 2B-2)
+
+- [x] **Bước 1:** tsc clean cho 9 Wave 2B-2 files
+- [x] **Bước 2:** PRD strict adherence — ALL bullets per BR-SA-22 a/b/c grep verified (LESSON APPLIED Wave 2B-1 v2)
+- [x] **Bước 3:** Anti-pattern scan clean
+- [x] **Bước 4:** Hand-pick mapping audit — N/A
+- [x] **Bước 5:** PROD-readiness — 197/197 PASS
+- [x] **Bước 6:** UI/UX — N/A backend
+- [x] **Bước 7:** Real-world data sanity — Health Score boundary tests exact 7/14/30/60 days
+- [x] **Bước 8:** Files Changed vs Scope Lock — 9 files all within Wave 2B backend Scope Lock + Wave 1 helper extract
+- [x] **Bước 9:** Generated SDK regen — DEFER end of Wave 2B
+- [x] **Bước 10:** Unit tests PASS 197/197
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2B-2 section đầy đủ 4 sub-sections
+
+**Lesson REINFORCED Wave 2B-2:**
+- Helper extraction pattern: `period-resolver.ts` now hosts cache key + period helpers shared across analytics services. Wave 1 → Wave 2A `shiftMonthClamped` → Wave 2B-1 v2 `buildMetricCacheKey` extend → Wave 2B-2 `resolveScopeFromTenant + periodKeyFromInputs`. Continued evolution.
