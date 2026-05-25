@@ -7,6 +7,66 @@
 
 ---
 
+## [2026-05-22] FEATURE-062 Wave 1 Foundation: Sales Analytics Dashboard infrastructure (PARTIAL DEPLOY)
+
+**Branch:** `5bib_analytics_v2` off main `e7284b0` — commit `53d2ec1` local only (push pending Danny approve)
+**Type:** EXTEND_EXISTING — Wave 1 of 5 (Foundation slice only, full F-062 pending Wave 2-5)
+**Status:** ⚠️ PARTIAL DEPLOY — `05-manager-deploy.md` slot reserved for Wave 5 full close. This entry = Wave 1 mini-deploy via `MANAGER_WAVE1_REVIEW.md` checkpoint.
+**Linked:** `.5bib-workflow/features/FEATURE-062-sales-analytics-dashboard/{00-manager-init,01-ba-prd,02-manager-plan,03-coder-implementation,IMPLEMENTATION_NOTES,04-qc-report,MANAGER_WAVE1_REVIEW}.md`
+
+### Why this feature
+Danny request 2026-05-22 nâng cấp toàn diện Sales Analytics Dashboard cho 5bib.com management. PRD v3 (2278 dòng) với 28 BR-SA + Acceptance Criteria 26 items spanning 5 sub-tabs (Tổng quan / Hiệu suất Race / Merchant / Runner / Funnel) + 20 NEW endpoints + GA4 integration + Export CSV/Excel + Multi-tab architecture + Persistence URL params + 5Solution brand tokens lock. Full scope ~8,405 LoC — Wave 1 ships Foundation infrastructure (~600 LoC actual + 4064 LoC including PRD/Plan/QC docs).
+
+### Files changed Wave 1 (13 files / 4064 LoC delta)
+- ✏️ Modified: `backend/src/modules/analytics/services/period-resolver.ts` — Adj #1 GranularityKind split (NEW enum 3 values daily/weekly/monthly) + CompareKind extend với 'wow' | 'mom' (giữ prev/yoy/custom/none backward compat F-026) + resolveBucketSize() helper returning SQL GROUP BY expr + label format + bucket key format
+- ➕ Added: `backend/src/modules/analytics/__tests__/period-resolver.f062.spec.ts` — 21 NEW tests (resolveBucketSize 4 + resolveCompare wow/mom 5 + PeriodKind regression 6 + helpers 4 + CompareKind completeness 5)
+- ✏️ Modified: `admin/src/app/globals.css` — Adj #5 5Solution brand token alias block lines 115-125 (`--5s-blue: var(--5bib-info)` + `--5s-magenta: var(--5bib-magenta)` + variants — alias chain pattern, no hex duplicate)
+- ➕ Added: `admin/src/lib/analytics-labels.ts` — BR-SA-17 Vietnamese dictionary (15 label maps: ORDER_TYPE, MERCHANT_STATUS, HEALTH_TIER, ALERT_TYPE/SEVERITY, RACE_TYPE, PERIOD/GRANULARITY/COMPARE, FUNNEL_STAGE, LEAD_TIME_BUCKET, DAY_OF_WEEK, GENDER, REPEAT_COHORT_TIER + HEALTH_TIER_COLOR map binding `var(--5s-blue)` + ERROR_MESSAGE constants + `labelOr()` type-safe lookup helper)
+- ➕ Added: `admin/src/app/(dashboard)/analytics/components/GranularityToggle.tsx` — Adj #3 BR-SA-13 SegmentedControl Ngày/Tuần/Tháng
+- ➕ Added: `admin/src/app/(dashboard)/analytics/components/PeriodSelector.tsx` — Adj #3 BR-SA-14b Select 6 PeriodKind values + custom date range picker inline
+- ➕ Added: `admin/src/app/(dashboard)/analytics/components/CompareSelector.tsx` — Adj #3 BR-SA-14 Select 5 CompareKind values (skip 'custom' per PRD)
+- ✏️ Modified: `admin/src/app/(dashboard)/analytics/components/PeriodCompareSelector.tsx` — BR-SA-14c @deprecated F-062 v3 header (KHÔNG xoá, backward compat in-flight `analytics/page.tsx` import)
+
+### Architecture impact (Wave 1 only)
+- NEW types `GranularityKind` + extended `CompareKind` in analytics module (KHÔNG break F-026 6 endpoint — backward compat verified 77/77 tests PASS)
+- NEW helper `resolveBucketSize()` cho chart aggregation (3 GranularityKind → SQL expr + label format)
+- 5Solution brand token alias layer added globals.css (delegate to existing `--5bib-info`/`--5bib-magenta`)
+
+### Conventions impact (DEFER formal codification to Wave 5 — drift risk if incremental)
+- NEW pattern minted (will codify Wave 5): "3-enum separation cho time-series query" (Period / Granularity / Compare distinct concerns)
+- NEW pattern minted (will codify Wave 5): "Brand token alias chain via CSS custom properties" (`--5s-blue: var(--5bib-info)` single source of truth)
+- NEW pattern minted (will codify Wave 5): "Backward compat selector deprecation" (mark `@deprecated` keep export, gradual migration via shared layout.tsx)
+- NEW pattern minted (will codify Wave 5): "Partial wave deploy" — feature-log In-flight status `🟠 CODING (Wave N of M)`, change-history partial entry, defer codebase-map/conventions/architecture full update until final ship
+
+### DB / Cache impact
+- ZERO — Wave 1 pure infrastructure (helpers + UI components + types). No SQL query, no cache read/write, no Redis key changes.
+
+### Tech debt added (4 NEW in known-issues.md)
+- **TD-F062-MOM-BOUNDARY-ROLLOVER** 🟡 MED 🔴 BLOCKING Wave 2 (Manager spot-check finding — Coder + QC both missed): `setUTCMonth(-1)` rolls over khi day > target month days (verified bug: May 31 → May 1 instead of April 30). Latent Wave 1 (no consumer), MUST fix Wave 2 trước khi wire CompareSelector → backend endpoints accept `?compare=mom`. Fix: replace với `shiftMonthClamped(date, months)` pattern + add boundary test. ~30 min.
+- TD-F062-VALIDATION-COMPAREKIND 🟢 LOW (QC finding): controller cast `as CompareKind` accept any string → fall through switch default. Wave 2 add `@IsEnum` decorator.
+- TD-F062-F026-SILENT-CAPABILITY-EXPANSION 🟢 INFORMATIONAL (QC finding): Adj #1 CompareKind extend silently adds wow/mom capability cho 6 F-026 endpoint cũ. Cache key namespace separate (no collision). Wave 5 decide market as feature OR add explicit guard.
+- TD-F062-PRD-SECTION-3.4-DTO-IMPORT-OVERLAP 🟢 LOW (Coder Forced Change #1): PRD claim 4 tab pages NEW nhưng codebase đã có 1530 LoC raw-fetch implementations từ F-026/F-058 era. Wave 3 REFACTOR (NOT NEW).
+
+### Lessons learned
+- **Coder honest documentation worked**: IMPLEMENTATION_NOTES.md Section 4 priority list (6 files) enabled Manager spot-check focused + efficient. Defense-in-depth justified: Coder + QC both missed MoM boundary rollover, Manager Independent Code Review + Node REPL verify caught (reinforces 2026-05-17 directive "mày review code chưa?" — F-040 Danny challenge precedent).
+- **Visual scan ≠ semantic verify**: Coder claimed "boundary 28/29/30/31-day month xử lý đúng" but only tested day=22 (safe case). Manager grep `setUTCMonth` + Node REPL `2026-05-31 setUTCMonth(3)` → confirmed rollover bug. Anti-pattern "Đọc file nhưng skip business logic check" applied.
+- **Partial wave deploy pattern minted**: When full feature ~8K LoC + ~5 sprint weeks → split into Wave 1-5 mini-deploys với:
+  - feature-log In-flight status `🟠 CODING (Wave N of M)`
+  - change-history partial entry per wave
+  - known-issues TD updates per wave
+  - codebase-map/conventions/architecture DEFER full ship (drift risk if incremental update)
+  - `05-manager-deploy.md` slot reserved for final ship
+  - Per-wave `MANAGER_WAVE_REVIEW.md` checkpoint files (not numbered 05+)
+  - Counter NOT bumped until final ship (full feature still in-flight)
+
+### Wave 2-5 roadmap
+- Wave 2 (~1800 LoC): Backend 5 NEW services (runner-analytics, race-performance, merchant-comparison, ga4, export) + 16 NEW DTOs + 12 NEW endpoints + cache invalidation extend `flushEventOverrideCache()` +13 patterns. **FIRST commit Wave 2 = fix TD-F062-MOM-BOUNDARY-ROLLOVER** trước khi backend services. PAUSE `pnpm install @google-analytics/data` (Danny defer 2026-05-22).
+- Wave 3 (~2500 LoC): Frontend `analytics/layout.tsx` NEW (multi-tab wrapper với 3 NEW selectors) + Tab 1/2/3 REFACTOR (TanStack Query migration + integrate selectors via layout) + 14 NEW components (KPI cards, charts, tables, panels) + SDK regen `pnpm --filter admin generate:api`.
+- Wave 4 (~1400 LoC): Tab 4 Runner Behavior (heatmap 7×24, lead time histogram, repeat cohort, demographics, geographic) + Tab 5 Funnel detail + GA4 section + Accordion F-026.
+- Wave 5 (~200 LoC + final ship): Polish + k6 performance benchmarks per Section 4.4 PRD + Manual UAT 5 tabs end-to-end persona walkthrough + BR coverage final audit. **Wave 5 = `/5bib-deploy` full F-062**: counter bump (F-062 → F-063+), move Shipped table, codebase-map/conventions/architecture formal update.
+
+---
+
 ## [2026-05-18] FEATURE-037 V2: On-Sale Race Detail Page (Promo Hub SEO Internal)
 
 **Branch:** worktree `condescending-dewdney-757430`, branch `feat/F-037-on-sale-race-detail-page` — NOT YET pushed
