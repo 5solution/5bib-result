@@ -39,14 +39,15 @@ interface BaseQuery {
   tenantId?: number;
 }
 
-const buildKey = (metric: string, q: BaseQuery & Record<string, unknown>) => [
+// Cast to Record<string, unknown> inside so callers don't need index signatures.
+const buildKey = (metric: string, q: BaseQuery) => [
   "analytics",
   metric,
   q.from ?? "",
   q.to ?? "",
   q.month ?? "",
   q.tenantId ?? "",
-  ...Object.entries(q)
+  ...Object.entries(q as Record<string, unknown>)
     .filter(([k]) => !["from", "to", "month", "tenantId"].includes(k))
     .flat()
     .map((v) => String(v ?? "")),
