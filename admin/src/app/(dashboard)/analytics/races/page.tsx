@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+// F-062 Wave 3-2 NEW — Wave 2 BR-SA-21 components
+import { RaceSpotlightCard } from "../components/RaceSpotlightCard";
+import { RaceTypeDistributionChart } from "../components/RaceTypeDistributionChart";
+import { searchParamsToQuery } from "@/lib/analytics-hooks";
 import { authHeaders } from "@/lib/api";
 import {
   Table,
@@ -169,12 +174,22 @@ export default function RacePerformancePage() {
 
   const totalPages = Math.ceil(total / LIMIT);
 
+  // F-062 Wave 3-2 — read filter from URL searchParams (set by AnalyticsFilterBar)
+  const sp = useSearchParams();
+  const wave2Query = searchParamsToQuery(sp);
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
+      {/* F-062 Wave 2 NEW — BR-SA-21 a/b chart + spotlight (driven by URL filter) */}
+      <div className="grid lg:grid-cols-2 gap-4">
+        <RaceTypeDistributionChart {...wave2Query} />
+        <RaceSpotlightCard {...wave2Query} />
+      </div>
+
+      {/* Header (legacy F-026 era — Race performance list table below) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Hiệu suất Race</h1>
+          <h1 className="text-2xl font-bold">Hiệu suất Race (Legacy F-026)</h1>
           <p className="text-sm text-muted-foreground">{total} races</p>
         </div>
         <nav className="flex items-center gap-1 text-sm">

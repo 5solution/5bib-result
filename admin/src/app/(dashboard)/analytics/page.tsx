@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+// F-062 Wave 3-2 + Wave 4 NEW — Wave 2 BR-SA components driven by URL filter
+import { ComparisonRow } from "./components/ComparisonRow";
+import { Ga4OverviewSection } from "./components/Ga4OverviewSection";
+import { ExportButtonV2 } from "./components/ExportButtonV2";
+import { searchParamsToQuery } from "@/lib/analytics-hooks";
+import type { CompareKind as CompareKindLabel } from "@/lib/analytics-labels";
 import { authHeaders } from "@/lib/api";
 import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -395,12 +402,31 @@ function AnalyticsOverviewPage() {
     toast.info("Export Excel đang được chuẩn bị (MVP — phase 2)");
   }, []);
 
+  // F-062 Wave 3-2 — read filter from URL searchParams (driven by AnalyticsFilterBar layout)
+  const sp = useSearchParams();
+  const wave2Query = searchParamsToQuery(sp);
+  const compareWith = ((sp.get("compare") as CompareKindLabel) === "wow" ||
+    (sp.get("compare") as CompareKindLabel) === "yoy"
+    ? (sp.get("compare") as "wow" | "yoy")
+    : "mom") as "wow" | "mom" | "yoy";
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
+      {/* F-062 Wave 2/4 NEW — Comparison Row + Export buttons + GA4 section */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-stone-900">Tổng quan kỳ ({compareWith.toUpperCase()})</h2>
+        <div className="flex gap-2">
+          <ExportButtonV2 reportType="overview" query={wave2Query} format="xlsx" />
+          <ExportButtonV2 reportType="overview" query={wave2Query} format="csv" />
+        </div>
+      </div>
+      <ComparisonRow {...wave2Query} compareWith={compareWith} />
+      <Ga4OverviewSection {...wave2Query} />
+
+      {/* Header (legacy F-026 era — full analytics dashboard below) */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Analytics Dashboard</h1>
+          <h1 className="text-2xl font-bold">Analytics Dashboard (Legacy)</h1>
           <p className="text-sm text-muted-foreground">
             Tổng quan hiệu suất nền tảng — Theo giờ Việt Nam (UTC+7)
           </p>

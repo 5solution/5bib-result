@@ -51,6 +51,75 @@ export type ApproveMerchantDto = {
     rejection_note?: string;
 };
 
+export type EventFeeOverrideResponseDto = {
+    /**
+     * MySQL platform race.id
+     */
+    raceId: number;
+    /**
+     * Tên race từ MySQL platform (joined via RaceReadonly)
+     */
+    raceName?: string | null;
+    service_fee_rate?: number | null;
+    manual_fee_per_ticket?: number | null;
+    fee_vat_rate?: number | null;
+    effective_from: string;
+    note?: string | null;
+    createdBy?: number | null;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+export type CreateEventFeeOverrideDto = {
+    /**
+     * MySQL platform race.id — phải tồn tại trong races table
+     */
+    raceId: number;
+    /**
+     * % phí dịch vụ — null = dùng merchant default
+     */
+    service_fee_rate?: number | null;
+    /**
+     * Phí cố định VNĐ/vé cho MANUAL — null = dùng merchant default
+     */
+    manual_fee_per_ticket?: number | null;
+    /**
+     * % VAT trên fee — null = dùng merchant default
+     */
+    fee_vat_rate?: number | null;
+    /**
+     * Ngày bắt đầu áp dụng (YYYY-MM-DD)
+     */
+    effective_from: string;
+    /**
+     * Ghi chú admin
+     */
+    note?: string | null;
+};
+
+export type UpdateEventFeeOverrideDto = {
+    /**
+     * % phí dịch vụ — null = dùng merchant default
+     */
+    service_fee_rate?: number | null;
+    /**
+     * Phí cố định VNĐ/vé cho MANUAL — null = dùng merchant default
+     */
+    manual_fee_per_ticket?: number | null;
+    /**
+     * % VAT trên fee — null = dùng merchant default
+     */
+    fee_vat_rate?: number | null;
+    /**
+     * Ngày bắt đầu áp dụng (YYYY-MM-DD)
+     */
+    effective_from?: string;
+    /**
+     * Ghi chú admin
+     */
+    note?: string | null;
+};
+
 export type RaceAthleteAdminDto = {
     mysql_race_id: number;
     athletes_id: number;
@@ -125,6 +194,99 @@ export type TriggerSyncResponseDto = {
 export type SyncLogListDto = {
     items: Array<SyncLogDto>;
     total: number;
+};
+
+export type RunBackfillDto = {
+    /**
+     * Required reason (≥10 chars) when dryRun=false. Logged for audit.
+     */
+    reason?: string;
+};
+
+export type IdentityClusterLinkedRecordDto = {
+    /**
+     * F-048: MySQL race_id (platform DB)
+     */
+    mysql_race_id: number;
+    /**
+     * F-048: MySQL athletes_id (platform DB)
+     */
+    athletes_id: number;
+    /**
+     * F-048: Bib number from race_athletes (legacy)
+     */
+    bib_number?: string;
+    /**
+     * F-048: Mongo race ObjectId mapping
+     */
+    mongoRaceId?: string;
+    /**
+     * F-048: Mongo bib (mirror of bib_number)
+     */
+    mongoBib?: string;
+    /**
+     * F-048: Full name from race_athletes
+     */
+    fullName?: string;
+    /**
+     * F-049: Race title joined from races.title (via mysql_race_id lookup, cached 1h)
+     */
+    raceName?: string;
+    /**
+     * F-049: Bib number joined from race_athletes.bib_number (via mysql_race_id + athletes_id)
+     */
+    bibNumber?: string;
+};
+
+export type IdentityClusterListItemDto = {
+    /**
+     * Cluster UUID v4
+     */
+    clusterId: string;
+    /**
+     * F-049 admin-only — primary email (full, no redact for admin context BR-49-02)
+     */
+    emailHash?: string;
+    nameSlug?: string;
+    dobYear?: number;
+    genderNormalized?: 'male' | 'female' | 'other';
+    confidence: number;
+    source: 'email' | 'name+dob' | 'name+gender' | 'manual' | 'review_pending';
+    /**
+     * F-049 enriched with raceName + bibNumber per record
+     */
+    linkedAthleteRecords: Array<IdentityClusterLinkedRecordDto>;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type IdentityClusterListResponseDto = {
+    items: Array<IdentityClusterListItemDto>;
+    total: number;
+};
+
+export type MergeClustersDto = {
+    /**
+     * Cluster IDs to merge INTO target
+     */
+    additionalClusterIds: Array<string>;
+    reason: string;
+};
+
+export type SplitClusterDto = {
+    /**
+     * Athletes IDs to extract
+     */
+    extractAthleteIds: Array<string>;
+    reason: string;
+};
+
+export type BulkSyncTriggerDto = {
+    mode: 'staged_10' | 'staged_50' | 'full';
+    /**
+     * Required ≥10 chars when mode=full (audit log)
+     */
+    reason?: string;
 };
 
 export type PreflightBatchDto = {
@@ -370,6 +532,533 @@ export type UpdateReconciliationStatusDto = {
     note?: string;
 };
 
+export type WeeklyRevenuePointDto = {
+    /**
+     * ISO 8601 week key
+     */
+    week: string;
+    /**
+     * First day of week (Monday) YYYY-MM-DD
+     */
+    weekStart: string;
+    /**
+     * Last day of week (Sunday) YYYY-MM-DD
+     */
+    weekEnd: string;
+    /**
+     * Gross merchandise value (sum total_price)
+     */
+    gmv: number;
+    /**
+     * Net GMV = gmv - total_discounts
+     */
+    netGmv: number;
+    /**
+     * Platform fee via FeeService.computeFeeForOrdersAggregate() — F-040 cascade. KHÔNG inline tính phí.
+     */
+    platformFee: number;
+    /**
+     * Số đơn paid (exclude MANUAL trong revenue calc per business invariant)
+     */
+    orderCount: number;
+};
+
+export type MonthlyRevenuePointDto = {
+    /**
+     * Calendar month key
+     */
+    month: string;
+    /**
+     * Gross merchandise value (sum total_price)
+     */
+    gmv: number;
+    /**
+     * Net GMV = gmv - total_discounts
+     */
+    netGmv: number;
+    /**
+     * Platform fee via FeeService.computeFeeForOrdersAggregate() — F-040 cascade. KHÔNG inline tính phí.
+     */
+    platformFee: number;
+    /**
+     * Số đơn paid (exclude MANUAL trong revenue calc per business invariant)
+     */
+    orderCount: number;
+};
+
+export type ComparisonMetricsDto = {
+    /**
+     * Label cho UI hiển thị (vd "Tháng 5 / 2026" hoặc "Tuần 21")
+     */
+    label: string;
+    /**
+     * Range start ISO datetime (inclusive)
+     */
+    from: string;
+    /**
+     * Range end ISO datetime (exclusive)
+     */
+    to: string;
+    /**
+     * Gross merchandise value
+     */
+    gmv: number;
+    /**
+     * Net GMV = gmv - total_discounts
+     */
+    netGmv: number;
+    /**
+     * Platform fee via FeeService.computeFeeForOrdersAggregate() — F-040 cascade.
+     */
+    platformFee: number;
+    /**
+     * Số đơn paid (exclude MANUAL trong revenue calc)
+     */
+    orderCount: number;
+};
+
+export type ComparisonDeltaDto = {
+    /**
+     * GMV delta % vs previous. null nếu previous.gmv = 0.
+     */
+    gmvPct: number | null;
+    /**
+     * Net GMV delta % vs previous.
+     */
+    netGmvPct: number | null;
+    /**
+     * Platform fee delta % vs previous.
+     */
+    platformFeePct: number | null;
+    /**
+     * Order count delta % vs previous.
+     */
+    orderCountPct: number | null;
+};
+
+export type ComparisonResponseDto = {
+    /**
+     * Metrics cho kỳ hiện tại
+     */
+    current: ComparisonMetricsDto;
+    /**
+     * Metrics cho kỳ tham chiếu (WoW/MoM/YoY)
+     */
+    previous: ComparisonMetricsDto;
+    /**
+     * Delta % của 4 metrics (calcDeltaPercent guard base=0 trả null)
+     */
+    delta: ComparisonDeltaDto;
+};
+
+export type RaceTypeDistributionPointDto = {
+    /**
+     * Race type machine key from races.race_type column
+     */
+    raceType: 'ROAD_MARATHON' | 'ROAD_HALF_MARATHON' | 'ULTRA_TRAIL_RACE' | 'TRAIL_RACE' | 'OTHER';
+    /**
+     * Số race trong period thuộc type này
+     */
+    count: number;
+    /**
+     * Tổng GMV của tất cả races thuộc type này
+     */
+    gmv: number;
+    /**
+     * Trung bình GMV per race trong type (gmv / count)
+     */
+    avgGmv: number;
+};
+
+export type RaceSpotlightDto = {
+    /**
+     * Race ID (MySQL races.race_id)
+     */
+    raceId: number;
+    /**
+     * Race title
+     */
+    raceName: string;
+    /**
+     * Merchant name (tenant.name)
+     */
+    merchant: string;
+    /**
+     * Race type machine key
+     */
+    type: 'ROAD_MARATHON' | 'ROAD_HALF_MARATHON' | 'ULTRA_TRAIL_RACE' | 'TRAIL_RACE' | 'OTHER';
+    /**
+     * Race date ISO YYYY-MM-DD (latest paid order date as proxy)
+     */
+    date: string | null;
+    /**
+     * GMV paid (exclude MANUAL)
+     */
+    gmv: number;
+    /**
+     * Số đơn paid (exclude MANUAL)
+     */
+    orders: number;
+    /**
+     * Average GMV per order (gmv / orders)
+     */
+    avgPerOrder: number;
+    /**
+     * Platform fee via FeeService.computeFeeForOrdersAggregate()
+     */
+    platformFee: number;
+    /**
+     * Auto-generated insight text in VN: "Đóng góp X% tổng GMV, trung bình Y VND/đơn"
+     */
+    insight: string;
+};
+
+export type RacePerformanceItemDto = {
+    /**
+     * Race ID
+     */
+    raceId: number;
+    /**
+     * Race title
+     */
+    raceName: string;
+    /**
+     * Merchant name (tenant.name)
+     */
+    merchant: string;
+    /**
+     * Race type machine key
+     */
+    raceType: 'ROAD_MARATHON' | 'ROAD_HALF_MARATHON' | 'ULTRA_TRAIL_RACE' | 'TRAIL_RACE' | 'OTHER';
+    /**
+     * Race date proxy (latest paid order date) ISO YYYY-MM-DD
+     */
+    date: string | null;
+    /**
+     * Số đơn paid (exclude MANUAL)
+     */
+    orders: number;
+    /**
+     * GMV paid (exclude MANUAL)
+     */
+    gmv: number;
+    /**
+     * Platform fee via FeeService.computeFeeForOrdersAggregate()
+     */
+    platformFee: number;
+    /**
+     * Average GMV per order (gmv / orders)
+     */
+    avgPerOrder: number;
+    /**
+     * Voided rate % = voided / (paid + voided) × 100
+     */
+    voidedPct: number;
+};
+
+export type RacePerformanceListResponseDto = {
+    /**
+     * Race rows for current page
+     */
+    data: Array<RacePerformanceItemDto>;
+    /**
+     * Total rows across all pages (after filters)
+     */
+    total: number;
+    /**
+     * Current page (1-indexed)
+     */
+    page: number;
+    /**
+     * Page size
+     */
+    limit: number;
+    /**
+     * ceil(total / limit)
+     */
+    totalPages: number;
+};
+
+export type MerchantScatterPointDto = {
+    /**
+     * Tenant ID (MySQL platform.tenant.id)
+     */
+    tenantId: number;
+    /**
+     * Tenant display name (MySQL platform.tenant.name)
+     */
+    tenantName: string;
+    /**
+     * Số đơn paid trong period (exclude MANUAL)
+     */
+    orders: number;
+    /**
+     * GMV paid trong period (exclude MANUAL)
+     */
+    gmv: number;
+    /**
+     * Merchant status per BR-SA-07: ACTIVE | AT_RISK | CHURNED | NEW
+     */
+    status: 'ACTIVE' | 'AT_RISK' | 'CHURNED' | 'NEW';
+};
+
+export type MerchantHealthDistributionTierDto = {
+    /**
+     * Tier code (machine key)
+     */
+    tier: 'EXCELLENT' | 'GOOD' | 'AVERAGE' | 'WEAK' | 'AT_RISK_SCORE';
+    /**
+     * VN label cho UI display
+     */
+    label: string;
+    /**
+     * Min score inclusive cho tier (per BR-SA-07)
+     */
+    min: number;
+    /**
+     * Max score inclusive cho tier
+     */
+    max: number;
+    /**
+     * Số merchant rơi vào tier này trong period
+     */
+    count: number;
+    /**
+     * Tailwind color class name (per design palette)
+     */
+    color: string;
+};
+
+export type MerchantComparisonItemDto = {
+    /**
+     * Tenant ID
+     */
+    tenantId: number;
+    /**
+     * Tenant display name
+     */
+    tenantName: string;
+    /**
+     * Default service_fee_rate (%) từ MerchantConfig
+     */
+    feeRate: number;
+    /**
+     * Số giải races đã tổ chức trong period
+     */
+    races: number;
+    /**
+     * Số đơn paid (exclude MANUAL) trong period
+     */
+    orders: number;
+    /**
+     * GMV paid (exclude MANUAL) trong period
+     */
+    gmv: number;
+    /**
+     * Platform fee via FeeService.computeFeeForOrdersAggregate() — F-040 cascade
+     */
+    fee: number;
+    /**
+     * Tỷ lệ % đơn MANUAL / tổng đơn paid
+     */
+    manualPct: number;
+    /**
+     * Tỷ lệ % đơn voided / (paid + voided)
+     */
+    voidedPct: number;
+    /**
+     * Merchant status per BR-SA-07
+     */
+    status: 'ACTIVE' | 'AT_RISK' | 'CHURNED' | 'NEW';
+    /**
+     * Health Score 0-100 (RFM formula BR-SA-07)
+     */
+    healthScore: number;
+};
+
+export type MerchantComparisonTotalsDto = {
+    /**
+     * Sum orders across all merchants
+     */
+    orders: number;
+    /**
+     * Sum GMV across all merchants
+     */
+    gmv: number;
+    /**
+     * Sum platform fee across all merchants
+     */
+    fee: number;
+};
+
+export type MerchantComparisonResponseDto = {
+    /**
+     * Per-merchant rows (default sort GMV DESC, UI overrides)
+     */
+    data: Array<MerchantComparisonItemDto>;
+    /**
+     * Footer aggregate row
+     */
+    totals: MerchantComparisonTotalsDto;
+};
+
+export type RunnerBookingHeatmapResponseDto = {
+    /**
+     * 7×24 matrix [dow 0-6 (0=Sun)][hour 0-23] of order counts
+     */
+    matrix: Array<Array<number>>;
+};
+
+export type RunnerLeadTimeBucketDto = {
+    /**
+     * Bucket key
+     */
+    bucket: '0-7d' | '8-30d' | '31-60d' | '61-120d' | '120+d';
+    /**
+     * VN label cho UI
+     */
+    label: string;
+    /**
+     * Số orders trong bucket
+     */
+    count: number;
+    /**
+     * % tổng orders (rounded 2 decimals)
+     */
+    percentage: number;
+    /**
+     * Tailwind color class per design palette
+     */
+    color: string;
+};
+
+export type RunnerRepeatCohortTierDto = {
+    /**
+     * Tier key
+     */
+    tier: '1' | '2' | '3-4' | '5+';
+    /**
+     * VN label cho UI
+     */
+    label: string;
+    /**
+     * Số runner trong tier
+     */
+    count: number;
+    /**
+     * % của totalUniqueRunners (rounded 2 decimals)
+     */
+    percentage: number;
+};
+
+export type RunnerRepeatCohortResponseDto = {
+    tiers: Array<RunnerRepeatCohortTierDto>;
+    /**
+     * Total unique runners (distinct user_id paid orders)
+     */
+    totalUniqueRunners: number;
+};
+
+export type RunnerDemographicsBucketDto = {
+    /**
+     * Age range key
+     */
+    ageRange: string;
+    /**
+     * Nam count
+     */
+    male: number;
+    /**
+     * Nữ count
+     */
+    female: number;
+    /**
+     * Khác count
+     */
+    other: number;
+    /**
+     * Không rõ gender (KHÔNG bao gồm Không rõ tuổi)
+     */
+    unknown: number;
+    /**
+     * Total runners trong bracket
+     */
+    total: number;
+};
+
+export type RunnerDemographicsGenderSummaryEntryDto = {
+    count: number;
+    pct: number;
+};
+
+export type RunnerDemographicsGenderSummaryDto = {
+    male: RunnerDemographicsGenderSummaryEntryDto;
+    female: RunnerDemographicsGenderSummaryEntryDto;
+    other: RunnerDemographicsGenderSummaryEntryDto;
+    unknown: RunnerDemographicsGenderSummaryEntryDto;
+};
+
+export type RunnerDemographicsResponseDto = {
+    brackets: Array<RunnerDemographicsBucketDto>;
+    genderSummary: RunnerDemographicsGenderSummaryDto;
+};
+
+export type RunnerGeographicProvinceDto = {
+    /**
+     * Tên tỉnh thành
+     */
+    province: string;
+    /**
+     * Số runner trong tỉnh
+     */
+    count: number;
+    /**
+     * % của totalWithProvince (rounded 2 decimals)
+     */
+    percentage: number;
+};
+
+export type RunnerGeographicResponseDto = {
+    provinces: Array<RunnerGeographicProvinceDto>;
+    /**
+     * Coverage % = totalWithProvince / totalRunners * 100
+     */
+    coverage: number;
+    /**
+     * Runners có province field populated
+     */
+    totalWithProvince: number;
+    /**
+     * Total unique runners (distinct user_id paid orders)
+     */
+    totalRunners: number;
+};
+
+export type RunnerSummaryKpiResponseDto = {
+    /**
+     * Distinct user_id paid orders trong period
+     */
+    uniqueRunners: number;
+    /**
+     * % runners có ≥2 races đã tham gia
+     */
+    repeatRate: number;
+    /**
+     * Trung bình lead time = race.event_start_date - order.payment_on (days)
+     */
+    avgLeadTime: number | null;
+    /**
+     * Trung bình orders mỗi runner = totalOrders / uniqueRunners
+     */
+    avgOrdersPerRunner: number;
+    /**
+     * Delta MoM % cho 4 KPIs (nullable khi previous = 0)
+     */
+    deltaMoM: {
+        [key: string]: number | null;
+    } | null;
+};
+
 export type RepeatAthleteTrendPointDto = {
     /**
      * Mốc thời gian (YYYY-MM)
@@ -582,6 +1271,118 @@ export type RefundCancelResponseDto = {
     refundOverThreshold: boolean;
     refundTrend: Array<RateTrendPointDto>;
     cancelTrend: Array<RateTrendPointDto>;
+};
+
+export type FeeBreakdownAggregateDto = {
+    /**
+     * Tổng service fee VND
+     */
+    totalServiceFee: number;
+    /**
+     * Tổng manual fee VND
+     */
+    totalManualFee: number;
+    /**
+     * Tổng VAT VND
+     */
+    totalVat: number;
+    /**
+     * Tổng fee = service + manual + vat
+     */
+    totalFee: number;
+};
+
+export type ReconciliationAggregateDto = {
+    /**
+     * Tổng service fee VND
+     */
+    totalServiceFee: number;
+    /**
+     * Tổng manual fee VND
+     */
+    totalManualFee: number;
+    /**
+     * Tổng VAT VND
+     */
+    totalVat: number;
+    /**
+     * Tổng fee = service + manual + vat
+     */
+    totalFee: number;
+    /**
+     * Tổng net GMV VND
+     */
+    totalNetGmv: number;
+    /**
+     * Số reconciliation doc đã match tháng đó
+     */
+    reconCount: number;
+    /**
+     * Mongo _id của các reconciliation đã aggregate
+     */
+    reconciliationIds: Array<string>;
+};
+
+export type DeltaDto = {
+    /**
+     * Delta tuyệt đối VND = analytics.totalFee - recon.totalFee
+     */
+    absVnd: number;
+    /**
+     * Delta % vs reconciliation (rounded 2 decimals)
+     */
+    pctOfReconciliation: number | null;
+};
+
+export type DiscrepancyCheckResponseDto = {
+    tenantId: number;
+    month: string;
+    analyticsAggregate: FeeBreakdownAggregateDto;
+    reconciliationAggregate: ReconciliationAggregateDto;
+    delta: DeltaDto | null;
+    /**
+     * MATCH = abs<=threshold AND pct<=thresholdPct; MINOR = pct<1%; MAJOR = pct>=1%; NO_RECONCILIATION = chưa có recon doc
+     */
+    verdict: 'MATCH' | 'MINOR_DRIFT' | 'MAJOR_DRIFT' | 'NO_RECONCILIATION';
+    /**
+     * Threshold absolute VND default 1000
+     */
+    thresholdAbsVnd: number;
+    /**
+     * Threshold % default 0.1
+     */
+    thresholdPct: number;
+};
+
+export type Ga4TopPageDto = {
+    page: string;
+    pageviews: number;
+};
+
+export type Ga4TrafficSourceDto = {
+    source: string;
+    sessions: number;
+};
+
+export type Ga4DailySessionPointDto = {
+    date: string;
+    sessions: number;
+};
+
+export type Ga4OverviewResponseDto = {
+    /**
+     * false nếu GA4 chưa config (KHÔNG throw 500 per BR-SA-11)
+     */
+    available: boolean;
+    error?: string;
+    sessions?: number;
+    pageviews?: number;
+    bounceRate?: number;
+    avgSessionDuration?: number;
+    newUsers?: number;
+    topPages?: Array<Ga4TopPageDto>;
+    trafficSources?: Array<Ga4TrafficSourceDto>;
+    dailySessions?: Array<Ga4DailySessionPointDto>;
 };
 
 export type ChipConfigLinkResponseDto = {
@@ -1064,17 +1865,163 @@ export type UpdateCostItemDto = {
     incurredDate?: string;
 };
 
+export type ReconciledFeeSliceDto = {
+    /**
+     * Recon doc _id (hex string)
+     */
+    reconciliationId: string;
+    /**
+     * Period start ISO YYYY-MM-DD
+     */
+    periodStart: string;
+    /**
+     * Period end ISO YYYY-MM-DD
+     */
+    periodEnd: string;
+    /**
+     * Recon status (signed/reviewed/completed/sent)
+     */
+    status: string;
+    /**
+     * Phí 5BIB orders từ recon (VND)
+     */
+    feeAmount: number;
+    /**
+     * Phí MANUAL orders từ recon (VND)
+     */
+    manualFeeAmount: number;
+    /**
+     * TD-F016 legacy warning nếu created_at < 2026-05-08
+     */
+    legacyWarning?: string;
+    /**
+     * Signed/reviewed/completed timestamp ISO (nullable)
+     */
+    finalizedAt: string | null;
+};
+
+export type SelfComputeSliceDto = {
+    /**
+     * Số đơn 5BIB-eligible (ORDINARY/GROUP_BUY/etc.)
+     */
+    count5BIB: number;
+    /**
+     * SUM(total_price) của 5BIB orders (VND)
+     */
+    gross5BIB: number;
+    /**
+     * Tỉ lệ phí % áp dụng
+     */
+    feeRatePercent: number;
+    /**
+     * Phí 5BIB = gross5BIB × feeRatePercent / 100 (VND)
+     */
+    fee5BIB: number;
+    /**
+     * Số đơn MANUAL
+     */
+    countManual: number;
+    /**
+     * Tổng số vé MANUAL (SUM line_item.quantity)
+     */
+    manualTicketCount: number;
+    /**
+     * VNĐ/vé MANUAL áp dụng
+     */
+    manualFeePerTicket: number;
+    /**
+     * Phí MANUAL = manualTicketCount × manualFeePerTicket (VND)
+     */
+    feeManual: number;
+    /**
+     * Period gap start that self-compute covers (when MIXED source)
+     */
+    periodGapStart?: string;
+    /**
+     * Period gap end that self-compute covers (when MIXED source)
+     */
+    periodGapEnd?: string;
+    /**
+     * Warning nếu fallback cascade tier 3 default 5.5% kích hoạt
+     */
+    rateFallbackWarning?: string;
+    /**
+     * F-043 — Nguồn fee rate được resolved trong cascade 4-tier. `event_override` = từ MerchantConfig.event_fee_overrides[raceId]; `merchant_default` = từ MerchantConfig.service_fee_rate; `contract_fallback` = từ contract.revenueShare.feePercentage; `platform_default` = hardcoded 5.5%.
+     */
+    feeSource?: 'event_override' | 'merchant_default' | 'contract_fallback' | 'platform_default';
+};
+
+export type FeeBreakdownDto = {
+    /**
+     * Contract ObjectId (hex string)
+     */
+    contractId: string;
+    feeSource: 'RECONCILIATION' | 'SELF_COMPUTE' | 'MIXED' | 'ESTIMATED';
+    /**
+     * Total fee 5BIB = SUM(reconciliations) + selfCompute (VND)
+     */
+    totalFee: number;
+    /**
+     * Gross GMV reference (KHÔNG dùng cho P&L, transparency only)
+     */
+    grossGMV?: number;
+    /**
+     * Reconciliation slices contributing to total (empty if pure SELF_COMPUTE)
+     */
+    reconciliations: Array<ReconciledFeeSliceDto>;
+    /**
+     * Self-compute slice for period gap (omit if pure RECONCILIATION cover)
+     */
+    selfCompute?: SelfComputeSliceDto;
+    /**
+     * Computed at ISO timestamp
+     */
+    computedAt: string;
+    /**
+     * Generic warnings if any
+     */
+    warnings?: Array<string>;
+};
+
 export type PnLSummaryDto = {
     contractId: string;
     /**
-     * Revenue VND (include VAT — BR-PNL-02)
+     * Revenue VND. F-040: TICKET_SALES → fee 5BIB thật (KHÔNG GMV). Non-TICKET_SALES → BBNT actualTotalWithVat hoặc totalAmount.
      */
     revenue: number;
     revenueSource: 'ESTIMATED' | 'ACTUAL';
     /**
-     * Tổng chi phí VND (BR-PNL-05)
+     * F-040 fee source (TICKET_SALES only)
+     */
+    feeSource?: 'RECONCILIATION' | 'SELF_COMPUTE' | 'MIXED' | 'ESTIMATED';
+    /**
+     * F-040 gross GMV (SUM order.total_price) — TICKET_SALES only
+     */
+    grossGMV?: number;
+    /**
+     * F-040 fee warning (TD legacy hoặc degraded path)
+     */
+    feeWarning?: string;
+    /**
+     * F-040 full fee breakdown (TICKET_SALES only)
+     */
+    feeBreakdown?: FeeBreakdownDto;
+    /**
+     * Tổng chi phí VND = estimatedCost + actualCost (ADDITIVE, F-036)
      */
     totalCost: number;
+    /**
+     * Chi phí ước tính từ line items (F-036)
+     */
+    estimatedCost: number;
+    /**
+     * Chi phí phát sinh thêm từ cost_items (F-036)
+     */
+    actualCost: number;
+    /**
+     * Source attribution descriptive (F-036)
+     */
+    totalCostSource: 'actual' | 'estimated' | 'mixed' | 'none';
     /**
      * Lãi/Lỗ VND (BR-PNL-06)
      */
@@ -1113,6 +2060,25 @@ export type ExcelExportResponseDto = {
     bytes: number;
 };
 
+export type FeeSourceMixDto = {
+    /**
+     * Count of contracts with RECONCILIATION source
+     */
+    reconciliation: number;
+    /**
+     * Count of contracts with SELF_COMPUTE source
+     */
+    selfCompute: number;
+    /**
+     * Count of contracts with MIXED source
+     */
+    mixed: number;
+    /**
+     * Count of contracts with ESTIMATED source
+     */
+    estimated: number;
+};
+
 export type DashboardTotalsDto = {
     contractCount: number;
     totalRevenue: number;
@@ -1125,6 +2091,10 @@ export type DashboardTotalsDto = {
     costByCategory: {
         [key: string]: number;
     };
+    /**
+     * F-040 distribution of contracts by feeSource
+     */
+    feeSourceMix: FeeSourceMixDto;
 };
 
 export type DashboardGroupBucketDto = {
@@ -1150,8 +2120,23 @@ export type DashboardContractItemDto = {
     raceName: string | null;
     contractType: 'TICKET_SALES' | 'TIMING' | 'RACEKIT' | 'OPERATIONS';
     status: string;
+    /**
+     * F-040 semantic shift (TICKET_SALES only): fee 5BIB thật, NOT gross GMV. Non-TICKET_SALES unchanged.
+     */
     revenue: number;
     revenueSource: 'ESTIMATED' | 'ACTUAL';
+    /**
+     * F-040 fee source (TICKET_SALES only)
+     */
+    feeSource?: 'RECONCILIATION' | 'SELF_COMPUTE' | 'MIXED' | 'ESTIMATED';
+    /**
+     * F-040 gross GMV reference (TICKET_SALES only)
+     */
+    grossGMV?: number;
+    /**
+     * F-040 fee compute warning string
+     */
+    feeWarning?: string;
     totalCost: number;
     profit: number;
     margin: number | null;
@@ -1198,6 +2183,49 @@ export type PnLDashboardFilterDto = {
      * ISO YYYY-MM-DD — chỉ dùng khi period=custom
      */
     dateTo?: string;
+};
+
+export type PnLContractsListResponseDto = {
+    /**
+     * Resolved period (echoes filter input)
+     */
+    period: string;
+    /**
+     * Resolved ISO date period start YYYY-MM-DD
+     */
+    dateFrom: string;
+    /**
+     * Resolved ISO date period end YYYY-MM-DD
+     */
+    dateTo: string;
+    /**
+     * Generation timestamp ISO 8601
+     */
+    generatedAt: string;
+    /**
+     * Paginated list — current page only
+     */
+    items: Array<DashboardContractItemDto>;
+    /**
+     * Total contracts matching filter (before pagination)
+     */
+    total: number;
+    /**
+     * Current page (1-indexed)
+     */
+    page: number;
+    /**
+     * Items per page
+     */
+    limit: number;
+    /**
+     * Total pages = ceil(total / limit)
+     */
+    totalPages: number;
+    /**
+     * Aggregate totals across ALL matching contracts (NOT just current page) — for footer summary
+     */
+    totals: DashboardTotalsDto;
 };
 
 export type TenantSearchResultDto = {
@@ -1875,6 +2903,10 @@ export type LineItemInputDto = {
      * ServiceCatalog._id reference
      */
     catalogItemId?: string;
+    /**
+     * Quote-time estimated cost per unit (giá vốn 1 đơn vị)
+     */
+    cost?: number;
 };
 
 export type RevenueShareInputDto = {
@@ -2058,6 +3090,64 @@ export type PartnerResponseDto = {
     updatedAt: string;
 };
 
+export type ParsedPartnerRowDto = {
+    /**
+     * Excel row number (1-indexed, header=1)
+     */
+    rowNum: number;
+    entityName: string;
+    shortName?: string;
+    taxId?: string;
+    address?: string;
+    representative?: string;
+    position?: string;
+    bankAccount?: string;
+    bankName?: string;
+    phone?: string;
+    email?: string;
+    notes?: string;
+};
+
+export type InvalidPartnerRowDto = {
+    rowNum: number;
+    errors: Array<string>;
+    raw: {
+        [key: string]: unknown;
+    };
+};
+
+export type PartnerImportPreviewDto = {
+    /**
+     * Total data rows trong Excel (sau header)
+     */
+    total: number;
+    /**
+     * Rows hợp lệ + chưa trùng → sẽ insert ở Step 2
+     */
+    valid: Array<ParsedPartnerRowDto>;
+    /**
+     * Rows hợp lệ nhưng trùng (taxId hoặc entityName) → SKIP
+     */
+    duplicate: Array<ParsedPartnerRowDto>;
+    /**
+     * Rows fail validation — reported, KHÔNG insert
+     */
+    invalid: Array<InvalidPartnerRowDto>;
+};
+
+export type PartnerImportConfirmDto = {
+    /**
+     * Validated rows từ Step 1 preview. Server RE-VALIDATES.
+     */
+    rows: Array<ParsedPartnerRowDto>;
+};
+
+export type PartnerImportResultDto = {
+    inserted: number;
+    skipped_duplicate: number;
+    failed: number;
+};
+
 export type UpdatePartnerDto = {
     entityName?: string;
     shortName?: string;
@@ -2101,6 +3191,78 @@ export type ServiceCatalogResponseDto = {
     updatedAt: string;
 };
 
+export type ParsedServiceCatalogRowDto = {
+    /**
+     * Excel row number (1-indexed, header=1)
+     */
+    rowNum: number;
+    name: string;
+    category: 'TIMING' | 'RACEKIT' | 'OPERATIONS' | 'GENERAL';
+    unit?: string;
+    referencePrice?: number;
+    referenceCost?: number;
+    description?: string;
+    sortOrder?: number;
+};
+
+export type InvalidServiceCatalogRowDto = {
+    /**
+     * Excel row number (1-indexed)
+     */
+    rowNum: number;
+    /**
+     * Validation error messages (VN)
+     */
+    errors: Array<string>;
+    /**
+     * Raw cell values for admin debug (name, category, etc.)
+     */
+    raw: {
+        [key: string]: unknown;
+    };
+};
+
+export type ServiceCatalogImportPreviewDto = {
+    /**
+     * Total data rows trong Excel (sau header)
+     */
+    total: number;
+    /**
+     * Rows hợp lệ + chưa trùng → sẽ insert ở Step 2
+     */
+    valid: Array<ParsedServiceCatalogRowDto>;
+    /**
+     * Rows hợp lệ nhưng trùng name+category → SKIP, KHÔNG insert
+     */
+    duplicate: Array<ParsedServiceCatalogRowDto>;
+    /**
+     * Rows fail validation — reported, KHÔNG insert
+     */
+    invalid: Array<InvalidServiceCatalogRowDto>;
+};
+
+export type ServiceCatalogImportConfirmDto = {
+    /**
+     * Validated rows từ Step 1 preview. Server RE-VALIDATES.
+     */
+    rows: Array<ParsedServiceCatalogRowDto>;
+};
+
+export type ServiceCatalogImportResultDto = {
+    /**
+     * Số dịch vụ đã insert thành công
+     */
+    inserted: number;
+    /**
+     * Số rows bị skip do trùng (re-check server-side sau preview, race với manual create)
+     */
+    skipped_duplicate: number;
+    /**
+     * Số rows failed at insert layer (vd: validation server-side reject)
+     */
+    failed: number;
+};
+
 export type UpdateServiceCatalogDto = {
     name?: string;
     category?: 'TIMING' | 'RACEKIT' | 'OPERATIONS' | 'GENERAL';
@@ -2114,6 +3276,158 @@ export type UpdateServiceCatalogDto = {
     sortOrder?: number;
 };
 
+export type RaceOnSaleResponseDto = {
+    /**
+     * race_id as string (bigint).
+     */
+    raceId: string;
+    title: string;
+    /**
+     * url_name slug — already filtered NOT NULL (BR-PH33-03).
+     */
+    urlName: string;
+    logoUrl?: string;
+    eventStartDate?: string;
+    registrationEndTime?: string;
+    location?: string;
+    brand?: string;
+    /**
+     * Pre-computed 5Ticket URL: https://5ticket.vn/event/<urlName> (BR-PH33-05). Frontend dùng cho race card CTA — KHÔNG cần hard-code domain.
+     */
+    ticketUrl: string;
+};
+
+export type RacesOnSaleListResponseDto = {
+    data: Array<RaceOnSaleResponseDto>;
+};
+
+export type RaceCourseDto = {
+    /**
+     * Course ID (bigint as string)
+     */
+    id: string;
+    /**
+     * Course display prefix (e.g. "M42K")
+     */
+    prefix: string;
+    /**
+     * Course name VN
+     */
+    name?: string;
+    /**
+     * Distance label (e.g. "42KM")
+     */
+    distance?: string;
+    /**
+     * Course description (HTML, will be sanitized server-side)
+     */
+    description?: string;
+    /**
+     * Price in VND
+     */
+    price?: number;
+    /**
+     * Max participants
+     */
+    maxParticipate?: number;
+    minAge?: number;
+    maxAge?: number;
+    /**
+     * Registration window open
+     */
+    openForSaleDateTime?: string;
+    /**
+     * Registration window close
+     */
+    closeForSaleDateTime?: string;
+    /**
+     * Course route image URL
+     */
+    routeImageUrl?: string;
+    /**
+     * Course map image URL
+     */
+    routeMapImageUrl?: string;
+    /**
+     * Medal image URL
+     */
+    medalUrl?: string;
+    /**
+     * Elevation gain e.g. "1500m+"
+     */
+    gain?: string;
+    /**
+     * Course type
+     */
+    courseType?: 'ORDINARY' | 'VIRTUAL' | 'CHARITY';
+};
+
+export type RaceOnSaleDetailDto = {
+    /**
+     * race_id (bigint as string)
+     */
+    raceId: string;
+    /**
+     * Race title
+     */
+    title: string;
+    /**
+     * URL slug (url_name OR fallback raceId nếu NULL — F-033 TD-F033-06)
+     */
+    urlName: string;
+    /**
+     * Race long-form description (HTML, sanitized server-side)
+     */
+    description?: string;
+    /**
+     * Logo / banner image URL
+     */
+    logoUrl?: string;
+    /**
+     * Additional images (CSV or JSON)
+     */
+    images?: string;
+    eventStartDate?: string;
+    eventEndDate?: string;
+    registrationStartTime?: string;
+    registrationEndTime?: string;
+    /**
+     * Race location (text)
+     */
+    location?: string;
+    province?: string;
+    district?: string;
+    /**
+     * Google Maps URL
+     */
+    locationUrl?: string;
+    /**
+     * Organizer brand name
+     */
+    brand?: string;
+    /**
+     * event_type field (e.g. "RUNNING")
+     */
+    eventType?: string;
+    /**
+     * race_type field (e.g. "MARATHON", "TRAIL", "ULTRA")
+     */
+    raceType?: string;
+    season?: string;
+    /**
+     * Pre-built selling-web URL with UTM tracking (BR-37-09)
+     */
+    sellingWebUrl: string;
+    /**
+     * Course list filtered deleted=0
+     */
+    courses: Array<RaceCourseDto>;
+    /**
+     * Source marker for frontend dual-source logic
+     */
+    source: 'on-sale';
+};
+
 export type SectionScheduleDto = {
     enabled: boolean;
     startDate?: string;
@@ -2122,7 +3436,7 @@ export type SectionScheduleDto = {
 
 export type SectionResponseDto = {
     /**
-     * Optional ID — for edit operations preserve existing section _id.
+     * Optional ID. For edit operations: pass existing ObjectId hex (24 chars) to preserve. For new sections: omit OR pass any client-side temp ID (UUID v4 from crypto.randomUUID(), "tmp-*", etc.) — service layer auto-detects non-ObjectId and assigns fresh ObjectId. Validator accepts ANY string.
      */
     _id?: string;
     type: 'hero' | 'race_calendar' | 'featured_races' | 'promo_banner' | 'cta_buttons' | 'sponsors' | 'stats' | 'rich_text' | 'recent_results' | 'link_grid' | 'social_links' | 'faq' | 'countdown' | 'video_embed' | 'image_gallery' | 'testimonial' | 'map_embed' | 'schedule_timeline' | 'form_embed';
@@ -2171,7 +3485,7 @@ export type PromoHubResponseDto = {
 
 export type SectionInputDto = {
     /**
-     * Optional ID — for edit operations preserve existing section _id.
+     * Optional ID. For edit operations: pass existing ObjectId hex (24 chars) to preserve. For new sections: omit OR pass any client-side temp ID (UUID v4 from crypto.randomUUID(), "tmp-*", etc.) — service layer auto-detects non-ObjectId and assigns fresh ObjectId. Validator accepts ANY string.
      */
     _id?: string;
     type: 'hero' | 'race_calendar' | 'featured_races' | 'promo_banner' | 'cta_buttons' | 'sponsors' | 'stats' | 'rich_text' | 'recent_results' | 'link_grid' | 'social_links' | 'faq' | 'countdown' | 'video_embed' | 'image_gallery' | 'testimonial' | 'map_embed' | 'schedule_timeline' | 'form_embed';
@@ -2949,6 +4263,333 @@ export type CourseMapDataDto = {
     bounds?: GpxBoundsDto;
 };
 
+export type RecapHeroStatsDto = {
+    totalFinishers: number;
+    dnsCount: number;
+    dnfCount: number;
+    dsqCount: number;
+    headline: string;
+    /**
+     * F-056 Tổng số VĐV đăng ký (mọi trạng thái)
+     */
+    registered?: number;
+    /**
+     * F-056 Winning time Nam overall (longest course)
+     */
+    winningTimeMale?: string;
+    winningNameMale?: string;
+    /**
+     * F-056 Winning time Nữ overall
+     */
+    winningTimeFemale?: string;
+    winningNameFemale?: string;
+    /**
+     * F-056 Tổng elevation gain (m) — max across courses
+     */
+    elevationGain?: number;
+    /**
+     * F-056 Số đoạn dốc 800m+
+     */
+    elevationSegments?: number;
+};
+
+export type RecapPodiumCellDto = {
+    name: string;
+    bib: string;
+    chipTime: string;
+    category?: string;
+    medal: 'gold' | 'silver' | 'bronze';
+    avatarUrl?: string;
+    /**
+     * F-056 City per podium athlete (derived chain)
+     */
+    city?: string;
+};
+
+export type RecapPodiumPerCourseDto = {
+    courseId: string;
+    courseName: string;
+    distance?: string;
+    male: Array<RecapPodiumCellDto>;
+    female: Array<RecapPodiumCellDto>;
+    /**
+     * F-056 Tổng số finisher Nam
+     */
+    maleFinisherCount?: number;
+    /**
+     * F-056 Tổng số finisher Nữ
+     */
+    femaleFinisherCount?: number;
+};
+
+export type RecapPaceStatsDto = {
+    courseId: string;
+    courseName: string;
+    medianPace: string;
+    p10Pace: string;
+    p90Pace: string;
+    distribution: Array<number>;
+    finisherCount: number;
+};
+
+export type RecapNegativeSplitDto = {
+    courseId: string;
+    courseName: string;
+    negativeSplitPercent: number;
+    interpretation: string;
+    /**
+     * F-056 Average 1st half time hh:mm:ss
+     */
+    avgFirstHalf?: string;
+    /**
+     * F-056 Average 2nd half time hh:mm:ss
+     */
+    avgSecondHalf?: string;
+    /**
+     * F-056 Delta seconds (positive = positive split)
+     */
+    deltaSeconds?: number;
+    /**
+     * F-056 Số finisher có data đủ để compute split
+     */
+    finishersAnalyzed?: number;
+    /**
+     * F-056 Benchmark Vietnam (40)
+     */
+    benchmark?: number;
+};
+
+export type RecapAgBucketDto = {
+    category: string;
+    finisherCount: number;
+    top5: Array<RecapPodiumCellDto>;
+};
+
+export type RecapAgBreakdownPerCourseDto = {
+    courseId: string;
+    courseName: string;
+    buckets: Array<RecapAgBucketDto>;
+};
+
+export type RecapSpotlightStoryDto = {
+    /**
+     * Course ID this story refers to
+     */
+    courseId: string;
+    gender: 'M' | 'F';
+    /**
+     * Winner BIB number
+     */
+    winnerBib: string;
+    /**
+     * Winner display name
+     */
+    winnerName: string;
+    /**
+     * Auto-gen or admin-curated markdown source
+     */
+    markdown: string;
+    /**
+     * Pre-rendered sanitized HTML
+     */
+    html: string;
+    source: 'admin' | 'auto';
+};
+
+export type RecapSpotlightPerCourseDto = {
+    courseId: string;
+    courseName: string;
+    stories: Array<RecapSpotlightStoryDto>;
+};
+
+export type RecapCourseDistributionDto = {
+    courseId: string;
+    courseName: string;
+    distance?: string;
+    /**
+     * Total finishers on this course (FIN status)
+     */
+    finisherCount: number;
+    medianPace?: string;
+    bestChipTime?: string;
+};
+
+export type RecapArticleMetaDto = {
+    /**
+     * URL-safe slug (unique within race scope)
+     */
+    slug: string;
+    title: string;
+    /**
+     * Teaser (max 240 chars)
+     */
+    summary: string;
+    category: 'race-narrative' | 'winner-profile' | 'pacing' | 'course-difficulty' | 'age-group' | 'pace-distribution';
+    readMinutes: number;
+    source: 'auto' | 'admin';
+    /**
+     * Pre-rendered sanitized HTML body
+     */
+    html: string;
+    /**
+     * ISO timestamp when article was generated
+     */
+    publishedAt: string;
+};
+
+export type RaceRecapResponseDto = {
+    raceId: string;
+    raceTitle: string;
+    raceSlug: string;
+    endDate?: string;
+    hero: RecapHeroStatsDto;
+    podiums: Array<RecapPodiumPerCourseDto>;
+    paceStats: Array<RecapPaceStatsDto>;
+    negativeSplits: Array<RecapNegativeSplitDto>;
+    agBreakdowns: Array<RecapAgBreakdownPerCourseDto>;
+    computedAt: string;
+    spotlightStoriesByCourse?: Array<RecapSpotlightPerCourseDto>;
+    finisherDistribution?: Array<RecapCourseDistributionDto>;
+    recapArticles?: Array<RecapArticleMetaDto>;
+};
+
+export type RecapInsightPublicDto = {
+    insightMarkdown?: string;
+    insightHtml?: string;
+    publishedAt?: string;
+    updatedAt?: string;
+    authorName?: string;
+};
+
+export type AthletePrRecordDto = {
+    distance: '5K' | '10K' | 'HM' | 'FM';
+    chipTime: string;
+    raceId: string;
+    raceSlug: string;
+    raceTitle: string;
+    raceDate?: string;
+};
+
+export type AthleteRaceHistoryRowDto = {
+    raceId: string;
+    raceSlug: string;
+    raceTitle: string;
+    courseId: string;
+    courseName: string;
+    distance?: string;
+    chipTime: string;
+    bib: string;
+    overallRank?: string;
+    categoryRank?: string;
+    category?: string;
+    raceDate?: string;
+    status: 'finished' | 'dnf' | 'dsq';
+    /**
+     * F-050 PAUSE-50-02: 3 classes — Road / Trail (<50K) / Ultra Trail (≥50K)
+     */
+    raceClassification?: 'road' | 'trail' | 'ultra_trail';
+    /**
+     * F-050 PAUSE-50-03: elevation gain in meters (D+), undefined if missing
+     */
+    elevationGain?: number;
+    /**
+     * F-050 PAUSE-50-04: ITRA points (only if > 0 in source; currently never populated, reserved Phase 2 backfill)
+     */
+    itraPoints?: number;
+    /**
+     * F-050 PAUSE-50-05: gun time (frontend toggleable, default hidden)
+     */
+    gunTime?: string;
+    /**
+     * F-050 race-ops: AG bracket localized VN label (e.g. "Nữ 30-39")
+     */
+    agBracket?: string;
+};
+
+export type AthleteBestAgRankDto = {
+    raceId: string;
+    raceSlug: string;
+    raceTitle: string;
+    raceDate?: string;
+    /**
+     * AG rank position (numeric string)
+     */
+    rank: string;
+    /**
+     * AG bracket label (e.g. "Nữ 30-39")
+     */
+    bracket?: string;
+};
+
+export type AthleteDistanceSpecialistDto = {
+    /**
+     * Display distance label (e.g. "42K", "21K", "50K")
+     */
+    distance: string;
+    /**
+     * Number of finished races at this distance
+     */
+    count: number;
+};
+
+export type AthleteProfileResponseDto = {
+    /**
+     * Slug format <bib>-<name-kebab>
+     */
+    slug: string;
+    canonicalName: string;
+    primaryBib: string;
+    gender?: 'male' | 'female' | 'other';
+    province?: string;
+    nationality?: string;
+    club?: string;
+    /**
+     * Most recent AG bracket
+     */
+    ageGroupSnapshot?: string;
+    totalRaces: number;
+    totalFinished: number;
+    totalDNF: number;
+    /**
+     * F-047 Phase 1C — DNS count (didn't start)
+     */
+    totalDNS: number;
+    /**
+     * Future: explicit disqualification count
+     */
+    totalDSQ?: number;
+    /**
+     * 4 distances: 5K/10K/HM/FM (BR-47-09)
+     */
+    prRecords: Array<AthletePrRecordDto>;
+    /**
+     * Sort by raceDate DESC
+     */
+    raceHistory: Array<AthleteRaceHistoryRowDto>;
+    lastRaceDate?: string;
+    /**
+     * Avatar from race_results.avatarUrl (public-shareable F-046 Phase 1.5 precedent)
+     */
+    avatarUrl?: string;
+    computedAt: string;
+    /**
+     * F-050 best AG performance — lowest categoryRank across all finished races
+     */
+    bestAgRank?: AthleteBestAgRankDto;
+    /**
+     * F-050 PAUSE-50-07: consecutive finished-race streak from most recent (≥5 to qualify badge)
+     */
+    streak?: number;
+    /**
+     * F-050 PAUSE-50-08: distance specialist groups where finished count ≥3
+     */
+    distanceSpecialist?: Array<AthleteDistanceSpecialistDto>;
+    /**
+     * F-050: unique provinces visited across finished races (≥3 to qualify geographic badge)
+     */
+    provinces?: Array<string>;
+};
+
 export type RaceResultItemDto = {
     Bib: string;
     Name: string;
@@ -3246,6 +4887,32 @@ export type UpdateDnsChipFailDto = {
 export type UpdateDnsChipFailResponseDto = {
     success: boolean;
     dnsChipFail: boolean;
+};
+
+export type ToggleProfileActiveDto = {
+    /**
+     * true = public, false = privacy opt-out 404
+     */
+    active: boolean;
+};
+
+export type ModerationQueueItemDto = {
+    id: string;
+    athleteSlug: string;
+    type: string;
+    signedUrl: string;
+    mime: string;
+    sizeBytes: number;
+    uploadedAt: string;
+    raceId?: string;
+    bib?: string;
+};
+
+export type PhotoModerationActionDto = {
+    /**
+     * Lý do từ chối (required khi reject)
+     */
+    reason?: string;
 };
 
 export type ResolveClaimV2Dto = {
@@ -4675,6 +6342,66 @@ export type PodiumPdfResponseDto = {
     warning?: string;
 };
 
+export type SeoSyncResultDto = {
+    /**
+     * Số race quét trong run này
+     */
+    racesScanned: number;
+    /**
+     * Số slug mới generate trong run này
+     */
+    slugsGenerated: number;
+    /**
+     * Các path đã gọi revalidate tới frontend
+     */
+    revalidatedPaths: Array<string>;
+    /**
+     * Errors trong quá trình sync (nếu có)
+     */
+    errors: Array<string>;
+    /**
+     * Thời gian chạy (ms)
+     */
+    durationMs: number;
+    /**
+     * true nếu lock bị skip (concurrent run khác đang chạy)
+     */
+    lockSkipped: boolean;
+};
+
+export type SeoSyncLogDto = {
+    id: string;
+    startedAt: string;
+    finishedAt?: string;
+    triggeredBy: 'cron' | 'manual';
+    userId?: string;
+    racesScanned: number;
+    slugsGenerated: number;
+    revalidatedPaths: Array<string>;
+    errors: Array<string>;
+    durationMs: number;
+    lockSkipped: boolean;
+};
+
+export type FlushFeeCacheResponseDto = {
+    /**
+     * Số pattern đã flush
+     */
+    flushedPatterns: number;
+    /**
+     * Tổng số Redis keys xóa qua các pattern
+     */
+    deletedKeys: number;
+    /**
+     * Thời gian thực thi (ms)
+     */
+    durationMs: number;
+    /**
+     * Patterns đã flush
+     */
+    patterns: Array<string>;
+};
+
 export type MerchantControllerFindAllData = {
     body?: never;
     path?: never;
@@ -4797,6 +6524,150 @@ export type MerchantControllerApproveResponses = {
     200: unknown;
 };
 
+export type MerchantControllerListEventFeeOverridesData = {
+    body?: never;
+    path: {
+        /**
+         * tenantId
+         */
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/event-fee-overrides';
+};
+
+export type MerchantControllerListEventFeeOverridesErrors = {
+    /**
+     * Chưa đăng nhập
+     */
+    401: unknown;
+    /**
+     * Không phải admin
+     */
+    403: unknown;
+    /**
+     * Merchant không tồn tại
+     */
+    404: unknown;
+};
+
+export type MerchantControllerListEventFeeOverridesResponses = {
+    200: Array<EventFeeOverrideResponseDto>;
+};
+
+export type MerchantControllerListEventFeeOverridesResponse = MerchantControllerListEventFeeOverridesResponses[keyof MerchantControllerListEventFeeOverridesResponses];
+
+export type MerchantControllerCreateEventFeeOverrideData = {
+    body: CreateEventFeeOverrideDto;
+    path: {
+        /**
+         * tenantId
+         */
+        id: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/event-fee-overrides';
+};
+
+export type MerchantControllerCreateEventFeeOverrideErrors = {
+    /**
+     * Validation fail / raceId không tồn tại
+     */
+    400: unknown;
+    /**
+     * Chưa đăng nhập
+     */
+    401: unknown;
+    /**
+     * Không phải admin
+     */
+    403: unknown;
+    /**
+     * Merchant không tồn tại
+     */
+    404: unknown;
+    /**
+     * Override cho raceId đã tồn tại
+     */
+    409: unknown;
+};
+
+export type MerchantControllerCreateEventFeeOverrideResponses = {
+    201: EventFeeOverrideResponseDto;
+};
+
+export type MerchantControllerCreateEventFeeOverrideResponse = MerchantControllerCreateEventFeeOverrideResponses[keyof MerchantControllerCreateEventFeeOverrideResponses];
+
+export type MerchantControllerDeleteEventFeeOverrideData = {
+    body?: never;
+    path: {
+        /**
+         * tenantId
+         */
+        id: number;
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/event-fee-overrides/{raceId}';
+};
+
+export type MerchantControllerDeleteEventFeeOverrideErrors = {
+    /**
+     * Chưa đăng nhập
+     */
+    401: unknown;
+    /**
+     * Không phải admin
+     */
+    403: unknown;
+    /**
+     * Override không tồn tại
+     */
+    404: unknown;
+};
+
+export type MerchantControllerDeleteEventFeeOverrideResponses = {
+    200: unknown;
+};
+
+export type MerchantControllerUpdateEventFeeOverrideData = {
+    body: UpdateEventFeeOverrideDto;
+    path: {
+        /**
+         * tenantId
+         */
+        id: number;
+        raceId: number;
+    };
+    query?: never;
+    url: '/api/merchants/{id}/event-fee-overrides/{raceId}';
+};
+
+export type MerchantControllerUpdateEventFeeOverrideErrors = {
+    /**
+     * Validation fail
+     */
+    400: unknown;
+    /**
+     * Chưa đăng nhập
+     */
+    401: unknown;
+    /**
+     * Không phải admin
+     */
+    403: unknown;
+    /**
+     * Override không tồn tại
+     */
+    404: unknown;
+};
+
+export type MerchantControllerUpdateEventFeeOverrideResponses = {
+    200: EventFeeOverrideResponseDto;
+};
+
+export type MerchantControllerUpdateEventFeeOverrideResponse = MerchantControllerUpdateEventFeeOverrideResponses[keyof MerchantControllerUpdateEventFeeOverrideResponses];
+
 export type RaceMasterDataAdminControllerListAthletesData = {
     body?: never;
     path: {
@@ -4898,6 +6769,195 @@ export type RaceMasterDataAdminControllerSyncLogsResponses = {
 };
 
 export type RaceMasterDataAdminControllerSyncLogsResponse = RaceMasterDataAdminControllerSyncLogsResponses[keyof RaceMasterDataAdminControllerSyncLogsResponses];
+
+export type RaceMysqlIdBackfillControllerRunBackfillData = {
+    body: RunBackfillDto;
+    path?: never;
+    query?: {
+        /**
+         * true (default) = compute only, false = apply writes
+         */
+        dryRun?: boolean;
+    };
+    url: '/api/admin/race-master-data/run-mysql-id-backfill';
+};
+
+export type RaceMysqlIdBackfillControllerRunBackfillErrors = {
+    /**
+     * reason required when dryRun=false
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Not admin role
+     */
+    403: unknown;
+};
+
+export type RaceMysqlIdBackfillControllerRunBackfillResponses = {
+    /**
+     * Backfill report
+     */
+    200: unknown;
+};
+
+export type IdentityClusterAdminControllerListClustersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        source?: 'email' | 'name+dob' | 'name+gender' | 'manual' | 'review_pending';
+        maxConfidence?: number;
+        minLinkedRaces?: number;
+        q?: string;
+    };
+    url: '/api/admin/athletes/identity-clusters';
+};
+
+export type IdentityClusterAdminControllerListClustersResponses = {
+    200: IdentityClusterListResponseDto;
+};
+
+export type IdentityClusterAdminControllerListClustersResponse = IdentityClusterAdminControllerListClustersResponses[keyof IdentityClusterAdminControllerListClustersResponses];
+
+export type IdentityClusterAdminControllerGetClusterData = {
+    body?: never;
+    path: {
+        clusterId: string;
+    };
+    query?: never;
+    url: '/api/admin/athletes/identity-clusters/{clusterId}';
+};
+
+export type IdentityClusterAdminControllerGetClusterErrors = {
+    404: unknown;
+};
+
+export type IdentityClusterAdminControllerGetClusterResponses = {
+    200: IdentityClusterListItemDto;
+};
+
+export type IdentityClusterAdminControllerGetClusterResponse = IdentityClusterAdminControllerGetClusterResponses[keyof IdentityClusterAdminControllerGetClusterResponses];
+
+export type IdentityClusterAdminControllerMergeClustersData = {
+    body: MergeClustersDto;
+    path: {
+        clusterId: string;
+    };
+    query?: never;
+    url: '/api/admin/athletes/identity-clusters/{clusterId}/merge';
+};
+
+export type IdentityClusterAdminControllerMergeClustersErrors = {
+    /**
+     * Validation fail
+     */
+    400: unknown;
+    /**
+     * Cluster not found
+     */
+    404: unknown;
+};
+
+export type IdentityClusterAdminControllerMergeClustersResponses = {
+    200: unknown;
+};
+
+export type IdentityClusterAdminControllerSplitClusterData = {
+    body: SplitClusterDto;
+    path: {
+        clusterId: string;
+    };
+    query?: never;
+    url: '/api/admin/athletes/identity-clusters/{clusterId}/split';
+};
+
+export type IdentityClusterAdminControllerSplitClusterErrors = {
+    400: unknown;
+};
+
+export type IdentityClusterAdminControllerSplitClusterResponses = {
+    200: unknown;
+};
+
+export type IdentityClusterAdminControllerTriggerClusteringData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/athletes/identity-clusters/trigger-clustering';
+};
+
+export type IdentityClusterAdminControllerTriggerClusteringResponses = {
+    200: unknown;
+};
+
+export type IdentityCoverageStatsControllerGetStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/identity-coverage-stats';
+};
+
+export type IdentityCoverageStatsControllerGetStatsResponses = {
+    200: unknown;
+};
+
+export type BulkSyncControllerTriggerData = {
+    body: BulkSyncTriggerDto;
+    path?: never;
+    query?: never;
+    url: '/api/admin/race-master-data/full-sync-all';
+};
+
+export type BulkSyncControllerTriggerErrors = {
+    /**
+     * Validation fail
+     */
+    400: unknown;
+    /**
+     * Sync already running
+     */
+    409: unknown;
+};
+
+export type BulkSyncControllerTriggerResponses = {
+    /**
+     * Sync triggered, returns runId
+     */
+    202: unknown;
+};
+
+export type BulkSyncControllerGetStatusData = {
+    body?: never;
+    path: {
+        runId: string;
+    };
+    query?: never;
+    url: '/api/admin/race-master-data/sync-status/{runId}';
+};
+
+export type BulkSyncControllerGetStatusErrors = {
+    404: unknown;
+};
+
+export type BulkSyncControllerGetStatusResponses = {
+    200: unknown;
+};
+
+export type BulkSyncControllerGetOverallData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/race-master-data/sync-overall-status';
+};
+
+export type BulkSyncControllerGetOverallResponses = {
+    200: unknown;
+};
 
 export type ReconciliationControllerPreflightData = {
     body?: never;
@@ -5342,6 +7402,229 @@ export type AnalyticsControllerGetDailyRevenueResponses = {
     200: unknown;
 };
 
+export type AnalyticsControllerGetWeeklyRevenueData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/revenue/weekly';
+};
+
+export type AnalyticsControllerGetWeeklyRevenueErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetWeeklyRevenueResponses = {
+    200: Array<WeeklyRevenuePointDto>;
+};
+
+export type AnalyticsControllerGetWeeklyRevenueResponse = AnalyticsControllerGetWeeklyRevenueResponses[keyof AnalyticsControllerGetWeeklyRevenueResponses];
+
+export type AnalyticsControllerGetMonthlyRevenueData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/revenue/monthly';
+};
+
+export type AnalyticsControllerGetMonthlyRevenueErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetMonthlyRevenueResponses = {
+    200: Array<MonthlyRevenuePointDto>;
+};
+
+export type AnalyticsControllerGetMonthlyRevenueResponse = AnalyticsControllerGetMonthlyRevenueResponses[keyof AnalyticsControllerGetMonthlyRevenueResponses];
+
+export type AnalyticsControllerGetRevenueComparisonData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+        /**
+         * Period-over-period comparison type. wow=Week, mom=Month, yoy=Year. Wave 2A: mom uses shiftMonthClamped day-clamp pattern (handle May 31 → April 30).
+         */
+        compareWith?: 'wow' | 'mom' | 'yoy';
+    };
+    url: '/api/analytics/comparison';
+};
+
+export type AnalyticsControllerGetRevenueComparisonErrors = {
+    /**
+     * Invalid compareWith or date range
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRevenueComparisonResponses = {
+    200: ComparisonResponseDto;
+};
+
+export type AnalyticsControllerGetRevenueComparisonResponse = AnalyticsControllerGetRevenueComparisonResponses[keyof AnalyticsControllerGetRevenueComparisonResponses];
+
 export type AnalyticsControllerGetTopRacesData = {
     body?: never;
     path?: never;
@@ -5580,6 +7863,225 @@ export type AnalyticsControllerGetRaceDetailResponses = {
     200: unknown;
 };
 
+export type AnalyticsControllerGetRaceTypeDistributionData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/races/type-distribution';
+};
+
+export type AnalyticsControllerGetRaceTypeDistributionErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRaceTypeDistributionResponses = {
+    200: Array<RaceTypeDistributionPointDto>;
+};
+
+export type AnalyticsControllerGetRaceTypeDistributionResponse = AnalyticsControllerGetRaceTypeDistributionResponses[keyof AnalyticsControllerGetRaceTypeDistributionResponses];
+
+export type AnalyticsControllerGetRaceSpotlightData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/races/spotlight';
+};
+
+export type AnalyticsControllerGetRaceSpotlightErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRaceSpotlightResponses = {
+    200: RaceSpotlightDto;
+};
+
+export type AnalyticsControllerGetRaceSpotlightResponse = AnalyticsControllerGetRaceSpotlightResponses[keyof AnalyticsControllerGetRaceSpotlightResponses];
+
+export type AnalyticsControllerGetRacePerformanceListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter theo race type
+         */
+        raceType?: 'ROAD_MARATHON' | 'ROAD_HALF_MARATHON' | 'ULTRA_TRAIL_RACE' | 'TRAIL_RACE';
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (default gmv)
+         */
+        sortBy?: 'gmv' | 'orders' | 'fee' | 'avgPerOrder' | 'voidedPct';
+        /**
+         * Sort direction (default desc)
+         */
+        sortOrder?: 'asc' | 'desc';
+        /**
+         * Page number (1-indexed, default 1)
+         */
+        page?: number;
+        /**
+         * Page size (default 12, max 50)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/races/performance';
+};
+
+export type AnalyticsControllerGetRacePerformanceListErrors = {
+    /**
+     * Invalid filters/sort/pagination or date range > 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRacePerformanceListResponses = {
+    200: RacePerformanceListResponseDto;
+};
+
+export type AnalyticsControllerGetRacePerformanceListResponse = AnalyticsControllerGetRacePerformanceListResponses[keyof AnalyticsControllerGetRacePerformanceListResponses];
+
 export type AnalyticsControllerGetMerchantComparisonData = {
     body?: never;
     path?: never;
@@ -5638,6 +8140,225 @@ export type AnalyticsControllerGetMerchantComparisonResponses = {
      */
     200: unknown;
 };
+
+export type AnalyticsControllerGetMerchantScatterData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/merchants/scatter';
+};
+
+export type AnalyticsControllerGetMerchantScatterErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetMerchantScatterResponses = {
+    200: Array<MerchantScatterPointDto>;
+};
+
+export type AnalyticsControllerGetMerchantScatterResponse = AnalyticsControllerGetMerchantScatterResponses[keyof AnalyticsControllerGetMerchantScatterResponses];
+
+export type AnalyticsControllerGetMerchantHealthDistributionData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/merchants/health-distribution';
+};
+
+export type AnalyticsControllerGetMerchantHealthDistributionErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetMerchantHealthDistributionResponses = {
+    200: Array<MerchantHealthDistributionTierDto>;
+};
+
+export type AnalyticsControllerGetMerchantHealthDistributionResponse = AnalyticsControllerGetMerchantHealthDistributionResponses[keyof AnalyticsControllerGetMerchantHealthDistributionResponses];
+
+export type AnalyticsControllerGetMerchantComparisonTableData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/merchants/comparison';
+};
+
+export type AnalyticsControllerGetMerchantComparisonTableErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetMerchantComparisonTableResponses = {
+    200: MerchantComparisonResponseDto;
+};
+
+export type AnalyticsControllerGetMerchantComparisonTableResponse = AnalyticsControllerGetMerchantComparisonTableResponses[keyof AnalyticsControllerGetMerchantComparisonTableResponses];
 
 export type AnalyticsControllerGetRunnerBehaviorData = {
     body?: never;
@@ -5757,6 +8478,444 @@ export type AnalyticsControllerGetBookingPatternsResponses = {
     200: unknown;
 };
 
+export type AnalyticsControllerGetRunnerBookingHeatmapData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/runners/booking-heatmap';
+};
+
+export type AnalyticsControllerGetRunnerBookingHeatmapErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRunnerBookingHeatmapResponses = {
+    200: RunnerBookingHeatmapResponseDto;
+};
+
+export type AnalyticsControllerGetRunnerBookingHeatmapResponse = AnalyticsControllerGetRunnerBookingHeatmapResponses[keyof AnalyticsControllerGetRunnerBookingHeatmapResponses];
+
+export type AnalyticsControllerGetRunnerLeadTimeData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/runners/lead-time';
+};
+
+export type AnalyticsControllerGetRunnerLeadTimeErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRunnerLeadTimeResponses = {
+    200: Array<RunnerLeadTimeBucketDto>;
+};
+
+export type AnalyticsControllerGetRunnerLeadTimeResponse = AnalyticsControllerGetRunnerLeadTimeResponses[keyof AnalyticsControllerGetRunnerLeadTimeResponses];
+
+export type AnalyticsControllerGetRunnerRepeatCohortData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/runners/repeat-cohort';
+};
+
+export type AnalyticsControllerGetRunnerRepeatCohortErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRunnerRepeatCohortResponses = {
+    200: RunnerRepeatCohortResponseDto;
+};
+
+export type AnalyticsControllerGetRunnerRepeatCohortResponse = AnalyticsControllerGetRunnerRepeatCohortResponses[keyof AnalyticsControllerGetRunnerRepeatCohortResponses];
+
+export type AnalyticsControllerGetRunnerDemographicsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/runners/demographics';
+};
+
+export type AnalyticsControllerGetRunnerDemographicsErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRunnerDemographicsResponses = {
+    200: RunnerDemographicsResponseDto;
+};
+
+export type AnalyticsControllerGetRunnerDemographicsResponse = AnalyticsControllerGetRunnerDemographicsResponses[keyof AnalyticsControllerGetRunnerDemographicsResponses];
+
+export type AnalyticsControllerGetRunnerGeographicData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/runners/geographic';
+};
+
+export type AnalyticsControllerGetRunnerGeographicErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRunnerGeographicResponses = {
+    200: RunnerGeographicResponseDto;
+};
+
+export type AnalyticsControllerGetRunnerGeographicResponse = AnalyticsControllerGetRunnerGeographicResponses[keyof AnalyticsControllerGetRunnerGeographicResponses];
+
+export type AnalyticsControllerGetRunnerSummaryKpiData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/runners/summary';
+};
+
+export type AnalyticsControllerGetRunnerSummaryKpiErrors = {
+    /**
+     * Date range exceeds 366 days
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetRunnerSummaryKpiResponses = {
+    200: RunnerSummaryKpiResponseDto;
+};
+
+export type AnalyticsControllerGetRunnerSummaryKpiResponse = AnalyticsControllerGetRunnerSummaryKpiResponses[keyof AnalyticsControllerGetRunnerSummaryKpiResponses];
+
 export type AnalyticsControllerGetFunnelData = {
     body?: never;
     path?: never;
@@ -5833,9 +8992,9 @@ export type AnalyticsControllerGetRepeatAthleteRateData = {
          */
         to?: string;
         /**
-         * Compare mode
+         * Compare mode. F-062 Wave 2A extend (TD-F062-VALIDATION-COMPAREKIND): thêm "wow" (Week-over-Week) + "mom" (Month-over-Month) cho parity với F-062 CompareSelector. F-026 backward compat: "prev" / "yoy" / "custom" / "none" giữ nguyên.
          */
-        compareWith?: 'prev' | 'yoy' | 'custom' | 'none';
+        compareWith?: 'prev' | 'yoy' | 'custom' | 'none' | 'wow' | 'mom';
         /**
          * Drill-down race id
          */
@@ -5954,6 +9113,194 @@ export type AnalyticsControllerGetRefundCancelResponses = {
 };
 
 export type AnalyticsControllerGetRefundCancelResponse = AnalyticsControllerGetRefundCancelResponses[keyof AnalyticsControllerGetRefundCancelResponses];
+
+export type AnalyticsControllerGetDiscrepancyCheckData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Tenant ID MySQL platform
+         */
+        tenantId: number;
+        /**
+         * Tháng cần check, format YYYY-MM
+         */
+        month: string;
+    };
+    url: '/api/analytics/discrepancy-check';
+};
+
+export type AnalyticsControllerGetDiscrepancyCheckErrors = {
+    /**
+     * Invalid tenantId/month params
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetDiscrepancyCheckResponses = {
+    200: DiscrepancyCheckResponseDto;
+};
+
+export type AnalyticsControllerGetDiscrepancyCheckResponse = AnalyticsControllerGetDiscrepancyCheckResponses[keyof AnalyticsControllerGetDiscrepancyCheckResponses];
+
+export type AnalyticsControllerGetGa4OverviewData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+    };
+    url: '/api/analytics/ga4/overview';
+};
+
+export type AnalyticsControllerGetGa4OverviewErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerGetGa4OverviewResponses = {
+    200: Ga4OverviewResponseDto;
+};
+
+export type AnalyticsControllerGetGa4OverviewResponse = AnalyticsControllerGetGa4OverviewResponses[keyof AnalyticsControllerGetGa4OverviewResponses];
+
+export type AnalyticsControllerExportAnalyticsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Month filter in YYYY-MM format (used for overview)
+         */
+        month?: string;
+        /**
+         * Start date filter in YYYY-MM-DD format
+         */
+        from?: string;
+        /**
+         * End date filter in YYYY-MM-DD format
+         */
+        to?: string;
+        /**
+         * Filter by tenant ID
+         */
+        tenantId?: number;
+        /**
+         * Filter by race ID
+         */
+        raceId?: number;
+        /**
+         * Filter by race type (e.g. TRAIL_RACE, ROAD_MARATHON)
+         */
+        raceType?: string;
+        /**
+         * Filter by race status (e.g. GENERATED_CODE, COMPLETE)
+         */
+        status?: string;
+        /**
+         * Sort field (e.g. grossGmv, paidOrders, eventStartDate)
+         */
+        sortBy?: string;
+        /**
+         * Sort direction
+         */
+        sortOrder?: 'ASC' | 'DESC';
+        /**
+         * Page number (1-based)
+         */
+        page?: number;
+        /**
+         * Items per page (max 100)
+         */
+        limit?: number;
+        /**
+         * File format
+         */
+        format?: 'csv' | 'xlsx';
+        /**
+         * Report type
+         */
+        reportType?: 'overview' | 'revenue' | 'races' | 'merchants' | 'funnel' | 'runners';
+    };
+    url: '/api/analytics/export';
+};
+
+export type AnalyticsControllerExportAnalyticsErrors = {
+    /**
+     * Data > 10K rows OR invalid format/reportType
+     */
+    400: unknown;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Forbidden (not admin)
+     */
+    403: unknown;
+};
+
+export type AnalyticsControllerExportAnalyticsResponses = {
+    /**
+     * File stream
+     */
+    200: unknown;
+};
 
 export type ChipVerificationControllerGetConfigByMongoIdData = {
     body?: never;
@@ -6446,6 +9793,105 @@ export type PnLDashboardControllerExportAggregatedResponses = {
 };
 
 export type PnLDashboardControllerExportAggregatedResponse = PnLDashboardControllerExportAggregatedResponses[keyof PnLDashboardControllerExportAggregatedResponses];
+
+export type PnLContractsListControllerGetContractsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        period?: 'current_month' | 'last_3_months' | 'last_6_months' | 'last_12_months' | 'ytd' | 'custom';
+        /**
+         * Default tab focus phía UI — server vẫn trả cả 3 chiều
+         */
+        groupBy?: 'type' | 'partner' | 'month';
+        /**
+         * ISO YYYY-MM-DD — chỉ dùng khi period=custom
+         */
+        dateFrom?: string;
+        /**
+         * ISO YYYY-MM-DD — chỉ dùng khi period=custom
+         */
+        dateTo?: string;
+        /**
+         * Page number (1-indexed)
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: 20 | 50 | 100;
+        /**
+         * Sort column
+         */
+        sortBy?: 'anchorMonth' | 'profit' | 'revenue' | 'margin' | 'contractNumber';
+        /**
+         * Sort direction
+         */
+        sortDir?: 'asc' | 'desc';
+        /**
+         * Search keyword — match contractNumber, partnerName, raceName (case-insensitive, regex-escaped)
+         */
+        q?: string;
+        /**
+         * F-040 filter — fee source (RECONCILIATION/SELF_COMPUTE/MIXED/ESTIMATED)
+         */
+        feeSource?: 'RECONCILIATION' | 'SELF_COMPUTE' | 'MIXED' | 'ESTIMATED';
+    };
+    url: '/api/finance/pnl/contracts';
+};
+
+export type PnLContractsListControllerGetContractsListErrors = {
+    /**
+     * Invalid filter (limit/sortBy/page/q)
+     */
+    400: unknown;
+    /**
+     * Missing Bearer token
+     */
+    401: unknown;
+    /**
+     * Insufficient permissions (non-admin)
+     */
+    403: unknown;
+};
+
+export type PnLContractsListControllerGetContractsListResponses = {
+    200: PnLContractsListResponseDto;
+};
+
+export type PnLContractsListControllerGetContractsListResponse = PnLContractsListControllerGetContractsListResponses[keyof PnLContractsListControllerGetContractsListResponses];
+
+export type FeeBreakdownControllerGetFeeBreakdownData = {
+    body?: never;
+    path: {
+        /**
+         * Contract ObjectId (hex)
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/finance/contracts/{id}/fee-breakdown';
+};
+
+export type FeeBreakdownControllerGetFeeBreakdownErrors = {
+    /**
+     * Missing Bearer token
+     */
+    401: unknown;
+    /**
+     * Insufficient permissions (non-admin)
+     */
+    403: unknown;
+    /**
+     * Contract not found / deleted
+     */
+    404: unknown;
+};
+
+export type FeeBreakdownControllerGetFeeBreakdownResponses = {
+    200: FeeBreakdownDto;
+};
+
+export type FeeBreakdownControllerGetFeeBreakdownResponse = FeeBreakdownControllerGetFeeBreakdownResponses[keyof FeeBreakdownControllerGetFeeBreakdownResponses];
 
 export type MysqlLookupControllerSearchTenantsData = {
     body?: never;
@@ -7335,6 +10781,51 @@ export type PartnersControllerCreateResponses = {
 
 export type PartnersControllerCreateResponse = PartnersControllerCreateResponses[keyof PartnersControllerCreateResponses];
 
+export type PartnersControllerImportPreviewData = {
+    body: {
+        /**
+         * Excel file .xlsx (max 5MB, ≤200 data rows)
+         */
+        file?: Blob | File;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/partners/import-excel/preview';
+};
+
+export type PartnersControllerImportPreviewResponses = {
+    200: PartnerImportPreviewDto;
+};
+
+export type PartnersControllerImportPreviewResponse = PartnersControllerImportPreviewResponses[keyof PartnersControllerImportPreviewResponses];
+
+export type PartnersControllerImportConfirmData = {
+    body: PartnerImportConfirmDto;
+    path?: never;
+    query?: never;
+    url: '/api/partners/import-excel/confirm';
+};
+
+export type PartnersControllerImportConfirmResponses = {
+    201: PartnerImportResultDto;
+};
+
+export type PartnersControllerImportConfirmResponse = PartnersControllerImportConfirmResponses[keyof PartnersControllerImportConfirmResponses];
+
+export type PartnersControllerImportTemplateData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/partners/import-template';
+};
+
+export type PartnersControllerImportTemplateResponses = {
+    /**
+     * XLSX file binary stream
+     */
+    200: unknown;
+};
+
 export type PartnersControllerRemoveData = {
     body?: never;
     path: {
@@ -7406,6 +10897,51 @@ export type ServiceCatalogControllerCreateResponses = {
 };
 
 export type ServiceCatalogControllerCreateResponse = ServiceCatalogControllerCreateResponses[keyof ServiceCatalogControllerCreateResponses];
+
+export type ServiceCatalogControllerImportPreviewData = {
+    body: {
+        /**
+         * Excel file .xlsx (max 5MB, ≤200 data rows)
+         */
+        file?: Blob | File;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/service-catalog/import-excel/preview';
+};
+
+export type ServiceCatalogControllerImportPreviewResponses = {
+    200: ServiceCatalogImportPreviewDto;
+};
+
+export type ServiceCatalogControllerImportPreviewResponse = ServiceCatalogControllerImportPreviewResponses[keyof ServiceCatalogControllerImportPreviewResponses];
+
+export type ServiceCatalogControllerImportConfirmData = {
+    body: ServiceCatalogImportConfirmDto;
+    path?: never;
+    query?: never;
+    url: '/api/service-catalog/import-excel/confirm';
+};
+
+export type ServiceCatalogControllerImportConfirmResponses = {
+    201: ServiceCatalogImportResultDto;
+};
+
+export type ServiceCatalogControllerImportConfirmResponse = ServiceCatalogControllerImportConfirmResponses[keyof ServiceCatalogControllerImportConfirmResponses];
+
+export type ServiceCatalogControllerImportTemplateData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/service-catalog/import-template';
+};
+
+export type ServiceCatalogControllerImportTemplateResponses = {
+    /**
+     * XLSX file binary stream
+     */
+    200: unknown;
+};
 
 export type ServiceCatalogControllerRemoveData = {
     body?: never;
@@ -7599,6 +11135,50 @@ export type ContractTemplatesControllerUpdateLineItemsData = {
 export type ContractTemplatesControllerUpdateLineItemsResponses = {
     200: unknown;
 };
+
+export type PromoHubControllerFindRacesOnSaleData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Số race trả về (max 20 — match F-027 race_calendar limit).
+         */
+        limit?: number;
+        /**
+         * Sort key. `registration_start_time` = race sắp mở bán hiển thị trước (BR-PH33-04 default). `event_date` = race sắp diễn ra hiển thị trước.
+         */
+        sort?: 'registration_start_time' | 'event_date';
+    };
+    url: '/api/promo-hubs/races-on-sale';
+};
+
+export type PromoHubControllerFindRacesOnSaleResponses = {
+    200: RacesOnSaleListResponseDto;
+};
+
+export type PromoHubControllerFindRacesOnSaleResponse = PromoHubControllerFindRacesOnSaleResponses[keyof PromoHubControllerFindRacesOnSaleResponses];
+
+export type PromoHubControllerFindRaceOnSaleByUrlNameData = {
+    body?: never;
+    path: {
+        urlName: string;
+    };
+    query?: never;
+    url: '/api/promo-hubs/races-on-sale/by-url-name/{urlName}';
+};
+
+export type PromoHubControllerFindRaceOnSaleByUrlNameErrors = {
+    /**
+     * Race not found / hidden / deleted
+     */
+    404: unknown;
+};
+
+export type PromoHubControllerFindRaceOnSaleByUrlNameResponses = {
+    200: RaceOnSaleDetailDto;
+};
+
+export type PromoHubControllerFindRaceOnSaleByUrlNameResponse = PromoHubControllerFindRaceOnSaleByUrlNameResponses[keyof PromoHubControllerFindRaceOnSaleByUrlNameResponses];
 
 export type PromoHubControllerFindBySlugData = {
     body?: never;
@@ -8260,6 +11840,165 @@ export type RacesControllerGetCourseMapDataResponses = {
 };
 
 export type RacesControllerGetCourseMapDataResponse = RacesControllerGetCourseMapDataResponses[keyof RacesControllerGetCourseMapDataResponses];
+
+export type RaceResultControllerGetRaceRecapData = {
+    body?: never;
+    path: {
+        /**
+         * Race ObjectId
+         */
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-results/recap/{raceId}';
+};
+
+export type RaceResultControllerGetRaceRecapErrors = {
+    /**
+     * Race not ended / no results yet / not found
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerGetRaceRecapResponses = {
+    200: RaceRecapResponseDto;
+};
+
+export type RaceResultControllerGetRaceRecapResponse = RaceResultControllerGetRaceRecapResponses[keyof RaceResultControllerGetRaceRecapResponses];
+
+export type RaceResultControllerGetRaceRecapInsightData = {
+    body?: never;
+    path: {
+        /**
+         * Race ObjectId
+         */
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-results/recap/{raceId}/insight';
+};
+
+export type RaceResultControllerGetRaceRecapInsightResponses = {
+    200: RecapInsightPublicDto;
+};
+
+export type RaceResultControllerGetRaceRecapInsightResponse = RaceResultControllerGetRaceRecapInsightResponses[keyof RaceResultControllerGetRaceRecapInsightResponses];
+
+export type RaceResultControllerRegenerateRecapArticlesData = {
+    body?: never;
+    path: {
+        /**
+         * Race ObjectId
+         */
+        raceId: string;
+    };
+    query?: never;
+    url: '/api/race-results/recap/{raceId}/regenerate-articles';
+};
+
+export type RaceResultControllerRegenerateRecapArticlesResponses = {
+    /**
+     * Articles deleted; next public GET regenerates
+     */
+    200: {
+        success?: boolean;
+        deletedCount?: number;
+    };
+};
+
+export type RaceResultControllerRegenerateRecapArticlesResponse = RaceResultControllerRegenerateRecapArticlesResponses[keyof RaceResultControllerRegenerateRecapArticlesResponses];
+
+export type RaceResultControllerGetAthletesStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/race-results/athletes-stats';
+};
+
+export type RaceResultControllerGetAthletesStatsErrors = {
+    /**
+     * Paused — F-057 opt-in flow
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerGetAthletesSpotlightData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/race-results/athletes-spotlight';
+};
+
+export type RaceResultControllerGetAthletesSpotlightErrors = {
+    /**
+     * Paused — F-057 opt-in flow
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerGetAthletesFeatured90dData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/race-results/athletes-featured-90d';
+};
+
+export type RaceResultControllerGetAthletesFeatured90dErrors = {
+    /**
+     * Paused — F-057 opt-in flow
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerListAthletesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        letter?: string;
+        province?: string;
+        gender?: 'male' | 'female';
+        ageGroup?: string;
+        specialty?: 'marathon' | 'hm' | 'trail' | 'ultra' | 'road';
+        minRaces?: number;
+        maxRaces?: number;
+        sort?: 'az' | 'recent' | 'most-races' | 'fastest-pr';
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/race-results/athletes';
+};
+
+export type RaceResultControllerListAthletesErrors = {
+    /**
+     * Paused — F-057 opt-in flow
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerGetAthleteProfileBySlugData = {
+    body?: never;
+    path: {
+        /**
+         * Athlete URL slug `<bib>-<name-kebab>`
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/race-results/athletes/{slug}';
+};
+
+export type RaceResultControllerGetAthleteProfileBySlugErrors = {
+    /**
+     * Athlete profile not found
+     */
+    404: unknown;
+};
+
+export type RaceResultControllerGetAthleteProfileBySlugResponses = {
+    200: AthleteProfileResponseDto;
+};
+
+export type RaceResultControllerGetAthleteProfileBySlugResponse = RaceResultControllerGetAthleteProfileBySlugResponses[keyof RaceResultControllerGetAthleteProfileBySlugResponses];
 
 export type RaceResultControllerGetRaceDistancesData = {
     body?: never;
@@ -9079,6 +12818,96 @@ export type RaceResultControllerManualSyncResponses = {
 };
 
 export type RaceResultControllerManualSyncResponse = RaceResultControllerManualSyncResponses[keyof RaceResultControllerManualSyncResponses];
+
+export type AthleteAdminControllerToggleActiveData = {
+    body: ToggleProfileActiveDto;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/admin/athletes/profiles/{slug}/active';
+};
+
+export type AthleteAdminControllerToggleActiveErrors = {
+    /**
+     * Profile không tồn tại
+     */
+    404: unknown;
+};
+
+export type AthleteAdminControllerToggleActiveResponses = {
+    /**
+     * Active flag updated + cache invalidated
+     */
+    200: unknown;
+};
+
+export type AthleteAdminControllerGetPendingQueueData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/api/admin/athletes/photos/pending';
+};
+
+export type AthleteAdminControllerGetPendingQueueResponses = {
+    200: Array<ModerationQueueItemDto>;
+};
+
+export type AthleteAdminControllerGetPendingQueueResponse = AthleteAdminControllerGetPendingQueueResponses[keyof AthleteAdminControllerGetPendingQueueResponses];
+
+export type AthleteAdminControllerGetPendingCountData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/athletes/photos/pending-count';
+};
+
+export type AthleteAdminControllerGetPendingCountResponses = {
+    200: unknown;
+};
+
+export type AthleteAdminControllerApprovePhotoData = {
+    body?: never;
+    path: {
+        photoId: string;
+    };
+    query?: never;
+    url: '/api/admin/athletes/photos/{photoId}/approve';
+};
+
+export type AthleteAdminControllerApprovePhotoErrors = {
+    /**
+     * Photo đã được duyệt/từ chối trước đó
+     */
+    409: unknown;
+};
+
+export type AthleteAdminControllerApprovePhotoResponses = {
+    200: unknown;
+};
+
+export type AthleteAdminControllerRejectPhotoData = {
+    body: PhotoModerationActionDto;
+    path: {
+        photoId: string;
+    };
+    query?: never;
+    url: '/api/admin/athletes/photos/{photoId}/reject';
+};
+
+export type AthleteAdminControllerRejectPhotoErrors = {
+    /**
+     * Photo đã được duyệt/từ chối trước đó
+     */
+    409: unknown;
+};
+
+export type AthleteAdminControllerRejectPhotoResponses = {
+    200: unknown;
+};
 
 export type AdminControllerGetSyncLogsData = {
     body?: never;
@@ -11234,3 +15063,68 @@ export type AwardsControllerPdfStatusData = {
 export type AwardsControllerPdfStatusResponses = {
     200: unknown;
 };
+
+export type AdminSeoControllerTriggerSyncData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/seo/sync-slugs';
+};
+
+export type AdminSeoControllerTriggerSyncErrors = {
+    /**
+     * Sync already running (lock conflict)
+     */
+    409: unknown;
+};
+
+export type AdminSeoControllerTriggerSyncResponses = {
+    200: SeoSyncResultDto;
+};
+
+export type AdminSeoControllerTriggerSyncResponse = AdminSeoControllerTriggerSyncResponses[keyof AdminSeoControllerTriggerSyncResponses];
+
+export type AdminSeoControllerGetLogsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Max entries (default 10)
+         */
+        limit?: number;
+    };
+    url: '/api/admin/seo/sync-logs';
+};
+
+export type AdminSeoControllerGetLogsResponses = {
+    200: Array<SeoSyncLogDto>;
+};
+
+export type AdminSeoControllerGetLogsResponse = AdminSeoControllerGetLogsResponses[keyof AdminSeoControllerGetLogsResponses];
+
+export type FlushFeeCacheControllerFlushAllData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/internal/flush-fee-cache-f061';
+};
+
+export type FlushFeeCacheControllerFlushAllErrors = {
+    /**
+     * Missing/invalid admin token
+     */
+    401: unknown;
+    /**
+     * Not admin role
+     */
+    403: unknown;
+};
+
+export type FlushFeeCacheControllerFlushAllResponses = {
+    /**
+     * Flush success — return total keys deleted + duration.
+     */
+    200: FlushFeeCacheResponseDto;
+};
+
+export type FlushFeeCacheControllerFlushAllResponse = FlushFeeCacheControllerFlushAllResponses[keyof FlushFeeCacheControllerFlushAllResponses];

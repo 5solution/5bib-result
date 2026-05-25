@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+// F-062 Wave 3-2 NEW — BR-SA-22b health distribution
+import { MerchantHealthDistribution } from "../components/MerchantHealthDistribution";
+import { searchParamsToQuery } from "@/lib/analytics-hooks";
 import { authHeaders } from "@/lib/api";
 import {
   Table,
@@ -215,14 +219,21 @@ export default function MerchantComparisonPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // F-062 Wave 3-2 — read filter from URL (driven by AnalyticsFilterBar layout)
+  const sp = useSearchParams();
+  const wave2Query = searchParamsToQuery(sp);
+
   const totalGmv = rows.reduce((s, r) => s + r.grossGmv, 0);
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
+      {/* F-062 Wave 2 NEW — BR-SA-22b Health Distribution */}
+      <MerchantHealthDistribution {...wave2Query} />
+
+      {/* Header (legacy F-026 era — Merchant list table below) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">So sánh Merchant</h1>
+          <h1 className="text-2xl font-bold">So sánh Merchant (Legacy F-026)</h1>
           <p className="text-sm text-muted-foreground">{rows.length} merchants</p>
         </div>
         <div className="flex items-center gap-3">

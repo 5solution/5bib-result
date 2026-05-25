@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
+// F-062 Wave 3-2 NEW — BR-SA-20f Runner Summary KPI strip
+import { RunnerSummaryKpiStrip } from "../components/RunnerSummaryKpiStrip";
+import { searchParamsToQuery } from "@/lib/analytics-hooks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -141,12 +145,19 @@ export default function RunnerBehaviorPage() {
     });
   });
 
+  // F-062 Wave 3-2 — read filter from URL searchParams (set by AnalyticsFilterBar)
+  const sp = useSearchParams();
+  const wave2Query = searchParamsToQuery(sp);
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
+      {/* F-062 Wave 2 NEW — BR-SA-20f Runner Summary 4 KPI strip với delta MoM */}
+      <RunnerSummaryKpiStrip {...wave2Query} />
+
+      {/* Header (legacy F-026 era — Runner behavior charts below) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Hành vi Runner</h1>
+          <h1 className="text-2xl font-bold">Hành vi Runner (Legacy F-026)</h1>
           <p className="text-sm text-muted-foreground">Phân tích hành vi đặt vé của runners</p>
         </div>
         <nav className="flex items-center gap-1 text-sm">
