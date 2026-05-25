@@ -107,10 +107,30 @@ describe('F-064 — Audit: 5 templates post-Phase 4 cleanup', () => {
     expect(text).toContain('{note}');
   });
 
-  it('acceptance-operations.docx — new sign date variables present', () => {
+  // QC P2-TEST-02 rework: extend assertion to ALL 3 acceptance templates
+  // (was masking P1-FUNC-01 bug where racekit + timing missing acceptanceSignDate).
+  const ACCEPTANCE_TEMPLATES = [
+    'acceptance-operations.docx',
+    'acceptance-racekit.docx',
+    'acceptance-timing.docx',
+  ];
+
+  for (const file of ACCEPTANCE_TEMPLATES) {
+    it(`${file} — {acceptanceSignDate} placeholder present`, () => {
+      const text = extractAllText(file);
+      expect(text).toContain('{acceptanceSignDate}');
+    });
+
+    it(`${file} — no literal "…….." leftover (PAUSE-64-11)`, () => {
+      const text = extractAllText(file);
+      // Literal Vietnamese ellipsis used as placeholder before F-064 cleanup.
+      expect(text).not.toContain('…….');
+    });
+  }
+
+  it('acceptance-operations.docx — also has {contractSignDate}', () => {
     const text = extractAllText('acceptance-operations.docx');
     expect(text).toContain('{contractSignDate}');
-    expect(text).toContain('{acceptanceSignDate}');
   });
 
   it('contract-racekit.docx — athleteCount + eventLocation variables present', () => {

@@ -33,6 +33,7 @@ process.env.AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID ?? 'test';
 process.env.AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY ?? 'test';
 process.env.AWS_S3_BUCKET = process.env.AWS_S3_BUCKET ?? 'test';
 
+import { ContractsService } from './contracts.service';
 import { DocumentGeneratorService } from './document-generator.service';
 import {
   deriveExpoDate,
@@ -322,21 +323,60 @@ describe('F-064 — Render hardcoded cleanup verification', () => {
   });
 
   describe('TC-64-10: Free-format raceDate — anti-leak (NO fallback hardcoded)', () => {
-    it('renders empty for setup/expo when raceDate is free-form multi-day text', async () => {
-      const ctx = vcbKidRunCtx() as Record<string, unknown>;
-      ctx.raceDate = '06:00 ngày 15/06/2026 đến 12:00 ngày 16/06/2026';
-      ctx.setupDate = '' as never; // simulate ctx after derive on free-form
-      ctx.expoDate = '' as never;
-      ctx.eventStartDate = '' as never;
-      ctx.eventEndDate = '' as never;
+    // QC P2-TEST-01 rework: call REAL buildRenderContext() instead of
+    // manually wiping ctx fields. This way an anti-leak regression in
+    // ContractsService.buildRenderContext would actually flip the test red
+    // (no mock false-positive risk — F-059 lesson echo).
+    it('REAL buildRenderContext derives null setup/expo for free-form raceDate — render shows no hardcoded fallback', async () => {
+      // Construct ContractsService with minimal mocks (same pattern as
+      // contracts.service.f064-context.spec.ts).
+      const contractsService = new ContractsService(
+        jest.fn() as never,
+        jest.fn() as never,
+        jest.fn() as never,
+        { generate: jest.fn() } as never,
+        { getArticles: jest.fn().mockResolvedValue([]) } as never,
+        { renderAndUpload: jest.fn() } as never,
+        { emit: jest.fn() } as never,
+        undefined as never,
+      );
+
+      // Build a contract document with free-form multi-day raceDate.
+      const fixture = vcbKidRunCtx() as Record<string, unknown>;
+      const contractDoc: Record<string, unknown> = {
+        ...fixture,
+        _id: 'tc-64-10',
+        raceDate: '06:00 ngày 15/06/2026 đến 12:00 ngày 16/06/2026',
+        // Explicitly DO NOT pass eventStartDate/setupDate/expoDate — force
+        // buildRenderContext to attempt derive from raceDate.
+        eventStartDate: undefined,
+        eventEndDate: undefined,
+        setupDate: undefined,
+        expoDate: undefined,
+      };
+
+      // Call REAL service method.
+      const derivedCtx = await contractsService.buildRenderContext(
+        contractDoc as never,
+        'CONTRACT',
+      );
+
+      // Hard assert: derive produced null (anti-leak rule honored).
+      expect(derivedCtx.setupDate).toBeNull();
+      expect(derivedCtx.expoDate).toBeNull();
+      expect(derivedCtx.eventStartDate).toBeNull();
+      expect(derivedCtx.eventEndDate).toBeNull();
+
+      // Now render with the actually-derived ctx — no manual wipe.
       const buf = await svc.renderDocx(
         'contract-operations.docx',
-        ctx as never,
+        derivedCtx as never,
       );
       const text = extractText(buf);
-      // raceDate as-is
+
+      // raceDate as-is (untouched free-form text passes through).
       expect(text).toContain('06:00 ngày 15/06/2026');
-      // No leak
+      // No hardcoded legacy leak.
       expect(text).not.toMatch(FORBIDDEN_REGEX);
     });
   });
