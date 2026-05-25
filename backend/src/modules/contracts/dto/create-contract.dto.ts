@@ -140,6 +140,49 @@ export class CreateContractDto {
   @ApiPropertyOptional() @IsOptional() @IsString() raceDate?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() raceLocation?: string;
 
+  /**
+   * F-064 Phase 4 — Event date + location + athlete count override fields.
+   * All optional — empty input → server `buildRenderContext` derives:
+   *   - setupDate = raceDate - 3 days
+   *   - expoDate  = raceDate - 1 day
+   *   - eventLocation fallback = raceLocation
+   *   - athleteCount = sum quantity of line items matching athlete keywords
+   * @see backend/src/modules/contracts/utils/event-date-derive.ts
+   */
+  @ApiPropertyOptional({ description: 'Ngày bắt đầu sự kiện (ISO 8601). Bỏ trống → dùng raceDate.' })
+  @IsOptional()
+  @IsDateString()
+  eventStartDate?: string;
+
+  @ApiPropertyOptional({ description: 'Ngày kết thúc sự kiện (ISO 8601). Bỏ trống → dùng raceDate.' })
+  @IsOptional()
+  @IsDateString()
+  eventEndDate?: string;
+
+  @ApiPropertyOptional({ description: 'Ngày setup (ISO 8601). Bỏ trống → tự derive raceDate - 3d.' })
+  @IsOptional()
+  @IsDateString()
+  setupDate?: string;
+
+  @ApiPropertyOptional({ description: 'Ngày Expo (ISO 8601). Bỏ trống → tự derive raceDate - 1d.' })
+  @IsOptional()
+  @IsDateString()
+  expoDate?: string;
+
+  @ApiPropertyOptional({ description: 'Địa điểm sự kiện override. Bỏ trống → fallback raceLocation.' })
+  @IsOptional()
+  @IsString()
+  eventLocation?: string;
+
+  @ApiPropertyOptional({
+    description: 'Số lượng VĐV dự kiến override. Bỏ trống → derive từ line items quantity.',
+    minimum: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  expectedAthleteCount?: number;
+
   @ApiPropertyOptional() @IsOptional() @IsDateString() signDate?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() effectiveDate?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() endDate?: string;
