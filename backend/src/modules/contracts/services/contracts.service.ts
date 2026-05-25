@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -943,8 +944,8 @@ export class ContractsService {
         attempts++;
       }
       if (!c.contractNumber) {
-        throw new BadRequestException(
-          'Không tạo được số HĐ unique sau 5 lần thử — vui lòng thử lại',
+        throw new ConflictException(
+          'Số HĐ bị trùng — vui lòng đổi tên viết tắt đối tác và thử lại',
         );
       }
     }

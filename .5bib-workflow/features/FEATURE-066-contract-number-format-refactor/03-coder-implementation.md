@@ -159,3 +159,95 @@ QC mandate (5bib-qc-gatekeeper):
 7. Security: SQL injection / NoSQL injection trong shortName field → DTO `@Matches(/^[A-Z0-9]+$/)` blocks.
 
 **Ready cho `/5bib-qc`.**
+
+---
+
+## 14. QC Rework RW-01 + RW-02 (2026-05-26)
+
+Hậu QC verdict ✅ APPROVED WITH MINOR REWORK → fix 2 items:
+
+### RW-02 CRITICAL — `BadRequestException` → `ConflictException` (BR-66-14)
+
+**File:** `backend/src/modules/contracts/services/contracts.service.ts`
+
+```diff
+ import {
+   BadRequestException,
++  ConflictException,
+   Inject,
+   Injectable,
+   ...
+ } from '@nestjs/common';
+ ...
+       if (!c.contractNumber) {
+-        throw new BadRequestException(
+-          'Không tạo được số HĐ unique sau 5 lần thử — vui lòng thử lại',
+-        );
++        throw new ConflictException(
++          'Số HĐ bị trùng — vui lòng đổi tên viết tắt đối tác và thử lại',
++        );
+       }
+```
+
+- HTTP status returned: **409** (NestJS `ConflictException` → HttpStatus.CONFLICT) ✅
+- Message exact match PRD Section 5.3 + Journey 2 step 4b wording ✅
+- Grep verify: chỉ còn 1 occurrence new message, 0 occurrence old message.
+
+### RW-01 MINOR — Add 3 unit tests cho `assertShortNameUnique()`
+
+**File:** `backend/src/modules/contracts/services/partners.service.spec.ts`
+
+Vì `assertShortNameUnique()` là `private`, tests exercise qua public surface `create()` + `update()` để giữ encapsulation, nhưng vẫn assert đầy đủ:
+
+- Filter shape (`shortName` + `deletedAt: null` + optional `_id.$ne`)
+- Mongoose `.lean()` chain
+- Exception type + exact VN message
+- excludeId branch on PATCH (update scenario)
+
+**3 test cases mới:**
+
+1. `TC-66-PARTNER-01`: `create()` succeeds khi shortName chưa tồn tại → `findOne` filter có `_id: undefined`, no `ConflictException`.
+2. `TC-66-PARTNER-02`: `create()` throws `ConflictException` khi shortName trùng → message match `/Tên viết tắt "TAM" đã được dùng cho đối tác khác/`, `create` không bị gọi.
+3. `TC-66-PARTNER-03`: `update()` exclude self khi check uniqueness → filter có `_id.$ne = ObjectId(selfId)`.
+
+### Test output (sau rework)
+
+```
+PASS  src/modules/contracts/services/partners.service.spec.ts
+  PartnersService
+    create — BR-CM-10
+      ✓ creates partner independent of merchant module
+    FEATURE-066 OQ-66-01: assertShortNameUnique() — via create/update
+      ✓ TC-66-PARTNER-01: create() succeeds khi shortName chưa tồn tại
+      ✓ TC-66-PARTNER-02: create() throws ConflictException khi shortName đã tồn tại
+      ✓ TC-66-PARTNER-03: update() excludes self khi check uniqueness (PATCH scenario)
+    UP-06: delete with reference
+      ✓ rejects delete if contract references partner
+      ✓ soft deletes when no contracts reference partner
+      ✓ throws NotFound if partner missing
+      ✓ rejects invalid ObjectId
+
+Tests:       8 passed, 8 total   (5 existing + 3 new)
+```
+
+Regression F-044 / F-045 / F-064 / contracts.service / contract-number:
+
+```
+Test Suites: 24 passed, 24 total
+Tests:       250 passed, 250 total
+```
+
+`contract-number.service.spec.ts`: 25/25 PASS (15 TC-66 + 10 baseline).
+
+### Files changed (diff stat)
+
+```
+ backend/src/modules/contracts/services/contracts.service.ts     |  5 +-
+ backend/src/modules/contracts/services/partners.service.spec.ts | 84 +++++++++++++++++++-
+ 2 files changed, 86 insertions(+), 3 deletions(-)
+```
+
+### Commit SHA
+
+(điền post-push — xem `git log -1 --format=%H`)
+
