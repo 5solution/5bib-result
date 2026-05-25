@@ -246,23 +246,44 @@ function AnalyticsOverviewPage() {
     }
   }, [token, month]);
 
+  // F-062 BUG-009 fix 2026-05-25: read granularity from URL → switch endpoint
+  // daily/weekly/monthly per BR-SA-13. AreaChart x-axis label adapts.
+  const granularityFromUrl = sp.get("granularity") ?? "daily";
   const fetchDailyRevenue = useCallback(async () => {
     if (!token) return;
     setLoadingDaily(true);
     try {
+      const endpoint =
+        granularityFromUrl === "weekly"
+          ? "revenue/weekly"
+          : granularityFromUrl === "monthly"
+            ? "revenue/monthly"
+            : "revenue/daily";
       const res = await fetch(
-        `/api/analytics/revenue/daily?from=${from}&to=${to}`,
-        { headers: authHeaders(token).headers }
+        `/api/analytics/${endpoint}?from=${from}&to=${to}`,
+        { headers: authHeaders(token).headers },
       );
       if (!res.ok) throw new Error();
       const json = await res.json();
-      setDailyRevenue(json.data ?? json ?? []);
+      const rawData: Array<Record<string, unknown>> = json.data ?? json ?? [];
+      // Normalize date field per granularity (daily=date, weekly=weekStart, monthly=month)
+      const normalized = rawData.map((d) => ({
+        date:
+          (d.date as string | undefined) ??
+          (d.weekStart as string | undefined) ??
+          (d.month as string | undefined) ??
+          "",
+        gmv: Number(d.gmv ?? 0),
+        netGmv: Number(d.netGmv ?? 0),
+        orderCount: Number(d.orderCount ?? 0),
+      }));
+      setDailyRevenue(normalized);
     } catch {
-      toast.error("Không thể tải dữ liệu doanh thu theo ngày");
+      toast.error("Không thể tải dữ liệu doanh thu");
     } finally {
       setLoadingDaily(false);
     }
-  }, [token, from, to]);
+  }, [token, from, to, granularityFromUrl]);
 
   const fetchCategory = useCallback(async () => {
     if (!token) return;
@@ -439,7 +460,17 @@ function AnalyticsOverviewPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Doanh thu 30 ngày</CardTitle>
+            <CardTitle className="text-sm font-semibold">
+              Doanh thu —{" "}
+              {granularityFromUrl === "weekly"
+                ? "theo tuần"
+                : granularityFromUrl === "monthly"
+                  ? "theo tháng"
+                  : "theo ngày"}
+            </CardTitle>
+            <p className="text-xs text-stone-400">
+              BR-SA-02/03 — chuyển granularity ở filter bar trên cùng
+            </p>
           </CardHeader>
           <CardContent>
             {loadingDaily ? (

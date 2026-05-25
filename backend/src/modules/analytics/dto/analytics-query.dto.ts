@@ -5,6 +5,7 @@ import {
   IsString,
   IsNumber,
   IsIn,
+  Matches,
   Min,
   Max,
 } from 'class-validator';
@@ -17,6 +18,9 @@ export class AnalyticsQueryDto {
   })
   @IsOptional()
   @IsString()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'month must match YYYY-MM format (e.g. 2026-03)',
+  })
   month?: string;
 
   @ApiProperty({
@@ -26,6 +30,9 @@ export class AnalyticsQueryDto {
   })
   @IsOptional()
   @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'from must match YYYY-MM-DD format',
+  })
   from?: string;
 
   @ApiProperty({
@@ -35,6 +42,9 @@ export class AnalyticsQueryDto {
   })
   @IsOptional()
   @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'to must match YYYY-MM-DD format',
+  })
   to?: string;
 
   @ApiProperty({
@@ -45,6 +55,7 @@ export class AnalyticsQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(1, { message: 'tenantId must be a positive integer' })
   tenantId?: number;
 
   @ApiProperty({
