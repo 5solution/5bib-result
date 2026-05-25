@@ -204,6 +204,20 @@ export interface CreateContractInput {
   raceName?: string;
   raceDate?: string;
   raceLocation?: string;
+  /**
+   * F-064 Phase 4 — Event date + location + athlete count override fields.
+   * All optional — backend `buildRenderContext` derives fallback:
+   *   - setupDate = raceDate - 3 days
+   *   - expoDate = raceDate - 1 day
+   *   - eventLocation = raceLocation
+   *   - athleteCount = sum quantity of athlete-keyword line items
+   */
+  eventStartDate?: string;
+  eventEndDate?: string;
+  setupDate?: string;
+  expoDate?: string;
+  eventLocation?: string;
+  expectedAthleteCount?: number;
   signDate?: string;
   effectiveDate?: string;
   endDate?: string;
