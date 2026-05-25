@@ -7,6 +7,72 @@
 
 ---
 
+## [2026-05-25] FEATURE-062 Wave 2B-2: Merchant Comparison Service — Wave 2B-1 v2 lesson APPLIED (PARTIAL DEPLOY)
+
+**Branch:** `5bib_analytics_v2` 8 cumulative commits — Wave 2B-2 `053d050` + Manager checkpoint (this commit)
+**Type:** EXTEND_EXISTING (NEW service file per Manager Plan v2 line 68 — additive, legacy `/analytics/merchants` endpoint preserved)
+**Wave scope:** Wave 2B-2 of Wave 2B (~1,504 LoC, 1 of 2+ slices)
+
+### Files changed (Wave 2B-2)
+
+- ➕ Added: `backend/src/modules/analytics/services/merchant-comparison.service.ts` (420 LoC) — NEW MerchantComparisonService với 3 public methods + `_buildMerchantAggregates` internal helper + `computeHealthScore` RFM + `classifyStatus` (4 status types per BR-SA-07) + Health Score 5-tier constants module-level
+- ➕ Added: `backend/src/modules/analytics/dto/merchant-scatter.dto.ts` — MerchantScatterPointDto (BR-SA-22a)
+- ➕ Added: `backend/src/modules/analytics/dto/merchant-health-distribution.dto.ts` — MerchantHealthDistributionTierDto (BR-SA-22b)
+- ➕ Added: `backend/src/modules/analytics/dto/merchant-comparison-table.dto.ts` — MerchantComparisonItemDto + MerchantComparisonTotalsDto + MerchantComparisonResponseDto (BR-SA-22c)
+- ✏️ Modified: `backend/src/modules/analytics/services/period-resolver.ts` (+42 LoC) — EXTRACT `resolveScopeFromTenant` + `periodKeyFromInputs` cho shared reuse (Wave 1 helper extension pattern continues)
+- ✏️ Modified: `backend/src/modules/analytics/analytics.service.ts` (+6/-15 LoC) — REFACTOR `resolveQueryScope` + `buildPeriodKey` to thin delegate wrappers calling shared helpers
+- ✏️ Modified: `backend/src/modules/analytics/analytics.module.ts` (+5 LoC) — register MerchantComparisonService provider
+- ✏️ Modified: `backend/src/modules/analytics/analytics.controller.ts` (+60 LoC) — 3 NEW endpoints `@Get('merchants/{scatter,health-distribution,comparison}')` với full @ApiResponse 200/400/401/403 + constructor DI inject + legacy `/merchants` description tag updated noting NEW endpoints location
+- ➕ Added: `backend/src/modules/analytics/__tests__/merchant-comparison.f062.spec.ts` (285 LoC) — 25 invariant tests (Module + DI + SQL + FeeService + cache + default period + Health Score + controller wiring) + 3 pure-unit tests for extracted shared helpers
+
+### Architecture impact
+- NEW NestJS service `MerchantComparisonService` registered in AnalyticsModule providers
+- 3 NEW endpoints at `/analytics/merchants/scatter`, `/analytics/merchants/health-distribution`, `/analytics/merchants/comparison`
+- Legacy `/analytics/merchants` endpoint preserved (backward compat F-026 era consumers)
+- period-resolver.ts now hosts shared cache key + period helpers used by analytics.service.ts + merchant-comparison.service.ts (future Wave 2C services will reuse)
+- FeeService Tier 0 cascade per tenant — same pattern as Wave 1+2B-1 services
+
+### Conventions impact
+- Helper extraction continues evolution: Wave 1 buildMetricCacheKey → Wave 2A shiftMonthClamped extend → Wave 2B-1 v2 buildMetricCacheKey tenant scope + extra axis → Wave 2B-2 resolveScopeFromTenant + periodKeyFromInputs extract
+- Health Score RFM formula pattern: module-level `HEALTH_TIERS` + `HEALTH_WEIGHTS` constants (cho easy update if business revises thresholds)
+- Status classification with NEW (tenant ≤30d + 0 orders) special case
+- Wave 5 codify trong conventions.md "Cache Key Helper Composition Pattern" + "Health Score RFM Constants Pattern" + "MySQL Platform Audit Columns (created_on)"
+
+### DB / Cache impact
+- MongoDB: no schema change (uses existing MerchantConfig lean query)
+- MySQL platform: no schema change (uses existing `tenant.created_on` + `tenant.name` + `order_metadata` + `races` indexed columns)
+- Redis: 3 NEW key patterns
+  - `analytics:metric:merchant-comp-scatter:tenant:42:month:2026-05` (TTL 900s current / 86400s historical)
+  - `analytics:metric:merchant-comp-dist:platform:range:2026-01-01~2026-05-25`
+  - `analytics:metric:merchant-comp-table:platform:default`
+
+### Test results
+```
+Test Suites: 14 passed, 14 total
+Tests:       197 passed, 197 total (169 Wave 2B-1 v2 baseline + 28 NEW Wave 2B-2)
+Time:        7.279 s
+```
+
+### Tech debt NEW (added to known-issues.md)
+- TD-F062-WAVE2B2-STATUS-GAP-CLARIFY 🟡 MED — PRD silent on 60 < lastOrderDays ≤ 90 status classification. Coder lenient interp = CHURNED. BA clarify next cycle (3 options A/B/C). Affects merchant status badge UX.
+- TD-F062-WAVE2B2-PULLORDERS-DUPLICATE 🟢 LOW — pullOrdersForFeeAggregate duplicated. Defer extraction until 3rd consumer Wave 2C.
+- TD-F062-WAVE2B2-COLD-CACHE-3X 🟡 LOW-MED — 3 concurrent endpoint cold-cache redundant aggregate. Wave 5 k6 benchmark; mitigation candidate internal Map cache.
+- TD-F062-WAVE2B2-RFM-EXTERNAL-NOW 🟢 LOW — Date.now() inside helpers. Defer Wave 5 fuzz testing if needed.
+
+### Lessons learned (Wave 2B-1 v2 LESSON APPLIED success)
+1. **Defense-in-depth invariant tests proved effective** — Wave 2B-1 v2 added 8 NEW anti-regression invariants (cache helper usage, raw string anti-pattern guard, endpoint URL guard, default period). Wave 2B-2 Coder followed same patterns naturally — 0 PRD drifts caught by QC Phase 5. Lesson loop closed successfully.
+2. **Helper extraction pattern is sustainable** — Wave 1 buildMetricCacheKey + Wave 2A shiftMonthClamped + Wave 2B-1 v2 extend + Wave 2B-2 extract = period-resolver.ts grew from 250 LoC → ~430 LoC across 4 waves without conflicting changes. Pattern: extract when 2nd consumer surfaces, post-3rd consumer extract is more authoritative.
+3. **PRD ambiguity ≠ Coder bug** — TD-WAVE2B2-STATUS-GAP-CLARIFY surfaced by QC Phase 5 PRD line-by-line walk. Coder lenient interp acceptable; QC flagged for BA clarification track. Defense-in-depth catches PRD spec gaps not just Coder mistakes.
+4. **Wave 1 helper REUSE mandate enforced** — Coder USED buildMetricCacheKey from start, applied applyDefaultPeriod pattern from Wave 2B-1 v2, used extracted helpers proactively. Anti-regression tests guard against backsliding.
+5. **`r: any` SQL row convention** — Coder preserved existing convention (matches getDailyRevenue + getMerchantComparison legacy). Asserted by invariant test no `as unknown as`. Consistent với surrounding service file style.
+
+### Coder Honest Reporting Pattern (continued from Wave 2A + 2B-1 v2)
+- IMPLEMENTATION_NOTES Section 1 Deviation #12-#14 + Forced #8-#9 + Tradeoffs 11-16 = 11 design decisions documented transparently
+- tenant.created_on column name (not _at) Forced discovery → Wave 5 memory codification action item
+- Lesson APPLIED success documented for Wave 5 conventions.md codification
+
+---
+
 ## [2026-05-25] FEATURE-062 Wave 2B-1 v2: Revenue Endpoints — 4 QC findings resolved (PARTIAL DEPLOY)
 
 **Branch:** `5bib_analytics_v2` 7 cumulative commits — Wave 2B-1 trilogy `d5e31b5` (v1 ship) + `a36d3b6` (v2 fix) + `cdac268` (QC v2 APPROVED doc) pushed origin

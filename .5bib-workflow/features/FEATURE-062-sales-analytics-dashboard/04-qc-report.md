@@ -996,3 +996,209 @@ All security checks PASS. v2 fix is pure spec-conformance + helper refactor — 
 - USE Wave 1 + Wave 2A helpers (buildMetricCacheKey + shiftMonthClamped) đầu tiên, không inline equivalent
 
 **Recommendation:** Mini-deploy Wave 2B-1 v2 (commit `a36d3b6`) OR bundle với Wave 2B-2 deploy — Manager decision.
+
+---
+
+# Wave 2B-2 — QC Report (Merchant Comparison)
+
+**Slice:** Wave 2B-2 (commit `053d050`)
+**Reviewed:** 2026-05-25
+**Reviewer:** 5bib-qc-gatekeeper
+**Status:** ✅ **APPROVED — Wave 2B-2 với 1 MED TD-needs-BA-clarification tracked**
+
+## ✅ Pre-flight check
+- [x] `03-coder-implementation.md` Wave 2B-2 section status `🟠 READY_FOR_QC`
+- [x] Tests Written với PASS output: 197/197 analytics suite (169 baseline + 28 NEW)
+- [x] `01-ba-prd.md` BR-SA-22 (a/b/c) + BR-SA-07 đã đọc kỹ với LESSON APPLIED (grep ALL bullets per BR)
+- [x] `IMPLEMENTATION_NOTES.md` Wave 2B-2 4 sub-sections present
+
+## 🔬 Phase 1: Impact & Regression Audit
+
+### Coder got RIGHT (Wave 2B-1 v2 LESSON APPLIED ĐÚNG)
+✓ **3 DTO shapes match PRD verbatim** — Scatter `{tenantId, tenantName, orders, gmv, status}` (BR-SA-22a line 561); HealthDist `{tier, label, min, max, count, color}` (BR-SA-22b line 567); ComparisonTable `{data, totals}` với 10-field MerchantCompItem + 3-field totals (BR-SA-22c lines 574-575).
+
+✓ **Cache keys USE buildMetricCacheKey from start** — Wave 2B-1 v2 lesson APPLIED. 3 keys conform PRD pattern `analytics:metric:merchant-comp-{scatter|dist|table}:<scope>:<periodKey>` (anti-pattern test asserts no raw strings).
+
+✓ **Shared helpers EXTRACTED** — Coder went beyond minimum spec: extracted `resolveScopeFromTenant` + `periodKeyFromInputs` từ analytics.service.ts private methods → period-resolver.ts shared. Wave 1 helper pattern continued. Backward compat preserved (8 Wave 2B-1 v2 invariant tests still pass).
+
+✓ **Default period applied** — Wave 2B-1 v2 lesson APPLIED. 12 tháng default trong `applyDefaultPeriod`. DoS risk closed (validateDateRange applies AFTER default fill).
+
+✓ **FeeService Tier 0 cascade** — `_buildMerchantAggregates` routes per-tenant via FeeService. NO inline % calc (asserted by invariant test).
+
+✓ **Health Score RFM formula** — verbatim per BR-SA-07: 0.4×recency + 0.3×frequency + 0.3×monetary. 5 tiers with boundary inclusive `>= min && <= max`. HEALTH_TIERS + HEALTH_WEIGHTS module constants.
+
+✓ **90-day RFM sub-query** has same paid + MANUAL filter as main query (BI-01 + BI-02 enforced both places).
+
+✓ **NEW status classification** — tenant ≤30d + 0 orders per BR-SA-07 line 252.
+
+✓ **tenant.created_on column** verified via entity (Forced #8 honest documentation).
+
+✓ **Legacy /analytics/merchants endpoint preserved** — backward compat for F-026 era consumers.
+
+### Coder MISSED — 1 PRD-spec ambiguity (NOT Coder bug)
+
+#### 🟡 MED — PRD-needs-BA-clarification — Status classification gap 60-90 days
+
+**PRD BR-SA-07 lines 248-252:**
+```
+ACTIVE: có đơn hàng trong 30 ngày qua.
+AT_RISK: không có đơn trong 30 ngày qua, nhưng có trong 60 ngày.    [days 30-60]
+CHURNED: không có đơn trong 90 ngày qua.                              [days >90]
+NEW: merchant tạo trong 30 ngày qua, chưa có đơn.
+```
+
+**Gap:** 60 < lastOrderDays ≤ 90 is unspecified. PRD silent.
+
+**Coder impl `classifyStatus`:**
+```typescript
+if (lastOrderDays <= 30) return 'ACTIVE';
+if (lastOrderDays <= 60) return 'AT_RISK';
+return 'CHURNED';  // Lenient: catches 60 < days ≤ 90 as well
+```
+
+**Issue:** Strict reading of PRD says CHURNED = >90d (not >60d). Days 60-90 classification undefined. Coder chose lenient interpretation (CHURNED) — reasonable but not explicit PRD-compliant.
+
+**Recommended fix (BA confirm Wave 2B-3 or Wave 5):**
+- **Option A (Recommended):** Extend AT_RISK to 90d (`<= 90`); CHURNED only after >90d. Matches PRD strict reading of CHURNED threshold.
+- **Option B:** Add NEW `INACTIVE` 4th tier cho 60-90d gap.
+- **Option C:** Accept current lenient behavior (CHURNED includes 60-90d) + update PRD spec text.
+
+**Severity rationale:**
+- 🟡 MED — affects UI status badge displayed to Back-Office Admin (could mislead merchant outreach decisions for 60-90d gap merchants)
+- NOT BLOCKING — not a regression of existing behavior; PRD genuinely ambiguous
+- Defer to BA clarification + small follow-up patch
+
+### Other observations (non-blocking)
+- ✓ Health Score boundaries inclusive verified (`>= min && <= max`)
+- ✓ Monetary formula `min(100, (gmv90d / 10_000_000) * 100)` matches PRD line 256 verbatim
+- ✓ Frequency formula `min(100, orders90d * 10)` matches PRD line 255
+- ✓ Recency thresholds 7/14/30/60+ days match PRD line 254
+- ✓ SQL `?` placeholders + parameterized IN clause (`tenantIds.map(() => '?').join(',')` safe — derived from internal row IDs)
+- ✓ `applyDefaultPeriod` returns NEW query via spread (no mutation)
+- ✓ 28 NEW invariant tests cover SQL + cache + DI + Swagger + Health Score formula + status classification
+
+## 🛡️ Phase 2: Security Threat Model
+
+| Threat | Mitigation | Status |
+|--------|-----------|--------|
+| SQL injection via from/to/month | `?` placeholders + params array | ✅ |
+| SQL injection via IN clause (tenantIds) | tenantIds derived từ row.tenant_id (internal), not user input | ✅ |
+| Auth bypass | Class-level `@UseGuards(LogtoAdminGuard)` inherited | ✅ |
+| Date range DoS via no-params | `applyDefaultPeriod` sets from/to BEFORE validateDateRange | ✅ |
+| PII leak in response | Response only aggregates (tenantName + counts + scores). No athlete/order PII | ✅ |
+| Cache poisoning | Cache key includes all query axes via helper composition | ✅ |
+| Information disclosure (health score formula leak) | Formula publicly known per PRD; computation server-side | ✅ |
+| Concurrent endpoint race | Each cache miss runs independently — eventual consistency acceptable for read-only analytics | ✅ |
+| `tenant_id IN (...)` query plan | Indexed via existing tenant_id PK → index hit | ✅ |
+
+**Net:** Security clean. NO new attack surface.
+
+## 🧪 Phase 3: Adversarial Test Coverage Gaps
+
+Coder's 28 tests strong. QC observations:
+
+1. **Health Score boundary tests** — should add property-based fuzz with `fast-check` for exact threshold scores (79.5 → rounds to 80 EXCELLENT? 79.4 → 79 GOOD?). Currently only invariant scan. Defer Wave 5.
+
+2. **Status classification gap 60-90 days** — needs explicit test once BA clarifies (Option A/B/C above). Currently behavior is implicit via `if-else` fallthrough.
+
+3. **Empty tenant list edge case** — `_buildMerchantAggregates` returns `[]` early if no merchants. Verified in scatter/dist/table return shapes (`[]` / 5 tiers count=0 / `{data:[], totals: {0,0,0}}`). Could add explicit invariant test for empty-state behavior.
+
+## 🔁 Phase 4: 10x Stability
+
+**N/A Wave 2B-2** — read-only endpoints, no mutation. Aggregate function deterministic. 3× cold-cache concurrent run is documented tradeoff (TD-WAVE2B2-COLD-CACHE-3X LOW-MED).
+
+## 📋 Phase 5: PRD Compliance
+
+### BR-SA-22a — Scatter
+| Spec | Status |
+|------|--------|
+| `GET /analytics/merchants/scatter` endpoint | ✅ |
+| Response shape `{tenantId, tenantName, orders, gmv, status}` | ✅ |
+| Cache `analytics:metric:merchant-comp-scatter:<scope>:<periodKey>` | ✅ |
+
+### BR-SA-22b — Health Distribution
+| Spec | Status |
+|------|--------|
+| `GET /analytics/merchants/health-distribution` endpoint | ✅ |
+| Response shape `{tier, label, min, max, count, color}` | ✅ |
+| 5 tiers per BR-SA-07 | ✅ |
+| Cache `analytics:metric:merchant-comp-dist:<scope>:<periodKey>` | ✅ |
+
+### BR-SA-22c — Comparison Table
+| Spec | Status |
+|------|--------|
+| `GET /analytics/merchants/comparison` endpoint | ✅ |
+| Response shape `{data, totals}` | ✅ |
+| 10 MerchantCompItem fields | ✅ |
+| Totals 3 fields {orders, gmv, fee} | ✅ |
+| Phí 5BIB via FeeService.computeFeeForOrdersAggregate | ✅ |
+| Cache `analytics:metric:merchant-comp-table:<scope>:<periodKey>` | ✅ |
+
+### BR-SA-07 (referenced by BR-SA-22b)
+| Spec | Status |
+|------|--------|
+| 5 tier thresholds + VN labels | ✅ |
+| RFM formula 0.4/0.3/0.3 weights | ✅ |
+| Recency 100/75/50/25/0 cho 7/14/30/60+ days | ✅ |
+| Frequency min(100, orders×10) | ✅ |
+| Monetary min(100, gmv/10M×100) | ✅ |
+| NEW status (tenant ≤30d + 0 orders) | ✅ |
+| ACTIVE status (order ≤30d) | ✅ |
+| AT_RISK status (30-60d) | ✅ |
+| CHURNED status (>90d) | ⚠️ MED — 60-90d gap classified as CHURNED (lenient), PRD ambiguous |
+
+### BR-SA-18 — Cache invalidation hook pattern
+| Spec | Status |
+|------|--------|
+| Pattern `analytics:metric:merchant-comp-scatter:*` invalidatable | ✅ |
+| Pattern `analytics:metric:merchant-comp-dist:*` invalidatable | ✅ |
+| Pattern `analytics:metric:merchant-comp-table:*` invalidatable | ✅ |
+
+**PRD Compliance Score: 22/23 ✅ + 1 PRD-ambiguity flagged**
+
+## 👥 Phase 6: Persona Journey Walkthrough
+
+**N/A Wave 2B-2** — Pure backend slice. Wave 3 wires Tab 3 Merchant page UI.
+
+## 📊 Test Execution Output
+
+```
+Test Suites: 14 passed, 14 total
+Tests:       197 passed, 197 total (169 Wave 2B-1 v2 + 28 NEW Wave 2B-2)
+Time:        7.279 s
+```
+
+NEW Wave 2B-2 invariant tests verifiable:
+- DI/Module 2 + SQL invariants 4 + FeeService delegation 2 + Cache key 4 + Default period 2 + Health Score 3 + Controller wiring 6 = 25 invariant + 3 shared-helper unit = 28 total
+
+## 🚧 Tech Debt còn lại
+
+| TD ID | Severity | Description | Resolution plan |
+|-------|----------|-------------|-----------------|
+| TD-F062-WAVE2B2-STATUS-GAP-CLARIFY | 🟡 MED | PRD BR-SA-07 lines 248-252 gap 60 < lastOrderDays ≤ 90 unspecified. Coder lenient interp = CHURNED. Strict reading = need AT_RISK extension OR INACTIVE 4th tier. | BA clarify Wave 2B-3 / Wave 5. Recommended Option A: extend AT_RISK to ≤90d. Single 1-char fix `<= 60` → `<= 90`. |
+| TD-F062-WAVE2B2-PULLORDERS-DUPLICATE | 🟢 LOW | `pullOrdersForFeeAggregate` private duplicated in merchant-comparison.service.ts | Wave 2C if race-performance.service.ts cũng cần — extract to shared helper. |
+| TD-F062-WAVE2B2-COLD-CACHE-3X | 🟡 LOW-MED | 3 concurrent endpoint cold-cache redundantly runs `_buildMerchantAggregates` 3× | Wave 5 k6 benchmark; mitigation candidate internal Map cache. |
+| TD-F062-WAVE2B2-RFM-EXTERNAL-NOW | 🟢 LOW | `computeHealthScore` + `classifyStatus` use `Date.now()` — tests must mock for determinism | Wave 5 if property-based fuzz needed — inject `nowProvider`. |
+
+## ✅ Final Verdict
+
+**Status: ✅ APPROVED — Wave 2B-2 ready ship + Manager checkpoint**
+
+**Defense-in-depth value continued:**
+- v1 Wave 2B-1 had 4 PRD drifts (caught by QC Phase 5 PRD walk)
+- v2 Wave 2B-1 fix + lesson codified
+- Wave 2B-2 Coder APPLIED lesson — 0 PRD drifts on cache key, 0 on endpoint URL, 0 on default period, 0 on FeeService delegation
+- Single MED finding is PRD-ambiguity (not Coder bug) — BA clarification track
+
+**Defense-in-depth value DEMONSTRATED:** Lesson loop closed. Wave 2B-1 v2 + 8 NEW anti-regression invariants prevented Wave 2B-2 re-introduction. Coder confidence + invariant test coverage = no spec drift this slice.
+
+**For Manager spot-check:**
+- IMPLEMENTATION_NOTES Section 4 top-5 priority list (Reviewer Notes)
+- TD-F062-WAVE2B2-STATUS-GAP-CLARIFY tracked for BA next cycle
+
+**For Coder (Wave 2C next session):**
+- Continue race-performance.service.ts (~700 LoC) + runner-analytics.service.ts (~500 LoC) + GA4 service (PAUSE pnpm install pending Danny)
+- Pattern continues: USE Wave 1+2A+2B-1+2B-2 helpers FIRST, grep ALL BR bullets, applyDefaultPeriod, buildMetricCacheKey composition
+- 3rd service `race-performance` may consume `pullOrdersForFeeAggregate` → time to extract to shared per TD-F062-WAVE2B2-PULLORDERS-DUPLICATE
+
+**Recommendation:** Bundle Wave 2B-2 commit `053d050` với Wave 2B-1 v2 trilogy (a36d3b6 + cdac268 + 5379076) for push origin — Manager checkpoint MANAGER_WAVE2B2_REVIEW.md write next.
