@@ -268,7 +268,13 @@ function applyFixes(): VerifyResult[] {
     }
     if (ok) {
       zip.file('word/document.xml', xml);
-      const out = zip.generate({ type: 'nodebuffer' });
+      // DEFLATE compression matches original DOCX format (Word default). Without
+      // it pizzip emits STORE (no compression) and file size balloons ~7x →
+      // breaks NFR-65-1 ≤ 5% size increase.
+      const out = zip.generate({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+      });
       fs.writeFileSync(absPath, out);
       details.push(`  ✓ ${template}: written ${out.length} bytes`);
     } else {
