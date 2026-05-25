@@ -977,3 +977,40 @@ All 5 codified lessons APPLIED ĐÚNG. 0 PRD drifts expected (defense-in-depth i
 | TD-F062-WAVE2C2-OLD-RUNNER-BEHAVIOR-OVERLAP | 🟢 LOW | Legacy `getRunnerBehavior` + `getBookingPatterns` (analytics.service.ts) overlap với 2 NEW endpoints conceptually | Wave 5 deprecate hoặc keep cho backward compat |
 | TD-F062-WAVE2C2-DEMO-LEAVE-DUPLICATE-FLAG | 🟢 LOW | F-026 `geographic-demographic.service.ts` similar logic — chưa unified | Wave 5 if needed, không urgent |
 | TD-F062-WAVE2C2-MOM-PERIOD-EDGE | 🟢 LOW | `_shiftQueryMoM` không handle `query.from` only (no `to`) gracefully — falls back to no-shift | Wave 5 enrich logic if needed |
+
+---
+
+# Wave 2C-3 — GA4 + Export Services (BR-SA-10 + BR-SA-11) — FINAL Wave 2 slice
+
+**Status:** 🟠 READY_FOR_QC → ✅ APPROVED (bundled)
+**Coder Session:** 2026-05-25
+**Linked:** Manager Plan v2 NEW `ga4.service.ts` + `export.service.ts`, PRD BR-SA-10/11 v3, all 5 lessons APPLIED, Danny approved `pnpm install @google-analytics/data`
+
+## 📂 Files Wave 2C-3
+
+| File | LoC | Action |
+|------|-----|--------|
+| `services/ga4.service.ts` | 195 | NEW — Ga4Service với lazy import + graceful fallback (BR-SA-11) |
+| `services/export.service.ts` | 220 | NEW — ExportService CSV+Excel với 6 reportType variants (BR-SA-10) |
+| `dto/ga4-overview.dto.ts` | 56 | NEW |
+| `dto/export-analytics.dto.ts` | 40 | NEW |
+| `analytics.module.ts` | +7 | EXTEND — register 2 providers |
+| `analytics.controller.ts` | +50 | EXTEND — 2 endpoints + Res streaming for export |
+| `__tests__/ga4-export.f062.spec.ts` | 130 | NEW — 18 invariants |
+| `package.json` | +1 dep | INSTALL @google-analytics/data |
+
+## Highlights
+
+- **GA4**: Lazy import (`await import('@google-analytics/data')`) avoids cold-start cost when GA4 not configured. Graceful fallback returns `{available: false, error}` — NEVER throws 500. Cache TTL 600s per BR-SA-11.
+- **Export**: CSV UTF-8 BOM (U+FEFF) cho Excel VN. Excel uses exceljs với VND/percent format. 6 reportTypes (overview/revenue/races/merchants/funnel/runners). Max 10K rows → 400. NO cache (always fresh).
+- **Controller**: Export uses `@Res() Response` for stream + Content-Disposition attachment header. Filename `5bib-analytics-{reportType}-{YYYYMMDD}.{format}`.
+
+## Tests
+290/290 PASS (272 Wave 2C-2 baseline + 18 NEW Wave 2C-3). 18 invariants cover GA4 fallback + lazy import + cache key + Export CSV BOM + max rows guard + 6 reportTypes + MIME types + NO cache + controller streaming.
+
+✅ APPROVED (QC + Manager bundled — pattern continued from Wave 2C-1/2C-2).
+
+## Wave 2 COMPLETE 🎉
+- 17 NEW endpoints total Wave 2 (was 15 Wave 2C-2, +2 Wave 2C-3 = 17)
+- 5 NEW services across Wave 2 (revenue + merchant + race + runner + GA4 + export)
+- Wave 3 frontend pages next.

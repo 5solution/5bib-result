@@ -1,4 +1,13 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  Param,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { LogtoAdminGuard } from '../logto-auth';
 import { AnalyticsService } from './analytics.service';
@@ -67,6 +76,11 @@ import { RunnerRepeatCohortResponseDto } from './dto/runner-repeat-cohort.dto';
 import { RunnerDemographicsResponseDto } from './dto/runner-demographics.dto';
 import { RunnerGeographicResponseDto } from './dto/runner-geographic.dto';
 import { RunnerSummaryKpiResponseDto } from './dto/runner-summary-kpi.dto';
+// F-062 Wave 2C-3 — GA4 + Export DTOs + services
+import { Ga4Service } from './services/ga4.service';
+import { ExportService } from './services/export.service';
+import { Ga4OverviewResponseDto } from './dto/ga4-overview.dto';
+import { ExportAnalyticsQueryDto } from './dto/export-analytics.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -86,6 +100,9 @@ export class AnalyticsController {
     private readonly racePerformanceService: RacePerformanceService,
     // F-062 Wave 2C-2 — Runner Behavior Analytics (6 endpoints BR-SA-20 a-f)
     private readonly runnerAnalyticsService: RunnerAnalyticsService,
+    // F-062 Wave 2C-3 — GA4 + Export
+    private readonly ga4Service: Ga4Service,
+    private readonly exportService: ExportService,
   ) {}
 
   @Get('overview')
@@ -560,5 +577,49 @@ export class AnalyticsController {
     @Query() query: DiscrepancyCheckQueryDto,
   ): Promise<DiscrepancyCheckResponseDto> {
     return this.analyticsService.getDiscrepancyCheck(query);
+  }
+
+  // ─── F-062 Wave 2C-3 — GA4 Integration + Export CSV/Excel ──────────────────
+
+  @Get('ga4/overview')
+  @ApiOperation({
+    summary: 'F-062 BR-SA-11 v3 — GA4 Data API overview proxy',
+    description:
+      'Proxies Google Analytics 4 Data API v4. Returns {available: false, error} ' +
+      'gracefully if GA4 not configured (env GA4_SERVICE_ACCOUNT_KEY_PATH + GA4_PROPERTY_ID). ' +
+      'Cache `analytics:metric:ga4-overview:<scope>:<periodKey>` TTL 600s.',
+  })
+  @ApiResponse({ status: 200, type: Ga4OverviewResponseDto })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getGa4Overview(@Query() query: AnalyticsQueryDto) {
+    return this.ga4Service.getOverview(query);
+  }
+
+  @Get('export')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-10 v3 — Export analytics data CSV/Excel (fix TD-F026-EXPORT-STUB)',
+    description:
+      'Generate file download. format=csv|xlsx, reportType=overview|revenue|races|merchants|funnel|runners. ' +
+      'CSV với UTF-8 BOM cho Excel VN. Excel với format VND/percent. Max 10K rows → 400. ' +
+      'File name 5bib-analytics-{reportType}-{YYYYMMDD}.{format}. NO cache.',
+  })
+  @ApiResponse({ status: 200, description: 'File stream' })
+  @ApiResponse({ status: 400, description: 'Data > 10K rows OR invalid format/reportType' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  async exportAnalytics(
+    @Query() query: ExportAnalyticsQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename, mimeType } =
+      await this.exportService.generate(query);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filename}"`,
+    );
+    res.send(buffer);
   }
 }

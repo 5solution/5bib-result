@@ -45,6 +45,10 @@ import { RacePerformanceService } from './services/race-performance.service';
 // F-062 Wave 2C-2 — NEW runner-analytics service (BR-SA-20 a-f)
 import { RunnerAnalyticsService } from './services/runner-analytics.service';
 
+// F-062 Wave 2C-3 — NEW GA4 service (BR-SA-11) + Export service (BR-SA-10)
+import { Ga4Service } from './services/ga4.service';
+import { ExportService } from './services/export.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Tenant], 'platform'),
@@ -75,6 +79,9 @@ import { RunnerAnalyticsService } from './services/runner-analytics.service';
     RacePerformanceService,
     // F-062 Wave 2C-2 — Runner Behavior Analytics (BR-SA-20 a-f)
     RunnerAnalyticsService,
+    // F-062 Wave 2C-3 — GA4 Integration (BR-SA-11) + Export CSV/Excel (BR-SA-10)
+    Ga4Service,
+    ExportService,
   ],
 })
 export class AnalyticsModule {}
