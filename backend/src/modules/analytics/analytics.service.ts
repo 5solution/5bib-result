@@ -26,10 +26,13 @@ import {
   DiscrepancyCheckResponseDto,
   DiscrepancyVerdict,
 } from './dto/analytics-discrepancy.dto';
-// F-062 Wave 2B-1 — period comparison + bucket helpers
+// F-062 Wave 2B-1 — period comparison + bucket helpers + cache-key helper
 import {
   resolveCompare,
   calcDeltaPercent,
+  buildMetricCacheKey,
+  ymd,
+  addDaysUtc,
 } from './services/period-resolver';
 import {
   dateToWeekKey,
@@ -444,6 +447,54 @@ export class AnalyticsService {
   // BR-SA-02/03/04 (PRD v3): chart data trên dashboard Sales Analytics.
   // Phí 5BIB PHẢI dùng FeeService.computeFeeForOrdersAggregate per (tenant, bucket)
   // — KHÔNG inline tính phí (BR-SA-02 mandate, F-040 4-tier cascade).
+  // Cache keys per BR-SA-02/03/04/18 spec: `analytics:metric:<name>:<scope>:<periodKey>`
+  // via Wave 1 `buildMetricCacheKey` helper (extended Wave 2B-1 fix với tenant scope).
+
+  /**
+   * F-062 Wave 2B-1 helper — derive scope từ query.tenantId.
+   * BR-SA-02 spec: scope = 'platform' nếu no tenant filter, else 'tenant:<id>'.
+   */
+  private resolveQueryScope(
+    query: AnalyticsQueryDto,
+  ): 'platform' | { tenantId: number } {
+    return query.tenantId ? { tenantId: query.tenantId } : 'platform';
+  }
+
+  /**
+   * F-062 Wave 2B-1 helper — stable cache periodKey từ query input.
+   * Same query parameters → same periodKey (cache hit). Different equivalent
+   * inputs (vd `?month=2026-05` vs `?from=2026-05-01&to=2026-05-31`) get
+   * distinct keys — acceptable trade-off vì BR-SA-18 invalidation pattern
+   * sweeps tất cả keys cùng metric prefix.
+   */
+  private buildPeriodKey(query: AnalyticsQueryDto): string {
+    if (query.month) return `month:${query.month}`;
+    if (query.from && query.to) return `range:${query.from}~${query.to}`;
+    if (query.from) return `from:${query.from}`;
+    if (query.to) return `to:${query.to}`;
+    return 'default';
+  }
+
+  /**
+   * F-062 Wave 2B-1 helper — BR-SA-02 + BR-SA-03 default period.
+   *
+   * "Default 12 tuần gần nhất" / "Default 12 tháng gần nhất" khi không truyền
+   * `from/to/month`. Trả về **NEW** query object (KHÔNG mutate input) để cacheKey
+   * resolution + tests deterministic.
+   *
+   * Trade-off: weekly default = 84 days (~12 tuần), monthly default = 365 days
+   * (~12 tháng). Inclusive endpoints — `to = today`.
+   */
+  private applyDefaultPeriod(
+    query: AnalyticsQueryDto,
+    granularity: 'week' | 'month',
+  ): AnalyticsQueryDto {
+    if (query.from || query.to || query.month) return query;
+    const today = new Date();
+    const days = granularity === 'week' ? 84 : 365;
+    const fromDate = addDaysUtc(today, -days);
+    return { ...query, from: ymd(fromDate), to: ymd(today) };
+  }
 
   /**
    * F-062 BR-SA-02 v3 — Weekly revenue bucketed by ISO 8601 week.
@@ -454,10 +505,18 @@ export class AnalyticsService {
    * pull orders raw full period → group in-memory by ISO week → run FeeService
    * mỗi (tenant, week). 12 tuần × ~58 tenant ≈ 700 cuộc gọi/cache miss; cache TTL
    * cho period current/historical bảo vệ throughput.
+   *
+   * Default: 12 tuần gần nhất nếu KHÔNG truyền from/to/month (BR-SA-02 line 186).
+   * Cache: `analytics:metric:weekly-revenue:<scope>:<periodKey>` per BR-SA-02 line 187.
    */
   async getWeeklyRevenue(query: AnalyticsQueryDto) {
+    query = this.applyDefaultPeriod(query, 'week');
     this.validateDateRange(query.from, query.to);
-    const cacheKey = `analytics:weekly-revenue:${query.from ?? ''}:${query.to ?? ''}:${query.month ?? ''}:${query.tenantId ?? ''}`;
+    const cacheKey = buildMetricCacheKey(
+      'weekly-revenue',
+      this.resolveQueryScope(query),
+      this.buildPeriodKey(query),
+    );
     return this.cachedQuery(cacheKey, async () => {
       const { clause, params } = this.buildDateFilter(
         query.from,
@@ -525,10 +584,18 @@ export class AnalyticsService {
    *
    * Per-bucket platformFee tính qua FeeService Tier 0 cascade. Cùng pattern
    * weekly nhưng ít buckets hơn (12 month max trên 1y range).
+   *
+   * Default: 12 tháng gần nhất nếu KHÔNG truyền from/to/month (BR-SA-03 line 195).
+   * Cache: `analytics:metric:monthly-revenue:<scope>:<periodKey>` per BR-SA-03 line 196.
    */
   async getMonthlyRevenue(query: AnalyticsQueryDto) {
+    query = this.applyDefaultPeriod(query, 'month');
     this.validateDateRange(query.from, query.to);
-    const cacheKey = `analytics:monthly-revenue:${query.from ?? ''}:${query.to ?? ''}:${query.month ?? ''}:${query.tenantId ?? ''}`;
+    const cacheKey = buildMetricCacheKey(
+      'monthly-revenue',
+      this.resolveQueryScope(query),
+      this.buildPeriodKey(query),
+    );
     return this.cachedQuery(cacheKey, async () => {
       const { clause, params } = this.buildDateFilter(
         query.from,
@@ -658,7 +725,14 @@ export class AnalyticsService {
     compareWith: 'wow' | 'mom' | 'yoy' = 'mom',
   ) {
     this.validateDateRange(query.from, query.to);
-    const cacheKey = `analytics:comparison:${compareWith}:${query.from ?? ''}:${query.to ?? ''}:${query.month ?? ''}:${query.tenantId ?? ''}`;
+    // BR-SA-04 line 216 spec: `analytics:metric:comparison:<scope>:<compareWith>:<periodKey>`
+    // compareWith axis BETWEEN scope và periodKey — buildMetricCacheKey `extra` param.
+    const cacheKey = buildMetricCacheKey(
+      'comparison',
+      this.resolveQueryScope(query),
+      this.buildPeriodKey(query),
+      compareWith,
+    );
     return this.cachedQuery(cacheKey, async () => {
       // Resolve current window từ query (tái dùng buildDateFilter + resolvePeriodWindow)
       const currentWindow = this.resolvePeriodWindow(query);

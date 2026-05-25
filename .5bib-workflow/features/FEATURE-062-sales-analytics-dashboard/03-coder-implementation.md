@@ -563,3 +563,88 @@ Time:        8.239 s
 - [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2B-1 section đầy đủ 4 sub-sections (Deviations + Forced + Tradeoffs + Reviewer Notes)
 
 → **Status: 🟠 READY_FOR_QC (Wave 2B-1 slice)**
+
+---
+
+# Wave 2B-1 v2 — Fix QC REJECT findings
+
+**Date:** 2026-05-25
+**Status:** 🟠 READY_FOR_QC (v2 re-submit post-fix)
+**Triggered by:** QC report 04-qc-report.md Wave 2B-1 section — 2 BLOCKING + 2 MED findings
+
+## 📋 Fix list applied
+
+### 🔴 BLOCKING #1 — Endpoint URL `/analytics/comparison` (BR-SA-04 line 200)
+**File:** `analytics.controller.ts:97`
+**Change:** `@Get('revenue/comparison')` → `@Get('comparison')`
+**Description tag added:** "Mounted at /analytics/comparison per BR-SA-04 line 200 (NOT /revenue/comparison)" để Wave 3 frontend dev không nhầm.
+
+### 🔴 BLOCKING #2 — Cache key drift (4 sub-issues all fixed via `buildMetricCacheKey` extend)
+**Files:** `analytics.service.ts` (3 method updates) + `period-resolver.ts:337-388` (helper extend)
+**Change in period-resolver.ts:**
+- EXTEND `buildMetricCacheKey` signature: scope union thêm `{ tenantId: string | number }` variant + optional `extra` param (4th arg) inserted GIỮA scope và periodKey per BR-SA-04 line 216 comparison spec
+- Backward compat preserved: existing 2-axis + race scope calls unaffected (3 existing tests still pass)
+
+**Change in analytics.service.ts:**
+- NEW private helper `resolveQueryScope(query)` → returns `'platform' | { tenantId }`
+- NEW private helper `buildPeriodKey(query)` → stable format `month:YYYY-MM` / `range:from~to` / `from:X` / `to:Y` / `default`
+- Replace 3 inline cache key strings với `buildMetricCacheKey(metric, scope, periodKey [, extra])`
+
+**Result keys (now PRD-compliant):**
+```
+analytics:metric:weekly-revenue:tenant:42:range:2026-01-01~2026-05-25
+analytics:metric:monthly-revenue:platform:month:2026-05
+analytics:metric:comparison:platform:mom:range:2026-04-25~2026-05-25
+```
+
+**BR-SA-18 invalidation hook ready:** Wave 2C `flushEventOverrideCache()` extension sẽ match `analytics:metric:weekly-revenue:*`, `analytics:metric:monthly-revenue:*`, `analytics:metric:comparison:*` patterns đúng spec.
+
+### 🟡 MED #3 — Default period 12 weeks / 12 months (BR-SA-02 line 186 + BR-SA-03 line 195)
+**File:** `analytics.service.ts`
+**Change:** NEW private helper `applyDefaultPeriod(query, granularity)` returns NEW query (no mutation) với `from = today - 84 days` (weekly) hoặc `from = today - 365 days` (monthly), `to = today`. Called first line trong `getWeeklyRevenue` + `getMonthlyRevenue`.
+
+**Tests added:**
+- `applyDefaultPeriod` uses 84 / 365 day constants
+- Pure function: spreads `{...query}` (no mutation)
+
+### 🟡 MED #4 — `buildMetricCacheKey` tenant scope extension
+**File:** `period-resolver.ts:337-388`
+**Change:** Already implemented as part of BLOCKING #2 fix (single helper extension serves both BLOCKING + MED).
+
+## 📂 Files Changed (Wave 2B-1 v2 fix patch)
+
+| File | LoC delta | Action |
+|------|-----------|--------|
+| `backend/src/modules/analytics/services/period-resolver.ts` | +28 | EXTEND `buildMetricCacheKey` với tenant scope + extra axis |
+| `backend/src/modules/analytics/analytics.service.ts` | +52 / -3 | NEW `resolveQueryScope` + `buildPeriodKey` + `applyDefaultPeriod` helpers; replace 3 inline cache keys |
+| `backend/src/modules/analytics/analytics.controller.ts` | +1 / -1 | `@Get('revenue/comparison')` → `@Get('comparison')` + description note |
+| `backend/src/modules/analytics/__tests__/revenue-endpoints.f062.spec.ts` | +60 / -12 | Update existing cache key assertions + add 8 NEW invariants (cache helper usage + default period + endpoint URL anti-pattern guard + extractMethodBody supports non-async) |
+| `backend/src/modules/analytics/__tests__/period-resolver.f062.spec.ts` | +28 | NEW 3 tests cho tenant scope + extra axis + backward compat |
+
+**Net delta v2 fix:** ~168 LoC (~88 source + ~80 test updates).
+
+## 🧪 Wave 2B-1 v2 Tests Re-Run
+
+```
+Test Suites: 13 passed, 13 total
+Tests:       169 passed, 169 total
+Time:        7.151 s
+```
+
+(Baseline 161 → v2 169 = +8 NEW invariant tests, 0 regression. Pre-fix had 161 PASS but 2 PRD-conformance assertions FAILED conceptually; v2 fixes assertions to match correct spec.)
+
+## ✅ Wave 2B-1 v2 Self-Review Pipeline checklist 11 bước
+
+- [x] **Bước 1:** tsc clean (chỉ pre-existing `upload/*.spec.ts` Vitest errors UNRELATED)
+- [x] **Bước 2:** PRD strict adherence — ALL 4 QC findings fixed. Endpoint URL + cache key + default period + helper extend ĐÚNG BR-SA-02/03/04/18 spec
+- [x] **Bước 3:** Anti-pattern scan clean — 0 console.log / 0 `as unknown as` / 0 NEW `any` cast / NO raw cache key strings (test asserts `not.toMatch(/analytics:weekly-revenue:/)` etc)
+- [x] **Bước 4:** Hand-pick mapping audit — N/A v2 fix (no schema change)
+- [x] **Bước 5:** PROD-readiness — 169/169 PASS. Endpoint URL fix verified by invariant test `@Get('comparison')` pattern match + anti-pattern guard `not /@Get\('revenue\/comparison'\)/`
+- [x] **Bước 6:** UI/UX self-inspection — N/A backend
+- [x] **Bước 7:** Real-world data sanity — `buildPeriodKey` tested với month/range/from/to/default 5 input variants; ISO 8601 boundary tests unchanged
+- [x] **Bước 8:** Files Changed vs Scope Lock — 5 files all trong Wave 2B backend Scope Lock (period-resolver.ts EXTEND đã có precedent Wave 1+2A, others EXTEND of just-shipped Wave 2B-1)
+- [x] **Bước 9:** Generated SDK regen — Still DEFER Wave 2B end (endpoint URL change `/comparison` requires SDK regen, will bundle với 2B-2 merchant-comparison)
+- [x] **Bước 10:** Unit tests PASS 169/169
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2B-1 v2 section sẽ append (next step)
+
+→ **Status: 🟠 READY_FOR_QC v2 (post-fix re-submit)**

@@ -331,14 +331,45 @@ export function calcDeltaPercent(current: number, base: number): number | null {
 }
 
 /**
- * Build cache key chuẩn cho F-026 metric.
- *  analytics:metric:<name>:<scope>:<periodKey>
+ * Build cache key chuẩn cho F-026 + F-062 metric.
+ *
+ * Format:
+ *   - 2-axis:  `analytics:metric:<name>:<scope>:<periodKey>`
+ *   - 3-axis:  `analytics:metric:<name>:<scope>:<extra>:<periodKey>` (extra inserted
+ *              GIỮA scope và periodKey per BR-SA-04 comparison spec)
+ *
+ * Scope variants:
+ *   - `'platform'` → `platform`
+ *   - `{ raceId }` → `race:<id>` (F-026 race-scoped metrics)
+ *   - `{ tenantId }` → `tenant:<id>` (F-062 Wave 2B-1 tenant-scoped revenue charts)
+ *
+ * F-062 Wave 2B-1 fix (TD-F062-WAVE2B1-CACHE-KEY-DRIFT 2026-05-25):
+ *   Tenant scope variant added; extra-axis support added cho comparison endpoint
+ *   (`compareWith` axis between scope và periodKey per BR-SA-04 PRD spec).
+ *
+ * Usage:
+ *   buildMetricCacheKey('weekly-revenue', { tenantId: 42 }, 'range:2026-01-01~2026-05-25')
+ *     → 'analytics:metric:weekly-revenue:tenant:42:range:2026-01-01~2026-05-25'
+ *   buildMetricCacheKey('comparison', 'platform', 'range:...', 'mom')
+ *     → 'analytics:metric:comparison:platform:mom:range:...'
  */
 export function buildMetricCacheKey(
   metric: string,
-  scope: 'platform' | { raceId: string | number },
+  scope:
+    | 'platform'
+    | { raceId: string | number }
+    | { tenantId: string | number },
   periodKey: string,
+  extra?: string,
 ): string {
-  const scopeStr = scope === 'platform' ? 'platform' : `race:${scope.raceId}`;
-  return `analytics:metric:${metric}:${scopeStr}:${periodKey}`;
+  let scopeStr: string;
+  if (scope === 'platform') {
+    scopeStr = 'platform';
+  } else if ('raceId' in scope) {
+    scopeStr = `race:${scope.raceId}`;
+  } else {
+    scopeStr = `tenant:${scope.tenantId}`;
+  }
+  const base = `analytics:metric:${metric}:${scopeStr}`;
+  return extra ? `${base}:${extra}:${periodKey}` : `${base}:${periodKey}`;
 }

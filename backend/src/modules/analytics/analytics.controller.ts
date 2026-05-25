@@ -113,14 +113,15 @@ export class AnalyticsController {
     return this.analyticsService.getMonthlyRevenue(query);
   }
 
-  @Get('revenue/comparison')
+  @Get('comparison')
   @ApiOperation({
     summary:
       'F-062 BR-SA-04 v3 — Period-over-period comparison (wow/mom/yoy)',
     description:
       'Current vs previous summary cho 4 metric (gmv/netGmv/platformFee/orderCount). ' +
       'Delta % nullable khi base=0 (calcDeltaPercent guard). ' +
-      'mom dùng Wave 2A shiftMonthClamped (handle 31→30 boundary).',
+      'mom dùng Wave 2A shiftMonthClamped (handle 31→30 boundary). ' +
+      'Mounted at /analytics/comparison per BR-SA-04 line 200 (NOT /revenue/comparison).',
   })
   @ApiResponse({ status: 200, type: ComparisonResponseDto })
   @ApiResponse({ status: 400, description: 'Invalid compareWith or date range' })

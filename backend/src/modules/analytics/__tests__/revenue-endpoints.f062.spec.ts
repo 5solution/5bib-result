@@ -37,14 +37,21 @@ function stripComments(src: string): string {
 }
 
 function extractMethodBody(src: string, methodName: string): string {
-  // Tìm `async methodName(` rồi capture đến start của method kế tiếp.
-  // Naive boundary — đủ cho invariant scan, không cần parse AST.
-  const start = src.indexOf(`async ${methodName}(`);
-  if (start === -1) {
+  // Tìm method declaration (async OR sync, private OR public) rồi capture đến start
+  // của method kế tiếp. Naive boundary — đủ cho invariant scan, không parse AST.
+  const re = new RegExp(
+    `\\n\\s{2}(?:private\\s+|public\\s+)?(?:async\\s+)?${methodName}\\(`,
+  );
+  const match = re.exec(src);
+  if (!match) {
     throw new Error(`extractMethodBody: ${methodName} not found`);
   }
+  const start = match.index;
   const rest = src.slice(start + 1);
-  const nextOffset = rest.search(/\n\s{2}(?:private |public )?async \w+\(/);
+  // Next method = same pattern but ANY name (not necessarily async)
+  const nextOffset = rest.search(
+    /\n\s{2}(?:private\s+|public\s+)?(?:async\s+)?\w+\(/,
+  );
   const endRel = nextOffset === -1 ? rest.length : nextOffset;
   return src.slice(start, start + 1 + endRel);
 }
@@ -146,18 +153,59 @@ describe('F-062 Wave 2B-1 revenue endpoints invariants', () => {
     });
   });
 
-  describe('Cache key convention (Wave 1 BR-SA-24)', () => {
-    it('Weekly cache key prefix analytics:weekly-revenue', () => {
+  describe('Cache key convention (BR-SA-02/03/04 + BR-SA-18)', () => {
+    // POST-FIX: keys must use buildMetricCacheKey helper + match PRD pattern
+    // `analytics:metric:<name>:<scope>:<periodKey>` (BR-SA-18 invalidation hook depends on prefix).
+    it('Weekly uses buildMetricCacheKey with weekly-revenue metric name', () => {
       const body = extractMethodBody(svc, 'getWeeklyRevenue');
-      expect(body).toMatch(/analytics:weekly-revenue:/);
+      expect(body).toMatch(/buildMetricCacheKey\(\s*['"]weekly-revenue['"]/);
+      // Anti-pattern: NO raw `analytics:weekly-revenue` (missing :metric: infix)
+      expect(body).not.toMatch(/['"]analytics:weekly-revenue:/);
     });
-    it('Monthly cache key prefix analytics:monthly-revenue', () => {
+    it('Monthly uses buildMetricCacheKey with monthly-revenue metric name', () => {
       const body = extractMethodBody(svc, 'getMonthlyRevenue');
-      expect(body).toMatch(/analytics:monthly-revenue:/);
+      expect(body).toMatch(/buildMetricCacheKey\(\s*['"]monthly-revenue['"]/);
+      expect(body).not.toMatch(/['"]analytics:monthly-revenue:/);
     });
-    it('Comparison cache key includes compareWith axis', () => {
+    it('Comparison uses buildMetricCacheKey với compareWith như extra axis', () => {
       const body = extractMethodBody(svc, 'getComparison');
-      expect(body).toMatch(/analytics:comparison:\$\{compareWith\}/);
+      expect(body).toMatch(/buildMetricCacheKey\(\s*['"]comparison['"]/);
+      // 4th arg (extra) phải là compareWith — BR-SA-04 line 216 spec
+      // Allow trailing comma + multiline (Prettier may format args on separate lines)
+      expect(body).toMatch(/buildMetricCacheKey\([\s\S]*?compareWith[\s,]*\)/);
+      expect(body).not.toMatch(/['"]analytics:comparison:\$\{compareWith\}/);
+    });
+
+    it('All 3 methods use resolveQueryScope helper (tenant|platform)', () => {
+      for (const method of ['getWeeklyRevenue', 'getMonthlyRevenue', 'getComparison']) {
+        const body = extractMethodBody(svc, method);
+        expect(body).toMatch(/this\.resolveQueryScope\(/);
+      }
+    });
+
+    it('All 3 methods use buildPeriodKey helper (stable periodKey form)', () => {
+      for (const method of ['getWeeklyRevenue', 'getMonthlyRevenue', 'getComparison']) {
+        const body = extractMethodBody(svc, method);
+        expect(body).toMatch(/this\.buildPeriodKey\(/);
+      }
+    });
+  });
+
+  describe('Default period BR-SA-02/03 (12 weeks / 12 months)', () => {
+    it('getWeeklyRevenue applies default period via applyDefaultPeriod helper', () => {
+      const body = extractMethodBody(svc, 'getWeeklyRevenue');
+      expect(body).toMatch(/this\.applyDefaultPeriod\(\s*query\s*,\s*['"]week['"]\s*\)/);
+    });
+    it('getMonthlyRevenue applies default period via applyDefaultPeriod helper', () => {
+      const body = extractMethodBody(svc, 'getMonthlyRevenue');
+      expect(body).toMatch(/this\.applyDefaultPeriod\(\s*query\s*,\s*['"]month['"]\s*\)/);
+    });
+    it('applyDefaultPeriod uses 84 days (week) / 365 days (month) defaults', () => {
+      const body = extractMethodBody(svc, 'applyDefaultPeriod' as never);
+      expect(body).toMatch(/84/); // 12 weeks in days
+      expect(body).toMatch(/365/); // 12 months ≈ 365 days
+      // Pure function — does NOT mutate input (spread {...query} required)
+      expect(body).toMatch(/\.\.\.query/);
     });
   });
 
@@ -166,7 +214,10 @@ describe('F-062 Wave 2B-1 revenue endpoints invariants', () => {
       expect(ctrlRaw).toMatch(/@UseGuards\(LogtoAdminGuard\)/);
       expect(ctrlRaw).toMatch(/@Get\('revenue\/weekly'\)/);
       expect(ctrlRaw).toMatch(/@Get\('revenue\/monthly'\)/);
-      expect(ctrlRaw).toMatch(/@Get\('revenue\/comparison'\)/);
+      // BR-SA-04 PRD line 200: GET /analytics/comparison (NOT /revenue/comparison)
+      expect(ctrlRaw).toMatch(/@Get\('comparison'\)/);
+      // Anti-pattern guard: ensure NOT mounted under /revenue/
+      expect(ctrlRaw).not.toMatch(/@Get\('revenue\/comparison'\)/);
     });
 
     it('Weekly endpoint declares 200/400/401/403 ApiResponse', () => {
@@ -177,12 +228,15 @@ describe('F-062 Wave 2B-1 revenue endpoints invariants', () => {
     });
 
     it('Comparison endpoint uses ComparisonResponseDto typed response', () => {
-      const section = ctrlRaw.split('revenue/comparison')[1]?.split('@Get(')[0] ?? '';
+      const section =
+        ctrlRaw.split("@Get('comparison')")[1]?.split('@Get(')[0] ?? '';
       expect(section).toMatch(/type:\s*ComparisonResponseDto/);
     });
 
     it('Comparison endpoint accepts ComparisonQueryDto (with compareWith)', () => {
-      expect(ctrlRaw).toMatch(/getRevenueComparison\(@Query\(\)\s*query:\s*ComparisonQueryDto\)/);
+      expect(ctrlRaw).toMatch(
+        /getRevenueComparison\(@Query\(\)\s*query:\s*ComparisonQueryDto\)/,
+      );
     });
   });
 });

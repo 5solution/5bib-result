@@ -277,6 +277,38 @@ describe('Period Resolver — F-062 v3 (Adj #1 GranularityKind + CompareKind ext
       const key = buildMetricCacheKey('runner-summary', { raceId: 104 }, '30d:2026-04-22');
       expect(key).toBe('analytics:metric:runner-summary:race:104:30d:2026-04-22');
     });
+
+    // F-062 Wave 2B-1 fix (TD-F062-WAVE2B1-BUILDMETRICCACHEKEY-EXTEND)
+    it('buildMetricCacheKey với scope tenant:<tenantId> (Wave 2B-1 EXTEND)', () => {
+      const key = buildMetricCacheKey(
+        'weekly-revenue',
+        { tenantId: 42 },
+        'range:2026-01-01~2026-05-25',
+      );
+      expect(key).toBe(
+        'analytics:metric:weekly-revenue:tenant:42:range:2026-01-01~2026-05-25',
+      );
+    });
+
+    it('buildMetricCacheKey với extra axis BETWEEN scope và periodKey (BR-SA-04 comparison)', () => {
+      const key = buildMetricCacheKey(
+        'comparison',
+        'platform',
+        'range:2026-04-25~2026-05-25',
+        'mom',
+      );
+      expect(key).toBe(
+        'analytics:metric:comparison:platform:mom:range:2026-04-25~2026-05-25',
+      );
+    });
+
+    it('buildMetricCacheKey extra axis omitted → 2-axis fallback (BR-SA-02/03)', () => {
+      const key2 = buildMetricCacheKey('weekly-revenue', 'platform', 'wk:2026-W21');
+      const key3 = buildMetricCacheKey('weekly-revenue', 'platform', 'wk:2026-W21', undefined);
+      // Both should produce same 2-axis form
+      expect(key2).toBe(key3);
+      expect(key2).toBe('analytics:metric:weekly-revenue:platform:wk:2026-W21');
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────

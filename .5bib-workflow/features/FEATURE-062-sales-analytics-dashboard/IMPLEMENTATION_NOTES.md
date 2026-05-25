@@ -359,3 +359,120 @@
 - [x] **Bước 9:** Generated SDK regen — DEFER end of Wave 2B (combine với 2B-2 merchant-comparison NEW DTOs)
 - [x] **Bước 10:** Unit tests PASS 161/161 với output paste in 03-coder-implementation.md Wave 2B-1 section
 - [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2B-1 section đầy đủ 4 sub-sections (Deviations #7-#9 + Forced #5-#6 + Tradeoffs 5 + Reviewer Notes top-5 priority list)
+
+---
+
+# Wave 2B-1 v2 — Honest Deviation Notes (post-QC fix)
+
+**Date:** 2026-05-25
+**Trigger:** QC REJECT 4 findings on commit `d5e31b5` — fixed in v2 patch
+**Status:** 🟠 READY_FOR_QC v2
+
+## Section 1: 🚧 Wave 2B-1 v2 Honest Reporting of Initial Miss
+
+### [Deviation #10] Initial PRD spec drift not caught during self-review
+- **What I missed:** 4 PRD-spec compliance items missed at v1 Wave 2B-1 ship:
+  1. Cache key format (BR-SA-02 line 187 / BR-SA-03 line 196 / BR-SA-04 line 216) — wrote inline raw strings instead of `buildMetricCacheKey` helper (Wave 1 helper EXISTS, I had imported it but forgot to USE it for cache keys)
+  2. Endpoint URL `/comparison` vs `/revenue/comparison` (BR-SA-04 line 200) — assumed `/revenue/` namespace was right by symmetry với `/revenue/weekly|monthly`, didn't re-read PRD endpoint declaration
+  3. Default 12 weeks / 12 months when no period params (BR-SA-02 line 186 / BR-SA-03 line 195) — completely missed reading default behavior spec
+  4. `buildMetricCacheKey` Wave 1 helper only supported `platform | race:<id>` — needed extend for tenant scope (would have caught if used helper from start)
+
+- **Root cause analysis:** My Self-Review Pipeline Bước 2 (PRD strict adherence) checked DTO field shapes + SQL pattern + FeeService delegation (the loud invariants) but DIDN'T systematically grep `Cache:` / `Default:` / `Endpoint` keywords in PRD section for each BR-SA. Pattern-matching by RESPONSE shape only, not full BR spec line-by-line.
+
+- **Why caught by QC:** QC Phase 5 PRD Compliance does explicit BR-by-BR + table walk, including non-shape fields like Cache key + Default behavior + Endpoint URL. Found 4 drifts that surface-level testing wouldn't catch.
+
+- **Lesson learned for future waves:**
+  - When PRD section has multiple bullet points per BR (Endpoint, Response, Phí, Default, Cache), grep ALL bullet keywords in code, không chỉ Response shape
+  - If a helper exists in Wave 1 (vd `buildMetricCacheKey`), USE it — don't reinvent cache key strings even if they "look right"
+  - Endpoint URL is one-line spec — quick to verify but easy to miss because feels obvious
+
+- **Reviewer should check:** v2 patch uses `buildMetricCacheKey` for all 3 endpoints + endpoint URL matches `@Get('comparison')` + default period helper applied first line of weekly/monthly methods
+
+### [Deviation #11] extractMethodBody test helper was over-restrictive
+- **What I did:** Initially `extractMethodBody` only matched `async ${methodName}(` — couldn't find non-async private methods
+- **Why:** Wave 2B-1 v1 only had async methods, test helper grew up around them
+- **v2 fix:** Generalized regex `(?:private\s+|public\s+)?(?:async\s+)?${methodName}\(` để cover non-async private helpers (`applyDefaultPeriod`, `resolveQueryScope`, `buildPeriodKey`)
+- **Lesson:** Test helpers should be flexible from start — anticipate non-async private helpers when building service utilities
+
+## Section 2: ⚙️ Forced Changes (Wave 2B-1 v2 reality)
+
+### [Forced #7] `buildMetricCacheKey` Wave 1 helper had to be extended (not strict-additive)
+- **PRD assumed:** Helper covers all scope variants F-026 + F-062 needed
+- **Reality:** Wave 1 helper only had `'platform' | { raceId }`. F-062 Wave 2B-1 needs `{ tenantId }` because revenue charts can scope by tenant (NOT race — revenue is tenant-level).
+- **Workaround:** Extended signature backward-compatible — scope union widened (no breaking change), `extra` arg added optional 4th param (existing 3-arg calls unaffected)
+- **Manager/BA action:** Wave 5 update memory `conventions.md` cache key convention section: scope variants now `platform | race:<id> | tenant:<id>`
+
+## Section 3: ⚖️ Tradeoffs Considered (Wave 2B-1 v2)
+
+| # | Decision | Option chosen | Alternatives REJECTED | Cost paid |
+|---|----------|---------------|----------------------|-----------|
+| 6 | Default period 12 weeks vs 90 days | 84 days = exactly 12 ISO weeks | 90 days (calendar months alignment), `resolvePeriod({kind:'30d'})` reuse | Exact-12-buckets simpler; 90-day would give 12.86 weeks (last bucket partial) |
+| 7 | Default period applied in service vs DTO transform | Service `applyDefaultPeriod` helper | DTO `@Transform` decorator on AnalyticsQueryDto | Service approach keeps default LOGIC adjacent to bucket math; DTO would couple to validation timing + harder to test |
+| 8 | Mutate query vs new query object trong `applyDefaultPeriod` | NEW object via spread `{...query, from, to}` | In-place mutation | Immutability easier to reason about; spread cost negligible (4 fields); test can assert `not toBe(input)` |
+| 9 | Cache key periodKey format `range:from~to` vs `from=...&to=...` query-string-like | `range:from~to` (custom delim) | `from=2026-01-01&to=2026-05-25` (URL-like) | `~` delim consistent với F-026 `cc:from~to` convention (period-resolver.ts:220) — pattern continuity over URL similarity |
+| 10 | `buildMetricCacheKey` extra arg position | 4th arg `extra` AFTER periodKey trong signature, but INSERTED between scope và periodKey trong output | Named args, separate function `buildMetricCacheKeyWithExtra` | Positional cleaner; doc-comment explains the insert semantic; backward compat preserved |
+
+## Section 4: 🎯 Wave 2B-1 v2 Reviewer Notes — Priority List (revised post-fix)
+
+### Critical paths để Manager spot-check (top 5 — REVISED v2)
+
+1. **`period-resolver.ts:337-388` `buildMetricCacheKey` extension** (28 LoC NEW)
+   - Verify scope discrimination: `scope === 'platform'` → string literal check; `'raceId' in scope` → object type narrowing; else → tenant. Order matters!
+   - Verify extra arg insertion: `extra ? \`${base}:${extra}:${periodKey}\` : \`${base}:${periodKey}\``
+   - 3 NEW unit tests cover tenant scope + extra arg + backward compat (period-resolver.f062.spec.ts:280-310)
+
+2. **`analytics.service.ts` 3 NEW helpers `resolveQueryScope` / `buildPeriodKey` / `applyDefaultPeriod`** (~30 LoC)
+   - Verify `resolveQueryScope` returns `'platform'` (literal) when no tenantId, else `{ tenantId }` object — narrowed type matches `buildMetricCacheKey` signature
+   - Verify `buildPeriodKey` priority: month > range > from > to > default
+   - Verify `applyDefaultPeriod` does NOT mutate input — must return NEW object via spread
+
+3. **`analytics.service.ts:getWeeklyRevenue` + `getMonthlyRevenue` lead lines (post-fix)** (~5 LoC each)
+   - Verify `query = this.applyDefaultPeriod(query, 'week'|'month')` is FIRST line (before validateDateRange)
+   - Verify cache key construction uses helper composition: `buildMetricCacheKey(metric, this.resolveQueryScope(query), this.buildPeriodKey(query))`
+
+4. **`analytics.service.ts:getComparison` cache key** (~6 LoC)
+   - Verify compareWith passed as 4th `extra` arg (NOT inline string interp)
+   - Verify documented format `analytics:metric:comparison:<scope>:<compareWith>:<periodKey>` matches BR-SA-04 line 216
+
+5. **`analytics.controller.ts:97` `@Get('comparison')`** (1 char change)
+   - Verify NOT `revenue/comparison` (anti-pattern test asserts `not.toMatch(/@Get\('revenue\/comparison'\)/)`)
+   - Verify description tag mentions "Mounted at /analytics/comparison per BR-SA-04 line 200" to discourage future re-introduction of `/revenue/` prefix
+
+### Anti-regression invariant tests added (8 NEW)
+
+- `revenue-endpoints.f062.spec.ts`:
+  - Weekly/monthly/comparison MUST use `buildMetricCacheKey` (not inline string)
+  - Weekly/monthly/comparison MUST use `resolveQueryScope` + `buildPeriodKey` helpers
+  - Weekly/monthly MUST call `applyDefaultPeriod`
+  - `applyDefaultPeriod` uses 84/365 days + spread (no mutation)
+  - Controller MUST mount at `@Get('comparison')` + NOT at `@Get('revenue/comparison')`
+- `period-resolver.f062.spec.ts`:
+  - `buildMetricCacheKey` tenant scope produces `tenant:<id>` prefix
+  - `buildMetricCacheKey` extra arg inserts BETWEEN scope and periodKey
+  - `buildMetricCacheKey` backward compat: 3-arg + 4-arg-undefined identical
+
+### Security checklist v2 (unchanged from v1 — fixes are spec-conformance not security)
+- [x] SQL `?` placeholders preserved
+- [x] Class-level `@UseGuards(LogtoAdminGuard)` preserved
+- [x] `@IsIn(['wow','mom','yoy'])` validator preserved
+- [x] `validateDateRange` 366-day cap NOW applies even on default-period because `applyDefaultPeriod` sets `from/to` first
+- [x] NO new PII leak — response shape unchanged
+- [x] Cache key now reveals `tenant:<id>` (vs raw int) — minor info disclosure if Redis exposed, but tenant ID isn't sensitive
+
+### Self-Review Pipeline checklist 11 bước (Wave 2B-1 v2 patch)
+
+- [x] **Bước 1:** tsc clean (pre-existing `upload/*.spec.ts` UNRELATED)
+- [x] **Bước 2:** PRD strict adherence v2 — ALL 4 QC findings fixed against BR-SA-02/03/04/18 spec
+- [x] **Bước 3:** Anti-pattern scan clean — NEW invariant tests guard against re-introduction of raw cache keys + raw endpoint URL
+- [x] **Bước 4:** Hand-pick mapping audit — N/A
+- [x] **Bước 5:** PROD-readiness — 169/169 PASS post-fix
+- [x] **Bước 6:** UI/UX self-inspection — N/A backend
+- [x] **Bước 7:** Real-world data sanity — `buildPeriodKey` 5 variant tests cover all query input forms
+- [x] **Bước 8:** Files Changed vs Scope Lock — 5 files all trong Wave 2B + extension of Wave 1 helper (precedent set Wave 2A `period-resolver.ts` extend)
+- [x] **Bước 9:** Generated SDK regen — DEFER Wave 2B end (endpoint URL change `/comparison` requires regen; bundle với 2B-2)
+- [x] **Bước 10:** Unit tests PASS 169/169
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2B-1 v2 honest miss reporting in Section 1 Deviation #10 + Forced #7 + Tradeoffs 6-10 + Reviewer Notes top-5 priority list
+
+**Lessons codified for memory (Wave 5 manager update):**
+- Self-review Bước 2 PRD adherence pattern check ALL bullet keywords (Endpoint / Response / Phí / Default / Cache) per BR, không chỉ Response shape
+- Wave 1 helpers always check IF EXISTS before writing inline equivalent
