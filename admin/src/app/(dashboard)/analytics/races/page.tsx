@@ -186,10 +186,10 @@ export default function RacePerformancePage() {
         <RaceSpotlightCard {...wave2Query} />
       </div>
 
-      {/* Header (legacy F-026 era — Race performance list table below) */}
+      {/* Bảng chi tiết race performance — filter + paginated list (extends F-026) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Hiệu suất Race (Legacy F-026)</h1>
+          <h2 className="text-lg font-semibold">Bảng chi tiết race</h2>
           <p className="text-sm text-muted-foreground">{total} races</p>
         </div>
         <nav className="flex items-center gap-1 text-sm">

@@ -154,11 +154,11 @@ export default function RunnerBehaviorPage() {
       {/* F-062 Wave 2 NEW — BR-SA-20f Runner Summary 4 KPI strip với delta MoM */}
       <RunnerSummaryKpiStrip {...wave2Query} />
 
-      {/* Header (legacy F-026 era — Runner behavior charts below) */}
+      {/* Biểu đồ chi tiết hành vi runner — heatmap + category mix (extends F-026) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Hành vi Runner (Legacy F-026)</h1>
-          <p className="text-sm text-muted-foreground">Phân tích hành vi đặt vé của runners</p>
+          <h2 className="text-lg font-semibold">Biểu đồ chi tiết hành vi runner</h2>
+          <p className="text-sm text-muted-foreground">Heatmap đặt vé + category mix</p>
         </div>
         <nav className="flex items-center gap-1 text-sm">
           {[

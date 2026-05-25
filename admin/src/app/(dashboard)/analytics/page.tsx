@@ -423,80 +423,17 @@ function AnalyticsOverviewPage() {
       <ComparisonRow {...wave2Query} compareWith={wave2Compare} />
       <Ga4OverviewSection {...wave2Query} />
 
-      {/* Header (legacy F-026 era — full analytics dashboard below) */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Analytics Dashboard (Legacy)</h1>
-          <p className="text-sm text-muted-foreground">
-            Tổng quan hiệu suất nền tảng — Theo giờ Việt Nam (UTC+7)
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <nav className="flex items-center gap-1 text-sm">
-            {[
-              { href: "/analytics", label: "Tổng quan" },
-              { href: "/analytics/races", label: "Races" },
-              { href: "/analytics/merchants", label: "Merchants" },
-              { href: "/analytics/runners", label: "Runners" },
-              { href: "/analytics/funnel", label: "Funnel" },
-            ].map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded px-2.5 py-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <Separator orientation="vertical" className="h-5" />
-          <Select value={month} onValueChange={(v) => { if (v != null) setMonth(v); }}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthOptions_.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Row 1: KPI cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard
-          title="Tổng GMV tháng này"
-          value={overview ? formatVnd(overview.gmv) : "—"}
-          pct={overview?.vsLastMonth?.gmvChange ?? undefined}
-          sub="so với tháng trước"
-          icon={Banknote}
-          loading={loadingOverview}
-        />
-        <KpiCard
-          title="Tổng đơn hàng"
-          value={overview ? overview.orderCount.toLocaleString("vi-VN") : "—"}
-          pct={overview?.vsLastMonth?.orderChange ?? undefined}
-          sub="so với tháng trước"
-          icon={ShoppingCart}
-          loading={loadingOverview}
-        />
-        <KpiCard
-          title="Platform fee tháng này"
-          value={overview ? formatVnd(overview.platformFee) : "—"}
-          icon={TrendingUp}
-          loading={loadingOverview}
-        />
-        <KpiCard
-          title="Races đang mở"
-          value={overview ? String(overview.openRaces) : "—"}
-          sub={`${overview?.pendingReconciliations ?? "—"} chờ đối soát`}
-          icon={Trophy}
-          loading={loadingOverview}
-        />
-      </div>
+      {/* F-062 BUG-001 fix Wave 2: REMOVED duplicate KPI strip + legacy header +
+          tabs sub-nav + month selector. ComparisonRow above already shows GMV/Net/
+          Phí/Đơn current vs previous với delta — no need for separate "Tổng GMV
+          tháng này" cards. Filter context comes từ layout AnalyticsFilterBar
+          (granularity/period/compare) instead of legacy month-only Select.
+          Legacy KPI strip + sub-nav + month dropdown removed per Manager refactor
+          ARCH-001 (2026-05-25). Below: legacy charts that ARE complementary
+          (daily area chart, category donut, top races, top merchants) — NOT
+          duplicate of Wave 2 components, kept inline. F-026 6-panel detail block
+          wrapped in <details> collapsed default per BR-SA-23 spec.
+       */}
 
       {/* Row 2: Revenue trend + category donut */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -535,55 +472,69 @@ function AnalyticsOverviewPage() {
         </Card>
       </div>
 
-      {/* F-026 — 8 widget grid */}
-      <div className="border-t border-stone-200 pt-5">
-        <h2 className="mb-3 text-lg font-semibold">Phân tích vận hành</h2>
-
-        {/* Controls row — period + race filter + export (chỉ áp cho khu này) */}
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white p-3">
-          <PeriodCompareSelector
-            period={period}
-            compareWith={compareWith}
-            onPeriodChange={setPeriod}
-            onCompareChange={setCompareWith}
-          />
+      {/* F-062 BR-SA-23 — Accordion "Phân tích vận hành chi tiết" (collapsed default).
+          Wraps 6 F-026 panels (RepeatAthleteRate / MerchantChurn / TimeToFill /
+          ClaimRate+ResolutionSLA / GeoDemo / RefundCancel) per spec line 586-593.
+          User explicitly opens to see detail metrics. */}
+      <details className="rounded-lg border border-stone-200 bg-white overflow-hidden group">
+        <summary className="cursor-pointer flex items-center justify-between gap-3 px-4 py-3 hover:bg-stone-50 transition-colors select-none list-none">
           <div className="flex items-center gap-2">
-            <RaceDrillDownFilter
-              races={raceOptions}
-              selectedRaceId={selectedRaceId}
-              onChange={setSelectedRaceId}
+            <svg className="size-4 text-stone-400 transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+            </svg>
+            <h2 className="text-lg font-semibold text-stone-900">Phân tích vận hành chi tiết</h2>
+            <span className="text-xs text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">6 chỉ số F-026</span>
+          </div>
+          <span className="text-xs text-stone-400 italic">Click để mở/đóng</span>
+        </summary>
+
+        <div className="border-t border-stone-100 p-4 space-y-3">
+          {/* Controls row — period + race filter + export (chỉ áp F-026 section) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-200 bg-stone-50 p-3">
+            <PeriodCompareSelector
+              period={period}
+              compareWith={compareWith}
+              onPeriodChange={setPeriod}
+              onCompareChange={setCompareWith}
             />
-            <ExportButton onExportPdf={handleExportPdf} onExportExcel={handleExportExcel} />
+            <div className="flex items-center gap-2">
+              <RaceDrillDownFilter
+                races={raceOptions}
+                selectedRaceId={selectedRaceId}
+                onChange={setSelectedRaceId}
+              />
+              <ExportButton onExportPdf={handleExportPdf} onExportExcel={handleExportExcel} />
+            </div>
+          </div>
+
+          {/* Drill-down banner */}
+          {selectedRaceId && (
+            <div className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+              <span>
+                Đang xem race <strong>{selectedRaceName ?? selectedRaceId}</strong> — tất cả widget đã re-fetch
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedRaceId(null)}
+                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-blue-700 hover:bg-blue-100"
+              >
+                <X className="size-3.5" /> Bỏ chọn
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <RepeatAthleteRateCard data={repeatAthlete} loading={loadingF026} />
+            <MerchantChurnTable data={merchantChurn} loading={loadingF026} />
+            <TimeToFillTable data={timeToFill} loading={loadingF026} />
+            <ClaimRateTable data={claimRate} loading={loadingF026} />
+            <ResolutionSLACard data={claimRate} loading={loadingF026} />
+            <GeographicDonut data={geoDemo} loading={loadingF026} />
+            <DemographicStackedBar data={geoDemo} loading={loadingF026} />
+            <RefundCancelCards data={refundCancel} loading={loadingF026} />
           </div>
         </div>
-
-        {/* Drill-down banner */}
-        {selectedRaceId && (
-          <div className="mb-3 flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-            <span>
-              Đang xem race <strong>{selectedRaceName ?? selectedRaceId}</strong> — tất cả widget đã re-fetch
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedRaceId(null)}
-              className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-blue-700 hover:bg-blue-100"
-            >
-              <X className="size-3.5" /> Bỏ chọn
-            </button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <RepeatAthleteRateCard data={repeatAthlete} loading={loadingF026} />
-          <MerchantChurnTable data={merchantChurn} loading={loadingF026} />
-          <TimeToFillTable data={timeToFill} loading={loadingF026} />
-          <ClaimRateTable data={claimRate} loading={loadingF026} />
-          <ResolutionSLACard data={claimRate} loading={loadingF026} />
-          <GeographicDonut data={geoDemo} loading={loadingF026} />
-          <DemographicStackedBar data={geoDemo} loading={loadingF026} />
-          <RefundCancelCards data={refundCancel} loading={loadingF026} />
-        </div>
-      </div>
+      </details>
 
       {/* Top tables */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

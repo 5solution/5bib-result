@@ -230,10 +230,10 @@ export default function MerchantComparisonPage() {
       {/* F-062 Wave 2 NEW — BR-SA-22b Health Distribution */}
       <MerchantHealthDistribution {...wave2Query} />
 
-      {/* Header (legacy F-026 era — Merchant list table below) */}
+      {/* Bảng chi tiết merchant — sortable + scatter view (extends F-026) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">So sánh Merchant (Legacy F-026)</h1>
+          <h2 className="text-lg font-semibold">Bảng chi tiết merchant</h2>
           <p className="text-sm text-muted-foreground">{rows.length} merchants</p>
         </div>
         <div className="flex items-center gap-3">
