@@ -786,3 +786,131 @@ Time:        7.279 s
 - [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2B-2 section sẽ append (next step)
 
 → **Status: 🟠 READY_FOR_QC (Wave 2B-2 slice)**
+
+---
+
+# Wave 2C-1 — Race Performance Service (BR-SA-21 a/b/c)
+
+**Slice:** Wave 2C-1 of Wave 2C (~860 LoC NEW service + DTOs + tests + shared extract)
+**Status:** 🟠 READY_FOR_QC
+**Coder Session:** 2026-05-25
+**Linked:** Manager Plan v2 line 67 NEW `race-performance.service.ts`, PRD BR-SA-21 v3, all 5 codified lessons APPLIED
+
+## 📂 Files Changed (Wave 2C-1)
+
+| File | LoC | Action | Purpose |
+|------|-----|--------|---------|
+| `backend/src/modules/analytics/services/race-performance.service.ts` | 380 | NEW | `RacePerformanceService` 3 public methods + `_buildRaceAggregates` shared internal |
+| `backend/src/modules/analytics/dto/race-type-distribution.dto.ts` | 53 | NEW | `RaceTypeDistributionPointDto` (BR-SA-21a) |
+| `backend/src/modules/analytics/dto/race-spotlight.dto.ts` | 76 | NEW | `RaceSpotlightDto` (BR-SA-21b) |
+| `backend/src/modules/analytics/dto/race-performance-list.dto.ts` | 156 | NEW | `RacePerformanceListQueryDto` (filters + pagination) + `RacePerformanceItemDto` + `RacePerformanceListResponseDto` (BR-SA-21c) |
+| `backend/src/modules/analytics/services/fee-aggregate.helpers.ts` | 88 | NEW | EXTRACT `pullOrdersForFeeAggregate` shared helper — 3rd consumer threshold met (TD-F062-WAVE2B2-PULLORDERS-DUPLICATE resolved) |
+| `backend/src/modules/analytics/analytics.service.ts` | +12/-80 | REFACTOR | private `pullOrdersForFeeAggregate` → thin delegate to shared; removed legacy duplicated body |
+| `backend/src/modules/analytics/services/merchant-comparison.service.ts` | +5/-67 | REFACTOR | use shared `pullOrdersForFeeAggregate` import directly; removed private duplicate + unused OrderForFeeAggregate import |
+| `backend/src/modules/analytics/analytics.module.ts` | +5 | EXTEND | Register `RacePerformanceService` provider |
+| `backend/src/modules/analytics/analytics.controller.ts` | +60 | EXTEND | 3 NEW endpoints + DI inject |
+| `backend/src/modules/analytics/__tests__/race-performance.f062.spec.ts` | 320 | NEW | 33 invariant tests (Module + DI + SQL + Extraction + FeeService + cache + pagination + race type + spotlight insight + controller wiring) |
+
+**Net delta:** ~1,008 LoC (~858 NEW + 150 refactor reduction).
+
+## 🎯 Wave 2C-1 Impact Assessment
+
+### Backend impact
+- **MySQL queries:** 1 main SQL aggregate (race-grouped, FeeService) + sub queries via shared helper. Indexed columns `payment_on` + `race_id` + `tenant_id`.
+- **Redis cache:** 3 NEW key patterns (`race-perf-type`, `race-perf-spotlight`, `race-perf-list:<filters-hash>`)
+- **FeeService Tier 0:** per (tenant, race) cascade — for full year × 195 races worst-case ~195 calls/cold-cache cycle
+- **Pagination:** in-memory sort + slice (small dataset 195 races/year max)
+- **filters-hash:** SHA-256 truncated 12-char for stable cache key
+
+### EXTRACTION completed (TD-WAVE2B2-PULLORDERS-DUPLICATE resolved)
+- Shared `fee-aggregate.helpers.ts` hosts `pullOrdersForFeeAggregate` standalone function (88 LoC)
+- 3 consumer services refactored to import directly:
+  - `analytics.service.ts` (legacy F-026+F-058 consumer — thin private wrapper for backward compat)
+  - `merchant-comparison.service.ts` (Wave 2B-2 consumer — direct import, removed private duplicate)
+  - `race-performance.service.ts` (Wave 2C-1 NEW consumer — direct import)
+- Net code reduction: ~150 LoC removed (2 duplicates) - 88 LoC added (shared) = -62 LoC saving + better DRY
+
+## ⚠️ Wave 2C-1 Edge Cases Covered
+
+1. **Empty period (no races)** — `_buildRaceAggregates` returns `[]` early → all 3 endpoints handle: type-distribution `[]`, spotlight `null`, list `{data:[], total:0, page:1, totalPages:1}`
+2. **Race type = null OR unknown** — `normalizeRaceType` fallback `'OTHER'` (defensive)
+3. **Spotlight: zero total GMV edge** — contribution % `0` (guard divide-by-zero)
+4. **Spotlight: zero orders** — avgPerOrder `0`
+5. **Pagination: page > totalPages** — slice returns `[]` (no error)
+6. **Pagination: limit > 50** — clamped to MAX_PAGE_SIZE (50)
+7. **Pagination: page < 1** — clamped to 1
+8. **filtersHash deterministic** — same filters = same key (JSON.stringify with fixed key order via object literal)
+9. **raceType filter at SQL level** — efficient (no fetch-then-filter)
+10. **voidedPct = 0 nếu no orders** — divide-by-zero guard
+
+## 🧠 Wave 2C-1 Logic & Architecture
+
+### Helper extraction strategy (post-3rd consumer threshold)
+**Pattern:** Wave 2B-2 IMPLEMENTATION_NOTES Forced #9 documented "defer extraction until 3rd consumer". Wave 2C-1 race-performance = 3rd consumer → extract clean abstraction with confirmed need.
+
+**Approach:** Standalone exported function `pullOrdersForFeeAggregate(db, clause, params, filter?)` — takes `DataSource` as 1st arg (no class state needed). Easy to import + test.
+
+### Pagination + filter strategy
+**In-memory sort:** Small dataset (~50-200 races/year) makes server-side sort+slice trivial. SQL-side ORDER BY would need dynamic sortBy parameter handling (whitelist) but adds SQL complexity. Trade-off: simpler code + acceptable perf.
+
+**filters-hash:** SHA-256 truncated 12-char keeps cache key length reasonable. Each unique filter combo gets distinct cache entry; same combo = stable hit. BR-SA-18 invalidation hook will SCAN `analytics:metric:race-perf-list:*` to match all hashes.
+
+### Spotlight insight text generation
+**Pattern:** Auto-generate VN text from data: "Đóng góp {X}% tổng GMV, trung bình {Y} đ/đơn" (per BR-SA-21b line 540).
+
+**Localization:** `toLocaleString('vi-VN')` for numeric formatting.
+
+## 🧪 Wave 2C-1 Tests Written (33 NEW)
+
+### Invariant tests (33 — `race-performance.f062.spec.ts`)
+- Module + DI 2
+- SQL business invariants 4 (paid + MANUAL exclude + GREATEST + GROUP BY race_type)
+- Extraction completed verification 5 (shared helper exists + 3 consumers use import + analytics delegate)
+- FeeService delegation 2 (call site + anti-pattern % guard)
+- Cache key convention 4 (3 metric names + helper composition)
+- Default period 2 (applied first + spread no mutation)
+- Pagination + sort 5 (max 50 + default 12 + sortBy gmv default + totalPages ceil + filtersHash SHA-256)
+- Race type normalization 1 (KNOWN_RACE_TYPES + OTHER fallback)
+- Spotlight insight text 2 (VN format + null on empty)
+- Controller wiring 6 (3 endpoints + ApiResponse codes + 3 typed responses + legacy preserved)
+
+### Test output (230/230 PASS analytics suite)
+```
+Test Suites: 15 passed, 15 total
+Tests:       230 passed, 230 total (197 Wave 2B-2 baseline + 33 NEW Wave 2C-1)
+Time:        7.079 s
+```
+
+## 🚧 Wave 2C-1 PAUSE Log
+
+- ✅ `races.race_type` column verified (existing F-026 SQL uses it, PAUSE-SA-07 resolved earlier)
+- ⏸️ `pnpm install @google-analytics/data` — STILL PAUSED Wave 2C-2/3 (GA4 service deferred)
+- 🔲 SDK regen — DEFER end of Wave 2C (5 NEW endpoints accumulated: 3 Wave 2B-1 + 3 Wave 2B-2 + 3 Wave 2C-1 = 9 endpoints; bundle regen)
+
+## 📉 Wave 2C-1 Scope creep
+
+**ZERO scope creep.** Extraction of `pullOrdersForFeeAggregate` is justified by 3rd consumer threshold + TD-WAVE2B2-PULLORDERS-DUPLICATE resolution plan (Wave 2B-2 IMPLEMENTATION_NOTES Forced #9).
+
+## 📋 Wave 2C-1 Known Limitations / Tech Debt
+
+| TD ID | Severity | Description | Resolution plan |
+|-------|----------|-------------|-----------------|
+| TD-F062-WAVE2C1-IN-MEMORY-SORT-LIMIT | 🟢 LOW | Pagination sort happens in-memory after full SQL aggregate. Acceptable cho ~195 races/year; would scale issue at 10K+ races. | Wave 5 k6 benchmark; switch to SQL-side ORDER BY (with sortBy whitelist) if performance issue. |
+| TD-F062-WAVE2C1-DATE-PROXY-VS-RACE-EVENT-DATE | 🟢 LOW | `RaceSpotlight.date` + `RacePerformanceItem.date` proxy = MAX(payment_on) thay vì actual race event date (race start_date from races table). | Wave 2C-2 hoặc Wave 5 if frontend needs exact race date — add `r.event_date` to SELECT + map field. Defer unless BA confirms. |
+| TD-F062-WAVE2C1-COLD-CACHE-3X | 🟡 LOW-MED | Cold-cache 3 endpoint concurrent run = 3× `_buildRaceAggregates` redundant (same pattern Wave 2B-2 TD) | Wave 5 k6 benchmark — same mitigation candidates (internal Map cache OR per-request memo). |
+
+## ✅ Wave 2C-1 Self-Review Pipeline checklist 11 bước
+
+- [x] **Bước 1:** tsc clean cho Wave 2C-1 files
+- [x] **Bước 2:** PRD strict adherence — ALL bullets per BR-SA-21 a/b/c grep verified
+- [x] **Bước 3:** Anti-pattern scan clean — 0 console.log / 0 `as unknown as` / 0 inline % fee calc
+- [x] **Bước 4:** Hand-pick mapping audit — N/A no schema change
+- [x] **Bước 5:** PROD-readiness — 230/230 PASS
+- [x] **Bước 6:** UI/UX — N/A backend
+- [x] **Bước 7:** Real-world data sanity — race types match existing MySQL convention + OTHER fallback for legacy null values
+- [x] **Bước 8:** Files Changed vs Scope Lock — 10 files all trong Wave 2C backend Scope Lock + Wave 1 helper extract
+- [x] **Bước 9:** Generated SDK regen — DEFER end of Wave 2C
+- [x] **Bước 10:** Unit tests PASS 230/230
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2C-1 section sẽ append (next step)
+
+→ **Status: 🟠 READY_FOR_QC (Wave 2C-1 slice)**

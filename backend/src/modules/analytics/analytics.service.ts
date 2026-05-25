@@ -36,6 +36,8 @@ import {
   ymd,
   addDaysUtc,
 } from './services/period-resolver';
+// F-062 Wave 2C-1 — shared FeeService pre-aggregate helper (extracted)
+import { pullOrdersForFeeAggregate as pullOrdersShared } from './services/fee-aggregate.helpers';
 import {
   dateToWeekKey,
   dateToMonthKey,
@@ -177,84 +179,17 @@ export class AnalyticsService {
   }
 
   /**
-   * F-058 helper — Pull orders raw từ MySQL group by (tenant, race) cho 1 period.
+   * F-058 helper (refactored Wave 2C-1 → delegate shared util).
    * Trả về Map<tenantId, OrderForFeeAggregate[]> để feed `computeFeeForOrdersAggregate`.
-   *
-   * Hint scope: optional `tenantId` filter + optional `raceId` filter để giới
-   * hạn query size (TopRaces, RaceDetail).
+   * Implementation in `services/fee-aggregate.helpers.ts:pullOrdersForFeeAggregate` —
+   * extracted Wave 2C-1 cho reuse (3rd consumer race-performance.service.ts threshold met).
    */
   private async pullOrdersForFeeAggregate(
     clause: string,
     params: any[],
     filter?: { tenantId?: number; raceId?: number },
   ): Promise<Map<number, OrderForFeeAggregate[]>> {
-    const whereClause = clause ? `AND ${clause}` : '';
-    const extraConds: string[] = [];
-    const extraParams: any[] = [];
-    if (filter?.tenantId) {
-      extraConds.push('r.tenant_id = ?');
-      extraParams.push(filter.tenantId);
-    }
-    if (filter?.raceId) {
-      extraConds.push('om.race_id = ?');
-      extraParams.push(filter.raceId);
-    }
-    const extraWhere = extraConds.length > 0 ? `AND ${extraConds.join(' AND ')}` : '';
-
-    const rows: Array<{
-      id: number;
-      tenant_id: number;
-      race_id: number;
-      total_price: string | number;
-      total_discounts: string | number | null;
-      order_category: string;
-      payment_on: Date | string;
-      payment_ref: string | null;
-      manual_ticket_count: string | number | null;
-    }> = await this.db.query(
-      // HOTFIX F-058 2026-05-22: column thực tế là `payment_on` (NOT
-      // `created_at` — order_metadata table không có column đó). Verified
-      // bằng existing dashboard/kpi.service.ts pattern + entity OrderReadonly.
-      // Semantic: `payment_on` chuẩn hơn cho fee calc (chỉ áp khi tiền vào).
-      // F-061 BR-61-08: thêm `om.payment_ref` để FeeService cascade phân biệt
-      // 5BIB-eligible (ref truthy) vs MANUAL semantic (ref empty/null).
-      `SELECT
-        om.id,
-        r.tenant_id,
-        om.race_id,
-        om.total_price,
-        om.total_discounts,
-        om.order_category,
-        om.payment_on,
-        om.payment_ref,
-        oli_agg.total_quantity AS manual_ticket_count
-      FROM order_metadata om
-      JOIN races r ON r.race_id = om.race_id
-      LEFT JOIN (
-        SELECT order_id, SUM(quantity) AS total_quantity
-        FROM order_line_item GROUP BY order_id
-      ) oli_agg ON oli_agg.order_id = om.id
-      WHERE om.financial_status = 'paid' ${whereClause} ${extraWhere}`,
-      [...params, ...extraParams],
-    );
-
-    const byTenant = new Map<number, OrderForFeeAggregate[]>();
-    for (const r of rows) {
-      const tid = Number(r.tenant_id);
-      const arr = byTenant.get(tid) ?? [];
-      arr.push({
-        id: Number(r.id),
-        raceId: Number(r.race_id),
-        totalPrice: Number(r.total_price ?? 0),
-        totalDiscounts: Number(r.total_discounts ?? 0),
-        orderCategory: r.order_category,
-        createdAt: r.payment_on,  // F-058 hotfix: MySQL column `payment_on` → TS field `createdAt` (semantic: order paid time = effective date for fee cascade)
-        paymentRef: r.payment_ref ?? null, // F-061 BR-61-08
-        manualTicketCount: r.manual_ticket_count != null ? Number(r.manual_ticket_count) : undefined,
-      });
-      byTenant.set(tid, arr);
-    }
-    return byTenant;
+    return pullOrdersShared(this.db, clause, params, filter);
   }
 
   private monthShift(month: string, delta: number): string {

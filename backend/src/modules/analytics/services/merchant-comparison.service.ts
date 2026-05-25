@@ -11,12 +11,13 @@ import {
 } from '../../merchant/schemas/merchant-config.schema';
 import { AnalyticsQueryDto } from '../dto/analytics-query.dto';
 import { FeeService } from '../../finance/services/fee.service';
-import type { OrderForFeeAggregate } from '../../finance/dto/fee-aggregate.dto';
 import {
   buildMetricCacheKey,
   resolveScopeFromTenant,
   periodKeyFromInputs,
 } from './period-resolver';
+// F-062 Wave 2C-1 — shared FeeService pre-aggregate helper (extracted)
+import { pullOrdersForFeeAggregate } from './fee-aggregate.helpers';
 import type { MerchantScatterPointDto } from '../dto/merchant-scatter.dto';
 import type { MerchantHealthDistributionTierDto } from '../dto/merchant-health-distribution.dto';
 import type {
@@ -324,7 +325,11 @@ export class MerchantComparisonService {
 
     // FeeService Tier 0 cascade per tenant — period-scoped
     const periodWindow = this.resolvePeriodWindow(query);
-    const ordersByTenant = await this.pullOrdersForFeeAggregate(clause, params);
+    const ordersByTenant = await pullOrdersForFeeAggregate(
+      this.db,
+      clause,
+      params,
+    );
     const feeByTenant = new Map<number, number>();
     for (const [tid, orders] of ordersByTenant) {
       const result = await this.feeService.computeFeeForOrdersAggregate(
@@ -386,70 +391,6 @@ export class MerchantComparisonService {
         status,
       };
     });
-  }
-
-  /**
-   * Pull orders raw cho FeeService aggregate — mirror analytics.service.ts
-   * pullOrdersForFeeAggregate pattern (not extracted to shared helper because
-   * tightly coupled với module-internal OrderForFeeAggregate shape; future
-   * refactor TD if 3+ services use identical pattern).
-   */
-  private async pullOrdersForFeeAggregate(
-    clause: string,
-    params: any[],
-  ): Promise<Map<number, OrderForFeeAggregate[]>> {
-    const whereClause = clause ? `AND ${clause}` : '';
-    const rows: Array<{
-      id: number;
-      tenant_id: number;
-      race_id: number;
-      total_price: string | number;
-      total_discounts: string | number | null;
-      order_category: string;
-      payment_on: Date | string;
-      payment_ref: string | null;
-      manual_ticket_count: string | number | null;
-    }> = await this.db.query(
-      `SELECT
-        om.id,
-        r.tenant_id,
-        om.race_id,
-        om.total_price,
-        om.total_discounts,
-        om.order_category,
-        om.payment_on,
-        om.payment_ref,
-        oli_agg.total_quantity AS manual_ticket_count
-      FROM order_metadata om
-      JOIN races r ON r.race_id = om.race_id
-      LEFT JOIN (
-        SELECT order_id, SUM(quantity) AS total_quantity
-        FROM order_line_item GROUP BY order_id
-      ) oli_agg ON oli_agg.order_id = om.id
-      WHERE om.financial_status = 'paid' ${whereClause}`,
-      params,
-    );
-
-    const byTenant = new Map<number, OrderForFeeAggregate[]>();
-    for (const r of rows) {
-      const tid = Number(r.tenant_id);
-      const arr = byTenant.get(tid) ?? [];
-      arr.push({
-        id: Number(r.id),
-        raceId: Number(r.race_id),
-        totalPrice: Number(r.total_price ?? 0),
-        totalDiscounts: Number(r.total_discounts ?? 0),
-        orderCategory: r.order_category,
-        createdAt: r.payment_on,
-        paymentRef: r.payment_ref ?? null,
-        manualTicketCount:
-          r.manual_ticket_count != null
-            ? Number(r.manual_ticket_count)
-            : undefined,
-      });
-      byTenant.set(tid, arr);
-    }
-    return byTenant;
   }
 
   // ─── BR-SA-22a — Scatter ────────────────────────────────────────────────────

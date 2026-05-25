@@ -51,6 +51,14 @@ import { MerchantComparisonService } from './services/merchant-comparison.servic
 import { MerchantScatterPointDto } from './dto/merchant-scatter.dto';
 import { MerchantHealthDistributionTierDto } from './dto/merchant-health-distribution.dto';
 import { MerchantComparisonResponseDto } from './dto/merchant-comparison-table.dto';
+// F-062 Wave 2C-1 — Race Performance (type-distribution / spotlight / list) DTOs + service
+import { RacePerformanceService } from './services/race-performance.service';
+import { RaceTypeDistributionPointDto } from './dto/race-type-distribution.dto';
+import { RaceSpotlightDto } from './dto/race-spotlight.dto';
+import {
+  RacePerformanceListQueryDto,
+  RacePerformanceListResponseDto,
+} from './dto/race-performance-list.dto';
 
 @ApiTags('analytics')
 @Controller('analytics')
@@ -66,6 +74,8 @@ export class AnalyticsController {
     private readonly refundCancelService: RefundCancelService,
     // F-062 Wave 2B-2 — Merchant comparison (scatter / health-distribution / table)
     private readonly merchantComparisonService: MerchantComparisonService,
+    // F-062 Wave 2C-1 — Race performance (type-distribution / spotlight / list)
+    private readonly racePerformanceService: RacePerformanceService,
   ) {}
 
   @Get('overview')
@@ -169,6 +179,69 @@ export class AnalyticsController {
     @Query() query: AnalyticsQueryDto,
   ) {
     return this.analyticsService.getRaceDetail(Number(raceId), query);
+  }
+
+  // ─── F-062 Wave 2C-1 — Race Performance Analytics (BR-SA-21) ────────────────
+
+  @Get('races/type-distribution')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-21a v3 — GMV by race type horizontal bar chart',
+    description:
+      'Group races by race_type (ROAD_MARATHON / ROAD_HALF_MARATHON / ULTRA_TRAIL_RACE / TRAIL_RACE / OTHER) ' +
+      'với count + sum gmv + avg gmv per type. ' +
+      'Default 12 tháng gần nhất nếu không from/to. ' +
+      'Cache `analytics:metric:race-perf-type:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: RaceTypeDistributionPointDto,
+    isArray: true,
+  })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRaceTypeDistribution(@Query() query: AnalyticsQueryDto) {
+    return this.racePerformanceService.getTypeDistribution(query);
+  }
+
+  @Get('races/spotlight')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-21b v3 — Top GMV race + auto-generated insight text',
+    description:
+      'Race với GMV cao nhất trong period. Returns null nếu không có race nào paid order. ' +
+      'Phí 5BIB qua FeeService Tier 0 cascade. ' +
+      'Cache `analytics:metric:race-perf-spotlight:<scope>:<periodKey>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: RaceSpotlightDto })
+  @ApiResponse({ status: 400, description: 'Date range exceeds 366 days' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRaceSpotlight(@Query() query: AnalyticsQueryDto) {
+    return this.racePerformanceService.getSpotlight(query);
+  }
+
+  @Get('races/performance')
+  @ApiOperation({
+    summary:
+      'F-062 BR-SA-21c v3 — Paginated + filtered race performance list (10 fields)',
+    description:
+      'Filters: raceType (enum) + tenantId + from/to/month. ' +
+      'Sort: gmv/orders/fee/avgPerOrder/voidedPct với asc/desc (default gmv DESC). ' +
+      'Page size default 12, max 50. ' +
+      'Phí 5BIB qua FeeService Tier 0 cascade. ' +
+      'Cache `analytics:metric:race-perf-list:<scope>:<filters-hash>` TTL 15min/24h.',
+  })
+  @ApiResponse({ status: 200, type: RacePerformanceListResponseDto })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid filters/sort/pagination or date range > 366 days',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (not admin)' })
+  getRacePerformanceList(@Query() query: RacePerformanceListQueryDto) {
+    return this.racePerformanceService.getPerformanceList(query);
   }
 
   @Get('merchants')

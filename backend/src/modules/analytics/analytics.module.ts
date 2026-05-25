@@ -39,6 +39,9 @@ import { AnalyticsAggregatorCron } from './services/analytics-aggregator.cron';
 // F-062 Wave 2B-2 — NEW merchant-comparison service (BR-SA-22 a/b/c)
 import { MerchantComparisonService } from './services/merchant-comparison.service';
 
+// F-062 Wave 2C-1 — NEW race-performance service (BR-SA-21 a/b/c)
+import { RacePerformanceService } from './services/race-performance.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Tenant], 'platform'),
@@ -65,6 +68,8 @@ import { MerchantComparisonService } from './services/merchant-comparison.servic
     AnalyticsAggregatorCron,
     // F-062 Wave 2B-2 — Merchant Comparison Analytics (BR-SA-22)
     MerchantComparisonService,
+    // F-062 Wave 2C-1 — Race Performance Analytics (BR-SA-21)
+    RacePerformanceService,
   ],
 })
 export class AnalyticsModule {}

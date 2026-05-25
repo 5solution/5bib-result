@@ -602,3 +602,122 @@
 
 **Lesson REINFORCED Wave 2B-2:**
 - Helper extraction pattern: `period-resolver.ts` now hosts cache key + period helpers shared across analytics services. Wave 1 → Wave 2A `shiftMonthClamped` → Wave 2B-1 v2 `buildMetricCacheKey` extend → Wave 2B-2 `resolveScopeFromTenant + periodKeyFromInputs`. Continued evolution.
+
+---
+
+# Wave 2C-1 — Race Performance Service + Shared Extract (BR-SA-21)
+
+**Date:** 2026-05-25
+**Slice:** Wave 2C-1 of Wave 2C
+**Status:** 🟠 READY_FOR_QC
+
+## Section 1: 🚧 Wave 2C-1 Deviations
+
+### [Deviation #15] EXTRACT pullOrdersForFeeAggregate to shared (TD-WAVE2B2 resolved)
+- **Spec said:** Manager Plan + Wave 2B-2 IMPLEMENTATION_NOTES Forced #9 "defer extraction until 3rd consumer"
+- **I did:** Wave 2C-1 race-performance.service.ts = 3rd consumer → extracted to `services/fee-aggregate.helpers.ts` standalone function. Refactored 2 existing consumers (analytics.service.ts thin wrapper for backward compat; merchant-comparison.service.ts direct import).
+- **Why:** 3rd consumer threshold met per documented plan. Extraction is now justified by confirmed need (3 different services share identical 88-LoC SQL + map pattern).
+- **Reviewer should check:** TD-F062-WAVE2B2-PULLORDERS-DUPLICATE marked RESOLVED in known-issues.md. 5 invariant tests in Wave 2C-1 spec verify extraction completeness.
+
+### [Deviation #16] In-memory sort + pagination (NOT SQL-side ORDER BY + LIMIT)
+- **Spec said:** BR-SA-21c spec mentions pagination + sort but doesn't mandate implementation
+- **I did:** Pull all race aggregates from SQL (sorted gmv DESC default), then sort + slice in-memory based on query.sortBy/sortOrder/page/limit
+- **Why:** Small dataset (~50-200 races/year) makes in-memory cheap + simpler code. SQL-side dynamic sortBy needs whitelist validation + SQL injection guard. Trade-off LOW given dataset size.
+- **Reviewer should check:** TD-F062-WAVE2C1-IN-MEMORY-SORT-LIMIT LOW tracked. Wave 5 k6 benchmark to confirm.
+
+### [Deviation #17] date field = MAX(payment_on) NOT race event_date
+- **Spec said:** BR-SA-21b line 539 + 21c line 553 mention `date` field but don't specify source
+- **I did:** Used `MAX(payment_on)` as proxy (latest paid order = "race active date" proxy)
+- **Why:** Avoids extra JOIN to races.event_date column; payment_on directly correlates với race activity period
+- **Reviewer should check:** TD-F062-WAVE2C1-DATE-PROXY-VS-RACE-EVENT-DATE LOW tracked. Wave 2C-2/Wave 5 swap to event_date if BA confirms.
+
+## Section 2: ⚙️ Wave 2C-1 Forced Changes
+
+### [Forced #10] analytics.service.ts pullOrdersForFeeAggregate kept as thin wrapper (NOT removed)
+- **PRD assumed:** Clean removal post-extraction
+- **Reality:** 18+ internal call sites in analytics.service.ts (getDailyRevenue, getTopRaces, getRacePerformance, getRaceDetail, getMerchantComparison legacy, getRunnerBehavior, etc.) — refactoring all to direct import is large diff for marginal benefit
+- **Workaround:** Private method becomes thin delegate `return pullOrdersShared(this.db, clause, params, filter)`. Wave 5 cleanup task: refactor all internal call sites to direct import + remove wrapper.
+- **Manager/BA action:** TD-WAVE2C1-LEGACY-WRAPPER-CLEANUP can be added Wave 5 if cleanup desired. Current state is acceptable transition.
+
+## Section 3: ⚖️ Wave 2C-1 Tradeoffs
+
+| # | Decision | Option chosen | Alternatives REJECTED | Cost paid |
+|---|----------|---------------|----------------------|-----------|
+| 17 | Extraction timing | Post-3rd consumer | Premature extract Wave 2B-2 OR delay to Wave 5 | Confirmed need (3 consumers with identical pattern); not theoretical |
+| 18 | filters-hash algorithm | SHA-256 truncated 12-char | crc32, base64 JSON | SHA-256 standard, no extra dep, 12 chars = 2^48 unique combos (safe) |
+| 19 | Pagination sort strategy | In-memory after full aggregate | SQL-side dynamic ORDER BY + LIMIT | Simpler code + no SQL injection risk; LOW perf TD tracked Wave 5 |
+| 20 | normalizeRaceType OTHER fallback | Default 'OTHER' for null/unknown | Filter out OTHER from distribution endpoint | Defensive — legacy DB rows có race_type null show in UI as "Khác" rather than silently dropped |
+| 21 | Spotlight insight text generation | Backend computes VN string | Frontend computes from raw data | Backend ensures consistent VN formatting (vi-VN toLocaleString) + reduces frontend complexity |
+
+## Section 4: 🎯 Wave 2C-1 Reviewer Notes — Priority List
+
+### Critical paths để Manager spot-check (top 5)
+
+1. **`fee-aggregate.helpers.ts` extracted standalone function** (88 LoC)
+   - Verify takes `DataSource` as 1st arg (decoupled from service class state)
+   - Verify SQL identical to original (no semantic change during extraction)
+   - Verify filter optional cho tenantId/raceId scope
+
+2. **`race-performance.service.ts:_buildRaceAggregates` SQL + FeeService orchestration** (~70 LoC)
+   - Verify main SQL filters BI-01 paid + BI-02 MANUAL exclude + GREATEST netGmv guard
+   - Verify GROUP BY includes race_type (needed cho distribution endpoint)
+   - Verify FeeService called per (tenantId, raceOrders) — race-scoped, not whole-tenant
+   - Verify raceTypeFilter + tenantId at SQL level (efficient)
+
+3. **`race-performance.service.ts:getPerformanceList` pagination logic** (~50 LoC)
+   - Verify page/limit clamping (page ≥ 1, limit ≤ MAX_PAGE_SIZE 50)
+   - Verify sortBy default 'gmv' + sortOrder 'desc'
+   - Verify totalPages = ceil(total / limit)
+   - Verify filtersHash via SHA-256 truncated 12-char
+
+4. **`race-performance.service.ts:getSpotlight` insight text + null handling**
+   - Verify returns null on empty aggregates
+   - Verify VN insight format "Đóng góp X% tổng GMV, trung bình Y đ/đơn"
+   - Verify contribution % guards divide-by-zero (totalGmv > 0 check)
+
+5. **`analytics.service.ts` + `merchant-comparison.service.ts` extraction backport**
+   - Verify analytics.service.ts thin wrapper delegates to shared
+   - Verify merchant-comparison.service.ts uses direct import + private duplicate removed
+   - Verify unused OrderForFeeAggregate import cleaned from merchant-comparison.service.ts
+
+### Anti-regression invariant tests added (33 NEW)
+
+- 5 extraction tests verify shared helper + 3 consumers correctly refactored
+- 4 cache key tests verify Wave 2B-1 v2 + Wave 2B-2 lesson APPLIED
+- 6 pagination tests verify clamping + defaults + filtersHash
+- 2 spotlight tests verify VN insight + null handling
+- 16 standard invariants (SQL + FeeService + DI + controller wiring)
+
+### ⚠️ Deferred (acceptable Wave 2C-1 scope):
+- analytics.service.ts 18 internal call sites still go through private wrapper (Wave 5 cleanup TD)
+- Race event_date vs MAX(payment_on) proxy (Wave 5 if BA confirms)
+- SQL-side ORDER BY + LIMIT for very large dataset (Wave 5 k6 benchmark)
+- 3× cold-cache redundancy (same pattern Wave 2B-2 TD)
+
+### Security checklist (Wave 2C-1)
+- [x] SQL injection — `?` placeholders + params array. raceType filter via `?` after `@IsIn` validation
+- [x] Auth guard — class-level `@UseGuards(LogtoAdminGuard)` inherited
+- [x] DTO validation — `RacePerformanceListQueryDto` `@IsIn` cho raceType/sortBy/sortOrder + `@Min`/`@Max` cho page/limit
+- [x] Pagination DoS — limit clamped MAX_PAGE_SIZE 50; date range cap 366 days
+- [x] No PII leak — response only race aggregates
+- [x] filtersHash deterministic + cryptographic — same input always same output
+
+### Self-Review Pipeline checklist 11 bước (Wave 2C-1)
+
+- [x] **Bước 1:** tsc clean
+- [x] **Bước 2:** PRD strict adherence — ALL BR-SA-21 a/b/c bullets grep verified
+- [x] **Bước 3:** Anti-pattern scan clean
+- [x] **Bước 4:** Hand-pick mapping audit — N/A
+- [x] **Bước 5:** PROD-readiness — 230/230 PASS
+- [x] **Bước 6:** UI/UX — N/A backend
+- [x] **Bước 7:** Real-world data sanity — race types match existing convention + OTHER defensive fallback
+- [x] **Bước 8:** Files Changed vs Scope Lock — 10 files all in Wave 2C backend Scope Lock + shared helper extract
+- [x] **Bước 9:** Generated SDK regen — DEFER end of Wave 2C
+- [x] **Bước 10:** Unit tests PASS 230/230
+- [x] **Bước 11:** IMPLEMENTATION_NOTES.md Wave 2C-1 section đầy đủ 4 sub-sections
+
+**Helper extraction pattern continues evolution:**
+- Wave 1 buildMetricCacheKey + Wave 2A shiftMonthClamped + Wave 2B-1 v2 extend + Wave 2B-2 resolveScopeFromTenant + periodKeyFromInputs + **Wave 2C-1 pullOrdersForFeeAggregate extract**
+- period-resolver.ts: cache key + period helpers (~430 LoC across 4 waves)
+- fee-aggregate.helpers.ts: NEW FeeService pre-aggregate helper (~88 LoC Wave 2C-1)
+- All shared cross 3 services with full backward compat
