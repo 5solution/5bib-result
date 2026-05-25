@@ -687,6 +687,11 @@ export class FeeService {
     // TRIM(payment_ref) != '' — covers null/empty/whitespace defensively.
     const hasPaymentRefSql =
       "o.payment_ref IS NOT NULL AND TRIM(o.payment_ref) <> ''";
+    // F-061.1 HOTFIX — Pattern B FREE skip mirror TS helper `isFreePromoOrder`.
+    // Pattern B (split cat + no ref + total_price = 0) → KHÔNG count vào
+    // manual_ticket_count (FREE promo, không charge MANUAL fee ảo). Pattern A
+    // (split cat + no ref + total_price > 0) vẫn đi MANUAL như cũ.
+    const hasRevenueSql = 'o.total_price > 0';
     const periodClause =
       periodFromStr && periodToStr
         ? ' AND o.processed_on >= ? AND o.processed_on <= ?'
@@ -717,6 +722,7 @@ export class FeeService {
             OR (
               o.order_category IN (${fiveBibCatsJoined})
               AND NOT (${hasPaymentRefSql})
+              AND ${hasRevenueSql}
             )
           THEN 1
           ELSE 0
@@ -726,6 +732,7 @@ export class FeeService {
             OR (
               o.order_category IN (${fiveBibCatsJoined})
               AND NOT (${hasPaymentRefSql})
+              AND ${hasRevenueSql}
             )
           THEN (
             SELECT COALESCE(SUM(oli2.quantity), 0)
@@ -1242,13 +1249,30 @@ export class FeeService {
       // `paymentRef` field undefined → `isPaymentRefEmpty(undefined) = true`
       // → cat ∈ SPLIT bị classify MANUAL. Atomic B fix đã update 3 caller
       // (Analytics + 2 Dashboard) cùng inject paymentRef qua SQL pull.
+      //
+      // F-061.1 HOTFIX — Pattern B FREE skip.
+      //   Pattern A: payment_ref empty + total_price > 0 → MANUAL (MOU thu hộ).
+      //   Pattern B: payment_ref empty + total_price = 0 → SKIP (FREE promo
+      //     — organizer KHÔNG thu, 5BIB KHÔNG charge MANUAL fee ảo). Required
+      //     vì discound_code_id giảm 100% → đơn FREE bản chất không phải
+      //     "MOU thu hộ" mà là "promo 100% off cho VĐV".
+      //   QC re-audit post v1.9.5 phát hiện ~32M VND over-charge cho 25/29
+      //   race no_ref khi KHÔNG check hasRevenue.
       const cat = order.orderCategory;
       const isSplitCat = SPLIT_BY_PAYMENT_REF.has(cat);
       const isPaymentEmpty = isPaymentRefEmpty(order.paymentRef);
+      const hasRevenue = Number(order.totalPrice) > 0;
       const isManual =
-        cat === 'MANUAL' || (isSplitCat && isPaymentEmpty);
+        cat === 'MANUAL' ||
+        (isSplitCat && isPaymentEmpty && hasRevenue); // 🆕 hasRevenue gate
       // 5BIB-eligible CHỈ khi cat 5BIB AND payment_ref truthy (sau F-061).
       const is5bib = fiveBibCats.includes(cat) && !isManual;
+      // F-061.1 — Pattern B FREE skip: split cat + no ref + no revenue.
+      // Loop tiếp theo SẼ skip entire fee compute (orderServiceFee = 0,
+      // orderManualFee = 0). Tracking biến để source attribution KHÔNG inflate
+      // bucket count cho free orders.
+      const isFreeSkip =
+        isSplitCat && isPaymentEmpty && !hasRevenue;
 
       let orderServiceFee = 0;
       let orderManualFee = 0;
@@ -1273,6 +1297,13 @@ export class FeeService {
       totalManualFee += orderManualFee;
       totalVat += orderVat;
       totalNetGmv += orderNetGmv;
+
+      // F-061.1 — Pattern B FREE skip: KHÔNG count vào source attribution
+      // bucket. Đơn FREE không phát sinh fee bất kỳ source nào — inflate
+      // `orderCount` sẽ làm sai feeSourceBreakdown UI metrics.
+      if (isFreeSkip) {
+        continue;
+      }
 
       // Source attribution — phân theo rate source (dominant cho 5BIB orders)
       const orderFee = orderServiceFee + orderManualFee + orderVat;

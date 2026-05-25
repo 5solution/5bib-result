@@ -95,3 +95,32 @@ export function isPaymentRefEmpty(
 export const FIVE_BIB_SQL_LIST = FIVE_BIB_CATEGORIES.map(
   (c) => `'${c}'`,
 ).join(',');
+
+/**
+ * F-061.1 hotfix — Pattern B FREE detection helper.
+ *
+ * QC re-audit post v1.9.5 phát hiện F-061 over-charge ~32M VND MANUAL fee ảo
+ * cho 25/29 race ORDINARY no_ref. Distribution:
+ *   - Pattern A (MOU thu hộ, total_price > 0): organizer thu ngoài 5BIB
+ *     → ĐÚNG là MANUAL semantic, charge fee đúng.
+ *   - Pattern B (Promo 100% FREE, total_price = 0): VĐV không trả tiền
+ *     (discound_code_id giảm 100%) → organizer KHÔNG thu, 5BIB cũng KHÔNG
+ *     được charge MANUAL fee ảo trên đơn FREE này.
+ *
+ * Returns true cho free promo order (total_price = 0 after discount) — caller
+ * SKIP MANUAL fee compute hoàn toàn (KHÔNG count MANUAL, KHÔNG count 5BIB GMV).
+ *
+ * @example
+ * isFreePromoOrder(0) === true
+ * isFreePromoOrder('0') === true
+ * isFreePromoOrder(null) === false   // unknown → fail-safe NOT free
+ * isFreePromoOrder(500000) === false
+ */
+export function isFreePromoOrder(
+  totalPrice: number | string | null | undefined,
+): boolean {
+  if (totalPrice == null) return false;
+  const n = Number(totalPrice);
+  if (!Number.isFinite(n)) return false;
+  return n === 0;
+}
