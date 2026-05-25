@@ -192,6 +192,17 @@ export default function AnalyticsPageGate() {
 
 function AnalyticsOverviewPage() {
   const { token } = useAuth();
+  // F-062 Wave 3-2: read filter params from URL (driven by AnalyticsFilterBar in layout)
+  // Declared early so granularityFromUrl is available for fetchDailyRevenue useCallback below.
+  const sp = useSearchParams();
+  const wave2Query = searchParamsToQuery(sp);
+  const wave2Compare = ((sp.get("compare") as CompareKindLabel) === "wow" ||
+    (sp.get("compare") as CompareKindLabel) === "yoy"
+    ? (sp.get("compare") as "wow" | "yoy")
+    : "mom") as "wow" | "mom" | "yoy";
+  // F-062 BUG-009: granularity switch for AreaChart endpoint (daily/weekly/monthly per BR-SA-13)
+  const granularityFromUrl = sp.get("granularity") ?? "daily";
+
   const [month, setMonth] = useState(currentMonthStr());
 
   // F-026 state
@@ -422,14 +433,6 @@ function AnalyticsOverviewPage() {
   const handleExportExcel = useCallback(() => {
     toast.info("Export Excel đang được chuẩn bị (MVP — phase 2)");
   }, []);
-
-  // F-062 Wave 3-2 — read filter from URL searchParams (driven by AnalyticsFilterBar layout)
-  const sp = useSearchParams();
-  const wave2Query = searchParamsToQuery(sp);
-  const wave2Compare = ((sp.get("compare") as CompareKindLabel) === "wow" ||
-    (sp.get("compare") as CompareKindLabel) === "yoy"
-    ? (sp.get("compare") as "wow" | "yoy")
-    : "mom") as "wow" | "mom" | "yoy";
 
   return (
     <div className="flex flex-col gap-6">
