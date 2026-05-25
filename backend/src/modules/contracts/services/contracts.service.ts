@@ -887,14 +887,28 @@ export class ContractsService {
     }
     if (!c.contractNumber) {
       const signDate = c.signDate ?? new Date();
-      const clientShort =
-        (c.client?.entityName ?? 'CLIENT')
-          .split(/\s+/)
-          .map((w) => w[0])
-          .join('')
-          .replace(/[^A-Za-z0-9]/g, '')
-          .toUpperCase()
-          .slice(0, 8) || 'CLIENT';
+      // FEATURE-066 BR-66-02: thay block acronym hand-built bằng partner.shortName
+      // override (highest priority) → fallback stripCompanyPrefix(entityName).
+      // Lookup Partner via c.partnerId để lấy shortName mới nhất (admin có thể
+      // edit Partner.shortName sau khi tạo contract DRAFT — BR-66-10 forward-only).
+      let partnerShortName: string | null | undefined;
+      try {
+        if (c.partnerId) {
+          const partner = await this.partnerModel
+            .findOne({ _id: c.partnerId, deletedAt: null }, { shortName: 1 })
+            .lean();
+          partnerShortName = partner?.shortName ?? null;
+        }
+      } catch (err) {
+        // Defensive: log + fallback null (service tiếp tục bằng stripCompanyPrefix).
+        this.logger.warn(
+          `[contracts] lookup partner.shortName fail — fallback strip entity. ${
+            (err as Error).message
+          }`,
+        );
+        partnerShortName = null;
+      }
+      const entityName = c.client?.entityName ?? null;
       // F-024 BUG-002 fix — retry tối đa 5 lần nếu Redis sequence + seq
       // suffix vẫn collide với HĐ cũ trong DB (e.g. dev/test data residue).
       // Pre-check uniqueness via model.exists() khi available (production).
@@ -902,11 +916,12 @@ export class ContractsService {
       // và rely trên seq suffix uniqueness (Redis INCR atomic đảm bảo).
       let attempts = 0;
       while (attempts < 5) {
-        const { contractNumber } = await this.numberService.generateNumber(
+        const { contractNumber } = await this.numberService.generateNumber({
           signDate,
-          clientShort,
-          c.providerId,
-        );
+          partnerShortName,
+          entityName,
+          providerId: c.providerId,
+        });
         let collides = false;
         if (typeof (this.model as any).exists === 'function') {
           try {
