@@ -1053,3 +1053,43 @@ export function confirmPartnerImport(
 export function getPartnerTemplateUrl(): string {
   return "/api/partners/import-template";
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// F-067 — Contract Audit History
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Mirrors backend `AuditEntryDto` + `ContractHistoryResponseDto` byte-for-byte.
+ * `metadata` is intentionally `Record<string, unknown>` because action-specific
+ * shapes vary (force-edit carries `diff`, generateDocument carries `docType`+
+ * `s3Key`, docRegenFail carries `error`+`trigger`, …). Consumers narrow with
+ * type guards at the render site.
+ */
+export interface AuditActor {
+  userId: string;
+  displayName?: string;
+  role?: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  action: string;
+  actor: AuditActor;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ContractHistoryResponse {
+  entries: AuditEntry[];
+  total: number;
+}
+
+/** F-067 BR-67-16 — GET /api/contracts/:id/history */
+export function getContractHistory(
+  id: string,
+  limit = 50,
+): Promise<ContractHistoryResponse> {
+  return jsonFetch<ContractHistoryResponse>(
+    `/api/contracts/${encodeURIComponent(id)}/history${toQs({ limit })}`,
+  );
+}
