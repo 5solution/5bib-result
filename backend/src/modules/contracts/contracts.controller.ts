@@ -33,6 +33,10 @@ import {
   CreateAcceptanceReportDto,
   CreatePaymentRequestDto,
 } from './dto/acceptance-payment.dto';
+import {
+  ContractHistoryResponseDto,
+  GetHistoryQueryDto,
+} from './dto/contract-history.dto';
 import { LogtoStaffGuard } from '../logto-auth';
 
 @ApiTags('Contracts')
@@ -62,6 +66,29 @@ export class ContractsController {
   @ApiResponse({ status: 200, type: ContractResponseDto })
   async detail(@Param('id') id: string) {
     return this.contracts.findOne(id);
+  }
+
+  /**
+   * F-067 Group Z — Audit timeline endpoint.
+   *
+   * Returns `audit_logs` entries (F-023 collection) scoped to one contract,
+   * latest-first. Surfaces `contract.update.force` diffs (BR-67-13) +
+   * `contract.docRegenFail` markers (BR-67-06) for the admin "Lịch sử chỉnh
+   * sửa" tab. `limit` defaults to 50, class-validator @Max enforces ≤200.
+   */
+  @Get(':id/history')
+  @ApiOperation({
+    summary:
+      'F-067 — Audit timeline (force-edit diffs + auto-regen events) sorted DESC',
+  })
+  @ApiResponse({ status: 200, type: ContractHistoryResponseDto })
+  @ApiResponse({ status: 400, description: 'limit out of range (1-200)' })
+  @ApiResponse({ status: 404, description: 'Contract not found' })
+  async history(
+    @Param('id') id: string,
+    @Query() query: GetHistoryQueryDto,
+  ): Promise<ContractHistoryResponseDto> {
+    return this.contracts.getHistory(id, query.limit ?? 50);
   }
 
   @Patch(':id')

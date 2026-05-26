@@ -90,6 +90,15 @@ type State = {
   partner: PartnerView | null;
   client: CreateContractInput["client"];
   race: RacePickerValue;
+  // F-064 Phase 4 — event date + location + athlete count override (all optional).
+  // Server fallback derive: setup=race-3d, expo=race-1d, location=raceLocation,
+  // athleteCount=sum athlete-keyword line items. Empty → server derive.
+  eventStartDate: string;
+  eventEndDate: string;
+  setupDate: string;
+  expoDate: string;
+  eventLocation: string;
+  expectedAthleteCount: string; // string for input control; convert to number on submit
   lineItems: LineItemInput[];
   revenueShare: RevenueShare;
   vatRate: number;
@@ -119,6 +128,13 @@ const DEFAULT_STATE: State = {
     email: "",
   },
   race: null,
+  // F-064 Phase 4 — empty → server derive fallback
+  eventStartDate: "",
+  eventEndDate: "",
+  setupDate: "",
+  expoDate: "",
+  eventLocation: "",
+  expectedAthleteCount: "",
   lineItems: [],
   revenueShare: { feePercentage: 0, feePerAthlete: 0, estimatedAthletes: 0 },
   vatRate: 8,
@@ -305,6 +321,15 @@ export function ContractWizard() {
         raceName: state.race?.raceName,
         raceDate: state.race?.raceDate,
         raceLocation: state.race?.raceLocation,
+        // F-064 Phase 4 — empty string → undefined → server derive fallback.
+        eventStartDate: state.eventStartDate || undefined,
+        eventEndDate: state.eventEndDate || undefined,
+        setupDate: state.setupDate || undefined,
+        expoDate: state.expoDate || undefined,
+        eventLocation: state.eventLocation || undefined,
+        expectedAthleteCount: state.expectedAthleteCount
+          ? Number(state.expectedAthleteCount)
+          : undefined,
         signDate: state.signDate,
         effectiveDate: state.effectiveDate || undefined,
         endDate: state.endDate || undefined,
@@ -574,6 +599,108 @@ export function ContractWizard() {
                 )}
               </div>
             )}
+
+            {/*
+              F-064 Phase 4 — Lịch sự kiện (tuỳ chọn).
+              All 6 fields optional. Empty → server `buildRenderContext` derives:
+                - setupDate = raceDate - 3d
+                - expoDate  = raceDate - 1d
+                - eventLocation = raceLocation
+                - athleteCount = sum quantity of athlete-keyword line items
+              Admin override when default doesn't match (multi-day race, custom
+              setup window, race kit quantity differs from athlete count, etc.).
+            */}
+            <div className="rounded-md border border-[#E7E5E4] bg-white p-4">
+              <h3 className="mb-1 text-sm font-semibold">
+                Lịch sự kiện (tuỳ chọn)
+              </h3>
+              <p className="mb-3 text-xs text-[var(--text-muted,#78716C)]">
+                Bỏ trống các trường để hệ thống tự suy ra từ ngày race. Chỉ nhập
+                khi cần ghi đè (sự kiện nhiều ngày, setup/expo lệch, hoặc số VĐV
+                khác với line items).
+              </p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Ngày bắt đầu sự kiện</Label>
+                  <Input
+                    type="date"
+                    value={state.eventStartDate}
+                    onChange={(e) => patch("eventStartDate", e.target.value)}
+                    placeholder="Mặc định: dùng ngày race"
+                  />
+                  <p className="mt-1 text-[10px] text-[var(--text-muted,#78716C)]">
+                    Bỏ trống nếu sự kiện 1 ngày → dùng raceDate.
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs">Ngày kết thúc sự kiện</Label>
+                  <Input
+                    type="date"
+                    value={state.eventEndDate}
+                    onChange={(e) => patch("eventEndDate", e.target.value)}
+                    placeholder="Mặc định: dùng ngày race"
+                  />
+                  <p className="mt-1 text-[10px] text-[var(--text-muted,#78716C)]">
+                    Bỏ trống nếu sự kiện 1 ngày → dùng raceDate.
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs">Ngày setup</Label>
+                  <Input
+                    type="date"
+                    value={state.setupDate}
+                    onChange={(e) => patch("setupDate", e.target.value)}
+                    placeholder="Mặc định: race - 3 ngày"
+                  />
+                  <p className="mt-1 text-[10px] text-[var(--text-muted,#78716C)]">
+                    Bỏ trống → tự tính = ngày race - 3 ngày.
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs">Ngày Expo</Label>
+                  <Input
+                    type="date"
+                    value={state.expoDate}
+                    onChange={(e) => patch("expoDate", e.target.value)}
+                    placeholder="Mặc định: race - 1 ngày"
+                  />
+                  <p className="mt-1 text-[10px] text-[var(--text-muted,#78716C)]">
+                    Bỏ trống → tự tính = ngày race - 1 ngày.
+                  </p>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-xs">Địa điểm sự kiện (ghi đè)</Label>
+                  <Input
+                    type="text"
+                    value={state.eventLocation}
+                    onChange={(e) => patch("eventLocation", e.target.value)}
+                    placeholder="VD: Hồ Hoàn Kiếm 6h sáng — bỏ trống dùng raceLocation"
+                    maxLength={255}
+                  />
+                  <p className="mt-1 text-[10px] text-[var(--text-muted,#78716C)]">
+                    Bỏ trống → dùng raceLocation từ race picker.
+                  </p>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-xs">
+                    Số lượng VĐV dự kiến (ghi đè)
+                  </Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={state.expectedAthleteCount}
+                    onChange={(e) =>
+                      patch("expectedAthleteCount", e.target.value)
+                    }
+                    placeholder="VD: 3500 — bỏ trống dùng tổng quantity line items có 'BIB', 'VĐV', 'racekit'"
+                  />
+                  <p className="mt-1 text-[10px] text-[var(--text-muted,#78716C)]">
+                    Bỏ trống → tự tính từ line items có chữ "BIB" / "VĐV" /
+                    "racekit" / "vận động viên".
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

@@ -248,11 +248,31 @@ function CreatePartnerForm({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label htmlFor="p-short">Tên viết tắt</Label>
+          {/*
+            FEATURE-066 BR-66-12: auto-transform shortName input về uppercase A-Z 0-9
+            on every keystroke. Backend là source of truth (BR-66-11 DTO validate
+            @Matches(/^[A-Z0-9]+$/) + @MaxLength(16)) — UI transform là best-effort
+            UX để user thấy ngay format đúng. Helper text giải thích usage.
+          */}
           <Input
             id="p-short"
             value={form.shortName ?? ""}
-            onChange={(e) => set("shortName", e.target.value)}
+            placeholder="VD: TAM"
+            maxLength={16}
+            onChange={(e) =>
+              set(
+                "shortName",
+                e.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9]/g, "")
+                  .slice(0, 16),
+              )
+            }
           />
+          <p className="mt-1 text-[11px] leading-snug text-[var(--text-muted,#78716C)]">
+            Dùng cho số HĐ — VD: <code>15.05/2026/HDDV/TAM-5BIB</code>. Để trống
+            sẽ tự sinh từ tên đối tác. Tối đa 16 ký tự A-Z 0-9.
+          </p>
         </div>
         <div>
           <Label htmlFor="p-mst">MST</Label>

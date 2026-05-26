@@ -258,6 +258,20 @@ export class Contract {
   @Prop() raceDate: string;
   @Prop() raceLocation: string;
 
+  /**
+   * F-064 Phase 4 — Event date + location override + athlete count fields.
+   * All optional, no default. Empty → `buildRenderContext` derives fallback
+   * (setup = raceDate - 3d, expo = raceDate - 1d, location = raceLocation,
+   * athleteCount = sum match line items). Backward compat 100% — existing
+   * contracts have these undefined → render empty (no hardcoded leak).
+   */
+  @Prop() eventStartDate?: Date;
+  @Prop() eventEndDate?: Date;
+  @Prop() setupDate?: Date;
+  @Prop() expoDate?: Date;
+  @Prop() eventLocation?: string;
+  @Prop() expectedAthleteCount?: number;
+
   @Prop() signDate: Date;
   @Prop() effectiveDate: Date;
   @Prop() endDate: Date;
