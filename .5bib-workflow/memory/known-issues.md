@@ -756,3 +756,69 @@ Xem `conventions.md` section "DOCX Template Content Review Protocol (F-044 lesso
 - F-044 Manager Content Review: `.5bib-workflow/features/FEATURE-044-contract-docx-phase-2-text-hardcoded-fix/MANAGER-CONTENT-REVIEW.md`
 - F-044 BUGFIX #1 regression spec: `backend/src/modules/contracts/services/document-generator.service.f044-bugfix1.spec.ts`
 - Render verify spec template: `backend/src/modules/contracts/services/f044-manager-render-verify.spec.ts`
+
+---
+
+## Q2 Contract Revamp 2026-05-26 (F-064 + F-065 + F-066 + F-067 BUNDLE)
+
+### 🔴 TD-RACE-CONDITION-PARALLEL-AGENTS (HIGH process)
+
+**Symptom:** 3 features (F-064 + F-065 + F-067) lost 00/01/02 docs on branch despite being committed earlier. F-064 Coder fail mid-run lần 1.
+
+**Root cause:** Parallel Coder agents `git checkout` xung đột trên main worktree — agent A checkout branch X, agent B checkout branch Y, agent A's working file deletes overwritten by B's branch state.
+
+**Mitigation (enforced post-Q2):**
+1. Manager + Coder MUST use isolated worktree pattern `/private/tmp/5bib-fXXX/` cho parallel feature work
+2. Coder pre-flight check: `git ls-tree` instead of `ls` (verify files committed, not just local present)
+3. Manager Plan: workflow docs (00/01/02) MUST be committed in first commit C0 BEFORE Coder starts code commits
+4. Multiple agents same-repo HEAD race risk = ALWAYS isolate worktree
+
+### 🟡 TD-PIZZIP-STORE-DEFAULT (MED — possible regression)
+
+pizzip default STORE compression có thể affect F-044 + F-064 rendered output size + integrity. F-065 phát hiện + applied DEFLATE manual override. Need verify F-042/F-044/F-045 outputs compression mode.
+
+**Action:** Audit existing DOCX render outputs compression. If STORE → migrate to DEFLATE consistent.
+
+### 🟢 TD-NO-BOLD-VERIFY (LOW — manual QC required)
+
+Audit scripts F-064/F-065/F-067 verify TEXT content but KHÔNG verify visual style preservation (bold/italic/font/color). DOCX XML edit có thể break style accidentally.
+
+**Mitigation:** Danny manual visual diff Word/LibreOffice rendered outputs sample contract sau mỗi F-XXX DOCX edit.
+
+### 🟢 TD-F067-CONCURRENT-REGEN-RACE (LOW — Phase 2 BullMQ)
+
+Concurrent mutations cùng contract → 2 regen jobs spawn → version conflict possible. Phase 1 accept last-write-wins. Phase 2 add BullMQ queue + Redis lock per contractId.
+
+### 🟢 TD-CONTRACTS-ACTOR-001 (carry-forward F-067)
+
+`actorId='admin'` hardcoded across contract mutations. Future F-068 implement proper JWT extraction.
+
+### 🟢 TD-F067-DIFF-CAP-100-ITEMS (LOW)
+
+Line items > 100 → diff truncated. Edge case rare. Accept Phase 1.
+
+### 🟢 TD-F064-HISTORICAL-CONTRACTS (accepted forward-only)
+
+N historical contracts với hardcoded SAI KHÔNG auto re-render (consistent F-061 forward-only). Sales Admin manual re-issue per contract nếu cần.
+
+### 🟡 TD-F064-ATHLETE-COUNT-REGEX-FALSE-POSITIVE (MED — F-068+ improve)
+
+Regex `/\b(athlete|VĐV|runner|BIB|vận động viên)\b/i` có thể match "Banner BIB sponsor" hoặc "Race kit" → over-count. Mitigation: admin override `expectedAthleteCount` explicit field exist. F-068+ audit + improve regex.
+
+### 🟢 TD-F066-MONGO-SPARSE-INDEX (LOW — perf future)
+
+Partner.shortName field cần sparse index `{shortName:1}` future perf. F-068+ defer.
+
+### 🟢 TD-F066-ADMIN-EDIT-SHORTNAME-UI (LOW — F-068 Journey 3)
+
+Admin Partner EDIT form chỉ render "Tạo mới" path. EDIT shortName flow defer F-068+.
+
+### CI Infrastructure Pattern (lesson Q2 Contract Revamp)
+
+**Symptom:** Sequential push 4 release branches `v1.9.7 → v1.9.8 → v1.9.9 → v1.10.0` trong vài phút cause Deploy SSH VPS step race conditions → CI failure pattern (build PASS but deploy fail).
+
+**Mitigation next sequential deploys:**
+1. Stagger ≥5 phút giữa 4 releases
+2. Hoặc bundle thành 1 release branch single deploy (1 super-release thay vì 4 sub-releases)
+3. CI deploy script should ALWAYS update both backend + admin SHA in docker-compose.yml (paths-filter occasionally skip admin nếu commit chỉ touch backend file)
+4. Post-deploy verify VPS image SHA vs expected — manual `sed + docker compose pull + up -d` fallback nếu stale
