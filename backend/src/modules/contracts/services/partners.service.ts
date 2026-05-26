@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -17,7 +18,38 @@ export class PartnersService {
     @InjectModel(Contract.name) private contractModel: Model<ContractDocument>,
   ) {}
 
+  /**
+   * FEATURE-066 OQ-66-01 = YES — pre-check uniqueness `shortName` trên active partners.
+   *
+   * Reason: 2 partner cùng shortName sẽ share sequence Redis key
+   * `contracts:sequence:<year>:<shortName>` → counter "lệch" lẫn lộn giữa 2 client.
+   * Reject 409 Conflict + VN message để admin chọn token khác.
+   *
+   * @throws ConflictException khi shortName trùng (case-sensitive, normalize uppercase upstream)
+   */
+  private async assertShortNameUnique(
+    shortName: string,
+    excludeId?: string,
+  ): Promise<void> {
+    const filter: Record<string, unknown> = {
+      shortName,
+      deletedAt: null,
+    };
+    if (excludeId && Types.ObjectId.isValid(excludeId)) {
+      filter._id = { $ne: new Types.ObjectId(excludeId) };
+    }
+    const existing = await this.partnerModel.findOne(filter, { _id: 1 }).lean();
+    if (existing) {
+      throw new ConflictException(
+        `Tên viết tắt "${shortName}" đã được dùng cho đối tác khác — vui lòng đổi giá trị khác.`,
+      );
+    }
+  }
+
   async create(dto: CreatePartnerDto, createdBy?: string): Promise<Partner> {
+    if (dto.shortName) {
+      await this.assertShortNameUnique(dto.shortName);
+    }
     const doc = await this.partnerModel.create({ ...dto, createdBy });
     return doc.toObject();
   }
@@ -64,6 +96,10 @@ export class PartnersService {
   }
 
   async update(id: string, dto: UpdatePartnerDto): Promise<Partner> {
+    // FEATURE-066 OQ-66-01: uniqueness check khi PATCH shortName (exclude self)
+    if (dto.shortName) {
+      await this.assertShortNameUnique(dto.shortName, id);
+    }
     const partner = await this.partnerModel
       .findOneAndUpdate({ _id: id, deletedAt: null }, dto, { new: true })
       .lean();

@@ -22,6 +22,7 @@ import { ServiceCatalogImportService } from './services/service-catalog-import.s
 import { ContractNumberService } from './services/contract-number.service';
 import { ContractTemplateService } from './services/contract-template.service';
 import { DocumentGeneratorService } from './services/document-generator.service';
+import { ContractAuditService } from './services/contract-audit.service';
 import { Race, RaceSchema } from '../races/schemas/race.schema';
 import { AuditModule } from '../audit/audit.module';
 
@@ -29,7 +30,8 @@ import { AuditModule } from '../audit/audit.module';
  * F-024 Contracts module — Phase 2A.
  * - Mongoose: Contract + Partner + ServiceCatalog + ContractTemplate +
  *   Race (READ-ONLY DI for auto-fill US-06).
- * - AuditModule (forwarded from F-023) for lifecycle event emit (BR-CM-07).
+ * - AuditModule (forwarded from F-023) for lifecycle event emit (BR-CM-07)
+ *   AND F-067 contract.update.force / docRegenFail audit emit + read.
  * - Redis: injected via @InjectRedis from RedisModule.forRoot (in app.module).
  */
 @Module({
@@ -59,6 +61,8 @@ import { AuditModule } from '../audit/audit.module';
     ContractNumberService,
     ContractTemplateService,
     DocumentGeneratorService,
+    // F-067 — domain audit wrapper (depends on AuditLogService from AuditModule).
+    ContractAuditService,
   ],
   exports: [ContractsService, PartnersService],
 })

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -38,6 +39,18 @@ import {
   ProviderId,
 } from '../constants/provider-entities';
 import { AuditLogService } from '../../audit/services/audit-log.service';
+import {
+  AuditLog,
+  AuditLogDocument,
+} from '../../audit/schemas/audit-log.schema';
+import { ContractAuditService } from './contract-audit.service';
+import {
+  computeContractDiff,
+  hasDocAffectingChange,
+  type ContractSnapshot,
+  type ContractUpdateDiff,
+} from '../utils/contract-diff.util';
+import type { ContractHistoryResponseDto } from '../dto/contract-history.dto';
 import { Race } from '../../races/schemas/race.schema';
 import { vndAmountInWords } from '../utils/vn-num-to-words';
 import { escapeRegex } from '../utils/escape-regex';
@@ -134,6 +147,13 @@ export class ContractsService {
     private readonly docGenerator: DocumentGeneratorService,
     @Optional() private readonly auditLog?: AuditLogService,
     @Optional() @InjectRedis() private readonly redis?: Redis,
+    // F-067 — domain audit wrapper + audit_logs read model. Both @Optional()
+    // so positional constructor signatures used by hand-written jest specs
+    // keep working — ContractsModule wires them as required providers in prod.
+    @Optional() private readonly contractAudit?: ContractAuditService,
+    @Optional()
+    @InjectModel(AuditLog.name)
+    private readonly auditLogModel?: Model<AuditLogDocument>,
   ) {}
 
   // ────────────────────────────────────────────────────────────────
@@ -208,13 +228,39 @@ export class ContractsService {
     }
   }
 
-  /** Emit audit log (best-effort). */
+  /**
+   * Emit audit log (best-effort).
+   *
+   * QC F-067 rework Item 3 — this helper now delegates to
+   * `ContractAuditService.emit()` when the wrapper is injected. The wrapper
+   * centralizes domain enrichment + diff typing + no-throw guards
+   * (F-023 contract). When no wrapper is bound (hand-written jest spec only
+   * passes positional ctor args), we fall back to direct
+   * `AuditLogService.emit` so existing test bench keeps working unchanged.
+   *
+   * KHÔNG widen the public surface — only `emitAudit` and the F-067
+   * regen path call into this. Other modules calling AuditLog directly is
+   * acceptable (F-023 pattern).
+   */
   private async emitAudit(
     action: string,
     contract: { _id: any; contractNumber?: string; contractType?: string },
     actorId: string,
     metadata?: Record<string, unknown>,
   ): Promise<void> {
+    const displayName =
+      contract.contractNumber ?? `${contract.contractType ?? 'CONTRACT'}`;
+    if (this.contractAudit) {
+      // Preferred route — domain wrapper handles best-effort + diff sugar.
+      await this.contractAudit.emit({
+        contractId: String(contract._id),
+        actorId,
+        action,
+        displayName,
+        metadata,
+      });
+      return;
+    }
     if (!this.auditLog) return;
     await this.auditLog.emit({
       actor: { userId: actorId },
@@ -222,8 +268,7 @@ export class ContractsService {
       entity: {
         type: 'contract',
         id: String(contract._id),
-        displayName:
-          contract.contractNumber ?? `${contract.contractType ?? 'CONTRACT'}`,
+        displayName,
       },
       metadata,
     });
@@ -621,6 +666,27 @@ export class ContractsService {
     const current = await this.model.findOne({ _id: id, deletedAt: null });
     if (!current) throw new NotFoundException('Contract not found');
 
+    // F-067 Group X/Z — capture before-snapshot BEFORE any mutation, used to
+    // build the audit diff after save(). Shallow copy of just the diffed
+    // fields keeps payload tiny + avoids mongoose-document edge cases.
+    const beforeSnapshot: ContractSnapshot = {
+      lineItems: Array.isArray(current.lineItems)
+        ? current.lineItems.map((li) => ({
+            stt: li.stt,
+            description: li.description,
+            quantity: li.quantity,
+            unitPrice: li.unitPrice,
+            discount: li.discount,
+            amount: li.amount,
+            cost: li.cost,
+          }))
+        : [],
+      totalAmount: current.totalAmount,
+      vatRate: current.vatRate,
+      signDate: current.signDate,
+      status: current.status,
+    };
+
     // F-028 Q3.A — `linkedTenantId` + `linkedMysqlRaceId` là **metadata** liên
     // kết MySQL platform, KHÔNG affect business amount. Cho phép edit anytime
     // (kể cả ACTIVE/COMPLETED) → tách path xử lý riêng vs DRAFT-only fields.
@@ -826,19 +892,50 @@ export class ContractsService {
 
     await current.save();
     await this.invalidateContractsCache();
+
+    // F-067 Group X/Z — compute diff once (used for audit metadata + the
+    // fire-and-forget regen decision). Idempotency guard BR-67-04: no diff
+    // when DTO touches zero doc-affecting fields (e.g. internalNotes-only).
+    const dtoHasDocAffecting = hasDocAffectingChange(
+      dto as Record<string, unknown>,
+    );
+    let updateDiff: ContractUpdateDiff | undefined;
+    if (dtoHasDocAffecting) {
+      updateDiff = computeContractDiff(
+        beforeSnapshot,
+        {
+          lineItems: current.lineItems,
+          totalAmount: current.totalAmount,
+          vatRate: current.vatRate,
+          signDate: current.signDate,
+          status: current.status,
+        },
+        dto as Record<string, unknown>,
+      );
+    }
+
     // FEATURE-034 — Force-edit audit: track ai sửa HĐ non-DRAFT lúc nào, status
     // gì, fields nào. Admin accountability cho legal mismatch post-sign.
+    // F-067 BR-67-13 — enrich `metadata.diff` when DTO mutates allowlist field.
     if (isForceEdit) {
       await this.emitAudit('contract.update.force', current, 'admin', {
         previousStatus,
         editedFields: Object.keys(dto),
+        ...(updateDiff ? { diff: updateDiff } : {}),
       });
       this.logger.warn(
         `[contracts] FORCE-EDIT contract=${String(current._id)} ` +
           `previousStatus=${previousStatus} fields=${Object.keys(dto).join(',')}`,
       );
     } else {
-      await this.emitAudit('contract.update', current, 'admin');
+      await this.emitAudit(
+        'contract.update',
+        current,
+        'admin',
+        updateDiff
+          ? { editedFields: Object.keys(dto), diff: updateDiff }
+          : undefined,
+      );
     }
 
     // FEATURE-034 — Flush P&L cache nếu force-edit ảnh hưởng revenue/cost
@@ -856,7 +953,111 @@ export class ContractsService {
       }
     }
 
+    // F-067 Group X — fire-and-forget DOCX regen. Conditions:
+    //   - DTO touched at least one DOC_AFFECTING_FIELDS key (BR-67-01/04)
+    //   - Contract is NOT DRAFT (generateDocument(CONTRACT) would 400 anyway)
+    // Errors logged + audit-emitted inside regenerateContractDocxAsync.
+    // PAUSE-67-CODER-03 orphan promise acceptable Phase 1 (BullMQ Phase 2).
+    if (dtoHasDocAffecting && current.status !== 'DRAFT') {
+      void this.regenerateContractDocxAsync(String(current._id));
+    }
+
     return current.toObject();
+  }
+
+  /**
+   * F-067 Group X — Async DOCX regenerator. Fire-and-forget — never throws
+   * to caller. Outcomes:
+   *   1. Contract gone (race with delete) → silent skip.
+   *   2. Status DRAFT (race with cancel-flip) → skip (generateDocument would
+   *      throw BR-CM-12 anyway).
+   *   3. generateDocument throws → log warn + emit `contract.docRegenFail`
+   *      audit so the UI history tab can surface the failure.
+   *
+   * Uses actorId `'system:auto-regen'` to differentiate from human "Tạo lại
+   * tài liệu" clicks in the audit timeline (UI labels both via
+   * AUDIT_ACTION_LABEL — BR-67-20).
+   */
+  private async regenerateContractDocxAsync(contractId: string): Promise<void> {
+    try {
+      const c = await this.model.findOne({ _id: contractId, deletedAt: null });
+      if (!c) {
+        this.logger.warn(
+          `[F-067] auto-regen skip — contract gone contract=${contractId}`,
+        );
+        return;
+      }
+      if (c.status === 'DRAFT') {
+        this.logger.warn(
+          `[F-067] auto-regen skip DRAFT contract=${contractId}`,
+        );
+        return;
+      }
+      await this.generateDocument(contractId, 'CONTRACT', 'system:auto-regen');
+      this.logger.log(`[F-067] auto-regen DOCX done contract=${contractId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `[F-067] auto-regen DOCX fail contract=${contractId} err=${msg}`,
+      );
+      try {
+        await this.emitAudit(
+          'contract.docRegenFail',
+          { _id: contractId } as any,
+          'system:auto-regen',
+          { trigger: 'auto', error: msg },
+        );
+      } catch {
+        // emitAudit is already best-effort; double-swallow defensively.
+      }
+    }
+  }
+
+  /**
+   * F-067 Group Z — Audit timeline for one contract.
+   *
+   * Reads `audit_logs` collection (F-023) filtered by entity, returns latest-
+   * first up to `limit` (DTO @Max 200 + service-side clamp). 404 if contract
+   * is gone (defense vs probing arbitrary IDs). Empty timeline returns
+   * `{entries: [], total: 0}` — UI renders empty state.
+   */
+  async getHistory(
+    contractId: string,
+    limit = 50,
+  ): Promise<ContractHistoryResponseDto> {
+    const exists = await this.model.exists({
+      _id: contractId,
+      deletedAt: null,
+    });
+    if (!exists) throw new NotFoundException('Contract not found');
+    if (!this.auditLogModel) {
+      // AuditLog model not wired (e.g. test bench without AuditModule) →
+      // return empty timeline, KHÔNG throw.
+      return { entries: [], total: 0 };
+    }
+    const safeLimit = Math.min(Math.max(1, Math.floor(limit) || 50), 200);
+    const rows = await this.auditLogModel
+      .find({ 'entity.type': 'contract', 'entity.id': contractId })
+      .sort({ createdAt: -1 })
+      .limit(safeLimit)
+      .lean();
+    return {
+      entries: rows.map((e) => ({
+        id: String(e._id),
+        action: e.action,
+        actor: {
+          userId: e.actor?.userId ?? 'admin',
+          displayName: e.actor?.displayName,
+          role: e.actor?.role,
+        },
+        createdAt:
+          e.createdAt instanceof Date
+            ? e.createdAt.toISOString()
+            : new Date(e.createdAt ?? Date.now()).toISOString(),
+        metadata: e.metadata,
+      })),
+      total: rows.length,
+    };
   }
 
   async remove(id: string, actorId = 'admin'): Promise<{ success: true }> {
@@ -893,14 +1094,28 @@ export class ContractsService {
     }
     if (!c.contractNumber) {
       const signDate = c.signDate ?? new Date();
-      const clientShort =
-        (c.client?.entityName ?? 'CLIENT')
-          .split(/\s+/)
-          .map((w) => w[0])
-          .join('')
-          .replace(/[^A-Za-z0-9]/g, '')
-          .toUpperCase()
-          .slice(0, 8) || 'CLIENT';
+      // FEATURE-066 BR-66-02: thay block acronym hand-built bằng partner.shortName
+      // override (highest priority) → fallback stripCompanyPrefix(entityName).
+      // Lookup Partner via c.partnerId để lấy shortName mới nhất (admin có thể
+      // edit Partner.shortName sau khi tạo contract DRAFT — BR-66-10 forward-only).
+      let partnerShortName: string | null | undefined;
+      try {
+        if (c.partnerId) {
+          const partner = await this.partnerModel
+            .findOne({ _id: c.partnerId, deletedAt: null }, { shortName: 1 })
+            .lean();
+          partnerShortName = partner?.shortName ?? null;
+        }
+      } catch (err) {
+        // Defensive: log + fallback null (service tiếp tục bằng stripCompanyPrefix).
+        this.logger.warn(
+          `[contracts] lookup partner.shortName fail — fallback strip entity. ${
+            (err as Error).message
+          }`,
+        );
+        partnerShortName = null;
+      }
+      const entityName = c.client?.entityName ?? null;
       // F-024 BUG-002 fix — retry tối đa 5 lần nếu Redis sequence + seq
       // suffix vẫn collide với HĐ cũ trong DB (e.g. dev/test data residue).
       // Pre-check uniqueness via model.exists() khi available (production).
@@ -908,11 +1123,12 @@ export class ContractsService {
       // và rely trên seq suffix uniqueness (Redis INCR atomic đảm bảo).
       let attempts = 0;
       while (attempts < 5) {
-        const { contractNumber } = await this.numberService.generateNumber(
+        const { contractNumber } = await this.numberService.generateNumber({
           signDate,
-          clientShort,
-          c.providerId,
-        );
+          partnerShortName,
+          entityName,
+          providerId: c.providerId,
+        });
         let collides = false;
         if (typeof (this.model as any).exists === 'function') {
           try {
@@ -934,8 +1150,8 @@ export class ContractsService {
         attempts++;
       }
       if (!c.contractNumber) {
-        throw new BadRequestException(
-          'Không tạo được số HĐ unique sau 5 lần thử — vui lòng thử lại',
+        throw new ConflictException(
+          'Số HĐ bị trùng — vui lòng đổi tên viết tắt đối tác và thử lại',
         );
       }
     }

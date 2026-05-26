@@ -9,6 +9,13 @@
  * - update() CANCELLED-only status update OK from ACTIVE
  * - create() manual race (no raceId) saves raceName/raceDate/raceLocation
  * - create() raceDate free-format string preserves as-is
+ *
+ * QC F-067 rework Item 4 — `regenerateContractDocxAsync` is mocked at the
+ * prototype level to silence the fire-and-forget log noise (`auto-regen
+ * DOCX fail …`) that bleeds into this regression bench. F-067 integration
+ * coverage lives in `contracts.service.f067.spec.ts`; here we explicitly
+ * assert the regen hook IS / IS NOT fired per test scope so silent
+ * regressions in the F-067 trigger predicate cannot slip through.
  */
 import { BadRequestException } from '@nestjs/common';
 import { ContractsService } from './contracts.service';
@@ -22,6 +29,10 @@ describe('ContractsService — F-024 update + manual race input', () => {
   let mockTemplateService: any;
   let mockDocGenerator: any;
   let numberService: ContractNumberService;
+  // QC F-067 rework Item 4 — silence fire-and-forget DOCX regen hook. Each
+  // test asserts `regenSpy` call expectation explicitly so accidental
+  // regressions in the F-067 trigger predicate cannot pass unnoticed.
+  let regenSpy: jest.SpyInstance;
 
   const buildContract = (overrides: any = {}) => {
     const base: any = {
@@ -87,6 +98,17 @@ describe('ContractsService — F-024 update + manual race input', () => {
       undefined, // auditLog optional
       undefined, // redis optional
     );
+    // QC F-067 rework Item 4 — mute fire-and-forget regen so test logs
+    // stay clean and silent failures inside `regenerateContractDocxAsync`
+    // cannot mask future regressions. Tests below assert spy calls
+    // explicitly where the F-067 trigger predicate should fire.
+    regenSpy = jest
+      .spyOn(svc as any, 'regenerateContractDocxAsync')
+      .mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    regenSpy.mockRestore();
   });
 
   // ───────────────────────────────────────────────────────────────
@@ -104,6 +126,8 @@ describe('ContractsService — F-024 update + manual race input', () => {
       expect(result.client.entityName).toBe('XYZ Sport');
       expect(result.raceName).toBe('New Race 2026');
       expect(c.save).toHaveBeenCalled();
+      // F-067 BR-67-03 — DRAFT status MUST skip regen.
+      expect(regenSpy).not.toHaveBeenCalled();
     });
 
     // FEATURE-034 — UNLOCKED: edit allowed cho mọi status (Danny 2026-05-14
@@ -130,6 +154,10 @@ describe('ContractsService — F-024 update + manual race input', () => {
           }),
         }),
       );
+      // F-067 BR-67-01 — raceName ∈ DOC_AFFECTING_FIELDS + status ACTIVE
+      // (non-DRAFT) ⇒ regen MUST fire exactly once.
+      expect(regenSpy).toHaveBeenCalledTimes(1);
+      expect(regenSpy).toHaveBeenCalledWith('contract-123');
     });
 
     it('TC-F034-02: COMPLETED contract update — force-edit OK', async () => {
@@ -254,6 +282,10 @@ describe('ContractsService — F-024 update + manual race input', () => {
       expect((result as any).linkedTenantId).toBe(12);
       expect((result as any).linkedMysqlRaceId).toBe(148);
       expect(c.save).toHaveBeenCalled();
+      // F-067 BR-67-04 idempotency — link fields ∉ DOC_AFFECTING_FIELDS,
+      // regen MUST NOT fire. (TC-67-07 covers this in F-067 spec; we
+      // re-assert here so future allowlist drift surfaces immediately.)
+      expect(regenSpy).not.toHaveBeenCalled();
     });
 
     it('happy: TICKET_SALES COMPLETED — set link works (Q3.A terminal state OK)', async () => {
