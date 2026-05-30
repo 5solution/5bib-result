@@ -8,6 +8,14 @@
 
 <!-- ===== SEO ported from app/solution/layout.tsx (static drop-in) ===== -->
 <link rel="canonical" href="https://solution.5bib.com/">
+<link rel="alternate" hreflang="vi" href="https://solution.5bib.com/">
+<link rel="alternate" hreflang="en" href="https://solution.5bib.com/?lang=en">
+<link rel="alternate" hreflang="zh-Hans" href="https://solution.5bib.com/?lang=zh">
+<link rel="alternate" hreflang="th" href="https://solution.5bib.com/?lang=th">
+<link rel="alternate" hreflang="km" href="https://solution.5bib.com/?lang=km">
+<link rel="alternate" hreflang="lo" href="https://solution.5bib.com/?lang=lo">
+<link rel="alternate" hreflang="ms" href="https://solution.5bib.com/?lang=ms">
+<link rel="alternate" hreflang="x-default" href="https://solution.5bib.com/">
 <meta name="theme-color" content="#060818">
 <meta name="keywords" content="5BIB, phần mềm quản lý giải chạy, đăng ký giải marathon, race registration Vietnam, BIB number, check-in QR, chip timing Việt Nam, cổng bán vé giải chạy">
 <meta name="author" content="5Solution JSC">
@@ -121,7 +129,17 @@ a{color:inherit;text-decoration:none}
 .hdr-nav a::after{content:'';position:absolute;left:0;right:100%;bottom:-3px;height:2px;background:#fff;transition:right .22s cubic-bezier(.16,1,.3,1)}
 .hdr-nav a:hover::after{right:0}
 .hdr-right{display:flex;align-items:stretch;gap:12px}
-.hdr-lang{align-self:center;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);font-weight:700;font-size:12px;letter-spacing:.08em;padding:0 14px;height:32px;border-radius:6px;display:inline-flex;align-items:center}
+.hdr-lang{align-self:center;position:relative}
+.hdr-lang-btn{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);font-weight:700;font-size:12px;letter-spacing:.08em;padding:0 12px;height:32px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-family:inherit}
+.hdr-lang-btn:hover{background:rgba(255,255,255,.16)}
+.hdr-lang-btn svg{width:10px;height:10px;transition:transform .25s}
+.hdr-lang.open .hdr-lang-btn svg{transform:rotate(180deg)}
+.hdr-lang-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:168px;background:rgba(10,14,31,.96);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:6px;list-style:none;margin:0;opacity:0;visibility:hidden;transform:translateY(-6px);transition:opacity .2s,transform .2s,visibility .2s;box-shadow:0 24px 48px -12px rgba(0,0,0,.6);z-index:60}
+.hdr-lang.open .hdr-lang-menu{opacity:1;visibility:visible;transform:translateY(0)}
+.hdr-lang-menu li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:7px;color:rgba(255,255,255,.82);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,color .15s}
+.hdr-lang-menu li:hover{background:rgba(255,255,255,.08);color:#fff}
+.hdr-lang-menu li[aria-selected="true"]{background:rgba(232,30,99,.16);color:#fff}
+.hdr-lang-menu li .lang-code{font-size:10px;font-weight:800;letter-spacing:.08em;opacity:.55}
 .hdr-cta{background:var(--magenta);color:#fff;font-weight:900;font-size:13px;letter-spacing:.14em;text-transform:uppercase;padding:0 28px 0 36px;display:inline-flex;align-items:center;gap:8px;clip-path:polygon(14% 0%,100% 0%,100% 100%,0% 100%);height:100%}
 .hdr-cta:hover{background:var(--magenta-600)}
 
@@ -860,7 +878,8 @@ section.live{padding:140px 32px;background:var(--bg)}
 @media (max-width: 760px){
   body{cursor:auto!important}
   .cursor,.blob{display:none}
-  .hdr-nav,.hdr-lang{display:none}
+  .hdr-nav{display:none}
+  .hdr-lang-btn{padding:0 10px;height:30px;font-size:11px}
   .hdr{height:52px}
   .hdr-logo img{height:22px}
   .hdr-cta{font-size:11px;padding:0 22px 0 30px;letter-spacing:.1em}
@@ -1097,7 +1116,21 @@ section.live{padding:140px 32px;background:var(--bg)}
       <a href="#contact">Liên hệ</a>
     </nav>
     <div class="hdr-right">
-      <button class="hdr-lang">VI / EN</button>
+      <div class="hdr-lang" id="langSwitch">
+        <button class="hdr-lang-btn" id="langBtn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Language / Ngôn ngữ">
+          <span id="langCur">VI</span>
+          <svg viewBox="0 0 12 8" fill="none" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <ul class="hdr-lang-menu" id="langMenu" role="listbox" aria-label="Chọn ngôn ngữ">
+          <li role="option" data-lang="vi"><span>Tiếng Việt</span><span class="lang-code">VI</span></li>
+          <li role="option" data-lang="en"><span>English</span><span class="lang-code">EN</span></li>
+          <li role="option" data-lang="zh"><span>中文</span><span class="lang-code">ZH</span></li>
+          <li role="option" data-lang="th"><span>ไทย</span><span class="lang-code">TH</span></li>
+          <li role="option" data-lang="km"><span>ខ្មែរ</span><span class="lang-code">KM</span></li>
+          <li role="option" data-lang="lo"><span>ລາວ</span><span class="lang-code">LO</span></li>
+          <li role="option" data-lang="ms"><span>Bahasa Melayu</span><span class="lang-code">MS</span></li>
+        </ul>
+      </div>
       <a href="#contact" class="hdr-cta">Đăng ký BTC →</a>
     </div>
   </div>
@@ -1704,6 +1737,79 @@ section.live{padding:140px 32px;background:var(--bg)}
     <iframe id="chaosModalFrame" style="width:100%;height:100%;border:0" allow="autoplay"></iframe>
   </div>
 </div>
+
+<!-- ═══════ i18n ENGINE — runs BEFORE animation/char-split so translated text gets animated ═══════ -->
+<script src="/solution-v2/i18n-dict.js"></script>
+<script>
+(function(){
+  /* Multi-language drop-in. Default Vietnamese; switching reloads with ?lang= so the
+     translation is applied to raw text nodes BEFORE the hero/CTA char-split runs. */
+  var LABEL={vi:'VI',en:'EN',zh:'ZH',th:'TH',km:'KM',lo:'LO',ms:'MS'};
+  var HTMLLANG={vi:'vi',en:'en',zh:'zh-Hans',th:'th',km:'km',lo:'lo',ms:'ms'};
+  var DICT=window.I18N_DICT||{}, ADICT=window.I18N_ATTR||{};
+  var ATTRS=['placeholder','aria-label','data-cursor','alt','title'];
+
+  var url=new URL(location.href);
+  var q=(url.searchParams.get('lang')||'').toLowerCase();
+  var stored=''; try{stored=(localStorage.getItem('5bib_lang')||'').toLowerCase();}catch(e){}
+  var lang=LABEL[q]?q:(LABEL[stored]?stored:'vi');
+  if(LABEL[q]){ try{localStorage.setItem('5bib_lang',q);}catch(e){} }
+  document.documentElement.lang=HTMLLANG[lang]||lang;
+
+  function norm(s){return s.replace(/\s+/g,' ').trim();}
+
+  function translate(){
+    if(lang==='vi') return;
+    var map=DICT[lang]; if(!map) return;
+    var amap=ADICT[lang]||{};
+    var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+      var p=n.parentNode; if(!p) return 2;
+      var t=p.nodeName; if(t==='SCRIPT'||t==='STYLE'||t==='NOSCRIPT') return 2;
+      if(p.closest&&p.closest('#langSwitch')) return 2;
+      if(!/\S/.test(n.nodeValue)) return 2;
+      return 1;
+    }});
+    var nodes=[],n; while(n=w.nextNode()) nodes.push(n);
+    nodes.forEach(function(node){
+      var raw=node.nodeValue, key=norm(raw); if(!key) return;
+      var tr=map[key]; if(tr==null) return;
+      node.nodeValue=raw.match(/^\s*/)[0]+tr+raw.match(/\s*$/)[0];
+    });
+    [].forEach.call(document.body.querySelectorAll('['+ATTRS.join('],[')+']'),function(el){
+      if(el.closest('#langSwitch')) return;
+      ATTRS.forEach(function(a){
+        if(!el.hasAttribute(a)) return;
+        var key=norm(el.getAttribute(a)); if(!key) return;
+        var tr=(amap[key]!=null?amap[key]:map[key]);
+        if(tr!=null) el.setAttribute(a,tr);
+      });
+    });
+  }
+  translate(); /* synchronous — before char-split below */
+
+  function wire(){
+    var sw=document.getElementById('langSwitch'); if(!sw) return;
+    var btn=document.getElementById('langBtn'),
+        menu=document.getElementById('langMenu'),
+        cur=document.getElementById('langCur');
+    if(cur) cur.textContent=LABEL[lang]||'VI';
+    function close(){sw.classList.remove('open');btn.setAttribute('aria-expanded','false');}
+    [].forEach.call(menu.querySelectorAll('li'),function(li){
+      li.setAttribute('aria-selected', li.getAttribute('data-lang')===lang?'true':'false');
+      li.addEventListener('click',function(){
+        var l=li.getAttribute('data-lang');
+        if(l===lang){close();return;}
+        try{localStorage.setItem('5bib_lang',l);}catch(e){}
+        var u=new URL(location.href); u.searchParams.set('lang',l); location.href=u.toString();
+      });
+    });
+    btn.addEventListener('click',function(e){e.stopPropagation();sw.classList.toggle('open');btn.setAttribute('aria-expanded',sw.classList.contains('open'));});
+    document.addEventListener('click',function(e){if(!sw.contains(e.target))close();});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
+})();
+</script>
 
 <script>
 /* ═══════ GSAP + LENIS Setup ═══════ */
