@@ -475,7 +475,7 @@ iframe.mock-pickup-video{opacity:1;background:#faf9f5}
 .reach-frame::after{content:'';position:absolute;inset:0;border-radius:18px;padding:2px;background:linear-gradient(120deg,transparent 32%,rgba(255,255,255,.6) 48%,transparent 64%);background-size:280% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:reachSheen 5.5s linear infinite;pointer-events:none}
 @keyframes reachSheen{0%{background-position:180% 0}100%{background-position:-80% 0}}
 .reach-screen{position:relative;z-index:1;width:100%;height:100%;border-radius:16px;overflow:hidden;background:#0c1322}
-.reach-screen iframe{display:block;width:100%;height:100%;border:0;background:#0c1322;pointer-events:auto}
+.reach-screen iframe{display:block;width:100%;height:100%;border:0;background:#0c1322;pointer-events:none}
 
 /* viewfinder corner brackets — float just outside the frame corners */
 .reach-corner{position:absolute;z-index:3;width:24px;height:24px;border:2px solid var(--sky);opacity:.8;pointer-events:none}
@@ -697,7 +697,7 @@ section.live{padding:140px 32px;background:var(--bg)}
 .live-frame{position:relative;z-index:2;aspect-ratio:16/9;border-radius:18px;padding:2px;background:linear-gradient(135deg,rgba(37,99,235,.9),rgba(219,48,105,.85) 55%,rgba(56,189,248,.7));box-shadow:0 42px 110px -26px rgba(0,0,0,.78),0 0 0 1px rgba(255,255,255,.05)}
 .live-frame::after{content:'';position:absolute;inset:0;border-radius:18px;padding:2px;background:linear-gradient(120deg,transparent 32%,rgba(255,255,255,.6) 48%,transparent 64%);background-size:280% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:reachSheen 5.5s linear infinite;pointer-events:none}
 .live-screen{position:relative;z-index:1;width:100%;height:100%;border-radius:16px;overflow:hidden;background:#0a0e1f}
-.live-screen iframe{display:block;width:100%;height:100%;border:0;background:#0a0e1f;pointer-events:auto}
+.live-screen iframe{display:block;width:100%;height:100%;border:0;background:#0a0e1f;pointer-events:none}
 .live-corner{position:absolute;z-index:3;width:22px;height:22px;border:2px solid var(--sky);opacity:.8;pointer-events:none}
 .live-corner.tl{top:12px;left:12px;border-right:0;border-bottom:0;border-radius:7px 0 0 0}
 .live-corner.tr{top:12px;right:12px;border-left:0;border-bottom:0;border-radius:0 7px 0 0}
@@ -711,7 +711,7 @@ section.live{padding:140px 32px;background:var(--bg)}
 .result-frame{position:relative;z-index:2;height:100%;width:auto;aspect-ratio:4/5;max-width:100%;border-radius:20px;padding:2px;background:linear-gradient(135deg,rgba(37,99,235,.9),rgba(219,48,105,.85) 55%,rgba(56,189,248,.7));box-shadow:0 42px 110px -26px rgba(0,0,0,.78),0 0 0 1px rgba(255,255,255,.05)}
 .result-frame::after{content:'';position:absolute;inset:0;border-radius:20px;padding:2px;background:linear-gradient(120deg,transparent 32%,rgba(255,255,255,.6) 48%,transparent 64%);background-size:280% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:reachSheen 5.5s linear infinite;pointer-events:none}
 .result-screen{position:relative;z-index:1;width:100%;height:100%;border-radius:18px;overflow:hidden;background:#0a0e1f}
-.result-screen iframe{display:block;width:100%;height:100%;border:0;background:#0a0e1f;pointer-events:auto}
+.result-screen iframe{display:block;width:100%;height:100%;border:0;background:#0a0e1f;pointer-events:none}
 .result-corner{position:absolute;z-index:3;width:22px;height:22px;border:2px solid var(--sky);opacity:.8;pointer-events:none}
 .result-corner.tl{top:6px;left:6px;border-right:0;border-bottom:0;border-radius:7px 0 0 0}
 .result-corner.tr{top:6px;right:6px;border-left:0;border-bottom:0;border-radius:0 7px 0 0}
@@ -2774,18 +2774,13 @@ function normalizeBundledIframe(iframe, frameBg) {
 }
 normalizeBundledIframe(document.querySelector('iframe[src="/solution-v2/awakening-video.html"]'), '#FAF8F5');
 /* network-wakes-up: cream killed at source (S.page transparent) + fills 16:9 frame, so no sweep needed.
-   It is now interactive (pointer-events:auto) — hand the custom cursor off so the page dot
-   doesn't freeze at the edge; the video draws its own matching dot inside. */
-(function videoCursorHandoff(){
-  const cur = document.querySelector('.cursor');
-  if (!cur) return;
-  ['/solution-v2/network-wakes-up.html','/solution-v2/finish-line.html','/solution-v2/three-seconds.html'].forEach(src => {
-    const ifr = document.querySelector('iframe[src="'+src+'"]');
-    if (!ifr) return;
-    ifr.addEventListener('mouseenter', () => { cur.style.opacity = '0'; });
-    ifr.addEventListener('mouseleave', () => { cur.style.opacity = '1'; });
-  });
-})();
+   SCROLL FIX: these 3 ambient video iframes are now pointer-events:none (CSS). An interactive
+   iframe (pointer-events:auto) is its own browsing context with overflow:hidden, so it SWALLOWS
+   wheel/touch events — Lenis (window-level smooth scroll) never sees them while the pointer is
+   over the frame, the page stalls, then lurches when the cursor leaves = the "one jolt" per pass.
+   pointer-events:none lets wheel/touch pass straight through to Lenis (smooth, incl. mobile) and
+   lets the page's own custom cursor glide over the video. The mouseenter/leave handoff below is
+   kept but now inert (iframe fires no mouse events) — the page dot simply stays visible. */
 
 /* Refresh ScrollTrigger after all new triggers added */
 setTimeout(() => ScrollTrigger.refresh(), 800);
