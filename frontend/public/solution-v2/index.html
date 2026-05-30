@@ -1859,15 +1859,30 @@ gsap.to(target, {
 setTimeout(dismissPreloader, 4000);
 
 /* Hero char-split + intro */
-function splitToChars(el) {
-  el.querySelectorAll('.line').forEach(line => {
-    const html = line.innerHTML;
-    line.innerHTML = html.replace(/(<[^>]+>)|(\s)|(.)/g, (m, tag, space, ch) => {
-      if (tag) return tag;
-      if (space) return '<span class="char">&nbsp;</span>';
-      return `<span class="char">${ch}</span>`;
-    });
+/* Grapheme-aware splitter — keeps Thai/Lao/Khmer/Vietnamese combining clusters
+   (vowels, tone marks) attached to their base letter. Splitting by UTF-16 code
+   unit detached combining marks and broke non-Latin headlines; Intl.Segmenter
+   with grapheme granularity fixes it (falls back to code-points if unavailable). */
+const __segGr = (typeof Intl !== 'undefined' && Intl.Segmenter) ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+function __graphemes(str) { return __segGr ? [...__segGr.segment(str)].map(s => s.segment) : [...str]; }
+function __wrapChars(node) {
+  [...node.childNodes].forEach(child => {
+    if (child.nodeType === 3) {
+      const frag = document.createDocumentFragment();
+      __graphemes(child.nodeValue).forEach(g => {
+        const span = document.createElement('span');
+        span.className = 'char';
+        if (/^\s$/.test(g)) span.innerHTML = '&nbsp;'; else span.textContent = g;
+        frag.appendChild(span);
+      });
+      node.replaceChild(frag, child);
+    } else if (child.nodeType === 1) {
+      __wrapChars(child);
+    }
   });
+}
+function splitToChars(el) {
+  el.querySelectorAll('.line').forEach(line => __wrapChars(line));
 }
 const heroHeadlineEl = document.getElementById('heroHeadline');
 const heroPairs = [...heroHeadlineEl.querySelectorAll('.hero-pair')];
@@ -2766,13 +2781,8 @@ ScrollTrigger.create({
 /* ════════ CTA — char-split title + magnetic + orbit tags */
 const ctaTitle = document.querySelector('.cta-title');
 if (ctaTitle) {
-  /* Wrap each char in span */
-  const html = ctaTitle.innerHTML;
-  ctaTitle.innerHTML = html.replace(/(<[^>]+>)|(\s)|(.)/g, (m, tag, space, ch) => {
-    if (tag) return tag;
-    if (space) return '<span class="char">&nbsp;</span>';
-    return `<span class="char">${ch}</span>`;
-  });
+  /* Wrap each char in span (grapheme-aware, see __wrapChars above) */
+  __wrapChars(ctaTitle);
   ScrollTrigger.create({
     trigger: '.cta', start: 'top 65%', once: true,
     onEnter: () => {
