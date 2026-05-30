@@ -40,6 +40,28 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   turbopack: {},
   assetPrefix: ASSET_PREFIX,
+  /**
+   * solution.5bib.com landing v2 — static drop-in.
+   *
+   * middleware.ts rewrites the host `solution.5bib.com/` → internal `/solution`.
+   * This beforeFiles rewrite then serves the static landing bundle living in
+   * `public/solution-v2/index.html` (replaces the old React `app/solution`
+   * route, now retired to `app/_solution-legacy-v1/`).
+   *
+   * All sub-resources (videos, fonts, assets, hdsd.html iframes) are referenced
+   * with absolute `/solution-v2/...` paths in index.html; they carry file
+   * extensions so middleware's matcher skips them and they serve directly from
+   * `public/` — no extra rewrite needed.
+   */
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: '/solution', destination: '/solution-v2/index.html' },
+      ],
+      afterFiles: [],
+      fallback: [],
+    }
+  },
 }
 
 export default withSerwist(nextConfig)

@@ -1,0 +1,74 @@
+/* 5BIB design tokens — matched to selling-web codebase
+   Fonts: DM Sans VN (body) + Unbounded (display) + Caveat (script)
+   Primary: #2563eb · Accent: #DB3069 · #FF5C81 */
+
+@font-face { font-family: "DM Sans VN"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/DMSansVN-Regular.ttf") format("truetype"); }
+@font-face { font-family: "DM Sans VN"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/DMSansVN-Medium.ttf") format("truetype"); }
+@font-face { font-family: "DM Sans VN"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/DMSansVN-Bold.ttf") format("truetype"); }
+@font-face { font-family: "Unbounded"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/Unbounded.ttf") format("truetype-variations"); }
+
+/* Keep JetBrains Mono available for BIB number displays / tabular data */
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/JetBrainsMono-Medium.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url("fonts/JetBrainsMono-Bold.ttf") format("truetype"); }
+
+:root {
+  /* ── Brand (matched to selling-web tailwind.config.js) ── */
+  --5s-blue:           #2563eb;   /* primary-600 — main brand */
+  --5s-blue-700:       #1d4ed8;   /* primary-700 — hover */
+  --5s-blue-800:       #1e40af;
+  --5s-blue-500:       #3b82f6;
+  --5s-blue-400:       #60a5fa;
+  --5s-blue-100:       #dbeafe;
+  --5s-blue-50:        #eff6ff;
+  --5s-blue-deep:      #0A347D;   /* used in login modal carousel */
+
+  --5s-magenta:        #DB3069;   /* logo accent (the pink "flag") */
+  --5s-magenta-600:    #C9265F;
+  --5s-red-bib:        #FF5C81;   /* b.red — used for highlights */
+  --5s-red-bib-100:    #FFD8E2;
+
+  --5s-purple:         #7848F4;   /* b.primary-500 — secondary brand */
+  --5s-purple-deep:    #0B0434;   /* b.primary-800 — dark surface */
+  --5s-sky:            #27A5EE;   /* b.sky */
+
+  /* ── Neutrals (b. & gr.) ── */
+  --5s-bg:             #F8F8FA;   /* b.light — page background */
+  --5s-surface:        #F1F1F2;   /* neutral-100 */
+  --5s-surface-2:      #EFEFF3;   /* gr.300 */
+  --5s-surface-3:      #F8F9FA;   /* gr.200 */
+  --5s-border:         #cbd5e0;   /* gray-400 */
+  --5s-border-soft:    #e2e8f0;   /* gray-300 */
+  --5s-text:           #131315;   /* b.dark */
+  --5s-text-muted:     #4a5568;   /* gray-700 */
+  --5s-text-subtle:    #6A7C94;   /* b.gray / gr.500 */
+  --5s-text-light:     #a0aec0;   /* gray-500 */
+  --5s-white:          #FFFFFF;
+
+  /* ── Semantic ── */
+  --5s-success:        #22C55E;
+  --5s-success-bg:     #DCFCE7;
+  --5s-warning:        #F59E0B;
+  --5s-warning-bg:     #FEF3C7;
+  --5s-danger:         #EF4444;
+  --5s-danger-bg:      #FEE2E2;
+  --5s-live:           #DC2626;
+  --5s-gold:           #D97706;
+
+  /* ── Fonts ── */
+  --font-display: "Unbounded", "DM Sans VN", system-ui, sans-serif;
+  --font-body:    "DM Sans VN", "Inter", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  --font-inter:   "DM Sans VN", "Inter", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  font-family: var(--font-body);
+  background: var(--5s-bg);
+  color: var(--5s-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}

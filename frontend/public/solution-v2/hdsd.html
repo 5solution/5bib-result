@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5BIB · HDSD</title>
+
+<link rel="stylesheet" href="tokens.css">
+<style>
+  html, body { background: #0A0A0A; overflow: hidden; margin: 0; }
+  #root, .video-only-stage {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh;
+  }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="animations.jsx"></script>
+<script type="text/babel" src="ui-bits.jsx"></script>
+<script type="text/babel" src="tutorial-ui.jsx"></script>
+<script type="text/babel" src="tutorial-screens.jsx"></script>
+<script type="text/babel" src="tutorial-effects.jsx"></script>
+<script type="text/babel" src="guide-doi-cu-ly.jsx"></script>
+<script type="text/babel" src="guide-dang-nhap.jsx"></script>
+<script type="text/babel" src="guide-check-in.jsx"></script>
+<script type="text/babel" src="guide-quay-bib.jsx"></script>
+<script type="text/babel" src="guides-misc.jsx"></script>
+
+<script type="text/babel">
+const { Stage, Sprite } = window;
+
+const SLUG_MAP = {
+  'doi-cu-ly':         window.GUIDE_DOI_CU_LY,
+  'dang-nhap':         window.GUIDE_DANG_NHAP,
+  'check-in':          window.GUIDE_CHECK_IN,
+  'quay-bib':          window.GUIDE_QUAY_BIB,
+  'chuyen-nhuong':     window.GUIDE_CHUYEN_NHUONG,
+  'nhan-chuyen-nhuong':window.GUIDE_NHAN_CHUYEN_NHUONG,
+  'uy-quyen':          window.GUIDE_UY_QUYEN,
+  'chinh-sua':         window.GUIDE_CHINH_SUA,
+  'them-ho-so':        window.GUIDE_THEM_HO_SO,
+};
+
+function GuideVideo() {
+  const params = new URLSearchParams(location.search);
+  const slug = params.get('slug') || 'doi-cu-ly';
+  const guide = SLUG_MAP[slug];
+
+  if (!guide || !guide.Component) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100%', color: '#fff', fontFamily: 'system-ui',
+        textAlign: 'center', padding: 40, flexDirection: 'column', gap: 16
+      }}>
+        <div style={{ fontSize: 48 }}>⚠️</div>
+        <div style={{ fontSize: 20, fontWeight: 700 }}>HDSD không tồn tại</div>
+        <div style={{ fontSize: 14, opacity: 0.6 }}>slug: {slug}</div>
+      </div>
+    );
+  }
+
+  const Cmp = guide.Component;
+  const duration = guide.duration || 60;
+
+  return (
+    <div className="video-only-stage" data-screen-label={`hdsd-${slug}`}>
+      <Stage
+        width={1920} height={1080}
+        duration={duration}
+        background="#0A0A0A"
+        loop={true}
+        autoplay={true}
+        persistKey={guide.persistKey || `hdsd-${slug}`}
+      >
+        <Sprite start={0} end={duration}>
+          <Cmp />
+        </Sprite>
+      </Stage>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<GuideVideo />);
+</script>
+</body>
+</html>

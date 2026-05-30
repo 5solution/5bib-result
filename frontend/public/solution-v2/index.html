@@ -1,0 +1,2795 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5BIB · find your race — Race timing platform Việt Nam</title>
+<meta name="description" content="5BIB là nền tảng chip-timing và quản lý VĐV #1 Việt Nam. 100+ giải, 94,000+ VĐV, độ chính xác 0.01s.">
+
+<!-- ===== SEO ported from app/solution/layout.tsx (static drop-in) ===== -->
+<link rel="canonical" href="https://solution.5bib.com/">
+<meta name="theme-color" content="#060818">
+<meta name="keywords" content="5BIB, phần mềm quản lý giải chạy, đăng ký giải marathon, race registration Vietnam, BIB number, check-in QR, chip timing Việt Nam, cổng bán vé giải chạy">
+<meta name="author" content="5Solution JSC">
+<link rel="icon" href="/solution/logos/5bib-logo.png">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:url" content="https://solution.5bib.com">
+<meta property="og:site_name" content="5BIB">
+<meta property="og:title" content="5BIB — Cổng đăng ký &amp; quản lý VĐV #1 Việt Nam">
+<meta property="og:description" content="Form, thanh toán, BIB, wave, check-in QR, email blast, dashboard — một nền tảng. 72 giờ mở bán.">
+<meta property="og:image" content="https://solution.5bib.com/solution/brand/5bib-hero.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="5BIB — Cổng đăng ký &amp; quản lý VĐV #1 Việt Nam">
+<meta name="twitter:description" content="Form, thanh toán, BIB, wave, check-in QR, email blast, dashboard.">
+<meta name="twitter:image" content="https://solution.5bib.com/solution/brand/5bib-hero.jpg">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://solution.5bib.com/#org","name":"5Solution JSC","legalName":"Công ty Cổ phần 5BIB","alternateName":["5Solution","5BIB","5Sport"],"url":"https://solution.5bib.com","logo":"https://solution.5bib.com/solution/logos/5bib-logo.png","foundingDate":"2024","foundingLocation":{"@type":"Place","address":{"@type":"PostalAddress","addressCountry":"VN"}},"areaServed":{"@type":"Country","name":"Vietnam"},"sameAs":["https://5bib.com","https://timing.5bib.com","https://result.5bib.com","https://5solution.vn","https://solution.5sport.vn","https://www.facebook.com/5bib.vn","https://www.facebook.com/5sport.vn"],"contactPoint":[{"@type":"ContactPoint","email":"info@5bib.com","contactType":"sales","availableLanguage":["Vietnamese","English"]}]},{"@type":"WebSite","@id":"https://solution.5bib.com/#website","url":"https://solution.5bib.com","name":"5BIB Manager","description":"Cổng đăng ký, thanh toán, BIB, wave, check-in QR và quản lý VĐV cho giải chạy.","inLanguage":["vi-VN","en-US"],"publisher":{"@id":"https://solution.5bib.com/#org"}},{"@type":"SoftwareApplication","@id":"https://solution.5bib.com/#app","name":"5BIB Manager — Race Registration & Athlete Management","operatingSystem":"Web, iOS, Android","applicationCategory":"BusinessApplication","provider":{"@id":"https://solution.5bib.com/#org"},"offers":{"@type":"AggregateOffer","priceCurrency":"VND","lowPrice":"0","highPrice":"15000000","description":"Free / Standard ₫5M / Premium ₫15M + 1.5-2% transaction fee"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"FAQPage","@id":"https://solution.5bib.com/#faq","inLanguage":"vi-VN","mainEntity":[{"@type":"Question","name":"Phí dùng 5BIB Solution là bao nhiêu?","acceptedAnswer":{"@type":"Answer","text":"Mô hình transaction fee — không phí setup, không subscription. 5BIB thu phí trên mỗi BIB bán (3–6% tuỳ scale + cổng thanh toán). Giải free entry hoặc nội bộ doanh nghiệp có gói whitelabel flat-fee, liên hệ sales."}},{"@type":"Question","name":"Bao lâu thì launch được cổng đăng ký?","acceptedAnswer":{"@type":"Answer","text":"72 giờ cho race standard (1 course, 1 ngôn ngữ, VNPay/MoMo). Race phức tạp (multi-course, multi-language, custom branding, sponsor tier) thường 5–7 ngày."}},{"@type":"Question","name":"Tích hợp được cổng thanh toán nào?","acceptedAnswer":{"@type":"Answer","text":"Native VNPay, MoMo, ZaloPay, OnePay, bank QR. Có thể bật Stripe/PayPal cho giải có VĐV nước ngoài. Tất cả qua 1 dashboard reconciliation, đối soát T+1."}},{"@type":"Question","name":"5BIB Solution đã chạy bao nhiêu giải?","acceptedAnswer":{"@type":"Answer","text":"195 giải chạy được host trên platform (5/2026), reach 120K+ runner unique, phục vụ 58 merchant tenant (BTC + agency)."}},{"@type":"Question","name":"Có hỗ trợ wave start không?","acceptedAnswer":{"@type":"Answer","text":"Có. Tạo unlimited wave với capacity cap, time slot, criteria (PB, age group, ngẫu nhiên). VĐV chọn wave khi đăng ký hoặc admin assign tự động. Hỗ trợ in BIB theo wave color-code."}},{"@type":"Question","name":"Email marketing có giới hạn không?","acceptedAnswer":{"@type":"Answer","text":"Không giới hạn email theo gói whitelabel. Transaction tier có 3 chiến dịch broadcast/tháng miễn phí, đính kèm Mailchimp connector cho gói nâng cao. Open-rate trung bình của race email trên 5BIB là 42%."}},{"@type":"Question","name":"Check-in race pack pickup hoạt động như thế nào?","acceptedAnswer":{"@type":"Answer","text":"VĐV nhận email/SMS có QR code sau khi pay. Tại pickup booth, crew scan QR (mobile PWA app, không cần cài app), tự động in BIB từ máy in nhiệt và đánh dấu đã nhận. Throughput 60–80 VĐV/phút/booth."}},{"@type":"Question","name":"Có dashboard analytics cho BTC không?","acceptedAnswer":{"@type":"Answer","text":"Có. Dashboard real-time: doanh thu theo giờ, breakdown theo course/wave/payment method, conversion funnel landing → checkout, geo heatmap VĐV, top discount code. Export CSV/Excel mọi báo cáo."}},{"@type":"Question","name":"Có dùng subdomain riêng được không?","acceptedAnswer":{"@type":"Answer","text":"Có. Whitelabel tier hỗ trợ custom domain (`dangky.giai-cua-ban.vn`) với SSL Let's Encrypt tự động, custom logo, palette màu, font. Transaction tier dùng `{race-slug}.5bib.com`."}},{"@type":"Question","name":"Bao nhiêu ngôn ngữ được hỗ trợ?","acceptedAnswer":{"@type":"Answer","text":"Native VN + EN. Có thể thêm JP, KR, CN, TH cho giải international. Translation pack được provide bởi 5BIB hoặc BTC custom override từng key."}},{"@type":"Question","name":"5BIB Solution khác gì các nền tảng đăng ký giải chạy khác?","acceptedAnswer":{"@type":"Answer","text":"5BIB Solution là nền tảng duy nhất tại Việt Nam khép kín full lifecycle: đăng ký → thanh toán → BIB → wave assignment → check-in QR → chip timing → certificate → photo gallery → community. Đối thủ quốc tế như RunSignup hay Race Roster chỉ làm registration + payment, mọi step còn lại BTC phải tích hợp 3rd-party. 195 giải đã chạy, 120K runner, 58 BTC tin dùng. Time-to-launch 72 giờ."}}]}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","@id":"https://solution.5bib.com/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Trang chủ","item":"https://solution.5bib.com"}]}]}</script>
+<!-- Google Tag Manager + GA4 (ported from layout) -->
+<script>window.dataLayer=window.dataLayer||[];window.dataLayer.push({page_type:'landing_page',product:'5bib_manager',environment:'production'});</script>
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-WNJV5PD9');</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ND6VCY2B57"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-ND6VCY2B57',{send_page_view:true});</script>
+<!-- ===== end ported SEO ===== -->
+
+<!-- GSAP + ScrollTrigger + CustomEase + Lenis smooth scroll -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/CustomEase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js"></script>
+
+<style>
+/* ═══════ FONTS ═══════ */
+@font-face { font-family: "DM Sans VN"; font-weight: 400; font-display: swap; src: url("/solution-v2/fonts/DMSansVN-Regular.ttf") format("truetype"); }
+@font-face { font-family: "DM Sans VN"; font-weight: 500; font-display: swap; src: url("/solution-v2/fonts/DMSansVN-Medium.ttf") format("truetype"); }
+@font-face { font-family: "DM Sans VN"; font-weight: 700; font-display: swap; src: url("/solution-v2/fonts/DMSansVN-Bold.ttf") format("truetype"); }
+@font-face { font-family: "Unbounded"; font-weight: 100 900; font-display: swap; src: url("/solution-v2/fonts/Unbounded.ttf") format("truetype-variations"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap; src: url("/solution-v2/fonts/JetBrainsMono-Medium.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: swap; src: url("/solution-v2/fonts/JetBrainsMono-Bold.ttf") format("truetype"); }
+@font-face { font-family: "Be Vietnam Pro"; font-weight: 800; font-display: swap; src: url("/solution-v2/fonts/BeVietnamPro-ExtraBold.ttf") format("truetype"); }
+@font-face { font-family: "Be Vietnam Pro"; font-weight: 900; font-display: swap; src: url("/solution-v2/fonts/BeVietnamPro-Black.ttf") format("truetype"); }
+
+/* ═══════ TOKENS ═══════ */
+:root {
+  --blue:#2563eb; --blue-deep:#0A347D; --blue-700:#1d4ed8;
+  --magenta:#DB3069; --magenta-600:#C9265F;
+  --pink-bib:#FF5C81; --pink-100:#FFD8E2;
+  --purple:#7848F4; --sky:#27A5EE;
+  --bg:#F8F8FA; --surface:#F1F1F2;
+  --text:#131315; --text-muted:#4a5568; --text-subtle:#6A7C94;
+  --midnight:#06081A; --border:#cbd5e0;
+  --race-5k:#E54E26; --race-10k:#D4E843; --race-21k:#7FD4C6; --race-42k:#5DAEDC; --race-100k:#FFF44F;
+  --font-display:"Unbounded","DM Sans VN",system-ui,sans-serif;
+  --font-body:"DM Sans VN",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --font-impact:"Be Vietnam Pro","DM Sans VN",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
+html.lenis,html.lenis body{height:auto}
+.lenis.lenis-smooth{scroll-behavior:auto!important}
+a{color:inherit;text-decoration:none}
+
+/* Mouse blob */
+.blob{position:fixed;top:0;left:0;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(219,48,105,.16) 0%,rgba(255,92,129,.08) 30%,transparent 70%);pointer-events:none;z-index:0;filter:blur(40px);transform:translate(-50%,-50%);will-change:transform;mix-blend-mode:multiply;opacity:.7}
+
+/* 3D perspective */
+.races-track{perspective:1200px}
+.race-card{transform-style:preserve-3d;will-change:transform;transition:box-shadow 360ms}
+.race-card:hover{box-shadow:0 30px 80px -20px rgba(0,0,0,.35)}
+.race-card > div{transform:translateZ(30px);transform-style:preserve-3d}
+.race-card .race-num{transform:translateZ(50px)}
+.features-grid{perspective:1200px}
+.feature{transform-style:preserve-3d;will-change:transform}
+.feature > div,.feature .feat-icon{transform:translateZ(20px)}
+
+/* ═══════ PRELOADER ═══════ */
+.preloader{position:fixed;inset:0;z-index:100;background:var(--midnight)}
+.preloader.done{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .6s,visibility .6s}
+.pre-tagline{position:absolute;left:40px;bottom:40px;font-weight:700;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.pre-tagline .dot{display:inline-block;width:8px;height:8px;background:var(--magenta);border-radius:50%;margin-right:12px;vertical-align:middle;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.6)}}
+.pre-status{position:absolute;right:40px;top:40px;font-family:var(--font-mono);font-weight:500;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+.pre-counter{position:absolute;right:40px;bottom:30px;font-family:var(--font-display);font-weight:800;font-size:clamp(160px,22vw,320px);line-height:.85;letter-spacing:-.04em;color:var(--pink-bib);font-variant-numeric:tabular-nums}
+.pre-bib-label{position:absolute;right:40px;bottom:12px;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.35)}
+.pre-progress{position:absolute;left:40px;right:40px;top:50%;height:1px;background:rgba(255,255,255,.1)}
+.pre-progress-fill{position:absolute;left:0;top:0;bottom:0;background:var(--pink-bib);width:0%}
+
+/* ═══════ CURSOR ═══════ */
+@media (hover: hover) and (pointer: fine) {
+  body{cursor:none}
+  a,button,.cursor-trigger{cursor:none}
+  .cursor{position:fixed;top:0;left:0;z-index:1000;pointer-events:none;transform:translate(-50%,-50%);will-change:transform}
+  .cursor-dot{width:12px;height:12px;background:var(--pink-bib);border-radius:50%;box-shadow:0 0 16px rgba(255,92,129,.6);transition:transform .22s cubic-bezier(.16,1,.3,1),background .22s}
+  .cursor-label{position:absolute;top:-28px;left:50%;transform:translateX(-50%);font-family:var(--font-mono);font-weight:700;font-size:10px;letter-spacing:.2em;color:var(--text);opacity:0;transition:opacity .18s;white-space:nowrap}
+  body.cursor-dark .cursor-label{color:#fff}
+  .cursor.show-label .cursor-label{opacity:1}
+  .cursor.large .cursor-dot{transform:scale(2.5);background:var(--magenta)}
+}
+
+/* ═══════ HEADER ═══════ */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:50;background:var(--blue);height:60px;display:flex;align-items:center;transition:background .24s}
+.hdr.midnight{background:rgba(6,8,26,.85);backdrop-filter:blur(12px)}
+.hdr-inner{width:100%;max-width:1440px;margin:0 auto;padding:0 32px;display:flex;align-items:stretch;gap:32px;height:100%}
+.hdr-logo{display:flex;align-items:center}
+.hdr-logo img{height:28px}
+.hdr-nav{flex:1;display:flex;align-items:center;gap:32px}
+.hdr-nav a{color:rgba(255,255,255,.9);font-weight:600;font-size:14px;position:relative;padding:4px 0;transition:color .15s}
+.hdr-nav a::after{content:'';position:absolute;left:0;right:100%;bottom:-3px;height:2px;background:#fff;transition:right .22s cubic-bezier(.16,1,.3,1)}
+.hdr-nav a:hover::after{right:0}
+.hdr-right{display:flex;align-items:stretch;gap:12px}
+.hdr-lang{align-self:center;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);font-weight:700;font-size:12px;letter-spacing:.08em;padding:0 14px;height:32px;border-radius:6px;display:inline-flex;align-items:center}
+.hdr-cta{background:var(--magenta);color:#fff;font-weight:900;font-size:13px;letter-spacing:.14em;text-transform:uppercase;padding:0 28px 0 36px;display:inline-flex;align-items:center;gap:8px;clip-path:polygon(14% 0%,100% 0%,100% 100%,0% 100%);height:100%}
+.hdr-cta:hover{background:var(--magenta-600)}
+
+/* ═══════ HERO ═══════ */
+.hero{position:relative;min-height:100vh;padding-top:60px;background:var(--bg);overflow:hidden;display:flex;flex-direction:column}
+.hero-bgvid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s cubic-bezier(.4,0,.2,1);z-index:0;filter:brightness(.55) saturate(1.15)}
+.hero.video-on .hero-bgvid{opacity:1}
+.hero.video-on{background:var(--midnight)}
+.hero.video-on .hero-eyebrow,.hero.video-on .hero-headline,.hero.video-on .hero-sub,.hero.video-on .hero-hint{color:#fff}
+.hero.video-on .hero-eyebrow{color:var(--pink-bib)}
+.hero.video-on .marquee-item{color:rgba(255,255,255,.18)}
+.hero.video-on .marquee-item.active{color:var(--pink-bib);text-shadow:0 0 80px rgba(255,92,129,.5)}
+.hero-top{position:relative;z-index:2;max-width:1440px;width:100%;margin:0 auto;padding:80px 32px 40px}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:12px;font-weight:800;font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--text-muted);margin-bottom:28px;transition:color .28s}
+.hero-eyebrow .dot{width:8px;height:8px;background:var(--magenta);border-radius:50%;animation:pulse 1.6s ease-in-out infinite}
+.hero-headline{font-family:var(--font-display);font-weight:700;font-size:clamp(40px,7.6vw,128px);line-height:.94;letter-spacing:-.04em;color:var(--text);perspective:1200px;width:100%;display:grid}
+.hero-headline .hero-pair{grid-area:1/1;width:100%;pointer-events:none}
+.hero-headline .hero-pair.active{pointer-events:auto}
+.hero-headline .line{display:block;overflow:hidden;padding:.08em 0;white-space:nowrap}
+.hero-headline .char{display:inline-block;will-change:transform,opacity;transform-origin:50% 100%}
+.hero-headline.js-anim .hero-pair:not(.active) .char{opacity:0;transform:translateY(110%) rotateX(-80deg)}
+.hero-headline.js-anim .hero-pair.active .char{opacity:0;transform:translateY(110%) rotateX(-80deg)}
+.hero-headline .hl-blue{color:var(--blue)}
+.hero-headline .hl-pink{color:var(--pink-bib);font-style:italic}
+.hero.video-on .hero-headline .hl-blue{color:var(--sky)}
+
+/* Indicator dots showing which pair is active */
+.hero-pair-dots{
+  position:absolute;bottom:32px;left:40px;
+  display:flex;gap:8px;z-index:5;
+}
+.hero-pair-dots .dot{
+  width:6px;height:6px;border-radius:50%;
+  background:rgba(0,0,0,.15);transition:all .4s cubic-bezier(.16,1,.3,1);
+}
+.hero.video-on .hero-pair-dots .dot{background:rgba(255,255,255,.18)}
+.hero-pair-dots .dot.active{
+  width:28px;border-radius:3px;background:var(--pink-bib);
+  box-shadow:0 0 12px rgba(255,92,129,.5);
+}
+.hero-sub{margin-top:28px;font-size:19px;font-weight:500;color:var(--text-muted);max-width:620px;line-height:1.55}
+.hero-marquee-wrap{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 0;user-select:none;cursor:grab}
+.hero-marquee-wrap:active{cursor:grabbing}
+.hero-hint{position:absolute;top:32px;right:40px;font-family:var(--font-mono);font-weight:500;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-subtle);display:flex;align-items:center;gap:10px}
+.hero-hint::after{content:'';width:32px;height:1px;background:currentColor;opacity:.4}
+.marquee{width:100%;overflow:hidden;white-space:nowrap;pointer-events:none}
+.marquee-track{display:inline-flex;align-items:baseline;gap:72px;padding:0 40px;transform:translateX(0);will-change:transform;pointer-events:auto}
+.marquee-item{font-family:var(--font-impact);font-weight:900;font-size:clamp(80px,14vw,220px);line-height:1;letter-spacing:-.04em;color:var(--text);display:inline-block;cursor:pointer;pointer-events:auto;transition:color .32s,opacity .32s}
+.marquee-item.dim{opacity:.18}
+.marquee-item .sep{display:inline-block;margin-left:64px;width:16px;height:16px;background:currentColor;border-radius:50%;transform:translateY(-12px);opacity:.4}
+
+/* ═══════ SHOWCASE ═══════ */
+.showcase{background:var(--bg);padding:80px 32px 120px;position:relative}
+.showcase-inner{max-width:1440px;margin:0 auto}
+.showcase-eyebrow{display:flex;align-items:center;gap:24px;margin-bottom:32px}
+.showcase-eyebrow .tag{font-weight:800;font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--magenta)}
+.showcase-eyebrow .line{flex:1;height:1px;background:var(--border)}
+.showcase-eyebrow .meta{font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-subtle)}
+.showcase-frame{position:relative;aspect-ratio:16/9;background:var(--midnight);border-radius:24px;overflow:hidden;box-shadow:0 80px 120px -30px rgba(37,99,235,.25),0 40px 60px -20px rgba(0,0,0,.25),0 0 0 1px rgba(0,0,0,.08)}
+.showcase-frame video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.showcase-frame .corner{position:absolute;top:20px;left:20px;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.65);backdrop-filter:blur(8px);padding:8px 14px;border-radius:999px;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.2em;text-transform:uppercase;z-index:2}
+.showcase-frame .corner .red-dot{width:8px;height:8px;background:#FF3030;border-radius:50%;animation:pulse 1.2s ease-in-out infinite}
+.showcase-caption{margin-top:20px;display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--text-subtle)}
+.showcase-caption .left{font-weight:700;color:var(--text);font-size:15px}
+.showcase-caption .right{font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase}
+
+/* ═══════ STATS ═══════ */
+.stats{background:var(--midnight);padding:120px 32px;position:relative;overflow:hidden}
+.stats::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 15% 0%,rgba(37,99,235,.32),transparent 60%),radial-gradient(ellipse 60% 60% at 100% 100%,rgba(219,48,105,.18),transparent 50%);pointer-events:none}
+.stats-inner{position:relative;max-width:1440px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:40px}
+.stat{color:#fff;padding-top:32px;border-top:1px solid rgba(255,255,255,.18)}
+.stat-num{font-family:var(--font-mono);font-weight:700;font-size:clamp(48px,5vw,88px);letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:8px}
+.stat-num .plus{color:var(--pink-bib);font-size:.7em}
+.stat-label{margin-top:14px;font-weight:700;font-size:16px;color:rgba(255,255,255,.92)}
+.stat-sub{margin-top:4px;font-weight:700;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+
+/* ═══════ SECTION COMMON ═══════ */
+.section-eyebrow{display:inline-flex;align-items:center;gap:14px;font-weight:800;font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--magenta);margin-bottom:24px}
+.section-eyebrow .num{font-family:var(--font-mono);background:var(--magenta);color:#fff;padding:3px 10px;border-radius:4px;font-size:11px}
+.section-title{font-family:var(--font-display);font-weight:700;font-size:clamp(40px,6vw,88px);line-height:1.0;letter-spacing:-.04em;color:var(--text);max-width:980px;margin-bottom:64px}
+.section-title .accent{color:var(--pink-bib)}
+.section-title .blue{color:var(--blue)}
+
+/* ═══════ FEATURES ═══════ */
+.features{padding:140px 32px;background:var(--bg);position:relative}
+.features-inner{max-width:1440px;margin:0 auto}
+.features-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.feature{position:relative;padding:48px 40px 40px;background:#fff;border:1px solid var(--border);border-radius:24px;overflow:hidden;min-height:380px;display:flex;flex-direction:column;justify-content:space-between;transition:border-color .24s,transform .36s cubic-bezier(.16,1,.3,1)}
+.feature::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--accent,var(--blue)) 0%,transparent 60%);opacity:0;transition:opacity .36s;pointer-events:none}
+.feature:hover{border-color:var(--accent,var(--blue))}
+.feature:hover::before{opacity:.05}
+.feature .feat-num{font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+.feature .feat-title{font-family:var(--font-display);font-weight:700;font-size:clamp(32px,3.4vw,52px);letter-spacing:-.03em;line-height:1.0;margin-bottom:16px}
+.feature .feat-desc{color:var(--text-muted);font-size:16px;line-height:1.55;max-width:460px}
+.feature .feat-icon{align-self:flex-end;width:120px;height:120px;position:relative;display:flex;align-items:center;justify-content:center}
+.feature[data-feat="bib"]{--accent:var(--magenta)}
+.feature[data-feat="wave"]{--accent:var(--blue)}
+.feature[data-feat="checkin"]{--accent:var(--race-21k)}
+.feature[data-feat="result"]{--accent:var(--purple)}
+.illus-bib{width:120px;height:80px;background:var(--magenta);border-radius:6px;position:relative;color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:700;font-size:30px;letter-spacing:.04em;box-shadow:0 10px 30px -10px rgba(219,48,105,.5)}
+.illus-bib::before,.illus-bib::after{content:'';position:absolute;width:8px;height:8px;background:#fff;border-radius:50%}
+.illus-bib::before{top:8px;left:8px}
+.illus-bib::after{top:8px;right:8px}
+.illus-wave{width:120px;height:80px;display:flex;align-items:center;justify-content:center}
+.illus-wave svg{width:100%;height:100%}
+.illus-checkin{width:100px;height:100px;background:var(--race-21k);border-radius:16px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:6px;padding:14px}
+.illus-checkin div{background:var(--midnight);border-radius:3px}
+.illus-checkin div:nth-child(5){background:transparent}
+.illus-result{width:120px;height:90px;background:var(--midnight);border-radius:10px;padding:12px;font-family:var(--font-mono);font-weight:700;color:var(--purple);font-size:22px;display:flex;align-items:center;justify-content:center;position:relative;letter-spacing:.02em}
+.illus-result::before{content:'';position:absolute;top:8px;left:12px;right:12px;height:6px;background:linear-gradient(90deg,var(--magenta) 0% 30%,var(--blue) 30% 60%,var(--race-21k) 60% 100%);border-radius:3px}
+
+/* ═══════ RACES — Apple horizontal pin ═══════ */
+.races{background:var(--bg);position:relative}
+.races-pin-wrap{height:100vh;position:relative}
+.races-pin{position:sticky;top:0;height:100vh;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);justify-content:center}
+.races-head{padding:40px 64px 16px;flex-shrink:0}
+.races-head .section-title{margin-bottom:0;font-size:clamp(32px,4vw,56px)}
+.races-track-wrap{display:flex;align-items:center;overflow:hidden;padding:20px 0 40px}
+.races-track{display:flex;gap:24px;padding:0 64px;will-change:transform}
+.race-card{position:relative;flex-shrink:0;width:clamp(380px,24vw,520px);height:540px;border-radius:24px;overflow:hidden;padding:36px 32px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;will-change:transform;box-shadow:0 30px 60px -20px rgba(0,0,0,.18)}
+.race-intro{flex-shrink:0;width:clamp(360px,30vw,520px);height:540px;display:flex;flex-direction:column;justify-content:center;padding:0 48px 0 8px}
+.race-intro .ri-label{font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:.24em;text-transform:uppercase;color:var(--pink-bib);margin-bottom:24px}
+.race-intro .ri-title{font-family:var(--font-display);font-weight:800;font-size:clamp(34px,3.4vw,52px);line-height:1.04;letter-spacing:-.03em;color:var(--text);margin:0 0 22px}
+.race-intro .ri-desc{font-size:clamp(15px,1.1vw,18px);line-height:1.6;color:var(--text-muted);max-width:30ch;margin:0 0 32px}
+.race-intro .ri-hint{display:inline-flex;align-items:center;gap:12px;font-family:var(--font-mono);font-weight:600;font-size:13px;letter-spacing:.06em;color:var(--text-subtle)}
+.race-intro .ri-arrow{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--pink-bib);color:#fff;font-weight:800;animation:riNudge 1.6s ease-in-out infinite}
+@keyframes riNudge{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
+.race-card[data-distance="5K"]{background:var(--race-5k);color:#fff}
+.race-card[data-distance="10K"]{background:var(--race-10k);color:var(--text)}
+.race-card[data-distance="21K"]{background:var(--race-21k);color:var(--text)}
+.race-card[data-distance="42K"]{background:var(--race-42k);color:var(--text)}
+.race-card[data-distance="100K"]{background:var(--race-100k);color:var(--text)}
+.race-card .race-num{font-family:var(--font-impact);font-weight:900;font-size:clamp(80px,9vw,160px);line-height:.82;letter-spacing:-.04em}
+.race-card .race-tag{font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:.22em;text-transform:uppercase;opacity:.75}
+.race-card .race-label{font-weight:700;font-size:22px;letter-spacing:-.01em}
+.race-card .race-time{font-family:var(--font-mono);font-weight:500;font-size:14px;opacity:.75;margin-top:4px}
+.races-progress{position:absolute;bottom:24px;left:64px;right:64px;height:2px;background:rgba(0,0,0,.08);border-radius:2px;overflow:hidden}
+.races-progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--race-5k),var(--race-10k),var(--race-21k),var(--race-42k),var(--race-100k));border-radius:2px}
+.races-counter{position:absolute;bottom:36px;right:64px;font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-subtle)}
+
+/* ═══════ PROCESS ═══════ */
+.process{padding:140px 32px;background:var(--midnight);color:#fff;position:relative;overflow:hidden}
+.process::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 100% 0%,rgba(37,99,235,.22),transparent 60%);pointer-events:none}
+.process-inner{position:relative;max-width:1440px;margin:0 auto}
+.process .section-eyebrow{color:var(--pink-bib)}
+.process .section-eyebrow .num{background:var(--pink-bib)}
+.process .section-title{color:#fff}
+.process .section-title .accent{color:var(--sky)}
+.process-timeline{display:grid;grid-template-columns:repeat(5,1fr);gap:0;position:relative}
+.process-line-track{position:absolute;left:32px;right:32px;top:24px;height:1px;background:rgba(255,255,255,.12)}
+.process-line-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--magenta),var(--blue),var(--race-21k),var(--sky),var(--purple))}
+.process-step{padding:0 16px;position:relative}
+.process-step::before{content:'';position:absolute;left:32px;top:16px;width:16px;height:16px;background:var(--midnight);border:2px solid var(--pink-bib);border-radius:50%;box-shadow:0 0 24px rgba(255,92,129,.4)}
+.process-step:nth-child(2)::before{border-color:var(--blue);box-shadow:0 0 24px rgba(37,99,235,.4)}
+.process-step:nth-child(3)::before{border-color:var(--race-21k)}
+.process-step:nth-child(4)::before{border-color:var(--sky)}
+.process-step:nth-child(5)::before{border-color:var(--purple)}
+.process-step .step-num{font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:.22em;color:rgba(255,255,255,.5);margin-top:56px}
+.process-step .step-title{font-family:var(--font-display);font-weight:700;font-size:clamp(20px,1.6vw,26px);margin-top:8px;margin-bottom:12px;letter-spacing:-.02em}
+.process-step .step-desc{font-size:14px;line-height:1.55;color:rgba(255,255,255,.65)}
+.process-step .step-time{margin-top:16px;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--pink-bib)}
+
+/* ═══════ SERVICES — 4 dịch vụ 5BIB ═══════ */
+.svc{padding:140px 32px;position:relative;overflow:hidden}
+.svc-inner{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:5fr 7fr;gap:80px;align-items:center}
+.svc-inner.reverse{grid-template-columns:7fr 5fr}
+.svc-inner.reverse .svc-text{order:2}
+.svc-inner.reverse .svc-visual{order:1}
+.svc-text .section-title{font-size:clamp(36px,5vw,72px);margin-bottom:24px}
+.svc-desc{font-size:17px;line-height:1.55;color:var(--text-muted);margin-bottom:28px;max-width:520px}
+.svc-bullets{display:flex;flex-direction:column;gap:14px;margin-bottom:36px}
+.svc-bullet{display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.5}
+.svc-bullet .ico{flex-shrink:0;font-size:20px;margin-top:-2px}
+.svc-bullet b{color:var(--text);font-weight:700;margin-right:4px}
+.svc-cta{display:inline-flex;align-items:center;gap:10px;background:var(--blue);color:#fff;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;padding:16px 28px;border-radius:12px;box-shadow:0 10px 24px rgba(37,99,235,.28);transition:all .22s}
+.svc-cta:hover{background:var(--blue-700);transform:translateY(-2px)}
+.svc-stat{margin-top:20px;padding:18px 22px;background:rgba(37,99,235,.06);border-left:3px solid var(--magenta);border-radius:0 8px 8px 0;font-size:15px;line-height:1.55;color:var(--text-muted)}
+.svc-stat b,.svc-stat .accent{color:var(--magenta);font-family:var(--font-mono);font-size:18px;font-weight:700;letter-spacing:-.02em}
+
+/* Visual mockup shared */
+.svc-visual{position:relative}
+.svc-mock{
+  background:var(--midnight);border-radius:24px;padding:28px;
+  box-shadow:0 60px 100px -30px rgba(37,99,235,.25),0 30px 50px -20px rgba(0,0,0,.25);
+  color:#fff;position:relative;overflow:hidden;
+}
+.svc-mock::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 0% 0%,rgba(255,92,129,.12),transparent 60%);pointer-events:none}
+
+/* Section A — Sale dashboard mockup */
+.svc.svc-sale{background:var(--bg)}
+.mock-sale-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;position:relative}
+.mock-sale-head .ev{font-weight:700;font-size:15px}
+.mock-sale-head .ev .sub{display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:2px}
+.mock-sale-head .live-badge{background:#22C55E}
+.mock-sale-tabs{display:flex;gap:8px;margin-bottom:20px;position:relative}
+.mock-sale-tabs .tab{padding:6px 12px;border-radius:6px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:rgba(255,255,255,.06);color:rgba(255,255,255,.7)}
+.mock-sale-tabs .tab.active{background:var(--magenta);color:#fff}
+.mock-sale-rows{position:relative;display:flex;flex-direction:column;gap:10px}
+.mock-sale-row{display:grid;grid-template-columns:1fr 60px 80px;gap:14px;padding:14px 16px;background:rgba(255,255,255,.04);border-radius:10px;font-size:13px;align-items:center;border:1px solid rgba(255,255,255,.06)}
+.mock-sale-row .tier{font-weight:700}
+.mock-sale-row .tier .ti{display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:rgba(255,255,255,.5);margin-top:2px;text-transform:uppercase}
+.mock-sale-row .price{font-family:var(--font-mono);font-weight:700;color:var(--race-100k);text-align:right;font-size:14px}
+.mock-sale-row .qty{font-family:var(--font-mono);font-weight:700;font-size:12px;text-align:right}
+.mock-sale-row .qty .bar{display:block;width:100%;height:4px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:6px;overflow:hidden;position:relative}
+.mock-sale-row .qty .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--magenta),var(--pink-bib));border-radius:2px}
+.mock-sale-stats{display:flex;gap:18px;margin-top:20px;padding-top:18px;border-top:1px solid rgba(255,255,255,.1);position:relative}
+.mock-sale-stats > div{flex:1}
+.mock-sale-stats .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+.mock-sale-stats .num{font-family:var(--font-mono);font-weight:700;font-size:20px;margin-top:4px;color:#fff}
+.mock-sale-stats .num .green{color:#22C55E}
+
+/* ── Section 04 — Phone stage with Awakening video + floating mini-dashboard ── */
+.sale-stage{position:relative;width:100%;min-height:680px;display:flex;align-items:center;justify-content:center;perspective:1400px}
+.sale-stage::before{content:'';position:absolute;left:50%;top:50%;width:90%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at center,rgba(37,99,235,.18) 0%,rgba(255,92,129,.10) 30%,transparent 65%);transform:translate(-50%,-50%);filter:blur(40px);pointer-events:none}
+.sale-stage::after{content:'';position:absolute;left:50%;top:50%;width:60%;aspect-ratio:1;border:1.5px dashed rgba(37,99,235,.18);border-radius:50%;transform:translate(-50%,-50%);animation:saleStageRing 60s linear infinite;pointer-events:none}
+@keyframes saleStageRing{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+.phone-mock{position:relative;width:min(340px,30vw);aspect-ratio:9/19.5;background:#0A0A0A;border-radius:42px;padding:10px;box-shadow:0 60px 100px -20px rgba(37,99,235,.35),0 30px 60px -10px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.06) inset,0 -2px 0 rgba(255,255,255,.04) inset;transform-style:preserve-3d;will-change:transform;z-index:2;transition:transform .5s cubic-bezier(.16,1,.3,1)}
+.phone-mock::before{content:'';position:absolute;left:50%;top:14px;transform:translateX(-50%);width:108px;height:30px;background:#000;border-radius:99px;z-index:3;box-shadow:0 0 0 1px rgba(255,255,255,.05)}
+.phone-mock::after{content:'';position:absolute;left:-2px;right:-2px;top:50%;bottom:50%;border-left:1.5px solid rgba(255,255,255,.05);border-right:1.5px solid rgba(255,255,255,.05);pointer-events:none}
+.phone-screen{position:relative;width:100%;height:100%;background:#FAF8F5;border-radius:32px;overflow:hidden;z-index:1}
+.phone-screen iframe{width:100%;height:100%;border:0;display:block;background:#FAF8F5}
+.phone-screen .phone-status{position:absolute;top:0;left:0;right:0;height:44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 28px 6px;font-family:var(--font-mono);font-size:13px;font-weight:700;color:#131315;z-index:2;pointer-events:none}
+.phone-screen .phone-status .right{display:flex;gap:6px;align-items:center}
+.phone-screen .phone-status .battery{width:24px;height:11px;border:1.5px solid #131315;border-radius:3px;position:relative;display:inline-block}
+.phone-screen .phone-status .battery::after{content:'';position:absolute;right:-3px;top:2.5px;width:2px;height:4px;background:#131315;border-radius:0 1px 1px 0}
+.phone-screen .phone-status .battery::before{content:'';position:absolute;left:1px;top:1px;bottom:1px;width:78%;background:#131315;border-radius:1px}
+
+/* Notification pulse rings emanating from phone */
+.phone-pulse{position:absolute;left:50%;top:50%;width:60%;aspect-ratio:1;border:2px solid var(--magenta);border-radius:50%;transform:translate(-50%,-50%) scale(.7);opacity:0;pointer-events:none;z-index:0}
+.phone-pulse.p1{animation:phonePulse 3s ease-out infinite}
+.phone-pulse.p2{animation:phonePulse 3s 1s ease-out infinite;border-color:var(--blue)}
+.phone-pulse.p3{animation:phonePulse 3s 2s ease-out infinite;border-color:var(--purple)}
+@keyframes phonePulse{0%{transform:translate(-50%,-50%) scale(.6);opacity:.6}80%{opacity:.05}100%{transform:translate(-50%,-50%) scale(1.6);opacity:0}}
+
+/* Floating notification card (mini dashboard preview) */
+.phone-notif{position:absolute;background:rgba(255,255,255,.96);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.6);border-radius:16px;padding:14px 16px;font-family:var(--font-body);color:#131315;box-shadow:0 24px 60px -10px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.04);z-index:4;will-change:transform;display:flex;align-items:center;gap:12px;min-width:240px}
+.phone-notif .notif-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:linear-gradient(135deg,var(--blue),var(--magenta));color:#fff;box-shadow:0 4px 12px rgba(219,48,105,.3)}
+.phone-notif .notif-body{flex:1;min-width:0}
+.phone-notif .notif-app{font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-subtle);margin-bottom:2px}
+.phone-notif .notif-title{font-weight:800;font-size:13px;letter-spacing:-.01em;line-height:1.25}
+.phone-notif .notif-meta{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);margin-top:3px;letter-spacing:.04em}
+.phone-notif .notif-amt{font-family:var(--font-mono);font-weight:700;font-size:14px;color:#22C55E;letter-spacing:-.01em;white-space:nowrap}
+
+.phone-notif.n1{top:8%;right:-8%;transform:rotate(-3deg)}
+.phone-notif.n2{top:50%;left:-22%;transform:rotate(2deg);background:#0A0A0A;color:#fff;border-color:rgba(255,255,255,.12)}
+.phone-notif.n2 .notif-app{color:rgba(255,255,255,.45)}
+.phone-notif.n2 .notif-meta{color:rgba(255,255,255,.55)}
+.phone-notif.n3{bottom:8%;right:-12%;transform:rotate(-2deg)}
+.phone-notif.n3 .notif-ico{background:linear-gradient(135deg,#22C55E,#16a34a)}
+
+/* Floating big number "+240" */
+.phone-tick{position:absolute;top:42%;right:-32%;font-family:var(--font-mono);font-weight:700;font-size:48px;letter-spacing:-.03em;color:var(--magenta);z-index:5;text-shadow:0 8px 24px rgba(219,48,105,.35);white-space:nowrap;pointer-events:none}
+.phone-tick .arr{display:inline-block;color:#22C55E;font-size:.6em;vertical-align:middle;margin-right:8px}
+.phone-tick .lbl{display:block;font-size:10px;letter-spacing:.22em;color:var(--text-muted);text-transform:uppercase;margin-top:4px;font-weight:800}
+
+/* Caption strip below phone — replaces the old dashboard but keeps trust numbers */
+.sale-strip{position:absolute;left:50%;bottom:-12px;transform:translateX(-50%);display:flex;gap:32px;background:#0A0A0A;color:#fff;padding:14px 26px;border-radius:99px;box-shadow:0 30px 60px -10px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.06);z-index:6;white-space:nowrap}
+.sale-strip > div{display:flex;flex-direction:column;align-items:center;gap:2px}
+.sale-strip .v{font-family:var(--font-mono);font-weight:700;font-size:18px;letter-spacing:-.02em;color:var(--race-100k)}
+.sale-strip .l{font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+.sale-strip .sep{width:1px;background:rgba(255,255,255,.12);margin:2px 0}
+
+/* Responsive */
+@media (max-width: 1100px){
+  .sale-stage{min-height:580px}
+  .phone-mock{width:min(280px,38vw)}
+  .phone-notif{min-width:200px;padding:10px 12px}
+  .phone-notif .notif-title{font-size:12px}
+  .phone-notif.n1{right:-4%}
+  .phone-notif.n2{left:-10%}
+  .phone-notif.n3{right:-6%}
+  .phone-tick{font-size:36px;right:-20%}
+}
+@media (max-width: 760px){
+  .sale-stage{min-height:520px;padding:40px 0}
+  .phone-mock{width:240px}
+  .phone-notif.n1{top:2%;right:-2%;transform:rotate(-2deg) scale(.85)}
+  .phone-notif.n2{top:48%;left:-2%;transform:rotate(2deg) scale(.85)}
+  .phone-notif.n3{bottom:2%;right:-2%;transform:rotate(-2deg) scale(.85)}
+  .phone-tick{display:none}
+  .sale-strip{gap:18px;padding:10px 18px}
+  .sale-strip .v{font-size:14px}
+}
+
+/* Section B — Racekit pickup mockup */
+.svc.svc-onsite{background:var(--midnight);color:#fff}
+.svc.svc-onsite::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 100% 30%,rgba(255,92,129,.18),transparent 60%);pointer-events:none}
+.svc.svc-onsite .svc-text > * {position:relative}
+.svc.svc-onsite .section-title{color:#fff}
+.svc.svc-onsite .section-title .accent{color:var(--pink-bib);font-style:italic}
+.svc.svc-onsite .section-eyebrow{color:var(--pink-bib)}
+.svc.svc-onsite .section-eyebrow .num{background:var(--pink-bib)}
+.svc.svc-onsite .svc-desc{color:rgba(255,255,255,.7)}
+.svc.svc-onsite .svc-bullet b{color:#fff}
+.svc.svc-onsite .svc-bullet{color:rgba(255,255,255,.85)}
+.svc.svc-onsite .svc-stat{background:rgba(255,92,129,.08);color:rgba(255,255,255,.85);border-left-color:var(--pink-bib)}
+.svc.svc-onsite .svc-stat b{color:var(--pink-bib)}
+.svc.svc-onsite .svc-cta{background:var(--pink-bib);color:var(--midnight);box-shadow:0 10px 24px rgba(255,92,129,.4)}
+.svc.svc-onsite .svc-cta:hover{background:#fff}
+.mock-pickup{
+  background:#111122;border-radius:24px;overflow:hidden;
+  position:relative;aspect-ratio:4/5;
+  box-shadow:0 60px 100px -30px rgba(255,92,129,.3),0 30px 50px -20px rgba(0,0,0,.4);
+}
+.mock-pickup-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55;border:0}
+iframe.mock-pickup-video{opacity:1;background:#faf9f5}
+.mock-pickup-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(17,17,34,.2) 30%,rgba(17,17,34,.95) 90%);pointer-events:none}
+.mock-pickup-content{position:absolute;inset:0;padding:24px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;z-index:2}
+.mock-pickup-top{display:flex;justify-content:space-between;align-items:flex-start}
+.mock-pickup-top .station{background:rgba(0,0,0,.5);backdrop-filter:blur(10px);padding:8px 14px;border-radius:999px;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;border:1px solid rgba(255,255,255,.15)}
+.mock-pickup-top .queue{background:rgba(255,92,129,.85);backdrop-filter:blur(10px);padding:8px 14px;border-radius:999px;font-family:var(--font-mono);font-weight:800;font-size:11px;color:#fff;display:flex;align-items:center;gap:8px}
+.mock-pickup-bottom{display:flex;flex-direction:column;gap:10px}
+.mock-pickup-vdv{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:rgba(255,255,255,.08);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.12);border-radius:14px}
+.mock-pickup-vdv .name{font-weight:700;font-size:14px}
+.mock-pickup-vdv .meta{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;color:rgba(255,255,255,.55);margin-top:2px}
+.mock-pickup-vdv .status{padding:6px 10px;border-radius:8px;font-family:var(--font-mono);font-weight:700;font-size:11px;text-transform:uppercase}
+.mock-pickup-vdv .status.done{background:#22C55E;color:#000}
+.mock-pickup-vdv .status.pending{background:#F59E0B;color:#000}
+.mock-pickup-counter{display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;padding:0 6px;color:rgba(255,255,255,.7)}
+.mock-pickup-counter .big{font-size:32px;letter-spacing:-.02em;color:var(--pink-bib);font-weight:700}
+
+/* Section C — Reach mockup */
+.svc.svc-reach{background:linear-gradient(180deg,var(--midnight) 0%,#0B0D2E 100%);color:#fff;position:relative;overflow:hidden}
+.svc.svc-reach::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(37,99,235,.25),transparent 60%);pointer-events:none}
+.svc.svc-reach .svc-text > *{position:relative}
+.svc.svc-reach .section-title{color:#fff}
+.svc.svc-reach .section-title .accent{color:var(--sky)}
+.svc.svc-reach .section-eyebrow{color:var(--race-100k)}
+.svc.svc-reach .section-eyebrow .num{background:var(--race-100k);color:var(--midnight)}
+.svc.svc-reach .svc-desc{color:rgba(255,255,255,.7)}
+.svc.svc-reach .svc-bullet b{color:#fff}
+.svc.svc-reach .svc-bullet{color:rgba(255,255,255,.82)}
+.svc.svc-reach .svc-stat{background:rgba(255,244,79,.08);border-left-color:var(--race-100k);color:rgba(255,255,255,.85)}
+.svc.svc-reach .svc-stat b{color:var(--race-100k)}
+.svc.svc-reach .svc-cta{background:var(--race-100k);color:var(--midnight);box-shadow:0 10px 24px rgba(255,244,79,.25)}
+.svc.svc-reach .svc-cta:hover{background:#fff}
+/* ── Section 06 — Reach: Network Wakes Up 16:9 video stage ── */
+/* stacked layout: 2-col head on top, full-width landscape video below */
+.svc-inner.reach-stacked{grid-template-columns:1fr;gap:clamp(40px,5vw,64px)}
+.reach-head{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(32px,5vw,72px);align-items:start}
+.reach-head-main .svc-cta{margin-top:6px}
+.reach-head-side{display:flex;flex-direction:column;gap:18px;padding-top:4px}
+.reach-head-side .svc-bullets{margin-bottom:0}
+
+/* video stage — the iframe is NEVER covered; all FX live in the padding ring / behind */
+.reach-stage{position:relative;width:100%;max-width:1440px;margin:0 auto;padding:36px;isolation:isolate}
+.reach-glow{position:absolute;inset:-4%;z-index:0;border-radius:34px;background:radial-gradient(ellipse 58% 70% at 28% 28%,rgba(37,99,235,.5),transparent 64%),radial-gradient(ellipse 56% 66% at 76% 74%,rgba(219,48,105,.45),transparent 64%);filter:blur(58px);opacity:.5;animation:reachGlow 9s ease-in-out infinite;pointer-events:none}
+@keyframes reachGlow{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:.72;transform:scale(1.05)}}
+.reach-frame{position:relative;z-index:2;aspect-ratio:16/9;border-radius:18px;padding:2px;background:linear-gradient(135deg,rgba(37,99,235,.9),rgba(219,48,105,.85) 55%,rgba(56,189,248,.7));box-shadow:0 42px 110px -26px rgba(0,0,0,.78),0 0 0 1px rgba(255,255,255,.05)}
+.reach-frame::after{content:'';position:absolute;inset:0;border-radius:18px;padding:2px;background:linear-gradient(120deg,transparent 32%,rgba(255,255,255,.6) 48%,transparent 64%);background-size:280% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:reachSheen 5.5s linear infinite;pointer-events:none}
+@keyframes reachSheen{0%{background-position:180% 0}100%{background-position:-80% 0}}
+.reach-screen{position:relative;z-index:1;width:100%;height:100%;border-radius:16px;overflow:hidden;background:#0c1322}
+.reach-screen iframe{display:block;width:100%;height:100%;border:0;background:#0c1322;pointer-events:auto}
+
+/* viewfinder corner brackets — float just outside the frame corners */
+.reach-corner{position:absolute;z-index:3;width:24px;height:24px;border:2px solid var(--sky);opacity:.8;pointer-events:none}
+.reach-corner.tl{top:18px;left:18px;border-right:0;border-bottom:0;border-radius:7px 0 0 0}
+.reach-corner.tr{top:18px;right:18px;border-left:0;border-bottom:0;border-radius:0 7px 0 0}
+.reach-corner.bl{bottom:18px;left:18px;border-right:0;border-top:0;border-radius:0 0 0 7px}
+.reach-corner.br{bottom:18px;right:18px;border-left:0;border-top:0;border-radius:0 0 7px 0}
+
+/* floating chips — sit in the stage padding zone, never over the video */
+.reach-tag{position:absolute;z-index:4;display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.13em;text-transform:uppercase;padding:8px 14px;border-radius:999px;backdrop-filter:blur(8px);white-space:nowrap}
+.reach-tag-live{top:0;left:26px;background:rgba(219,48,105,.18);border:1px solid rgba(219,48,105,.5);color:#fff}
+.reach-tag-live .dot{width:8px;height:8px;border-radius:50%;background:var(--pink-bib);box-shadow:0 0 0 0 rgba(219,48,105,.6);animation:reachDot 1.6s ease-out infinite}
+@keyframes reachDot{0%{box-shadow:0 0 0 0 rgba(219,48,105,.5)}100%{box-shadow:0 0 0 13px rgba(219,48,105,0)}}
+.reach-tag-count{bottom:0;right:26px;background:rgba(255,244,79,.14);border:1px solid rgba(255,244,79,.45);color:var(--race-100k)}
+
+
+/* Section D — Result lookup mockup */
+.svc.svc-result{background:var(--bg)}
+.mock-result{
+  background:#fff;border-radius:24px;overflow:hidden;
+  box-shadow:0 50px 100px -30px rgba(37,99,235,.25),0 0 0 1px var(--border);
+}
+.mock-result-hero{
+  position:relative;padding:24px 28px 28px;
+  background:linear-gradient(135deg,var(--blue) 0%,var(--blue-deep) 100%);
+  color:#fff;overflow:hidden;
+}
+.mock-result-hero::before{content:'';position:absolute;inset:0;background:url('hero-5bib.mp4') center/cover;opacity:.15;mix-blend-mode:overlay}
+.mock-result-nav{display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.85);margin-bottom:24px}
+.mock-result-nav .logo{font-family:var(--font-display);font-size:18px;letter-spacing:-.02em}
+.mock-result-nav .links{display:flex;gap:18px;font-size:10px}
+.mock-result-nav .links span{opacity:.7}
+.mock-result-nav .links span.active{opacity:1;border-bottom:2px solid var(--pink-bib);padding-bottom:2px}
+.mock-result-title{font-family:var(--font-display);font-weight:700;font-size:36px;line-height:1;letter-spacing:-.04em;margin:8px 0}
+.mock-result-title .live{color:var(--race-100k)}
+.mock-result-search{display:flex;gap:8px;margin-top:18px;background:rgba(255,255,255,.12);backdrop-filter:blur(10px);padding:6px;border-radius:12px;border:1px solid rgba(255,255,255,.15)}
+.mock-result-search input{flex:1;background:transparent;border:0;padding:10px 14px;color:#fff;font-family:var(--font-body);font-size:13px;outline:none}
+.mock-result-search input::placeholder{color:rgba(255,255,255,.5)}
+.mock-result-search button{padding:0 18px;background:#fff;color:var(--blue);border:0;border-radius:8px;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.mock-result-stats{display:flex;gap:24px;margin-top:22px;padding-top:18px;border-top:1px solid rgba(255,255,255,.18)}
+.mock-result-stats > div{display:flex;flex-direction:column;gap:2px}
+.mock-result-stats .n{font-family:var(--font-mono);font-weight:700;font-size:22px;color:#fff}
+.mock-result-stats .l{font-family:var(--font-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.6)}
+.mock-result-grid{padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:14px;background:#fff}
+.mock-result-card{position:relative;background:var(--surface);border-radius:14px;overflow:hidden;aspect-ratio:16/10}
+.mock-result-card.r1{background:linear-gradient(135deg,#E54E26 0%,#C9265F 100%)}
+.mock-result-card.r2{background:linear-gradient(135deg,#5DAEDC 0%,#0A347D 100%)}
+.mock-result-card.r3{background:linear-gradient(135deg,#7FD4C6 0%,#27A5EE 100%)}
+.mock-result-card.r4{background:linear-gradient(135deg,#FFF44F 0%,#D4E843 100%);color:var(--text)}
+.mock-result-card .ended{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);padding:4px 10px;border-radius:6px;font-family:var(--font-mono);font-weight:700;font-size:9px;letter-spacing:.18em;color:#fff;text-transform:uppercase}
+.mock-result-card .meta{position:absolute;left:12px;right:12px;bottom:10px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.3)}
+.mock-result-card.r4 .meta{color:var(--text);text-shadow:none}
+.mock-result-card .meta .ttl{font-weight:700;font-size:13px;line-height:1.2}
+.mock-result-card .meta .sub{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;opacity:.85;margin-top:3px}
+.mock-result-card .meta .pills{display:flex;gap:4px;margin-top:6px}
+.mock-result-card .meta .pills span{background:rgba(255,255,255,.2);backdrop-filter:blur(8px);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);font-size:9px;font-weight:700}
+.mock-result-card.r4 .meta .pills span{background:rgba(0,0,0,.15)}
+
+/* ═══════ CHAOS — HDSD tutorial showcase ═══════ */
+.chaos{position:relative;background:var(--midnight);color:#fff;padding:120px 32px 160px;overflow:hidden}
+.chaos::before{content:'';position:absolute;inset:0;background:
+  radial-gradient(ellipse 50% 60% at 80% 30%,rgba(255,92,129,.18),transparent 60%),
+  radial-gradient(ellipse 60% 50% at 10% 70%,rgba(37,99,235,.18),transparent 60%);
+  pointer-events:none;z-index:0
+}
+/* paper noise via SVG */
+.chaos::after{content:'';position:absolute;inset:0;opacity:.05;pointer-events:none;
+  background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85"/></filter><rect width="100%" height="100%" filter="url(%23n)"/></svg>');
+  z-index:0
+}
+.chaos-inner{position:relative;z-index:2;max-width:1440px;margin:0 auto}
+.chaos-head{display:flex;justify-content:space-between;align-items:flex-end;gap:32px;margin-bottom:64px;flex-wrap:wrap}
+.chaos-head .section-eyebrow{color:var(--race-100k);margin-bottom:24px}
+.chaos-head .section-eyebrow .num{background:var(--race-100k);color:var(--midnight)}
+.chaos-head .section-title{color:#fff;margin-bottom:0;font-size:clamp(40px,7vw,108px);max-width:900px}
+.chaos-head .section-title .accent{color:var(--race-100k);font-style:italic}
+.chaos-head .meta{font-family:var(--font-mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.5);max-width:280px;line-height:1.6}
+
+.chaos-mosaic{position:relative;height:920px;width:100%}
+.chaos-card{
+  position:absolute;
+  background:#fff;color:var(--text);
+  border-radius:18px;
+  overflow:hidden;
+  box-shadow:0 30px 80px -20px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.08);
+  transition:transform .5s cubic-bezier(.16,1,.3,1),box-shadow .5s;
+  cursor:pointer;
+  will-change:transform;
+}
+.chaos-card:hover{
+  transform:translate(var(--tx,0),var(--ty,0)) rotate(0deg) scale(1.06)!important;
+  z-index:20;
+  box-shadow:0 50px 120px -20px rgba(0,0,0,.7),0 0 0 2px var(--race-100k);
+}
+.chaos-card .chaos-cover{
+  position:relative;height:55%;
+  background:linear-gradient(135deg,var(--card-bg,var(--blue)) 0%,var(--card-bg-2,var(--magenta)) 100%);
+  overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;
+}
+.chaos-card .chaos-cover::before{
+  content:'';position:absolute;top:10px;left:10px;
+  width:10px;height:10px;background:#FF3030;border-radius:50%;
+  box-shadow:0 0 8px rgba(255,48,48,.6);
+  animation:pulse 1.2s ease-in-out infinite;
+}
+.chaos-card .chaos-emoji{
+  font-size:48px;
+  filter:drop-shadow(0 4px 8px rgba(0,0,0,.3));
+}
+.chaos-card .chaos-iframe{width:100%;height:100%;border:0;display:block;pointer-events:none}
+.chaos-card .chaos-meta{padding:18px 20px 20px;height:45%;display:flex;flex-direction:column;justify-content:space-between}
+.chaos-card .chaos-step{font-family:var(--font-mono);font-weight:700;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--text-subtle)}
+.chaos-card .chaos-title{font-family:var(--font-display);font-weight:700;font-size:18px;letter-spacing:-.01em;line-height:1.15;margin-top:6px;color:var(--text)}
+.chaos-card .chaos-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:11px}
+.chaos-card .chaos-tag{font-family:var(--font-mono);font-weight:700;color:var(--magenta);letter-spacing:.1em;text-transform:uppercase}
+.chaos-card .chaos-time{font-family:var(--font-mono);color:var(--text-subtle)}
+
+/* individual card placements */
+.chaos-card.c1{top:0;left:2%;width:280px;height:340px;--rot:-7deg;--tx:0;--ty:0;transform:rotate(-7deg)}
+.chaos-card.c2{top:80px;left:22%;width:340px;height:400px;--rot:4deg;transform:rotate(4deg);z-index:2}
+.chaos-card.c3{top:0;left:46%;width:300px;height:360px;--rot:-3deg;transform:rotate(-3deg)}
+.chaos-card.c4{top:40px;right:18%;width:320px;height:380px;--rot:6deg;transform:rotate(6deg)}
+.chaos-card.c5{top:60px;right:0%;width:240px;height:300px;--rot:-9deg;transform:rotate(-9deg)}
+.chaos-card.c6{top:420px;left:0%;width:300px;height:360px;--rot:8deg;transform:rotate(8deg)}
+.chaos-card.c7{top:480px;left:24%;width:260px;height:320px;--rot:-5deg;transform:rotate(-5deg)}
+.chaos-card.c8{top:440px;left:48%;width:340px;height:400px;--rot:3deg;transform:rotate(3deg);z-index:3}
+.chaos-card.c9{top:500px;right:6%;width:280px;height:340px;--rot:-6deg;transform:rotate(-6deg)}
+
+/* card cover variants */
+.chaos-card.c1 { --card-bg:var(--blue); --card-bg-2:var(--blue-deep) }
+.chaos-card.c2 { --card-bg:var(--magenta); --card-bg-2:var(--pink-bib) }
+.chaos-card.c3 { --card-bg:var(--race-21k); --card-bg-2:var(--sky) }
+.chaos-card.c4 { --card-bg:var(--purple); --card-bg-2:var(--magenta) }
+.chaos-card.c5 { --card-bg:var(--race-5k); --card-bg-2:#FF8B7C }
+.chaos-card.c6 { --card-bg:var(--midnight); --card-bg-2:var(--blue-deep) }
+.chaos-card.c7 { --card-bg:var(--race-10k); --card-bg-2:#A8D420 }
+.chaos-card.c8 { --card-bg:var(--blue); --card-bg-2:var(--magenta) }
+.chaos-card.c9 { --card-bg:var(--race-100k); --card-bg-2:#F2CE00 }
+.chaos-card.c9 .chaos-emoji,.chaos-card.c7 .chaos-emoji{color:var(--midnight)}
+
+.chaos-tags-row{margin-top:64px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center}
+.chaos-pill{display:inline-flex;align-items:center;height:36px;padding:0 16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:999px;font-family:var(--font-body);font-weight:600;font-size:12px;letter-spacing:.04em;color:rgba(255,255,255,.78);cursor:pointer;transition:all .22s;white-space:nowrap}
+.chaos-pill:hover{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.3)}
+.chaos-pill:not(.live){cursor:default}
+.chaos-pill:not(.live):hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.78);border-color:rgba(255,255,255,.14)}
+.chaos-pill.live{background:var(--race-100k);border-color:var(--race-100k);color:var(--midnight);font-weight:800;letter-spacing:.06em}
+.chaos-pill.live:hover{background:#fff;border-color:#fff}
+
+/* ═══════ LIVE TRACKER ═══════ */
+section.live{padding:140px 32px;background:var(--bg)}
+.live-inner{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:0.7fr 1.3fr;gap:56px;align-items:center}
+.live-left .section-title{font-size:clamp(36px,5vw,64px);margin-bottom:24px}
+.live-left .live-desc{color:var(--text-muted);font-size:17px;line-height:1.6;margin-bottom:32px}
+.live-features{display:flex;flex-direction:column;gap:16px}
+.live-feat{display:flex;align-items:center;gap:14px;font-weight:600;color:var(--text)}
+.live-feat .check{width:24px;height:24px;background:var(--race-21k);color:var(--text);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px}
+.tracker{background:var(--midnight);border-radius:24px;padding:28px;box-shadow:0 60px 100px -30px rgba(37,99,235,.25),0 30px 50px -20px rgba(0,0,0,.25);color:#fff;position:relative;overflow:hidden}
+.tracker::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 0% 0%,rgba(255,92,129,.15),transparent 50%);pointer-events:none}
+.tracker-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.tracker-event{font-weight:700;font-size:16px}
+.tracker-event .sub{display:block;font-family:var(--font-mono);font-weight:500;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:2px}
+.live-badge{display:inline-flex;align-items:center;gap:8px;background:#FF3030;color:#fff;padding:6px 12px;border-radius:999px;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.16em}
+.live-badge .dot{width:8px;height:8px;background:#fff;border-radius:50%;animation:pulse 1.2s ease-in-out infinite}
+.tracker-table{border-top:1px solid rgba(255,255,255,.1);padding-top:16px}
+.tracker-row{display:grid;grid-template-columns:48px 1fr 110px 84px;gap:16px;padding:14px 8px;border-radius:10px;align-items:center;font-size:14px;transition:background .2s,transform .6s cubic-bezier(.16,1,.3,1);position:relative;border-bottom:1px solid rgba(255,255,255,.04)}
+.tracker-row:hover{background:rgba(255,255,255,.04)}
+.tracker-row .rk{font-family:var(--font-mono);font-weight:700;font-size:18px;color:rgba(255,255,255,.6);position:relative;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%}
+.tracker-row.gold .rk{color:#FFD700;background:radial-gradient(circle,rgba(255,215,0,.18),transparent 70%);animation:leaderPulse 2.4s ease-in-out infinite}
+.tracker-row.silver .rk{color:#C0C0C0}
+.tracker-row.bronze .rk{color:#CD7F32}
+@keyframes leaderPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,215,0,.5)}
+  50%{box-shadow:0 0 0 10px rgba(255,215,0,0)}
+}
+.tracker-row .name{font-weight:700;display:flex;align-items:center;gap:8px}
+.tracker-row .name .flag{font-size:16px;line-height:1}
+.tracker-row .meta{font-family:var(--font-mono);font-size:11px;color:rgba(255,255,255,.5);display:block;margin-top:3px;letter-spacing:.08em}
+.tracker-row .name-wrap{position:relative}
+.tracker-row .progress{display:block;margin-top:6px;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;position:relative}
+.tracker-row .progress i{display:block;height:100%;background:linear-gradient(90deg,var(--pink-bib),var(--race-100k));border-radius:2px;transition:width 800ms cubic-bezier(.16,1,.3,1)}
+.tracker-row .progress .km{position:absolute;right:0;top:-15px;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;color:rgba(255,255,255,.4)}
+.tracker-row .pace{font-family:var(--font-mono);font-weight:500;font-size:13px;color:rgba(255,255,255,.7);text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.tracker-row .pace .arr{font-size:10px;font-weight:700}
+.tracker-row .pace .arr.up{color:#22C55E}
+.tracker-row .pace .arr.down{color:#EF4444}
+.tracker-row .pace .arr.flat{color:rgba(255,255,255,.4)}
+.tracker-row .time{font-family:var(--font-mono);font-weight:700;font-size:15px;text-align:right}
+.tracker-row.flash{animation:rowFlash 1s ease-out}
+@keyframes rowFlash{
+  0%{background:rgba(255,92,129,.18)}
+  100%{background:transparent}
+}
+
+/* Commentary marquee */
+.tracker-commentary{
+  margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;gap:10px;overflow:hidden;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:rgba(255,255,255,.7);
+}
+.tracker-commentary .live-tag{
+  flex-shrink:0;background:#FF3030;color:#fff;padding:3px 8px;border-radius:4px;
+  font-weight:800;font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+}
+.tracker-commentary .scroll{
+  flex:1;overflow:hidden;white-space:nowrap;position:relative;mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+}
+.tracker-commentary .scroll-inner{display:inline-flex;gap:48px;animation:commentaryScroll 30s linear infinite;will-change:transform}
+.tracker-commentary .scroll-inner span{display:inline-block}
+@keyframes commentaryScroll{
+  0%{transform:translateX(0)}
+  100%{transform:translateX(-50%)}
+}
+
+/* live tracker — Finish Line video module (replaces leaderboard mock) */
+.live-stage{position:relative;width:100%;padding:22px;isolation:isolate}
+.live-glow{position:absolute;inset:-2%;z-index:0;border-radius:34px;background:radial-gradient(ellipse 58% 70% at 28% 28%,rgba(37,99,235,.5),transparent 64%),radial-gradient(ellipse 56% 66% at 76% 74%,rgba(219,48,105,.45),transparent 64%);filter:blur(54px);opacity:.5;animation:reachGlow 9s ease-in-out infinite;pointer-events:none}
+.live-frame{position:relative;z-index:2;aspect-ratio:16/9;border-radius:18px;padding:2px;background:linear-gradient(135deg,rgba(37,99,235,.9),rgba(219,48,105,.85) 55%,rgba(56,189,248,.7));box-shadow:0 42px 110px -26px rgba(0,0,0,.78),0 0 0 1px rgba(255,255,255,.05)}
+.live-frame::after{content:'';position:absolute;inset:0;border-radius:18px;padding:2px;background:linear-gradient(120deg,transparent 32%,rgba(255,255,255,.6) 48%,transparent 64%);background-size:280% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:reachSheen 5.5s linear infinite;pointer-events:none}
+.live-screen{position:relative;z-index:1;width:100%;height:100%;border-radius:16px;overflow:hidden;background:#0a0e1f}
+.live-screen iframe{display:block;width:100%;height:100%;border:0;background:#0a0e1f;pointer-events:auto}
+.live-corner{position:absolute;z-index:3;width:22px;height:22px;border:2px solid var(--sky);opacity:.8;pointer-events:none}
+.live-corner.tl{top:12px;left:12px;border-right:0;border-bottom:0;border-radius:7px 0 0 0}
+.live-corner.tr{top:12px;right:12px;border-left:0;border-bottom:0;border-radius:0 7px 0 0}
+.live-corner.bl{bottom:12px;left:12px;border-right:0;border-top:0;border-radius:0 0 0 7px}
+.live-corner.br{bottom:12px;right:12px;border-left:0;border-top:0;border-radius:0 0 7px 0}
+
+/* ── Section 08 RESULT — portrait 9:16 video (matches text-column height) ── */
+#svc-result .svc-inner.reverse{grid-template-columns:minmax(420px,560px) 1fr;align-items:stretch;gap:72px}
+.result-stage{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:18px;isolation:isolate}
+.result-glow{position:absolute;inset:-2%;z-index:0;border-radius:36px;background:radial-gradient(ellipse 58% 70% at 28% 26%,rgba(37,99,235,.5),transparent 64%),radial-gradient(ellipse 56% 66% at 74% 76%,rgba(219,48,105,.45),transparent 64%);filter:blur(56px);opacity:.5;animation:reachGlow 9s ease-in-out infinite;pointer-events:none}
+.result-frame{position:relative;z-index:2;height:100%;width:auto;aspect-ratio:4/5;max-width:100%;border-radius:20px;padding:2px;background:linear-gradient(135deg,rgba(37,99,235,.9),rgba(219,48,105,.85) 55%,rgba(56,189,248,.7));box-shadow:0 42px 110px -26px rgba(0,0,0,.78),0 0 0 1px rgba(255,255,255,.05)}
+.result-frame::after{content:'';position:absolute;inset:0;border-radius:20px;padding:2px;background:linear-gradient(120deg,transparent 32%,rgba(255,255,255,.6) 48%,transparent 64%);background-size:280% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:reachSheen 5.5s linear infinite;pointer-events:none}
+.result-screen{position:relative;z-index:1;width:100%;height:100%;border-radius:18px;overflow:hidden;background:#0a0e1f}
+.result-screen iframe{display:block;width:100%;height:100%;border:0;background:#0a0e1f;pointer-events:auto}
+.result-corner{position:absolute;z-index:3;width:22px;height:22px;border:2px solid var(--sky);opacity:.8;pointer-events:none}
+.result-corner.tl{top:6px;left:6px;border-right:0;border-bottom:0;border-radius:7px 0 0 0}
+.result-corner.tr{top:6px;right:6px;border-left:0;border-bottom:0;border-radius:0 7px 0 0}
+.result-corner.bl{bottom:6px;left:6px;border-right:0;border-top:0;border-radius:0 0 0 7px}
+.result-corner.br{bottom:6px;right:6px;border-left:0;border-top:0;border-radius:0 0 7px 0}
+@media (max-width:900px){
+  #svc-result .svc-inner.reverse{grid-template-columns:1fr;align-items:start}
+  .result-stage{height:auto}
+  .result-frame{width:min(400px,86vw);height:auto;aspect-ratio:4/5;margin:0 auto}
+}
+
+/* ═══════ PRESS ═══════ */
+.press{padding:80px 32px;background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:hidden}
+.press-eyebrow{text-align:center;font-weight:800;font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--text-subtle);margin-bottom:32px}
+.press-track{display:flex;gap:80px;white-space:nowrap;width:max-content;will-change:transform}
+.press-item{font-family:var(--font-display);font-weight:600;font-size:clamp(28px,3vw,42px);color:var(--text-muted);letter-spacing:-.02em;transition:color .22s;cursor:pointer}
+.press-item:hover{color:var(--text)}
+
+/* ═══════ ECO ═══════ */
+.eco{background:var(--midnight);color:#fff;padding:140px 32px;position:relative;overflow:hidden}
+.eco::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 100% 50%,rgba(120,72,244,.18),transparent 60%);pointer-events:none}
+.eco-inner{position:relative;max-width:1440px;margin:0 auto}
+.eco .section-title{color:#fff}
+.eco .section-title .accent{color:var(--sky)}
+.eco .section-eyebrow{color:var(--pink-bib)}
+.eco-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:20px}
+.eco-grid.eco-grid-4{grid-template-columns:1.4fr 1fr 1fr 1fr}
+.eco-card-main{background:linear-gradient(135deg,rgba(37,99,235,.16),rgba(219,48,105,.12))!important;border-color:var(--pink-bib)!important}
+.eco-card-main img{filter:none!important;height:40px!important}
+.eco-card-main .eco-card-tag{color:var(--pink-bib)!important}
+.eco-card{text-decoration:none}
+.eco-card{display:flex;flex-direction:column;gap:16px;padding:32px 24px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:16px;transition:all .26s}
+.eco-card:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18)}
+.eco-card img{height:32px;width:auto;align-self:flex-start;filter:brightness(0) invert(1)}
+.eco-card-desc{font-size:14px;font-weight:500;color:rgba(255,255,255,.7);line-height:1.5;flex:1}
+.eco-card-tag{font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4)}
+
+/* ═══════ TESTI ═══════ */
+.testi{background:var(--bg);padding:140px 32px}
+.testi-inner{max-width:1440px;margin:0 auto}
+.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.testi-card{padding:36px 32px;background:#fff;border:1px solid var(--border);border-radius:20px;display:flex;flex-direction:column;gap:24px;transition:transform .36s cubic-bezier(.16,1,.3,1)}
+.testi-card:hover{transform:translateY(-4px)}
+.testi-card .quote{font-family:var(--font-display);font-weight:400;font-size:21px;line-height:1.4;letter-spacing:-.02em;color:var(--text)}
+.testi-card .quote::before{content:'"';color:var(--magenta);font-size:64px;display:block;line-height:.4;margin-bottom:16px}
+.testi-card .author{display:flex;align-items:center;gap:12px;padding-top:20px;border-top:1px solid var(--border)}
+.testi-card .author .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--magenta));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;font-family:var(--font-display)}
+.testi-card .author .name{font-weight:700;font-size:15px;color:var(--text)}
+.testi-card .author .role{font-size:12px;color:var(--text-subtle);margin-top:2px}
+
+/* ═══════ FAQ ═══════ */
+.faq{background:var(--bg);padding:0 32px 140px}
+.faq-inner{max-width:980px;margin:0 auto}
+.faq-list{display:flex;flex-direction:column;gap:4px}
+.faq-item{border-top:1px solid var(--border);transition:background .22s}
+.faq-item:last-child{border-bottom:1px solid var(--border)}
+.faq-q{padding:28px 0;font-family:var(--font-display);font-weight:700;font-size:clamp(20px,1.8vw,26px);letter-spacing:-.02em;color:var(--text);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.faq-q .plus{width:28px;height:28px;position:relative;flex-shrink:0}
+.faq-q .plus::before,.faq-q .plus::after{content:'';position:absolute;background:var(--text);transition:transform .28s cubic-bezier(.16,1,.3,1)}
+.faq-q .plus::before{left:0;right:0;top:50%;height:2px;transform:translateY(-50%)}
+.faq-q .plus::after{top:0;bottom:0;left:50%;width:2px;transform:translateX(-50%)}
+.faq-item.open .faq-q .plus::after{transform:translateX(-50%) rotate(90deg)}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .36s cubic-bezier(.4,0,.2,1),padding .36s;padding:0;color:var(--text-muted);font-size:16px;line-height:1.6;max-width:760px}
+.faq-item.open .faq-a{max-height:240px;padding:0 0 28px}
+
+/* ═══════ CTA ═══════ */
+.cta{background:var(--bg);padding:140px 32px;text-align:center;position:relative;overflow:hidden}
+.cta::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 50% 60% at 50% 100%,rgba(37,99,235,.12),transparent 60%);pointer-events:none}
+.cta-inner{position:relative;max-width:1280px;margin:0 auto}
+.cta-eyebrow{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--magenta);margin-bottom:32px}
+.cta-eyebrow .dot{width:8px;height:8px;background:var(--magenta);border-radius:50%}
+.cta-title{font-family:var(--font-display);font-weight:700;font-size:clamp(56px,9vw,140px);line-height:.92;letter-spacing:-.04em;color:var(--text)}
+.cta-title .accent{color:var(--pink-bib);font-style:italic}
+.cta-sub{margin:32px auto 48px;font-size:19px;font-weight:500;color:var(--text-muted);max-width:560px}
+.cta-btns{display:flex;justify-content:center;gap:16px;flex-wrap:wrap}
+
+/* ═══════ Lead form ═══════ */
+.lead-form-wrap{margin:72px auto 0;max-width:720px;text-align:left;position:relative}
+.lead-card{position:relative;background:var(--midnight);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:44px 44px 40px;box-shadow:0 50px 100px -30px rgba(6,8,26,.5);overflow:hidden}
+.lead-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 100% 0%,rgba(219,48,105,.18),transparent 60%),radial-gradient(ellipse 60% 50% at 0% 100%,rgba(37,99,235,.16),transparent 60%);pointer-events:none}
+.lead-head{position:relative;z-index:1;margin-bottom:28px}
+.lead-eyebrow{font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--pink-bib);margin-bottom:12px}
+.lead-title{font-family:var(--font-display);font-weight:700;font-size:clamp(26px,3.4vw,34px);line-height:1.08;letter-spacing:-.02em;color:#fff}
+.lead-desc{margin-top:12px;font-size:15px;font-weight:500;color:rgba(255,255,255,.6);line-height:1.5}
+.lead-grid{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.lead-field{display:flex;flex-direction:column;gap:7px}
+.lead-field.full{grid-column:1 / -1}
+.lead-field label{font-family:var(--font-mono);font-weight:700;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+.lead-field label .req{color:var(--pink-bib)}
+.lead-field input,.lead-field select,.lead-field textarea{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:14px 16px;font-family:var(--font-body);font-size:15px;font-weight:500;color:#fff;transition:border-color .2s,background .2s,box-shadow .2s;outline:none}
+.lead-field textarea{resize:vertical;min-height:92px;line-height:1.5}
+.lead-field input::placeholder,.lead-field textarea::placeholder{color:rgba(255,255,255,.32)}
+.lead-field select{appearance:none;-webkit-appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ffffff88' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;padding-right:40px}
+.lead-field select option{color:#131315}
+.lead-field input:focus,.lead-field select:focus,.lead-field textarea:focus{border-color:var(--pink-bib);background:rgba(255,255,255,.08);box-shadow:0 0 0 3px rgba(255,92,129,.16)}
+.lead-field.invalid input,.lead-field.invalid select{border-color:var(--magenta);box-shadow:0 0 0 3px rgba(219,48,105,.2)}
+.lead-submit{grid-column:1 / -1;margin-top:8px;display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;font-family:var(--font-body);font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:18px 32px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--magenta),var(--pink-bib));color:#fff;cursor:pointer;transition:transform .2s cubic-bezier(.16,1,.3,1),box-shadow .2s}
+.lead-submit:hover{transform:translateY(-2px);box-shadow:0 16px 40px -12px rgba(219,48,105,.6)}
+.lead-submit:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.lead-note{position:relative;z-index:1;margin-top:16px;font-size:12.5px;color:rgba(255,255,255,.42);text-align:center}
+.lead-success{position:relative;z-index:1;display:none;flex-direction:column;align-items:center;text-align:center;padding:28px 0 8px}
+.lead-success .ls-check{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--magenta),var(--pink-bib));display:flex;align-items:center;justify-content:center;font-size:32px;color:#fff;margin-bottom:20px;box-shadow:0 16px 40px -12px rgba(219,48,105,.6)}
+.lead-success h3{font-family:var(--font-display);font-weight:700;font-size:26px;color:#fff;margin-bottom:10px}
+.lead-success p{font-size:15px;color:rgba(255,255,255,.6);max-width:420px;line-height:1.55}
+.lead-card.sent .lead-grid,.lead-card.sent .lead-head,.lead-card.sent .lead-note{display:none}
+.lead-card.sent .lead-success{display:flex}
+@media (max-width:600px){.lead-card{padding:32px 24px}.lead-grid{grid-template-columns:1fr}}
+.btn{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:18px 32px;border-radius:12px;border:none;transition:all .2s cubic-bezier(.16,1,.3,1)}
+.btn-primary{background:var(--blue);color:#fff;box-shadow:0 10px 30px rgba(37,99,235,.28)}
+.btn-primary:hover{background:var(--blue-700);transform:translateY(-2px);box-shadow:0 14px 36px rgba(37,99,235,.38)}
+.btn-ghost{background:transparent;color:var(--text);border:1.5px solid var(--border)}
+.btn-ghost:hover{border-color:var(--text);background:rgba(0,0,0,.04)}
+
+/* ═══════ FOOTER ═══════ */
+.foot{background:var(--midnight);color:rgba(255,255,255,.6);padding:60px 32px 40px;font-size:13px}
+.foot-inner{max-width:1440px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:24px}
+.foot-brand{display:flex;align-items:center;gap:12px}
+.foot-brand img{height:24px;filter:brightness(0) invert(1);opacity:.85}
+.foot-divider{width:1px;height:16px;background:rgba(255,255,255,.2)}
+.foot-meta{font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.4)}
+
+/* ═══════ Responsive ═══════ */
+@media (max-width: 1100px){
+  .stats-inner,.eco-grid{grid-template-columns:repeat(3,1fr)}
+  .eco-grid.eco-grid-4{grid-template-columns:repeat(2,1fr)}
+  .svc-inner,.svc-inner.reverse{grid-template-columns:1fr;gap:48px}
+  .svc-inner.reverse .svc-text{order:1}
+  .svc-inner.reverse .svc-visual{order:2}
+  .process-timeline{grid-template-columns:repeat(3,1fr);gap:32px 0}
+  .live-inner{grid-template-columns:1fr;gap:48px}
+  .testi-grid{grid-template-columns:1fr}
+  .chaos-mosaic{height:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .chaos-card{position:relative;top:auto!important;left:auto!important;right:auto!important;width:100%!important;height:340px!important;transform:none!important}
+  .chaos-card:hover{transform:translateY(-6px)!important}
+}
+@media (max-width: 899px){
+  .races-pin-wrap{height:auto}
+  .races-pin{position:relative;top:auto;height:auto;overflow:visible;padding-bottom:80px}
+  .races-head{padding:80px 20px 32px}
+  .races-track-wrap{padding:0 20px;overflow:visible;flex:none}
+  .races-track{flex-direction:column;gap:16px;padding:0}
+  .race-card{width:100%;height:auto;aspect-ratio:16/10;padding:24px 22px}
+  .race-card .race-num{font-size:clamp(60px,16vw,120px)}
+  .races-progress,.races-counter{display:none}
+}
+@media (max-width: 760px){
+  body{cursor:auto!important}
+  .cursor,.blob{display:none}
+  .hdr-nav,.hdr-lang{display:none}
+  .hdr{height:52px}
+  .hdr-logo img{height:22px}
+  .hdr-cta{font-size:11px;padding:0 22px 0 30px;letter-spacing:.1em}
+  .hero-top{padding:56px 20px 16px}
+  .hero-hint{display:none}
+  .hero-headline{font-size:clamp(40px,11vw,68px)}
+  .hero-sub{font-size:15px;margin-top:20px}
+  .marquee-item{font-size:clamp(56px,16vw,90px)}
+  .marquee-track{gap:40px;padding:0 20px}
+  .stats,.eco,.cta,.features,.process,section.live,.testi,.faq,.showcase,.chaos,.svc{padding-left:20px;padding-right:20px;padding-top:72px;padding-bottom:72px}
+  .eco-grid.eco-grid-4{grid-template-columns:1fr;gap:14px}
+  .svc-inner,.svc-inner.reverse{gap:32px}
+  .svc-text .section-title{font-size:clamp(28px,8vw,44px)}
+  .svc-desc{font-size:15px}
+  .svc-stat{font-size:13px;padding:14px 16px}
+  .mock-result-title{font-size:24px}
+  .mock-result-grid{grid-template-columns:1fr}
+  .mock-pickup{aspect-ratio:3/4}
+  .mock-pickup-content{padding:18px}
+  .reach-head{grid-template-columns:1fr;gap:24px}
+  .reach-stage{padding:20px}
+  .reach-corner{width:18px;height:18px;top:8px;left:8px}
+  .reach-corner.tr{right:8px;left:auto}.reach-corner.bl{bottom:8px;top:auto}.reach-corner.br{right:8px;bottom:8px;top:auto;left:auto}
+  .reach-tag{font-size:10px;padding:6px 11px}
+  .reach-tag-live{left:14px}.reach-tag-count{right:14px}
+  .stats-inner{grid-template-columns:1fr 1fr;gap:24px}
+  .stat-num{font-size:clamp(36px,10vw,56px)}
+  .stat-label{font-size:13px}
+  .stat-sub{font-size:10px}
+  .eco-grid{grid-template-columns:1fr 1fr;gap:12px}
+  .eco-card{padding:20px 16px}
+  .eco-card-desc{font-size:12px}
+  .testi-grid{grid-template-columns:1fr;gap:14px}
+  .testi-card{padding:28px 24px}
+  .testi-card .quote{font-size:17px}
+  .features-grid{grid-template-columns:1fr;gap:14px}
+  .feature{min-height:auto;padding:32px 24px 28px}
+  .feature .feat-title{font-size:clamp(26px,6vw,36px)}
+  .feature .feat-icon{width:80px;height:80px;align-self:flex-start;margin-top:16px}
+  .section-title,.cta-title{font-size:clamp(36px,10vw,56px)}
+  .pre-counter{font-size:clamp(120px,28vw,200px);right:24px;bottom:24px}
+  .pre-tagline{left:24px;bottom:24px;font-size:11px}
+  .pre-status{right:24px;top:24px;font-size:10px}
+  .pre-progress{left:24px;right:24px}
+  .process-timeline{grid-template-columns:1fr;gap:32px}
+  .process-line-track{display:none}
+  .process-step{padding:0 0 0 32px}
+  .process-step::before{left:0;top:8px}
+  .process-step .step-num{margin-top:0}
+  .live-inner{grid-template-columns:1fr;gap:32px}
+  .tracker{padding:20px}
+  .tracker-row{grid-template-columns:28px 1fr 70px;gap:10px;font-size:13px}
+  .tracker-row .pace{display:none}
+  .faq-q{font-size:17px;padding:22px 0;gap:16px}
+  .faq-a{font-size:14px}
+  .showcase-frame{border-radius:16px}
+  .showcase-caption{flex-direction:column;align-items:flex-start;gap:8px}
+  .cta-sub{font-size:16px}
+  .btn{padding:14px 22px;font-size:13px}
+  .cta-btns{flex-direction:column;align-items:stretch;width:100%;max-width:320px;margin:0 auto}
+  .cta-btns .btn{justify-content:center}
+  .foot{padding:40px 20px 28px}
+  .foot-inner{flex-direction:column;align-items:flex-start;gap:16px}
+  .foot-meta{font-size:10px}
+  .chaos-head{flex-direction:column;align-items:flex-start}
+  .chaos-mosaic{grid-template-columns:1fr;height:auto}
+  .chaos-card{height:280px!important}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  .blob,.cursor{display:none}
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   BUFF v2 — extra GSAP effects layer (scroll progress, watermarks,
+   spotlights, ribbons, orbits, dual marquees, eco-line, etc.)
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Global scroll progress bar */
+.scroll-progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:101;background:rgba(255,255,255,.04);pointer-events:none}
+.scroll-progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--blue),var(--purple),var(--pink-bib),var(--race-100k));transform-origin:left;box-shadow:0 0 18px rgba(255,14,101,.6);transition:width 80ms linear}
+
+/* Section corner watermark — huge tab number that parallaxes */
+.section-watermark{position:absolute;right:24px;top:24px;font-family:var(--font-mono);font-weight:700;font-size:clamp(80px,12vw,180px);line-height:.85;letter-spacing:-.06em;color:transparent;-webkit-text-stroke:1.2px currentColor;opacity:.08;pointer-events:none;will-change:transform;z-index:1;mix-blend-mode:difference}
+.section-watermark.dark{color:#fff;opacity:.12}
+.section-watermark.light{color:#000;opacity:.06}
+
+/* Stats — magnetic + accent ribbon + glow */
+.stat{position:relative;will-change:transform;transition:transform .4s cubic-bezier(.16,1,.3,1)}
+.stat::before{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,var(--pink-bib),var(--race-100k));transform-origin:left;transform:scaleX(0)}
+.stat.in-view::before{animation:statRibbonDraw 1.2s cubic-bezier(.16,1,.3,1) forwards}
+@keyframes statRibbonDraw{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+.stat .stat-num{position:relative}
+.stat .stat-num .plus{display:inline-block;will-change:transform;transform-origin:center}
+.stat.in-view .stat-num .plus{animation:statPlusPulse 1.6s 1.2s ease-out infinite}
+@keyframes statPlusPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.18) rotate(8deg)}}
+.stat::after{content:'';position:absolute;inset:0;border-radius:2px;background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.08),transparent 60%);opacity:0;transition:opacity .3s}
+.stat:hover::after{opacity:1}
+
+/* Features — cursor spotlight + icon depth */
+.feature{will-change:transform}
+.feature-spotlight{position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle 280px at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--accent,var(--blue)) 18%,transparent),transparent 60%);opacity:0;transition:opacity .3s;z-index:0;border-radius:24px}
+.feature:hover .feature-spotlight{opacity:1}
+.feature > div, .feature .feat-icon{position:relative;z-index:1}
+.feature .feat-icon{transition:transform .35s cubic-bezier(.16,1,.3,1)}
+.feature .feat-num,.feature .feat-title,.feature .feat-desc{will-change:transform}
+.feature::after{content:attr(data-feat-num);position:absolute;bottom:-12px;right:16px;font-family:var(--font-mono);font-weight:700;font-size:120px;letter-spacing:-.05em;color:var(--accent,var(--blue));opacity:0;pointer-events:none;line-height:1;transition:opacity .4s;z-index:0}
+.feature:hover::after{opacity:.04}
+
+/* Service mock — sale dashboard accent */
+.mock-sale-row{position:relative;overflow:hidden}
+.mock-sale-row::after{content:'';position:absolute;left:-100%;top:0;bottom:0;width:50%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);pointer-events:none}
+.mock-sale-row.shimmer::after{animation:rowShimmer 1.4s cubic-bezier(.16,1,.3,1) forwards}
+@keyframes rowShimmer{0%{left:-50%}100%{left:120%}}
+.mock-sale-tabs .tab{transition:transform .25s,background .25s}
+.mock-sale-tabs .tab:hover{transform:translateY(-2px)}
+.mock-sale-stats > div{position:relative}
+.mock-sale-stats > div::before{content:'';position:absolute;left:0;top:50%;width:2px;height:0;background:var(--magenta);transform:translateY(-50%);transition:height .4s}
+.mock-sale-stats > div.active::before{height:80%}
+
+/* Reach video stage — entrance hooks (FX never overlap the iframe) */
+.reach-stage[data-anim] .reach-frame{opacity:0}
+
+/* Result mock — card stagger + hover lift */
+.mock-result-card{will-change:transform;cursor:pointer}
+.mock-result-card .ended{transition:transform .3s,letter-spacing .3s}
+.mock-result-card:hover .ended{letter-spacing:.36em;transform:translateY(-3px)}
+.mock-result-stats > div .n{display:inline-block;font-variant-numeric:tabular-nums}
+
+/* Press — dual lane */
+.press{position:relative}
+.press-lane{display:flex;gap:80px;white-space:nowrap;width:max-content;will-change:transform}
+.press-lane-wrap{overflow:hidden;mask:linear-gradient(90deg,transparent 0,#000 8%,#000 92%,transparent 100%)}
+.press-lane + .press-lane-wrap{margin-top:36px}
+.press-item{position:relative;cursor:pointer;transition:transform .3s,color .3s}
+.press-item:hover{transform:scale(1.12) rotate(-1deg);color:var(--magenta)}
+.press-item::after{content:'';position:absolute;left:0;right:0;bottom:-4px;height:2px;background:var(--magenta);transform:scaleX(0);transform-origin:left;transition:transform .3s}
+.press-item:hover::after{transform:scaleX(1)}
+
+/* Eco — connecting lines + glow hover */
+.eco{position:relative}
+.eco-lines-svg{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.6}
+.eco-lines-svg path{stroke:var(--sky);stroke-width:1.5;fill:none;stroke-dasharray:600;stroke-dashoffset:600;filter:drop-shadow(0 0 6px rgba(39,165,238,.45))}
+.eco-lines-svg.drawn path{animation:ecoLineDraw 1.5s cubic-bezier(.65,0,.35,1) forwards}
+.eco-lines-svg.drawn path:nth-child(1){animation-delay:.15s}
+.eco-lines-svg.drawn path:nth-child(2){animation-delay:.32s}
+.eco-lines-svg.drawn path:nth-child(3){animation-delay:.5s}
+@keyframes ecoLineDraw{to{stroke-dashoffset:0}}
+.eco-grid{position:relative;z-index:1}
+.eco-card{position:relative;overflow:hidden;will-change:transform}
+.eco-card::before{content:'';position:absolute;inset:0;background:radial-gradient(circle 260px at 50% 50%,rgba(127,212,198,.18),transparent 70%);opacity:0;transition:opacity .35s;pointer-events:none}
+.eco-card:hover::before{opacity:1}
+.eco-card:hover{transform:translateY(-8px) scale(1.02)}
+.eco-card:hover img{filter:brightness(0) invert(1) drop-shadow(0 0 10px rgba(255,255,255,.5))}
+.eco-card-main:hover img{filter:drop-shadow(0 0 16px rgba(255,92,129,.6))!important}
+
+/* Testi — fancier */
+.testi-card{position:relative;overflow:hidden}
+.testi-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--blue),var(--magenta));transform:scaleX(0);transform-origin:left;transition:transform .5s cubic-bezier(.65,0,.35,1)}
+.testi-card:hover::after{transform:scaleX(1)}
+.testi-card:hover .author .avatar{animation:testiAvatarPulse .6s ease-out}
+@keyframes testiAvatarPulse{0%{transform:scale(1)}50%{transform:scale(1.18) rotate(-6deg)}100%{transform:scale(1) rotate(0)}}
+.testi-card .quote{position:relative}
+.testi-card .quote::after{content:'';position:absolute;left:0;bottom:-8px;width:36px;height:2px;background:var(--magenta);transform-origin:left;transform:scaleX(0);transition:transform .4s .1s}
+.testi-card:hover .quote::after{transform:scaleX(3)}
+
+/* FAQ — premium accordion */
+.faq-item{position:relative;padding:0 4px}
+.faq-item::before{content:'';position:absolute;left:-8px;top:0;bottom:0;width:3px;background:var(--magenta);transform:scaleY(0);transform-origin:top;transition:transform .35s cubic-bezier(.16,1,.3,1)}
+.faq-item:hover::before,.faq-item.open::before{transform:scaleY(1)}
+.faq-q{transition:padding-left .3s}
+.faq-item:hover .faq-q,.faq-item.open .faq-q{padding-left:18px}
+.faq-q .plus{transition:transform .45s cubic-bezier(.16,1,.3,1)}
+.faq-item.open .faq-q .plus{transform:rotate(135deg)}
+.faq-a{overflow:hidden;max-height:0;opacity:0;transition:max-height .45s cubic-bezier(.16,1,.3,1),opacity .25s,padding .35s}
+.faq-item.open .faq-a{max-height:200px;opacity:1;padding-bottom:24px}
+
+/* CTA — rotating outline + char split */
+.cta{position:relative;overflow:hidden}
+.cta-rotor{position:absolute;left:50%;top:50%;width:min(140vh,1400px);aspect-ratio:1;border:1.5px dashed rgba(37,99,235,.18);border-radius:50%;transform:translate(-50%,-50%);animation:ctaRot 80s linear infinite;pointer-events:none;z-index:0}
+.cta-rotor::before{content:'';position:absolute;inset:60px;border:1px dashed rgba(255,14,101,.16);border-radius:50%;animation:ctaRot 50s linear infinite reverse}
+.cta-rotor::after{content:'';position:absolute;inset:140px;border:1px solid rgba(127,212,198,.12);border-radius:50%}
+@keyframes ctaRot{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.cta-orbit-tag{position:absolute;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.22em;color:var(--magenta);background:rgba(255,255,255,.95);padding:6px 12px;border-radius:99px;box-shadow:0 6px 18px rgba(0,0,0,.12);white-space:nowrap;pointer-events:none;z-index:2}
+.cta-inner{position:relative;z-index:3}
+.cta-title{position:relative}
+.cta-title .char{display:inline-block;will-change:transform}
+
+/* Showcase frame velocity tilt */
+.showcase-frame{will-change:transform}
+.showcase-frame .corner{transition:letter-spacing .4s}
+.showcase:hover .corner{letter-spacing:.4em}
+
+/* Service text reveal lines */
+.svc-text .svc-desc{position:relative;overflow:hidden}
+.svc-bullet{will-change:transform;transition:transform .3s,color .3s}
+.svc-bullet:hover{transform:translateX(8px)}
+.svc-bullet:hover .ico{animation:svcBulletWiggle .5s ease-in-out}
+@keyframes svcBulletWiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg) scale(1.15)}75%{transform:rotate(12deg) scale(1.15)}}
+.svc-cta{position:relative;overflow:hidden}
+.svc-cta::after{content:'';position:absolute;top:0;left:-150%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);transform:skewX(-20deg);pointer-events:none}
+.svc-cta:hover::after{animation:ctaShine .9s ease-out}
+@keyframes ctaShine{to{left:150%}}
+</style>
+</head>
+<body>
+
+<!-- PRELOADER -->
+<div class="preloader" id="preloader">
+  <div class="pre-tagline"><span class="dot"></span>5BIB · CHIP TIMING #1 VIỆT NAM</div>
+  <div class="pre-status">LOADING START LIST</div>
+  <div class="pre-counter" id="preCounter">000</div>
+  <div class="pre-bib-label">BIB № — VTV‑LPBANK MARATHON 2026</div>
+  <div class="pre-progress"><div class="pre-progress-fill" id="preFill"></div></div>
+</div>
+
+<!-- CURSOR + BLOB -->
+<div class="cursor" id="cursor"><div class="cursor-label" id="cursorLabel">DRAG</div><div class="cursor-dot"></div></div>
+<div class="blob" id="blob"></div>
+
+<!-- SCROLL PROGRESS BAR -->
+<div class="scroll-progress"><div class="scroll-progress-fill" id="scrollFill"></div></div>
+
+<!-- HEADER -->
+<header class="hdr" id="hdr">
+  <div class="hdr-inner">
+    <a href="#" class="hdr-logo"><img src="/solution-v2/assets/5bib-logo-white.png" alt="5BIB"></a>
+    <nav class="hdr-nav">
+      <a href="#features">Tính năng</a>
+      <a href="#races">Cự ly</a>
+      <a href="#process">Quy trình</a>
+      <a href="#chaos">Hướng dẫn</a>
+      <a href="#eco">Hệ sinh thái</a>
+      <a href="#contact">Liên hệ</a>
+    </nav>
+    <div class="hdr-right">
+      <button class="hdr-lang">VI / EN</button>
+      <a href="#contact" class="hdr-cta">Đăng ký BTC →</a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <video class="hero-bgvid" id="heroBgVid" muted loop playsinline preload="auto">
+    <source src="/solution-v2/hero-5bib-mobile.mp4" type="video/mp4" media="(max-width: 760px)">
+    <source src="/solution-v2/hero-5bib.mp4" type="video/mp4">
+  </video>
+  <div class="hero-top">
+    <div class="hero-eyebrow"><span class="dot"></span>Q1 · 2026 — SLOT ONBOARDING ĐANG MỞ</div>
+    <h1 class="hero-headline" id="heroHeadline">
+      <div class="hero-pair active" data-pair="0">
+        <span class="line">Find your <span class="hl-pink">race.</span></span>
+        <span class="line">Find your <span class="hl-blue">BIB.</span></span>
+      </div>
+      <div class="hero-pair" data-pair="1">
+        <span class="line">Find your <span class="hl-pink">moment.</span></span>
+        <span class="line">Find your <span class="hl-blue">finish.</span></span>
+      </div>
+      <div class="hero-pair" data-pair="2">
+        <span class="line">Find your <span class="hl-pink">tribe.</span></span>
+        <span class="line">Find your <span class="hl-blue">pace.</span></span>
+      </div>
+    </h1>
+    <div class="hero-pair-dots" id="heroPairDots">
+      <span class="dot active"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+    <p class="hero-sub">5BIB là nền tảng chip-timing và quản lý VĐV #1 Việt Nam. Từ form đăng ký, BIB distribution, check-in onsite đến kết quả live realtime — tất cả trong một flow.</p>
+  </div>
+  <div class="hero-marquee-wrap cursor-trigger" id="marqueeWrap" data-cursor="DRAG">
+    <div class="hero-hint">DRAG / HOVER TO PREVIEW</div>
+    <div class="marquee">
+      <div class="marquee-track" id="marqueeTrack">
+        <span class="marquee-item">EMBRACING CHALLENGES<span class="sep"></span></span>
+        <span class="marquee-item">FIND YOUR EXPERIENCE<span class="sep"></span></span>
+        <span class="marquee-item">EMBRACING CHALLENGES<span class="sep"></span></span>
+        <span class="marquee-item">FIND YOUR EXPERIENCE<span class="sep"></span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SHOWCASE -->
+<section class="showcase" id="showcase">
+  <div class="showcase-inner">
+    <div class="showcase-eyebrow">
+      <span class="tag">▶ Race Day Reel · 2024 Highlights</span>
+      <span class="line"></span>
+      <span class="meta">Sắc Màu Cát Bà · VTV‑LPBank Marathon</span>
+    </div>
+    <div class="showcase-frame">
+      <div class="corner"><span class="red-dot"></span>RECORDED LIVE</div>
+      <video id="showcaseVid" muted loop playsinline autoplay preload="auto" poster="/solution-v2/assets/5bib-hero.jpg">
+        <source src="/solution-v2/hero-5bib.mp4" type="video/mp4">
+      </video>
+    </div>
+    <div class="showcase-caption">
+      <div class="left">Xem 5BIB vận hành thực tế · Cát Bà · 19.10.2024</div>
+      <div class="right">7,196 VĐV · 3 CỰ LY · 0 SAI SÓT</div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="stats">
+  <div class="stats-inner">
+    <div class="stat"><div class="stat-num"><span data-count="100">0</span><span class="plus">+</span></div><div class="stat-label">Giải đã vận hành</div><div class="stat-sub">2020 — nay</div></div>
+    <div class="stat"><div class="stat-num"><span data-count="94000">0</span><span class="plus">+</span></div><div class="stat-label">Vận động viên</div><div class="stat-sub">Đã bấm giờ</div></div>
+    <div class="stat"><div class="stat-num">0.01<span style="font-size:.5em;font-weight:500;letter-spacing:0">s</span></div><div class="stat-label">Độ chính xác</div><div class="stat-sub">RaceResult Decoder · Đức</div></div>
+    <div class="stat"><div class="stat-num"><span data-count="58">0</span><span class="plus">+</span></div><div class="stat-label">Đối tác BTC</div><div class="stat-sub">VTV · VnExpress · LPBank · UBND</div></div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="features-inner">
+    <div class="section-eyebrow"><span class="num">01</span>BỘ TÍNH NĂNG CỐT LÕI</div>
+    <h2 class="section-title">Một nền tảng. <span class="accent">Toàn bộ flow.</span></h2>
+    <div class="features-grid">
+      <div class="feature" data-feat="bib">
+        <div>
+          <div class="feat-num">01 · BIB Distribution</div>
+          <div class="feat-title">Form đăng ký & phát BIB</div>
+          <div class="feat-desc">Đa cự ly · multi-wave · sửa thông tin · chuyển nhượng · ủy quyền. VĐV nhận BIB qua QR ngay sau khi thanh toán.</div>
+        </div>
+        <div class="feat-icon"><div class="illus-bib">A‑1042</div></div>
+      </div>
+      <div class="feature" data-feat="wave">
+        <div>
+          <div class="feat-num">02 · Wave Management</div>
+          <div class="feat-title">Phân làn xuất phát thông minh</div>
+          <div class="feat-desc">Tự động chia wave theo pace cá nhân, giới tính, độ tuổi. Hiển thị wave color trên BIB & app — VĐV biết đứng đúng vạch.</div>
+        </div>
+        <div class="feat-icon"><div class="illus-wave"><svg viewBox="0 0 120 80" fill="none"><path d="M0 60 Q15 30 30 50 T60 40 T90 30 T120 20" stroke="var(--blue)" stroke-width="3" stroke-linecap="round"/><circle cx="20" cy="48" r="4" fill="var(--magenta)"/><circle cx="50" cy="45" r="4" fill="var(--magenta)"/><circle cx="80" cy="32" r="4" fill="var(--magenta)"/><circle cx="110" cy="22" r="4" fill="var(--magenta)"/></svg></div></div>
+      </div>
+      <div class="feature" data-feat="checkin">
+        <div>
+          <div class="feat-num">03 · Check‑in Onsite</div>
+          <div class="feat-title">Quét QR, nhận racekit 30 giây</div>
+          <div class="feat-desc">App native cho volunteer. Offline-first — không lo wifi rớt. Tracking real-time trên dashboard BTC.</div>
+        </div>
+        <div class="feat-icon"><div class="illus-checkin"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div></div>
+      </div>
+      <div class="feature" data-feat="result">
+        <div>
+          <div class="feat-num">04 · Live Result</div>
+          <div class="feat-title">Kết quả realtime · 0.01s</div>
+          <div class="feat-desc">RaceResult decoder (Đức) · multi-read redundancy · auto-publish lên trang giải + social share. Mỗi VĐV tự tra cứu thời gian qua BIB.</div>
+        </div>
+        <div class="feat-icon"><div class="illus-result">2:15:32</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RACES — Apple pin scroll -->
+<section class="races" id="races">
+  <div class="races-pin-wrap" id="racesPinWrap">
+    <div class="races-pin" id="racesPin">
+      <div class="races-head">
+        <div class="section-eyebrow"><span class="num">02</span>RACE COLORWAY · SCROLL TO EXPLORE →</div>
+        <h2 class="section-title">Mỗi cự ly, <span class="accent">một sắc màu.</span></h2>
+      </div>
+      <div class="races-track-wrap">
+        <div class="races-track" id="racesTrack">
+          <div class="race-intro">
+            <div class="ri-label">5 CỰ LY · 5 SẮC MÀU</div>
+            <h3 class="ri-title">Chọn vạch xuất phát<br>của riêng bạn.</h3>
+            <p class="ri-desc">Từ Color Run 5K rực rỡ đến Ultra 100K xuyên đêm — mỗi cự ly mang một sắc màu nhận diện và một thử thách riêng trên hệ thống 5BIB.</p>
+            <div class="ri-hint"><span class="ri-arrow">→</span> Kéo ngang để khám phá</div>
+          </div>
+          <div class="race-card" data-distance="5K"><div><div class="race-tag">Fun Run</div><div class="race-label">Color Run · Sắc Màu</div><div class="race-time">~30:00 cut‑off</div></div><div class="race-num">5K</div></div>
+          <div class="race-card" data-distance="10K"><div><div class="race-tag">Tempo</div><div class="race-label">10K Cá Nhân</div><div class="race-time">~1:30 cut‑off</div></div><div class="race-num">10K</div></div>
+          <div class="race-card" data-distance="21K"><div><div class="race-tag">Half Marathon</div><div class="race-label">21.0975 km</div><div class="race-time">~3:30 cut‑off</div></div><div class="race-num">21K</div></div>
+          <div class="race-card" data-distance="42K"><div><div class="race-tag">Full Marathon</div><div class="race-label">42.195 km</div><div class="race-time">~6:00 cut‑off</div></div><div class="race-num">42K</div></div>
+          <div class="race-card" data-distance="100K"><div><div class="race-tag">Ultra · Trail</div><div class="race-label">100K · Cát Bà · Sapa</div><div class="race-time">~28h cut‑off</div></div><div class="race-num">100K</div></div>
+        </div>
+      </div>
+      <div class="races-progress"><div class="races-progress-fill" id="racesProgress"></div></div>
+      <div class="races-counter"><span id="raceIdx">01</span> / 05</div>
+    </div>
+  </div>
+</section>
+
+<!-- PROCESS -->
+<section class="process" id="process">
+  <div class="process-inner">
+    <div class="section-eyebrow"><span class="num">03</span>QUY TRÌNH 5 BƯỚC</div>
+    <h2 class="section-title">Từ <span class="accent">tư vấn</span> đến kết quả chính thức.</h2>
+    <div class="process-timeline" id="processTimeline">
+      <div class="process-step"><div class="step-num">STEP 01</div><div class="step-title">Tư vấn & báo giá</div><div class="step-desc">BTC chia sẻ quy mô giải. 5BIB gửi gói + báo giá trong 24h.</div><div class="step-time">~24h</div></div>
+      <div class="process-step"><div class="step-num">STEP 02</div><div class="step-title">Setup form & BIB</div><div class="step-desc">5BIB build form đăng ký, BIB design, wave config, payment gateway.</div><div class="step-time">~3 ngày</div></div>
+      <div class="process-step"><div class="step-num">STEP 03</div><div class="step-title">Mở bán & truyền thông</div><div class="step-desc">Live trên 5BIB.com. Email blast tự động, SMS confirmation, Zalo OA.</div><div class="step-time">~30–90 ngày</div></div>
+      <div class="process-step"><div class="step-num">STEP 04</div><div class="step-title">Race day execution</div><div class="step-desc">Check-in QR, chip timing live, leaderboard public real-time.</div><div class="step-time">Race day</div></div>
+      <div class="process-step"><div class="step-num">STEP 05</div><div class="step-title">Kết quả & certificate</div><div class="step-desc">Auto-publish kết quả chính thức, e-certificate, photo finish qua 5Pix.</div><div class="step-time">~24h sau race</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ SERVICE A · 5BIB Bán vé (Awakening phone) ════════ -->
+<section class="svc svc-sale" id="svc-sale">
+  <div class="svc-inner">
+    <div class="svc-text">
+      <div class="section-eyebrow"><span class="num">04</span>5BIB · MỞ SALE RỒI ĐI NGỦ</div>
+      <h2 class="section-title">Mở sale lúc 0h.<br>Sáng dậy <span class="accent">điện thoại nổ noti</span>.</h2>
+      <p class="svc-desc">Google Form + chuyển khoản tay = 1 nhân sự thức 2 đêm, vẫn miss đơn.</p>
+      <p class="svc-desc">5BIB chạy tự động: tier pricing, payment gateway, chuyển nhượng BIB, push noti realtime.</p>
+      <p class="svc-desc">BTC chỉ mở app — xem đơn về từng phút.</p>
+      <div class="svc-bullets">
+        <div class="svc-bullet"><span class="ico">🎟️</span><span><b>Multi-tier · Multi-wave</b>— Chia wave theo cự ly / giới tính / nhóm tuổi trong 3 phút. Đổi Early Bird → Regular tự động, không sửa code.</span></div>
+        <div class="svc-bullet"><span class="ico">💳</span><span><b>Trả tiền cách nào cũng được</b>— VNPay · Momo · ZaloPay · Visa. Runner thanh toán lúc 2h sáng, BIB cấp luôn lúc 2h01.</span></div>
+        <div class="svc-bullet"><span class="ico">🔄</span><span><b>Runner tự chuyển BIB qua OTP</b>— Hết cảnh BTC sửa Excel mỗi tối. Policy fee + deadline cấu hình 1 lần, chạy cả mùa.</span></div>
+        <div class="svc-bullet"><span class="ico">📲</span><span><b>Push noti từng đơn về</b>— Mỗi đăng ký + thanh toán bắn noti vào app BTC. Sale velocity, geo heatmap có sẵn trong dashboard.</span></div>
+      </div>
+      <a href="#contact" class="svc-cta cursor-trigger" data-cursor="DEMO">Xem app BTC live · 10 phút →</a>
+      <div class="svc-stat"><span class="accent">42,000+</span> đơn xử lý · <span class="accent">58</span> BTC tin dùng · <span class="accent">0 đồng</span> lệch đối soát.</div>
+    </div>
+    <div class="svc-visual">
+      <div class="sale-stage" id="saleStage">
+        <div class="phone-pulse p1"></div>
+        <div class="phone-pulse p2"></div>
+        <div class="phone-pulse p3"></div>
+
+        <div class="phone-mock" id="salePhone">
+          <div class="phone-screen">
+            <iframe src="/solution-v2/awakening-video.html" frameborder="0" loading="lazy" allow="autoplay" title="5BIB Awakening"></iframe>
+            <div class="phone-status">
+              <span>5:47</span>
+              <span class="right"><span>•••</span><span class="battery"></span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone-notif n1" data-notif="1">
+          <div class="notif-ico">🎟️</div>
+          <div class="notif-body">
+            <div class="notif-app">5BIB · DASHBOARD</div>
+            <div class="notif-title">Early Bird vừa bán hết!</div>
+            <div class="notif-meta">2,000/2,000 · 21K + 42K</div>
+          </div>
+        </div>
+
+        <div class="phone-notif n2" data-notif="2">
+          <div class="notif-ico" style="background:linear-gradient(135deg,#0084FF,#00C2FF)">💳</div>
+          <div class="notif-body">
+            <div class="notif-app">VNPay · Thanh toán</div>
+            <div class="notif-title">+ 850,000₫ · VIP 42K</div>
+            <div class="notif-meta">Nguyễn Quang Huy · #1284</div>
+          </div>
+        </div>
+
+        <div class="phone-notif n3" data-notif="3">
+          <div class="notif-ico">📈</div>
+          <div class="notif-body">
+            <div class="notif-app">5BIB · SALE VELOCITY</div>
+            <div class="notif-title">Doanh thu 24h</div>
+            <div class="notif-meta">240 đơn · 8.2% conversion</div>
+          </div>
+          <div class="notif-amt" data-amt-target="204">+204M₫</div>
+        </div>
+
+        <div class="phone-tick" id="phoneTick">
+          <span class="arr">↑</span><span data-saleinc="240">+240</span>
+          <span class="lbl">đơn / 8 tiếng ngủ</span>
+        </div>
+
+        <div class="sale-strip">
+          <div><span class="v">42,000+</span><span class="l">Đơn xử lý</span></div>
+          <span class="sep"></span>
+          <div><span class="v">58</span><span class="l">BTC dùng</span></div>
+          <span class="sep"></span>
+          <div><span class="v">0₫</span><span class="l">Lệch đối soát</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ SERVICE B · Racekit Pickup ════════ -->
+<section class="svc svc-onsite" id="svc-onsite">
+  <div class="svc-inner reverse">
+    <div class="svc-text">
+      <div class="section-eyebrow"><span class="num">05</span>ONSITE OPS · RACEKIT PICKUP</div>
+      <h2 class="section-title">7,196 VĐV. <span class="accent">30 giây mỗi người.</span> Không một hàng dài.</h2>
+      <p class="svc-desc">Quầy BIB là điểm chết của race day. Một QR sai, một volunteer mới = VĐV xếp hàng 40 phút và post Facebook tiêu cực. 5BIB chuẩn hóa flow pickup xuống đúng 3 giây check QR + 27 giây trao racekit.</p>
+      <div class="svc-bullets">
+        <div class="svc-bullet"><span class="ico">📲</span><span><b>App native cho volunteer</b>— Offline-first. Wifi rớt, race vẫn chạy. Train 15 phút là vận hành.</span></div>
+        <div class="svc-bullet"><span class="ico">🎫</span><span><b>QR check-in 3 bước</b>— Quét QR → confirm tên → trao racekit. Done. Không sổ giấy.</span></div>
+        <div class="svc-bullet"><span class="ico">🧭</span><span><b>Queue analytics realtime</b>— BTC nhìn dashboard biết quầy nào nghẽn, điều phối volunteer tại chỗ.</span></div>
+        <div class="svc-bullet"><span class="ico">🏪</span><span><b>Self-service kiosk option</b>— Giải 5,000+ VĐV deploy kiosk + staff. Tự scan → in BIB → lấy túi.</span></div>
+      </div>
+      <a href="#contact" class="svc-cta cursor-trigger" data-cursor="DEMO">Xem demo flow check-in · 5 phút →</a>
+      <div class="svc-stat">Sắc Màu Cát Bà Marathon 2024 — <b>7,196 VĐV</b> pickup trong 2 ngày · Max queue time: <b>2:47</b>. <em>BTC: "Lần đầu chạy race không phải đứng quầy BIB."</em></div>
+    </div>
+    <div class="svc-visual">
+      <div class="mock-pickup">
+        <iframe class="mock-pickup-video" src="/solution-v2/racekit-video.html" frameborder="0" loading="lazy" allow="autoplay" title="5BIB Racekit Pickup Video"></iframe>
+        <div class="mock-pickup-overlay"></div>
+        <div class="mock-pickup-content">
+          <div class="mock-pickup-top">
+            <div class="station">SAIGON MARATHON 2026 · STATION 03</div>
+            <div class="queue"><span class="dot" style="width:6px;height:6px;background:#fff;border-radius:50%"></span>QUEUE: 4</div>
+          </div>
+          <div class="mock-pickup-bottom">
+            <div class="mock-pickup-counter"><span>Pickup hôm nay</span><span class="big" id="pickupCount">3,847</span><span>/ 7,196 VĐV</span></div>
+            <div class="mock-pickup-vdv">
+              <div><div class="name">Nguyễn Minh Anh</div><div class="meta">#1247 · 21K · SIZE M</div></div>
+              <div class="status done">✓ DONE</div>
+            </div>
+            <div class="mock-pickup-vdv">
+              <div><div class="name">Trần Hoàng Long</div><div class="meta">#1248 · 21K · SIZE L</div></div>
+              <div class="status pending">SCANNING</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ SERVICE C · Reach 120K runners (original orbit) ════════ -->
+<section class="svc svc-reach" id="svc-reach">
+  <div class="svc-inner reach-stacked">
+    <div class="reach-head">
+      <div class="reach-head-main svc-text">
+        <div class="section-eyebrow"><span class="num">06</span>5BIB REACH · 120K+ Runner</div>
+        <h2 class="section-title">BTC lần đầu? <span class="accent">120,000 VĐV</span> đợi anh mở bán.</h2>
+        <p class="svc-desc">Một giải mới = 0 email list, 0 followers, 0 brand. Mất 6 tháng + 200 triệu marketing để có 500 đơn vé đầu tiên. Hoặc mở bán trên 5BIB và tiếp cận database 120K+ VĐV active đã từng đăng ký race ít nhất 1 lần.</p>
+        <a href="#contact" class="svc-cta cursor-trigger" data-cursor="JOIN">Đăng ký BTC vào pool reach →</a>
+      </div>
+      <div class="reach-head-side svc-text">
+        <div class="svc-bullets">
+          <div class="svc-bullet"><span class="ico">📧</span><span><b>Email blast nhắm cự ly</b>— Push 42K marathoner khi mở 42K. Push 50K 10K-runner khi mở 10K. Open rate 38%.</span></div>
+          <div class="svc-bullet"><span class="ico">💬</span><span><b>Zalo OA 5Solution</b>— 80K follower active. CPA thấp hơn Facebook Ads 4–6 lần.</span></div>
+          <div class="svc-bullet"><span class="ico">📱</span><span><b>SMS confirmation + reminder</b>— Race day reminder, BIB pickup notice, weather alert. Reach 99%.</span></div>
+          <div class="svc-bullet"><span class="ico">🤝</span><span><b>Cross-promotion 5Sport community</b>— Showcase trên feed running clubs, training groups. Organic miễn phí cho partner.</span></div>
+        </div>
+        <div class="svc-stat"><b>30–50%</b> doanh số race lần đầu đến từ 5Solution reach — không phải Facebook Ads. <em>Source: internal benchmark · 12 giải debut 2024.</em></div>
+      </div>
+    </div>
+    <div class="reach-stage" id="reachStage" data-anim>
+      <div class="reach-glow"></div>
+      <span class="reach-corner tl"></span>
+      <span class="reach-corner tr"></span>
+      <span class="reach-corner bl"></span>
+      <span class="reach-corner br"></span>
+      <div class="reach-frame">
+        <div class="reach-screen">
+          <iframe src="/solution-v2/network-wakes-up.html" frameborder="0" loading="eager" allow="autoplay" title="5BIB · The Network Wakes Up"></iframe>
+        </div>
+      </div>
+      <div class="reach-tag reach-tag-live"><span class="dot"></span>Live network</div>
+      <div class="reach-tag reach-tag-count">120K+ VĐV</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ LIVE TRACKER (moved above Result) ════════ -->
+<section class="live">
+  <div class="live-inner">
+    <div class="live-left">
+      <div class="section-eyebrow"><span class="num">07</span>LIVE TRACKER</div>
+      <h2 class="section-title">Leaderboard <span class="blue">real-time.</span></h2>
+      <p class="live-desc">VĐV về đích, kết quả lên ngay lập tức. Mỗi runner có URL riêng. Mỗi BTC có dashboard riêng. Mỗi nhà tài trợ có view riêng.</p>
+      <div class="live-features">
+        <div class="live-feat"><div class="check">✓</div>Multi-read RFID — không bỏ sót 1 VĐV</div>
+        <div class="live-feat"><div class="check">✓</div>Auto-publish lên website giải + social share</div>
+        <div class="live-feat"><div class="check">✓</div>Pace bar, projected finish, split times</div>
+        <div class="live-feat"><div class="check">✓</div>Export CSV / PDF kết quả chính thức</div>
+      </div>
+    </div>
+    <div class="live-stage">
+      <div class="live-glow"></div>
+      <div class="live-frame">
+        <div class="live-screen">
+          <iframe src="/solution-v2/finish-line.html" frameborder="0" loading="eager" allow="autoplay" title="5BIB · The Finish Line Never Stops"></iframe>
+        </div>
+      </div>
+      <span class="live-corner tl"></span><span class="live-corner tr"></span>
+      <span class="live-corner bl"></span><span class="live-corner br"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ SERVICE D · Kết quả tham khảo từ result.5bib.com ════════ -->
+<section class="svc svc-result" id="svc-result">
+  <div class="svc-inner reverse">
+    <div class="svc-text">
+      <div class="section-eyebrow"><span class="num">08</span>RESULT · TRA CỨU KẾT QUẢ</div>
+      <h2 class="section-title">VĐV về đích. <span class="accent">Tự tra kết quả</span> qua BIB number.</h2>
+      <p class="svc-desc">Mỗi race xong, kết quả live trên <b>result.5bib.com</b> — public, share Facebook, embed vào trang BTC. VĐV gõ tên / số BIB là ra ngay chip time, pace, ranking, split times. BTC không phải gửi Excel cho từng người.</p>
+      <div class="svc-bullets">
+        <div class="svc-bullet"><span class="ico">🔍</span><span><b>Search bằng tên / BIB / Race</b>— Auto-suggest. 60,000+ result indexed sẵn.</span></div>
+        <div class="svc-bullet"><span class="ico">📈</span><span><b>Pace · Split · Ranking</b>— Chia theo cự ly, giới tính, age group. Filter podium, top 10%.</span></div>
+        <div class="svc-bullet"><span class="ico">🏆</span><span><b>Profile VĐV</b>— Lịch sử race, PB tracking, achievement badges. Share link gọn 1 dòng.</span></div>
+        <div class="svc-bullet"><span class="ico">📲</span><span><b>Embed widget cho BTC</b>— Iframe ngắn cắm vào trang giải. Auto-publish khi race kết thúc.</span></div>
+      </div>
+      <a href="https://result.5bib.com/" target="_blank" rel="noopener" class="svc-cta cursor-trigger" data-cursor="OPEN">Xem result.5bib.com live →</a>
+      <div class="svc-stat"><b>55 giải</b> · <b>60,438 kết quả</b> · <b>60,438 VĐV</b> tra cứu được public ngay tại result.5bib.com.</div>
+    </div>
+    <div class="svc-visual">
+      <div class="result-stage">
+        <div class="result-glow"></div>
+        <div class="result-frame">
+          <div class="result-screen">
+            <iframe src="/solution-v2/three-seconds.html" frameborder="0" loading="eager" allow="autoplay" title="5BIB · 3 Giây Sau Vạch Đích"></iframe>
+          </div>
+          <span class="result-corner tl"></span><span class="result-corner tr"></span>
+          <span class="result-corner bl"></span><span class="result-corner br"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ CHAOS HDSD ════════ -->
+<section class="chaos" id="chaos">
+  <div class="chaos-inner">
+    <div class="chaos-head">
+      <div>
+        <div class="section-eyebrow"><span class="num">09</span>HƯỚNG DẪN SỬ DỤNG</div>
+        <h2 class="section-title">Hỗ trợ vận động viên 24/7 <span class="accent">với video trực quan.</span></h2>
+      </div>
+      <div class="meta">9 video tutorial chuẩn hóa cho 9 thao tác phổ biến nhất — từ đăng ký vé, đổi cự ly đến quầy BIB và tra kết quả. <b style="color:#fff">VĐV tự xử lý 95% câu hỏi qua video</b>, BTC giảm tải hotline race day. Click thumbnail để xem.</div>
+    </div>
+    <div class="chaos-mosaic" id="chaosMosaic">
+      <a class="chaos-card c1" data-iframe="/solution-v2/hdsd.html?slug=doi-cu-ly">
+        <div class="chaos-cover"><div class="chaos-emoji">🔄</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">HDSD · 01</div><div class="chaos-title">Đổi cự ly vé chạy</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">35s</span></div>
+        </div>
+      </a>
+      <a class="chaos-card c2" data-iframe="/solution-v2/hdsd.html?slug=dang-nhap">
+        <div class="chaos-cover"><div class="chaos-emoji">🔐</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">HDSD · 02</div><div class="chaos-title">Đăng nhập 5BIB</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">28s</span></div>
+        </div>
+      </a>
+      <a class="chaos-card c3" data-iframe="/solution-v2/hdsd.html?slug=check-in">
+        <div class="chaos-cover"><div class="chaos-emoji">📲</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">HDSD · 03</div><div class="chaos-title">Check-in & nhận racekit</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">32s</span></div>
+        </div>
+      </a>
+      <a class="chaos-card c4" data-iframe="/solution-v2/hdsd.html?slug=quay-bib">
+        <div class="chaos-cover"><div class="chaos-emoji">🎫</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">HDSD · 04</div><div class="chaos-title">Quầy BIB tại race day</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">34s</span></div>
+        </div>
+      </a>
+      <a class="chaos-card c5" data-iframe="/solution-v2/hdsd.html?slug=chinh-sua">
+        <div class="chaos-cover"><div class="chaos-emoji">✏️</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">HDSD · 05</div><div class="chaos-title">Chỉnh sửa thông tin vé</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">24s</span></div>
+        </div>
+      </a>
+      <a class="chaos-card c6" data-iframe="/solution-v2/5BIB-Explainer-45s.html">
+        <div class="chaos-cover"><div class="chaos-emoji">🎬</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">REEL · 06</div><div class="chaos-title">5BIB Explainer · 45s</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">45s</span></div>
+        </div>
+      </a>
+      <a class="chaos-card c7" data-iframe="/solution-v2/hdsd.html?slug=them-ho-so">
+        <div class="chaos-cover"><div class="chaos-emoji">👤</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">HDSD · 07</div><div class="chaos-title">Thêm hồ sơ vận động viên</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">29s</span></div>
+        </div>
+      </a>
+      <a class="chaos-card c8" data-iframe="/solution-v2/hdsd.html?slug=chuyen-nhuong">
+        <div class="chaos-cover"><div class="chaos-emoji">📨</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">HDSD · 08</div><div class="chaos-title">Chuyển nhượng vé</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">30s</span></div>
+        </div>
+      </a>
+      <a class="chaos-card c9" data-iframe="/solution-v2/hdsd.html?slug=uy-quyen">
+        <div class="chaos-cover"><div class="chaos-emoji">🤝</div></div>
+        <div class="chaos-meta">
+          <div><div class="chaos-step">HDSD · 09</div><div class="chaos-title">Ủy quyền nhận racekit</div></div>
+          <div class="chaos-foot"><span class="chaos-tag">▶ LIVE PREVIEW</span><span class="chaos-time">27s</span></div>
+        </div>
+      </a>
+    </div>
+    <div class="chaos-tags-row">
+      <span class="chaos-pill live">▶ Play All</span>
+      <span class="chaos-pill">Đăng ký</span>
+      <span class="chaos-pill">Đổi cự ly</span>
+      <span class="chaos-pill">Check-in</span>
+      <span class="chaos-pill">Race Day</span>
+      <span class="chaos-pill">Quầy BIB</span>
+      <span class="chaos-pill">Chuyển nhượng</span>
+      <span class="chaos-pill">Tra kết quả</span>
+      <span class="chaos-pill">Hỗ trợ BTC</span>
+    </div>
+  </div>
+</section>
+
+<!-- LIVE -->
+<!-- PRESS — dual lane opposite scroll -->
+<section class="press">
+  <div class="press-eyebrow">BTC HÀNG ĐẦU VIỆT NAM TIN DÙNG 5BIB</div>
+  <div class="press-lane-wrap">
+    <div class="press-lane" id="pressLane1">
+      <span class="press-item">VTV</span><span class="press-item">VnExpress</span><span class="press-item">LPBank</span><span class="press-item">Techcombank</span><span class="press-item">UBND Cát Hải</span><span class="press-item">Race Jungle</span><span class="press-item">Color Run</span><span class="press-item">Tiền Phong</span>
+      <span class="press-item">VTV</span><span class="press-item">VnExpress</span><span class="press-item">LPBank</span><span class="press-item">Techcombank</span><span class="press-item">UBND Cát Hải</span><span class="press-item">Race Jungle</span><span class="press-item">Color Run</span><span class="press-item">Tiền Phong</span>
+    </div>
+  </div>
+  <div class="press-lane-wrap">
+    <div class="press-lane" id="pressLane2">
+      <span class="press-item">Sapa Trail</span><span class="press-item">Cát Bà Marathon</span><span class="press-item">Đà Nẵng IRONMAN</span><span class="press-item">VPBank HCM</span><span class="press-item">Hà Giang Adventure</span><span class="press-item">Mộc Châu</span><span class="press-item">Bà Nà Hills Race</span><span class="press-item">5Sport Saigon</span>
+      <span class="press-item">Sapa Trail</span><span class="press-item">Cát Bà Marathon</span><span class="press-item">Đà Nẵng IRONMAN</span><span class="press-item">VPBank HCM</span><span class="press-item">Hà Giang Adventure</span><span class="press-item">Mộc Châu</span><span class="press-item">Bà Nà Hills Race</span><span class="press-item">5Sport Saigon</span>
+    </div>
+  </div>
+</section>
+
+<!-- ECO -->
+<section class="eco" id="eco">
+  <svg class="eco-lines-svg" id="ecoLinesSvg" preserveAspectRatio="none"></svg>
+  <div class="eco-inner">
+    <div class="section-eyebrow"><span class="num">10</span>HỆ SINH THÁI 5SOLUTION</div>
+    <h2 class="section-title"><span class="accent">5BIB</span> + 3 sibling brand. Một hệ sinh thái race.</h2>
+    <div class="eco-grid eco-grid-4" id="ecoGrid">
+      <a href="https://5bib.com" target="_blank" class="eco-card eco-card-main" data-eco="main"><img src="/solution-v2/assets/5bib-logo.png" alt="5BIB"><div class="eco-card-tag">Race Management · Main</div><div class="eco-card-desc">Bán vé, BIB distribution, check-in, chip timing, kết quả realtime. Tất cả trong 5BIB.</div></a>
+      <a href="#" class="eco-card" data-eco="ticket"><img src="/solution-v2/assets/5ticket-logo.png" alt="5Ticket"><div class="eco-card-tag">Event Ticketing</div><div class="eco-card-desc">Sibling brand · bán vé sự kiện thể thao, concert, festival ngoài race.</div></a>
+      <a href="#" class="eco-card" data-eco="pix"><img src="/solution-v2/assets/5pix-logo.png" alt="5Pix"><div class="eco-card-tag">Race Photo</div><div class="eco-card-desc">Sibling brand · tìm ảnh runner theo BIB, AI face matching.</div></a>
+      <a href="#" class="eco-card" data-eco="sport"><img src="/solution-v2/assets/5sport-logo.png" alt="5Sport"><div class="eco-card-tag">Community</div><div class="eco-card-desc">Sibling brand · giải chạy phong trào, training plan, runner community.</div></a>
+    </div>
+  </div>
+</section>
+
+<!-- TESTI -->
+<section class="testi">
+  <div class="testi-inner">
+    <div class="section-eyebrow"><span class="num">11</span>BTC NÓI GÌ</div>
+    <h2 class="section-title">Tin cậy <span class="accent">đo bằng số giải.</span></h2>
+    <div class="testi-grid">
+      <div class="testi-card"><div class="quote">5BIB giúp Cát Bà Marathon vận hành 7,196 VĐV không sót một timestamp nào. Đội ngũ chuyên nghiệp, có mặt từ trước race 3 ngày.</div><div class="author"><div class="avatar">CB</div><div><div class="name">BTC Sắc Màu Cát Bà</div><div class="role">VTV–LPBank International Marathon</div></div></div></div>
+      <div class="testi-card"><div class="quote">Form đăng ký lên trong 48h. Email/SMS confirmation tự động. BIB phát đúng wave. Đáng đồng tiền cho mọi quy mô giải.</div><div class="author"><div class="avatar">RJ</div><div><div class="name">Race Jungle</div><div class="role">Hệ thống sự kiện chạy bộ</div></div></div></div>
+      <div class="testi-card"><div class="quote">Leaderboard real-time là điểm cộng cực lớn. VĐV về đích là kết quả lên ngay — không phải đợi 1–2 ngày như trước.</div><div class="author"><div class="avatar">CR</div><div><div class="name">Color Run</div><div class="role">Giải chạy phong trào toàn quốc</div></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq">
+  <div class="faq-inner">
+    <div class="section-eyebrow"><span class="num">12</span>FAQ</div>
+    <h2 class="section-title">Câu hỏi <span class="accent">thường gặp.</span></h2>
+    <div class="faq-list">
+      <div class="faq-item open"><div class="faq-q">5BIB chỉ phục vụ giải lớn hay BTC nhỏ cũng dùng được? <span class="plus"></span></div><div class="faq-a">5BIB có 3 gói linh hoạt theo quy mô — từ giải địa phương 200 VĐV đến quốc gia 10,000+ VĐV. Pricing minh bạch, không có phí ẩn.</div></div>
+      <div class="faq-item"><div class="faq-q">Cần báo trước race day bao lâu? <span class="plus"></span></div><div class="faq-a">Tối thiểu 30 ngày để setup ổn định form, BIB design, payment gateway. Race lớn (5,000+ VĐV) khuyến nghị 60–90 ngày để có thời gian promote.</div></div>
+      <div class="faq-item"><div class="faq-q">Chip timing dùng công nghệ gì? Có chính xác bằng quốc tế không? <span class="plus"></span></div><div class="faq-a">5BIB dùng RaceResult Decoder (Đức) — chuẩn công nghệ của các giải marathon quốc tế lớn. Chip RFID thụ động, độ chính xác 0.01s, hệ thống multi-read đảm bảo không bỏ sót một VĐV nào.</div></div>
+      <div class="faq-item"><div class="faq-q">VĐV chuyển nhượng BIB / đổi cự ly thì sao? <span class="plus"></span></div><div class="faq-a">5BIB có flow chuyển nhượng + đổi cự ly self-service ngay trong dashboard VĐV. BTC chỉ cần config policy (cho phép hay không, phí bao nhiêu) — phần còn lại tự động.</div></div>
+      <div class="faq-item"><div class="faq-q">Có tích hợp với hệ thống của BTC sẵn có không? <span class="plus"></span></div><div class="faq-a">5BIB có REST API + webhook cho mọi event (đăng ký, thanh toán, check-in, finish). BTC có thể export CSV/JSON, push sang Salesforce, Mailchimp, Zalo OA, Slack...</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta" id="contact">
+  <div class="cta-rotor" id="ctaRotor"></div>
+  <div class="cta-inner">
+    <div class="cta-eyebrow"><span class="dot"></span>SLOT ONBOARDING Q1·2026 — ĐANG MỞ</div>
+    <h2 class="cta-title">Ready to <span class="accent">race?</span></h2>
+    <p class="cta-sub">Báo giá trong 24h. Demo 15 phút. Slot onboarding giới hạn — đặt lịch ngay để giữ chỗ.</p>
+    <div class="cta-btns">
+      <a href="#leadForm" class="btn btn-primary cursor-trigger" data-cursor="DEMO">Đặt lịch demo 15 phút →</a>
+      <a href="#leadForm" class="btn btn-ghost cursor-trigger" data-cursor="EMAIL">Liên hệ báo giá</a>
+    </div>
+
+    <div class="lead-form-wrap" id="leadForm">
+      <div class="lead-card" id="leadCard">
+        <div class="lead-head">
+          <div class="lead-eyebrow">▶ Đăng ký tư vấn · Phản hồi trong 24h</div>
+          <h2 class="lead-title">Để lại thông tin — đội ngũ 5BIB liên hệ ngay.</h2>
+          <p class="lead-desc">Cho chúng tôi biết về giải của bạn để chuẩn bị báo giá &amp; demo phù hợp nhất.</p>
+        </div>
+        <form class="lead-grid" id="leadFormEl" novalidate>
+          <div class="lead-field">
+            <label for="lfName">Họ và tên <span class="req">*</span></label>
+            <input type="text" id="lfName" name="name" placeholder="Nguyễn Văn A" autocomplete="name" required>
+          </div>
+          <div class="lead-field">
+            <label for="lfOrg">Tên giải / Đơn vị tổ chức</label>
+            <input type="text" id="lfOrg" name="org" placeholder="VD: Cát Bà Marathon" autocomplete="organization">
+          </div>
+          <div class="lead-field">
+            <label for="lfEmail">Email <span class="req">*</span></label>
+            <input type="email" id="lfEmail" name="email" placeholder="ban@email.com" autocomplete="email" required>
+          </div>
+          <div class="lead-field">
+            <label for="lfPhone">Số điện thoại <span class="req">*</span></label>
+            <input type="tel" id="lfPhone" name="phone" placeholder="09xx xxx xxx" autocomplete="tel" required>
+          </div>
+          <div class="lead-field full">
+            <label for="lfScale">Quy mô VĐV dự kiến</label>
+            <select id="lfScale" name="scale">
+              <option value="">— Chọn quy mô —</option>
+              <option value="<500">Dưới 500 VĐV</option>
+              <option value="500-2000">500 – 2,000 VĐV</option>
+              <option value="2000-5000">2,000 – 5,000 VĐV</option>
+              <option value="5000+">Trên 5,000 VĐV</option>
+            </select>
+          </div>
+          <div class="lead-field full">
+            <label for="lfMsg">Nhu cầu cụ thể (tuỳ chọn)</label>
+            <textarea id="lfMsg" name="message" placeholder="VD: cần bán vé + chip timing + leaderboard realtime cho giải tháng 9…"></textarea>
+          </div>
+          <button type="submit" class="lead-submit" id="lfSubmit">Gửi thông tin →</button>
+        </form>
+        <p class="lead-note">Thông tin của bạn được bảo mật và chỉ dùng để liên hệ tư vấn.</p>
+        <div class="lead-success" id="leadSuccess">
+          <div class="ls-check">✓</div>
+          <h3>Đã nhận thông tin!</h3>
+          <p>Cảm ơn bạn. Đội ngũ 5BIB sẽ liên hệ trong vòng 24h để tư vấn &amp; gửi báo giá.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="foot">
+  <div class="foot-inner">
+    <div class="foot-brand"><img src="/solution-v2/assets/5bib-logo.png" alt="5BIB"><span class="foot-divider"></span><span class="foot-meta">© 2026 · 5SOLUTION VIETNAM</span></div>
+    <div class="foot-meta">timing.5bib.com · solution.5bib.com · 5solution.vn</div>
+  </div>
+</footer>
+
+<!-- Modal for chaos card iframe -->
+<div id="chaosModal" style="position:fixed;inset:0;z-index:200;background:rgba(6,8,26,.92);backdrop-filter:blur(20px);display:none;align-items:center;justify-content:center;padding:40px">
+  <div style="position:relative;width:100%;max-width:1280px;aspect-ratio:16/9;border-radius:20px;overflow:hidden;background:#0A0A0A;box-shadow:0 60px 120px -20px rgba(0,0,0,.8)">
+    <button id="chaosModalClose" style="position:absolute;top:16px;right:16px;z-index:3;background:rgba(255,255,255,.1);backdrop-filter:blur(8px);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:50%;width:44px;height:44px;cursor:pointer;font-size:24px;display:flex;align-items:center;justify-content:center">×</button>
+    <iframe id="chaosModalFrame" style="width:100%;height:100%;border:0" allow="autoplay"></iframe>
+  </div>
+</div>
+
+<script>
+/* ═══════ GSAP + LENIS Setup ═══════ */
+gsap.registerPlugin(ScrollTrigger, CustomEase);
+gsap.defaults({ ease: "power3.out", duration: 0.9 });
+CustomEase.create("snap", "M0,0 C0.2,0 0.1,1 1,1");
+
+const lenis = new Lenis({ duration: 1.1, easing: t => 1 - Math.pow(1 - t, 3), smoothTouch: false });
+lenis.on('scroll', ScrollTrigger.update);
+gsap.ticker.add(time => lenis.raf(time * 1000));
+gsap.ticker.lagSmoothing(0);
+
+/* Mouse blob */
+const blob = document.getElementById('blob');
+const blobPos = { x: window.innerWidth/2, y: window.innerHeight/2 };
+const blobTgt = { x: blobPos.x, y: blobPos.y };
+window.addEventListener('mousemove', e => { blobTgt.x = e.clientX; blobTgt.y = e.clientY; });
+gsap.ticker.add(() => {
+  blobPos.x += (blobTgt.x - blobPos.x) * 0.08;
+  blobPos.y += (blobTgt.y - blobPos.y) * 0.08;
+  blob.style.transform = `translate(${blobPos.x}px, ${blobPos.y}px) translate(-50%, -50%)`;
+});
+
+/* Preloader counter */
+const preCounter = document.getElementById('preCounter');
+const preFill = document.getElementById('preFill');
+const preloader = document.getElementById('preloader');
+const target = { v: 0 };
+
+function dismissPreloader() {
+  if (preloader.dataset.gone) return;
+  preloader.dataset.gone = '1';
+  preloader.style.transition = 'opacity 600ms ease-out';
+  preloader.style.opacity = '0';
+  preloader.style.pointerEvents = 'none';
+  setTimeout(() => { preloader.style.display = 'none'; }, 650);
+  playHeroIntro();
+}
+gsap.to(target, {
+  v: 999, duration: 2.2, ease: "power3.out",
+  onUpdate: () => {
+    preCounter.textContent = String(Math.round(target.v)).padStart(3, '0');
+    preFill.style.width = (target.v / 999 * 100) + '%';
+  },
+  onComplete: () => setTimeout(dismissPreloader, 250)
+});
+setTimeout(dismissPreloader, 4000);
+
+/* Hero char-split + intro */
+function splitToChars(el) {
+  el.querySelectorAll('.line').forEach(line => {
+    const html = line.innerHTML;
+    line.innerHTML = html.replace(/(<[^>]+>)|(\s)|(.)/g, (m, tag, space, ch) => {
+      if (tag) return tag;
+      if (space) return '<span class="char">&nbsp;</span>';
+      return `<span class="char">${ch}</span>`;
+    });
+  });
+}
+const heroHeadlineEl = document.getElementById('heroHeadline');
+const heroPairs = [...heroHeadlineEl.querySelectorAll('.hero-pair')];
+const heroPairDots = document.querySelectorAll('#heroPairDots .dot');
+heroPairs.forEach(p => splitToChars(p));
+heroHeadlineEl.classList.add('js-anim');
+
+let currentPair = 0;
+let heroCycleTimer = null;
+
+function playHeroIntro() {
+  /* Remove .js-anim immediately and lock all pair chars via inline style.
+     Pair 0 = will animate IN. Pair 1, 2 = stay hidden until their cycle. */
+  heroHeadlineEl.classList.remove('js-anim');
+  heroPairs.forEach((pair) => {
+    gsap.set(pair.querySelectorAll('.char'), { yPercent: 110, rotateX: -80, opacity: 0 });
+  });
+
+  /* First pair entrance — use fromTo with explicit yPercent state */
+  const firstPair = heroPairs[0];
+  gsap.to(firstPair.querySelectorAll('.char'), {
+    yPercent: 0, rotateX: 0, opacity: 1,
+    duration: 1.0,
+    stagger: { each: 0.022, from: "start" },
+    ease: "back.out(1.4)",
+    delay: 0.15,
+    overwrite: true
+  });
+  gsap.from('.hdr', { yPercent: -100, duration: 0.7 });
+  gsap.from('.hero-eyebrow', { y: 20, autoAlpha: 0, duration: 0.7, delay: 0.1 });
+  gsap.from('.hero-sub', { y: 20, autoAlpha: 0, duration: 0.7, delay: 0.8 });
+  gsap.from('.hero-marquee-wrap', { autoAlpha: 0, duration: 1.2, delay: 0.9 });
+  gsap.from('.hero-pair-dots', { autoAlpha: 0, y: 10, duration: 0.6, delay: 1.4 });
+
+  /* Start the cycle ~3.5s after first pair fully visible */
+  heroCycleTimer = setTimeout(cycleNextPair, 4200);
+}
+
+function cycleNextPair() {
+  const outPair = heroPairs[currentPair];
+  const nextIdx = (currentPair + 1) % heroPairs.length;
+  const inPair = heroPairs[nextIdx];
+
+  /* Set next pair active immediately for dots */
+  outPair.classList.remove('active');
+  inPair.classList.add('active');
+  heroPairDots.forEach((d, i) => d.classList.toggle('active', i === nextIdx));
+
+  const outChars = outPair.querySelectorAll('.char');
+  const inChars = inPair.querySelectorAll('.char');
+
+  /* Pre-set IN to hidden state to prevent any pre-flash */
+  gsap.set(inChars, { yPercent: 110, rotateX: -80, opacity: 0 });
+
+  const tl = gsap.timeline({
+    onComplete: () => {
+      currentPair = nextIdx;
+      heroCycleTimer = setTimeout(cycleNextPair, 2800);
+    }
+  });
+
+  /* OUT — chars fly UP and rotate away */
+  tl.to(outChars, {
+    yPercent: -120, rotateX: 90, opacity: 0,
+    duration: 0.55,
+    stagger: { each: 0.01, from: 'start' },
+    ease: "power2.in"
+  }, 0);
+
+  /* IN — chars come UP from below.
+     Starts 0.35s into OUT (small overlap is safe — OUT goes UP, IN comes UP from bottom,
+     they're at different Y zones so no visual collision) */
+  tl.to(inChars, {
+    yPercent: 0, rotateX: 0, opacity: 1,
+    duration: 0.85,
+    stagger: { each: 0.016, from: 'start' },
+    ease: "back.out(1.6)"
+  }, 0.35);
+
+  /* Reset OUT chars to bottom hidden position for next cycle */
+  tl.set(outChars, { yPercent: 110, rotateX: -80, opacity: 0 }, 0.7);
+}
+
+/* Custom cursor */
+const cursor = document.getElementById('cursor');
+const cursorLabel = document.getElementById('cursorLabel');
+const isPointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+if (isPointer) {
+  const cur = { x: window.innerWidth/2, y: window.innerHeight/2 };
+  const tgt = { x: cur.x, y: cur.y };
+  window.addEventListener('mousemove', e => { tgt.x = e.clientX; tgt.y = e.clientY; });
+  gsap.ticker.add(() => {
+    cur.x += (tgt.x - cur.x) * 0.22;
+    cur.y += (tgt.y - cur.y) * 0.22;
+    cursor.style.transform = `translate(${cur.x}px, ${cur.y}px) translate(-50%, -50%)`;
+  });
+  document.querySelectorAll('[data-cursor]').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      cursorLabel.textContent = el.dataset.cursor;
+      cursor.classList.add('show-label');
+    });
+    el.addEventListener('mouseleave', () => cursor.classList.remove('show-label'));
+  });
+}
+
+/* Header tint */
+const hdr = document.getElementById('hdr');
+['process','chaos','eco'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  ScrollTrigger.create({
+    trigger: el, start: 'top 60px', end: 'bottom 60px',
+    onToggle: self => hdr.classList.toggle('midnight', self.isActive)
+  });
+});
+
+/* Drag marquee */
+const track = document.getElementById('marqueeTrack');
+const marqueeWrap = document.getElementById('marqueeWrap');
+let mqState = { x: 0, dragging: false, startX: 0, startTx: 0 };
+
+const autoDrift = gsap.to(mqState, {
+  x: "-=2400", duration: 60, ease: "none", repeat: -1,
+  modifiers: { x: gsap.utils.unitize(v => parseFloat(v) % 1200, 'px') },
+  onUpdate: () => { track.style.transform = `translateX(${mqState.x}px)`; }
+});
+
+marqueeWrap.addEventListener('mousedown', e => {
+  autoDrift.pause();
+  mqState.dragging = true; mqState.startX = e.clientX; mqState.startTx = mqState.x;
+  cursor.classList.add('large');
+});
+window.addEventListener('mouseup', () => {
+  if (mqState.dragging) {
+    mqState.dragging = false;
+    cursor.classList.remove('large');
+    setTimeout(() => autoDrift.resume(), 800);
+  }
+});
+window.addEventListener('mousemove', e => {
+  if (!mqState.dragging) return;
+  mqState.x = mqState.startTx + (e.clientX - mqState.startX);
+  track.style.transform = `translateX(${mqState.x}px)`;
+});
+marqueeWrap.addEventListener('touchstart', e => {
+  autoDrift.pause();
+  mqState.dragging = true; mqState.startX = e.touches[0].clientX; mqState.startTx = mqState.x;
+}, { passive: true });
+marqueeWrap.addEventListener('touchmove', e => {
+  if (!mqState.dragging) return;
+  mqState.x = mqState.startTx + (e.touches[0].clientX - mqState.startX);
+  track.style.transform = `translateX(${mqState.x}px)`;
+}, { passive: true });
+marqueeWrap.addEventListener('touchend', () => { mqState.dragging = false; setTimeout(() => autoDrift.resume(), 800); });
+
+/* Velocity-scaled marquee */
+let lastMx = mqState.x;
+gsap.ticker.add(() => {
+  const velocity = (mqState.x - lastMx);
+  lastMx = mqState.x;
+  const scaleY = 1 + Math.min(Math.abs(velocity) / 80, 0.35);
+  document.querySelectorAll('.marquee-item').forEach(item => {
+    if (!item.classList.contains('active')) {
+      item.style.transform = `scaleY(${scaleY}) skewX(${velocity * -0.06}deg)`;
+    }
+  });
+});
+
+/* Hover-reveal-video */
+const heroBgVid = document.getElementById('heroBgVid');
+const hero = document.getElementById('hero');
+const marqueeItems = document.querySelectorAll('.marquee-item');
+marqueeItems.forEach(item => {
+  item.addEventListener('mouseenter', () => {
+    hero.classList.add('video-on');
+    document.body.classList.add('cursor-dark');
+    marqueeItems.forEach(o => o.classList.add('dim'));
+    item.classList.remove('dim'); item.classList.add('active');
+    gsap.to(item, { scale: 1.08, duration: 0.5 });
+    cursorLabel.textContent = 'VIEW'; cursor.classList.add('show-label');
+    heroBgVid.play().catch(() => {});
+  });
+  item.addEventListener('mouseleave', () => {
+    item.classList.remove('active');
+    gsap.to(item, { scale: 1, duration: 0.5 });
+    setTimeout(() => {
+      if (![...marqueeItems].some(o => o.matches(':hover'))) {
+        marqueeItems.forEach(o => o.classList.remove('dim'));
+        hero.classList.remove('video-on');
+        document.body.classList.remove('cursor-dark');
+        cursor.classList.remove('show-label');
+      }
+    }, 60);
+  });
+});
+
+/* Stats counter */
+document.querySelectorAll('.stat-num [data-count]').forEach(el => {
+  const tgt = { v: 0 };
+  const final = parseInt(el.dataset.count, 10);
+  ScrollTrigger.create({
+    trigger: el, start: 'top 80%', once: true,
+    onEnter: () => {
+      gsap.to(tgt, {
+        v: final, duration: 2, ease: "power3.out",
+        onUpdate: () => {
+          const v = Math.floor(tgt.v);
+          el.textContent = v >= 1000 ? v.toLocaleString('en-US') : v;
+        }
+      });
+    }
+  });
+});
+
+/* Section batch reveal — only for elements WITHOUT their own dedicated entrance in BUFF v2.
+   .feature / .testi-card / .faq-item are owned by BUFF v2 below; race-card owned by races pin. */
+ScrollTrigger.batch('.eco-card, .live-feat', {
+  start: 'top 88%',
+  onEnter: batch => gsap.fromTo(batch,
+    { yPercent: 30, autoAlpha: 0 },
+    { yPercent: 0, autoAlpha: 1, duration: 0.9, stagger: 0.08, ease: "power3.out", overwrite: true }
+  )
+});
+/* Section title reveal — animate ONLY when element enters viewport from below.
+   Uses ScrollTrigger.create + gsap.from inside onEnter (no immediateRender side-effect).
+   Elements already in viewport at page load play immediately (no flash). */
+gsap.utils.toArray('.section-title, .section-eyebrow').forEach(el => {
+  const rect = el.getBoundingClientRect();
+  const inViewport = rect.top < window.innerHeight && rect.bottom > 0;
+  if (inViewport) return; /* already visible — skip animation, keep as-is */
+  ScrollTrigger.create({
+    trigger: el, start: 'top 95%', once: true,
+    onEnter: () => gsap.from(el, { y: 30, autoAlpha: 0, duration: 0.8, ease: "power3.out" })
+  });
+});
+
+/* Showcase clip-path reveal */
+gsap.set('.showcase-frame', { clipPath: 'inset(0 50% 0 50%)' });
+gsap.to('.showcase-frame', {
+  clipPath: 'inset(0 0% 0 0%)', duration: 1.4, ease: "expo.inOut",
+  scrollTrigger: { trigger: '.showcase', start: 'top 70%', once: true }
+});
+
+/* RACES — Apple horizontal pin */
+gsap.matchMedia().add("(min-width: 900px)", () => {
+  const trackEl = document.getElementById('racesTrack');
+  const wrap = document.getElementById('racesPinWrap');
+  const progressFill = document.getElementById('racesProgress');
+  const idxEl = document.getElementById('raceIdx');
+  if (!trackEl || !wrap) return;
+  const computeDistance = () => Math.max(0, trackEl.scrollWidth - window.innerWidth + 128);
+  let distance = computeDistance();
+  gsap.to(trackEl, {
+    x: () => -distance, ease: "none",
+    scrollTrigger: {
+      trigger: wrap, start: 'top top', end: () => `+=${distance}`,
+      pin: '.races-pin', scrub: 1, invalidateOnRefresh: true,
+      onUpdate: self => {
+        if (progressFill) progressFill.style.width = (self.progress * 100) + '%';
+        if (idxEl) {
+          const cards = trackEl.querySelectorAll('.race-card').length;
+          const i = Math.min(Math.floor(self.progress * cards) + 1, cards);
+          idxEl.textContent = String(i).padStart(2, '0');
+        }
+      }
+    }
+  });
+  window.addEventListener('resize', () => { distance = computeDistance(); ScrollTrigger.refresh(); });
+});
+
+/* 3D Tilt cards */
+function applyTilt(selector, maxRotate = 12) {
+  document.querySelectorAll(selector).forEach(card => {
+    let rect;
+    card.addEventListener('mouseenter', () => {
+      rect = card.getBoundingClientRect();
+      gsap.to(card, { scale: 1.04, duration: 0.5 });
+    });
+    card.addEventListener('mousemove', e => {
+      if (!rect) rect = card.getBoundingClientRect();
+      const px = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+      const py = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+      gsap.to(card, {
+        rotationY: px * maxRotate, rotationX: -py * maxRotate,
+        duration: 0.6, ease: "power3.out", overwrite: "auto"
+      });
+    });
+    card.addEventListener('mouseleave', () => {
+      rect = null;
+      gsap.to(card, {
+        rotationX: 0, rotationY: 0, scale: 1, duration: 0.9,
+        ease: "elastic.out(1, 0.5)", overwrite: "auto"
+      });
+    });
+  });
+}
+applyTilt('.race-card', 14);
+applyTilt('.feature', 6);
+applyTilt('.eco-card', 4);
+
+/* Process timeline scroll-draw */
+const timeline = document.getElementById('processTimeline');
+if (timeline) {
+  const trackEl = document.createElement('div');
+  trackEl.className = 'process-line-track';
+  const fillEl = document.createElement('div');
+  fillEl.className = 'process-line-fill';
+  trackEl.appendChild(fillEl);
+  timeline.prepend(trackEl);
+  gsap.to(fillEl, {
+    width: '100%', ease: 'none',
+    scrollTrigger: { trigger: timeline, start: 'top 70%', end: 'bottom 70%', scrub: 0.6 }
+  });
+}
+
+/* Process steps reveal — same inViewport-safe pattern */
+gsap.utils.toArray('.process-step').forEach(step => {
+  const rect = step.getBoundingClientRect();
+  const inViewport = rect.top < window.innerHeight && rect.bottom > 0;
+  if (inViewport) return;
+  ScrollTrigger.create({
+    trigger: step, start: 'top 90%', once: true,
+    onEnter: () => gsap.from(step, { rotateY: -45, yPercent: 30, autoAlpha: 0, duration: 1, ease: "back.out(1.2)" })
+  });
+});
+
+/* Live tracker right column is now the Finish Line video (finish-line.html);
+   the old leaderboard-mock animation code was removed with the markup. */
+gsap.from('.live-stage', {
+  scrollTrigger: { trigger: '.live-stage', start: 'top 80%', once: true },
+  y: 40, autoAlpha: 0, duration: 0.9, ease: 'power3.out'
+});
+
+/* Press marquee — handled by dual-lane code in BUFF v2 layer below */
+
+/* Hero parallax video */
+gsap.to('.hero-bgvid', {
+  yPercent: 30, ease: 'none',
+  scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: 0.5 }
+});
+
+/* ════════ CHAOS HDSD — chaotic floating cards + iframe modal ════════ */
+const chaosCards = document.querySelectorAll('.chaos-card');
+const chaosModal = document.getElementById('chaosModal');
+const chaosFrame = document.getElementById('chaosModalFrame');
+const chaosClose = document.getElementById('chaosModalClose');
+
+/* random subtle parallax float */
+chaosCards.forEach((card, i) => {
+  const drift = (i % 2 === 0 ? 1 : -1) * (10 + Math.random() * 20);
+  gsap.to(card, {
+    y: drift, ease: 'none',
+    scrollTrigger: { trigger: '.chaos', start: 'top bottom', end: 'bottom top', scrub: 1 + Math.random() }
+  });
+  /* hover straighten + scale */
+  const baseRotate = getComputedStyle(card).transform;
+  card.addEventListener('mouseenter', () => {
+    gsap.to(card, { rotate: 0, scale: 1.06, duration: 0.5, ease: 'back.out(1.4)' });
+  });
+  card.addEventListener('mouseleave', () => {
+    /* read original rotation from class */
+    const rotMap = { c1:-7, c2:4, c3:-3, c4:6, c5:-9, c6:8, c7:-5, c8:3, c9:-6 };
+    const cls = [...card.classList].find(c => /^c[1-9]$/.test(c));
+    gsap.to(card, { rotate: rotMap[cls] || 0, scale: 1, duration: 0.8, ease: 'elastic.out(1, 0.5)' });
+  });
+  /* click → open modal */
+  card.addEventListener('click', e => {
+    e.preventDefault();
+    const iframeSrc = card.dataset.iframe;
+    if (iframeSrc) {
+      chaosFrame.src = iframeSrc;
+      chaosModal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      lenis.stop();
+    } else {
+      /* shake animation if no iframe */
+      gsap.fromTo(card, { rotate: -2 }, { rotate: 2, duration: 0.08, repeat: 5, yoyo: true, ease: 'power1.inOut',
+        onComplete: () => gsap.to(card, { rotate: 0, duration: 0.3 }) });
+    }
+  });
+});
+
+chaosClose.addEventListener('click', closeChaosModal);
+chaosModal.addEventListener('click', e => { if (e.target === chaosModal) closeChaosModal(); });
+function closeChaosModal() {
+  chaosFrame.src = '';
+  chaosModal.style.display = 'none';
+  document.body.style.overflow = '';
+  lenis.start();
+}
+
+/* Play All → mở video giới thiệu tổng quan trong modal */
+const chaosPlayAll = document.querySelector('.chaos-pill.live');
+if (chaosPlayAll) {
+  chaosPlayAll.addEventListener('click', () => {
+    chaosFrame.src = '/solution-v2/5BIB-Explainer-45s.html';
+    chaosModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    lenis.stop();
+  });
+}
+
+/* ═══════ Lead form ═══════ */
+const leadFormEl = document.getElementById('leadFormEl');
+if (leadFormEl) {
+  const leadCard = document.getElementById('leadCard');
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  leadFormEl.querySelectorAll('input,select,textarea').forEach(el => {
+    el.addEventListener('input', () => el.closest('.lead-field')?.classList.remove('invalid'));
+  });
+  const lfSubmit = document.getElementById('lfSubmit');
+  const leadNote = document.querySelector('.lead-note');
+  const setNote = (msg, isErr) => {
+    if (!leadNote) return;
+    leadNote.textContent = msg;
+    leadNote.style.color = isErr ? '#ff5c81' : '';
+  };
+  const DEFAULT_NOTE = leadNote ? leadNote.textContent : '';
+  leadFormEl.addEventListener('submit', async e => {
+    e.preventDefault();
+    const fields = {
+      name:  document.getElementById('lfName'),
+      email: document.getElementById('lfEmail'),
+      phone: document.getElementById('lfPhone')
+    };
+    let firstBad = null;
+    Object.entries(fields).forEach(([key, el]) => {
+      const v = el.value.trim();
+      const bad = !v || (key === 'email' && !emailRe.test(v));
+      el.closest('.lead-field').classList.toggle('invalid', bad);
+      if (bad && !firstBad) firstBad = el;
+    });
+    if (firstBad) { firstBad.focus(); return; }
+
+    /* Map sang schema backend /api/timing/leads.
+       Backend không có field email → nhét vào notes để không mất thông tin. */
+    const raw = Object.fromEntries(new FormData(leadFormEl).entries());
+    const email = (raw.email || '').trim();
+    const msg = (raw.message || '').trim();
+    const notes = [msg, email ? 'Email: ' + email : '']
+      .filter(Boolean).join('\n');
+    const payload = {
+      full_name: (raw.name || '').trim(),
+      phone: (raw.phone || '').trim(),
+      organization: (raw.org || '').trim(),
+      athlete_count_range: raw.scale || '',
+      package_interest: '',
+      notes,
+      website: ''  /* honeypot */
+    };
+
+    lfSubmit.disabled = true;
+    const originalLabel = lfSubmit.textContent;
+    lfSubmit.textContent = 'Đang gửi…';
+    setNote(DEFAULT_NOTE, false);
+
+    try {
+      const res = await fetch('/api/timing/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.status === 429) {
+        setNote('Bạn gửi hơi nhanh — vui lòng thử lại sau ít phút.', true);
+        lfSubmit.disabled = false;
+        lfSubmit.textContent = originalLabel;
+        return;
+      }
+      if (!res.ok) throw new Error('bad_status_' + res.status);
+
+      leadCard.classList.add('sent');
+      gsap.from('#leadSuccess', { y: 16, autoAlpha: 0, duration: 0.6, ease: 'power3.out' });
+      ScrollTrigger.refresh();
+    } catch (err) {
+      setNote('Gửi không thành công — vui lòng thử lại hoặc liên hệ trực tiếp qua Zalo/Hotline.', true);
+      lfSubmit.disabled = false;
+      lfSubmit.textContent = originalLabel;
+    }
+  });
+}
+
+/* Chaos cards stagger entrance — animate y + opacity only, keep CSS rotation */
+ScrollTrigger.create({
+  trigger: '.chaos-mosaic',
+  start: 'top 80%',
+  once: true,
+  onEnter: () => {
+    gsap.from('.chaos-card', {
+      y: 80, scale: 0.6, autoAlpha: 0,
+      duration: 1.1, stagger: { each: 0.06, from: 'random' },
+      ease: 'back.out(1.3)'
+    });
+  }
+});
+
+/* FAQ accordion */
+document.querySelectorAll('.faq-item').forEach(item => {
+  item.querySelector('.faq-q').addEventListener('click', () => item.classList.toggle('open'));
+});
+
+/* Magnetic buttons */
+if (isPointer) {
+  document.querySelectorAll('.btn').forEach(btn => {
+    btn.addEventListener('mousemove', e => {
+      const rect = btn.getBoundingClientRect();
+      const x = e.clientX - rect.left - rect.width / 2;
+      const y = e.clientY - rect.top - rect.height / 2;
+      gsap.to(btn, { x: x * 0.25, y: y * 0.25, duration: 0.5 });
+    });
+    btn.addEventListener('mouseleave', () => {
+      gsap.to(btn, { x: 0, y: 0, duration: 0.6, ease: "elastic.out(1, 0.4)" });
+    });
+  });
+}
+
+/* Force-play videos via IntersectionObserver + interaction */
+document.querySelectorAll('video').forEach(v => {
+  v.muted = true;
+  v.setAttribute('playsinline', '');
+  v.load();
+});
+const vidObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) e.target.play().catch(() => {});
+    else e.target.pause();
+  });
+}, { threshold: 0.1 });
+document.querySelectorAll('video').forEach(v => vidObserver.observe(v));
+['click','scroll','keydown','touchstart'].forEach(evt =>
+  window.addEventListener(evt, () => {
+    document.querySelectorAll('video').forEach(v => { if (v.paused) v.play().catch(() => {}); });
+  }, { once: true, passive: true })
+);
+
+/* Race card / feature hover lift */
+document.querySelectorAll('.race-card, .feature').forEach(card => {
+  card.addEventListener('mouseenter', () => gsap.to(card, { y: -10, duration: 0.5 }));
+  card.addEventListener('mouseleave', () => gsap.to(card, { y: 0, duration: 0.6, ease: "elastic.out(1, 0.5)" }));
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   BUFF v2 — extra GSAP layer
+   ════════════════════════════════════════════════════════════════════ */
+
+/* —— Scroll progress bar driven by Lenis */
+const scrollFill = document.getElementById('scrollFill');
+lenis.on('scroll', ({ scroll, limit }) => {
+  const p = limit ? Math.min(scroll / limit, 1) : 0;
+  scrollFill.style.width = (p * 100) + '%';
+});
+
+/* —— Section watermark injection (huge parallax numbers) */
+const WATERMARK_MAP = [
+  { sel: '.features', num: '01', cls: 'light' },
+  { sel: '.races',    num: '02', cls: 'light' },
+  { sel: '.process',  num: '03', cls: 'light' },
+  { sel: '#svc-sale', num: '04', cls: 'light' },
+  { sel: '#svc-onsite', num: '05', cls: 'light' },
+  { sel: '#svc-reach', num: '06', cls: 'dark' },
+  { sel: '.live',     num: '07', cls: 'dark' },
+  { sel: '#svc-result', num: '08', cls: 'light' },
+  { sel: '.chaos',    num: '09', cls: 'dark' },
+  { sel: '.eco',      num: '10', cls: 'dark' },
+  { sel: '.testi',    num: '11', cls: 'light' },
+  { sel: '.faq',      num: '12', cls: 'light' },
+];
+WATERMARK_MAP.forEach(({ sel, num, cls }) => {
+  const sec = document.querySelector(sel);
+  if (!sec) return;
+  if (getComputedStyle(sec).position === 'static') sec.style.position = 'relative';
+  const w = document.createElement('div');
+  w.className = 'section-watermark ' + cls;
+  w.textContent = '№ ' + num;
+  sec.appendChild(w);
+  gsap.to(w, {
+    yPercent: -40, ease: 'none',
+    scrollTrigger: { trigger: sec, start: 'top bottom', end: 'bottom top', scrub: 1 }
+  });
+});
+
+/* ════════ STATS — magnetic + ribbon */
+document.querySelectorAll('.stat').forEach(stat => {
+  ScrollTrigger.create({
+    trigger: stat, start: 'top 85%', once: true,
+    onEnter: () => stat.classList.add('in-view')
+  });
+  if (isPointer) {
+    stat.addEventListener('mousemove', e => {
+      const r = stat.getBoundingClientRect();
+      const x = (e.clientX - r.left - r.width / 2) * 0.18;
+      const y = (e.clientY - r.top - r.height / 2) * 0.18;
+      gsap.to(stat, { x, y, duration: 0.5, ease: 'power3.out' });
+    });
+    stat.addEventListener('mouseleave', () => {
+      gsap.to(stat, { x: 0, y: 0, duration: 0.7, ease: 'elastic.out(1, 0.4)' });
+    });
+  }
+});
+
+/* Stats entrance — stagger reveal each stat with rotation */
+ScrollTrigger.create({
+  trigger: '.stats', start: 'top 75%', once: true,
+  onEnter: () => {
+    gsap.fromTo('.stat',
+      { y: 60, autoAlpha: 0, rotateX: -30 },
+      { y: 0, autoAlpha: 1, rotateX: 0, duration: 1, stagger: 0.12,
+        ease: 'power3.out', overwrite: 'auto', clearProps: 'transform' }
+    );
+  }
+});
+
+/* ════════ FEATURES — cursor spotlight + icon parallax */
+document.querySelectorAll('.feature').forEach((card, i) => {
+  /* inject spotlight + data-feat-num */
+  const sp = document.createElement('div');
+  sp.className = 'feature-spotlight';
+  card.prepend(sp);
+  card.setAttribute('data-feat-num', '0' + (i + 1));
+
+  if (!isPointer) return;
+  const icon = card.querySelector('.feat-icon');
+  const title = card.querySelector('.feat-title');
+  let rect;
+  card.addEventListener('mouseenter', () => { rect = card.getBoundingClientRect(); });
+  card.addEventListener('mousemove', e => {
+    if (!rect) rect = card.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    card.style.setProperty('--mx', (px * 100) + '%');
+    card.style.setProperty('--my', (py * 100) + '%');
+    if (icon) gsap.to(icon, { x: (px - 0.5) * 22, y: (py - 0.5) * 22, duration: 0.6, ease: 'power3.out' });
+    if (title) gsap.to(title, { x: (px - 0.5) * 8, duration: 0.6, ease: 'power3.out' });
+  });
+  card.addEventListener('mouseleave', () => {
+    rect = null;
+    if (icon) gsap.to(icon, { x: 0, y: 0, duration: 0.9, ease: 'elastic.out(1, 0.4)' });
+    if (title) gsap.to(title, { x: 0, duration: 0.9, ease: 'elastic.out(1, 0.4)' });
+  });
+});
+
+/* Features grid entrance — fromTo (explicit) so every card ends at the
+   exact same natural state regardless of timing/conflicts */
+ScrollTrigger.create({
+  trigger: '.features-grid', start: 'top 80%', once: true,
+  onEnter: () => {
+    gsap.fromTo('.feature',
+      { y: 80, autoAlpha: 0, rotateX: -20 },
+      { y: 0, autoAlpha: 1, rotateX: 0, duration: 1.1, stagger: 0.12,
+        ease: 'power4.out', overwrite: 'auto', clearProps: 'transform' }
+    );
+  }
+});
+
+/* ════════ SVC SALE — phone entrance + notif sequence + tick + parallax */
+ScrollTrigger.create({
+  trigger: '#svc-sale', start: 'top 60%', once: true,
+  onEnter: () => {
+    /* Phone enters with rise + tilt + scale, then settles */
+    gsap.fromTo('#salePhone',
+      { y: 100, autoAlpha: 0, scale: 0.85, rotateX: 14, rotateY: -8 },
+      { y: 0, autoAlpha: 1, scale: 1, rotateX: 0, rotateY: 0,
+        duration: 1.4, ease: 'power4.out', clearProps: 'transform' }
+    );
+
+    /* Notif cards staggered fly-in from off-frame */
+    const notifConfigs = [
+      { sel: '.phone-notif.n1', from: { x: 60,  y: -30, rotate: -3, autoAlpha: 0, scale: 0.8 }, delay: 0.7 },
+      { sel: '.phone-notif.n2', from: { x: -80, y: 0,   rotate: 2,  autoAlpha: 0, scale: 0.8 }, delay: 0.95 },
+      { sel: '.phone-notif.n3', from: { x: 60,  y: 30,  rotate: -2, autoAlpha: 0, scale: 0.8 }, delay: 1.2 },
+    ];
+    notifConfigs.forEach(({ sel, from, delay }) => {
+      gsap.fromTo(sel, from,
+        { x: 0, y: 0,
+          rotate: sel === '.phone-notif.n1' ? -3 : sel === '.phone-notif.n2' ? 2 : -2,
+          autoAlpha: 1, scale: 1,
+          duration: 0.9, delay, ease: 'back.out(1.5)' }
+      );
+    });
+
+    /* Big "+240" tick counter */
+    const tickEl = document.querySelector('#phoneTick [data-saleinc]');
+    if (tickEl) {
+      const t = { v: 0 };
+      gsap.to(t, { v: 240, duration: 2.0, delay: 1.0, ease: 'power2.out',
+        onUpdate: () => { tickEl.textContent = '+' + Math.floor(t.v); }
+      });
+    }
+    gsap.fromTo('#phoneTick',
+      { autoAlpha: 0, y: 20, scale: 0.7 },
+      { autoAlpha: 1, y: 0, scale: 1, duration: 0.7, delay: 0.95, ease: 'back.out(1.6)' }
+    );
+
+    /* Amount in n3 — animates from 0 → 204M */
+    const amtEl = document.querySelector('[data-amt-target]');
+    if (amtEl) {
+      const tgt = parseInt(amtEl.dataset.amtTarget, 10);
+      const t = { v: 0 };
+      gsap.to(t, { v: tgt, duration: 2.4, delay: 1.5, ease: 'power3.out',
+        onUpdate: () => { amtEl.textContent = '+' + Math.floor(t.v) + 'M₫'; }
+      });
+    }
+
+    /* Sale strip — slide up */
+    gsap.fromTo('.sale-strip',
+      { autoAlpha: 0, y: 40 },
+      { autoAlpha: 1, y: 0, duration: 0.8, delay: 1.5, ease: 'power3.out' }
+    );
+  }
+});
+
+/* Phone parallax tilt on cursor inside stage */
+const saleStage = document.getElementById('saleStage');
+const salePhone = document.getElementById('salePhone');
+if (saleStage && salePhone && isPointer) {
+  const notifs = document.querySelectorAll('.phone-notif');
+  saleStage.addEventListener('mousemove', e => {
+    const r = saleStage.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width - 0.5) * 2;
+    const py = ((e.clientY - r.top) / r.height - 0.5) * 2;
+    gsap.to(salePhone, { rotateY: px * 8, rotateX: -py * 6, duration: 0.7, ease: 'power3.out' });
+    notifs.forEach((n, i) => {
+      const depth = (i + 1) * 8;
+      gsap.to(n, { x: px * depth, y: py * depth, duration: 0.7, ease: 'power3.out', overwrite: 'auto' });
+    });
+  });
+  saleStage.addEventListener('mouseleave', () => {
+    gsap.to(salePhone, { rotateX: 0, rotateY: 0, duration: 1, ease: 'elastic.out(1, 0.5)' });
+    notifs.forEach(n => gsap.to(n, { x: 0, y: 0, duration: 1, ease: 'elastic.out(1, 0.4)' }));
+  });
+}
+
+/* Subtle continuous float on the notif cards */
+document.querySelectorAll('.phone-notif').forEach((n, i) => {
+  gsap.to(n, {
+    y: '+=' + (i % 2 === 0 ? 8 : -8),
+    duration: 2.4 + i * 0.3,
+    ease: 'sine.inOut',
+    repeat: -1,
+    yoyo: true,
+    delay: 2 + i * 0.2
+  });
+});
+
+/* ════════ SVC ONSITE — pickup counter ticking up */
+const pickupCountEl = document.getElementById('pickupCount');
+if (pickupCountEl) {
+  ScrollTrigger.create({
+    trigger: '#svc-onsite', start: 'top 65%', once: true,
+    onEnter: () => {
+      const t = { v: 3000 };
+      gsap.to(t, { v: 3847, duration: 2.4, ease: 'power2.out',
+        onUpdate: () => { pickupCountEl.textContent = Math.floor(t.v).toLocaleString('en-US'); }
+      });
+      /* mock pickup card reveal */
+      gsap.from('.mock-pickup-vdv', { x: 80, opacity: 0, duration: 0.8, stagger: 0.15, delay: 0.4, ease: 'back.out(1.4)' });
+      gsap.from('.mock-pickup-top', { y: -30, opacity: 0, duration: 0.7, ease: 'power3.out' });
+    }
+  });
+}
+
+/* ════════ SVC REACH — Network video stage (FX never touch the iframe) ════════ */
+(function reachStageFX(){
+  const stage = document.getElementById('reachStage');
+  if (!stage) return;
+  const frame = stage.querySelector('.reach-frame');
+
+  // Entrance: fade/rise the WHOLE frame once (settles to identity, no overlay).
+  ScrollTrigger.create({
+    trigger: stage, start: 'top 78%', once: true,
+    onEnter: () => {
+      stage.removeAttribute('data-anim');
+      gsap.fromTo(frame,
+        { autoAlpha: 0, y: 44 },
+        { autoAlpha: 1, y: 0, duration: 1.0, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
+      gsap.from(stage.querySelectorAll('.reach-corner'),
+        { scale: 0, opacity: 0, duration: 0.6, stagger: 0.08, delay: 0.35, ease: 'back.out(2)', transformOrigin: 'center' });
+      gsap.from(stage.querySelectorAll('.reach-tag'),
+        { y: 14, autoAlpha: 0, duration: 0.6, stagger: 0.12, delay: 0.5, ease: 'power2.out' });
+    }
+  });
+
+  // Head copy entrance — eyebrow/title/desc/cta + bullets stagger in.
+  ScrollTrigger.create({
+    trigger: '#svc-reach', start: 'top 72%', once: true,
+    onEnter: () => {
+      gsap.from('#svc-reach .reach-head-main > *',
+        { y: 26, autoAlpha: 0, duration: 0.7, stagger: 0.09, ease: 'power2.out' });
+      gsap.from('#svc-reach .reach-head-side .svc-bullet',
+        { x: 24, autoAlpha: 0, duration: 0.6, stagger: 0.1, delay: 0.15, ease: 'power2.out' });
+      gsap.from('#svc-reach .reach-head-side .svc-stat',
+        { y: 18, autoAlpha: 0, duration: 0.6, delay: 0.55, ease: 'power2.out' });
+    }
+  });
+
+  // Gentle parallax drift of the glow halo on scroll (behind the frame, never over it).
+  gsap.to(stage.querySelector('.reach-glow'), {
+    yPercent: 12, ease: 'none',
+    scrollTrigger: { trigger: stage, start: 'top bottom', end: 'bottom top', scrub: 1 }
+  });
+})();
+
+/* ════════ SVC RESULT — portrait video stage reveal */
+gsap.from('.result-stage', {
+  scrollTrigger: { trigger: '#svc-result', start: 'top 72%', once: true },
+  y: 48, autoAlpha: 0, duration: 0.95, ease: 'power3.out'
+});
+
+/* ════════ PRESS — dual lane, opposite directions, hover speed boost */
+const lane1 = document.getElementById('pressLane1');
+const lane2 = document.getElementById('pressLane2');
+if (lane1) {
+  const a1 = gsap.to(lane1, { xPercent: -50, duration: 38, ease: 'none', repeat: -1 });
+  lane1.parentElement.addEventListener('mouseenter', () => a1.timeScale(2.5));
+  lane1.parentElement.addEventListener('mouseleave', () => a1.timeScale(1));
+}
+if (lane2) {
+  gsap.set(lane2, { xPercent: -50 });
+  const a2 = gsap.to(lane2, { xPercent: 0, duration: 46, ease: 'none', repeat: -1 });
+  lane2.parentElement.addEventListener('mouseenter', () => a2.timeScale(2.5));
+  lane2.parentElement.addEventListener('mouseleave', () => a2.timeScale(1));
+}
+
+/* ════════ ECO — draw SVG lines from main → siblings */
+function drawEcoLines() {
+  const svg = document.getElementById('ecoLinesSvg');
+  const grid = document.getElementById('ecoGrid');
+  if (!svg || !grid) return;
+  const main = grid.querySelector('[data-eco="main"]');
+  const siblings = ['ticket','pix','sport'].map(k => grid.querySelector(`[data-eco="${k}"]`));
+  const sec = document.querySelector('.eco');
+  const secRect = sec.getBoundingClientRect();
+  const w = sec.clientWidth, h = sec.clientHeight;
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.style.width = w + 'px'; svg.style.height = h + 'px';
+  if (!main) return;
+  const mr = main.getBoundingClientRect();
+  const mx = mr.right - secRect.left;
+  const my = mr.top + mr.height / 2 - secRect.top;
+  svg.innerHTML = siblings.map(sib => {
+    if (!sib) return '';
+    const r = sib.getBoundingClientRect();
+    const sx = r.left - secRect.left;
+    const sy = r.top + r.height / 2 - secRect.top;
+    const cx = (mx + sx) / 2;
+    return `<path d="M${mx} ${my} C${cx} ${my} ${cx} ${sy} ${sx} ${sy}"/>`;
+  }).join('');
+}
+window.addEventListener('load', () => setTimeout(drawEcoLines, 400));
+window.addEventListener('resize', () => setTimeout(drawEcoLines, 200));
+ScrollTrigger.create({
+  trigger: '.eco', start: 'top 75%', once: true,
+  onEnter: () => {
+    drawEcoLines();
+    setTimeout(() => document.getElementById('ecoLinesSvg').classList.add('drawn'), 100);
+  }
+});
+
+/* ════════ TESTI — 3D entrance + author hover */
+ScrollTrigger.create({
+  trigger: '.testi', start: 'top 75%', once: true,
+  onEnter: () => {
+    gsap.fromTo('.testi-card',
+      { y: 80, autoAlpha: 0, rotateY: -18 },
+      { y: 0, autoAlpha: 1, rotateY: 0, duration: 1, stagger: 0.15,
+        ease: 'power3.out', overwrite: 'auto', clearProps: 'transform' }
+    );
+  }
+});
+
+/* ════════ FAQ — close all then open one at a time */
+document.querySelectorAll('.faq-item').forEach(item => {
+  /* override default toggle to close siblings */
+});
+const faqQs = document.querySelectorAll('.faq-q');
+faqQs.forEach(q => {
+  q.addEventListener('click', e => {
+    const item = q.closest('.faq-item');
+    const wasOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(o => o.classList.remove('open'));
+    if (!wasOpen) item.classList.add('open');
+  }, true);
+});
+
+/* FAQ stagger entrance — replace generic batch with rotation */
+ScrollTrigger.create({
+  trigger: '.faq-list', start: 'top 80%', once: true,
+  onEnter: () => {
+    gsap.fromTo('.faq-item',
+      { x: -40, autoAlpha: 0 },
+      { x: 0, autoAlpha: 1, duration: 0.7, stagger: 0.08,
+        ease: 'power3.out', overwrite: 'auto', clearProps: 'transform' }
+    );
+  }
+});
+
+/* ════════ CTA — char-split title + magnetic + orbit tags */
+const ctaTitle = document.querySelector('.cta-title');
+if (ctaTitle) {
+  /* Wrap each char in span */
+  const html = ctaTitle.innerHTML;
+  ctaTitle.innerHTML = html.replace(/(<[^>]+>)|(\s)|(.)/g, (m, tag, space, ch) => {
+    if (tag) return tag;
+    if (space) return '<span class="char">&nbsp;</span>';
+    return `<span class="char">${ch}</span>`;
+  });
+  ScrollTrigger.create({
+    trigger: '.cta', start: 'top 65%', once: true,
+    onEnter: () => {
+      gsap.from('.cta-title .char', {
+        yPercent: 120, rotateX: -80, opacity: 0,
+        duration: 1.1, stagger: { each: 0.025, from: 'start' }, ease: 'back.out(1.5)'
+      });
+      gsap.from('.cta-eyebrow', { y: 30, opacity: 0, duration: 0.7, delay: 0.2, ease: 'power3.out' });
+      gsap.from('.cta-sub', { y: 30, opacity: 0, duration: 0.7, delay: 0.5, ease: 'power3.out' });
+      gsap.from('.cta-btns .btn', { y: 30, opacity: 0, duration: 0.6, stagger: 0.1, delay: 0.7, ease: 'back.out(1.4)' });
+    }
+  });
+}
+
+/* Inject orbit tags on the rotor */
+const ctaRotor = document.getElementById('ctaRotor');
+if (ctaRotor) {
+  const tags = ['CHIP TIMING', '24H BÁO GIÁ', 'DEMO 15 PHÚT', 'Q1·2026'];
+  tags.forEach((txt, i) => {
+    const el = document.createElement('div');
+    el.className = 'cta-orbit-tag';
+    el.textContent = '★ ' + txt;
+    const angle = (360 / tags.length) * i;
+    const radius = 'min(48vh, 460px)';
+    el.style.left = '50%'; el.style.top = '50%';
+    el.style.transform = `translate(-50%, -50%) rotate(${angle}deg) translateY(calc(-1 * ${radius})) rotate(${-angle}deg)`;
+    ctaRotor.appendChild(el);
+  });
+  /* Rotor speed boost on hover near CTA */
+  const cta = document.querySelector('.cta');
+  cta.addEventListener('mouseenter', () => ctaRotor.style.animationDuration = '20s');
+  cta.addEventListener('mouseleave', () => ctaRotor.style.animationDuration = '80s');
+}
+
+/* ════════ Showcase frame parallax tilt on mouse */
+const showcaseFrame = document.querySelector('.showcase-frame');
+if (showcaseFrame && isPointer) {
+  showcaseFrame.addEventListener('mousemove', e => {
+    const r = showcaseFrame.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    gsap.to(showcaseFrame, { rotateY: px * 6, rotateX: -py * 4, duration: 0.7, ease: 'power3.out' });
+  });
+  showcaseFrame.addEventListener('mouseleave', () => {
+    gsap.to(showcaseFrame, { rotateX: 0, rotateY: 0, duration: 1, ease: 'elastic.out(1, 0.5)' });
+  });
+}
+
+/* ════════ Iframe content normalizer — aggressive sweep
+   The video bundle uses document.open()/write() after async unpacking which WIPES our
+   injected style + invalidates any MutationObserver. So we run a sweep on a continuous
+   interval (every 250ms for 15s, then every 1s indefinitely) that:
+     1. Ensures our <style data-5bib-norm> is in iframe head (re-inject if gone)
+     2. Force-paints any cream-colored element dark via inline style.setProperty important
+   We always re-fetch iframe.contentDocument fresh each tick — bundle may have replaced it. */
+function normalizeBundledIframe(iframe, frameBg) {
+  if (!iframe) return;
+  const creamColors = new Set([
+    'rgb(250, 249, 245)', 'rgb(247, 245, 241)', 'rgb(255, 255, 255)',
+    'rgb(255, 252, 246)', 'rgba(250, 249, 245, 1)'
+  ]);
+  const sweep = () => {
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.body || !doc.head) return;
+      /* 1. Ensure style tag is present */
+      if (!doc.querySelector('style[data-5bib-norm]')) {
+        const style = doc.createElement('style');
+        style.setAttribute('data-5bib-norm', '1');
+        style.textContent = `
+          html, body { background: ${frameBg} !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; min-height: 0 !important; width: 100% !important; height: 100% !important; }
+          #root, #root > * { background: ${frameBg} !important; }
+          #root, #root > div:first-child { width: 100% !important; height: 100% !important; }
+          #__bundler_thumbnail, #__bundler_loading { background: ${frameBg} !important; display: none !important; }
+        `;
+        doc.head.appendChild(style);
+      }
+      /* 2. Force-paint cream elements */
+      const all = doc.querySelectorAll('body, body *');
+      let painted = 0;
+      all.forEach(el => {
+        const bg = getComputedStyle(el).backgroundColor;
+        if (creamColors.has(bg)) {
+          el.style.setProperty('background', frameBg, 'important');
+          el.style.setProperty('background-color', frameBg, 'important');
+          painted++;
+        }
+      });
+      return painted;
+    } catch (e) {/* CORS / doc replaced mid-iter */ }
+  };
+  /* Fast phase: every 200ms for first 8s — catch bundle unpacking + React init */
+  let fastTicks = 0;
+  const fastIv = setInterval(() => {
+    sweep();
+    if (++fastTicks > 40) {
+      clearInterval(fastIv);
+      /* Slow phase: every 1.5s forever — catch any late re-render */
+      setInterval(sweep, 1500);
+    }
+  }, 200);
+  /* Also sweep immediately if iframe already loaded */
+  sweep();
+  iframe.addEventListener('load', () => { fastTicks = 0; sweep(); });
+}
+normalizeBundledIframe(document.querySelector('iframe[src="/solution-v2/awakening-video.html"]'), '#FAF8F5');
+/* network-wakes-up: cream killed at source (S.page transparent) + fills 16:9 frame, so no sweep needed.
+   It is now interactive (pointer-events:auto) — hand the custom cursor off so the page dot
+   doesn't freeze at the edge; the video draws its own matching dot inside. */
+(function videoCursorHandoff(){
+  const cur = document.querySelector('.cursor');
+  if (!cur) return;
+  ['/solution-v2/network-wakes-up.html','/solution-v2/finish-line.html','/solution-v2/three-seconds.html'].forEach(src => {
+    const ifr = document.querySelector('iframe[src="'+src+'"]');
+    if (!ifr) return;
+    ifr.addEventListener('mouseenter', () => { cur.style.opacity = '0'; });
+    ifr.addEventListener('mouseleave', () => { cur.style.opacity = '1'; });
+  });
+})();
+
+/* Refresh ScrollTrigger after all new triggers added */
+setTimeout(() => ScrollTrigger.refresh(), 800);
+</script>
+
+</body>
+</html>
