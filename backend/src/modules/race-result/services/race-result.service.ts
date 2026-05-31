@@ -21,7 +21,8 @@ import { isStaffOrHigher } from '../../logto-auth/permissions.helper';
 import { TelegramService } from '../../notification/telegram.service';
 import { MailService } from '../../notification/mail.service';
 import { UploadService } from '../../upload/upload.service';
-import { parseDistanceKm } from './badge.service';
+import { parseDistanceKm as parseDistanceKmForBadge } from './badge.service';
+import { parseDistanceKm } from '../utils/parse-distance-km';
 import { RaceResultApiService } from './race-result-api.service';
 import { RaceResultApiItem } from '../types/race-result-api.types';
 import * as crypto from 'crypto';
@@ -914,8 +915,7 @@ export class RaceResultService {
 
     // Compute avgSpeed for pace alert baseline (BR-02)
     // speed in km/h = distanceKm / chipTimeHours
-    const distanceKmMatch = (result.distance || '').match(/[\d.]+/);
-    const distanceKm = distanceKmMatch ? parseFloat(distanceKmMatch[0]) : null;
+    const distanceKm = parseDistanceKm(result.distance);
     let avgSpeed: number | null = null;
     if (distanceKm && result.chipTime) {
       const parts = result.chipTime.split(':').map(Number);

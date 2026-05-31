@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import confetti from 'canvas-confetti';
 import { useTranslation } from 'react-i18next';
 import { countryToFlag } from '@/lib/country-flags';
+import { parseDistanceKm } from '@/lib/parse-distance-km';
 import { useRaceBySlug, useAthleteDetail, useSubmitClaim, useUploadClaimAttachment } from '@/lib/api-hooks';
 import ResultImageCreator from '@/components/result-image/ResultImageCreator';
 import CelebrationOverlay, {
@@ -1217,10 +1218,7 @@ export default function AthleteDetailPage() {
                 isPaceAlert: s.isPaceAlert,
               }))}
               avgPace={athlete.Pace}
-              distanceKm={(() => {
-                const m = String(athlete.distance ?? '').match(/(\d+(?:\.\d+)?)/);
-                return m ? parseFloat(m[1]) : undefined;
-              })()}
+              distanceKm={parseDistanceKm(athlete.distance) ?? undefined}
             />
           </div>
         )}

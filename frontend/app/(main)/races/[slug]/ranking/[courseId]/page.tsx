@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import LiveTimer from '@/components/LiveTimer';
 import { countryToFlag } from '@/lib/country-flags';
+import { parseDistanceKm } from '@/lib/parse-distance-km';
 import { useRaceBySlug, useFilterOptions, useRaceSponsors, useRaceResults, useCourseStats } from '@/lib/api-hooks';
 import { useStarredBibsByCourse } from '@/lib/hooks/use-athlete-stars';
 import StarAthleteButton from '@/components/StarAthleteButton';
@@ -875,7 +876,7 @@ export default function CourseRankingPage() {
 
 /* ─── Speed helper ─── */
 function computeSpeed(result: RaceResult): string | null {
-  const distKm = result.distance ? parseFloat(result.distance) : null;
+  const distKm = parseDistanceKm(result.distance);
   if (!distKm || !result.ChipTime) return null;
   const parts = result.ChipTime.split(':').map(Number);
   const hours = parts.length === 3
