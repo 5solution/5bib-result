@@ -70,6 +70,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06081A}
 <script>
 (function(){
   "use strict";
+  var PLAY = true; // toggled by parent via postMessage when scrolled off-screen
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var cv = document.getElementById("scope");
   var ctx = cv.getContext("2d");
@@ -115,6 +116,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06081A}
   }
 
   function loop(){
+    if(!PLAY) return;
     ctx.clearRect(0,0,W,H);
     for(var i=0;i<lanes.length;i++) drawLane(lanes[i]);
     requestAnimationFrame(loop);
@@ -197,6 +199,16 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06081A}
     spawnChip();
     gsap.delayedCall(0.9, function rep(){ spawnChip(); gsap.delayedCall(0.85+Math.random()*0.7, rep); });
   }
+
+  /* ── perf: pause/resume when parent reports off/on-screen ── */
+  window.addEventListener("message", function(e){
+    if(!e.data || e.data.__5bibAnim===undefined || reduced) return;
+    var p = !!e.data.__5bibAnim;
+    if(p===PLAY) return;
+    PLAY = p;
+    if(window.gsap){ p ? gsap.globalTimeline.resume() : gsap.globalTimeline.pause(); }
+    if(p) requestAnimationFrame(loop);
+  });
 })();
 </script>
 </body>

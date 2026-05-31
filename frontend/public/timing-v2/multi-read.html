@@ -493,6 +493,16 @@ html,body{margin:0;overflow:hidden;background:#0a0c1e;width:100%;height:100%}
       gsap.delayedCall(1.15, repeat);
     });
   }
+
+  /* ── perf: pause/resume when parent reports off/on-screen ── */
+  window.addEventListener("message", function(e){
+    if(!e.data || e.data.__5bibAnim===undefined || reduced) return;
+    var p = !!e.data.__5bibAnim;
+    if(p===rafOn) return;
+    if(window.gsap){ p ? gsap.globalTimeline.resume() : gsap.globalTimeline.pause(); }
+    if(p){ rafOn = true; requestAnimationFrame(loop); }
+    else { rafOn = false; }
+  });
 })();
 </script>
 </body>
