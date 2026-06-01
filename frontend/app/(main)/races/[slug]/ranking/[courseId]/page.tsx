@@ -937,13 +937,6 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
     return '';
   };
 
-  const getMedalEmoji = (r: number) => {
-    if (r === 1) return '🥇';
-    if (r === 2) return '🥈';
-    if (r === 3) return '🥉';
-    return '';
-  };
-
   const formatName = (name: string) =>
     name.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
@@ -958,8 +951,8 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
         {isUpcoming ? (
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs bg-slate-50 text-slate-300">-</div>
         ) : isTop3 ? (
-          <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-lg ${getMedalColor(rank)}`}>
-            {getMedalEmoji(rank as number)}
+          <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-base ${getMedalColor(rank)}`}>
+            {rank}
           </div>
         ) : (
           <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>
@@ -1099,13 +1092,6 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
     return 'bg-slate-100 text-slate-600';
   };
 
-  const getMedalEmoji = (r: number) => {
-    if (r === 1) return '🥇';
-    if (r === 2) return '🥈';
-    if (r === 3) return '🥉';
-    return '';
-  };
-
   const getMobileBg = () => {
     if (selected) return 'bg-blue-50/40';
     if (rank === 1) return 'bg-amber-50/60 border-l-4 border-l-amber-400';
@@ -1126,8 +1112,8 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
         {isUpcoming ? (
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs bg-slate-50 text-slate-300 shrink-0">-</div>
         ) : isTop3 ? (
-          <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-lg shrink-0 ${getMedalColor(rank)}`}>
-            {getMedalEmoji(rank as number)}
+          <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-base shrink-0 ${getMedalColor(rank)}`}>
+            {rank}
           </div>
         ) : (
           <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black shrink-0 ${typeof rank === 'string' ? 'text-[10px]' : 'text-sm'} ${getMedalColor(rank)}`}>

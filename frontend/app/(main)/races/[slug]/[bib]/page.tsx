@@ -391,10 +391,6 @@ export default function AthleteDetailPage() {
   };
 
   const formatRank = (rank: string) => {
-    const num = parseInt(rank);
-    if (num === 1) return '🥇';
-    if (num === 2) return '🥈';
-    if (num === 3) return '🥉';
     return `#${rank}`;
   };
 
