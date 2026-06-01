@@ -759,6 +759,29 @@ Xem `conventions.md` section "DOCX Template Content Review Protocol (F-044 lesso
 
 ---
 
+## F-068 (2026-06-01) Course Data Ops UX
+
+### ✅ RESOLVED by F-068
+
+- **Pre-existing `deleteResultsByCourse(courseId)` cross-race wipe** (Manager catch 2026-05-31 PROD audit `lets-run-2026`) — F-068 BR-68-10 fix `(raceId, courseId)` signature + `deleteMany({raceId, courseId})` filter. Regression TC-68-14 in `race-result.service.spec.ts`.
+- **Pre-existing `purgeCache(courseId)` pattern mismatch** (Manager catch 2026-05-31) — F-068 BR-68-11 fix race-namespaced patterns + NEW `athlete:<raceId>:*` + `badge:<raceId>:*` invalidation. Regression TC-68-15 in `race-result.service.spec.ts`.
+- **TD-F029-05 admin.service.spec.ts DI setup PARTIAL** — F-068 added TelegramService + MailService mocks. 12/14 PASS now (vs 0/14 before). 2 remaining resolveClaim spec failures still pre-existing unrelated.
+
+### 🟡 Tech Debt logged by F-068
+
+| ID | Severity | Module | Issue | Plan |
+|----|----------|--------|-------|------|
+| **TD-F068-LEADERBOARD-CACHE-NAMESPACE** 🟡 LOW | race-result.service | `leaderboard:<courseId>` + `time-distribution:<courseId>` + `country-stats:<courseId>` WRITE keys NOT raceId-namespaced (READ methods don't carry raceId — API shape change required to fix). F-068 scope kept legacy single-courseId. | Q3 2026 — REFACTOR controller path to `/leaderboard/:raceId/:courseId` etc. |
+| **TD-F068-COURSE-ACTOR-CARRY-FORWARD** 🟡 LOW | admin / audit | All 3 audit actions (`course.apiUrl.cleared`, `course.disabled_and_reset`, `course.data_reset`) log `actor: { userId: 'admin' }` hardcode. Cannot attribute race-day forensics to specific admin. Carry-forward TD-CONTRACTS-ACTOR-001 (F-066/F-067/F-068 all share). | F-069 mandate — extract JWT user from Logto guard, thread `@CurrentUser()` through 3 admin emit + F-066 + F-067 contract emit sites. ~30 min total effort. |
+| **TD-F068-CRON-STUCK-DETECT** 🟢 LOW | race-sync.cron + admin | BR-68-15 ">60s log warn if isSyncing continuous" not implemented — stateless endpoint cannot track continuous duration without server-side state (Redis counter or in-memory `Date` tracking). | Defer until ops surfaces concrete need (race-day cron hanging report). |
+| **TD-F068-SDK-REGEN-PENDING** 🟡 LOW | admin / api-generated | Hand-typed fetch wrappers in `course-data-ops-api.ts` (Deviation #2). QC declined to run regen without local backend. | **DEPLOY DAY MANDATE** — Manager run `pnpm --filter admin generate:api` against running backend AFTER merge + verify DTO shape parity vs hand-typed. Optional refactor admin code to use generated SDK functions. |
+| **TD-F068-PERF-NOT-MEASURED** 🟢 LOW | course-data-ops.service | Cold/warm p95 + reset 10K rows not benchmarked locally (no backend up during QC). | Staging smoke mandate — autocannon 60s GET data-stats (cold + warm) + k6 100 iter POST disable-and-reset 10K rows. |
+| **TD-F068-ORPHAN-PERCENTILE** 🟢 LOW | race-result.service.purgeCache | Kept `percentile:*:*` + `percentile:v2:*:*` legacy patterns (orphaned post-F-029) "for housekeeping" — wastes Redis KEYS scan per purge call (typically 0 results). | Q3 2026 housekeeping batch — verify orphan keys truly absent + remove patterns. |
+| **TD-F068-LOCK-TOKEN-LITERAL** 🟢 LOW | course-data-ops.service.acquireResetLock | Lock value `'1'` literal. No safe-release Lua script — crash recovery relies on 30s TTL. Single-process backend acceptable. | F-070+ if multi-instance backend deployment introduced. Pattern: UUID lock token + Lua DEL-if-matches script. |
+| **TD-F068-CRON-MID-FLIGHT-RACE** 🟢 LOW | course-data-ops.service.disableAndReset | Cron `getRacesWithApiUrls()` may snapshot race.courses BEFORE Step 1 clear apiUrl + write rows AFTER Step 3 deleteMany. Mitigated by 5s `waitForCronIdle`; residual race window. | Acceptable per BR-68-08 timeout-and-continue contract. Documented for future awareness if ops surface "data quay lại sau reset" complaint. |
+
+---
+
 ## Q2 Contract Revamp 2026-05-26 (F-064 + F-065 + F-066 + F-067 BUNDLE)
 
 ### 🔴 TD-RACE-CONDITION-PARALLEL-AGENTS (HIGH process)

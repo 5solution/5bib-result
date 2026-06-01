@@ -2023,6 +2023,212 @@ F-006 added 4 fields → all 3 DTO synced. Pre-commit check: POST với new fiel
 
 ---
 
+## 🔒 Redis SETNX Lock Pattern for Concurrent Mutation (F-068 mint 2026-06-01, port F-018/F-019)
+
+Khi cần serialize concurrent admin/user mutation trên cùng resource (vd: reset data, podium publish, medical incident transition):
+
+**Pattern:**
+
+```typescript
+// In service constructor: inject Redis
+@InjectRedis() private readonly redis: Redis,
+
+// Lock TTL — chọn theo expected mutation duration (5s short / 30s medium)
+private readonly RESET_LOCK_TTL_SECONDS = 30;
+
+private async acquireResetLock(raceId: string, courseId: string): Promise<() => Promise<void>> {
+  const key = `reset-lock:${raceId}:${courseId}`;
+  const acquired = await this.redis.set(
+    key,
+    '1',
+    'EX',
+    this.RESET_LOCK_TTL_SECONDS,
+    'NX',  // ← atomic acquire only if NOT exist
+  );
+  if (acquired !== 'OK') {
+    throw new ConflictException({
+      statusCode: 409,
+      code: 'RESET_IN_PROGRESS',  // ← <DOMAIN>_IN_PROGRESS convention
+      message: 'Đang có người khác xóa, chờ vài giây',  // ← VN message
+    });
+  }
+  return async () => {
+    try {
+      await this.redis.del(key);
+    } catch (err: any) {
+      this.logger.warn(`Failed to release ${key}: ${err.message}`);
+    }
+  };
+}
+
+// Caller pattern (MANDATORY try/finally — never leak lock):
+async disableAndReset(raceId, courseId, dto) {
+  // Pre-checks BEFORE lock acquire (404, race=live confirm) — avoid lock leak
+  const { race } = await this.loadRaceAndCourse(raceId, courseId);
+  this.assertLiveConfirmation(race, dto.confirmedLive);
+
+  const release = await this.acquireResetLock(raceId, courseId);
+  try {
+    // ... mutation steps ...
+  } finally {
+    await release();
+  }
+}
+```
+
+**Key conventions:**
+- Lock key: `<domain>-lock:<resourceId>` — vd `reset-lock:<raceId>:<courseId>`, `awards:state-lock:<podiumId>`, `medical:incident-lock:<incidentId>`
+- Lock value `'1'` literal acceptable cho single-process backend. Multi-instance + crash recovery → consider UUID token + Lua DEL-if-matches script (F-070+ if needed)
+- TTL ≥ expected mutation duration × 2 (safety margin for slow Mongo writes)
+- Error code `<DOMAIN>_IN_PROGRESS` convention — frontend matches via `err.code` toast routing
+- Pre-checks (404, confirm gate) BEFORE acquire — avoid lock leak on rejection path
+- `try/finally` mandatory — even when mutation throws
+
+**Existing implementations:** F-018 medical-incident-lock (5s), F-019 awards:state-lock (5s), F-068 reset-lock (30s).
+
+---
+
+## 🔄 Cron Lifecycle Expose for UI Feedback (F-068 mint 2026-06-01)
+
+Khi admin UI cần hiển thị cron status (next scheduled run, currently running):
+
+**Pattern:**
+
+```typescript
+@Injectable()
+export class RaceSyncCron {
+  private isSyncing = false;  // ← giữ private — KHÔNG expose field
+
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async handleCron() {
+    if (this.isSyncing) return;
+    try { this.isSyncing = true; /* ... */ }
+    finally { this.isSyncing = false; }
+  }
+
+  // ✅ Public getter — preserve encapsulation
+  isCurrentlySync(): boolean {
+    return this.isSyncing;
+  }
+
+  // ✅ Compute next run từ CronExpression constant
+  getNextScheduledRunAt(now: Date = new Date()): Date | null {
+    if (this.isSyncing) return null;  // caller marks cronStatus='in_progress'
+
+    const interval = RACE_SYNC_CRON_INTERVAL_MINUTES;  // export constant
+    const next = new Date(now.getTime());
+    next.setUTCSeconds(0, 0);
+    const minutes = next.getUTCMinutes();
+    const nextMark = Math.floor(minutes / interval) * interval + interval;
+    if (nextMark >= 60) {
+      next.setUTCHours(next.getUTCHours() + 1, nextMark - 60, 0, 0);
+    } else {
+      next.setUTCMinutes(nextMark, 0, 0);
+    }
+    return next;
+  }
+}
+```
+
+**Key conventions:**
+- KHÔNG expose `isSyncing` thành public field — break encapsulation. Dùng public method.
+- `getNextScheduledRunAt()` ALWAYS rounds UP to NEXT mark (avoid past Date once tick already started)
+- Handle hour rollover (`nextMark >= 60`) + day rollover (via `setUTCHours`)
+- Export `CRON_INTERVAL_MINUTES` constant để service caller + tests + future cron-aware UI dùng cùng source of truth
+- Return `null` from `getNextScheduledRunAt()` when `isSyncing=true` → caller maps to `cronStatus: 'in_progress'`
+
+**Existing:** F-068 RaceSyncCron (EVERY_10_MINUTES). Reusable for any cron with admin-visible UI feedback need.
+
+---
+
+## 📊 Admin Polling Endpoint with Short TTL Redis Cache Wrap (F-068 mint 2026-06-01)
+
+Khi admin UI poll per-resource stats (vd: course row count, sync status, lock state):
+
+**Pattern:**
+
+```typescript
+private readonly STATS_CACHE_TTL_SECONDS = 5;  // ← short TTL — bounds multi-admin cost
+
+private statsCacheKey(raceId: string, courseId: string): string {
+  return `admin:course-stats:${raceId}:${courseId}`;  // ← admin: prefix scope
+}
+
+async getStats(raceId: string, courseId: string): Promise<CourseDataStatsResponseDto> {
+  const cacheKey = this.statsCacheKey(raceId, courseId);
+
+  // 1. Try cache (best-effort — log warn if Redis throws)
+  try {
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return JSON.parse(cached) as CourseDataStatsResponseDto;
+  } catch (err: any) {
+    this.logger.warn(`Redis GET stats failed: ${err.message}`);
+  }
+
+  // 2. Verify resource exists (404 fast-fail before Mongo work)
+  const { course } = await this.loadRaceAndCourse(raceId, courseId);
+
+  // 3. Parallel fetch — Promise.all halves cold p95
+  const [rowCount, lastLog] = await Promise.all([
+    this.resultModel.countDocuments({ raceId, courseId }).exec(),
+    this.syncLogModel.findOne({ raceId, courseId }).sort({ created_at: -1 }).lean().exec(),
+  ]);
+
+  const dto = { /* build response */ };
+
+  // 4. Cache SET (best-effort)
+  try {
+    await this.redis.set(cacheKey, JSON.stringify(dto), 'EX', this.STATS_CACHE_TTL_SECONDS);
+  } catch (err: any) {
+    this.logger.warn(`Redis SET stats failed: ${err.message}`);
+  }
+
+  return dto;
+}
+
+// MANDATORY: DEL cache on EVERY mutation in this domain
+private async invalidateStatsCache(raceId: string, courseId: string): Promise<void> {
+  try {
+    await this.redis.del(this.statsCacheKey(raceId, courseId));
+  } catch (err: any) {
+    this.logger.warn(`Redis DEL stats failed: ${err.message}`);
+  }
+}
+```
+
+**Frontend polling pattern (TanStack Query):**
+
+```typescript
+export function useCourseDataStats(raceId, courseId) {
+  return useQuery({
+    queryKey: ['course-data-stats', raceId, courseId],
+    queryFn: () => fetchCourseDataStats(raceId, courseId),
+    enabled: Boolean(raceId) && Boolean(courseId),
+    staleTime: 0,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,  // ← default — pause on tab blur (cost control)
+  });
+}
+
+// Mutation invalidates immediately:
+useResetCourseData(raceId, courseId).mutateAsync().then(() => {
+  queryClient.invalidateQueries({ queryKey: ['course-data-stats', raceId, courseId] });
+});
+```
+
+**Key conventions:**
+- Cache key prefix `admin:<domain>-stats:<resourceId>` — scope to admin reads only
+- TTL **5s** default — bounds multi-admin cost: 5s × N admins → max N hits/5s per resource regardless of admin count
+- Always re-verify resource exists (404) — never serve cached stats for deleted resource
+- Parallel fetch (`Promise.all`) — halves cold p95 vs sequential awaits
+- Best-effort Redis (try/catch + log warn) — never throw on cache miss/error, always fall through to Mongo
+- DEL cache on EVERY mutation (delete row, clear apiUrl, force sync, etc.)
+- Frontend: `refetchIntervalInBackground: false` default — pause polling on tab blur
+
+**Existing:** F-068 `admin:course-stats:` (5s). Reusable for future admin polling endpoints.
+
+---
+
 ## ✏️ Cách Manager update file này
 
 Khi feature mới ship (`/5bib-deploy`):
