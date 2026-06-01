@@ -329,18 +329,44 @@ export class RaceResultService {
     }
   }
 
-  async purgeCache(courseId: string): Promise<number> {
+  /**
+   * F-068 BR-68-11: purgeCache signature change `(courseId)` → `(raceId, courseId)`.
+   *
+   * Pre-existing bug Manager catch 2026-05-31 audit `lets-run-2026`:
+   *  - Real cache key format `results:<raceId>:<courseId>:<page>:<filtersHash>` (line 618),
+   *    but legacy pattern `results:<courseId>:*` matched NOTHING → cache stale 24h.
+   *  - Missing `athlete:<raceId>:*` + `badge:<raceId>:*` invalidation → stale data
+   *    on detail page post-reset.
+   *
+   * Backward-compat: callers that don't have raceId can pass empty string and skip
+   * raceId-namespaced patterns (best-effort — used by claim resolve path with
+   * `claim.raceId` available, all callers updated).
+   *
+   * NOTE: `leaderboard:<courseId>` + `time-distribution:<courseId>` +
+   * `country-stats:<courseId>` keys KEEP single-courseId format because their
+   * WRITE sites (lines 880, 1344, 1453) use the same format. Renaming requires
+   * READ method signature change — out of F-068 scope (see IMPLEMENTATION_NOTES
+   * Section 1 Deviation). Documented as TD-F068-LEADERBOARD-CACHE-NAMESPACE.
+   */
+  async purgeCache(raceId: string, courseId: string): Promise<number> {
     try {
-      const patterns = [
-        `results:${courseId}:*`,
+      const patterns: string[] = [
+        // Race-namespaced patterns (Manager catch 2026-05-31 — F-068 fix)
+        `results:${raceId}:${courseId}:*`,
+        `stats:${raceId}:${courseId}`,
+        `country-rank:${raceId}:*`,
+        `percentile:v3:${raceId}:*`,
+        // NEW invalidations per BR-68-11 — race-scoped athlete/badge cache
+        `athlete:${raceId}:*`,
+        `badge:${raceId}:*`,
+        // Legacy single-courseId WRITE format — kept to match READ paths
+        // (leaderboard/time-distribution/country-stats — out of F-068 scope)
         `leaderboard:${courseId}`,
-        `stats:${courseId}`,
         `time-distribution:${courseId}`,
         `country-stats:${courseId}`,
-        `country-rank:*:*`,
-        `percentile:*:*`, // legacy v1 keys
-        `percentile:v2:*:*`, // v2 (had MM:SS parser bug — orphan them)
-        `percentile:v3:*:*`,
+        // Orphaned legacy keys from pre-F-029 era — included for housekeeping
+        `percentile:*:*`,
+        `percentile:v2:*:*`,
       ];
       let deleted = 0;
       for (const pattern of patterns) {
@@ -411,8 +437,8 @@ export class RaceResultService {
             course.apiUrl,
           );
 
-          // Purge cache after successful sync
-          await this.purgeCache(course.courseId);
+          // Purge cache after successful sync (F-068 BR-68-11: raceId-namespaced)
+          await this.purgeCache(raceId, course.courseId);
 
           await this.syncLogModel.create({
             raceId,
@@ -453,7 +479,7 @@ export class RaceResultService {
     const startTime = Date.now();
     try {
       const count = await this.syncRaceResult(raceId, courseId, distance, apiUrl);
-      await this.purgeCache(courseId);
+      await this.purgeCache(raceId, courseId);
       await this.syncLogModel.create({
         raceId,
         courseId,
@@ -1793,9 +1819,16 @@ export class RaceResultService {
 
   // ─── Admin helpers ────────────────────────────────────────────
 
-  async deleteResultsByCourse(courseId: string) {
-    const result = await this.resultModel.deleteMany({ courseId }).exec();
-    await this.purgeCache(courseId);
+  /**
+   * F-068 BR-68-10: signature change `(courseId)` → `(raceId, courseId)`.
+   *
+   * Pre-existing bug Manager catch 2026-05-31: filter `{ courseId }` ONLY would
+   * wipe cross-race data if 2 races share the same courseId (vd "200m"). 5BIB
+   * unique index is `{raceId, courseId, bib}` — courseId NOT globally unique.
+   */
+  async deleteResultsByCourse(raceId: string, courseId: string) {
+    const result = await this.resultModel.deleteMany({ raceId, courseId }).exec();
+    await this.purgeCache(raceId, courseId);
     return result.deletedCount;
   }
 
@@ -1898,7 +1931,7 @@ export class RaceResultService {
             $set: { isManuallyEdited: true },
           },
         ).exec();
-        await this.purgeCache(claim.courseId);
+        await this.purgeCache(claim.raceId, claim.courseId);
         await this.redis.del(`athlete:${result.raceId}:${claim.bib}`);
         await this.claimModel.updateOne({ _id: claimId }, { $set: { autoUpdated: true } }).exec();
       }
@@ -1974,7 +2007,7 @@ export class RaceResultService {
     // Result-image S3 cache self-invalidates because `updated_at` flows into
     // the cache key (see ResultImageService.computeCacheKey athleteSnapshot.v).
     if (updated) {
-      await this.purgeCache(updated.courseId);
+      await this.purgeCache(updated.raceId, updated.courseId);
       await this.redis.del(`athlete:${updated.raceId}:${updated.bib}`);
       // Edit may change podium / PB eligibility — wipe this athlete's badges.
       // When overallRank changes, sibling podium athletes (rank 1-3) could
@@ -2107,7 +2140,7 @@ export class RaceResultService {
       .lean()
       .exec();
 
-    if (updated?.courseId) await this.purgeCache(updated.courseId);
+    if (updated?.courseId) await this.purgeCache(updated.raceId, updated.courseId);
 
     return { success: true, avatarUrl: url };
   }

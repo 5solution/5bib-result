@@ -138,12 +138,22 @@ export class AdminController {
     return this.adminService.editResult(resultId, fields, reason, adminId);
   }
 
-  @Post('cache/purge/:courseId')
-  @ApiOperation({ summary: 'Purge Redis cache for a course' })
+  @Post('cache/purge/:raceId/:courseId')
+  @ApiOperation({
+    summary: 'Purge Redis cache for a course (F-068: raceId-namespaced)',
+    description:
+      'F-068 BR-68-11: endpoint path changed from `/cache/purge/:courseId` ' +
+      'to `/cache/purge/:raceId/:courseId` because cache keys are raceId-namespaced. ' +
+      'Old endpoint pattern matched 0 keys (Manager catch 2026-05-31).',
+  })
+  @ApiParam({ name: 'raceId', type: 'string' })
   @ApiParam({ name: 'courseId', type: 'string' })
   @ApiResponse({ status: 200, description: 'Cache purged' })
-  async purgeCache(@Param('courseId') courseId: string) {
-    return this.adminService.purgeCache(courseId);
+  async purgeCache(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+  ) {
+    return this.adminService.purgeCache(raceId, courseId);
   }
 
   @Get('race-results/athlete/:raceId/:bib')

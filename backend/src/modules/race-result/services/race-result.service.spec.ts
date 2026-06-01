@@ -987,17 +987,68 @@ describe('RaceResultService', () => {
   // ─── purgeCache ───────────────────────────────────────────────
 
   describe('purgeCache', () => {
-    it('should delete cache keys matching course patterns', async () => {
-      mockRedis.keys
-        .mockResolvedValueOnce(['results:c708:1:abc'])
-        .mockResolvedValueOnce(['leaderboard:c708'])
-        .mockResolvedValueOnce(['stats:c708']);
-      mockRedis.del.mockResolvedValue(1);
+    it('F-068 BR-68-11: signature (raceId, courseId) + race-namespaced patterns + athlete/badge invalidation', async () => {
+      mockRedis.keys.mockResolvedValue([]);
+      mockRedis.del.mockResolvedValue(0);
 
-      const deleted = await service.purgeCache('c708');
+      await service.purgeCache('race-XYZ', 'c708');
 
-      expect(mockRedis.keys).toHaveBeenCalledTimes(3);
-      expect(deleted).toBe(3);
+      // Verify race-namespaced patterns (Manager catch 2026-05-31 fix)
+      const calls = mockRedis.keys.mock.calls.map((c) => c[0]);
+      expect(calls).toContain('results:race-XYZ:c708:*');
+      expect(calls).toContain('stats:race-XYZ:c708');
+      expect(calls).toContain('country-rank:race-XYZ:*');
+      expect(calls).toContain('percentile:v3:race-XYZ:*');
+      // NEW invalidations per BR-68-11
+      expect(calls).toContain('athlete:race-XYZ:*');
+      expect(calls).toContain('badge:race-XYZ:*');
+      // Legacy single-courseId WRITE format kept
+      expect(calls).toContain('leaderboard:c708');
+      expect(calls).toContain('time-distribution:c708');
+      expect(calls).toContain('country-stats:c708');
+    });
+
+    it('F-068 TC-68-15 cache pattern regression — actual key deletion verified', async () => {
+      // Simulate Redis pre-populated with real-world key formats (Manager catch 2026-05-31)
+      mockRedis.keys.mockImplementation((pattern: string) => {
+        const allKeys: Record<string, string[]> = {
+          'results:race-XYZ:c708:*': [
+            'results:race-XYZ:c708:1:hashA',
+            'results:race-XYZ:c708:2:hashB',
+          ],
+          'stats:race-XYZ:c708': ['stats:race-XYZ:c708'],
+          'athlete:race-XYZ:*': ['athlete:race-XYZ:bib1', 'athlete:race-XYZ:bib2'],
+          'badge:race-XYZ:*': ['badge:race-XYZ:bib1'],
+          'leaderboard:c708': ['leaderboard:c708'],
+        };
+        return Promise.resolve(allKeys[pattern] || []);
+      });
+      mockRedis.del.mockImplementation((...keys: string[]) =>
+        Promise.resolve(keys.length),
+      );
+
+      const deleted = await service.purgeCache('race-XYZ', 'c708');
+
+      // 2 results + 1 stats + 2 athlete + 1 badge + 1 leaderboard = 7
+      expect(deleted).toBe(7);
+    });
+  });
+
+  // ─── F-068 deleteResultsByCourse — cross-race safety ───────────
+  describe('deleteResultsByCourse (F-068)', () => {
+    it('TC-68-14 cross-race wipe regression: filter MUST include raceId', async () => {
+      const mockDeleteMany = jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ deletedCount: 576 }),
+      });
+      (service as any).resultModel.deleteMany = mockDeleteMany;
+      // Stub purgeCache to avoid Redis noise
+      jest.spyOn(service, 'purgeCache').mockResolvedValue(0);
+
+      await service.deleteResultsByCourse('race-A', '200m');
+
+      expect(mockDeleteMany).toHaveBeenCalledWith({ raceId: 'race-A', courseId: '200m' });
+      // Verify purgeCache also called with both args
+      expect(service.purgeCache).toHaveBeenCalledWith('race-A', '200m');
     });
   });
 });

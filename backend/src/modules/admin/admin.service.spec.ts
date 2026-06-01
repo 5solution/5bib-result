@@ -3,6 +3,8 @@ import { NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { RaceResultService } from '../race-result/services/race-result.service';
 import { RacesService } from '../races/races.service';
+import { TelegramService } from '../notification/telegram.service';
+import { MailService } from '../notification/mail.service';
 
 const REDIS_TOKEN = 'default_IORedisModuleConnectionToken';
 
@@ -11,6 +13,8 @@ describe('AdminService', () => {
   let mockRaceResultService: any;
   let mockRacesService: any;
   let mockRedis: any;
+  let mockTelegramService: any;
+  let mockMailService: any;
 
   beforeEach(async () => {
     mockRaceResultService = {
@@ -20,6 +24,7 @@ describe('AdminService', () => {
       getClaims: jest.fn(),
       resolveClaim: jest.fn(),
       purgeCache: jest.fn(),
+      editResult: jest.fn(),
     };
 
     mockRacesService = {
@@ -33,12 +38,24 @@ describe('AdminService', () => {
       keys: jest.fn(),
     };
 
+    // F-068 fix pre-existing TD-F029-05: spec was missing Telegram/Mail mocks
+    mockTelegramService = {
+      notifyClaimResolved: jest.fn(),
+      notifyClaimSubmitted: jest.fn(),
+    };
+
+    mockMailService = {
+      sendClaimResolvedEmail: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
         { provide: RaceResultService, useValue: mockRaceResultService },
         { provide: RacesService, useValue: mockRacesService },
         { provide: REDIS_TOKEN, useValue: mockRedis },
+        { provide: TelegramService, useValue: mockTelegramService },
+        { provide: MailService, useValue: mockMailService },
       ],
     }).compile();
 
@@ -146,12 +163,14 @@ describe('AdminService', () => {
   // ─── resetData ────────────────────────────────────────────────
 
   describe('resetData', () => {
-    it('should delete all results for a course', async () => {
+    it('should delete all results for a course (F-068 BR-68-10: pass raceId)', async () => {
       mockRaceResultService.deleteResultsByCourse.mockResolvedValue(250);
 
       const result = await service.resetData('race1', 'c708');
 
+      // F-068 BR-68-10: signature now (raceId, courseId)
       expect(mockRaceResultService.deleteResultsByCourse).toHaveBeenCalledWith(
+        'race1',
         'c708',
       );
       expect(result.deletedCount).toBe(250);
@@ -225,12 +244,13 @@ describe('AdminService', () => {
   // ─── purgeCache ───────────────────────────────────────────────
 
   describe('purgeCache', () => {
-    it('should purge Redis cache keys for a course', async () => {
+    it('should purge Redis cache keys for a course (F-068 BR-68-11: raceId-namespaced)', async () => {
       mockRaceResultService.purgeCache.mockResolvedValue(5);
 
-      const result = await service.purgeCache('c708');
+      const result = await service.purgeCache('race1', 'c708');
 
-      expect(mockRaceResultService.purgeCache).toHaveBeenCalledWith('c708');
+      // F-068 BR-68-11: signature now (raceId, courseId)
+      expect(mockRaceResultService.purgeCache).toHaveBeenCalledWith('race1', 'c708');
       expect(result.deletedKeys).toBe(5);
       expect(result.success).toBe(true);
     });
@@ -238,7 +258,7 @@ describe('AdminService', () => {
     it('should handle zero keys deleted', async () => {
       mockRaceResultService.purgeCache.mockResolvedValue(0);
 
-      const result = await service.purgeCache('empty-course');
+      const result = await service.purgeCache('race1', 'empty-course');
 
       expect(result.deletedKeys).toBe(0);
     });
