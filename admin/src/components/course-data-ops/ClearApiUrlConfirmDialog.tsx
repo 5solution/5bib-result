@@ -93,50 +93,48 @@ export function ClearApiUrlConfirmDialog(props: ClearApiUrlConfirmDialogProps) {
           <AlertDialogTitle className={isLive ? 'text-rose-600' : undefined}>
             {titleText}
           </AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="space-y-3 text-sm">
-              <p>
-                🔌 Vendor RaceResult.com sẽ <strong>KHÔNG còn tự động sync</strong>{' '}
-                kết quả vào course này nữa.
-              </p>
-              {stats?.apiUrlMasked && (
-                <div className="rounded border border-muted bg-muted/40 p-2 font-mono text-xs">
-                  {stats.apiUrlMasked}
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Data hiện có ({(stats?.rowCount ?? 0).toLocaleString('vi-VN')} kết quả) sẽ KHÔNG bị xóa. Để xóa luôn data, dùng nút &ldquo;Xóa dữ liệu&rdquo; với checkbox &ldquo;Tắt auto-sync trước&rdquo;.
-              </p>
-
-              {isLive && (
-                <div className="rounded border border-rose-200 bg-rose-50 p-3 text-rose-900">
-                  <p className="mb-2 font-medium">
-                    ⛔ Race &ldquo;{raceTitle}&rdquo; đang LIVE. Tắt auto-sync sẽ ngừng live timing.
-                  </p>
-                  <p className="mb-1 text-xs">
-                    Gõ <code className="rounded bg-white px-1 font-mono">{courseName}</code> để xác nhận:
-                  </p>
-                  <Input
-                    value={typedConfirm}
-                    onChange={(e) => setTypedConfirm(e.target.value)}
-                    placeholder={courseName}
-                    autoFocus
-                    className={
-                      typedConfirm && !typedConfirmMatches
-                        ? 'border-rose-500 focus-visible:ring-rose-500'
-                        : ''
-                    }
-                  />
-                  {typedConfirm && !typedConfirmMatches && (
-                    <p className="mt-1 text-xs text-rose-700">
-                      Tên course không khớp
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+          <AlertDialogDescription>
+            🔌 Vendor RaceResult.com sẽ KHÔNG còn tự động sync kết quả vào course này nữa.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {/* Structural content outside Description to avoid invalid <div>/<p> nesting (Next.js 16) */}
+        <div className="space-y-3 text-sm">
+          {stats?.apiUrlMasked && (
+            <div className="rounded border border-muted bg-muted/40 p-2 font-mono text-xs">
+              {stats.apiUrlMasked}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Data hiện có ({(stats?.rowCount ?? 0).toLocaleString('vi-VN')} kết quả) sẽ KHÔNG bị xóa. Để xóa luôn data, dùng nút &ldquo;Xóa dữ liệu&rdquo; với checkbox &ldquo;Tắt auto-sync trước&rdquo;.
+          </p>
+
+          {isLive && (
+            <div className="rounded border border-rose-200 bg-rose-50 p-3 text-rose-900">
+              <p className="mb-2 font-medium">
+                ⛔ Race &ldquo;{raceTitle}&rdquo; đang LIVE. Tắt auto-sync sẽ ngừng live timing.
+              </p>
+              <p className="mb-1 text-xs">
+                Gõ <code className="rounded bg-white px-1 font-mono">{courseName}</code> để xác nhận:
+              </p>
+              <Input
+                value={typedConfirm}
+                onChange={(e) => setTypedConfirm(e.target.value)}
+                placeholder={courseName}
+                autoFocus
+                className={
+                  typedConfirm && !typedConfirmMatches
+                    ? 'border-rose-500 focus-visible:ring-rose-500'
+                    : ''
+                }
+              />
+              {typedConfirm && !typedConfirmMatches && (
+                <p className="mt-1 text-xs text-rose-700">
+                  Tên course không khớp
+                </p>
+              )}
+            </div>
+          )}
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isSubmitting}>Hủy</AlertDialogCancel>
           <AlertDialogAction

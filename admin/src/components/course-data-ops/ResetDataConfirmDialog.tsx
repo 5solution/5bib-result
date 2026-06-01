@@ -165,79 +165,77 @@ export function ResetDataConfirmDialog(props: ResetDataConfirmDialogProps) {
           <AlertDialogTitle className={isLive ? 'text-rose-600' : undefined}>
             {titleText}
           </AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="space-y-3 text-sm">
-              <p>
-                🗑️ Sẽ xóa <strong>{(stats?.rowCount ?? 0).toLocaleString('vi-VN')} kết quả</strong>
-                {' '}của course <strong>{courseName}</strong> (race &ldquo;{raceTitle}&rdquo;).
-              </p>
-
-              {hasApiUrl && stats?.cronStatus === 'scheduled' && (
-                <div className="rounded border border-amber-200 bg-amber-50 p-3 text-amber-900">
-                  <p className="mb-2 font-medium">
-                    ⚠️ Course này còn auto-sync từ vendor RaceResult.com.
-                  </p>
-                  <p className="text-xs">
-                    Cron sẽ tự đồng bộ lại vào{' '}
-                    <strong>{formatHHmmUtcPlus7(stats?.nextCronAt ?? null)} UTC+7</strong>
-                    {minutesToNextCron !== null
-                      ? ` (~${minutesToNextCron} phút nữa)`
-                      : ''}
-                    .
-                  </p>
-                  <label className="mt-2 flex items-start gap-2">
-                    <Checkbox
-                      checked={disableAutoSync}
-                      onCheckedChange={(v) => setDisableAutoSync(v === true)}
-                    />
-                    <span>
-                      <strong>Tắt auto-sync trước khi xóa</strong> (khuyến nghị)
-                      <br />
-                      {!disableAutoSync && (
-                        <em className="text-rose-700">
-                          → Nếu bỏ tick: data sẽ bị overwrite lại sau ~
-                          {minutesToNextCron ?? '?'} phút.
-                        </em>
-                      )}
-                    </span>
-                  </label>
-                </div>
-              )}
-
-              {isLive && (
-                <div className="rounded border border-rose-200 bg-rose-50 p-3 text-rose-900">
-                  <p className="mb-2 font-medium">
-                    ⛔ Race &ldquo;{raceTitle}&rdquo; đang LIVE. Xóa data sẽ ảnh hưởng public
-                    leaderboard NGAY.
-                  </p>
-                  <p className="mb-1 text-xs">
-                    Gõ <code className="rounded bg-white px-1 font-mono">{courseName}</code> vào ô bên dưới để xác nhận:
-                  </p>
-                  <Input
-                    value={typedConfirm}
-                    onChange={(e) => setTypedConfirm(e.target.value)}
-                    placeholder={courseName}
-                    autoFocus
-                    className={
-                      typedConfirm && !typedConfirmMatches
-                        ? 'border-rose-500 focus-visible:ring-rose-500'
-                        : ''
-                    }
-                  />
-                  {typedConfirm && !typedConfirmMatches && (
-                    <p className="mt-1 text-xs text-rose-700">
-                      Tên course không khớp
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                Thao tác này không thể hoàn tác.
-              </p>
-            </div>
+          <AlertDialogDescription>
+            🗑️ Sẽ xóa {(stats?.rowCount ?? 0).toLocaleString('vi-VN')} kết quả
+            của course {courseName} (race &ldquo;{raceTitle}&rdquo;).
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {/* Structural content outside Description to avoid invalid <div>/<p> nesting (Next.js 16) */}
+        <div className="space-y-3 text-sm">
+          {hasApiUrl && stats?.cronStatus === 'scheduled' && (
+            <div className="rounded border border-amber-200 bg-amber-50 p-3 text-amber-900">
+              <p className="mb-2 font-medium">
+                ⚠️ Course này còn auto-sync từ vendor RaceResult.com.
+              </p>
+              <p className="text-xs">
+                Cron sẽ tự đồng bộ lại vào{' '}
+                <strong>{formatHHmmUtcPlus7(stats?.nextCronAt ?? null)} UTC+7</strong>
+                {minutesToNextCron !== null
+                  ? ` (~${minutesToNextCron} phút nữa)`
+                  : ''}
+                .
+              </p>
+              <label className="mt-2 flex items-start gap-2">
+                <Checkbox
+                  checked={disableAutoSync}
+                  onCheckedChange={(v) => setDisableAutoSync(v === true)}
+                />
+                <span>
+                  <strong>Tắt auto-sync trước khi xóa</strong> (khuyến nghị)
+                  <br />
+                  {!disableAutoSync && (
+                    <em className="text-rose-700">
+                      → Nếu bỏ tick: data sẽ bị overwrite lại sau ~
+                      {minutesToNextCron ?? '?'} phút.
+                    </em>
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
+
+          {isLive && (
+            <div className="rounded border border-rose-200 bg-rose-50 p-3 text-rose-900">
+              <p className="mb-2 font-medium">
+                ⛔ Race &ldquo;{raceTitle}&rdquo; đang LIVE. Xóa data sẽ ảnh hưởng public
+                leaderboard NGAY.
+              </p>
+              <p className="mb-1 text-xs">
+                Gõ <code className="rounded bg-white px-1 font-mono">{courseName}</code> vào ô bên dưới để xác nhận:
+              </p>
+              <Input
+                value={typedConfirm}
+                onChange={(e) => setTypedConfirm(e.target.value)}
+                placeholder={courseName}
+                autoFocus
+                className={
+                  typedConfirm && !typedConfirmMatches
+                    ? 'border-rose-500 focus-visible:ring-rose-500'
+                    : ''
+                }
+              />
+              {typedConfirm && !typedConfirmMatches && (
+                <p className="mt-1 text-xs text-rose-700">
+                  Tên course không khớp
+                </p>
+              )}
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Thao tác này không thể hoàn tác.
+          </p>
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isSubmitting}>Hủy</AlertDialogCancel>
           <AlertDialogAction
