@@ -155,14 +155,10 @@ export class HomepageService {
     // Parallelize independent queries. `draft` is excluded everywhere.
     // FIX-STATS-01: totalRaces counts ONLY 'ended' races (completed events with results).
     //   Old bug: counted 'live' + 'pre_race' + 'ended' → inflated by upcoming races.
-    // FIX-STATS-02: totalAthletes uses countDocuments({}) for accuracy.
-    //   Old bug: estimatedDocumentCount() reads stale collection metadata → can be off by thousands.
-    // FIX-STATS-03: totalResults = finishers who have a recorded chipTime.
-    //   ALL docs have overallRankNumeric > 0 so that field doesn't differentiate.
-    //   chipTime presence (not null / empty / '0:00:00') = athlete crossed finish line.
-    //   Verified: 49,711 finishers vs 58,735 total → 9,024 DNS/DNF who lack chipTime.
-    //   This gives 3 distinct, meaningful numbers instead of showing totalAthletes === totalResults.
-    const [liveDocs, upcomingDocs, endedPage, totalRaces, totalAthletes, totalResults] =
+    // FIX-STATS-02: totalAthletes uses accurate countDocuments({}) — all participant rows,
+    //   including DNS/DNF (biggest meaningful number). totalResults = same value.
+    //   Old bug: estimatedDocumentCount() reads stale collection metadata → can be off.
+    const [liveDocs, upcomingDocs, endedPage, totalRaces, totalAthletes] =
       await Promise.all([
         this.raceModel
           .find({ status: 'live' })
@@ -179,12 +175,8 @@ export class HomepageService {
         this.getEndedPageDocs(1, 9),
         this.raceModel.countDocuments({ status: 'ended' }).exec(),
         this.resultModel.countDocuments({}).exec(),
-        this.resultModel
-          .countDocuments({
-            chipTime: { $exists: true, $nin: [null, '', '0:00:00', '00:00:00'] },
-          })
-          .exec(),
       ]);
+    const totalResults = totalAthletes; // same semantic — all participant rows
 
     // Finisher counts: only needed for ended races (live/upcoming always 0)
     const endedRaceIds = endedPage.items
