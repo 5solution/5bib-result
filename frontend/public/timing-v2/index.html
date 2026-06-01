@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5BIB Timing — Dịch vụ chip-timing chuẩn Đức cho giải chạy Việt Nam</title>
+<meta name="description" content="Dịch vụ chip-timing #1 Việt Nam. RaceResult decoder (Đức) · multi-read · backup offline. 100+ giải, 94,000+ VĐV — 0 sự cố mất dữ liệu. Báo giá trong 24h.">
+
+<link rel="canonical" href="https://timing.5bib.com/">
+<link rel="alternate" hreflang="vi" href="https://timing.5bib.com/">
+<link rel="alternate" hreflang="en" href="https://timing.5bib.com/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://timing.5bib.com/">
+<meta name="theme-color" content="#06081A">
+<meta name="keywords" content="dịch vụ chip timing, tính giờ chip giải chạy, hệ thống tính giờ marathon, thuê hệ thống timing, chip time là gì, gun time vs chip time, race timing Vietnam, RaceResult timing Vietnam, RFID race timing">
+<meta name="author" content="5Solution JSC">
+<link rel="icon" href="/solution/logos/5bib-logo.png">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:url" content="https://timing.5bib.com">
+<meta property="og:site_name" content="5BIB Timing">
+<meta property="og:title" content="5BIB Timing — Chip-timing chuẩn Đức cho giải chạy Việt Nam">
+<meta property="og:description" content="RaceResult decoder · multi-read redundancy · backup offline. 100+ giải, 94,000+ VĐV — 0 sự cố mất dữ liệu.">
+<meta property="og:image" content="https://solution.5bib.com/solution/brand/5bib-hero.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="5BIB Timing — Chip-timing chuẩn Đức">
+<meta name="twitter:description" content="RaceResult Germany · multi-read · 0 sự cố mất dữ liệu.">
+<meta name="twitter:image" content="https://solution.5bib.com/solution/brand/5bib-hero.jpg">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Service","@id":"https://timing.5bib.com/#service","name":"5BIB Chip Timing","serviceType":"Race chip timing","provider":{"@type":"Organization","name":"5Solution JSC","legalName":"Công ty Cổ phần 5BIB","url":"https://5bib.com","logo":"https://solution.5bib.com/solution/logos/5bib-logo.png","sameAs":["https://5bib.com","https://solution.5bib.com","https://result.5bib.com"]},"areaServed":{"@type":"Country","name":"Vietnam"},"description":"Dịch vụ chip-timing chuẩn RaceResult (Đức) cho giải chạy: multi-read redundancy, backup decoder offline, kết quả realtime, anti-cut detection.","brand":"RaceResult"},{"@type":"FAQPage","@id":"https://timing.5bib.com/#faq","inLanguage":"vi-VN","mainEntity":[{"@type":"Question","name":"Chip timing của 5BIB dùng công nghệ gì?","acceptedAnswer":{"@type":"Answer","text":"5BIB vận hành hệ timing RaceResult AG (Đức) — chuẩn công nghệ dùng tại các giải marathon quốc tế lớn. Chip RFID, độ phân giải 0.01s, multi-read redundancy đảm bảo không bỏ sót VĐV."}},{"@type":"Question","name":"Gun time và chip time khác nhau thế nào?","acceptedAnswer":{"@type":"Answer","text":"Gun time tính từ phát súng xuất phát (dùng cho thứ hạng chính thức theo chuẩn World Athletics). Chip time tính từ lúc VĐV qua mat xuất phát đến mat đích (time thật, dùng cho PB). 5BIB trả cả hai cho mỗi VĐV."}},{"@type":"Question","name":"Nếu một con chip bị lỗi thì sao?","acceptedAnswer":{"@type":"Answer","text":"Mỗi VĐV được nhiều antenna chồng vùng đọc (multi-read redundancy), kèm backup decoder chạy offline độc lập và mat đôi tại start/finish. 100+ giải, 94,000+ VĐV — 0 sự cố mất dữ liệu."}},{"@type":"Question","name":"5BIB có chống ăn gian cắt cự ly không?","acceptedAnswer":{"@type":"Answer","text":"Có. Thiếu split tại checkpoint giữa chặng sẽ tự flag nghi vấn cắt cự ly và chặn lên podium nhầm. 5BIB còn verify 2 lớp: tự tính ranking từ raw chip time rồi đối chiếu dữ liệu vendor."}},{"@type":"Question","name":"Bao lâu nhận được báo giá timing?","acceptedAnswer":{"@type":"Answer","text":"Trong 24 giờ làm việc kể từ khi gửi thông tin giải, kèm phương án bố trí mat. Không phí setup ẩn, hợp đồng dịch vụ rõ ràng."}}]}]}</script>
+
+<!-- GSAP + ScrollTrigger + Lenis -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js"></script>
+
+<style>
+/* ═══════ FONTS (reuse solution-v2) ═══════ */
+@font-face { font-family:"DM Sans VN"; font-weight:400; font-display:swap; src:url("/solution-v2/fonts/DMSansVN-Regular.ttf") format("truetype"); }
+@font-face { font-family:"DM Sans VN"; font-weight:500; font-display:swap; src:url("/solution-v2/fonts/DMSansVN-Medium.ttf") format("truetype"); }
+@font-face { font-family:"DM Sans VN"; font-weight:700; font-display:swap; src:url("/solution-v2/fonts/DMSansVN-Bold.ttf") format("truetype"); }
+@font-face { font-family:"Unbounded"; font-weight:100 900; font-display:swap; src:url("/solution-v2/fonts/Unbounded.ttf") format("truetype-variations"); }
+@font-face { font-family:"JetBrains Mono"; font-weight:500; font-display:swap; src:url("/solution-v2/fonts/JetBrainsMono-Medium.ttf") format("truetype"); }
+@font-face { font-family:"JetBrains Mono"; font-weight:700; font-display:swap; src:url("/solution-v2/fonts/JetBrainsMono-Bold.ttf") format("truetype"); }
+@font-face { font-family:"Be Vietnam Pro"; font-weight:800; font-display:swap; src:url("/solution-v2/fonts/BeVietnamPro-ExtraBold.ttf") format("truetype"); }
+@font-face { font-family:"Be Vietnam Pro"; font-weight:900; font-display:swap; src:url("/solution-v2/fonts/BeVietnamPro-Black.ttf") format("truetype"); }
+
+/* ═══════ TOKENS ═══════ */
+:root{
+  --blue:#2563eb; --blue-deep:#0A347D; --blue-700:#1d4ed8;
+  --magenta:#DB3069; --pink-bib:#FF5C81; --pink-100:#FFD8E2;
+  --sky:#27A5EE; --green:#16a34a; --amber:#f59e0b; --red:#ef4444;
+  --bg:#06081A; --surface:#0c1024; --surface-2:#11162e;
+  --text:#eef1f8; --text-muted:#9aa6c4; --text-subtle:#697699;
+  --border:rgba(255,255,255,.10); --border-strong:rgba(255,255,255,.18);
+  --font-display:"Unbounded","DM Sans VN",system-ui,sans-serif;
+  --font-body:"DM Sans VN",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --font-impact:"Be Vietnam Pro","DM Sans VN",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
+html.lenis,html.lenis body{height:auto}
+.lenis.lenis-smooth{scroll-behavior:auto!important}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+::selection{background:var(--magenta);color:#fff}
+
+/* ═══════ PRELOADER (signal-catching) ═══════ */
+#preloader{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:34px;
+  background:radial-gradient(90% 70% at 50% 38%,rgba(37,99,235,.16),transparent 62%),
+             radial-gradient(70% 70% at 80% 88%,rgba(219,48,105,.12),transparent 60%),
+             var(--bg);
+  transition:opacity .6s ease,visibility .6s ease}
+#preloader.done{opacity:0;visibility:hidden;pointer-events:none}
+html.preloading,html.preloading body{overflow:hidden;height:100%}
+#pre-grid{position:absolute;inset:0;opacity:.3;
+  background-image:linear-gradient(rgba(120,140,200,.10) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(120,140,200,.10) 1px,transparent 1px);
+  background-size:46px 46px;
+  -webkit-mask-image:radial-gradient(70% 60% at 50% 45%,#000,transparent 80%);
+          mask-image:radial-gradient(70% 60% at 50% 45%,#000,transparent 80%)}
+.pre-center{position:relative;width:min(560px,82vw);height:160px}
+#pre-scope{position:absolute;inset:0;width:100%;height:100%}
+.pre-readline{position:absolute;top:8%;bottom:8%;width:2px;left:62%;
+  background:linear-gradient(180deg,transparent,rgba(180,205,255,.6),rgba(255,150,185,.5),transparent);
+  box-shadow:0 0 16px rgba(140,180,255,.45)}
+#pre-fx{position:absolute;inset:0;pointer-events:none}
+.pre-tick{position:absolute;transform:translate(-50%,-50%) scale(0);
+  font-family:var(--font-mono);font-weight:700;font-size:20px;color:var(--green);
+  text-shadow:0 0 14px rgba(55,224,138,.95)}
+.pre-ring{position:absolute;transform:translate(-50%,-50%) scale(0);
+  width:30px;height:30px;border-radius:50%;border:2px solid rgba(120,180,255,.8)}
+.pre-chip{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;
+  font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:.04em;
+  padding:.3em .55em;border-radius:6px;color:#dbe3ff;background:rgba(24,32,64,.82);
+  border:1px solid rgba(120,140,200,.32)}
+.pre-meta{position:relative;display:flex;align-items:center;gap:16px;z-index:2}
+.pre-brand{display:flex;align-items:center;gap:8px;font-family:var(--font-impact);
+  font-weight:800;letter-spacing:.02em;color:var(--text)}
+.pre-brand img{height:22px;width:auto}
+.pre-brand b{font-size:15px;letter-spacing:.18em}
+.pre-status{font-family:var(--font-mono);font-size:11px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--text-subtle)}
+.pre-bar{position:relative;z-index:2;width:min(280px,70vw);height:2px;
+  border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
+.pre-bar i{position:absolute;inset:0;width:0%;border-radius:2px;
+  background:linear-gradient(90deg,var(--blue),var(--pink-bib));
+  box-shadow:0 0 10px rgba(120,170,255,.6)}
+.wrap{max-width:1280px;margin:0 auto;padding:0 32px}
+.eyebrow{display:inline-flex;align-items:center;gap:12px;font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--text-subtle)}
+.eyebrow .num{color:var(--magenta)}
+.eyebrow .dot{width:8px;height:8px;border-radius:50%;background:var(--magenta);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.6)}}
+.s-title{font-family:var(--font-impact);font-weight:900;line-height:1.04;letter-spacing:-.02em;font-size:clamp(30px,4.4vw,58px);margin:18px 0}
+.s-title .accent{color:var(--magenta)} .s-title .blue{color:var(--sky)}
+.lead{color:var(--text-muted);font-size:clamp(16px,1.4vw,19px);line-height:1.6;max-width:60ch}
+.char{display:inline-block;will-change:transform}
+.word{display:inline-block;white-space:nowrap}
+
+/* scroll progress */
+.progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--blue),var(--magenta));z-index:200;box-shadow:0 0 12px rgba(219,48,105,.6)}
+
+/* cursor */
+@media (hover:hover) and (pointer:fine){
+  body{cursor:none} a,button,.cursor-trigger,input,textarea,select{cursor:none}
+  .cursor{position:fixed;top:0;left:0;z-index:1000;pointer-events:none;transform:translate(-50%,-50%);will-change:transform}
+  .cursor-dot{width:12px;height:12px;background:var(--pink-bib);border-radius:50%;box-shadow:0 0 16px rgba(255,92,129,.7);transition:transform .22s cubic-bezier(.16,1,.3,1),background .22s}
+  .cursor-label{position:absolute;top:-26px;left:50%;transform:translateX(-50%);font-family:var(--font-mono);font-weight:700;font-size:10px;letter-spacing:.18em;color:#fff;opacity:0;transition:opacity .18s;white-space:nowrap}
+  .cursor.show-label .cursor-label{opacity:1}
+  .cursor.large .cursor-dot{transform:scale(2.6);background:var(--magenta)}
+}
+
+/* ═══════ HEADER ═══════ */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:90;height:62px;display:flex;align-items:center;background:rgba(6,8,26,.55);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);transition:background .25s}
+.hdr.scrolled{background:rgba(6,8,26,.92)}
+.hdr-inner{width:100%;max-width:1280px;margin:0 auto;padding:0 32px;display:flex;align-items:center;gap:28px}
+.hdr-logo{display:flex;align-items:center;gap:10px;font-family:var(--font-impact);font-weight:900;font-size:18px;letter-spacing:-.01em}
+.hdr-logo img{height:26px}
+.hdr-logo .badge{font-family:var(--font-mono);font-weight:700;font-size:10px;letter-spacing:.14em;color:var(--bg);background:var(--pink-bib);padding:2px 7px;border-radius:5px;text-transform:uppercase}
+.hdr-nav{flex:1;display:flex;align-items:center;gap:26px;margin-left:14px}
+.hdr-nav a{color:var(--text-muted);font-weight:600;font-size:14px;position:relative;padding:4px 0;transition:color .15s}
+.hdr-nav a::after{content:'';position:absolute;left:0;right:100%;bottom:-3px;height:2px;background:var(--magenta);transition:right .25s cubic-bezier(.16,1,.3,1)}
+.hdr-nav a:hover{color:#fff} .hdr-nav a:hover::after{right:0}
+.hdr-cta{font-weight:700;font-size:13px;background:var(--magenta);color:#fff;padding:9px 16px;border-radius:8px;transition:transform .18s,box-shadow .18s}
+.hdr-cta:hover{transform:translateY(-2px);box-shadow:0 10px 26px -8px rgba(219,48,105,.7)}
+/* lang switch */
+.lang{position:relative}
+.lang-btn{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:.1em;color:var(--text-muted);background:transparent;border:1px solid var(--border-strong);border-radius:8px;padding:8px 11px;transition:all .18s}
+.lang-btn:hover{color:#fff;border-color:var(--magenta)}
+.lang-btn svg{width:11px;height:11px;transition:transform .2s}
+.lang.open .lang-btn svg{transform:rotate(180deg)}
+.lang-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:140px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:10px;padding:6px;opacity:0;visibility:hidden;transform:translateY(-6px);transition:all .2s;list-style:none;box-shadow:0 20px 50px -12px rgba(0,0,0,.6)}
+.lang.open .lang-menu{opacity:1;visibility:visible;transform:translateY(0)}
+.lang-menu li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;border-radius:7px;font-weight:600;font-size:14px;color:var(--text-muted);transition:all .15s}
+.lang-menu li:hover{background:rgba(255,255,255,.06);color:#fff}
+.lang-menu li.sel{color:#fff} .lang-menu li.sel .lang-code{background:var(--magenta);color:#fff}
+.lang-code{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.08em;background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px}
+
+/* ═══════ HERO ═══════ */
+.hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden;padding-top:62px}
+.hero-bg{position:absolute;inset:0;z-index:0}
+.hero-bg iframe{width:100%;height:100%;border:0;display:block}
+.hero-bg::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,rgba(6,8,26,.94) 0%,rgba(6,8,26,.78) 42%,rgba(6,8,26,.30) 100%)}
+.hero-inner{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:0 32px;width:100%}
+.hero-eyebrow{margin-bottom:22px}
+.hero h1{font-family:var(--font-impact);font-weight:900;line-height:.98;letter-spacing:-.03em;font-size:clamp(42px,7.2vw,104px);max-width:16ch}
+.hero h1 .accent{color:var(--magenta)}
+.hero-sub{margin-top:26px;color:var(--text-muted);font-size:clamp(16px,1.5vw,21px);line-height:1.6;max-width:54ch}
+.hero-cta{margin-top:38px;display:flex;flex-wrap:wrap;gap:14px}
+.btn{display:inline-flex;align-items:center;gap:9px;font-weight:700;font-size:15px;padding:15px 26px;border-radius:11px;transition:transform .2s,box-shadow .2s,background .2s}
+.btn-primary{background:var(--magenta);color:#fff;box-shadow:0 14px 34px -12px rgba(219,48,105,.8)}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 20px 46px -12px rgba(219,48,105,.9)}
+.btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid var(--border-strong)}
+.btn-ghost:hover{background:rgba(255,255,255,.12);transform:translateY(-3px)}
+.hero-micro{margin-top:30px;display:flex;flex-wrap:wrap;gap:10px 26px}
+.hero-micro span{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--text-muted);font-weight:600}
+.hero-micro .ck{color:var(--green);font-weight:800}
+.hero-scroll{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);z-index:2;font-family:var(--font-mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--text-subtle);display:flex;flex-direction:column;align-items:center;gap:8px}
+.hero-scroll i{width:1px;height:34px;background:linear-gradient(var(--magenta),transparent);display:block;animation:scrolldrop 1.8s ease-in-out infinite}
+@keyframes scrolldrop{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+
+/* ═══════ TRUST BAR ═══════ */
+.trust{border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface);padding:22px 0;overflow:hidden}
+.trust-inner{display:flex;align-items:center;gap:28px}
+.trust-label{flex-shrink:0;font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-subtle);max-width:180px;line-height:1.5}
+.trust-marquee{flex:1;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.trust-track{display:flex;gap:48px;width:max-content;animation:marq 26s linear infinite}
+.trust-track span{font-family:var(--font-impact);font-weight:800;font-size:19px;color:var(--text-muted);white-space:nowrap;opacity:.7}
+@keyframes marq{to{transform:translateX(-50%)}}
+.rr-badge{flex-shrink:0;display:inline-flex;align-items:center;gap:9px;font-family:var(--font-mono);font-weight:700;font-size:11px;letter-spacing:.1em;color:#fff;border:1px solid var(--border-strong);border-radius:8px;padding:8px 12px}
+.rr-badge .flag{display:inline-flex;width:18px;height:12px;border-radius:2px;overflow:hidden;flex-direction:column}
+.rr-badge .flag i{flex:1} .rr-badge .flag i:nth-child(1){background:#000} .rr-badge .flag i:nth-child(2){background:#DD0000} .rr-badge .flag i:nth-child(3){background:#FFCE00}
+
+/* ═══════ STATS ═══════ */
+.stats{padding:80px 0}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:32px 26px;position:relative;overflow:hidden;transition:border-color .3s,transform .3s}
+.stat:hover{border-color:var(--magenta);transform:translateY(-4px)}
+.stat::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px;background:linear-gradient(90deg,var(--blue),var(--magenta));transform:scaleX(0);transform-origin:left;transition:transform .5s}
+.stat:hover::before{transform:scaleX(1)}
+.stat-num{font-family:var(--font-impact);font-weight:900;font-size:clamp(40px,4.6vw,60px);line-height:1;letter-spacing:-.02em;color:#fff;font-variant-numeric:tabular-nums}
+.stat-num .suf{color:var(--magenta)}
+.stat-label{margin-top:12px;font-weight:700;font-size:15px;color:var(--text)}
+.stat-sub{margin-top:5px;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--text-subtle);text-transform:uppercase}
+
+/* ═══════ SPLIT SECTION (text + visual stage) ═══════ */
+.split{padding:96px 0;position:relative}
+.split-inner{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
+.split-inner.reverse{direction:rtl} .split-inner.reverse>*{direction:ltr}
+.split-text .lead{margin-top:16px}
+.bullets{margin-top:26px;display:flex;flex-direction:column;gap:14px}
+.bullet{display:flex;gap:13px;align-items:flex-start;font-size:15px;line-height:1.5;color:var(--text)}
+.bullet .ck{flex-shrink:0;width:24px;height:24px;border-radius:7px;background:rgba(22,163,74,.16);color:var(--green);display:grid;place-items:center;font-weight:800;font-size:13px}
+.bullet b{color:#fff}
+.proof-card{margin-top:30px;background:linear-gradient(135deg,rgba(37,99,235,.14),rgba(219,48,105,.12));border:1px solid var(--border-strong);border-radius:16px;padding:22px 24px;font-size:15px;line-height:1.55;color:var(--text-muted)}
+.proof-card b{color:#fff} .proof-card em{color:var(--pink-bib);font-style:italic}
+/* visual stage */
+.stage{position:relative;aspect-ratio:16/11;border-radius:20px;overflow:hidden;border:1px solid var(--border-strong);background:var(--surface);content-visibility:auto;contain-intrinsic-size:auto 420px}
+.stage.tall{aspect-ratio:4/3}
+.stage iframe{width:100%;height:100%;border:0;display:block}
+.stage .glow{position:absolute;inset:-2px;border-radius:22px;background:linear-gradient(135deg,var(--blue),var(--magenta));filter:blur(26px);opacity:.30;z-index:-1}
+.corner{position:absolute;width:18px;height:18px;border:2px solid var(--magenta);z-index:3}
+.corner.tl{top:12px;left:12px;border-right:0;border-bottom:0}
+.corner.tr{top:12px;right:12px;border-left:0;border-bottom:0}
+.corner.bl{bottom:12px;left:12px;border-right:0;border-top:0}
+.corner.br{bottom:12px;right:12px;border-left:0;border-top:0}
+.stage-tag{position:absolute;top:14px;left:38px;z-index:3;font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#fff;background:rgba(6,8,26,.6);padding:5px 10px;border-radius:6px;display:flex;align-items:center;gap:7px}
+.stage-tag .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+
+/* glossary cards */
+.gloss{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.gloss-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+.gloss-card h4{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--pink-bib);margin-bottom:8px}
+.gloss-card p{font-size:14px;line-height:1.55;color:var(--text-muted)}
+
+/* ═══════ COMPARISON ═══════ */
+.compare{padding:96px 0}
+.compare-head{text-align:center;max-width:760px;margin:0 auto 44px}
+.compare-head .lead{margin:14px auto 0}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:18px;background:var(--surface)}
+table.cmp{width:100%;border-collapse:collapse;min-width:760px}
+table.cmp th,table.cmp td{padding:18px 20px;text-align:center;border-bottom:1px solid var(--border);font-size:14px}
+table.cmp thead th{font-family:var(--font-impact);font-weight:800;font-size:15px;color:#fff;background:var(--surface-2)}
+table.cmp thead th.us{color:var(--magenta)}
+table.cmp tbody td:first-child,table.cmp thead th:first-child{text-align:left;color:var(--text-muted);font-weight:600}
+table.cmp td.us{background:rgba(219,48,105,.08);color:#fff;font-weight:800}
+table.cmp .y{color:var(--green);font-weight:800;font-size:17px}
+table.cmp .n{color:var(--text-subtle)}
+table.cmp .p{color:var(--amber);font-size:13px}
+table.cmp tbody tr:last-child td{border-bottom:0}
+
+/* ═══════ PROCESS TIMELINE ═══════ */
+.process{padding:96px 0}
+.timeline{margin-top:40px;display:grid;grid-template-columns:repeat(5,1fr);gap:0;position:relative}
+.timeline::before{content:'';position:absolute;top:26px;left:6%;right:6%;height:2px;background:linear-gradient(90deg,var(--blue),var(--magenta))}
+.tl-step{position:relative;padding:0 14px;text-align:center}
+.tl-dot{width:54px;height:54px;margin:0 auto 18px;border-radius:50%;background:var(--surface-2);border:2px solid var(--magenta);display:grid;place-items:center;font-family:var(--font-mono);font-weight:700;font-size:13px;color:#fff;position:relative;z-index:2}
+.tl-when{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--pink-bib);margin-bottom:7px}
+.tl-task{font-size:14px;line-height:1.5;color:var(--text-muted)}
+
+/* ═══════ CTA / FORM ═══════ */
+.cta{padding:96px 0}
+.cta-box{background:linear-gradient(135deg,var(--surface-2),var(--surface));border:1px solid var(--border-strong);border-radius:24px;padding:clamp(32px,5vw,64px);display:grid;grid-template-columns:1fr 1fr;gap:54px;align-items:center;position:relative;overflow:hidden}
+.cta-box::before{content:'';position:absolute;top:-40%;right:-10%;width:480px;height:480px;background:radial-gradient(circle,rgba(219,48,105,.22),transparent 70%);filter:blur(20px)}
+.cta-left{position:relative;z-index:2}
+.cta-left .s-title{font-size:clamp(28px,3.6vw,46px)}
+.cta-form{position:relative;z-index:2;display:flex;flex-direction:column;gap:13px}
+.cta-form .row{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-subtle)}
+.field input,.field select,.field textarea{font-family:var(--font-body);font-size:15px;color:#fff;background:rgba(255,255,255,.04);border:1px solid var(--border-strong);border-radius:10px;padding:12px 14px;transition:border-color .18s}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--magenta)}
+.field textarea{resize:vertical;min-height:64px}
+.cta-form .btn-primary{justify-content:center;margin-top:6px}
+.cta-trust{margin-top:6px;display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;color:var(--text-subtle)}
+.cta-trust span{display:inline-flex;gap:6px;align-items:center} .cta-trust .ck{color:var(--green)}
+
+/* ═══════ FOOTER ═══════ */
+.foot{border-top:1px solid var(--border);padding:50px 0 40px}
+.foot-inner{display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between;align-items:center}
+.foot-logo{font-family:var(--font-impact);font-weight:900;font-size:18px}
+.foot-meta{font-family:var(--font-mono);font-size:12px;color:var(--text-subtle);letter-spacing:.04em}
+.foot-links{display:flex;gap:22px;flex-wrap:wrap}
+.foot-links a{font-size:14px;color:var(--text-muted);transition:color .15s} .foot-links a:hover{color:#fff}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(30px)}
+
+/* ═══════ RESPONSIVE ═══════ */
+@media(max-width:980px){
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .split-inner{grid-template-columns:1fr;gap:36px}
+  .split-inner.reverse{direction:ltr}
+  .cta-box{grid-template-columns:1fr;gap:32px}
+  .timeline{grid-template-columns:1fr;gap:26px}
+  .timeline::before{display:none}
+  .tl-step{display:grid;grid-template-columns:54px 1fr;text-align:left;gap:16px;align-items:start}
+  .tl-dot{margin:0}
+}
+@media(max-width:680px){
+  .wrap{padding:0 20px} .hdr-inner{padding:0 20px}
+  .hdr-nav{display:none}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:12px}
+  .stat{padding:22px 18px}
+  .gloss{grid-template-columns:1fr}
+  .cta-form .row{grid-template-columns:1fr}
+  .hero-cta{flex-direction:column;align-items:stretch}
+  .btn{justify-content:center}
+  body{cursor:auto!important}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body class="cursor-dark">
+
+<!-- ═══════ PRELOADER (signal-catching) ═══════ -->
+<div id="preloader" aria-hidden="true">
+  <div id="pre-grid"></div>
+  <div class="pre-center">
+    <canvas id="pre-scope"></canvas>
+    <div class="pre-readline"></div>
+    <div id="pre-fx"></div>
+  </div>
+  <div class="pre-meta">
+    <span class="pre-brand"><img src="/solution/logos/5bib-logo.png" alt="5BIB"><b>TIMING</b></span>
+    <span class="pre-status" id="preStatus">Đang bắt sóng…</span>
+  </div>
+  <div class="pre-bar"><i id="preBar"></i></div>
+</div>
+<script>
+(function(){
+  "use strict";
+  document.documentElement.classList.add("preloading");
+  var pre=document.getElementById("preloader");
+  var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+  // language-aware status text (mirrors 5bib_timing_lang / ?lang= used by main i18n)
+  var L=(function(){try{var u=new URLSearchParams(location.search).get("lang");
+    if(u==="en"||u==="vi")return u;return localStorage.getItem("5bib_timing_lang")||"vi";}catch(e){return "vi";}})();
+  var T=(L==="en")
+    ?{scan:"Catching signal…",lock:"Signal locked",ready:"Ready"}
+    :{scan:"Đang bắt sóng…",lock:"Đã khoá tín hiệu",ready:"Sẵn sàng"};
+  var cv=document.getElementById("pre-scope"), fx=document.getElementById("pre-fx");
+  var bar=document.getElementById("preBar"), statusEl=document.getElementById("preStatus");
+  var ctx=cv.getContext("2d");
+  statusEl.textContent=T.scan;
+  var dpr=Math.min(window.devicePixelRatio||1,2), W=0,H=0;
+  var lanes=[
+    {yf:0.34,color:"55,130,255", glow:9,pts:[],pulse:0,base:2.4},
+    {yf:0.52,color:"200,212,255",glow:6,pts:[],pulse:0,base:1.6},
+    {yf:0.70,color:"255,120,170",glow:9,pts:[],pulse:0,base:2.4}
+  ];
+  function size(){
+    W=cv.offsetWidth;H=cv.offsetHeight;
+    cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+    lanes.forEach(function(l){if(!l.pts.length){for(var i=0;i<W;i++)l.pts.push(0);}});
+  }
+  size();
+  function drawLane(l){
+    var y0=H*l.yf; l.pts.shift();
+    l.pts.push((Math.random()-0.5)*l.base + l.pulse); l.pulse*=0.80;
+    if(l.pts.length>W)l.pts.splice(0,l.pts.length-W);
+    ctx.lineWidth=2;ctx.strokeStyle="rgba("+l.color+",.92)";
+    ctx.shadowColor="rgba("+l.color+",.9)";ctx.shadowBlur=l.glow;ctx.beginPath();
+    var n=l.pts.length;
+    for(var i=0;i<n;i++){var x=(i/(n-1))*W,y=y0-l.pts[i];if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    ctx.stroke();ctx.shadowBlur=0;
+  }
+  var rafId,raf=function(){ctx.clearRect(0,0,W,H);for(var i=0;i<lanes.length;i++)drawLane(lanes[i]);rafId=requestAnimationFrame(raf);};
+  function readX(){return W*0.62;}
+  function spark(x,y,col){
+    var t=document.createElement("div");t.className="pre-tick";t.textContent="✓";
+    t.style.left=x+"px";t.style.top=y+"px";fx.appendChild(t);
+    var r=document.createElement("div");r.className="pre-ring";r.style.left=x+"px";r.style.top=y+"px";
+    r.style.borderColor="rgba("+col+",.85)";fx.appendChild(r);
+    var s=0,o=.9,start=performance.now();
+    (function an(now){
+      var p=Math.min(1,(now-start)/650);
+      t.style.transform="translate(-50%,-50%) scale("+(p<.3?p/.3*1.2:1.1)+")";
+      r.style.transform="translate(-50%,-50%) scale("+(p*3.4)+")";r.style.opacity=(1-p)*.9;
+      if(p<1)requestAnimationFrame(an);else{t.style.opacity=0;setTimeout(function(){t.remove();r.remove();},200);}
+    })(start);
+  }
+  var bib=1846;
+  function pad4(n){n=String(n);while(n.length<4)n="0"+n;return n;}
+  function chip(li){
+    var l=lanes[li];bib+=1+Math.floor(Math.random()*4);
+    var y=H*l.yf,rlx=readX(),startX=W+50,endX=-90,dur=1700,t0=performance.now();
+    var c=document.createElement("div");c.className="pre-chip";c.textContent="BIB "+pad4(bib);
+    c.style.top=y+"px";c.style.left=startX+"px";fx.appendChild(c);
+    var sparked=false;
+    (function mv(now){
+      var p=Math.min(1,(now-t0)/dur),x=startX+(endX-startX)*p;
+      c.style.left=x+"px";
+      if(!sparked&&x<=rlx){sparked=true;l.pulse=30+Math.random()*16;spark(rlx,y,l.color);}
+      if(p<1)requestAnimationFrame(mv);else c.remove();
+    })(t0);
+  }
+  function finish(){
+    cancelAnimationFrame(rafId);
+    document.documentElement.classList.remove("preloading");
+    pre.classList.add("done");
+    setTimeout(function(){if(pre&&pre.parentNode)pre.parentNode.removeChild(pre);},700);
+  }
+  if(reduce){
+    // static: draw one frame + lock, then quick fade
+    for(var i=0;i<lanes.length;i++){lanes[i].pulse=26;drawLane(lanes[i]);}
+    bar.style.width="100%";statusEl.textContent=T.lock;
+    setTimeout(finish,500);
+    return;
+  }
+  rafId=requestAnimationFrame(raf);
+  var t=0, locked=false, MIN=1500;
+  var chipTimer=setInterval(function(){chip(Math.random()<0.5?0:2);},460);
+  chip(0);
+  var barTimer=setInterval(function(){
+    t+=60; var pct=Math.min(96,(t/MIN)*100);
+    bar.style.width=pct+"%";
+    if(!locked&&t>=MIN*0.66){locked=true;statusEl.textContent=T.lock;}
+  },60);
+  function done(){
+    clearInterval(chipTimer);clearInterval(barTimer);
+    bar.style.width="100%";statusEl.textContent=T.ready;
+    setTimeout(finish,260);
+  }
+  var loaded=false,minPassed=false;
+  function tryDone(){if(loaded&&minPassed)done();}
+  setTimeout(function(){minPassed=true;tryDone();},MIN);
+  if(document.readyState==="complete"){loaded=true;}
+  else window.addEventListener("load",function(){loaded=true;tryDone();});
+  // safety net: never hang the page
+  setTimeout(function(){if(!pre.classList.contains("done"))done();},6000);
+  tryDone();
+})();
+</script>
+
+<div class="progress" id="progress"></div>
+<div class="cursor" id="cursor" aria-hidden="true"><div class="cursor-dot"></div><div class="cursor-label" id="cursorLabel"></div></div>
+
+<!-- ═══════ HEADER ═══════ -->
+<header class="hdr" id="hdr">
+  <div class="hdr-inner">
+    <a href="https://5bib.com" class="hdr-logo cursor-trigger"><img src="/solution/logos/5bib-logo.png" alt="5BIB">Timing<span class="badge">RaceResult</span></a>
+    <nav class="hdr-nav">
+      <a href="#reliability">Độ tin cậy</a>
+      <a href="#tech">Công nghệ</a>
+      <a href="#why">Vì sao 5BIB</a>
+      <a href="#result">Kết quả</a>
+      <a href="#process">Quy trình</a>
+    </nav>
+    <div class="lang" id="lang">
+      <button class="lang-btn" id="langBtn" aria-label="Language"><span id="langCur">VI</span><svg viewBox="0 0 12 8" fill="none"><path d="M1 1.5 6 6.5 11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <ul class="lang-menu" id="langMenu">
+        <li data-lang="vi" class="sel">Tiếng Việt<span class="lang-code">VI</span></li>
+        <li data-lang="en">English<span class="lang-code">EN</span></li>
+      </ul>
+    </div>
+    <a href="#quote" class="hdr-cta cursor-trigger">Nhận báo giá</a>
+  </div>
+</header>
+
+<!-- ═══════ HERO ═══════ -->
+<section class="hero">
+  <div class="hero-bg"><iframe src="/timing-v2/hero-timing.html" title="5BIB timing visual" loading="eager"></iframe></div>
+  <div class="hero-inner">
+    <div class="hero-eyebrow eyebrow"><span class="dot"></span>5BIB TIMING · CÔNG NGHỆ RACERESULT (ĐỨC)</div>
+    <h1 id="heroTitle">Chip-timing cho giải chạy, <span class="accent">vận hành bởi 5BIB.</span></h1>
+    <p class="hero-sub">Thiết bị RaceResult (Đức), nhiều đầu đọc chống sót, backup chạy offline. <b>Qua 100+ giải và 94.000+ VĐV: 0 lần mất dữ liệu.</b></p>
+    <div class="hero-cta">
+      <a href="#quote" class="btn btn-primary cursor-trigger" data-cursor="GỬI">Nhận báo giá trong 24h →</a>
+      <a href="#result" class="btn btn-ghost cursor-trigger">Xem leaderboard live →</a>
+    </div>
+    <div class="hero-micro">
+      <span><i class="ck">✓</i> Cùng hệ công nghệ giải BMW Berlin Marathon</span>
+      <span><i class="ck">✓</i> Đội kỹ thuật có mặt trước race 3 ngày</span>
+    </div>
+  </div>
+  <div class="hero-scroll">Cuộn xuống<i></i></div>
+</section>
+
+<!-- ═══════ TRUST BAR ═══════ -->
+<section class="trust">
+  <div class="wrap trust-inner">
+    <div class="trust-label">Tin dùng bởi BTC hàng đầu Việt Nam</div>
+    <div class="trust-marquee"><div class="trust-track">
+      <span>VTV</span><span>VnExpress</span><span>LPBank</span><span>UBND Tỉnh</span><span>Cát Bà Marathon</span><span>58+ đối tác tổ chức</span>
+      <span>VTV</span><span>VnExpress</span><span>LPBank</span><span>UBND Tỉnh</span><span>Cát Bà Marathon</span><span>58+ đối tác tổ chức</span>
+    </div></div>
+    <div class="rr-badge"><span class="flag"><i></i><i></i><i></i></span>RaceResult · Made in Germany</div>
+  </div>
+</section>
+
+<!-- ═══════ STATS ═══════ -->
+<section class="stats"><div class="wrap">
+  <div class="stats-grid">
+    <div class="stat reveal"><div class="stat-num"><span data-count="100">0</span><span class="suf">+</span></div><div class="stat-label">Giải đã tính giờ</div><div class="stat-sub">2020 — nay</div></div>
+    <div class="stat reveal"><div class="stat-num"><span data-count="94000">0</span><span class="suf">+</span></div><div class="stat-label">VĐV qua mat</div><div class="stat-sub">Đã tính giờ</div></div>
+    <div class="stat reveal"><div class="stat-num">0</div><div class="stat-label">Sự cố mất dữ liệu</div><div class="stat-sub">Zero data loss</div></div>
+    <div class="stat reveal"><div class="stat-num">0.01<span class="suf" style="font-size:.5em">s</span></div><div class="stat-label">Độ phân giải</div><div class="stat-sub">RaceResult · Đức</div></div>
+  </div>
+</div></section>
+
+<!-- ═══════ 04 · RELIABILITY / MULTI-READ ═══════ -->
+<section class="split" id="reliability"><div class="wrap"><div class="split-inner">
+  <div class="split-text">
+    <div class="eyebrow"><span class="num">02</span>ĐỘ TIN CẬY</div>
+    <h2 class="s-title">Không VĐV nào mất kết quả <span class="accent">chỉ vì một con chip lỗi.</span></h2>
+    <p class="lead">Timing không phải lúc chạy ngon thì ai cũng giống nhau — mà là lúc trời mưa, mất điện, 5,000 người dồn qua vạch trong 90 giây. 5BIB thiết kế để không một timestamp nào rơi.</p>
+    <div class="bullets">
+      <div class="bullet"><span class="ck">✓</span><span><b>Nhiều đầu đọc chồng vùng</b> — mỗi VĐV đi qua được vài antenna đọc cùng lúc. Đầu này sót, đầu kia bắt.</span></div>
+      <div class="bullet"><span class="ck">✓</span><span><b>Đầu đọc backup offline</b> — máy thứ 2 chạy độc lập, pin 15Ah (~8h). Mất điện, mất mạng — dữ liệu vẫn ghi.</span></div>
+      <div class="bullet"><span class="ck">✓</span><span><b>Mat đôi tại Start & Finish</b> — không bao giờ đặt một điểm đo đơn lẻ ở nơi quan trọng nhất.</span></div>
+      <div class="bullet"><span class="ck">✓</span><span><b>4G + GPS</b> — kết quả vẫn live ở venue trail xa, rừng, biển.</span></div>
+    </div>
+    <div class="proof-card"><b>Sắc Màu Cát Bà Marathon 2024</b> — 7.196 VĐV · 3 cự ly · <b>0 sai sót thời gian.</b></div>
+  </div>
+  <div class="split-visual">
+    <div class="stage tall"><div class="glow"></div>
+      <div class="stage-tag"><span class="dot"></span>MULTI-READ REDUNDANCY</div>
+      <iframe src="/timing-v2/multi-read.html" title="Multi-read redundancy" loading="lazy"></iframe>
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+    </div>
+  </div>
+</div></div></section>
+
+<!-- ═══════ 05 · TECH / RACERESULT ═══════ -->
+<section class="split" id="tech"><div class="wrap"><div class="split-inner reverse">
+  <div class="split-text">
+    <div class="eyebrow"><span class="num">03</span>CÔNG NGHỆ</div>
+    <h2 class="s-title">Công nghệ tiên tiến từ <span class="blue">RaceResult — Germany.</span></h2>
+    <p class="lead">5BIB vận hành hệ timing <b style="color:#fff">RaceResult AG (Đức)</b> — dùng tại 85+ quốc gia, hơn 5 triệu VĐV được tính giờ mỗi năm, hiện diện tại BMW Berlin Marathon (một trong 6 World Marathon Major). Cùng đẳng cấp thiết bị đó, vận hành bởi đội Việt Nam ngay tại giải của bạn.</p>
+    <div class="gloss">
+      <div class="gloss-card"><h4>Gun time</h4><p>Tính từ phát súng xuất phát. Dùng cho thứ hạng chính thức (chuẩn World Athletics).</p></div>
+      <div class="gloss-card"><h4>Chip time</h4><p>Tính từ lúc qua mat xuất phát đến mat đích. Time "thật" của bạn, dùng cho PB.</p></div>
+    </div>
+    <p class="lead" style="margin-top:18px;font-size:15px">5BIB trả <b style="color:#fff">cả hai</b> cho mỗi VĐV — ranking theo gun time, thành tích cá nhân theo chip time.</p>
+  </div>
+  <div class="split-visual">
+    <div class="stage"><div class="glow"></div>
+      <div class="stage-tag"><span class="dot"></span>RACERESULT · GERMANY</div>
+      <iframe src="/timing-v2/tech-decoder.html" title="RaceResult signal chain" loading="lazy"></iframe>
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+    </div>
+  </div>
+</div></div></section>
+
+<!-- ═══════ 06 · ANTI-CUT ═══════ -->
+<section class="split" id="anticut"><div class="wrap"><div class="split-inner">
+  <div class="split-text">
+    <div class="eyebrow"><span class="num">04</span>ĐỘ CHÍNH XÁC</div>
+    <h2 class="s-title">Kết quả đúng. <span class="accent">Không lên nhầm podium.</span></h2>
+    <div class="bullets" style="margin-top:22px">
+      <div class="bullet"><span class="ck" style="background:rgba(239,68,68,.16);color:var(--red)">🚫</span><span><b>Phát hiện cắt cự ly</b> — thiếu mốc đo ở checkpoint giữa chặng, hệ tự đánh dấu nghi vấn và chặn lên podium nhầm.</span></div>
+      <div class="bullet"><span class="ck">🔁</span><span><b>Đối chiếu 2 lớp</b> — 5BIB tự tính thứ hạng & nhóm tuổi từ chip time gốc, rồi so với dữ liệu nhà cung cấp. Lệch là cảnh báo BTC trước khi công bố.</span></div>
+      <div class="bullet"><span class="ck">🟢</span><span><b>Trạng thái rõ ràng</b> — REG · STARTED · DNF · CUT · DSQ · FIN, đồng bộ realtime trên dashboard BTC.</span></div>
+    </div>
+    <div class="proof-card">Chúng tôi từng bắt được lỗi age-group rỗng từ vendor trước khi nó làm hỏng podium. Đó là lý do 5BIB luôn verify 2 lớp — <em>không bao giờ tin mù dữ liệu vendor.</em></div>
+  </div>
+  <div class="split-visual">
+    <div class="stage tall"><div class="glow"></div>
+      <div class="stage-tag"><span class="dot" style="background:var(--red);box-shadow:0 0 8px var(--red)"></span>ANTI-CUT DETECTION</div>
+      <iframe src="/timing-v2/anti-cut.html" title="Anti-cut detection" loading="lazy"></iframe>
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+    </div>
+  </div>
+</div></div></section>
+
+<!-- ═══════ 07 · COMPARISON ═══════ -->
+<section class="compare" id="why"><div class="wrap">
+  <div class="compare-head">
+    <div class="eyebrow" style="justify-content:center"><span class="num">05</span>VÌ SAO 5BIB</div>
+    <h2 class="s-title">Cùng công nghệ Đức. <span class="accent">Khác ở phần còn lại.</span></h2>
+    <p class="lead">Phần lớn đơn vị timing dừng lại ở khâu tính giờ. 5BIB làm trọn vòng đời giải chạy — đăng ký, timing, ảnh, kết quả. Timing chỉ là một mắt xích trong đó.</p>
+  </div>
+  <div class="table-wrap"><table class="cmp">
+    <thead><tr>
+      <th></th><th class="us">5BIB Timing</th><th>Timing in-house VN</th><th>Nền tảng đăng ký</th><th>Quốc tế trực tiếp</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>Công nghệ RaceResult Đức</td><td class="us"><span class="y">✓</span></td><td><span class="n">— in-house</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+      <tr><td>Full lifecycle: đăng ký → timing → ảnh → community</td><td class="us"><span class="y">✓</span></td><td><span class="p">một phần</span></td><td><span class="p">một phần</span></td><td><span class="n">✕</span></td></tr>
+      <tr><td>Đội Việt, hỗ trợ tiếng Việt onsite</td><td class="us"><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="p">hạn chế</span></td></tr>
+      <tr><td>Ảnh 5Pix (nhận diện khuôn mặt) + community</td><td class="us"><span class="y">✓</span></td><td><span class="n">✕</span></td><td><span class="n">✕</span></td><td><span class="n">✕</span></td></tr>
+      <tr><td>Báo giá minh bạch, không phí license ẩn</td><td class="us"><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">✕</span></td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<!-- ═══════ 08 · LIVE RESULT ═══════ -->
+<section class="split" id="result"><div class="wrap"><div class="split-inner reverse">
+  <div class="split-text">
+    <div class="eyebrow"><span class="num">06</span>KẾT QUẢ REALTIME</div>
+    <h2 class="s-title">VĐV về đích. <span class="blue">Kết quả lên ngay lập tức.</span></h2>
+    <p class="lead">Mỗi giải xong, kết quả live trên <b style="color:#fff">result.5bib.com</b> — public, share Facebook, embed vào trang BTC. VĐV gõ tên / số BIB là ra ngay chip time, pace, ranking, split times. BTC không phải gửi Excel cho từng người.</p>
+    <div class="bullets">
+      <div class="bullet"><span class="ck">✓</span><span>Leaderboard real-time, mỗi VĐV một URL riêng</span></div>
+      <div class="bullet"><span class="ck">✓</span><span>Pace bar · projected finish · split times</span></div>
+      <div class="bullet"><span class="ck">✓</span><span>Auto-publish lên website giải + social share</span></div>
+      <div class="bullet"><span class="ck">✓</span><span>Export CSV / PDF kết quả chính thức</span></div>
+    </div>
+    <div class="proof-card"><b>55 giải · 60,438 kết quả</b> tra cứu public ngay tại result.5bib.com.</div>
+    <a href="https://result.5bib.com/" target="_blank" rel="noopener" class="btn btn-ghost cursor-trigger" style="margin-top:24px" data-cursor="OPEN">Xem result.5bib.com live →</a>
+  </div>
+  <div class="split-visual">
+    <div class="stage tall"><div class="glow"></div>
+      <div class="stage-tag"><span class="dot"></span>LIVE LEADERBOARD</div>
+      <iframe src="/solution-v2/finish-line.html" title="Live finish line" loading="lazy"></iframe>
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+    </div>
+  </div>
+</div></div></section>
+
+<!-- ═══════ 09 · PROCESS ═══════ -->
+<section class="process" id="process"><div class="wrap">
+  <div class="eyebrow"><span class="num">07</span>QUY TRÌNH</div>
+  <h2 class="s-title">Đến sớm 3 ngày. <span class="accent">Test kỹ trước khi súng nổ.</span></h2>
+  <div class="timeline">
+    <div class="tl-step reveal"><div class="tl-dot">T-3<small style="font-size:8px;margin-left:1px">ngày</small></div><div class="tl-when">T-3 ngày</div><div class="tl-task">Khảo sát vạch, định vị mat (start · split · finish · backup)</div></div>
+    <div class="tl-step reveal"><div class="tl-dot">T-1<small style="font-size:8px;margin-left:1px">ngày</small></div><div class="tl-when">T-1 ngày</div><div class="tl-task">Lắp mat, test với tag mẫu, sync backup decoder offline</div></div>
+    <div class="tl-step reveal"><div class="tl-dot">T-3<small style="font-size:8px;margin-left:1px">giờ</small></div><div class="tl-when">T-3 giờ</div><div class="tl-task">Setup đầu đọc, monitor, kiểm tra live tracking với BIB test</div></div>
+    <div class="tl-step reveal"><div class="tl-dot">T-0</div><div class="tl-when">Race day</div><div class="tl-task">Multi-read live · cut-off enforcement · leaderboard public</div></div>
+    <div class="tl-step reveal"><div class="tl-dot">✓</div><div class="tl-when">Về đích</div><div class="tl-task">Kết quả provisional ngay · official sau resolve khiếu nại · certificate</div></div>
+  </div>
+</div></section>
+
+<!-- ═══════ 10 · CTA / QUOTE ═══════ -->
+<section class="cta" id="quote"><div class="wrap"><div class="cta-box">
+  <div class="cta-left">
+    <div class="eyebrow"><span class="num">08</span>BẮT ĐẦU</div>
+    <h2 class="s-title">Giải tháng tới? <span class="accent">Báo giá timing trong 24h.</span></h2>
+    <p class="lead">Gửi vài thông tin, đội 5BIB phản hồi kèm phương án mat + báo giá trong 24 giờ làm việc.</p>
+    <div class="cta-trust">
+      <span><i class="ck">✓</i> Không phí setup ẩn</span>
+      <span><i class="ck">✓</i> Khảo sát mat trước race</span>
+      <span><i class="ck">✓</i> Hợp đồng dịch vụ rõ ràng</span>
+    </div>
+  </div>
+  <form class="cta-form" id="quoteForm">
+    <div class="row">
+      <div class="field"><label>Họ tên người liên hệ</label><input type="text" name="contactName" placeholder="VD: Nguyễn Văn A" maxlength="100" required></div>
+      <div class="field"><label>Tổ chức / BTC</label><input type="text" name="organization" placeholder="VD: CLB Chạy Bộ Hà Nội" maxlength="200"></div>
+    </div>
+    <div class="field"><label>Tên giải</label><input type="text" name="raceName" placeholder="VD: Cát Bà Marathon 2026"></div>
+    <div class="row">
+      <div class="field"><label>Ngày tổ chức</label><input type="date" name="raceDate"></div>
+      <div class="field"><label>Số VĐV dự kiến</label><input type="number" name="runners" placeholder="VD: 5000" min="0"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Số cự ly</label><input type="number" name="distances" placeholder="VD: 3" min="1"></div>
+      <div class="field"><label>Cần thêm gì?</label>
+        <select name="addons"><option value="timing">Chỉ timing</option><option value="timing+live">Timing + leaderboard live</option><option value="timing+live+5pix">Timing + live + ảnh 5Pix</option></select></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>SĐT</label><input type="tel" name="phone" placeholder="09xx xxx xxx" required></div>
+      <div class="field"><label>Email</label><input type="email" name="email" placeholder="you@btc.vn"></div>
+    </div>
+    <!-- Honeypot — bots fill this; real users leave it empty -->
+    <div class="field" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden"><label>Website</label><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
+    <button type="submit" class="btn btn-primary cursor-trigger">Gửi — nhận báo giá trong 24h</button>
+    <p id="quoteMsg" style="font-size:13px;color:var(--green);min-height:18px"></p>
+  </form>
+</div></div></section>
+
+<!-- ═══════ FOOTER ═══════ -->
+<footer class="foot"><div class="wrap foot-inner">
+  <div>
+    <div class="foot-logo">5BIB <span style="color:var(--magenta)">Timing</span></div>
+    <div class="foot-meta" style="margin-top:8px">Công ty Cổ phần 5BIB · info@5bib.com</div>
+  </div>
+  <div class="foot-links">
+    <a href="https://5bib.com" target="_blank" rel="noopener">5bib.com</a>
+    <a href="https://solution.5bib.com" target="_blank" rel="noopener">solution.5bib.com</a>
+    <a href="https://result.5bib.com" target="_blank" rel="noopener">result.5bib.com</a>
+    <a href="https://5solution.vn" target="_blank" rel="noopener">5solution.vn</a>
+  </div>
+  <div class="foot-meta">timing.5bib.com · © 2026</div>
+</div></footer>
+
+<!-- ═══════ I18N (VI default · EN switch · reload pattern) ═══════ -->
+<script>
+(function(){
+  var DICT_EN = {
+    // header
+    "Timing":"Timing","Độ tin cậy":"Reliability","Công nghệ":"Technology","Vì sao 5BIB":"Why 5BIB","Kết quả":"Results","Quy trình":"Process","Nhận báo giá":"Get a quote",
+    // hero
+    "5BIB TIMING · CÔNG NGHỆ RACERESULT (ĐỨC)":"5BIB TIMING · POWERED BY RACERESULT (GERMANY)",
+    "Chip-timing cho giải chạy,":"Chip timing for your race,","vận hành bởi 5BIB.":"run by 5BIB.",
+    "Thiết bị RaceResult (Đức), nhiều đầu đọc chống sót, backup chạy offline.":"RaceResult (Germany) hardware, multiple readers so no one slips through, offline backup.",
+    "Qua 100+ giải và 94.000+ VĐV: 0 lần mất dữ liệu.":"Across 100+ races and 94,000+ runners: zero data loss.",
+    "Nhận báo giá trong 24h →":"Get a quote in 24h →","Xem leaderboard live →":"See the live leaderboard →",
+    "Cùng hệ công nghệ giải BMW Berlin Marathon":"Same system class as the BMW Berlin Marathon",
+    "Đội kỹ thuật có mặt trước race 3 ngày":"Our crew on-site 3 days before race","Cuộn xuống":"Scroll",
+    // trust
+    "Tin dùng bởi BTC hàng đầu Việt Nam":"Trusted by Vietnam's leading organizers","58+ đối tác tổ chức":"58+ event partners","UBND Tỉnh":"Provincial committees","RaceResult · Made in Germany":"RaceResult · Made in Germany",
+    // stats
+    "ngày":"days","giờ":"hrs",
+    "Giải đã tính giờ":"Races timed","2020 — nay":"since 2020","VĐV qua mat":"Runners across the mats","Đã tính giờ":"Timed","Sự cố mất dữ liệu":"Data-loss incidents","Zero data loss":"Zero data loss","Độ phân giải":"Timing resolution","RaceResult · Đức":"RaceResult · Germany",
+    // reliability
+    "ĐỘ TIN CẬY":"RELIABILITY",
+    "Không VĐV nào mất kết quả":"No runner loses their result","chỉ vì một con chip lỗi.":"over a single failed chip.",
+    "Timing không phải lúc chạy ngon thì ai cũng giống nhau — mà là lúc trời mưa, mất điện, 5,000 người dồn qua vạch trong 90 giây. 5BIB thiết kế để không một timestamp nào rơi.":"Timing isn't about the easy moments — it's the rain, the power cut, 5,000 runners crossing the line in 90 seconds. 5BIB is built so no timestamp ever drops.",
+    "Nhiều đầu đọc chồng vùng":"Multi-read redundancy","— mỗi VĐV đi qua được vài antenna đọc cùng lúc. Đầu này sót, đầu kia bắt.":" — every runner is read by several overlapping antennas. One misses, the next catches.",
+    "Đầu đọc backup offline":"Offline backup decoder","— máy thứ 2 chạy độc lập, pin 15Ah (~8h). Mất điện, mất mạng — dữ liệu vẫn ghi.":" — a second reader runs independently on a 15Ah battery (~8h). No power, no network — data keeps recording.",
+    "Mat đôi tại Start & Finish":"Dual mats at Start & Finish","— không bao giờ đặt một điểm đo đơn lẻ ở nơi quan trọng nhất.":" — never a single point of failure where it matters most.",
+    "4G + GPS":"4G + GPS","— kết quả vẫn live ở venue trail xa, rừng, biển.":" — results stay live even at remote trail, forest and coastal venues.",
+    "Sắc Màu Cát Bà Marathon 2024":"Sắc Màu Cát Bà Marathon 2024","— 7.196 VĐV · 3 cự ly ·":"— 7,196 runners · 3 distances ·","0 sai sót thời gian.":"zero timing errors.",
+    // tech
+    "CÔNG NGHỆ":"TECHNOLOGY","Công nghệ tiên tiến từ":"Advanced technology from","RaceResult — Germany.":"RaceResult — Germany.",
+    "5BIB vận hành hệ timing":"5BIB runs the timing system from","RaceResult AG (Đức)":"RaceResult AG (Germany)","— dùng tại 85+ quốc gia, hơn 5 triệu VĐV được tính giờ mỗi năm, hiện diện tại BMW Berlin Marathon (một trong 6 World Marathon Major). Cùng đẳng cấp thiết bị đó, vận hành bởi đội Việt Nam ngay tại giải của bạn.":"— used in 85+ countries, over 5 million runners timed each year, deployed at the BMW Berlin Marathon (an Abbott World Marathon Major). That same class of equipment, run by a Vietnamese crew at your race.",
+    "Gun time":"Gun time","Tính từ phát súng xuất phát. Dùng cho thứ hạng chính thức (chuẩn World Athletics).":"From the start gun. Used for official ranking (World Athletics standard).",
+    "Chip time":"Chip time","Tính từ lúc qua mat xuất phát đến mat đích. Time \"thật\" của bạn, dùng cho PB.":"From crossing the start mat to the finish mat. Your \"true\" time, used for PBs.",
+    "5BIB trả":"5BIB returns","cả hai":"both","cho mỗi VĐV — ranking theo gun time, thành tích cá nhân theo chip time.":"for every runner — ranking by gun time, personal record by chip time.",
+    // anti-cut
+    "ĐỘ CHÍNH XÁC":"ACCURACY","Kết quả đúng.":"Results that hold.","Không lên nhầm podium.":"No wrong podiums.",
+    "Phát hiện cắt cự ly":"Course-cut detection","— thiếu mốc đo ở checkpoint giữa chặng, hệ tự đánh dấu nghi vấn và chặn lên podium nhầm.":" — a missing mid-course split auto-flags a possible course-cut and blocks a wrong podium.",
+    "Đối chiếu 2 lớp":"Two-layer check","— 5BIB tự tính thứ hạng & nhóm tuổi từ chip time gốc, rồi so với dữ liệu nhà cung cấp. Lệch là cảnh báo BTC trước khi công bố.":" — 5BIB computes ranking & age-group from raw chip time, then cross-checks against vendor data. Any mismatch alerts the organizer before publishing.",
+    "Trạng thái rõ ràng":"Transparent status codes","— REG · STARTED · DNF · CUT · DSQ · FIN, đồng bộ realtime trên dashboard BTC.":" — REG · STARTED · DNF · CUT · DSQ · FIN, synced in real time to the organizer dashboard.",
+    "Chúng tôi từng bắt được lỗi age-group rỗng từ vendor trước khi nó làm hỏng podium. Đó là lý do 5BIB luôn verify 2 lớp —":"We've caught an empty age-group bug from the vendor before it wrecked a podium. That's why 5BIB always verifies twice —",
+    "không bao giờ tin mù dữ liệu vendor.":"never blindly trusting vendor data.",
+    // comparison
+    "VÌ SAO 5BIB":"WHY 5BIB","Cùng công nghệ Đức.":"Same German tech.","Khác ở phần còn lại.":"Different everywhere else.",
+    "Phần lớn đơn vị timing dừng lại ở khâu tính giờ. 5BIB làm trọn vòng đời giải chạy — đăng ký, timing, ảnh, kết quả. Timing chỉ là một mắt xích trong đó.":"Most timing providers stop at the clock. 5BIB runs the full race lifecycle — registration, timing, photos, results. Timing is just one link in it.",
+    "Timing in-house VN":"VN in-house timing","Nền tảng đăng ký":"Registration-first","Quốc tế trực tiếp":"International direct",
+    "Công nghệ RaceResult Đức":"RaceResult German tech","— in-house":"— in-house",
+    "Full lifecycle: đăng ký → timing → ảnh → community":"Full lifecycle: reg → timing → photos → community","một phần":"partial",
+    "Đội Việt, hỗ trợ tiếng Việt onsite":"Vietnamese team, on-site VN support","hạn chế":"limited",
+    "Ảnh 5Pix (nhận diện khuôn mặt) + community":"5Pix photos (face recognition) + community",
+    "Báo giá minh bạch, không phí license ẩn":"Transparent pricing, no hidden license fees",
+    // result
+    "KẾT QUẢ REALTIME":"REAL-TIME RESULTS","VĐV về đích.":"Runners finish.","Kết quả lên ngay lập tức.":"Results go live instantly.",
+    "Mỗi giải xong, kết quả live trên":"When a race ends, results go live on","— public, share Facebook, embed vào trang BTC. VĐV gõ tên / số BIB là ra ngay chip time, pace, ranking, split times. BTC không phải gửi Excel cho từng người.":"— public, Facebook-shareable, embeddable in the organizer's site. Runners just type a name / BIB and instantly get chip time, pace, ranking, split times. No more emailing Excel to everyone.",
+    "Leaderboard real-time, mỗi VĐV một URL riêng":"Real-time leaderboard, a unique URL per runner",
+    "Pace bar · projected finish · split times":"Pace bar · projected finish · split times",
+    "Auto-publish lên website giải + social share":"Auto-publish to the race site + social share",
+    "Export CSV / PDF kết quả chính thức":"Export official results to CSV / PDF",
+    "55 giải · 60,438 kết quả":"55 races · 60,438 results","tra cứu public ngay tại result.5bib.com.":"publicly searchable at result.5bib.com.",
+    "Xem result.5bib.com live →":"See result.5bib.com live →",
+    // process
+    "QUY TRÌNH":"THE PROCESS","Đến sớm 3 ngày.":"On-site 3 days early.","Test kỹ trước khi súng nổ.":"Fully tested before the gun.",
+    "T-3 ngày":"T-3 days","T-1 ngày":"T-1 day","T-3 giờ":"T-3 hours","Race day":"Race day","Về đích":"Finish",
+    "Khảo sát vạch, định vị mat (start · split · finish · backup)":"Finish-line survey, mat positioning (start · split · finish · backup)",
+    "Lắp mat, test với tag mẫu, sync backup decoder offline":"Lay mats, test with sample tag, sync offline backup decoder",
+    "Setup đầu đọc, monitor, kiểm tra live tracking với BIB test":"Set up readers, monitors, verify live tracking with a test BIB",
+    "Multi-read live · cut-off enforcement · leaderboard public":"Live multi-read · cut-off enforcement · public leaderboard",
+    "Kết quả provisional ngay · official sau resolve khiếu nại · certificate":"Instant provisional results · official after protest resolution · certificates",
+    // cta
+    "BẮT ĐẦU":"GET STARTED","Giải tháng tới?":"Race next month?","Báo giá timing trong 24h.":"Get a timing quote in 24h.",
+    "Gửi vài thông tin, đội 5BIB phản hồi kèm phương án mat + báo giá trong 24 giờ làm việc.":"Send a few details and the 5BIB team replies with a mat plan + quote within 24 working hours.",
+    "Không phí setup ẩn":"No hidden setup fees","Khảo sát mat trước race":"Pre-race mat survey","Hợp đồng dịch vụ rõ ràng":"Clear service contract",
+    "Họ tên người liên hệ":"Contact name","Tổ chức / BTC":"Organization / Organizer",
+    "Tên giải":"Race name","Ngày tổ chức":"Date","Số VĐV dự kiến":"Expected runners","Số cự ly":"Number of distances",
+    "Cần thêm gì?":"Need anything else?","Chỉ timing":"Timing only","Timing + leaderboard live":"Timing + live leaderboard","Timing + live + ảnh 5Pix":"Timing + live + 5Pix photos",
+    "SĐT":"Phone","Email":"Email","Gửi — nhận báo giá trong 24h":"Send — get a quote in 24h",
+    // footer
+    "Công ty Cổ phần 5BIB · info@5bib.com":"5BIB JSC · info@5bib.com"
+  };
+  var ATTR_EN = {
+    "VD: Cát Bà Marathon 2026":"e.g. Cát Bà Marathon 2026","VD: 5000":"e.g. 5000","VD: 3":"e.g. 3","09xx xxx xxx":"09xx xxx xxx","you@btc.vn":"you@organizer.vn","Language":"Language"
+  };
+  var lang = (function(){
+    try{
+      var u=new URLSearchParams(location.search).get('lang');
+      if(u){localStorage.setItem('5bib_timing_lang',u);return u;}
+      return localStorage.getItem('5bib_timing_lang')||'vi';
+    }catch(e){return 'vi';}
+  })();
+  function norm(s){return s.replace(/\s+/g,' ').trim();}
+  if(lang==='en'){
+    document.documentElement.lang='en';
+    // text nodes
+    var skip={SCRIPT:1,STYLE:1,NOSCRIPT:1,IFRAME:1};
+    var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+      if(skip[n.parentNode.nodeName])return NodeFilter.FILTER_REJECT;
+      if(n.parentNode.closest&&n.parentNode.closest('#langMenu'))return NodeFilter.FILTER_REJECT;
+      return norm(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT;
+    }});
+    var nodes=[],x;while(x=walker.nextNode())nodes.push(x);
+    nodes.forEach(function(n){var k=norm(n.nodeValue);if(DICT_EN[k]!==undefined){n.nodeValue=n.nodeValue.replace(k,DICT_EN[k]);}});
+    // attributes
+    document.querySelectorAll('[placeholder],[aria-label],[title]').forEach(function(el){
+      ['placeholder','aria-label','title'].forEach(function(a){
+        var v=el.getAttribute(a);if(!v)return;var k=norm(v);
+        if(ATTR_EN[k]!==undefined)el.setAttribute(a,ATTR_EN[k]);
+        else if(DICT_EN[k]!==undefined)el.setAttribute(a,DICT_EN[k]);
+      });
+    });
+    // select options already handled as text nodes
+    var cur=document.getElementById('langCur');if(cur)cur.textContent='EN';
+    document.querySelectorAll('#langMenu li').forEach(function(li){li.classList.toggle('sel',li.dataset.lang==='en');});
+  }
+  // wire switcher
+  var langEl=document.getElementById('lang');
+  document.getElementById('langBtn').addEventListener('click',function(e){e.stopPropagation();langEl.classList.toggle('open');});
+  document.addEventListener('click',function(){langEl.classList.remove('open');});
+  document.querySelectorAll('#langMenu li').forEach(function(li){
+    li.addEventListener('click',function(){
+      var l=li.dataset.lang;try{localStorage.setItem('5bib_timing_lang',l);}catch(e){}
+      var p=new URLSearchParams(location.search);p.set('lang',l);location.search=p.toString();
+    });
+  });
+})();
+</script>
+
+<!-- ═══════ MOTION (GSAP + Lenis + cursor + count-up) ═══════ -->
+<script>
+(function(){
+  var reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  // Lenis
+  if(window.Lenis && !reduce){
+    var lenis=new Lenis({duration:1.1,easing:function(t){return Math.min(1,1.001-Math.pow(2,-10*t));}});
+    function raf(t){lenis.raf(t);requestAnimationFrame(raf);}requestAnimationFrame(raf);
+    if(window.ScrollTrigger){lenis.on('scroll',ScrollTrigger.update);}
+    document.querySelectorAll('a[href^="#"]').forEach(function(a){
+      a.addEventListener('click',function(e){var id=a.getAttribute('href');if(id.length>1){var t=document.querySelector(id);if(t){e.preventDefault();lenis.scrollTo(t,{offset:-70});}}});
+    });
+  }
+  // header scrolled + progress bar
+  var hdr=document.getElementById('hdr'),prog=document.getElementById('progress');
+  function onScroll(){
+    var y=window.scrollY||document.documentElement.scrollTop;
+    hdr.classList.toggle('scrolled',y>40);
+    var h=document.documentElement.scrollHeight-window.innerHeight;
+    prog.style.width=(h>0?(y/h*100):0)+'%';
+  }
+  window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  // cursor
+  if(window.matchMedia('(hover:hover) and (pointer:fine)').matches){
+    var cur=document.getElementById('cursor'),lab=document.getElementById('cursorLabel'),cx=innerWidth/2,cy=innerHeight/2,tx=cx,ty=cy;
+    window.addEventListener('mousemove',function(e){tx=e.clientX;ty=e.clientY;});
+    (function loop(){cx+=(tx-cx)*.2;cy+=(ty-cy)*.2;cur.style.transform='translate('+cx+'px,'+cy+'px) translate(-50%,-50%)';requestAnimationFrame(loop);})();
+    document.querySelectorAll('.cursor-trigger,a,button').forEach(function(el){
+      el.addEventListener('mouseenter',function(){cur.classList.add('large');var d=el.getAttribute('data-cursor');if(d){lab.textContent=d;cur.classList.add('show-label');}});
+      el.addEventListener('mouseleave',function(){cur.classList.remove('large','show-label');});
+    });
+  }
+  // GSAP reveal + count-up
+  if(window.gsap){
+    if(window.ScrollTrigger)gsap.registerPlugin(ScrollTrigger);
+    // split hero headline into chars
+    function splitChars(el){
+      if(!el)return;var html='';var seg=el.textContent;
+      el.querySelectorAll('*').forEach(function(){});
+      // walk child nodes preserving spans
+      var out=[];
+      el.childNodes.forEach(function(node){
+        if(node.nodeType===3){
+          out.push(wrap(node.nodeValue));
+        }else if(node.nodeType===1){
+          var cls=node.className?(' class="'+node.className+'"'):'';
+          out.push('<span'+cls+'>'+wrap(node.textContent)+'</span>');
+        }
+      });
+      el.innerHTML=out.join('');
+      function wrap(str){
+        // Split into words + whitespace runs so characters never break mid-word.
+        return str.split(/(\s+)/).map(function(token){
+          if(token==='')return '';
+          if(/^\s+$/.test(token))return '<span class="char">&nbsp;</span>';
+          var seg;try{seg=Array.from(new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(token)).map(function(s){return s.segment;});}catch(e){seg=Array.from(token);}
+          return '<span class="word">'+seg.map(function(c){return '<span class="char">'+c+'</span>';}).join('')+'</span>';
+        }).join('');}
+    }
+    var heroTitle=document.getElementById('heroTitle');
+    if(!reduce && heroTitle){
+      splitChars(heroTitle);
+      gsap.from(heroTitle.querySelectorAll('.char'),{yPercent:120,opacity:0,duration:.7,ease:'power3.out',stagger:{each:.018,from:'start'},delay:.15});
+      gsap.from('.hero-sub,.hero-cta,.hero-micro,.hero-eyebrow',{y:24,opacity:0,duration:.7,ease:'power3.out',stagger:.08,delay:.5});
+    }
+    if(window.ScrollTrigger && !reduce){
+      document.querySelectorAll('.reveal').forEach(function(el){
+        gsap.to(el,{opacity:1,y:0,duration:.7,ease:'power3.out',scrollTrigger:{trigger:el,start:'top 88%'}});
+      });
+      // section titles
+      document.querySelectorAll('.s-title').forEach(function(el){
+        if(el===heroTitle)return;
+        gsap.from(el,{y:30,opacity:0,duration:.7,ease:'power3.out',scrollTrigger:{trigger:el,start:'top 86%'}});
+      });
+      // count-up
+      document.querySelectorAll('[data-count]').forEach(function(el){
+        var end=+el.getAttribute('data-count'),obj={v:0};
+        ScrollTrigger.create({trigger:el,start:'top 90%',once:true,onEnter:function(){
+          gsap.to(obj,{v:end,duration:1.6,ease:'power2.out',onUpdate:function(){el.textContent=Math.round(obj.v).toLocaleString('en-US');}});
+        }});
+      });
+    }else{
+      document.querySelectorAll('.reveal').forEach(function(el){el.style.opacity=1;el.style.transform='none';});
+      document.querySelectorAll('[data-count]').forEach(function(el){el.textContent=(+el.getAttribute('data-count')).toLocaleString('en-US');});
+    }
+  }
+  // quote form → maps to CreateLeadDto on POST /api/timing/leads (source set server-side to 'timing')
+  var form=document.getElementById('quoteForm');
+  if(form){
+    var ADDON_PKG={'timing':'basic','timing+live':'advanced','timing+live+5pix':'professional'};
+    var ADDON_LABEL={'timing':'Chỉ timing','timing+live':'Timing + leaderboard live','timing+live+5pix':'Timing + live + ảnh 5Pix'};
+    form.addEventListener('submit',function(e){
+      e.preventDefault();
+      var en=document.documentElement.lang==='en';
+      var msg=document.getElementById('quoteMsg');
+      var data=Object.fromEntries(new FormData(form).entries());
+      // build a human-readable notes block from the race-detail fields (none of these map 1:1 to DTO)
+      var noteLines=[];
+      if(data.raceName) noteLines.push('Giải: '+data.raceName);
+      if(data.raceDate) noteLines.push('Ngày tổ chức: '+data.raceDate);
+      if(data.distances) noteLines.push('Số cự ly: '+data.distances);
+      if(data.addons) noteLines.push('Nhu cầu: '+(ADDON_LABEL[data.addons]||data.addons));
+      var payload={
+        full_name:(data.contactName||'').trim(),
+        phone:(data.phone||'').trim()||undefined,
+        organization:(data.organization||'').trim()||undefined,
+        email:(data.email||'').trim()||undefined,
+        athlete_count_range:(data.runners||'').toString().trim()||undefined,
+        package_interest:ADDON_PKG[data.addons]||'unspecified',
+        notes:noteLines.join('\n')||undefined,
+        website:data.website||'' // honeypot
+      };
+      msg.style.color='var(--text-muted)';msg.textContent=(en?'Sending…':'Đang gửi…');
+      fetch('/api/timing/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+        .then(function(r){
+          if(r.ok) return r;
+          if(r.status===429){var e1=new Error('rate');e1.code=429;throw e1;}
+          throw new Error('http '+r.status);
+        })
+        .then(function(){msg.style.color='var(--green)';msg.textContent=(en?'Received — we\'ll reply within 24h.':'Đã nhận — 5BIB phản hồi trong 24h.');form.reset();})
+        .catch(function(err){
+          if(err&&err.code===429){msg.style.color='var(--amber)';msg.textContent=(en?'Too many requests. Please try again in an hour.':'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 giờ.');return;}
+          msg.style.color='var(--amber)';msg.textContent=(en?'Could not send. Please email info@5bib.com.':'Gửi lỗi. Vui lòng email info@5bib.com.');
+        });
+    });
+  }
+
+  /* ── perf: pause off-screen animation iframes to stop scroll jank ──
+     Each animation iframe runs its own canvas/GSAP rAF loop. Same-origin
+     iframes share the main thread, so 5 simultaneous loops contend with
+     Lenis + ScrollTrigger during scroll. We postMessage play/pause based on
+     viewport intersection; iframes only render while visible. */
+  (function(){
+    var frames=[].slice.call(document.querySelectorAll('.hero-bg iframe, .stage iframe'));
+    if(!frames.length || !('IntersectionObserver' in window)) return;
+    var last=new WeakMap();
+    function send(f,play){
+      last.set(f,play);
+      try{ if(f.contentWindow) f.contentWindow.postMessage({__5bibAnim:play},'*'); }catch(_){}
+    }
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ send(en.target, en.isIntersecting); });
+    },{rootMargin:'150px 0px',threshold:0.01});
+    frames.forEach(function(f){
+      io.observe(f);
+      // re-assert state once a (lazy) iframe finishes loading
+      f.addEventListener('load',function(){ var s=last.get(f); if(s!==undefined) send(f,s); });
+    });
+  })();
+})();
+</script>
+</body>
+</html>

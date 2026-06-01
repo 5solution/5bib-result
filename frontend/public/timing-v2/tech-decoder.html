@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5BIB · Signal Chain</title>
+<style>
+@font-face{font-family:"JetBrains Mono";src:url("/solution-v2/fonts/JetBrainsMono-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("/solution-v2/fonts/JetBrainsMono-Medium.ttf") format("truetype");font-weight:500;font-display:swap}
+html,body{margin:0;overflow:hidden;background:#06081A;width:100%;height:100%}
+*{box-sizing:border-box}
+#stage{position:absolute;inset:0;font-family:"JetBrains Mono",ui-monospace,monospace}
+svg{display:block;width:100%;height:100%}
+.grid-line{stroke:#142046;stroke-width:.5}
+.hw{stroke:#e5e7eb;fill:none;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round}
+.hw-thin{stroke:#aeb6c8;fill:none;stroke-width:.9}
+.conn{stroke:#33406a;fill:none;stroke-width:1.4;stroke-dasharray:5 4}
+.tick{stroke:#33406a;stroke-width:.8}
+.lbl{font-family:"JetBrains Mono",monospace;font-weight:700;fill:#9fb0d6;letter-spacing:1.2px}
+.lbl-sm{font-family:"JetBrains Mono",monospace;font-weight:500;fill:#5b6890;letter-spacing:1px}
+.accent{fill:#2563eb}
+.flow-glow{filter:url(#glow)}
+.pink{fill:#FF5C81}
+.scanline{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(37,99,235,.025) 0,rgba(37,99,235,.025) 1px,transparent 2px,transparent 4px);mix-blend-mode:screen}
+.vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 50%,rgba(6,8,26,.85) 100%)}
+@media (prefers-reduced-motion:reduce){.rm-hide{display:none!important}}
+.rm-show{display:none}
+@media (prefers-reduced-motion:reduce){.rm-show{display:block}}
+</style>
+</head>
+<body>
+<div id="stage">
+<svg id="schematic" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet">
+<defs>
+<radialGradient id="bgGrad" cx="50%" cy="42%" r="70%">
+<stop offset="0%" stop-color="#0c1230"/>
+<stop offset="100%" stop-color="#06081A"/>
+</radialGradient>
+<filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+<feGaussianBlur stdDeviation="3.2" result="b"/>
+<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+<filter id="softglow" x="-80%" y="-80%" width="260%" height="260%">
+<feGaussianBlur stdDeviation="6" result="b"/>
+<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+<linearGradient id="brushed" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#1b2444"/>
+<stop offset="50%" stop-color="#101732"/>
+<stop offset="100%" stop-color="#0a0f24"/>
+</linearGradient>
+<linearGradient id="bibGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#f4f6fb"/>
+<stop offset="100%" stop-color="#d7dcea"/>
+</linearGradient>
+<linearGradient id="matGrad" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#0e1638"/>
+<stop offset="100%" stop-color="#16224d"/>
+</linearGradient>
+<radialGradient id="pktGrad" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#ffffff"/>
+<stop offset="35%" stop-color="#7fb0ff"/>
+<stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="pktGradPink" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#ffffff"/>
+<stop offset="35%" stop-color="#FF9DB6"/>
+<stop offset="100%" stop-color="#DB3069" stop-opacity="0"/>
+</radialGradient>
+</defs>
+
+<rect x="0" y="0" width="1280" height="720" fill="url(#bgGrad)"/>
+
+<!-- blueprint grid -->
+<g opacity="0.55">
+<g id="vgrid"></g>
+<g id="hgrid"></g>
+</g>
+
+<!-- title block -->
+<g>
+<text x="60" y="60" class="lbl" font-size="15">5BIB · SIGNAL CHAIN</text>
+<text x="60" y="80" class="lbl-sm" font-size="10.5">CHIP → ANTENNA → DECODER → CLOUD</text>
+<line x1="60" y1="92" x2="320" y2="92" class="tick"/>
+<text x="1220" y="60" class="lbl" font-size="13" text-anchor="end">RACERESULT · GERMANY</text>
+<text x="1220" y="80" class="lbl-sm" font-size="10.5" text-anchor="end">PRECISION TIMING SYSTEM</text>
+<line x1="960" y1="92" x2="1220" y2="92" class="tick"/>
+</g>
+
+<!-- connector backbone path (chip->antenna->mat->wire->decoder->cloud) -->
+<path id="chainPath" class="conn" d="M 250 430 C 250 360, 330 330, 410 330 L 470 330" fill="none"/>
+<path id="wirePath" class="conn" d="M 640 470 C 720 470, 740 430, 800 430" fill="none"/>
+<path id="cloudPath" class="conn" d="M 1010 380 C 1070 360, 1080 280, 1075 230" fill="none"/>
+
+<!-- ================= STAGE 1 : RFID BIB ================= -->
+<g id="gBib">
+<g transform="translate(150,360) rotate(-6)">
+<rect x="0" y="0" width="180" height="120" rx="6" fill="url(#bibGrad)" stroke="#b9c0d4" stroke-width="1"/>
+<rect x="0" y="0" width="180" height="120" rx="6" fill="none" stroke="#2563eb" stroke-width="1" opacity=".35"/>
+<text x="90" y="58" text-anchor="middle" font-family="JetBrains Mono,monospace" font-weight="700" font-size="46" fill="#0c1230">042</text>
+<rect x="22" y="74" width="136" height="10" rx="2" fill="#0c1230" opacity=".18"/>
+<rect x="22" y="90" width="96" height="7" rx="2" fill="#0c1230" opacity=".12"/>
+<!-- RFID coil chip -->
+<g transform="translate(126,86)">
+<rect x="-14" y="-12" width="40" height="30" rx="3" fill="#0c1230" opacity=".10"/>
+<g class="rfidCoil" stroke="#DB3069" fill="none" stroke-width="1.3">
+<rect x="-9" y="-7" width="22" height="18" rx="2"/>
+<rect x="-6" y="-4" width="16" height="12" rx="1.5"/>
+<rect x="-3" y="-1" width="10" height="6" rx="1"/>
+</g>
+<circle cx="2" cy="2" r="1.6" fill="#DB3069"/>
+</g>
+</g>
+<text x="150" y="520" class="lbl" font-size="11">RFID CHIP</text>
+<text x="150" y="537" class="lbl-sm" font-size="9">PASSIVE · UHF</text>
+<line x1="150" y1="496" x2="150" y2="508" class="tick"/>
+</g>
+
+<!-- ================= STAGE 2 : TIMING MAT + ANTENNA ARCS ================= -->
+<g id="gMat">
+<!-- mat (isometric slab) -->
+<g transform="translate(380,300)">
+<polygon points="0,90 230,90 290,150 60,150" fill="url(#matGrad)" stroke="#2f3c66" stroke-width="1.2"/>
+<polygon points="0,90 230,90 230,78 0,78" fill="#1c2a59" stroke="#3a4a7d" stroke-width="1"/>
+<polygon points="230,90 230,78 290,138 290,150" fill="#0e1838" stroke="#3a4a7d" stroke-width="1"/>
+<!-- antenna loops on mat top -->
+<g class="matLoops" stroke="#2563eb" fill="none" stroke-width="1.1" opacity=".8">
+<rect x="20" y="98" width="55" height="42" rx="4"/>
+<rect x="92" y="98" width="55" height="42" rx="4"/>
+<rect x="164" y="98" width="55" height="42" rx="4" transform="skewX(-12)"/>
+</g>
+<!-- scanning arcs emitter point -->
+<g id="arcSet" transform="translate(145,90)">
+<path class="scanArc" d="M -80 0 A 80 80 0 0 1 80 0" stroke="#2563eb" fill="none" stroke-width="1.4"/>
+<path class="scanArc" d="M -120 0 A 120 120 0 0 1 120 0" stroke="#2563eb" fill="none" stroke-width="1.2"/>
+<path class="scanArc" d="M -160 0 A 160 160 0 0 1 160 0" stroke="#2563eb" fill="none" stroke-width="1"/>
+</g>
+</g>
+<text x="525" y="190" class="lbl" font-size="11" text-anchor="middle">ANTENNA · MAT</text>
+<text x="525" y="207" class="lbl-sm" font-size="9" text-anchor="middle">SCAN FIELD ⟶ 4 LOOPS</text>
+</g>
+
+<!-- ================= STAGE 3 : DECODER UNIT ================= -->
+<g id="gDecoder">
+<g transform="translate(800,360)">
+<rect x="0" y="0" width="210" height="118" rx="8" fill="url(#brushed)" stroke="#e5e7eb" stroke-width="1.4"/>
+<!-- brushed faceplate lines -->
+<g stroke="#27345e" stroke-width=".6" opacity=".7">
+<line x1="8" y1="14" x2="202" y2="14"/><line x1="8" y1="22" x2="202" y2="22"/>
+<line x1="8" y1="30" x2="202" y2="30"/>
+</g>
+<rect x="0" y="0" width="210" height="118" rx="8" fill="none" stroke="#2563eb" stroke-width="1" opacity=".3"/>
+<!-- ventilation grille -->
+<g stroke="#3a4a7d" stroke-width="1">
+<line x1="14" y1="44" x2="14" y2="104"/><line x1="20" y1="44" x2="20" y2="104"/>
+<line x1="26" y1="44" x2="26" y2="104"/><line x1="32" y1="44" x2="32" y2="104"/>
+<line x1="38" y1="44" x2="38" y2="104"/>
+</g>
+<!-- display panel -->
+<rect x="58" y="48" width="92" height="40" rx="4" fill="#06102a" stroke="#1d2a52" stroke-width="1"/>
+<text id="decReadout" x="104" y="73" text-anchor="middle" font-family="JetBrains Mono,monospace" font-weight="700" font-size="16" fill="#5bd0ff">--:--:--</text>
+<!-- status LEDs -->
+<g id="leds">
+<circle class="led" cx="170" cy="52" r="4.5" fill="#1a8f3c"/>
+<circle class="led" cx="186" cy="52" r="4.5" fill="#b58a1a"/>
+<circle class="led" cx="170" cy="70" r="4.5" fill="#2563eb"/>
+<circle class="led" cx="186" cy="70" r="4.5" fill="#DB3069"/>
+</g>
+<text x="170" y="104" font-family="JetBrains Mono,monospace" font-weight="500" font-size="7" fill="#5b6890">PWR LINK RX SYN</text>
+<!-- brand strip -->
+<rect x="58" y="96" width="92" height="14" rx="2" fill="#0c1838"/>
+<text x="104" y="106" text-anchor="middle" font-family="JetBrains Mono,monospace" font-weight="700" font-size="8" fill="#9fb0d6">RACERESULT</text>
+</g>
+<text x="905" y="512" class="lbl" font-size="11" text-anchor="middle">DECODER</text>
+<text x="905" y="529" class="lbl-sm" font-size="9" text-anchor="middle">RR · DECODER UNIT</text>
+<line x1="905" y1="488" x2="905" y2="500" class="tick"/>
+</g>
+
+<!-- ================= STAGE 4 : CLOUD + RESULT ================= -->
+<g id="gCloud">
+<g transform="translate(1000,120)">
+<path class="hw" d="M 40 70 a 30 30 0 0 1 8 -59 a 38 38 0 0 1 72 6 a 26 26 0 0 1 4 53 Z" fill="#0c1838"/>
+<g stroke="#2563eb" fill="none" stroke-width="1" opacity=".5">
+<path d="M 40 70 a 30 30 0 0 1 8 -59 a 38 38 0 0 1 72 6 a 26 26 0 0 1 4 53 Z"/>
+</g>
+<text x="85" y="48" text-anchor="middle" font-family="JetBrains Mono,monospace" font-weight="700" font-size="11" fill="#7fb0ff">CLOUD</text>
+</g>
+<!-- result timestamp card -->
+<g transform="translate(975,200)">
+<rect x="0" y="0" width="230" height="60" rx="8" fill="#0a1430" stroke="#2563eb" stroke-width="1.2"/>
+<text x="16" y="24" font-family="JetBrains Mono,monospace" font-weight="500" font-size="9" fill="#5b6890">RESULT · BIB 042</text>
+<text id="resultTime" x="16" y="48" font-family="JetBrains Mono,monospace" font-weight="700" font-size="24" fill="#FF5C81">00:00:00.00</text>
+<circle id="resDot" cx="214" cy="22" r="4" fill="#36d36b"/>
+</g>
+<text x="1090" y="300" class="lbl" font-size="11" text-anchor="middle">0.01s RESOLUTION</text>
+<text x="1090" y="317" class="lbl-sm" font-size="9" text-anchor="middle">CHRONOMETRIC · CERTIFIED</text>
+</g>
+
+<!-- moving data packets -->
+<g id="packets" class="flow-glow"></g>
+
+<!-- bottom measurement rail -->
+<g opacity=".6">
+<line x1="60" y1="678" x2="1220" y2="678" class="tick"/>
+<g id="measTicks"></g>
+<text x="60" y="700" class="lbl-sm" font-size="9">SIGNAL LATENCY ≈ 0.7ms</text>
+<text x="1220" y="700" class="lbl-sm" font-size="9" text-anchor="end">99.97% READ RATE</text>
+</g>
+</svg>
+<div class="scanline rm-hide"></div>
+<div class="vignette"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var SVGNS="http://www.w3.org/2000/svg";
+
+  // ---- build blueprint grid ----
+  var vg=document.getElementById("vgrid"), hg=document.getElementById("hgrid");
+  for(var x=0;x<=1280;x+=40){var l=document.createElementNS(SVGNS,"line");l.setAttribute("x1",x);l.setAttribute("y1",0);l.setAttribute("x2",x);l.setAttribute("y2",720);l.setAttribute("class","grid-line");vg.appendChild(l);}
+  for(var y=0;y<=720;y+=40){var l2=document.createElementNS(SVGNS,"line");l2.setAttribute("x1",0);l2.setAttribute("y1",y);l2.setAttribute("x2",1280);l2.setAttribute("y2",y);l2.setAttribute("class","grid-line");hg.appendChild(l2);}
+
+  // ---- bottom measurement ticks ----
+  var mt=document.getElementById("measTicks");
+  for(var i=0;i<=58;i++){var tx=60+i*20;var big=(i%5===0);var t=document.createElementNS(SVGNS,"line");t.setAttribute("x1",tx);t.setAttribute("y1",678);t.setAttribute("x2",tx);t.setAttribute("y2",big?668:673);t.setAttribute("class","tick");mt.appendChild(t);}
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- timestamp helpers ----
+  function fmt(t){
+    var ms=Math.floor((t*100)%100);
+    var s=Math.floor(t)%60;
+    var m=Math.floor(t/60)%60;
+    var h=Math.floor(t/3600);
+    function p(n){return (n<10?"0":"")+n;}
+    return p(h)+":"+p(m)+":"+p(s)+"."+p(ms);
+  }
+  var resultEl=document.getElementById("resultTime");
+  var decEl=document.getElementById("decReadout");
+
+  if(reduce){
+    // static composed fallback
+    resultEl.textContent="00:42:13.07";
+    decEl.textContent="00:42:13";
+    gsap.set("#arcSet .scanArc",{opacity:.5});
+    return;
+  }
+
+  // ---- subtle idle animations ----
+  gsap.to("#vgrid",{opacity:.4,duration:3,yoyo:true,repeat:-1,ease:"sine.inOut"});
+  gsap.fromTo(".rfidCoil",{opacity:.45},{opacity:1,duration:1.1,yoyo:true,repeat:-1,ease:"sine.inOut"});
+
+  // LEDs blink (idle baseline)
+  gsap.to("#leds .led:nth-child(1)",{opacity:.35,duration:1.3,yoyo:true,repeat:-1,ease:"sine.inOut"});
+  gsap.to("#leds .led:nth-child(2)",{opacity:.4,duration:.9,yoyo:true,repeat:-1,ease:"sine.inOut",delay:.3});
+
+  // scanning arcs continuous emit
+  gsap.set("#arcSet .scanArc",{opacity:0,transformOrigin:"center bottom"});
+  function emitArcs(){
+    var arcs=document.querySelectorAll("#arcSet .scanArc");
+    var tl=gsap.timeline({repeat:-1,repeatDelay:.4});
+    arcs.forEach(function(a,i){
+      tl.fromTo(a,{opacity:.7,scale:.7},{opacity:0,scale:1.05,duration:1.4,ease:"power1.out"}, i*0.18);
+    });
+  }
+  emitArcs();
+
+  // ---- packet travel along chain ----
+  var packetsG=document.getElementById("packets");
+  var chain=document.getElementById("chainPath");
+  var wire=document.getElementById("wirePath");
+  var cloud=document.getElementById("cloudPath");
+
+  function ptOn(path,t){var L=path.getTotalLength();return path.getPointAtLength(L*t);}
+
+  function makePacket(pink){
+    var c=document.createElementNS(SVGNS,"circle");
+    c.setAttribute("r","7");
+    c.setAttribute("fill",pink?"url(#pktGradPink)":"url(#pktGrad)");
+    packetsG.appendChild(c);
+    return c;
+  }
+
+  // pulse the decoder readout + LEDs on packet arrival
+  function decoderHit(){
+    gsap.fromTo("#leds .led:nth-child(3)",{opacity:.3,r:4.5},{opacity:1,r:6,duration:.18,yoyo:true,repeat:1,ease:"power2.out"});
+    gsap.fromTo("#leds .led:nth-child(4)",{opacity:.3,r:4.5},{opacity:1,r:6,duration:.18,yoyo:true,repeat:1,ease:"power2.out",delay:.05});
+    gsap.fromTo("#decReadout",{fill:"#5bd0ff"},{fill:"#ffffff",duration:.15,yoyo:true,repeat:1});
+  }
+
+  // materialize timestamp on cloud arrival
+  function cloudHit(baseT){
+    gsap.fromTo("#resultTime",{opacity:.2,y:6},{opacity:1,y:0,duration:.35,ease:"power2.out"});
+    gsap.fromTo("#resDot",{fill:"#36d36b",r:4},{fill:"#9dffc0",r:6,duration:.2,yoyo:true,repeat:1});
+    // count up final hundredths flicker
+    var obj={v:baseT-0.4};
+    gsap.to(obj,{v:baseT,duration:.45,ease:"power2.out",onUpdate:function(){resultEl.textContent=fmt(obj.v);}});
+  }
+
+  var raceClock=2533.07; // ~00:42:13.07 baseline
+
+  function runPacket(delay){
+    var pink=Math.random()>0.5;
+    var p=makePacket(pink);
+    var thisTime=raceClock;
+    raceClock+=Math.random()*7+3;
+
+    var tl=gsap.timeline({delay:delay,onComplete:function(){p.remove();}});
+
+    // segment 1: chip -> antenna/mat
+    tl.set(p,{opacity:0});
+    tl.to(p,{opacity:1,duration:.25},0);
+    tl.to({t:0},{t:1,duration:1.3,ease:"power1.inOut",onUpdate:function(){
+      var pt=ptOn(chain,this.targets()[0].t);p.setAttribute("cx",pt.x);p.setAttribute("cy",pt.y);
+    }},0);
+
+    // brief dwell at mat (scan) then run decoder readout live count
+    tl.to({},{duration:.4});
+
+    // segment 2: mat/decoder wire travel
+    tl.to({t:0},{t:1,duration:1.1,ease:"power1.inOut",onStart:function(){
+      // live decoder counting during transit
+      var o={v:thisTime-1};
+      gsap.to(o,{v:thisTime,duration:1.1,ease:"none",onUpdate:function(){decEl.textContent=fmt(o.v).slice(0,8);}});
+    },onUpdate:function(){
+      var pt=ptOn(wire,this.targets()[0].t);p.setAttribute("cx",pt.x);p.setAttribute("cy",pt.y);
+    }});
+
+    tl.add(decoderHit,"-=0.05");
+    tl.to({},{duration:.3});
+
+    // segment 3: decoder -> cloud
+    tl.to({t:0},{t:1,duration:1.0,ease:"power2.in",onUpdate:function(){
+      var pt=ptOn(cloud,this.targets()[0].t);p.setAttribute("cx",pt.x);p.setAttribute("cy",pt.y);
+    }});
+    tl.to(p,{opacity:0,scale:1.6,duration:.3},"-=0.15");
+    tl.add(function(){cloudHit(thisTime);},"-=0.2");
+
+    return tl.duration();
+  }
+
+  // master loop: stagger multiple packets in flight
+  function loop(){
+    var d0=runPacket(0);
+    runPacket(d0*0.45);
+    runPacket(d0*0.9);
+    // schedule next wave
+    gsap.delayedCall(d0*0.9+1.0, loop);
+  }
+  loop();
+
+  /* ── perf: pause/resume GSAP when parent reports off/on-screen ── */
+  var __play = true;
+  window.addEventListener("message", function(e){
+    if(!e.data || e.data.__5bibAnim===undefined || reduce) return;
+    var p = !!e.data.__5bibAnim;
+    if(p===__play) return;
+    __play = p;
+    if(window.gsap){ p ? gsap.globalTimeline.resume() : gsap.globalTimeline.pause(); }
+  });
+
+})();
+</script>
+</body>
+</html>

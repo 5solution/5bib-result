@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5BIB Timing — Hero signal field</title>
+<style>
+@font-face{font-family:"JetBrains Mono";src:url("/solution-v2/fonts/JetBrainsMono-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("/solution-v2/fonts/JetBrainsMono-Medium.ttf") format("truetype");font-weight:500;font-display:swap}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06081A}
+*{box-sizing:border-box}
+#stage{
+  position:absolute;inset:0;width:100%;height:100%;
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  background:
+    radial-gradient(90% 70% at 78% 12%, rgba(37,99,235,.16), transparent 60%),
+    radial-gradient(80% 80% at 88% 92%, rgba(219,48,105,.13), transparent 62%),
+    #06081A;
+}
+/* faint blueprint grid */
+#grid{position:absolute;inset:0;opacity:.32;
+  background-image:
+    linear-gradient(rgba(120,140,200,.10) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(120,140,200,.10) 1px,transparent 1px);
+  background-size:46px 46px;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 40%,#000 100%);
+          mask-image:linear-gradient(90deg,transparent,#000 40%,#000 100%);
+}
+/* oscilloscope lanes share one canvas */
+#scope{position:absolute;inset:0;z-index:2}
+/* vertical read-line where chips get detected */
+#readline{
+  position:absolute;top:0;bottom:0;width:2px;left:62%;z-index:3;
+  background:linear-gradient(180deg,transparent,rgba(180,205,255,.55),rgba(255,150,185,.45),transparent);
+  box-shadow:0 0 18px rgba(140,180,255,.4);
+}
+#readline::before{content:"";position:absolute;top:0;bottom:0;left:-9px;width:20px;
+  background:linear-gradient(90deg,transparent,rgba(120,170,255,.12),transparent)}
+#fx{position:absolute;inset:0;z-index:4;pointer-events:none}
+.chip{
+  position:absolute;transform:translate(-50%,-50%);
+  font-weight:700;font-size:clamp(9px,1.5vw,13px);letter-spacing:.04em;
+  padding:.32em .6em;border-radius:7px;white-space:nowrap;
+  color:#dbe3ff;background:rgba(24,32,64,.82);
+  border:1px solid rgba(120,140,200,.32);
+  box-shadow:0 2px 12px rgba(0,0,0,.4);
+}
+.tick{position:absolute;transform:translate(-50%,-50%) scale(0);z-index:6;
+  font-weight:700;font-size:clamp(13px,2vw,20px);color:#37e08a;
+  text-shadow:0 0 14px rgba(55,224,138,.95)}
+.ring{position:absolute;transform:translate(-50%,-50%) scale(0);z-index:5;
+  width:30px;height:30px;border-radius:50%;border:2px solid rgba(120,180,255,.8)}
+/* ambient corner readout */
+#tag{position:absolute;left:5.2%;bottom:8%;z-index:4;
+  font-weight:500;font-size:clamp(9px,1.1vw,12px);letter-spacing:.26em;text-transform:uppercase;
+  color:rgba(150,170,225,.5)}
+#tag b{color:rgba(190,205,255,.8);font-weight:700}
+@media (prefers-reduced-motion: reduce){.rmHide{display:none!important}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <canvas id="scope"></canvas>
+  <div id="readline"></div>
+  <div id="fx"></div>
+  <div id="tag"><b>RFID</b> &nbsp;·&nbsp; signal lock &nbsp;·&nbsp; <b id="rps">0</b> reads/s</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var PLAY = true; // toggled by parent via postMessage when scrolled off-screen
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var cv = document.getElementById("scope");
+  var ctx = cv.getContext("2d");
+  var fx = document.getElementById("fx");
+  var rpsEl = document.getElementById("rps");
+  var dpr = Math.min(window.devicePixelRatio||1, 2);
+  var W=0,H=0;
+
+  // three heartbeat lanes: blue (primary), soft-white (mid), pink (backup)
+  var lanes = [
+    {yf:0.34, color:"55,130,255",  glow:9,  pts:[], pulse:0, base:2.6},
+    {yf:0.52, color:"200,212,255", glow:6,  pts:[], pulse:0, base:1.8},
+    {yf:0.70, color:"255,120,170", glow:9,  pts:[], pulse:0, base:2.6}
+  ];
+
+  function resize(){
+    W = cv.offsetWidth; H = cv.offsetHeight;
+    cv.width = W*dpr; cv.height = H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    lanes.forEach(function(l){ if(l.pts.length===0){ for(var i=0;i<W;i++) l.pts.push(0); } });
+  }
+
+  function drawLane(l){
+    var y0 = H*l.yf;
+    l.pts.shift();
+    var noise = (Math.random()-0.5)*l.base;
+    l.pts.push(noise + l.pulse);
+    l.pulse *= 0.80;
+    if(l.pts.length>W) l.pts.splice(0, l.pts.length-W);
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba("+l.color+",0.92)";
+    ctx.shadowColor = "rgba("+l.color+",0.9)";
+    ctx.shadowBlur = l.glow;
+    ctx.beginPath();
+    var n=l.pts.length;
+    for(var i=0;i<n;i++){
+      var x=(i/(n-1))*W, y=y0 - l.pts[i];
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+
+  function loop(){
+    if(!PLAY) return;
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<lanes.length;i++) drawLane(lanes[i]);
+    requestAnimationFrame(loop);
+  }
+
+  // reads/sec drift
+  var rps={v:847};
+  function fmt(n){return Math.round(n).toLocaleString("en-US");}
+  function driftRps(){
+    gsap.to(rps,{v:420+Math.random()*640,duration:2.4+Math.random()*1.5,ease:"sine.inOut",
+      onUpdate:function(){rpsEl.textContent=fmt(rps.v);},onComplete:driftRps});
+  }
+
+  function readlineX(){ return W*0.62; }
+
+  function spark(x,y,laneColor){
+    var t=document.createElement("div");
+    t.className="tick"; t.textContent="✓";
+    t.style.left=x+"px"; t.style.top=y+"px";
+    fx.appendChild(t);
+    gsap.timeline({onComplete:function(){t.remove();}})
+      .to(t,{scale:1.2,duration:.18,ease:"back.out(3)"})
+      .to(t,{scale:1,duration:.16})
+      .to(t,{opacity:0,y:"-=14",duration:.6,delay:.2});
+    var r=document.createElement("div");
+    r.className="ring"; r.style.left=x+"px"; r.style.top=y+"px";
+    r.style.borderColor="rgba("+laneColor+",.85)";
+    fx.appendChild(r);
+    gsap.timeline({onComplete:function(){r.remove();}})
+      .fromTo(r,{scale:0,opacity:.9},{scale:3.4,opacity:0,duration:.9,ease:"power2.out"});
+  }
+
+  var bib=1846;
+  function pad4(n){ n=String(n); while(n.length<4) n="0"+n; return n; }
+  function spawnChip(){
+    var li = Math.random()<0.5 ? 0 : 2;
+    var l = lanes[li];
+    bib += 1 + Math.floor(Math.random()*4);
+    var label = "BIB "+pad4(bib);
+    var y = H*l.yf;
+    var startX = W+70, endX=-110, rlx=readlineX();
+    var c=document.createElement("div");
+    c.className="chip"; c.textContent=label;
+    c.style.left=startX+"px"; c.style.top=y+"px";
+    fx.appendChild(c);
+    var dur=4.0, travel=startX-endX, timeToLine=dur*((startX-rlx)/travel);
+    gsap.to(c,{left:endX,duration:dur,ease:"none",onComplete:function(){c.remove();}});
+    gsap.delayedCall(timeToLine,function(){
+      l.pulse = 30 + Math.random()*16;
+      spark(rlx, y, l.color);
+      gsap.fromTo(c,{filter:"brightness(1)"},{filter:"brightness(1.7)",duration:.13,yoyo:true,repeat:1});
+    });
+  }
+
+  function staticFrame(){
+    lanes.forEach(function(l){
+      var y0=H*l.yf;
+      ctx.lineWidth=2;ctx.strokeStyle="rgba("+l.color+",0.92)";
+      ctx.shadowColor="rgba("+l.color+",0.9)";ctx.shadowBlur=l.glow;
+      ctx.beginPath();
+      for(var i=0;i<W;i++){
+        var y=y0+Math.sin(i*0.05)*1.6;
+        if((l===lanes[0]||l===lanes[2]) && Math.abs(i-W*0.62)<3) y=y0-26;
+        if(i===0)ctx.moveTo(i,y);else ctx.lineTo(i,y);
+      }
+      ctx.stroke();ctx.shadowBlur=0;
+    });
+    rpsEl.textContent="947";
+    spark(readlineX(), H*0.34, lanes[0].color);
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+
+  if(reduced){
+    staticFrame();
+  } else {
+    requestAnimationFrame(loop);
+    driftRps();
+    spawnChip();
+    gsap.delayedCall(0.9, function rep(){ spawnChip(); gsap.delayedCall(0.85+Math.random()*0.7, rep); });
+  }
+
+  /* ── perf: pause/resume when parent reports off/on-screen ── */
+  window.addEventListener("message", function(e){
+    if(!e.data || e.data.__5bibAnim===undefined || reduced) return;
+    var p = !!e.data.__5bibAnim;
+    if(p===PLAY) return;
+    PLAY = p;
+    if(window.gsap){ p ? gsap.globalTimeline.resume() : gsap.globalTimeline.pause(); }
+    if(p) requestAnimationFrame(loop);
+  });
+})();
+</script>
+</body>
+</html>

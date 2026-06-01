@@ -57,6 +57,7 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         { source: '/solution', destination: '/solution-v2/index.html' },
+        { source: '/timing', destination: '/timing-v2/index.html' },
       ],
       afterFiles: [],
       fallback: [],

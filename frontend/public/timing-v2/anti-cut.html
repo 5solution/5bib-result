@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5BIB · Anti-Cut</title>
+<style>
+@font-face{font-family:"JetBrains Mono";src:url("/solution-v2/fonts/JetBrainsMono-Bold.ttf") format("truetype");font-weight:700;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("/solution-v2/fonts/JetBrainsMono-Medium.ttf") format("truetype");font-weight:500;font-display:swap}
+html,body{margin:0;overflow:hidden;background:#06081A;width:100%;height:100%}
+*{box-sizing:border-box}
+#stage{position:absolute;inset:0;font-family:"JetBrains Mono",ui-monospace,monospace;color:#e8ecff}
+svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* side panel */
+.panel{position:absolute;top:5%;right:3.2%;width:30%;max-width:340px;min-width:200px;
+  background:rgba(13,17,40,.62);border:1px solid rgba(99,124,255,.22);border-radius:14px;
+  padding:14px 15px;backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.45)}
+.ph{display:flex;align-items:center;gap:8px;font-weight:700;font-size:11px;letter-spacing:.14em;
+  color:#9fb0ff;text-transform:uppercase;margin-bottom:11px}
+.ph .dot{width:7px;height:7px;border-radius:50%;background:#2563eb;box-shadow:0 0 10px #2563eb}
+.row{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:9px;margin-bottom:6px;
+  background:rgba(255,255,255,.03);font-size:12px;font-weight:500;position:relative;transition:opacity .3s}
+.row .rk{width:17px;font-weight:700;color:#6f80c0}
+.row .rb{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.row .rn{flex:1;letter-spacing:.02em;color:#dfe5ff;position:relative}
+.row .rt{font-weight:700;font-size:11px;color:#8fa0e0;font-variant-numeric:tabular-nums}
+.row.dq .rn{color:#ef4444}
+.row.dq .rn .strike{position:absolute;left:-2px;top:50%;height:2px;width:0;background:#ef4444;
+  border-radius:2px;box-shadow:0 0 8px #ef4444}
+.row.dq{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.25)}
+.row .tag{position:absolute;right:8px;font-size:9px;font-weight:700;letter-spacing:.1em;
+  color:#ef4444;opacity:0}
+
+.podium{margin-top:14px;border-top:1px solid rgba(99,124,255,.16);padding-top:12px}
+.pbars{display:flex;align-items:flex-end;justify-content:center;gap:10px;height:78px;margin-bottom:8px}
+.pcol{display:flex;flex-direction:column;align-items:center;gap:5px;width:30%}
+.pcap{width:100%;border-radius:7px 7px 0 0;display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:5px;font-weight:700;font-size:13px;color:#06081A;transform-origin:bottom;transform:scaleY(0)}
+.p1 .pcap{height:62px;background:linear-gradient(180deg,#FFD86B,#f0a500)}
+.p2 .pcap{height:46px;background:linear-gradient(180deg,#cfe0ff,#8fa6d8)}
+.p3 .pcap{height:34px;background:linear-gradient(180deg,#FF5C81,#DB3069);color:#fff}
+.pname{font-size:10px;font-weight:500;color:#c3ccf5;letter-spacing:.02em}
+.protect{display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;font-weight:700;
+  letter-spacing:.13em;color:#16a34a;opacity:0;text-align:center}
+.protect .shield{width:13px;height:13px}
+
+/* DSQ banner over runner */
+#dsq{position:absolute;transform:translate(-50%,-160%) scale(.4);opacity:0;
+  padding:6px 12px;border-radius:8px;background:linear-gradient(135deg,#ef4444,#b91c1c);
+  color:#fff;font-weight:700;font-size:12px;letter-spacing:.1em;white-space:nowrap;
+  box-shadow:0 6px 24px rgba(239,68,68,.55);border:1px solid #ff8d8d;z-index:9;
+  display:flex;align-items:center;gap:7px}
+#dsq:after{content:"";position:absolute;left:50%;bottom:-6px;transform:translateX(-50%) rotate(45deg);
+  width:11px;height:11px;background:#b91c1c}
+#dsq svg{position:static;width:14px;height:14px;flex:0 0 auto}
+
+.title{position:absolute;top:5.5%;left:3.5%;font-size:13px;font-weight:700;letter-spacing:.16em;
+  color:#7e8fdd;text-transform:uppercase}
+.title b{color:#FF5C81}
+.legend{position:absolute;bottom:4.5%;left:3.5%;display:flex;gap:16px;font-size:10.5px;
+  font-weight:500;color:#9aa6d6;letter-spacing:.05em}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+@media (prefers-reduced-motion: reduce){
+  .static-on{opacity:1!important;transform:none!important}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="title">5BIB · <b>ANTI-CUT</b> DETECTION</div>
+
+  <svg id="map" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="5" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <linearGradient id="course" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#4f86ff"/>
+      </linearGradient>
+      <radialGradient id="cpg" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#7fb0ff"/><stop offset="1" stop-color="#2563eb"/>
+      </radialGradient>
+    </defs>
+
+    <!-- legit course path (a winding loop) -->
+    <path id="track" d="M 140 470 C 120 360 200 300 300 320 C 410 342 430 200 540 190
+      C 660 179 660 90 760 110 C 870 131 900 250 820 320 C 740 388 760 470 660 500
+      C 540 536 360 540 140 470 Z"
+      fill="none" stroke="rgba(99,124,255,.14)" stroke-width="26" stroke-linecap="round"/>
+    <path id="trackcore" d="M 140 470 C 120 360 200 300 300 320 C 410 342 430 200 540 190
+      C 660 179 660 90 760 110 C 870 131 900 250 820 320 C 740 388 760 470 660 500
+      C 540 536 360 540 140 470 Z"
+      fill="none" stroke="url(#course)" stroke-width="3.5" stroke-dasharray="2 11"
+      stroke-linecap="round" opacity=".9"/>
+
+    <!-- red shortcut: from near CP1 cutting across, skipping CP2 -->
+    <path id="cut" d="M 300 320 C 470 300 600 340 760 470"
+      fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="9 9"
+      stroke-linecap="round" opacity="0"/>
+
+    <!-- checkpoint nodes -->
+    <g id="cp1" class="cp"><circle r="13" fill="url(#cpg)" filter="url(#glow)"/></g>
+    <g id="cp2" class="cp"><circle r="13" fill="url(#cpg)" filter="url(#glow)"/></g>
+    <g id="cp3" class="cp"><circle r="13" fill="url(#cpg)" filter="url(#glow)"/></g>
+    <g id="fin"><rect x="-13" y="-13" width="26" height="26" rx="6" fill="#16a34a" filter="url(#glow)"/>
+      <path d="M -6 0 L -1 5 L 7 -5" stroke="#fff" stroke-width="2.6" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/></g>
+
+    <!-- split pulse rings -->
+    <circle id="pulse" r="13" fill="none" stroke="#16a34a" stroke-width="2.5" opacity="0"/>
+    <circle id="pulseR" r="13" fill="none" stroke="#ef4444" stroke-width="2.5" opacity="0"/>
+
+    <!-- runners -->
+    <circle class="rn-d" id="r1" r="6.5" fill="#4f86ff"/>
+    <circle class="rn-d" id="r2" r="6.5" fill="#2563eb"/>
+    <circle class="rn-d" id="r3" r="6.5" fill="#16a34a"/>
+    <circle class="rn-d" id="rc" r="7" fill="#ef4444"/>
+  </svg>
+
+  <!-- SVG text labels overlay -->
+  <svg id="labels" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet" style="pointer-events:none">
+    <text id="lcp1" font-family="JetBrains Mono" font-size="15" font-weight="700" fill="#9fb6ff" text-anchor="middle">CP1</text>
+    <text id="lcp2" font-family="JetBrains Mono" font-size="15" font-weight="700" fill="#9fb6ff" text-anchor="middle">CP2</text>
+    <text id="lcp3" font-family="JetBrains Mono" font-size="15" font-weight="700" fill="#9fb6ff" text-anchor="middle">CP3</text>
+    <text id="lfin" font-family="JetBrains Mono" font-size="15" font-weight="700" fill="#16a34a" text-anchor="middle">FINISH</text>
+    <g id="nosplit" opacity="0">
+      <rect x="-58" y="-15" width="116" height="22" rx="5" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="1.2"/>
+      <text font-family="JetBrains Mono" font-size="12" font-weight="700" fill="#ef4444" text-anchor="middle" dy="4">CP2 · NO SPLIT</text>
+    </g>
+  </svg>
+
+  <div class="panel">
+    <div class="ph"><span class="dot"></span>RESULTS · LIVE</div>
+    <div class="row" data-r="0"><span class="rk">1</span><span class="rb" style="background:#16a34a;box-shadow:0 0 8px #16a34a"></span><span class="rn">NGUYEN A.</span><span class="rt">1:12:04</span></div>
+    <div class="row" data-r="1"><span class="rk">2</span><span class="rb" style="background:#4f86ff;box-shadow:0 0 8px #4f86ff"></span><span class="rn">TRAN B.</span><span class="rt">1:12:51</span></div>
+    <div class="row" data-r="2"><span class="rk">3</span><span class="rb" style="background:#2563eb;box-shadow:0 0 8px #2563eb"></span><span class="rn">LE C.</span><span class="rt">1:13:38</span></div>
+    <div class="row dq" data-r="3"><span class="rk">—</span><span class="rb" style="background:#ef4444;box-shadow:0 0 8px #ef4444"></span><span class="rn">PHAM X.<span class="strike"></span></span><span class="tag">DSQ</span></div>
+
+    <div class="podium">
+      <div class="pbars">
+        <div class="pcol p2"><span class="pname">TRAN B.</span><div class="pcap">2</div></div>
+        <div class="pcol p1"><span class="pname">NGUYEN A.</span><div class="pcap">1</div></div>
+        <div class="pcol p3"><span class="pname">LE C.</span><div class="pcap">3</div></div>
+      </div>
+      <div class="protect">
+        <svg class="shield" viewBox="0 0 24 24" fill="none"><path d="M12 2 20 5v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z" fill="#16a34a"/><path d="M8 12l3 3 5-6" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        PODIUM PROTECTED
+      </div>
+    </div>
+  </div>
+
+  <div id="dsq"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v8m0 4h.01" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="12" r="10" stroke="#fff" stroke-width="2"/></svg>DSQ · CUT DETECTED</div>
+
+  <div class="legend">
+    <span><i style="background:#2563eb"></i>LEGIT COURSE</span>
+    <span><i style="background:#16a34a"></i>VALID FINISH</span>
+    <span><i style="background:#ef4444"></i>CUT / DSQ</span>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script>
+(function(){
+  var track = document.getElementById('track');
+  var cutP  = document.getElementById('cut');
+  var L = track.getTotalLength();
+  var Lc = cutP.getTotalLength();
+  // checkpoint positions as fractions along the legit track
+  var F = {cp1:0.16, cp2:0.42, cp3:0.68, fin:0.985};
+
+  function ptT(t){ return track.getPointAtLength(((t%1)+1)%1 * L); }
+  function ptC(t){ return cutP.getPointAtLength(Math.max(0,Math.min(1,t)) * Lc); }
+
+  // place checkpoint nodes + labels
+  function place(){
+    var c1=ptT(F.cp1),c2=ptT(F.cp2),c3=ptT(F.cp3),fn=ptT(F.fin);
+    set('cp1',c1);set('cp2',c2);set('cp3',c3);set('fin',fn);
+    lbl('lcp1',c1,-24);lbl('lcp2',c2,-24);lbl('lcp3',c3,-24);lbl('lfin',fn,-26);
+    gsap.set('#nosplit',{attr:{transform:'translate('+c2.x+','+(c2.y-46)+')'}});
+  }
+  function set(id,p){ gsap.set('#'+id,{attr:{transform:'translate('+p.x+','+p.y+')'}}); }
+  function lbl(id,p,dy){ var e=document.getElementById(id); e.setAttribute('x',p.x); e.setAttribute('y',p.y+dy); }
+  place();
+
+  // map svg viewBox coords -> stage px for DSQ banner
+  var mapEl = document.getElementById('map');
+  function svgToStage(p){
+    var r = mapEl.getBoundingClientRect();
+    var vw=1000, vh=600, scale=Math.min(r.width/vw, r.height/vh);
+    var ox=(r.width-vw*scale)/2, oy=(r.height-vh*scale)/2;
+    return {x:r.left+ox+p.x*scale, y:r.top+oy+p.y*scale};
+  }
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // checkpoint pass: green tick flash + pulse
+  function tick(node, where){
+    gsap.fromTo('#'+node,{},{duration:.25,keyframes:[{attr:{}}]});
+    var n=document.querySelector('#'+node+' circle');
+    gsap.fromTo(n,{fill:'#2563eb'},{fill:'#16a34a',duration:.18,yoyo:true,repeat:1});
+    gsap.set('#pulse',{attr:{transform:'translate('+where.x+','+where.y+')'},opacity:1,r:13});
+    gsap.fromTo('#pulse',{r:13,opacity:.9},{r:34,opacity:0,duration:.7,ease:'power2.out'});
+  }
+  function noSplit(where){
+    var n=document.querySelector('#cp2 circle');
+    gsap.fromTo(n,{fill:'#2563eb'},{fill:'#ef4444',duration:.18,yoyo:true,repeat:5});
+    gsap.set('#pulseR',{attr:{transform:'translate('+where.x+','+where.y+')'},opacity:1,r:13});
+    gsap.fromTo('#pulseR',{r:13,opacity:.9},{r:42,opacity:0,duration:.9,repeat:2,ease:'power2.out'});
+    gsap.fromTo('#nosplit',{opacity:0,scale:.7,transformOrigin:'center'},{opacity:1,scale:1,duration:.4});
+  }
+
+  // animate one clean runner along track with checkpoint ticks
+  function runner(id, startT, dur, color, delay){
+    var st={t:startT};
+    var hit={cp1:false,cp2:false,cp3:false};
+    var c2=ptT(F.cp2);
+    var tl=gsap.timeline({delay:delay});
+    tl.to(st,{t:startT+1,duration:dur,ease:'none',onUpdate:function(){
+      var p=ptT(st.t);
+      gsap.set('#'+id,{attr:{transform:'translate('+p.x+','+p.y+')'}});
+      var frac=((st.t%1)+1)%1;
+      if(!hit.cp1 && frac>=F.cp1){hit.cp1=true; tick('cp1',ptT(F.cp1));}
+      if(!hit.cp2 && frac>=F.cp2){hit.cp2=true; tick('cp2',c2);}
+      if(!hit.cp3 && frac>=F.cp3){hit.cp3=true; tick('cp3',ptT(F.cp3));}
+    }, onComplete:function(){
+      gsap.fromTo('#'+id,{fill:color},{fill:'#16a34a',duration:.4});
+    }});
+    return tl;
+  }
+
+  // main looping master timeline
+  function build(){
+    var master=gsap.timeline({repeat:-1, repeatDelay:1.4});
+
+    // reset visuals
+    master.set(['#dsq'],{opacity:0,scale:.4,clearProps:false});
+    master.set('#nosplit',{opacity:0});
+    master.set('.row.dq',{opacity:1});
+    master.set('.row.dq .strike',{width:0});
+    master.set('.row.dq .tag',{opacity:0});
+    master.set('.pcap',{scaleY:0});
+    master.set('.protect',{opacity:0});
+    master.set('#cut',{opacity:0});
+    master.set('#rc',{opacity:0,fill:'#ef4444'});
+    master.set(['#r1','#r2','#r3'],{opacity:1,fill:'#4f86ff'});
+    master.call(function(){ gsap.set('#r2',{fill:'#2563eb'}); gsap.set('#r3',{fill:'#16a34a'}); });
+
+    // launch clean runners (staggered) — full lap
+    var DUR=6.2;
+    master.add(runner('r1',0.0,DUR,'#4f86ff',0),0);
+    master.add(runner('r2',-0.07,DUR,'#2563eb',0.5),0);
+    master.add(runner('r3',-0.14,DUR,'#16a34a',1.0),0);
+
+    // cheater: rides track to CP1 then takes shortcut, skipping CP2
+    var cl={p:0};
+    master.set('#rc',{opacity:1},0.3);
+    // segment A: along track 0 -> CP1
+    master.to(cl,{p:F.cp1,duration:DUR*0.16,ease:'none',onUpdate:function(){
+      var pt=ptT(cl.p); gsap.set('#rc',{attr:{transform:'translate('+pt.x+','+pt.y+')'}});
+    }},0.3);
+    master.call(function(){ tick('cp1',ptT(F.cp1)); gsap.to('#cut',{opacity:.85,duration:.4}); });
+    // segment B: along red shortcut (skips CP2)
+    var sc={s:0};
+    master.to(sc,{s:1,duration:DUR*0.5,ease:'power1.inOut',onUpdate:function(){
+      var pt=ptC(sc.s); gsap.set('#rc',{attr:{transform:'translate('+pt.x+','+pt.y+')'}});
+    }});
+    // arrives near finish area
+    master.call(function(){
+      var pt=ptC(1);
+      // NO SPLIT reaction at CP2
+      noSplit(ptT(F.cp2));
+      // DSQ banner over cheater
+      var sp=svgToStage(pt);
+      var d=document.getElementById('dsq');
+      d.style.left=sp.x+'px'; d.style.top=sp.y+'px';
+      gsap.fromTo('#dsq',{opacity:0,scale:.4,y:0},{opacity:1,scale:1,duration:.5,ease:'back.out(2.2)'});
+      gsap.to('#rc',{fill:'#7a1620',opacity:.55,duration:.5});
+      gsap.fromTo('#rc',{strokeWidth:0},{duration:.01});
+    });
+    // strike out leaderboard + DSQ tag
+    master.to('.row.dq .strike',{width:'92%',duration:.5,ease:'power2.out'},'+=0.25');
+    master.to('.row.dq .tag',{opacity:1,duration:.3},'<');
+    master.to('.row.dq',{opacity:.55,duration:.4},'<');
+
+    // podium rises (correct) + protected
+    master.to('.p1 .pcap',{scaleY:1,duration:.45,ease:'back.out(1.7)'},'-=0.2');
+    master.to('.p2 .pcap',{scaleY:1,duration:.45,ease:'back.out(1.7)'},'<+=0.1');
+    master.to('.p3 .pcap',{scaleY:1,duration:.45,ease:'back.out(1.7)'},'<+=0.1');
+    master.to('.protect',{opacity:1,duration:.5},'-=0.1');
+    master.fromTo('.protect',{scale:.9,transformOrigin:'center'},{scale:1,duration:.4},'<');
+
+    // hold the resolved state a beat
+    master.to({},{duration:1.6});
+    return master;
+  }
+
+  // gentle ambient pulse on checkpoint glow
+  gsap.to('.cp circle',{opacity:.78,duration:1.4,repeat:-1,yoyo:true,ease:'sine.inOut',stagger:.3});
+
+  if(reduce){
+    // static composed fallback: show resolved forensic state
+    gsap.set('#cut',{opacity:.85});
+    gsap.set('#rc',{opacity:.55,fill:'#7a1620',attr:{transform:'translate('+ptC(1).x+','+ptC(1).y+')'}});
+    gsap.set('#r1',{attr:{transform:'translate('+ptT(F.fin).x+','+(ptT(F.fin).y)+')'},fill:'#16a34a'});
+    gsap.set('#r2',{attr:{transform:'translate('+ptT(F.fin-0.05).x+','+ptT(F.fin-0.05).y+')'},fill:'#16a34a'});
+    gsap.set('#r3',{attr:{transform:'translate('+ptT(F.fin-0.1).x+','+ptT(F.fin-0.1).y+')'},fill:'#16a34a'});
+    noSplit(ptT(F.cp2));
+    var pt=svgToStage(ptC(1));
+    var d=document.getElementById('dsq'); d.style.left=pt.x+'px'; d.style.top=pt.y+'px';
+    gsap.set('#dsq',{opacity:1,scale:1});
+    gsap.set('.row.dq .strike',{width:'92%'});
+    gsap.set('.row.dq .tag',{opacity:1});
+    gsap.set('.row.dq',{opacity:.55});
+    gsap.set('.pcap',{scaleY:1});
+    gsap.set('.protect',{opacity:1});
+  } else {
+    build();
+    // keep DSQ banner anchored on resize
+    window.addEventListener('resize', place);
+  }
+
+  /* ── perf: pause/resume GSAP when parent reports off/on-screen ── */
+  var __play = true;
+  window.addEventListener('message', function(e){
+    if(!e.data || e.data.__5bibAnim===undefined || reduce) return;
+    var p = !!e.data.__5bibAnim;
+    if(p===__play) return;
+    __play = p;
+    if(window.gsap){ p ? gsap.globalTimeline.resume() : gsap.globalTimeline.pause(); }
+  });
+})();
+</script>
+</body>
+</html>

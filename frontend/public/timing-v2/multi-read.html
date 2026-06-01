@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Read Redundancy</title>
+<style>
+@font-face{
+  font-family:"JetBrains Mono";
+  src:url("/solution-v2/fonts/JetBrainsMono-Bold.ttf") format("truetype");
+  font-weight:700;font-display:swap;
+}
+@font-face{
+  font-family:"JetBrains Mono";
+  src:url("/solution-v2/fonts/JetBrainsMono-Medium.ttf") format("truetype");
+  font-weight:500;font-display:swap;
+}
+html,body{margin:0;overflow:hidden;background:#0a0c1e;width:100%;height:100%}
+*{box-sizing:border-box}
+#stage{
+  position:absolute;inset:0;width:100%;height:100%;
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  color:#e7ebff;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(37,99,235,.10), transparent 60%),
+    radial-gradient(120% 90% at 50% 100%, rgba(219,48,105,.08), transparent 60%),
+    #0a0c1e;
+}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* HUD */
+#hud{
+  position:absolute;top:0;left:0;right:0;height:13%;min-height:54px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 4.5%;
+  border-bottom:1px solid rgba(120,140,200,.14);
+}
+#hudTitle{
+  font-weight:700;letter-spacing:.32em;text-transform:uppercase;
+  font-size:clamp(10px,2.1vw,17px);
+  color:#cdd6ff;
+  display:flex;align-items:center;gap:.7em;
+}
+#hudTitle .dot{
+  width:.62em;height:.62em;border-radius:50%;background:#16a34a;
+  box-shadow:0 0 10px rgba(22,163,74,.9);
+}
+#lostBadge{
+  display:flex;align-items:center;gap:.55em;
+  font-weight:700;letter-spacing:.16em;
+  font-size:clamp(10px,1.9vw,15px);
+  color:#5ef0a0;
+  padding:.42em .85em;border-radius:999px;
+  background:rgba(22,163,74,.13);
+  border:1px solid rgba(22,163,74,.5);
+  box-shadow:0 0 16px rgba(22,163,74,.18) inset;
+}
+#lostBadge svg{display:block}
+
+/* lanes container */
+#scope{
+  position:absolute;left:0;right:0;top:13%;bottom:10%;
+}
+.lane{
+  position:absolute;left:4.5%;right:4.5%;height:38%;
+  border-radius:12px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.018), rgba(255,255,255,0)),
+    rgba(10,14,34,.5);
+  border:1px solid rgba(120,140,200,.13);
+  overflow:hidden;
+}
+#laneTop{top:5%}
+#laneBot{top:55%}
+
+/* faint grid */
+.grid{position:absolute;inset:0;opacity:.5;pointer-events:none}
+
+.laneLabel{
+  position:absolute;top:9px;left:13px;z-index:6;
+  font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+  font-size:clamp(8px,1.5vw,12px);
+}
+#laneTop .laneLabel{color:#6f9bff}
+#laneBot .laneLabel{color:#ff7fa3}
+
+.laneStat{
+  position:absolute;top:9px;right:13px;z-index:6;text-align:right;
+  font-size:clamp(7px,1.3vw,10px);letter-spacing:.14em;
+  color:#8b98c8;text-transform:uppercase;line-height:1.35;
+}
+.laneStat b{
+  display:block;font-weight:700;
+  font-size:clamp(13px,2.7vw,22px);letter-spacing:.02em;
+}
+#topRps{color:#7aa2ff}
+#botRps{color:#ff8fb0}
+
+/* read-line (vertical scan position where chips get read) */
+.readline{
+  position:absolute;top:0;bottom:0;width:2px;left:38%;
+  background:linear-gradient(180deg,transparent,rgba(180,200,255,.55),transparent);
+  z-index:3;
+}
+#laneBot .readline{background:linear-gradient(180deg,transparent,rgba(255,150,185,.5),transparent)}
+
+/* the moving SVG trace canvas inside each lane */
+.trace{position:absolute;inset:0;z-index:2}
+
+/* chip stream */
+.chipStream{position:absolute;left:0;right:0;top:0;bottom:0;z-index:4;pointer-events:none}
+.chip{
+  position:absolute;top:50%;transform:translate(-50%,-50%);
+  font-weight:700;font-size:clamp(9px,1.7vw,14px);letter-spacing:.04em;
+  padding:.32em .6em;border-radius:7px;
+  color:#dbe3ff;white-space:nowrap;
+  background:rgba(28,36,70,.85);
+  border:1px solid rgba(120,140,200,.3);
+  box-shadow:0 2px 10px rgba(0,0,0,.35);
+}
+
+/* tick / miss markers */
+.tick{
+  position:absolute;top:50%;transform:translate(-50%,-50%) scale(0);
+  z-index:5;font-weight:700;font-size:clamp(11px,2.2vw,18px);
+}
+.tick.ok{color:#37e08a;text-shadow:0 0 12px rgba(55,224,138,.9)}
+.miss{
+  position:absolute;top:50%;left:38%;transform:translate(-50%,-50%) scale(0);
+  z-index:7;
+  font-weight:700;letter-spacing:.16em;font-size:clamp(9px,1.7vw,13px);
+  color:#0a0c1e;background:#f59e0b;
+  padding:.3em .55em;border-radius:6px;
+  box-shadow:0 0 18px rgba(245,158,11,.7);
+}
+
+/* CAUGHT callout */
+#callout{
+  position:absolute;z-index:9;pointer-events:none;opacity:0;
+  left:0;top:0;width:100%;height:100%;
+}
+#callout svg{position:absolute;inset:0;width:100%;height:100%}
+#caughtLabel{
+  position:absolute;transform:translate(-50%,-100%);
+  font-weight:700;letter-spacing:.13em;font-size:clamp(8px,1.55vw,13px);
+  color:#fff;background:linear-gradient(90deg,#DB3069,#FF5C81);
+  padding:.34em .62em;border-radius:7px;white-space:nowrap;
+  box-shadow:0 0 20px rgba(219,48,105,.6);
+}
+
+/* footer reconcile bar */
+#foot{
+  position:absolute;left:0;right:0;bottom:0;height:10%;min-height:38px;
+  display:flex;align-items:center;justify-content:center;gap:1.4em;
+  border-top:1px solid rgba(120,140,200,.14);
+  font-size:clamp(8px,1.5vw,12px);letter-spacing:.16em;text-transform:uppercase;
+  color:#8b98c8;
+}
+#foot .seg{display:flex;align-items:center;gap:.55em}
+#foot .v{color:#e7ebff;font-weight:700;letter-spacing:.04em}
+#foot .v.green{color:#5ef0a0}
+.swatch{width:.85em;height:.85em;border-radius:3px}
+.swBlue{background:#2563eb;box-shadow:0 0 8px rgba(37,99,235,.7)}
+.swPink{background:#FF5C81;box-shadow:0 0 8px rgba(255,92,129,.7)}
+
+@media (prefers-reduced-motion: reduce){
+  .reducedHide{display:none!important}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="hud">
+    <div id="hudTitle"><span class="dot"></span>MULTI-READ REDUNDANCY</div>
+    <div id="lostBadge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#5ef0a0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      0 LOST
+    </div>
+  </div>
+
+  <div id="scope">
+    <div class="lane" id="laneTop">
+      <svg class="grid" preserveAspectRatio="none" viewBox="0 0 100 100"></svg>
+      <div class="readline"></div>
+      <canvas class="trace"></canvas>
+      <div class="laneLabel">PRIMARY DECODER</div>
+      <div class="laneStat">READS / SEC<b class="tnum" id="topRps">0</b></div>
+      <div class="chipStream" id="streamTop"></div>
+    </div>
+
+    <div class="lane" id="laneBot">
+      <svg class="grid" preserveAspectRatio="none" viewBox="0 0 100 100"></svg>
+      <div class="readline"></div>
+      <canvas class="trace"></canvas>
+      <div class="laneLabel">BACKUP DECODER</div>
+      <div class="laneStat">READS / SEC<b class="tnum" id="botRps">0</b></div>
+      <div class="chipStream" id="streamBot"></div>
+    </div>
+
+    <div id="callout">
+      <svg preserveAspectRatio="none" viewBox="0 0 1000 1000"><path id="calloutPath" d="" stroke="#FF5C81" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>
+      <div id="caughtLabel">CAUGHT BY BACKUP</div>
+    </div>
+  </div>
+
+  <div id="foot">
+    <div class="seg"><span class="swatch swBlue"></span>PRIMARY</div>
+    <div class="seg">TOTAL READ <span class="v tnum" id="totalRead">0</span></div>
+    <div class="seg">LOST <span class="v green tnum">0</span></div>
+    <div class="seg"><span class="swatch swPink"></span>BACKUP</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var streamTop = document.getElementById("streamTop");
+  var streamBot = document.getElementById("streamBot");
+  var laneTop   = document.getElementById("laneTop");
+  var laneBot   = document.getElementById("laneBot");
+  var calloutEl = document.getElementById("callout");
+  var calloutPath = document.getElementById("calloutPath");
+  var caughtLabel = document.getElementById("caughtLabel");
+  var scope = document.getElementById("scope");
+
+  var topRpsEl = document.getElementById("topRps");
+  var botRpsEl = document.getElementById("botRps");
+  var totalReadEl = document.getElementById("totalRead");
+
+  /* ---- live reads/sec counters (independent gentle drift) ---- */
+  var topRps = {v:842}, botRps = {v:838};
+  function fmt(n){ return Math.round(n).toLocaleString("en-US"); }
+  function driftRps(){
+    gsap.to(topRps,{v: 320 + Math.random()*680, duration:2.2+Math.random()*1.6, ease:"sine.inOut",
+      onUpdate:function(){ topRpsEl.textContent = fmt(topRps.v); }, onComplete:driftRps});
+    gsap.to(botRps,{v: 320 + Math.random()*680, duration:2.0+Math.random()*1.6, ease:"sine.inOut",
+      onUpdate:function(){ botRpsEl.textContent = fmt(botRps.v); }});
+  }
+
+  var totalRead = {v:128409};
+  function bumpTotal(by){
+    var target = totalRead.v + by;
+    gsap.to(totalRead,{v:target,duration:.45,ease:"power1.out",
+      onUpdate:function(){ totalReadEl.textContent = fmt(totalRead.v); }});
+  }
+
+  /* ---- decoder traces drawn on canvas (scrolling heartbeat) ---- */
+  function setupTrace(lane, color){
+    var cv = lane.querySelector("canvas.trace");
+    var ctx = cv.getContext("2d");
+    var W=0,H=0, dpr = Math.min(window.devicePixelRatio||1, 2);
+    var pts = []; // recent y samples scrolling left
+    function resize(){
+      W = lane.clientWidth; H = lane.clientHeight;
+      cv.width = W*dpr; cv.height = H*dpr;
+      cv.style.width = W+"px"; cv.style.height = H+"px";
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      if(pts.length===0){ for(var i=0;i<W;i++) pts.push(0); }
+    }
+    resize();
+    return {
+      cv:cv, ctx:ctx, color:color, pts:pts,
+      get W(){return W;}, get H(){return H;},
+      resize:resize,
+      pulse:0, // injected spike amplitude that decays
+    };
+  }
+  var tTop = setupTrace(laneTop, "37,99,235");
+  var tBot = setupTrace(laneBot, "255,92,129");
+
+  function drawTrace(t){
+    var ctx=t.ctx, W=t.W, H=t.H, mid=H*0.5;
+    // scroll left
+    t.pts.shift();
+    var noise = (Math.random()-0.5)*4;
+    var spike = t.pulse;
+    t.pulse *= 0.78;
+    t.pts.push(noise + spike);
+    if(t.pts.length>W) t.pts.splice(0, t.pts.length-W);
+
+    ctx.clearRect(0,0,W,H);
+    // glow line
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba("+t.color+",0.95)";
+    ctx.shadowColor = "rgba("+t.color+",0.9)";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    var n=t.pts.length;
+    for(var i=0;i<n;i++){
+      var x = (i/(n-1))*W;
+      var y = mid - t.pts[i];
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  var rafOn = true;
+  function loop(){
+    if(!rafOn) return;
+    drawTrace(tTop);
+    drawTrace(tBot);
+    requestAnimationFrame(loop);
+  }
+
+  /* ---- helpers for read markers ---- */
+  function readLineX(lane){ return lane.clientWidth*0.38; }
+
+  function tick(lane, x, color){
+    var el = document.createElement("div");
+    el.className = "tick ok";
+    el.textContent = "✓";
+    el.style.left = x+"px";
+    lane.appendChild(el);
+    gsap.timeline({onComplete:function(){ el.remove(); }})
+      .to(el,{scale:1.25,duration:.18,ease:"back.out(3)"})
+      .to(el,{scale:1,opacity:1,duration:.18})
+      .to(el,{opacity:0,y:-8,duration:.5,delay:.25});
+  }
+
+  function missFlag(lane){
+    var el = document.createElement("div");
+    el.className = "miss";
+    el.textContent = "MISS";
+    lane.appendChild(el);
+    var tl = gsap.timeline({onComplete:function(){ el.remove(); }});
+    tl.to(el,{scale:1,duration:.12,ease:"back.out(2.4)"})
+      .to(el,{opacity:.25,duration:.14,yoyo:true,repeat:4})
+      .to(el,{scale:.6,opacity:0,duration:.25});
+    return tl;
+  }
+
+  /* ---- callout line from backup lane up to the chip in primary lane ---- */
+  function doCallout(chipEl){
+    var sRect = scope.getBoundingClientRect();
+    var cRect = chipEl.getBoundingClientRect();
+    var botRect = laneBot.getBoundingClientRect();
+    // anchor: chip center (primary lane) ; source: backup read-line point
+    var x2 = cRect.left + cRect.width/2 - sRect.left;
+    var y2 = cRect.top + cRect.height/2 - sRect.top + cRect.height*0.55;
+    var x1 = (botRect.left - sRect.left) + readLineX(laneBot);
+    var y1 = (botRect.top - sRect.top) + botRect.height*0.5;
+
+    // scale into 1000x1000 viewBox space
+    var sx = 1000/sRect.width, sy = 1000/sRect.height;
+    var vx1=x1*sx, vy1=y1*sy, vx2=x2*sx, vy2=y2*sy;
+    var mx=(vx1+vx2)/2, my=Math.min(vy1,vy2)-60;
+    var d = "M "+vx1+" "+vy1+" Q "+mx+" "+my+" "+vx2+" "+vy2;
+    calloutPath.setAttribute("d", d);
+    var len = calloutPath.getTotalLength ? calloutPath.getTotalLength() : 400;
+    calloutPath.style.strokeDasharray = len;
+    calloutPath.style.strokeDashoffset = len;
+
+    caughtLabel.style.left = x2+"px";
+    caughtLabel.style.top  = (y2 - 6)+"px";
+
+    var tl = gsap.timeline();
+    tl.set(calloutEl,{opacity:1})
+      .fromTo(calloutPath,{strokeDashoffset:len},{strokeDashoffset:0,duration:.45,ease:"power2.out"})
+      .fromTo(caughtLabel,{opacity:0,scale:.7,y:6},{opacity:1,scale:1,y:0,duration:.3,ease:"back.out(2)"}, "-=.15")
+      .to({},{duration:1.0})
+      .to([calloutPath,caughtLabel],{opacity:0,duration:.4})
+      .set(calloutEl,{opacity:0});
+    return tl;
+  }
+
+  /* ---- main chip cycle ---- */
+  var bibNum = 1042;
+  var sinceMiss = 0;
+  var nextMissAt = 6 + Math.floor(Math.random()*3); // 6-8
+
+  function spawnChip(){
+    bibNum++;
+    var label = "A-"+bibNum;
+    var W = laneTop.clientWidth;
+    var startX = W + 60;
+    var rlx = readLineX(laneTop);
+    var endX = -90;
+
+    // create a chip in each lane (stacked vertically -> share the same horizontal motion)
+    var cTop = document.createElement("div");
+    cTop.className="chip"; cTop.textContent=label; cTop.style.left=startX+"px";
+    streamTop.appendChild(cTop);
+    var cBot = document.createElement("div");
+    cBot.className="chip"; cBot.textContent=label; cBot.style.left=startX+"px";
+    streamBot.appendChild(cBot);
+
+    sinceMiss++;
+    var willMiss = (sinceMiss >= nextMissAt);
+
+    var dur = 3.4;
+    var travel = startX - endX;
+    var timeToLine = dur * ((startX - rlx)/travel);
+
+    function cleanup(){ cTop.remove(); cBot.remove(); }
+
+    gsap.to([cTop,cBot],{left:endX, duration:dur, ease:"none", onComplete:cleanup});
+
+    // schedule the read event at the read-line
+    gsap.delayedCall(timeToLine, function(){
+      var rl = readLineX(laneTop);
+      if(!willMiss){
+        // BOTH read OK
+        tTop.pulse = 30 + Math.random()*16;
+        tBot.pulse = 30 + Math.random()*16;
+        tick(laneTop, rl, "ok");
+        tick(laneBot, readLineX(laneBot), "ok");
+        bumpTotal(2);
+        gsap.fromTo([cTop,cBot],{filter:"brightness(1)"},{filter:"brightness(1.5)",duration:.12,yoyo:true,repeat:1});
+      } else {
+        // PRIMARY misses -> backup catches a beat later
+        sinceMiss = 0;
+        nextMissAt = 6 + Math.floor(Math.random()*3);
+        // primary fails (no spike, amber flag, chip dims)
+        tTop.pulse = 4;
+        missFlag(laneTop);
+        gsap.to(cTop,{opacity:.45,duration:.2});
+        gsap.fromTo(laneTop,{boxShadow:"0 0 0 rgba(245,158,11,0)"},
+          {boxShadow:"inset 0 0 40px rgba(245,158,11,.25)",duration:.2,yoyo:true,repeat:3});
+
+        // beat later: backup catches the SAME chip
+        gsap.delayedCall(0.42, function(){
+          tBot.pulse = 42 + Math.random()*12;
+          tick(laneBot, readLineX(laneBot), "ok");
+          gsap.to(cBot,{filter:"brightness(1.7)",duration:.14,yoyo:true,repeat:1});
+          gsap.fromTo(laneBot,{boxShadow:"0 0 0 rgba(255,92,129,0)"},
+            {boxShadow:"inset 0 0 46px rgba(255,92,129,.3)",duration:.2,yoyo:true,repeat:3});
+          // restore primary chip slightly (it was caught -> not lost)
+          gsap.to(cTop,{opacity:.7,duration:.3});
+          bumpTotal(1);
+          doCallout(cBot.parentNode === streamBot ? cBot : cBot);
+        });
+      }
+    });
+  }
+
+  /* ---- REDUCED MOTION: static composed frame ---- */
+  function staticFrame(){
+    topRpsEl.textContent = "947";
+    botRpsEl.textContent = "951";
+    totalReadEl.textContent = fmt(128409);
+    // draw a static trace once
+    function staticTrace(t, withSpike){
+      var ctx=t.ctx,W=t.W,H=t.H,mid=H*0.5;
+      ctx.clearRect(0,0,W,H);
+      ctx.lineWidth=2;ctx.strokeStyle="rgba("+t.color+",0.95)";
+      ctx.shadowColor="rgba("+t.color+",0.9)";ctx.shadowBlur=8;
+      ctx.beginPath();
+      for(var i=0;i<W;i++){
+        var y=mid+Math.sin(i*0.07)*2.2;
+        if(withSpike && Math.abs(i-W*0.38)<3) y=mid-26;
+        if(i===0)ctx.moveTo(i,y);else ctx.lineTo(i,y);
+      }
+      ctx.stroke();ctx.shadowBlur=0;
+    }
+    staticTrace(tTop,false);
+    staticTrace(tBot,true);
+    // one chip + caught state
+    var c=document.createElement("div");c.className="chip";c.textContent="A-1043";
+    c.style.left=readLineX(laneTop)+"px";streamTop.appendChild(c);
+    var c2=document.createElement("div");c2.className="chip";c2.textContent="A-1043";
+    c2.style.left=readLineX(laneBot)+"px";c2.style.filter="brightness(1.5)";streamBot.appendChild(c2);
+    missFlag(laneTop); // brief; but reduced -> just show flag without flashing
+    var m=laneTop.querySelector(".miss"); if(m){gsap.killTweensOf(m);m.style.transform="translate(-50%,-50%) scale(1)";m.style.opacity="1";}
+    tick(laneBot, readLineX(laneBot),"ok");
+    var tk=laneBot.querySelector(".tick"); if(tk){gsap.killTweensOf(tk);tk.style.transform="translate(-50%,-50%) scale(1)";tk.style.opacity="1";}
+    doCallout(c2);
+    gsap.killTweensOf([calloutPath,caughtLabel,calloutEl]);
+    calloutEl.style.opacity="1";
+    calloutPath.style.strokeDashoffset="0";
+    caughtLabel.style.opacity="1";caughtLabel.style.transform="translate(-50%,-100%) scale(1)";
+  }
+
+  window.addEventListener("resize", function(){
+    tTop.resize(); tBot.resize();
+  });
+
+  if(reduced){
+    // ensure canvases sized then draw once
+    tTop.resize(); tBot.resize();
+    staticFrame();
+  } else {
+    driftRps();
+    requestAnimationFrame(loop);
+    // stagger chips
+    spawnChip();
+    gsap.delayedCall(1.0, function repeat(){
+      spawnChip();
+      gsap.delayedCall(1.15, repeat);
+    });
+  }
+
+  /* ── perf: pause/resume when parent reports off/on-screen ── */
+  window.addEventListener("message", function(e){
+    if(!e.data || e.data.__5bibAnim===undefined || reduced) return;
+    var p = !!e.data.__5bibAnim;
+    if(p===rafOn) return;
+    if(window.gsap){ p ? gsap.globalTimeline.resume() : gsap.globalTimeline.pause(); }
+    if(p){ rafOn = true; requestAnimationFrame(loop); }
+    else { rafOn = false; }
+  });
+})();
+</script>
+</body>
+</html>
