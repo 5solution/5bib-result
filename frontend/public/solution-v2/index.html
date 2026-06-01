@@ -2326,11 +2326,13 @@ if (leadFormEl) {
       .filter(Boolean).join('\n');
     const payload = {
       full_name: (raw.name || '').trim(),
-      phone: (raw.phone || '').trim(),
-      organization: (raw.org || '').trim(),
-      athlete_count_range: raw.scale || '',
-      package_interest: '',
-      notes,
+      phone: (raw.phone || '').trim() || undefined,
+      organization: (raw.org || '').trim() || undefined,
+      athlete_count_range: raw.scale || undefined,
+      /* Phải là giá trị enum hợp lệ — backend @IsOptional KHÔNG bỏ qua chuỗi rỗng,
+         '' sẽ làm @IsEnum fail → 400. Form này không hỏi gói nên dùng default. */
+      package_interest: 'unspecified',
+      notes: notes || undefined,
       website: ''  /* honeypot */
     };
 
