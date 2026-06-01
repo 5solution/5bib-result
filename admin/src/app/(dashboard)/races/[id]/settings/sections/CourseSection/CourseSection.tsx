@@ -12,8 +12,9 @@
  *     loading state via syncingCourseId/resettingCourseId).
  */
 
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Card,
   CardContent,
@@ -27,16 +28,26 @@ import { useAuth } from '@/lib/auth-context';
 import { authHeaders } from '@/lib/api';
 import {
   adminControllerForceSync,
-  adminControllerResetData,
   raceResultControllerGetRaceResults,
   racesControllerAddCourse,
   racesControllerRemoveCourse,
   racesControllerUpdateCourse,
 } from '@/lib/api-generated';
+import { fetchCourseDataStats } from '@/lib/course-data-ops-api';
+import {
+  ClearApiUrlConfirmDialog,
+  ResetDataConfirmDialog,
+  type RaceLiveStatus,
+} from '@/components/course-data-ops';
 import { CourseDialog } from '../../../components/CourseDialog';
 import { CourseMapFullpageLinkCard } from '../../../course-map/components/CourseMapFullpageLinkCard';
 import { CourseTable } from './CourseTable';
 import type { Course, Race } from '../section-shared.types';
+
+// F-068 BR-68-18 post-reset poll snapshot config (Danny chốt A)
+const POLL_INTERVAL_MS = 2000;
+const POLL_MAX_ATTEMPTS_NON_COMBO = 5;
+const POLL_MAX_ATTEMPTS_COMBO = 60; // ~2 min — poll "forever" up to a sane cap
 
 interface CourseSectionProps {
   raceId: string;
@@ -46,11 +57,85 @@ interface CourseSectionProps {
 
 export function CourseSection({ raceId, race, onRefetch }: CourseSectionProps) {
   const { token } = useAuth();
+  const queryClient = useQueryClient();
   const [courseDialogOpen, setCourseDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [savingCourse, setSavingCourse] = useState(false);
   const [syncingCourseId, setSyncingCourseId] = useState<string | null>(null);
   const [resettingCourseId, setResettingCourseId] = useState<string | null>(null);
+
+  // F-068 — reset/clear-apiUrl dialog state
+  const [resetDialog, setResetDialog] = useState<
+    | {
+        open: true;
+        courseId: string;
+        courseName: string;
+      }
+    | { open: false }
+  >({ open: false });
+  const [clearApiUrlDialog, setClearApiUrlDialog] = useState<
+    | { open: true; courseId: string; courseName: string }
+    | { open: false }
+  >({ open: false });
+
+  // F-068 BR-68-18 per-course post-reset poll progress
+  const [pollProgressByCourse, setPollProgressByCourse] = useState<
+    Record<string, { attempt: number; total: number } | undefined>
+  >({});
+  const pollAbortRef = useRef<Map<string, AbortController>>(new Map());
+
+  const raceLiveStatus: RaceLiveStatus = (race?.status ?? undefined) as RaceLiveStatus;
+
+  /**
+   * F-068 BR-68-18 — Post-reset poll snapshot.
+   * `combo=true` (apiUrl already cleared) → poll forever (Danny chốt A)
+   * `combo=false` (apiUrl still set) → poll 5x × 2s then stop
+   */
+  const startPostResetPoll = useCallback(
+    async (courseId: string, combo: boolean) => {
+      // Cancel any in-flight poll for this course
+      const existing = pollAbortRef.current.get(courseId);
+      if (existing) existing.abort();
+      const controller = new AbortController();
+      pollAbortRef.current.set(courseId, controller);
+
+      const total = combo
+        ? POLL_MAX_ATTEMPTS_COMBO
+        : POLL_MAX_ATTEMPTS_NON_COMBO;
+      for (let attempt = 1; attempt <= total; attempt++) {
+        if (controller.signal.aborted) return;
+        setPollProgressByCourse((prev) => ({
+          ...prev,
+          [courseId]: { attempt, total },
+        }));
+        // Invalidate immediately so the row badge re-fetches
+        await queryClient.invalidateQueries({
+          queryKey: ['course-data-stats', raceId, courseId],
+        });
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        if (controller.signal.aborted) return;
+        try {
+          const stats = await fetchCourseDataStats(raceId, courseId);
+          if (stats.rowCount === 0) {
+            setPollProgressByCourse((prev) => ({
+              ...prev,
+              [courseId]: undefined,
+            }));
+            return;
+          }
+        } catch {
+          // Network blip — keep polling
+        }
+      }
+      // Exhausted attempts without seeing rowCount=0 — clear progress badge so
+      // user sees the latest cached count (may be stale if backend still busy).
+      setPollProgressByCourse((prev) => ({
+        ...prev,
+        [courseId]: undefined,
+      }));
+    },
+    [queryClient, raceId],
+  );
 
   const [courseForm, setCourseForm] = useState<Record<string, unknown>>({
     courseId: '',
@@ -234,21 +319,14 @@ export function CourseSection({ raceId, race, onRefetch }: CourseSectionProps) {
     }
   }
 
-  async function handleResetData(courseId: string) {
-    if (!token) return;
-    setResettingCourseId(courseId);
-    try {
-      const { error } = await adminControllerResetData({
-        path: { raceId, courseId },
-        ...authHeaders(token),
-      });
-      if (error) throw error;
-      toast.success('Đã xóa dữ liệu!');
-    } catch {
-      toast.error('Xóa dữ liệu thất bại');
-    } finally {
-      setResettingCourseId(null);
-    }
+  // F-068 — Open Reset confirmation dialog (mutation handled inside dialog).
+  function openResetDialog(courseId: string, courseName: string) {
+    setResetDialog({ open: true, courseId, courseName });
+  }
+
+  // F-068 — Open Clear apiUrl confirmation dialog.
+  function openClearApiUrlDialog(courseId: string, courseName: string) {
+    setClearApiUrlDialog({ open: true, courseId, courseName });
   }
 
   async function handleExportCSV(courseId: string, courseName: string) {
@@ -361,12 +439,15 @@ export function CourseSection({ raceId, race, onRefetch }: CourseSectionProps) {
         </CardHeader>
         <CardContent>
           <CourseTable
+            raceId={raceId}
             courses={race.courses ?? []}
             syncingCourseId={syncingCourseId}
             resettingCourseId={resettingCourseId}
+            pollProgressByCourse={pollProgressByCourse}
             onExportCsv={handleExportCSV}
             onForceSync={handleForceSync}
-            onResetData={handleResetData}
+            onResetData={openResetDialog}
+            onClearApiUrl={openClearApiUrlDialog}
             onClone={openClone}
             onEdit={openEdit}
             onRemove={handleRemoveCourse}
@@ -374,6 +455,53 @@ export function CourseSection({ raceId, race, onRefetch }: CourseSectionProps) {
           />
         </CardContent>
       </Card>
+
+      {/* F-068 — Reset confirmation dialog (cron-aware + race-live typed confirm) */}
+      {resetDialog.open && (
+        <ResetDataConfirmDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setResetDialog({ open: false });
+          }}
+          raceId={raceId}
+          raceTitle={race?.title ?? ''}
+          raceStatus={raceLiveStatus}
+          courseId={resetDialog.courseId}
+          courseName={resetDialog.courseName}
+          stats={
+            queryClient.getQueryData<import('@/lib/course-data-ops-api').CourseDataStatsDto>([
+              'course-data-stats',
+              raceId,
+              resetDialog.courseId,
+            ])
+          }
+          onResetComplete={(combo) => {
+            void startPostResetPoll(resetDialog.courseId, combo);
+          }}
+        />
+      )}
+
+      {/* F-068 — Clear apiUrl confirmation dialog */}
+      {clearApiUrlDialog.open && (
+        <ClearApiUrlConfirmDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setClearApiUrlDialog({ open: false });
+          }}
+          raceId={raceId}
+          raceTitle={race?.title ?? ''}
+          raceStatus={raceLiveStatus}
+          courseId={clearApiUrlDialog.courseId}
+          courseName={clearApiUrlDialog.courseName}
+          stats={
+            queryClient.getQueryData<import('@/lib/course-data-ops-api').CourseDataStatsDto>([
+              'course-data-stats',
+              raceId,
+              clearApiUrlDialog.courseId,
+            ])
+          }
+        />
+      )}
     </section>
   );
 }
