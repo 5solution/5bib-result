@@ -37,9 +37,12 @@ export class PaginatedRaceDto {
 }
 
 export class HomepageSummaryDto {
-  @ApiProperty({ example: 195 }) totalRaces: number;
-  @ApiProperty({ example: 94000 }) totalAthletes: number;
-  @ApiProperty({ example: 82341 }) totalResults: number;
+  /** Completed (ended) races only — not live/upcoming. */
+  @ApiProperty({ example: 55 }) totalRaces: number;
+  /** Total result entries (all participants including DNS/DNF). Accurate countDocuments. */
+  @ApiProperty({ example: 58735 }) totalAthletes: number;
+  /** Finishers with a recorded chipTime (crossed finish line). Subset of totalAthletes. */
+  @ApiProperty({ example: 49711 }) totalResults: number;
   @ApiProperty({ type: [RaceCardDto] }) liveRaces: RaceCardDto[];
   @ApiProperty({ type: [RaceCardDto] }) upcomingRaces: RaceCardDto[];
   @ApiProperty({ type: PaginatedRaceDto }) endedRaces: PaginatedRaceDto;
