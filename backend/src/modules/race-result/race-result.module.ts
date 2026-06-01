@@ -155,6 +155,9 @@ import {
     RaceResultApiService,
     BadgeService,
     ShareEventService,
+    // F-068: expose RaceSyncCron for AdminModule's CourseDataStatsService
+    // (BR-68-06 cron-status check + getNextScheduledRunAt)
+    RaceSyncCron,
   ],
 })
 export class RaceResultModule {}
