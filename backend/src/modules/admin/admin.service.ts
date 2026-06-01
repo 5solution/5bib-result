@@ -62,9 +62,17 @@ export class AdminService {
 
   /**
    * Delete all results for a course
+   *
+   * F-068 BR-68-10: pass raceId to `deleteResultsByCourse` to scope deletion
+   * to a single race (fix pre-existing cross-race wipe bug Manager catch
+   * 2026-05-31 audit `lets-run-2026`).
+   *
+   * Note: F-068 also EXTEND this method via Phase 6 to add response shape
+   * `{ nextCronAt, hasApiUrl, durationMs }` + Redis SETNX lock + audit log.
+   * Phase 1 only refactors the signature; richer behavior added in Phase 6.
    */
   async resetData(raceId: string, courseId: string) {
-    const deleted = await this.raceResultService.deleteResultsByCourse(courseId);
+    const deleted = await this.raceResultService.deleteResultsByCourse(raceId, courseId);
     return {
       message: `Deleted ${deleted} results for course ${courseId}`,
       deletedCount: deleted,
@@ -158,12 +166,12 @@ export class AdminService {
   }
 
   /**
-   * Purge Redis cache for a course
+   * Purge Redis cache for a course (F-068 BR-68-11: raceId-namespaced)
    */
-  async purgeCache(courseId: string) {
-    const deleted = await this.raceResultService.purgeCache(courseId);
+  async purgeCache(raceId: string, courseId: string) {
+    const deleted = await this.raceResultService.purgeCache(raceId, courseId);
     return {
-      message: `Purged ${deleted} cache keys for course ${courseId}`,
+      message: `Purged ${deleted} cache keys for race ${raceId} course ${courseId}`,
       deletedKeys: deleted,
       success: true,
     };

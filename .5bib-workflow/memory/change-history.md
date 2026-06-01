@@ -7,6 +7,77 @@
 
 ---
 
+## [2026-06-01] FEATURE-068: Course Data Ops UX — ✅ DEPLOYED (branch awaiting main merge + PROD)
+
+**Branch:** `feat/F-068-course-data-ops-ux` 8 commits (`b075f49` docs → `1de23f0` Phase 1 → `6eb1971` Phase 2-7 → `ed35b0b` Phase 8-11 → `8ba9405` 03 + IMPLEMENTATION_NOTES → `125f4d0` feature-log → `14b3346` QC report + Manager 05)
+**Type:** EXTEND_EXISTING + pre-existing bug fix (signature refactor)
+
+### Files changed
+
+**Backend NEW (4):**
+- ➕ `backend/src/modules/admin/services/course-data-ops.service.ts` (~370 LoC) — 4 admin ops (data-stats + clear-apiUrl + disable-and-reset + reset-data EXTEND)
+- ➕ `backend/src/modules/admin/services/course-data-ops.service.spec.ts` (~400 LoC, 24 TC covering TC-68-01..16 + edges)
+- ➕ `backend/src/modules/admin/dto/course-data-ops.dto.ts` (~170 LoC, 6 DTOs: stats response + 3 mutation request + 2 mutation response)
+- ➕ `backend/src/modules/race-result/services/race-sync.cron.spec.ts` (~95 LoC, 9 TC for isCurrentlySync + getNextScheduledRunAt + UTC math edges)
+
+**Backend MODIFY (6):**
+- ✏️ `backend/src/modules/race-result/services/race-result.service.ts` — `purgeCache(raceId, courseId)` signature (L332-383, 11 patterns including NEW athlete/badge) + `deleteResultsByCourse(raceId, courseId)` signature (L1829-1833) + 5 internal call sites updated (L441/L482/L1901/L1977/L2110)
+- ✏️ `backend/src/modules/race-result/services/race-result.service.spec.ts` — 3 NEW F-068 tests (BR-68-11 patterns + TC-68-14 cross-race + TC-68-15 actual deletion)
+- ✏️ `backend/src/modules/race-result/services/race-sync.cron.ts` — 2 NEW public methods (`isCurrentlySync` + `getNextScheduledRunAt`) + `RACE_SYNC_CRON_INTERVAL_MINUTES` constant export
+- ✏️ `backend/src/modules/race-result/race-result.module.ts` — export `RaceSyncCron` (was internal-only)
+- ✏️ `backend/src/modules/admin/admin.controller.ts` — 3 NEW endpoint (GET data-stats + PATCH clear-api-url + POST disable-and-reset) + 1 EXTEND (reset-data response DTO) + path change `cache/purge/:courseId` → `:raceId/:courseId` + import 6 DTOs + inject CourseDataOpsService
+- ✏️ `backend/src/modules/admin/admin.service.ts` — `resetData(raceId, courseId)` + `purgeCache(raceId, courseId)` signature update
+- ✏️ `backend/src/modules/admin/admin.service.spec.ts` — 5 mock signature update + TD-F029-05 PARTIAL fix (added TelegramService + MailService DI mocks)
+- ✏️ `backend/src/modules/admin/admin.module.ts` — import AuditModule + MongooseModule.forFeature for RaceResult/SyncLog + register CourseDataOpsService
+
+**Admin NEW (6):**
+- ➕ `admin/src/lib/course-data-ops-api.ts` (~140 LoC) — fetch wrappers + 7 types + CourseDataOpsApiError class
+- ➕ `admin/src/lib/course-data-ops-hooks.ts` (~90 LoC) — useCourseDataStats poll 5s + 3 mutation hooks
+- ➕ `admin/src/components/course-data-ops/CourseDataStatsBadge.tsx` (~150 LoC) — 3-stack badge + 30s tick for relative time
+- ➕ `admin/src/components/course-data-ops/ResetDataConfirmDialog.tsx` (~245 LoC) — cron-aware + race-live typed confirm + toast routing 2 error codes
+- ➕ `admin/src/components/course-data-ops/ClearApiUrlConfirmDialog.tsx` (~165 LoC) — apiUrlMasked display + race-live gate
+- ➕ `admin/src/components/course-data-ops/index.ts` — barrel export
+
+**Admin MODIFY (2):**
+- ✏️ `admin/src/app/(dashboard)/races/[id]/settings/sections/CourseSection/CourseTable.tsx` — NEW `raceId` prop + NEW `onClearApiUrl` + `pollProgressByCourse` props + NEW "Tình trạng" column with `useCourseDataStats` per row + NEW PlugZap button conditional render + dynamic Reset tooltip
+- ✏️ `admin/src/app/(dashboard)/races/[id]/settings/sections/CourseSection/CourseSection.tsx` — replaced direct `adminControllerResetData` SDK call with dialog state machine + NEW startPostResetPoll (combo forever / non-combo 5×2s with AbortController) + render 2 dialogs
+
+### Architecture impact
+
+- NEW service `CourseDataOpsService` under `AdminModule` — composes RaceResultService + RacesService + RaceSyncCron + AuditLogService
+- NEW Redis keys (CLAUDE.md registry update):
+  - `admin:course-stats:<raceId>:<courseId>` TTL 5s (multi-admin poll cost bound)
+  - `reset-lock:<raceId>:<courseId>` TTL 30s (SETNX serialize concurrent reset)
+- Cron lifecycle expose: `RaceSyncCron.isCurrentlySync()` + `getNextScheduledRunAt()` — pattern reusable for future cron-aware UI features
+- Architecture diagram updated: `AdminModule → CourseDataOpsService` node
+
+### Conventions impact
+
+3 NEW patterns minted (added to conventions.md):
+1. **Redis SETNX lock pattern for concurrent mutation** — port from F-018/F-019 awards/medical. Key `<domain>-lock:<resourceId>` TTL 5-30s.
+2. **Cron lifecycle expose for UI feedback** — public `isCurrentlySync()` + `getNextScheduledRunAt()` getters without exposing private `isSyncing` field.
+3. **Admin polling endpoint with short TTL Redis cache wrap** — bound multi-admin polling cost via 5s cache, DEL on mutation.
+
+### DB / Cache impact
+
+- MongoDB: NO schema change (signature refactor only). `course.apiUrl?` already optional. Compound index `{raceId, courseId, bib}` UNIQUE on `race_results` already exists. `sync_logs` collection no schema change (uses existing `timestamps: { createdAt: 'created_at' }`).
+- MySQL platform: NO change
+- Redis: 2 NEW keys above. Pattern rename via `purgeCache` 11 patterns (race-namespaced). Backward-compat: 1 lần cache miss spike when deploy (acceptable per Danny chốt #9 — deploy non-race-day).
+
+### Tech debt còn lại (moved to known-issues.md)
+
+8 NEW TD logged — see `known-issues.md` "F-068 (2026-06-01)" section for full list.
+
+### Lessons learned
+
+- **Pre-existing bug catching in scope** worked well — Manager catch 2026-05-31 audit during ops debugging led to F-068 in-scope fixes (BR-68-10 + BR-68-11). Pattern: when Manager surfaces a bug while investigating new feature, IN-SCOPE the fix to feature so regression tests come bundled.
+- **Hand-typed fetch wrappers acceptable** when SDK regen impractical (no local backend). Document Deviation #2 + deploy mandate to reconcile.
+- **Plan-as-mandate Phase 1 order** (refactor signature TRƯỚC) avoided spec cascade break — confirmed when 5 call sites + spec mocks all updated together in single commit.
+- **Audit actor TD chain** continues — TD-CONTRACTS-ACTOR-001 carry-forward F-066/F-067/F-068. F-069 must finally fix to break cycle (~30 min effort).
+- **Redis SETNX lock port** from F-018/F-019 medical/awards — pattern proven, lower implementation risk.
+
+---
+
 ## [2026-05-25] FEATURE-062: Sales Analytics Dashboard Multi-Tab Redesign — ✅ FULLY DEPLOYED
 
 **Branch:** `5bib_analytics_v2` merged main + `release/v1.9.0` deployed PROD

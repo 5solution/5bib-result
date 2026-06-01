@@ -19,8 +19,18 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { CourseDataOpsService } from './services/course-data-ops.service';
 import { ResolveClaimDto } from './dto/resolve-claim.dto';
 import { EditResultDto, ResolveClaimV2Dto } from './dto/edit-result.dto';
+import {
+  ClearApiUrlDto,
+  ClearApiUrlResponseDto,
+  CourseDataStatsResponseDto,
+  DisableAndResetDto,
+  DisableAndResetResponseDto,
+  ResetDataDto,
+  ResetDataResponseDto,
+} from './dto/course-data-ops.dto';
 import { LogtoAdminGuard } from '../logto-auth';
 import { RaceResultService } from '../race-result/services/race-result.service';
 
@@ -32,6 +42,9 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly raceResultService: RaceResultService,
+    // F-068: 4 course data ops endpoints delegate here (data-stats GET +
+    // clear-api-url PATCH + disable-and-reset POST + reset-data POST EXTEND).
+    private readonly courseDataOps: CourseDataOpsService,
   ) {}
 
   @Get('sync-logs')
@@ -63,15 +76,114 @@ export class AdminController {
   }
 
   @Post('races/:raceId/courses/:courseId/reset-data')
-  @ApiOperation({ summary: 'Delete all results for a course' })
+  @ApiOperation({
+    summary: 'Delete all results for a course (F-068: EXTEND response shape)',
+    description:
+      'F-068 BR-68-09: response shape EXTEND with `nextCronAt`, `hasApiUrl`, ' +
+      '`durationMs`. Backward compat — original fields preserved. ' +
+      'BR-68-13: race=live requires `confirmedLive: true` else 409. ' +
+      'Danny chốt H: Redis SETNX lock (concurrent reset → 1 winner, others 409).',
+  })
   @ApiParam({ name: 'raceId', type: 'string' })
   @ApiParam({ name: 'courseId', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Data reset completed' })
+  @ApiResponse({
+    status: 200,
+    description: 'Data reset completed',
+    type: ResetDataResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Race or course not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Race is live without confirmedLive OR concurrent reset in progress',
+  })
   async resetData(
     @Param('raceId') raceId: string,
     @Param('courseId') courseId: string,
-  ) {
-    return this.adminService.resetData(raceId, courseId);
+    @Body() dto: ResetDataDto = {},
+  ): Promise<ResetDataResponseDto> {
+    return this.courseDataOps.resetData(raceId, courseId, dto);
+  }
+
+  // ─── F-068 NEW endpoints ──────────────────────────────────────
+
+  @Get('races/:raceId/courses/:courseId/data-stats')
+  @ApiOperation({
+    summary: 'F-068: Get course data stats (row count + sync status + cron + apiUrl)',
+    description:
+      'BR-68-01..06: real-time `rowCount` via countDocuments + latest sync_log ' +
+      '+ cronStatus (scheduled/in_progress/disabled) + nextCronAt. ' +
+      'BR-68-12: cached 5s in Redis to bound multi-admin polling cost.',
+  })
+  @ApiParam({ name: 'raceId', type: 'string' })
+  @ApiParam({ name: 'courseId', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns course data stats',
+    type: CourseDataStatsResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Race or course not found' })
+  async getCourseDataStats(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+  ): Promise<CourseDataStatsResponseDto> {
+    return this.courseDataOps.getStats(raceId, courseId);
+  }
+
+  @Patch('races/:raceId/courses/:courseId/clear-api-url')
+  @ApiOperation({
+    summary: 'F-068: Tắt auto-sync (clear course.apiUrl) with audit log',
+    description:
+      'BR-68-07: explicit semantic, dedicated audit action `course.apiUrl.cleared`. ' +
+      'BR-68-13: race=live requires `confirmedLive: true` else 409. ' +
+      'Does NOT delete row data — that is `/disable-and-reset`.',
+  })
+  @ApiParam({ name: 'raceId', type: 'string' })
+  @ApiParam({ name: 'courseId', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'apiUrl cleared',
+    type: ClearApiUrlResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Race or course not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Race is live without confirmedLive',
+  })
+  async clearCourseApiUrl(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+    @Body() dto: ClearApiUrlDto = {},
+  ): Promise<ClearApiUrlResponseDto> {
+    return this.courseDataOps.clearApiUrl(raceId, courseId, dto);
+  }
+
+  @Post('races/:raceId/courses/:courseId/disable-and-reset')
+  @ApiOperation({
+    summary: 'F-068: Atomic combo — clear apiUrl + wait cron + delete rows',
+    description:
+      'BR-68-08 atomic order: clear apiUrl FIRST so cron does not re-fetch ' +
+      'mid-delete, then wait `RaceSyncCron.isCurrentlySync()` poll (200ms × 5s ' +
+      'timeout — log warn + continue), then deleteResultsByCourse, then audit. ' +
+      'BR-68-13 live confirm + Danny chốt H lock apply.',
+  })
+  @ApiParam({ name: 'raceId', type: 'string' })
+  @ApiParam({ name: 'courseId', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'apiUrl cleared + rows deleted',
+    type: DisableAndResetResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Race or course not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Race is live without confirmedLive OR concurrent reset',
+  })
+  async disableAndResetCourse(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+    @Body() dto: DisableAndResetDto = {},
+  ): Promise<DisableAndResetResponseDto> {
+    return this.courseDataOps.disableAndReset(raceId, courseId, dto);
   }
 
   @Get('claims')
@@ -138,12 +250,22 @@ export class AdminController {
     return this.adminService.editResult(resultId, fields, reason, adminId);
   }
 
-  @Post('cache/purge/:courseId')
-  @ApiOperation({ summary: 'Purge Redis cache for a course' })
+  @Post('cache/purge/:raceId/:courseId')
+  @ApiOperation({
+    summary: 'Purge Redis cache for a course (F-068: raceId-namespaced)',
+    description:
+      'F-068 BR-68-11: endpoint path changed from `/cache/purge/:courseId` ' +
+      'to `/cache/purge/:raceId/:courseId` because cache keys are raceId-namespaced. ' +
+      'Old endpoint pattern matched 0 keys (Manager catch 2026-05-31).',
+  })
+  @ApiParam({ name: 'raceId', type: 'string' })
   @ApiParam({ name: 'courseId', type: 'string' })
   @ApiResponse({ status: 200, description: 'Cache purged' })
-  async purgeCache(@Param('courseId') courseId: string) {
-    return this.adminService.purgeCache(courseId);
+  async purgeCache(
+    @Param('raceId') raceId: string,
+    @Param('courseId') courseId: string,
+  ) {
+    return this.adminService.purgeCache(raceId, courseId);
   }
 
   @Get('race-results/athlete/:raceId/:bib')
