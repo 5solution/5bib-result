@@ -471,7 +471,7 @@ export default function RaceReportPage() {
       lang={lang}
       onLang={toggleLang}
       finance={hasRevenue}
-      active={tab === "revenue" ? "revenue" : "tickets"}
+      active="races"
       breadcrumb={[t("nav_races", lang), raceTitle]}
       center={center}
       showRefresh

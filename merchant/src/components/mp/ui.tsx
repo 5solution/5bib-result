@@ -58,17 +58,15 @@ interface SidebarProps {
 }
 
 // ---------- Sidebar ----------
-export function Sidebar({ lang, finance, active, user, currentRaceId }: SidebarProps) {
-  const raceHref = currentRaceId != null ? `/races/${currentRaceId}` : "/dashboard";
-  type NavItem = { id: NavId; icon: IconComponent; label: string; href: string; gated?: boolean };
-  const items: NavItem[] = (
-    [
-      { id: "races", icon: Icons.Trophy, label: t("nav_races", lang), href: "/dashboard" },
-      { id: "tickets", icon: Icons.Ticket, label: t("nav_tickets", lang), href: `${raceHref}?tab=ticket` },
-      { id: "revenue", icon: Icons.Dollar, label: t("nav_revenue", lang), href: `${raceHref}?tab=revenue`, gated: true },
-      { id: "settings", icon: Icons.Settings, label: t("nav_settings", lang), href: "/settings" },
-    ] satisfies NavItem[]
-  ).filter((it) => !(it.gated && !finance));
+export function Sidebar({ lang, finance, active, user }: SidebarProps) {
+  void finance; // báo cáo Vé/Doanh thu là TAB trong từng giải, KHÔNG phải nav global
+  type NavItem = { id: NavId; icon: IconComponent; label: string; href: string };
+  // Sidebar chỉ giữ điều hướng cấp ứng dụng. "Bán vé"/"Doanh thu" theo-giải nằm
+  // trong race detail dưới dạng tab (tránh dead-link khi chưa chọn giải).
+  const items: NavItem[] = [
+    { id: "races", icon: Icons.Trophy, label: t("nav_races", lang), href: "/dashboard" },
+    { id: "settings", icon: Icons.Settings, label: t("nav_settings", lang), href: "/settings" },
+  ];
 
   return (
     <aside
