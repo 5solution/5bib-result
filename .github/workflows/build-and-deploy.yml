@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       service:
-        description: "Service to build & deploy (all, backend, frontend, admin, crew, content-web)"
+        description: "Service to build & deploy (all, backend, frontend, admin, crew, content-web, merchant)"
         required: false
         default: "all"
 
@@ -23,6 +23,7 @@ jobs:
       admin: ${{ steps.filter.outputs.admin }}
       crew: ${{ steps.filter.outputs.crew }}
       content-web: ${{ steps.filter.outputs.content-web }}
+      merchant: ${{ steps.filter.outputs.merchant }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -39,6 +40,8 @@ jobs:
               - 'crew/**'
             content-web:
               - 'content-web/**'
+            merchant:
+              - 'merchant/**'
 
   build-backend:
     needs: changes
@@ -180,9 +183,37 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  build-merchant:
+    needs: changes
+    if: ${{ needs.changes.outputs.merchant == 'true' || github.event.inputs.service == 'all' || github.event.inputs.service == 'merchant' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REPO }}/merchant
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./merchant
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   deploy:
-    needs: [build-backend, build-frontend, build-admin, build-crew, build-content-web]
-    if: ${{ always() && !cancelled() && (needs.build-backend.result == 'success' || needs.build-frontend.result == 'success' || needs.build-admin.result == 'success' || needs.build-crew.result == 'success' || needs.build-content-web.result == 'success') }}
+    needs: [build-backend, build-frontend, build-admin, build-crew, build-content-web, build-merchant]
+    if: ${{ always() && !cancelled() && (needs.build-backend.result == 'success' || needs.build-frontend.result == 'success' || needs.build-admin.result == 'success' || needs.build-crew.result == 'success' || needs.build-content-web.result == 'success' || needs.build-merchant.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to VPS
@@ -194,12 +225,13 @@ jobs:
           BUILT_ADMIN: ${{ needs.build-admin.result }}
           BUILT_CREW: ${{ needs.build-crew.result }}
           BUILT_CONTENT_WEB: ${{ needs.build-content-web.result }}
+          BUILT_MERCHANT: ${{ needs.build-merchant.result }}
         with:
           host: ${{ secrets.VPS_HOST }}
           port: ${{ secrets.VPS_PORT || 22 }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: TAG_SHA,BUILT_BACKEND,BUILT_FRONTEND,BUILT_ADMIN,BUILT_CREW,BUILT_CONTENT_WEB
+          envs: TAG_SHA,BUILT_BACKEND,BUILT_FRONTEND,BUILT_ADMIN,BUILT_CREW,BUILT_CONTENT_WEB,BUILT_MERCHANT
           script: |
             set -e
             TAG=${TAG_SHA:0:7}
@@ -242,6 +274,12 @@ jobs:
               sed -i "s|ghcr.io/5solution/5bib-result/content-web:.*|ghcr.io/5solution/5bib-result/content-web:${TAG}|" docker-compose.yml
               docker compose pull 5bib-result-content-web
               docker compose up -d --force-recreate 5bib-result-content-web
+              DEPLOYED_ANY=1
+            fi
+            if [ "$BUILT_MERCHANT" = "success" ]; then
+              sed -i "s|ghcr.io/5solution/5bib-result/merchant:.*|ghcr.io/5solution/5bib-result/merchant:${TAG}|" docker-compose.yml
+              docker compose pull 5bib-result-merchant
+              docker compose up -d --force-recreate 5bib-result-merchant
               DEPLOYED_ANY=1
             fi
             if [ "$DEPLOYED_ANY" = "0" ]; then
