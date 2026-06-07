@@ -1421,7 +1421,9 @@ export class MerchantPortalService {
   /**
    * F-070 BR-70-10/11 — Heatmap: khung giờ vàng đăng ký (giờ VN).
    *
-   * payment_on lưu UTC → +7h TRƯỚC khi tính DAYOFWEEK/HOUR (BR-70-10).
+   * payment_on lưu SẴN giờ VN (GMT+7) — KHÔNG convert (UAT F-070 2026-06-07:
+   * order mới nhất payment_on='2026-06-07 23:06' > dbnow UTC ~15:2x ⇒ nếu UTC sẽ
+   * là tương lai → bất khả ⇒ column là VN-local). Dùng DAYOFWEEK/HOUR trực tiếp.
    * Grid 7 dòng (Mon..Sun) × 7 cột khung giờ [0-6,6-9,9-12,12-15,15-18,18-21,21-24].
    * MySQL DAYOFWEEK: 1=Sun..7=Sat → row index Mon=0..Sun=6.
    * Read-through Redis cache TTL 300s.
@@ -1441,8 +1443,8 @@ export class MerchantPortalService {
       hr: number | string;
       n: number | string;
     }> = await this.db.query(
-      `SELECT DAYOFWEEK(DATE_ADD(om.payment_on, INTERVAL 7 HOUR)) AS dow,
-              HOUR(DATE_ADD(om.payment_on, INTERVAL 7 HOUR)) AS hr,
+      `SELECT DAYOFWEEK(om.payment_on) AS dow,
+              HOUR(om.payment_on) AS hr,
               COUNT(DISTINCT om.id) AS n
        FROM order_metadata om
        WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'

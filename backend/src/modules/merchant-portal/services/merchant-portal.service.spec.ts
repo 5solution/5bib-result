@@ -1209,11 +1209,9 @@ describe('MerchantPortalService', () => {
       expect(JSON.stringify(r)).not.toMatch(/gmv|fee|price/i);
     });
 
-    it('TC-03 timezone +7h: payment_on 16:30 UTC (=23:30 VN Thu) → grid[Thu][21-24]', async () => {
-      // The +7h conversion happens in MySQL (DATE_ADD). We verify the BE mapping
-      // of the post-conversion dow/hr that MySQL would return:
-      // 2026-01-01 16:30 UTC + 7h = 2026-01-01 23:30 VN. 2026-01-01 is Thursday.
-      // MySQL DAYOFWEEK(Thu) = 5; HOUR(23:30) = 23 → bucket 21-24 (index 6).
+    it('TC-03 dow/hr→grid mapping: MySQL Thu 23h (dow=5,hr=23) → grid[Thu][21-24]', async () => {
+      // payment_on lưu SẴN giờ VN (UAT F-070 confirm) → KHÔNG +7h. Verify BE mapping
+      // của dow/hr MySQL trả về: DAYOFWEEK(Thu)=5; HOUR(23)=23 → bucket 21-24 (index 6).
       mockConfigFound({ tenantIds: [42] });
       mockDb.query
         .mockResolvedValueOnce([{ race_id: 138 }])
@@ -1222,10 +1220,9 @@ describe('MerchantPortalService', () => {
       // Thu = row index 3 (Mon0 Tue1 Wed2 Thu3); bucket 21-24 = index 6.
       expect(r.grid[3][6]).toBe(1);
       expect(r.max).toBe(1);
-      // verify SQL applied +7h before DAYOFWEEK/HOUR
-      expect(mockDb.query.mock.calls[1][0]).toMatch(
-        /DATE_ADD\(om\.payment_on, INTERVAL 7 HOUR\)/,
-      );
+      // SQL dùng raw payment_on (đã là giờ VN), KHÔNG convert +7h (UAT fix).
+      expect(mockDb.query.mock.calls[1][0]).toMatch(/DAYOFWEEK\(om\.payment_on\)/);
+      expect(mockDb.query.mock.calls[1][0]).not.toMatch(/INTERVAL 7 HOUR/);
     });
 
     it('TC-09 empty → grid all 0, max 0', async () => {
