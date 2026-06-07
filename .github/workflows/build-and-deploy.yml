@@ -277,10 +277,14 @@ jobs:
               DEPLOYED_ANY=1
             fi
             if [ "$BUILT_MERCHANT" = "success" ]; then
-              sed -i "s|ghcr.io/5solution/5bib-result/merchant:.*|ghcr.io/5solution/5bib-result/merchant:${TAG}|" docker-compose.yml
-              docker compose pull 5bib-result-merchant
-              docker compose up -d --force-recreate 5bib-result-merchant
-              DEPLOYED_ANY=1
+              if docker compose config --services | grep -q '^5bib-result-merchant$'; then
+                sed -i "s|ghcr.io/5solution/5bib-result/merchant:.*|ghcr.io/5solution/5bib-result/merchant:${TAG}|" docker-compose.yml
+                docker compose pull 5bib-result-merchant
+                docker compose up -d --force-recreate 5bib-result-merchant
+                DEPLOYED_ANY=1
+              else
+                echo "5bib-result-merchant chưa có trong VPS docker-compose.yml — skip deploy (image đã push GHCR; thêm service theo merchant/deploy/DEPLOY.md rồi deploy lại)"
+              fi
             fi
             if [ "$DEPLOYED_ANY" = "0" ]; then
               echo "No services built — nothing to deploy"
