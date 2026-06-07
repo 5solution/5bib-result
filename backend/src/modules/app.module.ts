@@ -37,6 +37,8 @@ import { MedicalIncidentModule } from './medical-incidents/medical-incident.modu
 import { AwardsModule } from './awards/awards.module';
 // F-023 — Admin Dashboard Redesign (Audit log + dashboard aggregator endpoints).
 import { AuditModule } from './audit/audit.module';
+// F-069 M2a — Merchant Reporting Portal (admin access config CRUD).
+import { MerchantPortalModule } from './merchant-portal/merchant-portal.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 // FEATURE-036 — SEO subdirectory routes admin endpoints (sync-slugs trigger + logs)
 import { AdminSeoModule } from './admin-seo/admin-seo.module';
@@ -229,6 +231,9 @@ const volunteerDbModules = env.volunteerDb.host
     AdminSeoModule,
     // F-061 — Admin internal post-deploy ops (flush fee cache endpoint).
     AdminInternalModule,
+    // F-069 M2a — Merchant Reporting Portal (admin access config CRUD).
+    // M2b will add merchant-facing report endpoints + service core.
+    MerchantPortalModule,
   ],
 })
 export class AppModule {}

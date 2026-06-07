@@ -46,6 +46,14 @@ const envVarsSchema = Joi.object()
     LOGTO_API_RESOURCE: Joi.string().default('https://api.5bib.com'),
     LOGTO_M2M_APP_ID: Joi.string().optional().allow(''),
     LOGTO_M2M_APP_SECRET: Joi.string().optional().allow(''),
+    // Logto Management API resource INDICATOR (audience). For self-hosted OSS the
+    // default-tenant indicator is `https://default.logto.app/api` — NOT the custom
+    // endpoint. (HTTP base for requests stays `${LOGTO_ENDPOINT}/api`.)
+    LOGTO_MANAGEMENT_RESOURCE: Joi.string().default(
+      'https://default.logto.app/api',
+    ),
+    // F-069 M3b — merchant portal login URL embedded in auto-provision invite email
+    MERCHANT_PORTAL_LOGIN_URL: Joi.string().default('https://merchant.5bib.com'),
     // Timing landing (timing.5bib.com) — lead notification emails + admin link
     TIMING_NOTIFY_EMAILS: Joi.string()
       .optional()
@@ -146,6 +154,8 @@ export const env = {
     apiResource: envVars.LOGTO_API_RESOURCE as string,
     m2mAppId: (envVars.LOGTO_M2M_APP_ID as string) || '',
     m2mAppSecret: (envVars.LOGTO_M2M_APP_SECRET as string) || '',
+    managementResource: envVars.LOGTO_MANAGEMENT_RESOURCE as string,
+    merchantLoginUrl: envVars.MERCHANT_PORTAL_LOGIN_URL as string,
   },
   timing: {
     notifyEmails: ((envVars.TIMING_NOTIFY_EMAILS as string) || '')

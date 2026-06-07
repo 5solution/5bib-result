@@ -19,7 +19,17 @@
  * nhưng các SQL filter dùng cùng timestamp (UTC).
  */
 
-export type PeriodKind = '7d' | '30d' | 'quarter' | 'year' | 'custom' | 'rolling12m';
+/**
+ * F-069 ADDITIVE (M1, 2026-06-04) — thêm `'90d'` literal cho Merchant Reporting Portal.
+ *
+ * Lý do additive (không refactor): merchant team MKT/Finance nói "90 ngày qua"
+ * theo natural language. Calendar `'quarter'` không phù hợp (đầu Q chỉ 15 ngày).
+ * `'90d'` = rolling 90 days = `now() - INTERVAL 90 DAY`, parallel với `'7d'` / `'30d'`.
+ *
+ * F-062 backward compat: 6 endpoint hiện tại KHÔNG break (Coder verify F-062
+ * existing tests still PASS).
+ */
+export type PeriodKind = '7d' | '30d' | '90d' | 'quarter' | 'year' | 'custom' | 'rolling12m';
 
 /**
  * F-062 NEW (Manager Adjustment #1 v3) — bucket size cho chart aggregation.
@@ -146,6 +156,17 @@ export function resolvePeriod(input: PeriodInput): ResolvedRange {
         fromIso: from.toISOString(),
         toIso: to.toISOString(),
         periodKey: `30d:${ymd(from)}`,
+      };
+    }
+    case '90d': {
+      // F-069 ADDITIVE: rolling 90-day window. Parallel với '7d' / '30d' pattern.
+      // 90 ngày BAO GỒM hôm nay → from = today - 89 (cùng convention 7d/30d).
+      const from = addDaysUtc(today, -89);
+      const to = addDaysUtc(today, 1);
+      return {
+        fromIso: from.toISOString(),
+        toIso: to.toISOString(),
+        periodKey: `90d:${ymd(from)}`,
       };
     }
     case 'quarter': {

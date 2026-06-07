@@ -41,6 +41,7 @@ import {
   Sparkles,
   UsersRound,
   DatabaseZap,
+  ShieldCheck,
 } from "lucide-react";
 
 export type NavItem = {
@@ -81,6 +82,14 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "dashboard", href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
       { id: "races", href: "/races", label: "Giải đấu", icon: Trophy },
       { id: "merchants", href: "/merchants", label: "Merchant", icon: Store },
+      {
+        id: "merchant-portal",
+        href: "/merchant-portal",
+        label: "Quyền BTC xem báo cáo",
+        icon: ShieldCheck,
+        badge: "NEW",
+        requireRole: "admin",
+      },
       { id: "reconciliations", href: "/reconciliations", label: "Đối soát", icon: ReceiptText },
       { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart2, requireRole: "admin" },
       { id: "team", href: "/team-management", label: "Quản lý nhân sự", icon: Users },

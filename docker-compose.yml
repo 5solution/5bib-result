@@ -42,6 +42,26 @@ services:
       - backend
     restart: unless-stopped
 
+  # F-069 M5 — Merchant Portal (merchant.5bib.com). Logto config 100% runtime.
+  merchant:
+    build:
+      context: ./merchant
+      dockerfile: Dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      - BACKEND_URL=http://backend:8081
+      - LOGTO_ENDPOINT=${LOGTO_ENDPOINT:-https://auth.5bib.com}
+      - LOGTO_API_RESOURCE=${LOGTO_API_RESOURCE:-https://api.5bib.com}
+      - LOGTO_APP_ID=${MERCHANT_LOGTO_APP_ID}
+      - LOGTO_APP_SECRET=${MERCHANT_LOGTO_APP_SECRET}
+      - LOGTO_BASE_URL=${MERCHANT_LOGTO_BASE_URL:-https://merchant.5bib.com}
+      - LOGTO_COOKIE_SECRET=${MERCHANT_LOGTO_COOKIE_SECRET}
+      - LOGTO_COOKIE_SECURE=${MERCHANT_LOGTO_COOKIE_SECURE:-true}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   crew:
     build:
       context: ./crew
