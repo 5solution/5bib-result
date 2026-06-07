@@ -28,6 +28,12 @@ import {
 } from '../../analytics/services/period-resolver';
 import { FeeService } from '../../finance/services/fee.service';
 import type { LogtoUser } from '../../logto-auth/types';
+import {
+  AdminRaceSearchItemDto,
+  AdminRaceSearchResponseDto,
+  AdminTenantSearchItemDto,
+  AdminTenantSearchResponseDto,
+} from '../dto/admin-search.dto';
 import { MerchantMeResponseDto } from '../dto/merchant-me.dto';
 import {
   RevenueAggregateDto,
@@ -217,6 +223,88 @@ export class MerchantPortalService {
         },
       });
     }
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // Admin search — "Gán quyền BTC" dialog (tenant picker + per-race picker)
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * Search BTC (tenant) ĐANG tổ chức giải (≥1 race chưa xóa). Phục vụ admin
+   * dialog gán quyền — chỉ list tenant có giải để admin không gán nhầm tenant
+   * trống. Tax/MST = cột `tenant.vat` (tên cột vat nhưng lưu mã số thuế).
+   *
+   * q optional: khớp name LIKE %q% OR vat LIKE %q% OR id (CAST exact). Bỏ trống
+   * → 50 tenant đầu theo name ASC. Parameterized (KHÔNG string-interpolate).
+   */
+  async searchTenants(q?: string): Promise<AdminTenantSearchResponseDto> {
+    const term = q?.trim();
+    let sql =
+      `SELECT DISTINCT t.id AS id, t.name AS name, t.vat AS vat
+       FROM tenant t
+       JOIN races r ON r.tenant_id = t.id
+       WHERE r.is_delete = 0`;
+    const params: Array<string | number> = [];
+    if (term) {
+      const like = `%${term}%`;
+      sql += ' AND (t.name LIKE ? OR t.vat LIKE ? OR CAST(t.id AS CHAR) = ?)';
+      params.push(like, like, term);
+    }
+    sql += ' ORDER BY t.name ASC LIMIT 50';
+
+    const rows: Array<{
+      id: number | string;
+      name: string | null;
+      vat: string | null;
+    }> = await this.db.query(sql, params);
+
+    const items: AdminTenantSearchItemDto[] = rows.map((row) => ({
+      id: Number(row.id),
+      name: row.name ?? '',
+      taxCode: row.vat ?? null,
+    }));
+    return { items };
+  }
+
+  /**
+   * Search giải (non-draft, chưa xóa) cho per-race access grant picker. Kèm tên
+   * BTC làm context (LEFT JOIN tenant — giữ giải dù tenant đã xóa).
+   *
+   * q optional: khớp title LIKE %q% OR race_id (CAST exact). Bỏ trống → 50 giải
+   * mới nhất theo event_start_date DESC. Parameterized.
+   */
+  async searchRaces(q?: string): Promise<AdminRaceSearchResponseDto> {
+    const term = q?.trim();
+    let sql =
+      `SELECT r.race_id AS race_id, r.title AS title, r.status AS status,
+              r.tenant_id AS tenant_id, t.name AS tenant_name
+       FROM races r
+       LEFT JOIN tenant t ON t.id = r.tenant_id
+       WHERE r.is_delete = 0 AND r.status != 'DRAFT'`;
+    const params: Array<string | number> = [];
+    if (term) {
+      const like = `%${term}%`;
+      sql += ' AND (r.title LIKE ? OR CAST(r.race_id AS CHAR) = ?)';
+      params.push(like, term);
+    }
+    sql += ' ORDER BY r.event_start_date DESC LIMIT 50';
+
+    const rows: Array<{
+      race_id: number | string;
+      title: string | null;
+      status: string | null;
+      tenant_id: number | string | null;
+      tenant_name: string | null;
+    }> = await this.db.query(sql, params);
+
+    const items: AdminRaceSearchItemDto[] = rows.map((row) => ({
+      raceId: Number(row.race_id),
+      title: row.title ?? '',
+      status: row.status ?? '',
+      tenantId: Number(row.tenant_id ?? 0),
+      tenantName: row.tenant_name ?? null,
+    }));
+    return { items };
   }
 
   // ────────────────────────────────────────────────────────────────

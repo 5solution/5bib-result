@@ -38,6 +38,10 @@ import type {
 } from "@/lib/api-generated/types.gen";
 import { MP_PERMISSION_DESC } from "@/lib/merchant-portal-labels";
 import { TenantMultiPicker } from "./tenant-multi-picker";
+import { RacePicker } from "./race-picker";
+
+/** Phạm vi quyền: theo BTC (tất cả giải của BTC) hoặc chọn giải cụ thể. */
+type ScopeMode = "tenant" | "race";
 
 type Props = {
   open: boolean;
@@ -80,7 +84,9 @@ export function AccessFormDialog({
   const [userId, setUserId] = useState("");
   const [userName, setUserName] = useState("");
   const [email, setEmail] = useState("");
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("tenant");
   const [tenantIds, setTenantIds] = useState<number[]>([]);
+  const [raceIds, setRaceIds] = useState<number[]>([]);
   const [revenueEnabled, setRevenueEnabled] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -95,14 +101,27 @@ export function AccessFormDialog({
       setUserId(editingItem.userId);
       setUserName(editingItem.userName);
       setEmail(editingItem.email);
-      setTenantIds(editingItem.tenantIds ?? []);
+      const existingTenantIds = editingItem.tenantIds ?? [];
+      const existingRaceIds = editingItem.raceOverrides?.include ?? [];
+      setTenantIds(existingTenantIds);
+      setRaceIds(existingRaceIds);
+      // Infer mode: tenant scope ưu tiên; nếu trống mà có race include → race.
+      if (existingTenantIds.length > 0) {
+        setScopeMode("tenant");
+      } else if (existingRaceIds.length > 0) {
+        setScopeMode("race");
+      } else {
+        setScopeMode("tenant");
+      }
       setRevenueEnabled(editingItem.permissions.includes("revenue_report"));
       setIsActive(editingItem.isActive);
     } else {
       setUserId("");
       setUserName("");
       setEmail("");
+      setScopeMode("tenant");
       setTenantIds([]);
+      setRaceIds([]);
       setRevenueEnabled(false);
       setIsActive(true);
     }
@@ -125,9 +144,13 @@ export function AccessFormDialog({
     // Email-first: định danh BTC qua email. Backend tự khớp/tạo userId (M3b).
     if (!userName.trim()) e.userName = "Vui lòng nhập tên người dùng";
     if (!EMAIL_RE.test(email.trim())) e.email = "Email không hợp lệ";
-    if (tenantIds.length < 1) e.tenantIds = "Chọn ít nhất 1 BTC";
+    if (scopeMode === "tenant") {
+      if (tenantIds.length < 1) e.scope = "Chọn ít nhất 1 BTC";
+    } else {
+      if (raceIds.length < 1) e.scope = "Chọn ít nhất 1 giải";
+    }
     return e;
-  }, [userName, email, tenantIds]);
+  }, [userName, email, scopeMode, tenantIds, raceIds]);
 
   const isValid = Object.keys(errors).length === 0;
 
@@ -143,12 +166,19 @@ export function AccessFormDialog({
       ? ["ticket_report", "revenue_report"]
       : ["ticket_report"];
 
+    // Payload theo mode: tenant → tenantIds + raceOverrides rỗng;
+    // race → tenantIds rỗng + raceOverrides.include = giải đã chọn.
+    const scopePayload =
+      scopeMode === "tenant"
+        ? { tenantIds, raceOverrides: { include: [], exclude: [] } }
+        : { tenantIds: [], raceOverrides: { include: raceIds, exclude: [] } };
+
     try {
       if (isEdit && editingItem) {
         const body: UpdateAccessConfigDto = {
           userName: userName.trim(),
           email: email.trim(),
-          tenantIds,
+          ...scopePayload,
           permissions,
           isActive,
         };
@@ -165,7 +195,7 @@ export function AccessFormDialog({
           userId: userId.trim() || undefined,
           userName: userName.trim(),
           email: email.trim(),
-          tenantIds,
+          ...scopePayload,
           permissions,
           isActive,
         };
@@ -254,17 +284,63 @@ export function AccessFormDialog({
             )}
           </div>
 
+          <div className="space-y-2">
+            <Label>Phạm vi quyền</Label>
+            <div className="grid grid-cols-2 gap-1 rounded-md border border-[var(--border,#E7E2D9)] p-1">
+              <button
+                type="button"
+                onClick={() => setScopeMode("tenant")}
+                aria-pressed={scopeMode === "tenant"}
+                className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                  scopeMode === "tenant"
+                    ? "bg-[#E6ECFF] text-blue-800"
+                    : "text-[var(--text-muted,#78716C)] hover:bg-[#F3F0EB]"
+                }`}
+              >
+                Theo BTC
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeMode("race")}
+                aria-pressed={scopeMode === "race"}
+                className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                  scopeMode === "race"
+                    ? "bg-[#E6ECFF] text-blue-800"
+                    : "text-[var(--text-muted,#78716C)] hover:bg-[#F3F0EB]"
+                }`}
+              >
+                Chọn giải cụ thể
+              </button>
+            </div>
+            <p className="text-xs text-[var(--text-muted,#78716C)]">
+              {scopeMode === "tenant"
+                ? "BTC được xem báo cáo của TẤT CẢ giải thuộc các đơn vị đã chọn."
+                : "BTC chỉ xem báo cáo của những giải được chọn cụ thể."}
+            </p>
+          </div>
+
           <div className="space-y-1.5">
-            <Label>
-              BTC được xem báo cáo <span className="text-red-600">*</span>
-            </Label>
-            <TenantMultiPicker
-              value={tenantIds}
-              onChange={setTenantIds}
-              initialNames={initialTenantNames}
-            />
-            {submitAttempted && errors.tenantIds && (
-              <p className="text-xs text-red-600">{errors.tenantIds}</p>
+            {scopeMode === "tenant" ? (
+              <>
+                <Label>
+                  BTC được xem báo cáo <span className="text-red-600">*</span>
+                </Label>
+                <TenantMultiPicker
+                  value={tenantIds}
+                  onChange={setTenantIds}
+                  initialNames={initialTenantNames}
+                />
+              </>
+            ) : (
+              <>
+                <Label>
+                  Giải được xem báo cáo <span className="text-red-600">*</span>
+                </Label>
+                <RacePicker value={raceIds} onChange={setRaceIds} />
+              </>
+            )}
+            {submitAttempted && errors.scope && (
+              <p className="text-xs text-red-600">{errors.scope}</p>
             )}
           </div>
 

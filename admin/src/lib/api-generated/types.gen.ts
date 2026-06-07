@@ -6606,6 +6606,52 @@ export type FlushFeeCacheResponseDto = {
     patterns: Array<string>;
 };
 
+export type AdminTenantSearchItemDto = {
+    /**
+     * Tenant (BTC) ID
+     */
+    id: number;
+    /**
+     * Tên BTC
+     */
+    name: string;
+    /**
+     * Mã số thuế / mã DN (cột `vat`). null nếu chưa có.
+     */
+    taxCode: string | null;
+};
+
+export type AdminTenantSearchResponseDto = {
+    items: Array<AdminTenantSearchItemDto>;
+};
+
+export type AdminRaceSearchItemDto = {
+    /**
+     * MySQL race_id
+     */
+    raceId: number;
+    /**
+     * Tên giải
+     */
+    title: string;
+    /**
+     * Trạng thái giải (enum gốc, vd COMPLETE/ONGOING)
+     */
+    status: string;
+    /**
+     * Tenant (BTC) ID sở hữu giải
+     */
+    tenantId: number;
+    /**
+     * Tên BTC (context). null nếu tenant đã bị xóa.
+     */
+    tenantName: string | null;
+};
+
+export type AdminRaceSearchResponseDto = {
+    items: Array<AdminRaceSearchItemDto>;
+};
+
 export type RaceOverridesDto = {
     /**
      * Race IDs include thêm ngoài tenant scope (agency cross-tenant)
@@ -16060,6 +16106,72 @@ export type FlushFeeCacheControllerFlushAllResponses = {
 };
 
 export type FlushFeeCacheControllerFlushAllResponse = FlushFeeCacheControllerFlushAllResponses[keyof FlushFeeCacheControllerFlushAllResponses];
+
+export type MerchantPortalAdminControllerSearchTenantsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Từ khóa (optional)
+         */
+        q?: string;
+    };
+    url: '/api/admin/merchant-portal/tenants/search';
+};
+
+export type MerchantPortalAdminControllerSearchTenantsErrors = {
+    /**
+     * Query không hợp lệ
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Not admin role
+     */
+    403: unknown;
+};
+
+export type MerchantPortalAdminControllerSearchTenantsResponses = {
+    200: AdminTenantSearchResponseDto;
+};
+
+export type MerchantPortalAdminControllerSearchTenantsResponse = MerchantPortalAdminControllerSearchTenantsResponses[keyof MerchantPortalAdminControllerSearchTenantsResponses];
+
+export type MerchantPortalAdminControllerSearchRacesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Từ khóa (optional)
+         */
+        q?: string;
+    };
+    url: '/api/admin/merchant-portal/races/search';
+};
+
+export type MerchantPortalAdminControllerSearchRacesErrors = {
+    /**
+     * Query không hợp lệ
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Not admin role
+     */
+    403: unknown;
+};
+
+export type MerchantPortalAdminControllerSearchRacesResponses = {
+    200: AdminRaceSearchResponseDto;
+};
+
+export type MerchantPortalAdminControllerSearchRacesResponse = MerchantPortalAdminControllerSearchRacesResponses[keyof MerchantPortalAdminControllerSearchRacesResponses];
 
 export type MerchantPortalAdminControllerListData = {
     body?: never;

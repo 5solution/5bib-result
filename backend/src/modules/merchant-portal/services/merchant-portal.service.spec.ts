@@ -1311,4 +1311,114 @@ describe('MerchantPortalService', () => {
       }
     });
   });
+
+  // ────────────────────────────────────────────────────────────────
+  // Admin search — searchTenants() / searchRaces()
+  // ────────────────────────────────────────────────────────────────
+
+  describe('searchTenants()', () => {
+    it('happy path → maps id/name/taxCode (vat column)', async () => {
+      mockDb.query.mockResolvedValueOnce([
+        { id: 42, name: 'CLB Sài Gòn', vat: '0312345678' },
+        { id: 99, name: 'BTC Hà Nội', vat: null },
+      ]);
+      const r = await service.searchTenants();
+      expect(r.items).toEqual([
+        { id: 42, name: 'CLB Sài Gòn', taxCode: '0312345678' },
+        { id: 99, name: 'BTC Hà Nội', taxCode: null },
+      ]);
+    });
+
+    it('q filter → parameterized LIKE %q% + vat + id, no string interpolation', async () => {
+      mockDb.query.mockResolvedValueOnce([]);
+      await service.searchTenants('Marathon');
+      const [sql, params] = mockDb.query.mock.calls[0];
+      expect(sql).toContain('JOIN races r ON r.tenant_id = t.id');
+      expect(sql).toContain('r.is_delete = 0');
+      expect(sql).toContain('t.name LIKE ? OR t.vat LIKE ? OR CAST(t.id AS CHAR) = ?');
+      expect(sql).toContain('LIMIT 50');
+      expect(sql).not.toContain('Marathon'); // never interpolated into SQL
+      expect(params).toEqual(['%Marathon%', '%Marathon%', 'Marathon']);
+    });
+
+    it('empty q → no WHERE term clause, no params', async () => {
+      mockDb.query.mockResolvedValueOnce([]);
+      await service.searchTenants('   '); // whitespace trims to empty
+      const [sql, params] = mockDb.query.mock.calls[0];
+      expect(sql).not.toContain('LIKE');
+      expect(params).toEqual([]);
+    });
+
+    it('null/string row coercion → Number(id), name fallback empty', async () => {
+      mockDb.query.mockResolvedValueOnce([{ id: '7', name: null, vat: '0900' }]);
+      const r = await service.searchTenants();
+      expect(r.items[0]).toEqual({ id: 7, name: '', taxCode: '0900' });
+    });
+  });
+
+  describe('searchRaces()', () => {
+    it('happy path → maps raceId/title/status/tenantId/tenantName', async () => {
+      mockDb.query.mockResolvedValueOnce([
+        {
+          race_id: 501,
+          title: 'VnExpress Marathon',
+          status: 'COMPLETE',
+          tenant_id: 42,
+          tenant_name: 'CLB Sài Gòn',
+        },
+      ]);
+      const r = await service.searchRaces();
+      expect(r.items).toEqual([
+        {
+          raceId: 501,
+          title: 'VnExpress Marathon',
+          status: 'COMPLETE',
+          tenantId: 42,
+          tenantName: 'CLB Sài Gòn',
+        },
+      ]);
+    });
+
+    it('q filter → parameterized title LIKE + race_id, excludes DRAFT', async () => {
+      mockDb.query.mockResolvedValueOnce([]);
+      await service.searchRaces('Trail');
+      const [sql, params] = mockDb.query.mock.calls[0];
+      expect(sql).toContain("r.status != 'DRAFT'");
+      expect(sql).toContain('r.is_delete = 0');
+      expect(sql).toContain('LEFT JOIN tenant t ON t.id = r.tenant_id');
+      expect(sql).toContain('r.title LIKE ? OR CAST(r.race_id AS CHAR) = ?');
+      expect(sql).toContain('ORDER BY r.event_start_date DESC');
+      expect(sql).toContain('LIMIT 50');
+      expect(sql).not.toContain('Trail');
+      expect(params).toEqual(['%Trail%', 'Trail']);
+    });
+
+    it('empty q → no term clause, ordered by date desc', async () => {
+      mockDb.query.mockResolvedValueOnce([]);
+      await service.searchRaces();
+      const [sql, params] = mockDb.query.mock.calls[0];
+      expect(sql).not.toContain('LIKE');
+      expect(params).toEqual([]);
+    });
+
+    it('null tenant (deleted) → tenantName null, tenantId 0 fallback', async () => {
+      mockDb.query.mockResolvedValueOnce([
+        {
+          race_id: '88',
+          title: null,
+          status: null,
+          tenant_id: null,
+          tenant_name: null,
+        },
+      ]);
+      const r = await service.searchRaces();
+      expect(r.items[0]).toEqual({
+        raceId: 88,
+        title: '',
+        status: '',
+        tenantId: 0,
+        tenantName: null,
+      });
+    });
+  });
 });

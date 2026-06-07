@@ -31,10 +31,16 @@ import {
   UpdateAccessConfigDto,
 } from './dto/access-config.dto';
 import {
+  AdminRaceSearchResponseDto,
+  AdminSearchQueryDto,
+  AdminTenantSearchResponseDto,
+} from './dto/admin-search.dto';
+import {
   LogtoLookupQueryDto,
   LogtoLookupResponseDto,
 } from './dto/logto-lookup.dto';
 import { MerchantPortalAccessService } from './services/merchant-portal-access.service';
+import { MerchantPortalService } from './services/merchant-portal.service';
 
 /**
  * F-069 M2a — Admin Merchant Portal endpoints.
@@ -61,7 +67,52 @@ import { MerchantPortalAccessService } from './services/merchant-portal-access.s
 export class MerchantPortalAdminController {
   constructor(
     private readonly accessService: MerchantPortalAccessService,
+    private readonly portalService: MerchantPortalService,
   ) {}
+
+  // ────────────────────────────────────────────────────────────────
+  // GET /tenants/search — BTC tổ chức giải (dialog "Gán quyền BTC")
+  // ────────────────────────────────────────────────────────────────
+
+  @Get('tenants/search')
+  @ApiOperation({
+    summary: 'Search BTC (tenant) đang tổ chức giải (admin)',
+    description:
+      'Trả tenant có ≥1 giải chưa xóa, phục vụ dialog "Gán quyền BTC". ' +
+      'q optional khớp name / mã số thuế / id. Bỏ trống → 50 tenant đầu theo tên.',
+  })
+  @ApiQuery({ name: 'q', description: 'Từ khóa (optional)', required: false })
+  @ApiResponse({ status: 200, type: AdminTenantSearchResponseDto })
+  @ApiResponse({ status: 400, description: 'Query không hợp lệ' })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Not admin role' })
+  async searchTenants(
+    @Query() query: AdminSearchQueryDto,
+  ): Promise<AdminTenantSearchResponseDto> {
+    return this.portalService.searchTenants(query.q);
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // GET /races/search — giải cho per-race access grant picker
+  // ────────────────────────────────────────────────────────────────
+
+  @Get('races/search')
+  @ApiOperation({
+    summary: 'Search giải (non-draft) cho per-race access grant (admin)',
+    description:
+      'Trả giải chưa xóa + khác DRAFT, kèm tên BTC làm context. ' +
+      'q optional khớp title / race_id. Bỏ trống → 50 giải mới nhất.',
+  })
+  @ApiQuery({ name: 'q', description: 'Từ khóa (optional)', required: false })
+  @ApiResponse({ status: 200, type: AdminRaceSearchResponseDto })
+  @ApiResponse({ status: 400, description: 'Query không hợp lệ' })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Not admin role' })
+  async searchRaces(
+    @Query() query: AdminSearchQueryDto,
+  ): Promise<AdminRaceSearchResponseDto> {
+    return this.portalService.searchRaces(query.q);
+  }
 
   // ────────────────────────────────────────────────────────────────
   // GET /access — List

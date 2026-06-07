@@ -78,6 +78,22 @@ export function statusKeyFromActive(isActive: boolean): MerchantStatusKey {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Race status (vendor enum gốc → nhãn VN cho RacePicker)
+// ────────────────────────────────────────────────────────────────────────────
+
+export const MP_RACE_STATUS_LABEL: Record<string, string> = {
+  ONGOING: "Đang diễn ra",
+  GENERATED_CODE: "Sắp diễn ra",
+  COMPLETE: "Đã kết thúc",
+  CANCEL: "Đã huỷ",
+};
+
+export function formatRaceStatus(s: string | null | undefined): string {
+  if (!s) return "—";
+  return MP_RACE_STATUS_LABEL[s] ?? s;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Race count sentinel (BR-MP — '__all' = tất cả giải của tenant)
 // ────────────────────────────────────────────────────────────────────────────
 
