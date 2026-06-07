@@ -1,0 +1,477 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ═══════════════════════════════════════════════════════════════════
+   5BIB Admin — Design System
+   Synced with frontend "Duong Mon" palette
+   Fonts: Be Vietnam Pro (display) + Plus Jakarta Sans (body) + JetBrains Mono
+   ═══════════════════════════════════════════════════════════════════ */
+
+@theme inline {
+  /* Fonts — FEATURE-022 BR-DESIGN-06/07
+     UI font: Be Vietnam Pro (--font-be-vietnam-pro tu lib/fonts.ts).
+     Data font: JetBrains Mono (--font-jetbrains-mono tu lib/fonts.ts).
+     KHONG dung Plus Jakarta Sans nua — admin va frontend tach design rieng. */
+  --font-sans: var(--font-be-vietnam-pro), "Be Vietnam Pro", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-display: var(--font-be-vietnam-pro), "Be Vietnam Pro", system-ui, sans-serif;
+  --font-heading: var(--font-be-vietnam-pro), "Be Vietnam Pro", system-ui, sans-serif;
+
+  /* Semantic color aliases (Tailwind picks these up) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Radius scale */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* FEATURE-022 BR-DESIGN-08 — radius co dinh:
+     card 12px, input/pill 8px, badges full pill 99px (qua rounded-full). */
+  --radius-card: 12px;
+  --radius-input: 8px;
+
+  /* FEATURE-022 BR-DESIGN-01 — admin design tokens (doi chieu shell.jsx).
+     Map sang Tailwind utility class qua @theme inline. */
+  --color-admin-bg: var(--admin-bg);
+  --color-admin-surface: var(--admin-surface);
+  --color-admin-surface-2: var(--admin-surface-2);
+  --color-admin-surface-3: var(--admin-surface-3);
+  --color-admin-text: var(--admin-text);
+  --color-admin-text-muted: var(--admin-text-muted);
+  --color-admin-text-dim: var(--admin-text-dim);
+  --color-admin-border: var(--admin-border);
+  --color-admin-border-strong: var(--admin-border-strong);
+  --color-admin-blue: var(--admin-blue);
+  --color-admin-blue-dim: var(--admin-blue-dim);
+  --color-admin-blue-50: var(--admin-blue-50);
+  --color-admin-blue-100: var(--admin-blue-100);
+  --color-admin-magenta: var(--admin-magenta);
+  --color-admin-success: var(--admin-success);
+  --color-admin-success-bg: var(--admin-success-bg);
+  --color-admin-warning: var(--admin-warning);
+  --color-admin-warning-bg: var(--admin-warning-bg);
+  --color-admin-danger: var(--admin-danger);
+  --color-admin-danger-bg: var(--admin-danger-bg);
+  --color-admin-violet: var(--admin-violet);
+  --color-admin-violet-bg: var(--admin-violet-bg);
+  --color-admin-sidebar-bg: var(--admin-sidebar-bg);
+
+  /* Sidebar (admin-specific) */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Charts */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+/* ── Brand tokens ── */
+:root {
+  /* 5BIB palette — identical to frontend */
+  --5bib-bg: #faf8f5;
+  --5bib-surface: #f3f0eb;
+  --5bib-surface-2: #e8e4dd;
+  --5bib-accent: #FF0E65;
+  --5bib-accent-dim: #d9094f;
+  --5bib-info: #1D49FF;
+  --5bib-info-dim: #0B36E6;
+  --5bib-magenta: #FF0E65;
+  --5bib-magenta-dim: #E60057;
+
+  /* F-062 Sales Analytics Dashboard — 5Solution brand token aliases (Manager Adjustment #5 v3).
+     Source: reference-ui-selling-web/design-system/tokens.css.
+     Maps to existing --5bib-* tokens to avoid duplicating hex literals.
+     Use in analytics components: `text-[var(--5s-blue)]` or `style={{ color: 'var(--5s-blue)' }}`. */
+  --5s-blue: var(--5bib-info);             /* #1D49FF — 5-family logo blue */
+  --5s-blue-600: var(--5bib-info-dim);     /* #0B36E6 */
+  --5s-blue-700: #0026B3;                  /* not in --5bib-*, original 5Solution token */
+  --5s-blue-400: #4A6EFF;                  /* not in --5bib-*, original 5Solution token */
+  --5s-blue-300: #88A2FF;                  /* not in --5bib-*, original 5Solution token */
+  --5s-blue-100: #DCE3FF;                  /* not in --5bib-*, original 5Solution token */
+  --5s-magenta: var(--5bib-magenta);       /* #FF0E65 — 5-family logo accent */
+  --5s-magenta-dim: var(--5bib-magenta-dim); /* #E60057 */
+  --5bib-accent-warm: #d97706;
+  --5bib-accent-glow: rgba(0, 102, 255, 0.25);
+  --5bib-text: #1c1917;
+  --5bib-text-muted: #78716c;
+  --5bib-border: #d6d3d1;
+  --5bib-success: #166534;
+  --5bib-live: #dc2626;
+  --5bib-gold: #92400e;
+  --5bib-silver: #57534e;
+  --5bib-bronze: #78350f;
+  --5bib-energy: #c2410c;
+  --5bib-trail: #166534;
+
+  /* shadcn semantic tokens — 5BIB warm stone palette
+     FEATURE-022 BR-DESIGN-03 — primary doi tu magenta sang BLUE.
+     Magenta van duoc giu lam brand accent qua --admin-magenta + --5bib-magenta. */
+  --background: #faf8f5;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+  --primary: #1D49FF;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f0eb;
+  --secondary-foreground: #1c1917;
+  --muted: #f3f0eb;
+  --muted-foreground: #78716c;
+  --accent: #e8e4dd;
+  --accent-foreground: #1c1917;
+  --destructive: #b91c1c;
+  --border: #e7e2d9;
+  --input: #d6d3d1;
+  --ring: #1D49FF;
+  --radius: 0.625rem;
+
+  /* Sidebar — DARK slate-900 (FEATURE-022 BR-DESIGN-05).
+     Active item dung BLUE tint thay vi magenta tint, blue left bar 3px. */
+  --sidebar: #0F172A;
+  --sidebar-foreground: rgba(255, 255, 255, 0.78);
+  --sidebar-primary: #1D49FF;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(29, 73, 255, 0.18);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #1D49FF;
+
+  /* FEATURE-022 — admin design tokens (doi chieu shell.jsx TOKENS). */
+  --admin-bg: #FAF8F5;
+  --admin-surface: #FFFFFF;
+  --admin-surface-2: #F3F0EB;
+  --admin-surface-3: #E8E4DD;
+  --admin-text: #1C1917;
+  --admin-text-muted: #78716C;
+  --admin-text-dim: #A8A29E;
+  --admin-border: #E7E2D9;
+  --admin-border-strong: #D6D3D1;
+  --admin-blue: #1D49FF;
+  --admin-blue-dim: #0B36E6;
+  --admin-blue-50: #E6ECFF;
+  --admin-blue-100: #CCD9FF;
+  --admin-magenta: #FF0E65;
+  --admin-success: #15803D;
+  --admin-success-bg: #DCFCE7;
+  --admin-warning: #B45309;
+  --admin-warning-bg: #FEF3C7;
+  --admin-danger: #B91C1C;
+  --admin-danger-bg: #FEE2E2;
+  --admin-violet: #5B21B6;
+  --admin-violet-bg: #EDE9FE;
+  --admin-sidebar-bg: #0F172A;
+
+  /* Charts */
+  --chart-1: #1D49FF;
+  --chart-2: #c2410c;
+  --chart-3: #166534;
+  --chart-4: #d97706;
+  --chart-5: #7c3aed;
+
+  /* Shadow system — same as frontend */
+  --shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-sm: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(28, 25, 23, 0.07), 0 2px 4px -2px rgba(28, 25, 23, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(28, 25, 23, 0.08), 0 4px 6px -4px rgba(28, 25, 23, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(28, 25, 23, 0.08), 0 8px 10px -6px rgba(28, 25, 23, 0.04);
+  --shadow-glow: 0 0 0 1px rgba(29, 73, 255, 0.08), 0 8px 32px rgba(29, 73, 255, 0.22);
+  --shadow-glow-magenta: 0 0 0 1px rgba(255, 14, 101, 0.12), 0 10px 30px rgba(255, 14, 101, 0.25);
+
+  /* Motion tokens */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 280ms;
+  --duration-slow: 500ms;
+
+  /* ── 5Solution design canvas tokens (FEATURE-005 Command Center) ── */
+  --5s-bg: #FAF8F5;
+  --5s-surface: #F3F0EB;
+  --5s-text: #1C1917;
+  --5s-text-muted: #78716C;
+  --5s-border: #E7E2D9;
+  --5s-border-strong: #C7C0B4;
+  /* F-007 BR-AF-15 — magenta primary token, blue retained as info for data viz */
+  --5s-primary: #FF0E65;
+  --5s-primary-hover: #d9094f;
+  --5s-info: #1D49FF;
+  --5s-info-50: #E6ECFF;
+  --5s-live: #FF0E65;
+  /* Backwards-compat aliases (kept so existing F-005/F-006 components keep compiling) */
+  --5s-blue: #1D49FF;
+  --5s-blue-50: #E6ECFF;
+  --5s-magenta: #FF0E65;
+  --5s-success: #16A34A;
+  --5s-warning: #F59E0B;
+  --5s-danger: #DC2626;
+}
+
+/* ── Command Center keyframes (race-ops) ── */
+@keyframes ro-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }
+@keyframes ro-pulse { 0% { transform: scale(.9); opacity:.5 } 70% { transform: scale(2.1); opacity:0 } 100% { transform: scale(2.1); opacity:0 } }
+
+/* FEATURE-022 BR-DESIGN-13 — magenta live indicator pulse 1.6s.
+   Dung boi <LiveDot /> tren race dang race-day. */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+/* ── Dark mode (keep simple — admin mostly light) ── */
+.dark {
+  --background: #1c1917;
+  --foreground: #fafaf9;
+  --card: #292524;
+  --card-foreground: #fafaf9;
+  --popover: #292524;
+  --popover-foreground: #fafaf9;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #292524;
+  --secondary-foreground: #e7e5e4;
+  --muted: #292524;
+  --muted-foreground: #a8a29e;
+  --accent: #292524;
+  --accent-foreground: #e7e5e4;
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #3b82f6;
+  --sidebar: #1c1917;
+  --sidebar-foreground: #fafaf9;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #292524;
+  --sidebar-accent-foreground: #e7e5e4;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #3b82f6;
+}
+
+/* ── Base reset ── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  code, pre, .font-mono, .tabular-nums {
+    font-family: var(--font-mono);
+  }
+}
+
+/* ── Utilities — shared with frontend ── */
+@layer utilities {
+  /* Interactions */
+  .card-hover {
+    transition:
+      box-shadow var(--duration-normal) var(--ease-out-expo),
+      border-color var(--duration-fast) ease,
+      transform var(--duration-normal) var(--ease-out-expo);
+  }
+  .card-hover:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--5bib-border);
+    transform: translateY(-1px);
+  }
+
+  .result-row-hover {
+    transition: background-color var(--duration-fast) ease;
+  }
+  .result-row-hover:hover {
+    background-color: color-mix(in srgb, var(--primary) 4%, transparent);
+  }
+
+  .focus-ring {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--5bib-accent-glow);
+    border-color: var(--primary);
+  }
+
+  .glow-accent {
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Glass */
+  .glass-light {
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Typography */
+  .text-gradient {
+    background: linear-gradient(135deg, var(--primary) 0%, #0055DD 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .accent-underline {
+    text-decoration: underline;
+    text-decoration-color: var(--primary);
+    text-underline-offset: 3px;
+  }
+
+  .mono-data {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Animations */
+  .slide-up {
+    animation: admin-slide-up var(--duration-slow) var(--ease-out-expo) both;
+  }
+  @keyframes admin-slide-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .scale-in {
+    animation: admin-scale-in var(--duration-normal) var(--ease-spring) both;
+  }
+  @keyframes admin-scale-in {
+    from { opacity: 0; transform: scale(0.94); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  .stagger-in > * {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: admin-stagger-up var(--duration-slow) var(--ease-out-expo) forwards;
+  }
+  .stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-in > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-in > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-in > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-in > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-in > *:nth-child(6) { animation-delay: 300ms; }
+  .stagger-in > *:nth-child(n+7) { animation-delay: 360ms; }
+  @keyframes admin-stagger-up {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      color-mix(in srgb, var(--muted) 70%, white) 50%,
+      var(--muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: admin-shimmer 1.6s ease-in-out infinite;
+  }
+  @keyframes admin-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .pulse-live {
+    animation: admin-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes admin-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(0.94); }
+  }
+
+  /* Layout */
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--5bib-border) transparent;
+  }
+
+  .sep {
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* ── Preserve scoped scope for race-result pages ── */
+.duong-mon-scope {
+  font-family: var(--font-sans);
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   F-008 v2 BR-CC2-22 — Command Center fullscreen mode.
+   Toggle activated by `CommandCenterFullscreenButton` setting
+   `data-fullscreen` on <body>. Hides race-ops shell sticky header so
+   the dashboard body fills the viewport. NO browser F11 — admin-only
+   fullscreen designed for race-day MC big-screen mounting.
+   ────────────────────────────────────────────────────────────────── */
+body[data-fullscreen] [data-race-ops-shell-header] {
+  transform: translateY(-100%);
+  transition: transform 200ms ease-out;
+  pointer-events: none;
+}
+body[data-fullscreen] main {
+  padding-top: 0 !important;
+  transition: padding 200ms ease-out;
+}
+
+/* F-011 BR-PB-02 — Extend fullscreen scope to admin shell (sidebar + topbar).
+   Danny chốt A: instant `display:none` for race-day big-screen viewport-max.
+   `!important` overrides Tailwind `lg:flex` on <aside>. */
+body[data-fullscreen] [data-admin-sidebar],
+body[data-fullscreen] [data-admin-topbar] {
+  display: none !important;
+}
+
+/* F-013 BR-RK-07 — Result Kiosk fullscreen containment.
+   When `data-fullscreen="true"` (kiosk-mode), lock viewport so touchscreen
+   layout cannot scroll the underlying admin shell off-canvas. The existing
+   F-008v2/F-011 rules above handle chrome hiding; this adds containment. */
+body[data-fullscreen="true"] {
+  overflow: hidden;
+  height: 100vh;
+}
+
