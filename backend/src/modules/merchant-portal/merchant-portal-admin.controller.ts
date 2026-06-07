@@ -36,12 +36,36 @@ import {
 } from './dto/logto-lookup.dto';
 import { MerchantPortalAccessService } from './services/merchant-portal-access.service';
 
+/**
+ * F-069 M2a — Admin Merchant Portal endpoints.
+ *
+ * Route prefix: `/api/admin/merchant-portal/*` per BR-MP-26 R2.
+ * Auth: `@UseGuards(LogtoAdminGuard)` class-level — all endpoints require admin.
+ *
+ * 7 endpoints:
+ *   GET    /access                  — List access configs (paginated, filterable)
+ *   GET    /access/:id              — Get config by Mongo _id
+ *   POST   /access                  — Create new config
+ *   PATCH  /access/:id              — Update config
+ *   DELETE /access/:id              — Hard delete config
+ *   GET    /audit-log               — TODO M2b — placeholder returns 200 empty for now
+ *   GET    /logto-lookup            — REUSE M1 LogtoService for user lookup
+ *
+ * Actor attribution (resolves TD-CONTRACTS-ACTOR-001): extracted from
+ * `req.user.userId` (Logto JWT subject) via @Req() instead of hardcoded 'admin'.
+ */
 @ApiTags('Admin — Merchant Portal')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(LogtoAdminGuard)
 @Controller('admin/merchant-portal')
 export class MerchantPortalAdminController {
-  constructor(private readonly accessService: MerchantPortalAccessService) {}
+  constructor(
+    private readonly accessService: MerchantPortalAccessService,
+  ) {}
+
+  // ────────────────────────────────────────────────────────────────
+  // GET /access — List
+  // ────────────────────────────────────────────────────────────────
 
   @Get('access')
   @ApiOperation({
@@ -57,6 +81,10 @@ export class MerchantPortalAdminController {
     return this.accessService.findAll(query);
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // GET /access/:id — Detail
+  // ────────────────────────────────────────────────────────────────
+
   @Get('access/:id')
   @ApiOperation({ summary: 'Get access config by id' })
   @ApiParam({ name: 'id', type: 'string', description: 'MongoDB _id' })
@@ -65,6 +93,10 @@ export class MerchantPortalAdminController {
   async detail(@Param('id') id: string): Promise<AccessConfigResponseDto> {
     return this.accessService.findOne(id);
   }
+
+  // ────────────────────────────────────────────────────────────────
+  // POST /access — Create
+  // ────────────────────────────────────────────────────────────────
 
   @Post('access')
   @ApiOperation({
@@ -87,6 +119,10 @@ export class MerchantPortalAdminController {
     return this.accessService.create(dto, actorUserId);
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // PATCH /access/:id — Update
+  // ────────────────────────────────────────────────────────────────
+
   @Patch('access/:id')
   @ApiOperation({
     summary: 'Update access config (BR-MP-16)',
@@ -107,6 +143,10 @@ export class MerchantPortalAdminController {
     return this.accessService.update(id, dto, actorUserId);
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // DELETE /access/:id — Hard delete
+  // ────────────────────────────────────────────────────────────────
+
   @Delete('access/:id')
   @HttpCode(200)
   @ApiOperation({
@@ -126,6 +166,10 @@ export class MerchantPortalAdminController {
     return this.accessService.delete(id, actorUserId);
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // GET /logto-lookup — Lookup Logto user (REUSE M1 LogtoService)
+  // ────────────────────────────────────────────────────────────────
+
   @Get('logto-lookup')
   @ApiOperation({
     summary: 'Lookup Logto user by ID or email (BR-MP-36)',
@@ -143,6 +187,10 @@ export class MerchantPortalAdminController {
     return this.accessService.lookupLogto(query.q);
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // GET /audit-log — M2b placeholder
+  // ────────────────────────────────────────────────────────────────
+
   @Get('audit-log')
   @ApiOperation({
     summary: 'List merchant_access.* audit log entries (M2b — placeholder M2a)',
@@ -157,6 +205,7 @@ export class MerchantPortalAdminController {
     page: number;
     pageSize: number;
   }> {
+    // M2a stub — M2b implements full audit log query
     return { items: [], total: 0, page: 1, pageSize: 20 };
   }
 }

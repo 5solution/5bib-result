@@ -11,12 +11,15 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import type Redis from 'ioredis';
 import { Model } from 'mongoose';
 import { In, Repository } from 'typeorm';
-import { env } from '../../../config';
+
+import { env } from 'src/config';
+
 import { AuditLogService } from '../../audit/services/audit-log.service';
 import { LogtoService } from '../../logto-auth/logto.service';
 import { Tenant } from '../../merchant/entities/tenant.entity';
 import { MailService } from '../../notification/mail.service';
 import {
+  AccessConfigListItemDto,
   AccessConfigListQueryDto,
   AccessConfigListResponseDto,
   AccessConfigResponseDto,
@@ -28,7 +31,36 @@ import { LogtoLookupResponseDto } from '../dto/logto-lookup.dto';
 import {
   MerchantPortalAccess,
   MerchantPortalAccessDocument,
+  type MerchantPortalPermission,
 } from '../schemas/merchant-portal-access.schema';
+
+/**
+ * F-069 M2a — MerchantPortalAccessService.
+ *
+ * Owns CRUD operations cho admin merchant-portal access configs (BR-MP-16, 17, 33, 37).
+ *
+ * Concurrency control (BR-MP-37): Redis SETNX lock `merchant-access-lock:<userId>`
+ * TTL 10s. Ports F-068 `reset-lock:` pattern. Prevents 2 admin saving same userId
+ * concurrently → ConflictException 409 với code `409_CONCURRENT_EDIT`.
+ *
+ * Tenant validation (BR-MP-33): Bulk validate tenantIds qua TypeORM Tenant repo
+ * (named connection 'platform'). Missing tenant → 400 với specific ID in message.
+ *
+ * Audit trail (BR-MP-17): Reuse AuditLogService.emit (F-023 pattern). 4 actions:
+ *   - `merchant_access.create`
+ *   - `merchant_access.update`
+ *   - `merchant_access.delete`
+ *   - `merchant_access.toggle`
+ * Cross-tenant flag in metadata when tenantIds.length > 1.
+ *
+ * Cache invalidation: scanStream `merchant-portal:access:<userId>:*` +
+ * `merchant-portal:races:<userId>:*` (BR-MP-13). Also invalidate
+ * `logto-lookup:byid:<userId>` M1 cache (user info updated by admin).
+ *
+ * Logto lookup (BR-MP-36): Delegates to M1 `LogtoService.lookupByIdWithCache` /
+ * `lookupByEmail` based on `q` format (contains `@` = email). Returns 503-style
+ * marker when service degraded (caller controller maps to HTTP status).
+ */
 
 const MERCHANT_ACCESS_LOCK_TTL_SECONDS = 10;
 
@@ -41,18 +73,27 @@ export class MerchantPortalAccessService {
     private readonly accessModel: Model<MerchantPortalAccessDocument>,
     @InjectRepository(Tenant, 'platform')
     private readonly tenantRepo: Repository<Tenant>,
-    @InjectRedis()
-    private readonly redis: Redis,
+    @InjectRedis() private readonly redis: Redis,
     private readonly auditLog: AuditLogService,
     private readonly logtoService: LogtoService,
     private readonly mailService: MailService,
   ) {}
 
+  // ────────────────────────────────────────────────────────────────
+  // SETNX lock (BR-MP-37, port F-068 reset-lock pattern)
+  // ────────────────────────────────────────────────────────────────
+
   private accessLockKey(userId: string): string {
     return `merchant-access-lock:${userId}`;
   }
 
-  private async acquireAccessLock(userId: string): Promise<() => Promise<void>> {
+  /**
+   * Acquire SETNX lock per userId TTL 10s. Returns release function (try/finally).
+   * Conflict → ConflictException 409 với bilingual VN/EN message per BR-MP-27.
+   */
+  private async acquireAccessLock(
+    userId: string,
+  ): Promise<() => Promise<void>> {
     const key = this.accessLockKey(userId);
     const acquired = await this.redis.set(
       key,
@@ -82,6 +123,10 @@ export class MerchantPortalAccessService {
     };
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // Cache invalidation (BR-MP-13)
+  // ────────────────────────────────────────────────────────────────
+
   private async invalidateUserCache(userId: string): Promise<void> {
     try {
       const patterns = [
@@ -93,6 +138,7 @@ export class MerchantPortalAccessService {
       const pipeline = this.redis.pipeline();
       let count = 0;
       for (const pattern of patterns) {
+        // For exact keys (no wildcard) use DEL directly; for wildcard use scanStream
         if (pattern.includes('*')) {
           const stream = this.redis.scanStream({ match: pattern, count: 200 });
           await new Promise<void>((resolve, reject) => {
@@ -118,6 +164,15 @@ export class MerchantPortalAccessService {
     }
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // Tenant validation (BR-MP-33)
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * Bulk validate tenantIds exist trong MySQL platform `tenant` table.
+   * Throws 400 với first missing tenant ID in message.
+   * Returns Map<id, name> cho denormalized response (avoid re-query).
+   */
   private async validateTenantIds(
     tenantIds: number[],
   ): Promise<Map<number, string>> {
@@ -141,7 +196,14 @@ export class MerchantPortalAccessService {
     return new Map(tenants.map((t) => [Number(t.id), t.name]));
   }
 
-  private assertScopeNonEmpty(tenantIds: number[], includeRaces: number[]): void {
+  // ────────────────────────────────────────────────────────────────
+  // BR-MP-33 cross-validation: at least 1 tenantId OR 1 raceOverrides.include
+  // ────────────────────────────────────────────────────────────────
+
+  private assertScopeNonEmpty(
+    tenantIds: number[],
+    includeRaces: number[],
+  ): void {
     if (tenantIds.length === 0 && includeRaces.length === 0) {
       throw new BadRequestException({
         statusCode: 400,
@@ -154,7 +216,11 @@ export class MerchantPortalAccessService {
     }
   }
 
-  private assertPermissionsValid(permissions: string[]): void {
+  // ────────────────────────────────────────────────────────────────
+  // BR-MP-33 permissions: must include ticket_report
+  // ────────────────────────────────────────────────────────────────
+
+  private assertPermissionsValid(permissions: MerchantPortalPermission[]): void {
     if (!permissions.includes('ticket_report')) {
       throw new BadRequestException({
         statusCode: 400,
@@ -167,7 +233,13 @@ export class MerchantPortalAccessService {
     }
   }
 
-  private toResponse(doc: MerchantPortalAccessDocument): AccessConfigResponseDto {
+  // ────────────────────────────────────────────────────────────────
+  // Mapper: Mongoose doc → ResponseDto (strip _id, inject id alias per BR-MP-23)
+  // ────────────────────────────────────────────────────────────────
+
+  private toResponse(
+    doc: MerchantPortalAccessDocument,
+  ): AccessConfigResponseDto {
     return {
       id: doc._id.toString(),
       userId: doc.userId,
@@ -187,6 +259,15 @@ export class MerchantPortalAccessService {
     };
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // Public CRUD methods
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * BR-MP-16 + BR-MP-33 — Create new access config.
+   * Side effects: insert MongoDB doc + audit emit + cache invalidate.
+   * Concurrency: SETNX lock per userId (BR-MP-37).
+   */
   async create(
     dto: CreateAccessConfigDto,
     actorUserId: string,
@@ -194,12 +275,21 @@ export class MerchantPortalAccessService {
     const tenantIds = dto.tenantIds ?? [];
     const include = dto.raceOverrides?.include ?? [];
     const exclude = dto.raceOverrides?.exclude ?? [];
+
+    // BR-MP-33 cross-field validation
     this.assertScopeNonEmpty(tenantIds, include);
     this.assertPermissionsValid(dto.permissions);
+
+    // BR-MP-33 tenant existence validate (also for cross-tenant agency)
     await this.validateTenantIds(tenantIds);
+
+    // M3b — resolve userId from dto.userId OR provision a new Logto user from email.
     const resolved = await this.resolveOrProvisionUser(dto);
+
+    // BR-MP-37 SETNX lock to prevent concurrent duplicate inserts
     const release = await this.acquireAccessLock(resolved.userId);
     try {
+      // Application-level duplicate check BEFORE Mongo insert (cleaner 409 response)
       const existing = await this.accessModel
         .findOne({ userId: resolved.userId })
         .lean()
@@ -214,6 +304,7 @@ export class MerchantPortalAccessService {
           },
         });
       }
+
       const doc = await this.accessModel.create({
         userId: resolved.userId,
         userName: resolved.userName,
@@ -224,6 +315,8 @@ export class MerchantPortalAccessService {
         isActive: dto.isActive ?? true,
         createdBy: actorUserId,
       });
+
+      // BR-MP-17 audit emit
       const isCrossTenant = tenantIds.length > 1;
       await this.auditLog.emit({
         actor: { userId: actorUserId, role: 'admin' },
@@ -241,7 +334,10 @@ export class MerchantPortalAccessService {
           provisioned: resolved.provisioned,
         },
       });
+
+      // BR-MP-13 cache invalidate
       await this.invalidateUserCache(resolved.userId);
+
       return {
         ...this.toResponse(doc),
         provisioned: resolved.provisioned,
@@ -252,12 +348,27 @@ export class MerchantPortalAccessService {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // M3b — Resolve or auto-provision Logto user
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Trả userId hiệu lực cho gán quyền:
+   *  - dto.userId có sẵn → dùng (M3 path, KHÔNG provision).
+   *  - chỉ có email → lookup Logto:
+   *      • CÓ user → dùng userId đó (idempotent, KHÔNG tạo trùng).
+   *      • CHƯA có → tạo user (no password) + assign role merchant theo permissions
+   *        + gửi email mời magic-link. Email fail KHÔNG rollback user (flag false).
+   *
+   * @throws BadRequestException khi Logto từ chối tạo user (G1 thiếu scope / email lỗi).
+   */
   private async resolveOrProvisionUser(dto: CreateAccessConfigDto): Promise<{
     userId: string;
     userName: string;
     provisioned: boolean;
     inviteEmailSent: boolean;
   }> {
+    // Path 1 — userId đã có (M3 lookup-existing flow)
     if (dto.userId && dto.userId.trim()) {
       return {
         userId: dto.userId.trim(),
@@ -266,7 +377,10 @@ export class MerchantPortalAccessService {
         inviteEmailSent: false,
       };
     }
+
     const email = dto.email.trim().toLowerCase();
+
+    // Path 2 — email-only: lookup trước (idempotent)
     const existing = await this.logtoService.lookupByEmail(email);
     if (existing) {
       return {
@@ -276,9 +390,12 @@ export class MerchantPortalAccessService {
         inviteEmailSent: false,
       };
     }
-    const roleNames = dto.permissions.includes('revenue_report')
+
+    // Path 3 — provision new Logto user + role + invite email
+    const roleNames: string[] = dto.permissions.includes('revenue_report')
       ? ['merchant_finance']
       : ['merchant_viewer'];
+
     let newUserId: string;
     try {
       newUserId = await this.logtoService.createUser(email, dto.userName);
@@ -306,6 +423,8 @@ export class MerchantPortalAccessService {
         },
       });
     }
+
+    // Invite email — KHÔNG block / rollback nếu gửi fail (BR: user vẫn tạo)
     let inviteEmailSent = false;
     try {
       inviteEmailSent = await this.mailService.sendCustomHtml(
@@ -318,6 +437,7 @@ export class MerchantPortalAccessService {
         `M3b invite email failed for ${email}: ${(err as Error).message}`,
       );
     }
+
     return {
       userId: newUserId,
       userName: dto.userName,
@@ -326,6 +446,7 @@ export class MerchantPortalAccessService {
     };
   }
 
+  /** Template email mời (magic-link passwordless — link tới merchant login). */
   private buildInviteHtml(name: string, loginUrl: string): string {
     const safeName = (name || 'bạn').replace(/</g, '&lt;');
     return [
@@ -339,13 +460,19 @@ export class MerchantPortalAccessService {
     ].join('');
   }
 
+  /**
+   * BR-MP-16 list view — paginated, filterable.
+   * Enriches each row với tenantNames denormalized + computed raceCount.
+   */
   async findAll(
     query: AccessConfigListQueryDto,
   ): Promise<AccessConfigListResponseDto> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const skip = (page - 1) * pageSize;
+
     const filter: Record<string, unknown> = {};
+
     if (query.q) {
       const regex = new RegExp(
         query.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
@@ -353,19 +480,23 @@ export class MerchantPortalAccessService {
       );
       filter.$or = [{ userName: regex }, { email: regex }];
     }
+
     if (query.tenantId !== undefined) {
       filter.tenantIds = query.tenantId;
     }
+
     if (query.permissionFilter === 'ticket_only') {
       filter.permissions = { $size: 1, $all: ['ticket_report'] };
     } else if (query.permissionFilter === 'ticket_and_revenue') {
       filter.permissions = { $all: ['ticket_report', 'revenue_report'] };
     }
+
     if (query.statusFilter === 'active') {
       filter.isActive = true;
     } else if (query.statusFilter === 'inactive') {
       filter.isActive = false;
     }
+
     const [docs, total] = await Promise.all([
       this.accessModel
         .find(filter)
@@ -375,20 +506,26 @@ export class MerchantPortalAccessService {
         .exec(),
       this.accessModel.countDocuments(filter).exec(),
     ]);
+
+    // Bulk load tenant names for enrichment (single query)
     const allTenantIds = Array.from(
       new Set(docs.flatMap((d) => d.tenantIds ?? [])),
     );
     const tenantNameMap = await this.lookupTenantNames(allTenantIds);
-    const items = docs.map((doc) => {
+
+    const items: AccessConfigListItemDto[] = docs.map((doc) => {
       const baseResp = this.toResponse(doc);
       const include = doc.raceOverrides?.include ?? [];
       const exclude = doc.raceOverrides?.exclude ?? [];
+      // raceCount computation deferred to M2b (resolveAccessibleRaces). M2a:
+      // sentinel '__all' if tenant scope + no exclude. Otherwise overrides-only count.
       let raceCount: number | '__all';
       if (doc.tenantIds.length > 0 && exclude.length === 0) {
         raceCount = '__all';
       } else if (doc.tenantIds.length === 0) {
         raceCount = include.length;
       } else {
+        // Mixed: tenant + exclude or tenant + include — M2b computes real count
         raceCount = '__all';
       }
       return {
@@ -399,6 +536,7 @@ export class MerchantPortalAccessService {
           .filter(Boolean),
       };
     });
+
     return { items, total, page, pageSize };
   }
 
@@ -429,6 +567,10 @@ export class MerchantPortalAccessService {
     return this.toResponse(doc);
   }
 
+  /**
+   * BR-MP-16 update — partial update with audit log diff.
+   * SETNX lock prevents concurrent admin save same record.
+   */
   async update(
     id: string,
     dto: UpdateAccessConfigDto,
@@ -441,17 +583,26 @@ export class MerchantPortalAccessService {
         message: { vi: 'Không tìm thấy cấu hình', en: 'Config not found' },
       });
     }
+
+    // Cross-field validation if scope/permissions changing
     const finalTenantIds = dto.tenantIds ?? existing.tenantIds;
     const finalInclude =
       dto.raceOverrides?.include ?? existing.raceOverrides?.include ?? [];
     const finalExclude =
       dto.raceOverrides?.exclude ?? existing.raceOverrides?.exclude ?? [];
     const finalPermissions = dto.permissions ?? existing.permissions;
+
     this.assertScopeNonEmpty(finalTenantIds, finalInclude);
     this.assertPermissionsValid(finalPermissions);
     if (dto.tenantIds) await this.validateTenantIds(finalTenantIds);
+
     const release = await this.acquireAccessLock(existing.userId);
     try {
+      // F-069 M2b-1 fix TD-F069-M2a-UPDATE-AFTER-DELETE-RACE:
+      // Re-verify doc still exists AFTER acquiring SETNX lock. Defends against
+      // concurrent delete that completed during the lock-wait window — without
+      // this check `existing.save()` would UPSERT (Mongoose semantics) and
+      // RESURRECT a just-deleted record (security: revoked user regains access).
       const stillExists = await this.accessModel.exists({ _id: existing._id });
       if (!stillExists) {
         throw new NotFoundException({
@@ -462,6 +613,7 @@ export class MerchantPortalAccessService {
           },
         });
       }
+
       const before = {
         tenantIds: existing.tenantIds,
         raceOverrides: existing.raceOverrides,
@@ -470,6 +622,8 @@ export class MerchantPortalAccessService {
         userName: existing.userName,
         email: existing.email,
       };
+
+      // Apply patch
       if (dto.userName !== undefined) existing.userName = dto.userName;
       if (dto.email !== undefined) existing.email = dto.email;
       if (dto.tenantIds !== undefined) existing.tenantIds = finalTenantIds;
@@ -482,7 +636,9 @@ export class MerchantPortalAccessService {
       if (dto.permissions !== undefined) existing.permissions = finalPermissions;
       if (dto.isActive !== undefined) existing.isActive = dto.isActive;
       existing.updatedBy = actorUserId;
+
       await existing.save();
+
       const after = {
         tenantIds: existing.tenantIds,
         raceOverrides: existing.raceOverrides,
@@ -491,12 +647,14 @@ export class MerchantPortalAccessService {
         userName: existing.userName,
         email: existing.email,
       };
+
       const action =
         dto.isActive !== undefined &&
         Object.keys(dto).length === 1 &&
         before.isActive !== after.isActive
           ? 'merchant_access.toggle'
           : 'merchant_access.update';
+
       await this.auditLog.emit({
         actor: { userId: actorUserId, role: 'admin' },
         action,
@@ -510,13 +668,18 @@ export class MerchantPortalAccessService {
           changes: { before, after },
         },
       });
+
       await this.invalidateUserCache(existing.userId);
+
       return this.toResponse(existing);
     } finally {
       await release();
     }
   }
 
+  /**
+   * BR-MP-16 hard delete — record removed permanently. Audit log preserves history.
+   */
   async delete(
     id: string,
     actorUserId: string,
@@ -528,8 +691,12 @@ export class MerchantPortalAccessService {
         message: { vi: 'Không tìm thấy cấu hình', en: 'Config not found' },
       });
     }
+
     const release = await this.acquireAccessLock(existing.userId);
     try {
+      // F-069 M2b-1 fix TD-F069-M2a-UPDATE-AFTER-DELETE-RACE (delete path):
+      // Re-verify after lock — prevents duplicate audit emit when 2 concurrent
+      // deletes both load the doc via findById then serialize on the lock.
       const stillExists = await this.accessModel.exists({ _id: existing._id });
       if (!stillExists) {
         throw new NotFoundException({
@@ -540,6 +707,8 @@ export class MerchantPortalAccessService {
           },
         });
       }
+
+      // BR-MP-17 emit audit BEFORE delete (with full payload snapshot)
       await this.auditLog.emit({
         actor: { userId: actorUserId, role: 'admin' },
         action: 'merchant_access.delete',
@@ -558,19 +727,41 @@ export class MerchantPortalAccessService {
           },
         },
       });
+
       await this.accessModel.deleteOne({ _id: existing._id }).exec();
       await this.invalidateUserCache(existing.userId);
+
       return { success: true, deletedUserId: existing.userId };
     } finally {
       await release();
     }
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // BR-MP-36 — Logto user lookup (REUSE M1 LogtoService)
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * Lookup Logto user by q. Auto-detect format:
+   *   - contains `@` → email lookup
+   *   - otherwise → userId lookup
+   *
+   * Returns null nếu user not found OR Logto unreachable. Caller controller
+   * distinguishes via `logtoService.isConfigured` getter để map đúng 404 vs 503.
+   *
+   * Returns { found, user, source } shape. Source tracking helps debug cache
+   * behavior in production.
+   */
   async lookupLogto(q: string): Promise<LogtoLookupResponseDto> {
     const isEmail = q.includes('@');
     const user = isEmail
       ? await this.logtoService.lookupByEmail(q)
       : await this.logtoService.lookupByIdWithCache(q);
+
+    // Source detection: lookupByIdWithCache caches under known key,
+    // so we can grep cache key existence as heuristic. For M2a simplicity,
+    // we mark source = 'api' since cache layer transparency would require
+    // exposing internal cache state. Future enhancement.
     return {
       found: user !== null,
       user,

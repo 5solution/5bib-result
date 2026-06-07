@@ -1,11 +1,11 @@
 import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
 
 import { CurrentUser } from '../logto-auth/current-user.decorator';
 import { LogtoMerchantFinanceGuard } from '../logto-auth/logto-merchant-finance.guard';
@@ -29,6 +29,7 @@ import {
   TicketStackedDto,
   TicketTrendDto,
 } from './dto/ticket-charts.dto';
+import type { TicketChartGranularity } from './dto/ticket-sales.dto';
 import {
   TicketSalesBreakdownDto,
   TicketSalesQueryDto,
@@ -36,12 +37,24 @@ import {
 } from './dto/ticket-sales.dto';
 import { MerchantPortalService } from './services/merchant-portal.service';
 
+/**
+ * F-069 M2b-1 — Merchant-facing Portal endpoints.
+ *
+ * Route prefix `/api/merchant-portal/*` (BR-MP-26). Auth `LogtoMerchantGuard`
+ * (M1) — merchant_viewer hoặc merchant_finance role. Per-user access scoping
+ * (BR-MP-04/05) qua MerchantPortalService.resolveAccessibleRaces.
+ *
+ * M2b-1 scope: GET /me + GET /races. Ticket-sales (M2b-2) + revenue (M2b-3)
+ * endpoints sẽ thêm vào controller này sau.
+ */
 @ApiTags('Merchant Portal')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(LogtoMerchantGuard)
 @Controller('merchant-portal')
 export class MerchantPortalController {
-  constructor(private readonly merchantPortalService: MerchantPortalService) {}
+  constructor(
+    private readonly merchantPortalService: MerchantPortalService,
+  ) {}
 
   @Get('me')
   @ApiOperation({
@@ -76,6 +89,10 @@ export class MerchantPortalController {
   ): Promise<MerchantRaceListResponseDto> {
     return this.merchantPortalService.getRaces(user.userId, query.tenantId);
   }
+
+  // ────────────────────────────────────────────────────────────────
+  // M2b-2 — Ticket Sales report (BR-MP-07/08/09) — NO financial data
+  // ────────────────────────────────────────────────────────────────
 
   @Get('ticket-sales/summary')
   @ApiOperation({
@@ -158,7 +175,7 @@ export class MerchantPortalController {
       user.userId,
       query.raceId,
       query.period ?? '30d',
-      query.granularity ?? 'daily',
+      (query.granularity ?? 'daily') as TicketChartGranularity,
     );
   }
 
@@ -180,7 +197,7 @@ export class MerchantPortalController {
       user.userId,
       query.raceId,
       query.period ?? '30d',
-      query.granularity ?? 'daily',
+      (query.granularity ?? 'daily') as TicketChartGranularity,
     );
   }
 
@@ -209,8 +226,12 @@ export class MerchantPortalController {
     );
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // M2b-3 — Revenue (BR-MP-10) — FINANCE-GATED (revenue_report only)
+  // ────────────────────────────────────────────────────────────────
+
   @Get('revenue/summary')
-  @UseGuards(LogtoMerchantFinanceGuard)
+  @UseGuards(LogtoMerchantFinanceGuard) // stricter than class-level — merchant_finance ONLY
   @ApiOperation({
     summary: 'Revenue summary cho 1 race — GMV + phí + net (BR-MP-10)',
     description:
@@ -222,15 +243,17 @@ export class MerchantPortalController {
   @ApiResponse({ status: 401, description: 'Unauthenticated' })
   @ApiResponse({
     status: 403,
-    description:
-      'Not merchant_finance role OR config lacks revenue_report OR race not accessible',
+    description: 'Not merchant_finance role OR config lacks revenue_report OR race not accessible',
   })
   @ApiResponse({ status: 404, description: 'No access config' })
   async getRevenueSummary(
     @CurrentUser() user: LogtoUser,
     @Query() query: TicketSalesQueryDto,
   ): Promise<RevenueSummaryDto> {
-    return this.merchantPortalService.getRevenueSummary(user.userId, query.raceId);
+    return this.merchantPortalService.getRevenueSummary(
+      user.userId,
+      query.raceId,
+    );
   }
 
   @Get('revenue/by-category')
@@ -293,7 +316,7 @@ export class MerchantPortalController {
       user.userId,
       query.raceId,
       query.period ?? '30d',
-      query.granularity ?? 'daily',
+      (query.granularity ?? 'daily') as TicketChartGranularity,
     );
   }
 

@@ -11,6 +11,7 @@ import * as ExcelJS from 'exceljs';
 import type Redis from 'ioredis';
 import { Model } from 'mongoose';
 import { DataSource } from 'typeorm';
+
 import {
   dateToMonthKey,
   dateToWeekKey,
@@ -31,19 +32,33 @@ import { MerchantMeResponseDto } from '../dto/merchant-me.dto';
 import {
   RevenueAggregateDto,
   RevenueByCategoryDto,
+  RevenueCategoryGroupDto,
+  RevenueTenantRowDto,
 } from '../dto/revenue-breakdown.dto';
 import { RevenueSummaryDto } from '../dto/revenue-summary.dto';
-import { RevenueTrendDto } from '../dto/revenue-trend.dto';
-import { MerchantRaceListResponseDto } from '../dto/race-list.dto';
 import {
+  RevenueTrendDto,
+  RevenueTrendPointDto,
+} from '../dto/revenue-trend.dto';
+import {
+  MerchantRaceItemDto,
+  MerchantRaceListResponseDto,
+} from '../dto/race-list.dto';
+import {
+  StackedCourseDto,
+  StackedSeriesPointDto,
   TicketOrderListDto,
+  TicketOrderRowDto,
   TicketStackedDto,
   TicketTrendDto,
+  TicketTrendPointDto,
 } from '../dto/ticket-charts.dto';
 import {
   type TicketChartGranularity,
+  TicketBreakdownItemDto,
   TicketSalesBreakdownDto,
   TicketSalesSummaryDto,
+  TicketStatusCountDto,
 } from '../dto/ticket-sales.dto';
 import {
   MerchantPortalAccess,
@@ -51,6 +66,46 @@ import {
   type MerchantPortalPermission,
 } from '../schemas/merchant-portal-access.schema';
 
+/**
+ * F-069 M2b-1 — MerchantPortalService (merchant-facing core).
+ *
+ * Owns access resolution + race list cho merchant users. Ticket-sales (M2b-2)
+ * + revenue (M2b-3) endpoints sẽ depend on `resolveAccessibleRaces` ở đây.
+ *
+ * SCHEMA SOURCE OF TRUTH = `01-ba-prd-revision-r3.md` canonical SQL templates
+ * (verified column-by-column vs DB thật 2026-06-05). KEY FACTS:
+ *   - order_metadata KHÔNG có tenant_id → scope qua JOIN races r WHERE r.tenant_id
+ *   - races.status UPPERCASE {COMPLETE/GENERATED_CODE/DRAFT/CANCEL/ONGOING}, filter `!= 'DRAFT'`
+ *   - races PK = race_id (bigint), event_start_date (no `date`), is_delete (bit raw `= 0`)
+ *   - order_metadata.deleted (bit raw `= 0`), financial_status = 'paid'
+ *
+ * Cache (BR-MP-13):
+ *   - `merchant-portal:access:<userId>` access config — TTL 300s
+ *   - `merchant-portal:races:<userId>` resolved race ID set — TTL 300s
+ * Invalidated by admin config mutation (MerchantPortalAccessService.invalidateUserCache).
+ */
+
+const ACCESS_CACHE_TTL_SECONDS = 300;
+const RACES_CACHE_TTL_SECONDS = 300;
+const TICKET_SALES_CACHE_TTL_SECONDS = 60;
+
+/**
+ * Canonical financial_status values (R3 FINAL BR-MP-08, verified live DB 2026-06-05:
+ * paid 35,618 / voided 9,405 / pending 1). Summary KPI ALWAYS renders these 3
+ * (0 if absent in scope) so frontend KPI cards are stable.
+ */
+const CANONICAL_FINANCIAL_STATUSES = ['paid', 'voided', 'pending'] as const;
+
+/**
+ * BR-MP-12 (Danny chốt Option A 2026-06-05): only `MANUAL` order_category uses
+ * fixed fee (VNĐ/vé). EVERYTHING else — incl null/unknown — is %-based.
+ * Keep `categoryGroup` null-safe so a future category auto-falls into fee_percent.
+ */
+function categoryGroup(orderCategory: string | null): 'fee_fixed' | 'fee_percent' {
+  return orderCategory === 'MANUAL' ? 'fee_fixed' : 'fee_percent';
+}
+
+/** Internal access config shape cached + returned by getAccessConfig. */
 export interface ResolvedAccessConfig {
   userId: string;
   userName: string;
@@ -62,48 +117,45 @@ export interface ResolvedAccessConfig {
   isActive: boolean;
 }
 
-const ACCESS_CACHE_TTL_SECONDS = 300;
-const RACES_CACHE_TTL_SECONDS = 300;
-const TICKET_SALES_CACHE_TTL_SECONDS = 60;
-
-const CANONICAL_FINANCIAL_STATUSES = ['paid', 'voided', 'pending'];
-
-function categoryGroup(orderCategory: string | null): 'fee_fixed' | 'fee_percent' {
-  return orderCategory === 'MANUAL' ? 'fee_fixed' : 'fee_percent';
-}
-
 @Injectable()
 export class MerchantPortalService {
   private readonly logger = new Logger(MerchantPortalService.name);
 
-  private static readonly NOMINAL_PERIOD = {
-    from: '1970-01-01',
-    to: '2999-12-31',
-  };
-
   constructor(
     @InjectModel(MerchantPortalAccess.name)
     private readonly accessModel: Model<MerchantPortalAccessDocument>,
-    @InjectDataSource('platform')
-    private readonly db: DataSource,
-    @InjectRedis()
-    private readonly redis: Redis,
+    @InjectDataSource('platform') private readonly db: DataSource,
+    @InjectRedis() private readonly redis: Redis,
     private readonly feeService: FeeService,
   ) {}
 
+  // ────────────────────────────────────────────────────────────────
+  // Access config (BR-MP-04/05) — cached read by userId
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * Load merchant access config by Logto userId. Cache 300s.
+   * Throws:
+   *   - 404 `404_NO_CONFIG` nếu user chưa được admin gán giải nào (BR-MP-18 step 5)
+   *   - 403 `403_INACTIVE` nếu config.isActive=false (BR-MP-34 SEC-08)
+   */
   async getAccessConfig(userId: string): Promise<ResolvedAccessConfig> {
     const cacheKey = `merchant-portal:access:${userId}`;
+
     let cachedCfg: ResolvedAccessConfig | null = null;
     try {
       const cached = await this.redis.get(cacheKey);
-      if (cached) cachedCfg = JSON.parse(cached);
+      if (cached) cachedCfg = JSON.parse(cached) as ResolvedAccessConfig;
     } catch (err) {
-      this.logger.warn(`Redis read ${cacheKey} failed: ${err.message}`);
+      this.logger.warn(
+        `Redis read ${cacheKey} failed: ${(err as Error).message}`,
+      );
     }
     if (cachedCfg) {
-      this.assertActive(cachedCfg);
+      this.assertActive(cachedCfg); // outside try — 403 must propagate
       return cachedCfg;
     }
+
     const doc = await this.accessModel.findOne({ userId }).lean().exec();
     if (!doc) {
       throw new NotFoundException({
@@ -115,6 +167,7 @@ export class MerchantPortalService {
         },
       });
     }
+
     const cfg: ResolvedAccessConfig = {
       userId: doc.userId,
       userName: doc.userName,
@@ -125,6 +178,7 @@ export class MerchantPortalService {
       permissions: doc.permissions,
       isActive: doc.isActive,
     };
+
     try {
       await this.redis.set(
         cacheKey,
@@ -133,8 +187,11 @@ export class MerchantPortalService {
         ACCESS_CACHE_TTL_SECONDS,
       );
     } catch (err) {
-      this.logger.warn(`Redis write ${cacheKey} failed: ${err.message}`);
+      this.logger.warn(
+        `Redis write ${cacheKey} failed: ${(err as Error).message}`,
+      );
     }
+
     this.assertActive(cfg);
     return cfg;
   }
@@ -152,41 +209,68 @@ export class MerchantPortalService {
     }
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // resolveAccessibleRaces (BR-MP-05/06) — Set<raceId> for scoping
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * BR-MP-05 — Resolve set of MySQL race_id user được phép xem:
+   *   (tenant races status != 'DRAFT') ∪ raceOverrides.include (non-draft) − exclude
+   *
+   * Draft races NEVER shown (BR-MP-05 strict) — filter applies to BOTH tenant
+   * races và include overrides. Returns `Set<number>` cached 300s.
+   *
+   * Mọi ticket-sales / revenue endpoint (M2b-2/3) PHẢI gọi method này TRƯỚC mọi
+   * query để có scope, rồi validate `raceId ∈ Set` (IDOR prevention BR-MP-06).
+   */
   async resolveAccessibleRaces(userId: string): Promise<Set<number>> {
     const cacheKey = `merchant-portal:races:${userId}`;
+
     try {
       const cached = await this.redis.get(cacheKey);
       if (cached) {
-        return new Set(JSON.parse(cached));
+        return new Set(JSON.parse(cached) as number[]);
       }
     } catch (err) {
-      this.logger.warn(`Redis read ${cacheKey} failed: ${err.message}`);
+      this.logger.warn(
+        `Redis read ${cacheKey} failed: ${(err as Error).message}`,
+      );
     }
-    const cfg = await this.getAccessConfig(userId);
+
+    const cfg = await this.getAccessConfig(userId); // 404/403 checks
     const accessible = new Set<number>();
+
+    // 1. Tenant-scoped races (non-draft, not deleted)
     if (cfg.tenantIds.length > 0) {
       const tenantPlaceholders = cfg.tenantIds.map(() => '?').join(',');
-      const tenantRaces = await this.db.query(
-        `SELECT r.race_id
+      const tenantRaces: Array<{ race_id: number | string }> =
+        await this.db.query(
+          `SELECT r.race_id
            FROM races r
            WHERE r.tenant_id IN (${tenantPlaceholders})
              AND r.status != 'DRAFT' AND r.is_delete = 0`,
-        cfg.tenantIds,
-      );
+          cfg.tenantIds,
+        );
       for (const row of tenantRaces) accessible.add(Number(row.race_id));
     }
+
+    // 2. Per-race include overrides (validate non-draft, exists)
     if (cfg.include.length > 0) {
       const incPlaceholders = cfg.include.map(() => '?').join(',');
-      const includeRaces = await this.db.query(
-        `SELECT r.race_id
+      const includeRaces: Array<{ race_id: number | string }> =
+        await this.db.query(
+          `SELECT r.race_id
            FROM races r
            WHERE r.race_id IN (${incPlaceholders})
              AND r.status != 'DRAFT' AND r.is_delete = 0`,
-        cfg.include,
-      );
+          cfg.include,
+        );
       for (const row of includeRaces) accessible.add(Number(row.race_id));
     }
+
+    // 3. Exclude overrides
     for (const excludeId of cfg.exclude) accessible.delete(excludeId);
+
     try {
       await this.redis.set(
         cacheKey,
@@ -195,11 +279,19 @@ export class MerchantPortalService {
         RACES_CACHE_TTL_SECONDS,
       );
     } catch (err) {
-      this.logger.warn(`Redis write ${cacheKey} failed: ${err.message}`);
+      this.logger.warn(
+        `Redis write ${cacheKey} failed: ${(err as Error).message}`,
+      );
     }
+
     return accessible;
   }
 
+  /**
+   * BR-MP-06 — Guard helper: throw 403 nếu raceId KHÔNG thuộc accessible set.
+   * Enumeration-safe (BR-MP-34 SEC-14): same response cho "race không tồn tại"
+   * và "race tồn tại nhưng không quyền".
+   */
   assertRaceAccessible(accessible: Set<number>, raceId: number): void {
     if (!accessible.has(raceId)) {
       throw new ForbiddenException({
@@ -212,6 +304,10 @@ export class MerchantPortalService {
       });
     }
   }
+
+  // ────────────────────────────────────────────────────────────────
+  // GET /me (BR-MP-26)
+  // ────────────────────────────────────────────────────────────────
 
   async getMe(user: LogtoUser): Promise<MerchantMeResponseDto> {
     const cfg = await this.getAccessConfig(user.userId);
@@ -226,11 +322,21 @@ export class MerchantPortalService {
     };
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // GET /races (BR-MP-26) — assigned races enriched
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * List giải user được assign với metadata (title/status/date) + tổng vé bán
+   * (paid). Optional `tenantId` filter (agency multi-tenant — BR-MP-21).
+   */
   async getRaces(
     userId: string,
     tenantId?: number,
   ): Promise<MerchantRaceListResponseDto> {
     const cfg = await this.getAccessConfig(userId);
+
+    // Cross-tenant guard (BR-MP-22): tenantId filter phải thuộc user scope
     if (tenantId !== undefined && !cfg.tenantIds.includes(tenantId)) {
       throw new ForbiddenException({
         statusCode: 403,
@@ -241,23 +347,39 @@ export class MerchantPortalService {
         },
       });
     }
+
     const accessible = await this.resolveAccessibleRaces(userId);
     if (accessible.size === 0) {
       return { races: [], total: 0 };
     }
+
     const raceIds = [...accessible];
     const placeholders = raceIds.map(() => '?').join(',');
-    const tenantClause = tenantId !== undefined ? 'AND r.tenant_id = ?' : '';
+
+    // Race metadata (R3 verified columns)
+    const tenantClause =
+      tenantId !== undefined ? 'AND r.tenant_id = ?' : '';
     const metaParams =
       tenantId !== undefined ? [...raceIds, tenantId] : raceIds;
-    const metaRows = await this.db.query(
+    const metaRows: Array<{
+      race_id: number | string;
+      title: string | null;
+      status: string | null;
+      event_start_date: Date | null;
+      tenant_id: number | string;
+    }> = await this.db.query(
       `SELECT r.race_id, r.title, r.status, r.event_start_date, r.tenant_id
        FROM races r
        WHERE r.race_id IN (${placeholders}) AND r.is_delete = 0 ${tenantClause}
        ORDER BY r.event_start_date DESC`,
       metaParams,
     );
-    const ticketRows = await this.db.query(
+
+    // Ticket count per race (paid) — R3 ticket aggregate
+    const ticketRows: Array<{
+      race_id: number | string;
+      ticket_count: number | string;
+    }> = await this.db.query(
       `SELECT om.race_id, COALESCE(SUM(oli.quantity),0) AS ticket_count
        FROM order_metadata om
        LEFT JOIN order_line_item oli ON oli.order_id = om.id
@@ -270,7 +392,8 @@ export class MerchantPortalService {
     for (const row of ticketRows) {
       ticketByRace.set(Number(row.race_id), Number(row.ticket_count ?? 0));
     }
-    const races = metaRows.map((row) => {
+
+    const races: MerchantRaceItemDto[] = metaRows.map((row) => {
       const raceId = Number(row.race_id);
       return {
         raceId,
@@ -281,9 +404,19 @@ export class MerchantPortalService {
         ticketsSold: ticketByRace.get(raceId) ?? 0,
       };
     });
+
     return { races, total: races.length };
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // M2b-2 — Ticket Sales report (BR-MP-07/08/09) — NO financial data
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * Shared scope guard for every ticket-sales endpoint: resolve accessible races
+   * then assert the requested raceId is in scope (IDOR — BR-MP-06). Throws 403
+   * `403_NO_RACE` enumeration-safe if not accessible.
+   */
   private async assertRaceForUser(
     userId: string,
     raceId: number,
@@ -292,15 +425,18 @@ export class MerchantPortalService {
     this.assertRaceAccessible(accessible, raceId);
   }
 
+  /** Best-effort cached read helper for ticket-sales aggregates (60s TTL). */
   private async cachedTicketRead<T>(
     cacheKey: string,
     compute: () => Promise<T>,
   ): Promise<T> {
     try {
       const cached = await this.redis.get(cacheKey);
-      if (cached) return JSON.parse(cached);
+      if (cached) return JSON.parse(cached) as T;
     } catch (err) {
-      this.logger.warn(`Redis read ${cacheKey} failed: ${err.message}`);
+      this.logger.warn(
+        `Redis read ${cacheKey} failed: ${(err as Error).message}`,
+      );
     }
     const result = await compute();
     try {
@@ -311,19 +447,33 @@ export class MerchantPortalService {
         TICKET_SALES_CACHE_TTL_SECONDS,
       );
     } catch (err) {
-      this.logger.warn(`Redis write ${cacheKey} failed: ${err.message}`);
+      this.logger.warn(
+        `Redis write ${cacheKey} failed: ${(err as Error).message}`,
+      );
     }
     return result;
   }
 
+  /**
+   * BR-MP-07/08 — Ticket Sales summary KPI (all-time per race).
+   * `totalTickets` = SUM(quantity) ALL status (R3 line 242 "Tổng vé" = all).
+   * `byStatus` ALWAYS includes paid/voided/pending (0 if absent); unknown status
+   * appended. NO financial fields (BR-MP-09).
+   */
   async getTicketSalesSummary(
     userId: string,
     raceId: number,
   ): Promise<TicketSalesSummaryDto> {
     await this.assertRaceForUser(userId, raceId);
     const cacheKey = `merchant-portal:ticket-summary:${userId}:${raceId}`;
+
     return this.cachedTicketRead(cacheKey, async () => {
-      const rows = await this.db.query(
+      // COUNT DISTINCT om.id (LEFT JOIN multiplies rows by line item)
+      const rows: Array<{
+        financial_status: string | null;
+        order_count: number | string;
+        ticket_count: number | string;
+      }> = await this.db.query(
         `SELECT om.financial_status,
                 COUNT(DISTINCT om.id) AS order_count,
                 COALESCE(SUM(oli.quantity),0) AS ticket_count
@@ -333,10 +483,8 @@ export class MerchantPortalService {
          GROUP BY om.financial_status`,
         [raceId],
       );
-      const byStatusMap = new Map<
-        string,
-        { financialStatus: string; orderCount: number; ticketCount: number }
-      >();
+
+      const byStatusMap = new Map<string, TicketStatusCountDto>();
       for (const row of rows) {
         const status = row.financial_status ?? 'unknown';
         byStatusMap.set(status, {
@@ -345,11 +493,9 @@ export class MerchantPortalService {
           ticketCount: Number(row.ticket_count ?? 0),
         });
       }
-      const byStatus: Array<{
-        financialStatus: string;
-        orderCount: number;
-        ticketCount: number;
-      }> = [];
+
+      // Canonical 3 first (0-filled), then any extra status found
+      const byStatus: TicketStatusCountDto[] = [];
       for (const status of CANONICAL_FINANCIAL_STATUSES) {
         byStatus.push(
           byStatusMap.get(status) ?? {
@@ -361,20 +507,33 @@ export class MerchantPortalService {
         byStatusMap.delete(status);
       }
       for (const extra of byStatusMap.values()) byStatus.push(extra);
+
       const totalTickets = byStatus.reduce((s, b) => s + b.ticketCount, 0);
       const totalOrders = byStatus.reduce((s, b) => s + b.orderCount, 0);
+
       return { raceId, totalTickets, totalOrders, byStatus };
     });
   }
 
+  /**
+   * BR-MP-07 — Vé bán theo cự ly (course). Paid-only (sold distribution).
+   * Chain `oli→om→tt→rc` (om has NO race_course_id — DISC-1). GROUP BY rc.id
+   * (NOT rc.name — distinct courses can share label e.g. two "2,9 km").
+   */
   async getTicketSalesByCourse(
     userId: string,
     raceId: number,
   ): Promise<TicketSalesBreakdownDto> {
     await this.assertRaceForUser(userId, raceId);
     const cacheKey = `merchant-portal:ticket-by-course:${userId}:${raceId}`;
+
     return this.cachedTicketRead(cacheKey, async () => {
-      const rows = await this.db.query(
+      const rows: Array<{
+        course_id: number | string;
+        course_name: string | null;
+        order_count: number | string;
+        ticket_count: number | string;
+      }> = await this.db.query(
         `SELECT rc.id AS course_id, rc.name AS course_name,
                 COUNT(DISTINCT om.id) AS order_count,
                 COALESCE(SUM(oli.quantity),0) AS ticket_count
@@ -391,14 +550,24 @@ export class MerchantPortalService {
     });
   }
 
+  /**
+   * BR-MP-07 — Vé bán theo loại vé (ticket type). Paid-only. Chain to ticket_type,
+   * GROUP BY tt.id, display `tt.type_name` (DISC-4).
+   */
   async getTicketSalesByType(
     userId: string,
     raceId: number,
   ): Promise<TicketSalesBreakdownDto> {
     await this.assertRaceForUser(userId, raceId);
     const cacheKey = `merchant-portal:ticket-by-type:${userId}:${raceId}`;
+
     return this.cachedTicketRead(cacheKey, async () => {
-      const rows = await this.db.query(
+      const rows: Array<{
+        ticket_type_id: number | string;
+        ticket_type_name: string | null;
+        order_count: number | string;
+        ticket_count: number | string;
+      }> = await this.db.query(
         `SELECT tt.id AS ticket_type_id, tt.type_name AS ticket_type_name,
                 COUNT(DISTINCT om.id) AS order_count,
                 COALESCE(SUM(oli.quantity),0) AS ticket_count
@@ -414,15 +583,16 @@ export class MerchantPortalService {
     });
   }
 
+  /** Map raw breakdown rows → DTO + compute total base for % (shared course/type). */
   private toBreakdown(
     raceId: number,
-    rows: any[],
+    rows: Array<Record<string, number | string | null>>,
     idKey: string,
     nameKey: string,
   ): TicketSalesBreakdownDto {
-    const items = rows.map((row) => ({
+    const items: TicketBreakdownItemDto[] = rows.map((row) => ({
       id: Number(row[idKey]),
-      name: row[nameKey] ?? '',
+      name: (row[nameKey] as string | null) ?? '',
       orderCount: Number(row.order_count ?? 0),
       ticketCount: Number(row.ticket_count ?? 0),
     }));
@@ -430,6 +600,14 @@ export class MerchantPortalService {
     return { raceId, totalTickets, items };
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // M2b-3 — Revenue (BR-MP-10) — PERMISSION-GATED (revenue_report)
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * BR-MP-09b defense-in-depth: beyond LogtoMerchantFinanceGuard (Logto role),
+   * verify the user's access config grants `revenue_report`. Throws 403 if not.
+   */
   private assertRevenuePermission(cfg: ResolvedAccessConfig): void {
     if (!cfg.permissions.includes('revenue_report')) {
       throw new ForbiddenException({
@@ -437,26 +615,46 @@ export class MerchantPortalService {
         errorCode: '403_NO_REVENUE_PERMISSION',
         message: {
           vi: 'Tài khoản của bạn không có quyền xem doanh thu',
-          en: 'Your account does not have revenue report permission',
+          en: "Your account does not have revenue report permission",
         },
       });
     }
   }
 
+  /**
+   * BR-MP-10 — Revenue summary cho 1 race (GMV + fee + net).
+   *
+   * GMV (gross paid) = Σ(totalPrice − totalDiscounts) over the SAME order set
+   * FeeService computes on → gmv/fee/net internally consistent (no query drift).
+   * Fee = FeeService.computeFeeForOrdersAggregate per tenant (Tier 0→3 cascade,
+   * MANUAL=VNĐ/vé vs %=rate invariant honored inside FeeService). Net = GMV − totalFee.
+   *
+   * A single race belongs to ONE tenant; loop over the pulled Map defensively
+   * (aggregate if data anomaly puts >1 tenant under a race). Cache 60s.
+   *
+   * Cross-tenant "Tất cả BTC" aggregate (BR-MP-21b per-tenant loop over accessible
+   * race subset) is DEFERRED to M2b-3b.
+   */
   async getRevenueSummary(
     userId: string,
     raceId: number,
   ): Promise<RevenueSummaryDto> {
-    const cfg = await this.getAccessConfig(userId);
-    this.assertRevenuePermission(cfg);
+    const cfg = await this.getAccessConfig(userId); // 404/403 inactive
+    this.assertRevenuePermission(cfg); // 403 no revenue_report
     const accessible = await this.resolveAccessibleRaces(userId);
-    this.assertRaceAccessible(accessible, raceId);
+    this.assertRaceAccessible(accessible, raceId); // 403 IDOR
+
     const cacheKey = `merchant-portal:revenue-summary:${userId}:${raceId}`;
     return this.cachedTicketRead(cacheKey, async () => {
+      // Pull paid orders for this race, grouped by tenant (chain via JOIN races).
       const byTenant = await pullOrdersForFeeAggregate(this.db, '', [], {
         raceId,
       });
+
+      // `_period` is void-ed by FeeService (orders already filtered) — pass a
+      // wide nominal window so the signature is satisfied (BR-58 docs param).
       const period = { from: '1970-01-01', to: '2999-12-31' };
+
       let gmv = 0;
       let orderCount = 0;
       let totalServiceFee = 0;
@@ -464,11 +662,13 @@ export class MerchantPortalService {
       let totalVat = 0;
       let totalFee = 0;
       const warnings: string[] = [];
+
       for (const [tenantId, orders] of byTenant.entries()) {
         for (const o of orders) {
           gmv += (o.totalPrice ?? 0) - (o.totalDiscounts ?? 0);
         }
         orderCount += orders.length;
+
         const fee = await this.feeService.computeFeeForOrdersAggregate(
           tenantId,
           orders,
@@ -480,6 +680,7 @@ export class MerchantPortalService {
         totalFee += fee.totalFee;
         if (fee.warnings?.length) warnings.push(...fee.warnings);
       }
+
       const net = gmv - totalFee;
       return {
         raceId,
@@ -495,6 +696,22 @@ export class MerchantPortalService {
     });
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // M2b-3b — Revenue breakdown (BR-MP-12) + cross-tenant (BR-MP-21b)
+  // ────────────────────────────────────────────────────────────────
+
+  /** FeeService `_period` is void-ed (orders pre-filtered) — wide nominal window. */
+  private static readonly NOMINAL_PERIOD = {
+    from: '1970-01-01',
+    to: '2999-12-31',
+  };
+
+  /**
+   * BR-MP-12 — Revenue breakdown theo loại phí (Option A 2-group) cho 1 race.
+   * Split paid orders → fee_percent vs fee_fixed (MANUAL). Per group: GMV +
+   * fee (FeeService over group subset) + net + count. ALWAYS emits both groups
+   * (0-fill). Finance-gated. Cache 60s.
+   */
   async getRevenueByCategory(
     userId: string,
     raceId: number,
@@ -503,18 +720,27 @@ export class MerchantPortalService {
     this.assertRevenuePermission(cfg);
     const accessible = await this.resolveAccessibleRaces(userId);
     this.assertRaceAccessible(accessible, raceId);
+
     const cacheKey = `merchant-portal:revenue-by-category:${userId}:${raceId}`;
     return this.cachedTicketRead(cacheKey, async () => {
       const byTenant = await pullOrdersForFeeAggregate(this.db, '', [], {
         raceId,
       });
       const warnings: string[] = [];
-      const acc = {
+
+      // accumulators per group key
+      const acc: Record<'fee_percent' | 'fee_fixed', {
+        gmv: number;
+        totalFee: number;
+        orderCount: number;
+      }> = {
         fee_percent: { gmv: 0, totalFee: 0, orderCount: 0 },
         fee_fixed: { gmv: 0, totalFee: 0, orderCount: 0 },
       };
+
       for (const [tenantId, orders] of byTenant.entries()) {
-        const partitions = {
+        // partition this tenant's orders by fee group
+        const partitions: Record<'fee_percent' | 'fee_fixed', typeof orders> = {
           fee_percent: [],
           fee_fixed: [],
         };
@@ -537,7 +763,10 @@ export class MerchantPortalService {
           if (fee.warnings?.length) warnings.push(...fee.warnings);
         }
       }
-      const groups = (['fee_percent', 'fee_fixed'] as const).map((key) => ({
+
+      const groups: RevenueCategoryGroupDto[] = (
+        ['fee_percent', 'fee_fixed'] as const
+      ).map((key) => ({
         groupKey: key,
         gmv: acc[key].gmv,
         totalFee: acc[key].totalFee,
@@ -545,24 +774,33 @@ export class MerchantPortalService {
         orderCount: acc[key].orderCount,
       }));
       const gmv = groups.reduce((s, g) => s + g.gmv, 0);
+
       return { raceId, gmv, groups, warnings };
     });
   }
 
+  /**
+   * BR-MP-21b — Cross-tenant "Tất cả BTC" revenue aggregate.
+   *
+   * Per-tenant FeeService loop (FeeService nhận 1 tenantId — mỗi tenant config
+   * fee riêng, KHÔNG thể single multi-tenant query). Loop `cfg.tenantIds`; pull
+   * each tenant's paid orders, FILTER to the accessible race set (applies
+   * draft/include/exclude overrides), then GMV + fee + net per tenant.
+   *
+   * NOTE: include-override races belonging to tenants OUTSIDE cfg.tenantIds are
+   * NOT in this agency rollup (they appear in /races + single-race revenue) —
+   * see TD-F069-M2b3b-INCLUDE-OUTSIDE-TENANT.
+   */
   async getRevenueAggregate(userId: string): Promise<RevenueAggregateDto> {
     const cfg = await this.getAccessConfig(userId);
     this.assertRevenuePermission(cfg);
     const accessible = await this.resolveAccessibleRaces(userId);
+
     const cacheKey = `merchant-portal:revenue-aggregate:${userId}`;
     return this.cachedTicketRead(cacheKey, async () => {
-      const byTenantRows: Array<{
-        tenantId: number;
-        gmv: number;
-        totalFee: number;
-        net: number;
-        orderCount: number;
-      }> = [];
+      const byTenantRows: RevenueTenantRowDto[] = [];
       const warnings: string[] = [];
+
       for (const tenantId of cfg.tenantIds) {
         const ordersMap = await pullOrdersForFeeAggregate(this.db, '', [], {
           tenantId,
@@ -570,7 +808,8 @@ export class MerchantPortalService {
         const orders = (ordersMap.get(tenantId) ?? []).filter((o) =>
           accessible.has(o.raceId),
         );
-        if (orders.length === 0) continue;
+        if (orders.length === 0) continue; // skip empty tenant rows
+
         let gmv = 0;
         for (const o of orders) {
           gmv += (o.totalPrice ?? 0) - (o.totalDiscounts ?? 0);
@@ -589,6 +828,7 @@ export class MerchantPortalService {
           orderCount: orders.length,
         });
       }
+
       byTenantRows.sort((a, b) => b.gmv - a.gmv);
       const totals = byTenantRows.reduce(
         (t, r) => {
@@ -599,6 +839,7 @@ export class MerchantPortalService {
         },
         { gmv: 0, totalFee: 0, orderCount: 0 },
       );
+
       return {
         gmv: totals.gmv,
         totalFee: totals.totalFee,
@@ -610,10 +851,19 @@ export class MerchantPortalService {
     });
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // M2b-2b — Ticket Sales charts (BR-MP-07) — NO financial data
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * SQL bucket expression per granularity — STRING-output forms for mysql2
+   * TZ-safety (daily uses DATE_FORMAT not DATE() to avoid JS Date reinterpret).
+   * `payment_on` unqualified is unambiguous (only on order_metadata).
+   */
   private bucketExpr(granularity: TicketChartGranularity): string {
     switch (granularity) {
       case 'weekly':
-        return 'YEARWEEK(om.payment_on, 3)';
+        return 'YEARWEEK(om.payment_on, 3)'; // int YYYYWW → mysqlYearweekToWeekKey
       case 'monthly':
         return "DATE_FORMAT(om.payment_on, '%Y-%m')";
       case 'daily':
@@ -622,23 +872,29 @@ export class MerchantPortalService {
     }
   }
 
+  /** Map a raw SQL bucket value → {bucket key, VN label} for the given granularity. */
   private bucketKeyLabel(
-    raw: number | string,
+    raw: unknown,
     granularity: TicketChartGranularity,
   ): { bucket: string; label: string } {
     if (granularity === 'weekly') {
-      const key = mysqlYearweekToWeekKey(raw);
+      const key = mysqlYearweekToWeekKey(raw as number | string);
       return { bucket: key, label: labelForWeekKey(key) };
     }
     if (granularity === 'monthly') {
       const key = String(raw);
       return { bucket: key, label: labelForMonthKey(key) };
     }
-    const key = String(raw);
-    const label = `${key.slice(8, 10)}/${key.slice(5, 7)}`;
+    const key = String(raw); // 'YYYY-MM-DD'
+    const label = `${key.slice(8, 10)}/${key.slice(5, 7)}`; // DD/MM
     return { bucket: key, label };
   }
 
+  /**
+   * BR-MP-07 chart #1 — Registration trend (paid orders over time buckets).
+   * period via resolvePeriod (payment_on BETWEEN from/to); granularity via
+   * bucketExpr. COUNT(DISTINCT om.id) per bucket. NO financial.
+   */
   async getTicketSalesTrend(
     userId: string,
     raceId: number,
@@ -652,18 +908,20 @@ export class MerchantPortalService {
       now,
     });
     const cacheKey = `merchant-portal:ticket-trend:${userId}:${raceId}:${periodKey}:${granularity}`;
+
     return this.cachedTicketRead(cacheKey, async () => {
       const expr = this.bucketExpr(granularity);
-      const rows = await this.db.query(
-        `SELECT ${expr} AS bucket, COUNT(DISTINCT om.id) AS order_count
+      const rows: Array<{ bucket: number | string; order_count: number | string }> =
+        await this.db.query(
+          `SELECT ${expr} AS bucket, COUNT(DISTINCT om.id) AS order_count
            FROM order_metadata om
            WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
              AND om.payment_on >= ? AND om.payment_on < ?
            GROUP BY bucket
            ORDER BY bucket`,
-        [raceId, fromIso, toIso],
-      );
-      const series = rows.map((r) => {
+          [raceId, fromIso, toIso],
+        );
+      const series: TicketTrendPointDto[] = rows.map((r) => {
         const { bucket, label } = this.bucketKeyLabel(r.bucket, granularity);
         return { bucket, label, orderCount: Number(r.order_count ?? 0) };
       });
@@ -671,6 +929,12 @@ export class MerchantPortalService {
     });
   }
 
+  /**
+   * BR-MP-07 chart #2 — AnStacked: ticket count (SUM quantity, paid) per course
+   * × time bucket. Chain `oli→om→tt→rc`. `courses[]` stable order (total DESC).
+   * Deviation from R2 (which said order count) — uses ticket count to reconcile
+   * with by-course breakdown (M2b-2). NO financial.
+   */
   async getTicketSalesStacked(
     userId: string,
     raceId: number,
@@ -684,9 +948,15 @@ export class MerchantPortalService {
       now,
     });
     const cacheKey = `merchant-portal:ticket-stacked:${userId}:${raceId}:${periodKey}:${granularity}`;
+
     return this.cachedTicketRead(cacheKey, async () => {
       const expr = this.bucketExpr(granularity);
-      const rows = await this.db.query(
+      const rows: Array<{
+        bucket: number | string;
+        course_id: number | string;
+        course_name: string | null;
+        ticket_count: number | string;
+      }> = await this.db.query(
         `SELECT ${expr} AS bucket, rc.id AS course_id, rc.name AS course_name,
                 COALESCE(SUM(oli.quantity),0) AS ticket_count
          FROM order_line_item oli
@@ -699,6 +969,8 @@ export class MerchantPortalService {
          ORDER BY bucket`,
         [raceId, fromIso, toIso],
       );
+
+      // Aggregate course totals (for stable display order) + bucket map
       const courseTotal = new Map<number, { name: string; total: number }>();
       const bucketMap = new Map<
         string,
@@ -713,21 +985,32 @@ export class MerchantPortalService {
         };
         ct.total += tc;
         courseTotal.set(courseId, ct);
+
         const { bucket, label } = this.bucketKeyLabel(r.bucket, granularity);
         const entry = bucketMap.get(bucket) ?? { label, counts: {} };
         entry.counts[courseId] = (entry.counts[courseId] ?? 0) + tc;
         bucketMap.set(bucket, entry);
       }
-      const courses = [...courseTotal.entries()]
+
+      const courses: StackedCourseDto[] = [...courseTotal.entries()]
         .sort((a, b) => b[1].total - a[1].total)
         .map(([courseId, v]) => ({ courseId, courseName: v.name }));
-      const series = [...bucketMap.entries()]
+
+      const series: StackedSeriesPointDto[] = [...bucketMap.entries()]
         .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
         .map(([bucket, v]) => ({ bucket, label: v.label, counts: v.counts }));
+
       return { raceId, period, granularity, courses, series };
     });
   }
 
+  /**
+   * BR-MP-07 — Paginated order detail table. NO financial (BR-MP-09) — order id +
+   * buyer NAME + course + ticket type + quantity + status + paymentOn. NO
+   * total_price/email/phone (PII conservatism — TD-F069-M2b2b-ORDER-PII).
+   * `search` matches buyer name (first_name/last_name/name LIKE).
+   * NOT cached (filter/search/page combinatorial — low hit).
+   */
   async getTicketSalesOrders(
     userId: string,
     raceId: number,
@@ -737,8 +1020,9 @@ export class MerchantPortalService {
     search?: string,
   ): Promise<TicketOrderListDto> {
     await this.assertRaceForUser(userId, raceId);
-    const conds = ['om.race_id = ?', 'om.deleted = 0'];
-    const params: any[] = [raceId];
+
+    const conds: string[] = ['om.race_id = ?', 'om.deleted = 0'];
+    const params: Array<string | number> = [raceId];
     if (financialStatus) {
       conds.push('om.financial_status = ?');
       params.push(financialStatus);
@@ -751,13 +1035,31 @@ export class MerchantPortalService {
       params.push(like, like, like, like);
     }
     const where = conds.join(' AND ');
-    const countRows = await this.db.query(
+
+    const countRows: Array<{ total: number | string }> = await this.db.query(
       `SELECT COUNT(*) AS total FROM order_metadata om WHERE ${where}`,
       params,
     );
     const total = Number(countRows[0]?.total ?? 0);
+
     const offset = (page - 1) * pageSize;
-    const rows = await this.db.query(
+    // Row + course/type via a representative line item (1 order may have many;
+    // pick the highest-quantity line for the display row, sum quantity overall).
+    const rows: Array<{
+      order_id: number | string;
+      first_name: string | null;
+      last_name: string | null;
+      name: string | null;
+      email: string | null;
+      phone_number: string | null;
+      financial_status: string | null;
+      payment_on: Date | null;
+      quantity: number | string | null;
+      course_name: string | null;
+      ticket_type_name: string | null;
+    }> = await this.db.query(
+      // Buyer contact (email/phone) included per Danny 2026-06-05 (BTC owns their
+      // race's customer data). total_price still EXCLUDED (BR-MP-09 ticket=no financial).
       `SELECT om.id AS order_id, om.first_name, om.last_name, om.name,
               om.email, om.phone_number,
               om.financial_status, om.payment_on,
@@ -775,7 +1077,8 @@ export class MerchantPortalService {
        LIMIT ? OFFSET ?`,
       [...params, pageSize, offset],
     );
-    const items = rows.map((r) => {
+
+    const items: TicketOrderRowDto[] = rows.map((r) => {
       const fullName = [r.first_name, r.last_name]
         .filter((x) => x && x.trim())
         .join(' ')
@@ -792,9 +1095,15 @@ export class MerchantPortalService {
         paymentOn: r.payment_on,
       };
     });
+
     return { items, total, page, pageSize };
   }
 
+  // ────────────────────────────────────────────────────────────────
+  // M2c — Revenue trend (BR-MP-10/11) + Excel export — FINANCE-GATED
+  // ────────────────────────────────────────────────────────────────
+
+  /** In-memory bucket key + label for a Date (UTC, matches ISO week / month). */
   private dateBucketKeyLabel(
     d: Date,
     granularity: TicketChartGranularity,
@@ -811,6 +1120,17 @@ export class MerchantPortalService {
     return { bucket: key, label: `${key.slice(8, 10)}/${key.slice(5, 7)}` };
   }
 
+  /**
+   * BR-MP-10/11 — Revenue trend (GMV/fee/net) per time bucket.
+   *
+   * Date filter applied at PULL layer (`payment_on` range via clause); orders
+   * bucketed IN-MEMORY (FeeService needs order objects per bucket); FeeService
+   * per tenant PER bucket (cascade is per-order, can't aggregate then split).
+   * Finance-gated. Cache 60s.
+   *
+   * PERF: N FeeService calls (one per non-empty bucket per tenant), each loads
+   * MerchantConfig once — see TD-F069-M2c-TREND-FEE-PERBUCKET.
+   */
   async getRevenueTrend(
     userId: string,
     raceId: number,
@@ -822,11 +1142,13 @@ export class MerchantPortalService {
     this.assertRevenuePermission(cfg);
     const accessible = await this.resolveAccessibleRaces(userId);
     this.assertRaceAccessible(accessible, raceId);
+
     const { fromIso, toIso, periodKey } = resolvePeriod({
       kind: period as PeriodKind,
       now,
     });
     const cacheKey = `merchant-portal:revenue-trend:${userId}:${raceId}:${periodKey}:${granularity}`;
+
     return this.cachedTicketRead(cacheKey, async () => {
       const byTenant = await pullOrdersForFeeAggregate(
         this.db,
@@ -835,12 +1157,15 @@ export class MerchantPortalService {
         { raceId },
       );
       const warnings: string[] = [];
+      // bucket key → accumulator
       const bucketMap = new Map<
         string,
         { label: string; gmv: number; totalFee: number; orderCount: number }
       >();
+
       for (const [tenantId, orders] of byTenant.entries()) {
-        const perBucket = new Map<string, { label: string; list: any[] }>();
+        // group this tenant's orders by bucket
+        const perBucket = new Map<string, { label: string; list: typeof orders }>();
         for (const o of orders) {
           const d = normalizePaymentOn(o.createdAt);
           const { bucket, label } = this.dateBucketKeyLabel(d, granularity);
@@ -871,7 +1196,8 @@ export class MerchantPortalService {
           bucketMap.set(bucket, acc);
         }
       }
-      const series = [...bucketMap.entries()]
+
+      const series: RevenueTrendPointDto[] = [...bucketMap.entries()]
         .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
         .map(([bucket, v]) => ({
           bucket,
@@ -881,18 +1207,28 @@ export class MerchantPortalService {
           net: v.gmv - v.totalFee,
           orderCount: v.orderCount,
         }));
+
       return { raceId, period, granularity, series, warnings };
     });
   }
 
+  /**
+   * BR-MP-10/11 — Excel export (.xlsx) for a race: Summary + By-Category sheets.
+   * Reuses getRevenueSummary + getRevenueByCategory (both finance-gated +
+   * scope-checked). Returns buffer + filename + mimeType for the controller to
+   * stream. NOT cached (generated on demand).
+   */
   async getRevenueExport(
     userId: string,
     raceId: number,
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    // Both calls enforce finance permission + race access internally.
     const summary = await this.getRevenueSummary(userId, raceId);
     const byCategory = await this.getRevenueByCategory(userId, raceId);
+
     const wb = new ExcelJS.Workbook();
     wb.creator = '5BIB Merchant Portal';
+
     const s1 = wb.addWorksheet('Tổng quan doanh thu');
     s1.columns = [
       { header: 'Chỉ tiêu', key: 'k', width: 28 },
@@ -908,6 +1244,7 @@ export class MerchantPortalService {
       { k: 'Net về BTC', v: summary.net },
       { k: 'Số đơn paid', v: summary.orderCount },
     ]);
+
     const s2 = wb.addWorksheet('Theo loại phí');
     s2.columns = [
       { header: 'Nhóm', key: 'g', width: 22 },
@@ -916,7 +1253,7 @@ export class MerchantPortalService {
       { header: 'Net', key: 'net', width: 18 },
       { header: 'Số đơn', key: 'n', width: 12 },
     ];
-    const groupLabel = {
+    const groupLabel: Record<string, string> = {
       fee_percent: 'Phí %',
       fee_fixed: 'Phí cố định (thủ công)',
     };
@@ -929,8 +1266,9 @@ export class MerchantPortalService {
         n: g.orderCount,
       });
     }
+
     const arrayBuffer = await wb.xlsx.writeBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = Buffer.from(arrayBuffer as ArrayBuffer);
     const filename = `5bib-merchant-revenue-race-${raceId}.xlsx`;
     return {
       buffer,

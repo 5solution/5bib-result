@@ -2,16 +2,27 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
+/**
+ * F-069 M2b-2b — Ticket Sales chart DTOs (BR-MP-07 Phase 1 charts).
+ *
+ * Trend + Stacked: time-bucket via F-062 `period-resolver` (PeriodKind) +
+ * `resolveBucketSize` (GranularityKind sqlGroupExpr) + `bucket-helpers`.
+ * Order table: paginated order_metadata + chain to course/type. BR-MP-09 STRICT
+ * — NO financial (total_price/fee/gmv) AND NO raw email/phone (PII conservatism).
+ * Display Convention: backend returns RAW status/courseId — frontend maps VN.
+ */
+
 const PERIOD_VALUES = ['7d', '30d', '90d', 'quarter', 'year'] as const;
 const GRANULARITY_VALUES = ['daily', 'weekly', 'monthly'] as const;
 
+/** Shared query for trend + stacked. */
 export class TicketChartQueryDto {
   @ApiProperty({ description: 'MySQL race_id', example: 138 })
   @Type(() => Number)
   @IsInt({ message: 'raceId phải là số nguyên' })
   @Min(1, { message: 'raceId không hợp lệ' })
   @IsNotEmpty({ message: 'raceId bắt buộc' })
-  raceId: number;
+  raceId!: number;
 
   @ApiPropertyOptional({ enum: PERIOD_VALUES, default: '30d' })
   @IsIn([...PERIOD_VALUES], { message: 'period không hợp lệ' })
@@ -24,45 +35,49 @@ export class TicketChartQueryDto {
   granularity?: (typeof GRANULARITY_VALUES)[number] = 'daily';
 }
 
+/** One point in a trend series. */
 export class TicketTrendPointDto {
   @ApiProperty({ description: 'Bucket key (YYYY-MM-DD / YYYY-Www / YYYY-MM)', example: '2026-03-01' })
-  bucket: string;
+  bucket!: string;
 
   @ApiProperty({ description: 'VN display label', example: '01/03' })
-  label: string;
+  label!: string;
 
   @ApiProperty({ description: 'Số đơn paid trong bucket', example: 42 })
-  orderCount: number;
+  orderCount!: number;
 }
 
+/** GET /ticket-sales/trend — registration trend (BR-MP-07 chart #1). */
 export class TicketTrendDto {
   @ApiProperty({ example: 138 })
-  raceId: number;
+  raceId!: number;
 
   @ApiProperty({ enum: PERIOD_VALUES, example: '30d' })
-  period: string;
+  period!: string;
 
   @ApiProperty({ enum: GRANULARITY_VALUES, example: 'daily' })
-  granularity: string;
+  granularity!: string;
 
   @ApiProperty({ type: [TicketTrendPointDto] })
-  series: TicketTrendPointDto[];
+  series!: TicketTrendPointDto[];
 }
 
+/** Course descriptor in the stacked chart (stable order across calls). */
 export class StackedCourseDto {
   @ApiProperty({ example: 459 })
-  courseId: number;
+  courseId!: number;
 
   @ApiProperty({ example: '21KM' })
-  courseName: string;
+  courseName!: string;
 }
 
+/** One time bucket with per-course ticket counts. */
 export class StackedSeriesPointDto {
   @ApiProperty({ description: 'Bucket key', example: '2026-03-01' })
-  bucket: string;
+  bucket!: string;
 
   @ApiProperty({ description: 'VN display label', example: '01/03' })
-  label: string;
+  label!: string;
 
   @ApiProperty({
     description: 'courseId → ticket count (SUM quantity paid). Missing course = 0.',
@@ -70,33 +85,35 @@ export class StackedSeriesPointDto {
     additionalProperties: { type: 'number' },
     example: { '459': 120, '460': 80 },
   })
-  counts: Record<number, number>;
+  counts!: Record<number, number>;
 }
 
+/** GET /ticket-sales/stacked — AnStacked course × time (BR-MP-07 chart #2). */
 export class TicketStackedDto {
   @ApiProperty({ example: 138 })
-  raceId: number;
+  raceId!: number;
 
   @ApiProperty({ enum: PERIOD_VALUES, example: '30d' })
-  period: string;
+  period!: string;
 
   @ApiProperty({ enum: GRANULARITY_VALUES, example: 'daily' })
-  granularity: string;
+  granularity!: string;
 
   @ApiProperty({ type: [StackedCourseDto], description: 'Stable display order (total ticket DESC)' })
-  courses: StackedCourseDto[];
+  courses!: StackedCourseDto[];
 
   @ApiProperty({ type: [StackedSeriesPointDto] })
-  series: StackedSeriesPointDto[];
+  series!: StackedSeriesPointDto[];
 }
 
+/** Query for the paginated order detail table. */
 export class TicketOrdersQueryDto {
   @ApiProperty({ description: 'MySQL race_id', example: 138 })
   @Type(() => Number)
   @IsInt({ message: 'raceId phải là số nguyên' })
   @Min(1, { message: 'raceId không hợp lệ' })
   @IsNotEmpty({ message: 'raceId bắt buộc' })
-  raceId: number;
+  raceId!: number;
 
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @Type(() => Number)
@@ -124,45 +141,51 @@ export class TicketOrdersQueryDto {
   search?: string;
 }
 
+/**
+ * One row in the order detail table. NO financial (total_price/fee).
+ * Buyer contact INCLUDED (Danny 2026-06-05: BTC là người tổ chức, sở hữu data
+ * khách của race họ — show full email + phone for ops).
+ */
 export class TicketOrderRowDto {
   @ApiProperty({ description: 'MySQL order_metadata.id', example: 12358181 })
-  orderId: number;
+  orderId!: number;
 
   @ApiProperty({ description: 'Tên người mua (first_name + last_name hoặc name)', example: 'Nguyễn Văn A' })
-  buyerName: string;
+  buyerName!: string;
 
   @ApiProperty({ description: 'Email người mua (BTC ops contact)', nullable: true, example: 'a@gmail.com' })
-  buyerEmail: string | null;
+  buyerEmail!: string | null;
 
   @ApiProperty({ description: 'SĐT người mua (BTC ops contact)', nullable: true, example: '0901234567' })
-  buyerPhone: string | null;
+  buyerPhone!: string | null;
 
   @ApiProperty({ description: 'Cự ly (rc.name)', nullable: true, example: '21KM' })
-  courseName: string | null;
+  courseName!: string | null;
 
   @ApiProperty({ description: 'Loại vé (tt.type_name)', nullable: true, example: 'Standard 21K' })
-  ticketTypeName: string | null;
+  ticketTypeName!: string | null;
 
   @ApiProperty({ description: 'Số vé (SUM oli.quantity)', example: 2 })
-  quantity: number;
+  quantity!: number;
 
   @ApiProperty({ description: 'Raw financial_status — frontend maps VN', example: 'paid' })
-  financialStatus: string;
+  financialStatus!: string;
 
   @ApiProperty({ description: 'Ngày thanh toán', nullable: true })
-  paymentOn: Date | null;
+  paymentOn!: Date | null;
 }
 
+/** GET /ticket-sales/orders — paginated order detail table (BR-MP-07). */
 export class TicketOrderListDto {
   @ApiProperty({ type: [TicketOrderRowDto] })
-  items: TicketOrderRowDto[];
+  items!: TicketOrderRowDto[];
 
   @ApiProperty({ example: 1234 })
-  total: number;
+  total!: number;
 
   @ApiProperty({ example: 1 })
-  page: number;
+  page!: number;
 
   @ApiProperty({ example: 20 })
-  pageSize: number;
+  pageSize!: number;
 }

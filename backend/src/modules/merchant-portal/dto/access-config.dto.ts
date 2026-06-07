@@ -12,14 +12,27 @@ import {
   IsOptional,
   IsString,
   MaxLength,
-  MinLength,
   Min,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 import {
   MERCHANT_PORTAL_PERMISSION_VALUES,
   type MerchantPortalPermission,
 } from '../schemas/merchant-portal-access.schema';
+
+/**
+ * F-069 M2a — DTOs cho admin merchant-portal access config CRUD.
+ *
+ * Validation rules per BR-MP-33:
+ *   - userId required, no whitespace-only
+ *   - userId unique (enforced at service layer — duplicate check + index)
+ *   - tenantIds[] OR raceOverrides.include[] must have ≥1 value
+ *   - permissions must include 'ticket_report' (finance permission alone không hợp lệ)
+ *   - raceOverrides.exclude must reference races thuộc tenantIds (service layer check)
+ *
+ * Error messages bilingual VN/EN per BR-MP-27 (frontend matches errorCode → translate).
+ */
 
 export class RaceOverridesDto {
   @ApiPropertyOptional({
@@ -71,7 +84,7 @@ export class CreateAccessConfigDto {
   @IsString()
   @IsNotEmpty({ message: 'Vui lòng nhập tên người dùng' })
   @MaxLength(255)
-  userName: string;
+  userName!: string;
 
   @ApiProperty({
     description: 'Email (denormalized từ Logto)',
@@ -79,7 +92,7 @@ export class CreateAccessConfigDto {
   })
   @IsEmail({}, { message: 'Email không hợp lệ' })
   @MaxLength(254)
-  email: string;
+  email!: string;
 
   @ApiPropertyOptional({
     description: 'MySQL tenant IDs (BTC). Cross-tenant allowed for agency users.',
@@ -113,7 +126,7 @@ export class CreateAccessConfigDto {
   @ArrayMinSize(1, { message: 'Vui lòng chọn mức quyền' })
   @IsEnum(MERCHANT_PORTAL_PERMISSION_VALUES, { each: true })
   @ArrayUnique()
-  permissions: MerchantPortalPermission[];
+  permissions!: MerchantPortalPermission[];
 
   @ApiPropertyOptional({
     description: 'Trạng thái active. Default true.',
@@ -170,47 +183,29 @@ export class UpdateAccessConfigDto {
 
 export class AccessConfigResponseDto {
   @ApiProperty({ description: 'MongoDB _id alias (BR-MP-23 strip pattern)' })
-  id: string;
+  id!: string;
 
-  @ApiProperty()
-  userId: string;
-
-  @ApiProperty()
-  userName: string;
-
-  @ApiProperty()
-  email: string;
-
-  @ApiProperty({ type: [Number] })
-  tenantIds: number[];
+  @ApiProperty() userId!: string;
+  @ApiProperty() userName!: string;
+  @ApiProperty() email!: string;
+  @ApiProperty({ type: [Number] }) tenantIds!: number[];
 
   @ApiProperty({ type: RaceOverridesDto })
-  raceOverrides: {
-    include: number[];
-    exclude: number[];
-  };
+  raceOverrides!: { include: number[]; exclude: number[] };
 
   @ApiProperty({
     enum: MERCHANT_PORTAL_PERMISSION_VALUES,
     isArray: true,
   })
-  permissions: MerchantPortalPermission[];
+  permissions!: MerchantPortalPermission[];
 
-  @ApiProperty()
-  isActive: boolean;
+  @ApiProperty() isActive!: boolean;
+  @ApiProperty() createdBy!: string;
+  @ApiPropertyOptional() updatedBy?: string;
+  @ApiProperty() createdAt!: Date;
+  @ApiProperty() updatedAt!: Date;
 
-  @ApiProperty()
-  createdBy: string;
-
-  @ApiPropertyOptional()
-  updatedBy?: string;
-
-  @ApiProperty()
-  createdAt: Date;
-
-  @ApiProperty()
-  updatedAt: Date;
-
+  // M3b auto-provision flags (transient — chỉ có ở response của POST create)
   @ApiPropertyOptional({
     description: 'true nếu user Logto vừa được tự tạo (M3b auto-provision)',
   })
@@ -224,29 +219,29 @@ export class AccessConfigResponseDto {
 }
 
 export class AccessConfigListItemDto extends AccessConfigResponseDto {
+  /**
+   * Computed: số giải resolved (sum tenant races + include − exclude) hoặc `'__all'`
+   * sentinel string cho UI label "Tất cả giải".
+   */
   @ApiProperty({
     description:
       'Computed race count. Number = resolved races count; `"__all"` = all races của tenants (no overrides limit).',
     example: 3,
   })
-  raceCount: number | '__all';
+  raceCount!: number | '__all';
 
+  /** Denormalized tenant names cho UI badge list (saved API roundtrip). */
   @ApiProperty({ type: [String] })
-  tenantNames: string[];
+  tenantNames!: string[];
 }
 
 export class AccessConfigListResponseDto {
   @ApiProperty({ type: [AccessConfigListItemDto] })
-  items: AccessConfigListItemDto[];
+  items!: AccessConfigListItemDto[];
 
-  @ApiProperty()
-  total: number;
-
-  @ApiProperty()
-  page: number;
-
-  @ApiProperty()
-  pageSize: number;
+  @ApiProperty() total!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() pageSize!: number;
 }
 
 export class AccessConfigListQueryDto {
@@ -292,9 +287,6 @@ export class AccessConfigListQueryDto {
 }
 
 export class DeleteAccessConfigResponseDto {
-  @ApiProperty()
-  success: boolean;
-
-  @ApiProperty()
-  deletedUserId: string;
+  @ApiProperty() success!: boolean;
+  @ApiProperty() deletedUserId!: string;
 }
