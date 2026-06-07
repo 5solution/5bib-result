@@ -24,6 +24,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FeeService } from '../../finance/services/fee.service';
 import type { LogtoUser } from '../../logto-auth/types';
 import { MerchantPortalAccess } from '../schemas/merchant-portal-access.schema';
+import { MerchantRaceTarget } from '../schemas/merchant-race-target.schema';
 import { MerchantPortalService } from './merchant-portal.service';
 
 function makeConfigDoc(overrides: Record<string, unknown> = {}) {
@@ -42,16 +43,26 @@ function makeConfigDoc(overrides: Record<string, unknown> = {}) {
 describe('MerchantPortalService', () => {
   let service: MerchantPortalService;
   let mockModel: { findOne: jest.Mock };
+  let mockTargetModel: { findOne: jest.Mock; findOneAndUpdate: jest.Mock };
   let mockDb: { query: jest.Mock };
-  let mockRedis: { get: jest.Mock; set: jest.Mock };
+  let mockRedis: { get: jest.Mock; set: jest.Mock; del: jest.Mock };
   let mockFee: { computeFeeForOrdersAggregate: jest.Mock };
 
   beforeEach(async () => {
     mockModel = { findOne: jest.fn() };
+    mockTargetModel = {
+      findOne: jest.fn().mockReturnValue({
+        lean: () => ({ exec: () => Promise.resolve(null) }),
+      }),
+      findOneAndUpdate: jest.fn().mockReturnValue({
+        exec: () => Promise.resolve(null),
+      }),
+    };
     mockDb = { query: jest.fn() };
     mockRedis = {
       get: jest.fn().mockResolvedValue(null), // default cache miss
       set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
     };
     mockFee = {
       computeFeeForOrdersAggregate: jest.fn().mockResolvedValue({
@@ -71,6 +82,7 @@ describe('MerchantPortalService', () => {
       providers: [
         MerchantPortalService,
         { provide: getModelToken(MerchantPortalAccess.name), useValue: mockModel },
+        { provide: getModelToken(MerchantRaceTarget.name), useValue: mockTargetModel },
         { provide: getDataSourceToken('platform'), useValue: mockDb },
         { provide: getRedisConnectionToken(), useValue: mockRedis },
         { provide: FeeService, useValue: mockFee },
@@ -1008,6 +1020,298 @@ describe('MerchantPortalService', () => {
       await expect(
         service.getRevenueExport('logto_user_a', 138),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────
+  // F-070 — Advanced MKT analytics (forecast / heatmap / target)
+  // ──────────────────────────────────────────────────────────
+
+  function mockTargetFound(target: number | null) {
+    mockTargetModel.findOne.mockReturnValue({
+      lean: () => ({
+        exec: () =>
+          Promise.resolve(target === null ? null : { raceId: 138, target }),
+      }),
+    });
+  }
+
+  /** Build N consecutive daily rows ending today-ish for cumsum tests. */
+  function dailyRows(values: number[], startDay = 1): Array<{ d: string; n: number }> {
+    return values.map((n, i) => ({
+      d: `2026-03-${String(startDay + i).padStart(2, '0')}`,
+      n,
+    }));
+  }
+
+  describe('getTicketForecast()', () => {
+    const NOW_F = new Date('2026-03-20T00:00:00Z');
+
+    it('TC-01 happy → cumsum running total + projection + caches 300s', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      // 8 daily points (≥8 → projection computed). Each day +5 → cum 5,10,..40.
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }]) // resolveAccessibleRaces
+        .mockResolvedValueOnce(dailyRows([5, 5, 5, 5, 5, 5, 5, 5])) // daily
+        .mockResolvedValueOnce([
+          { event_start_date: new Date('2026-03-30T00:00:00Z'), status: 'ONGOING' },
+        ]); // race meta
+      mockTargetFound(null);
+
+      const r = await service.getTicketForecast('logto_user_a', 138, NOW_F);
+
+      expect(r.cumulative).toHaveLength(8);
+      expect(r.cumulative[0]).toEqual({ date: '2026-03-01', value: 5 });
+      expect(r.cumulative[7].value).toBe(40);
+      expect(r.raceEnded).toBe(false);
+      // rate = (40 - 5)/7 = 5/day; daysToRace = ceil((30-20))=10 → 40 + 5*10 = 90.
+      expect(r.recentDailyRate).toBeCloseTo(5);
+      expect(r.projectedValue).toBe(90);
+      expect(r.target).toBeNull();
+      expect(r.projectionDate).toBe(new Date('2026-03-30T00:00:00Z').toISOString());
+      // NO financial leak
+      expect(JSON.stringify(r)).not.toMatch(/gmv|fee|price|total_price/i);
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'merchant-portal:forecast:138',
+        expect.any(String),
+        'EX',
+        300,
+      );
+    });
+
+    it('TC-02 race ended (status COMPLETE) → projectedValue null (target still returned)', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }])
+        .mockResolvedValueOnce(dailyRows([5, 5, 5, 5, 5, 5, 5, 5]))
+        .mockResolvedValueOnce([
+          { event_start_date: new Date('2026-03-10T00:00:00Z'), status: 'COMPLETE' },
+        ]);
+      mockTargetFound(5000);
+
+      const r = await service.getTicketForecast('logto_user_a', 138, NOW_F);
+      expect(r.raceEnded).toBe(true);
+      expect(r.projectedValue).toBeNull();
+      expect(r.target).toBe(5000); // value still returned; FE hides
+    });
+
+    it('TC-02b race ended via eventStartDate < today → raceEnded true', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }])
+        .mockResolvedValueOnce(dailyRows([5, 5, 5, 5, 5, 5, 5, 5]))
+        .mockResolvedValueOnce([
+          { event_start_date: new Date('2026-03-15T00:00:00Z'), status: 'ONGOING' },
+        ]);
+      mockTargetFound(null);
+      const r = await service.getTicketForecast('logto_user_a', 138, NOW_F);
+      expect(r.raceEnded).toBe(true);
+      expect(r.projectedValue).toBeNull();
+    });
+
+    it('TC-09 empty data → cumulative [], projectedValue null, no 500', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }])
+        .mockResolvedValueOnce([]) // no paid orders
+        .mockResolvedValueOnce([
+          { event_start_date: new Date('2026-03-30T00:00:00Z'), status: 'ONGOING' },
+        ]);
+      mockTargetFound(null);
+      const r = await service.getTicketForecast('logto_user_a', 138, NOW_F);
+      expect(r.cumulative).toEqual([]);
+      expect(r.projectedValue).toBeNull();
+      expect(r.recentDailyRate).toBe(0);
+    });
+
+    it('<8 data points → projectedValue null, recentDailyRate 0', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }])
+        .mockResolvedValueOnce(dailyRows([3, 4, 5])) // only 3 points
+        .mockResolvedValueOnce([
+          { event_start_date: new Date('2026-03-30T00:00:00Z'), status: 'ONGOING' },
+        ]);
+      mockTargetFound(null);
+      const r = await service.getTicketForecast('logto_user_a', 138, NOW_F);
+      expect(r.cumulative).toHaveLength(3);
+      expect(r.projectedValue).toBeNull();
+      expect(r.recentDailyRate).toBe(0);
+    });
+
+    it('handles Date object from DATE() column + missing race meta gracefully', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }])
+        .mockResolvedValueOnce([{ d: new Date('2026-03-01T00:00:00Z'), n: 7 }])
+        .mockResolvedValueOnce([]); // no race row
+      mockTargetFound(null);
+      const r = await service.getTicketForecast('logto_user_a', 138, NOW_F);
+      expect(r.cumulative[0]).toEqual({ date: '2026-03-01', value: 7 });
+      expect(r.projectionDate).toBeNull();
+      expect(r.raceEnded).toBe(false);
+    });
+
+    it('cache hit → returns cached forecast, no daily/meta SQL', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query.mockResolvedValueOnce([{ race_id: 138 }]); // resolveAccessibleRaces
+      // Key-aware cache: access/races miss (→ db), forecast hit.
+      mockRedis.get.mockImplementation((key: string) => {
+        if (key === 'merchant-portal:forecast:138') {
+          return Promise.resolve(
+            JSON.stringify({
+              cumulative: [{ date: '2026-03-01', value: 1 }],
+              projectedValue: null,
+              projectionDate: null,
+              recentDailyRate: 0,
+              target: null,
+              raceEnded: false,
+            }),
+          );
+        }
+        return Promise.resolve(null);
+      });
+      const r = await service.getTicketForecast('logto_user_a', 138, NOW_F);
+      expect(r.cumulative[0].value).toBe(1);
+      // only the resolveAccessibleRaces query ran (no daily/meta)
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+    });
+
+    it('TC-08 IDOR → race not accessible → 403 before forecast query', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query.mockResolvedValueOnce([{ race_id: 138 }]);
+      await expect(
+        service.getTicketForecast('logto_user_a', 999, NOW_F),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('getTicketHeatmap()', () => {
+    it('TC-03 happy → grid 7×7 + labels + max', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }]) // resolveAccessibleRaces
+        .mockResolvedValueOnce([
+          { dow: 2, hr: 8, n: 10 }, // Mon 08h → row0 bucket1
+          { dow: 1, hr: 22, n: 3 }, // Sun 22h → row6 bucket6
+        ]);
+      const r = await service.getTicketHeatmap('logto_user_a', 138);
+      expect(r.grid).toHaveLength(7);
+      expect(r.grid.every((row) => row.length === 7)).toBe(true);
+      expect(r.dayLabels).toEqual(['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']);
+      expect(r.bucketLabels).toEqual([
+        '0-6', '6-9', '9-12', '12-15', '15-18', '18-21', '21-24',
+      ]);
+      expect(r.grid[0][1]).toBe(10); // Mon 08h
+      expect(r.grid[6][6]).toBe(3); // Sun 22h
+      expect(r.max).toBe(10);
+      expect(JSON.stringify(r)).not.toMatch(/gmv|fee|price/i);
+    });
+
+    it('TC-03 timezone +7h: payment_on 16:30 UTC (=23:30 VN Thu) → grid[Thu][21-24]', async () => {
+      // The +7h conversion happens in MySQL (DATE_ADD). We verify the BE mapping
+      // of the post-conversion dow/hr that MySQL would return:
+      // 2026-01-01 16:30 UTC + 7h = 2026-01-01 23:30 VN. 2026-01-01 is Thursday.
+      // MySQL DAYOFWEEK(Thu) = 5; HOUR(23:30) = 23 → bucket 21-24 (index 6).
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }])
+        .mockResolvedValueOnce([{ dow: 5, hr: 23, n: 1 }]);
+      const r = await service.getTicketHeatmap('logto_user_a', 138);
+      // Thu = row index 3 (Mon0 Tue1 Wed2 Thu3); bucket 21-24 = index 6.
+      expect(r.grid[3][6]).toBe(1);
+      expect(r.max).toBe(1);
+      // verify SQL applied +7h before DAYOFWEEK/HOUR
+      expect(mockDb.query.mock.calls[1][0]).toMatch(
+        /DATE_ADD\(om\.payment_on, INTERVAL 7 HOUR\)/,
+      );
+    });
+
+    it('TC-09 empty → grid all 0, max 0', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 138 }])
+        .mockResolvedValueOnce([]);
+      const r = await service.getTicketHeatmap('logto_user_a', 138);
+      expect(r.max).toBe(0);
+      expect(r.grid.flat().every((c) => c === 0)).toBe(true);
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'merchant-portal:heatmap:138',
+        expect.any(String),
+        'EX',
+        300,
+      );
+    });
+
+    it('TC-08 IDOR → 403 before heatmap query', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query.mockResolvedValueOnce([{ race_id: 138 }]);
+      await expect(
+        service.getTicketHeatmap('logto_user_a', 999),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockDb.query).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('setTicketTarget()', () => {
+    it('TC-04 upsert + DEL forecast cache + returns target', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query.mockResolvedValueOnce([{ race_id: 138 }]); // resolveAccessibleRaces
+      const r = await service.setTicketTarget('logto_user_a', {
+        raceId: 138,
+        target: 5000,
+      });
+      expect(r).toEqual({ raceId: 138, target: 5000 });
+      expect(mockTargetModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { raceId: 138 },
+        { $set: { target: 5000, updatedBy: 'logto_user_a' } },
+        { upsert: true, new: true },
+      );
+      expect(mockRedis.del).toHaveBeenCalledWith('merchant-portal:forecast:138');
+    });
+
+    it('TC-05 target=0 → output target null (xoá mục tiêu) but doc still upserted', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query.mockResolvedValueOnce([{ race_id: 138 }]);
+      const r = await service.setTicketTarget('logto_user_a', {
+        raceId: 138,
+        target: 0,
+      });
+      expect(r).toEqual({ raceId: 138, target: null });
+      expect(mockTargetModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { raceId: 138 },
+        { $set: { target: 0, updatedBy: 'logto_user_a' } },
+        { upsert: true, new: true },
+      );
+    });
+
+    it('TC-08 IDOR → 403 BEFORE any upsert', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query.mockResolvedValueOnce([{ race_id: 138 }]); // accessible {138}
+      await expect(
+        service.setTicketTarget('logto_user_a', { raceId: 999, target: 100 }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockTargetModel.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(mockRedis.del).not.toHaveBeenCalled();
+    });
+
+    it('TC-10 concurrent writes same race → both resolve, last value wins (idempotent upsert)', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      // resolveAccessibleRaces cached so each call only hits redis, not db twice.
+      mockRedis.get.mockResolvedValue(JSON.stringify([138]));
+      const [a, b] = await Promise.all([
+        service.setTicketTarget('logto_user_a', { raceId: 138, target: 100 }),
+        service.setTicketTarget('logto_user_a', { raceId: 138, target: 200 }),
+      ]);
+      expect(a.raceId).toBe(138);
+      expect(b.raceId).toBe(138);
+      // both upserts target the same unique {raceId} filter → no duplicate doc
+      expect(mockTargetModel.findOneAndUpdate).toHaveBeenCalledTimes(2);
+      for (const call of mockTargetModel.findOneAndUpdate.mock.calls) {
+        expect(call[0]).toEqual({ raceId: 138 });
+        expect(call[2]).toEqual({ upsert: true, new: true });
+      }
     });
   });
 });

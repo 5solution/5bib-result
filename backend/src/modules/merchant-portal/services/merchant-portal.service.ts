@@ -47,9 +47,13 @@ import {
 import {
   StackedCourseDto,
   StackedSeriesPointDto,
+  TicketForecastDto,
+  TicketForecastPointDto,
+  TicketHeatmapDto,
   TicketOrderListDto,
   TicketOrderRowDto,
   TicketStackedDto,
+  TicketTargetDto,
   TicketTrendDto,
   TicketTrendPointDto,
 } from '../dto/ticket-charts.dto';
@@ -65,6 +69,10 @@ import {
   MerchantPortalAccessDocument,
   type MerchantPortalPermission,
 } from '../schemas/merchant-portal-access.schema';
+import {
+  MerchantRaceTarget,
+  MerchantRaceTargetDocument,
+} from '../schemas/merchant-race-target.schema';
 
 /**
  * F-069 M2b-1 — MerchantPortalService (merchant-facing core).
@@ -124,6 +132,8 @@ export class MerchantPortalService {
   constructor(
     @InjectModel(MerchantPortalAccess.name)
     private readonly accessModel: Model<MerchantPortalAccessDocument>,
+    @InjectModel(MerchantRaceTarget.name)
+    private readonly raceTargetModel: Model<MerchantRaceTargetDocument>,
     @InjectDataSource('platform') private readonly db: DataSource,
     @InjectRedis() private readonly redis: Redis,
     private readonly feeService: FeeService,
@@ -1276,5 +1286,292 @@ export class MerchantPortalService {
       mimeType:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     };
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // F-070 — Advanced MKT analytics (forecast / heatmap / target).
+  // Ticket-scope (BR-70-01/02) — NO financial values leaked.
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * F-070 BR-70-04/05/06 — Forecast: lũy kế vé thực tế + dự báo về ngày đua.
+   *
+   * Pipeline:
+   *  1. assertRaceForUser (IDOR — BR-70-03).
+   *  2. Read-through Redis cache `merchant-portal:forecast:<raceId>` TTL 300s.
+   *  3. SQL daily paid-order counts (FULL window) → running cumsum.
+   *  4. Race meta (event_start_date + status) → raceEnded + daysToRace.
+   *  5. recentDailyRate = (lastCum − cum 7 ngày trước) / 7 (0 nếu <8 điểm).
+   *  6. projectedValue = raceEnded || cumulative<8 ? null : round(lastCum + rate×daysToRace).
+   *  7. target từ Mongo merchant_race_target (null nếu absent hoặc 0).
+   */
+  async getTicketForecast(
+    userId: string,
+    raceId: number,
+    now?: Date,
+  ): Promise<TicketForecastDto> {
+    await this.assertRaceForUser(userId, raceId);
+
+    const cacheKey = `merchant-portal:forecast:${raceId}`;
+    const cachedForecast = await this.readJsonCache<TicketForecastDto>(cacheKey);
+    if (cachedForecast) return cachedForecast;
+
+    // 1) Daily paid-order counts (FULL window — BR-70-04).
+    const dailyRows: Array<{ d: string | Date; n: number | string }> =
+      await this.db.query(
+        `SELECT DATE(om.payment_on) AS d, COUNT(DISTINCT om.id) AS n
+         FROM order_metadata om
+         WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
+           AND om.payment_on IS NOT NULL
+         GROUP BY d ORDER BY d ASC`,
+        [raceId],
+      );
+
+    // 2) Running cumsum → cumulative[{date,value}].
+    let running = 0;
+    const cumulative: TicketForecastPointDto[] = dailyRows.map((row) => {
+      running += Number(row.n ?? 0);
+      return { date: this.toYmd(row.d), value: running };
+    });
+
+    // 3) Race meta (PRD 3.4 spec says `id` but races PK = race_id — R3 schema).
+    const metaRows: Array<{
+      event_start_date: Date | null;
+      status: string | null;
+    }> = await this.db.query(
+      `SELECT event_start_date, status FROM races WHERE race_id = ? LIMIT 1`,
+      [raceId],
+    );
+    const meta = metaRows[0];
+    const eventStartDate = meta?.event_start_date ?? null;
+    const status = (meta?.status ?? '').toUpperCase();
+
+    const today = now ?? new Date();
+    const todayMs = Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate(),
+    );
+    const eventMs =
+      eventStartDate != null
+        ? Date.UTC(
+            eventStartDate.getUTCFullYear(),
+            eventStartDate.getUTCMonth(),
+            eventStartDate.getUTCDate(),
+          )
+        : null;
+
+    const raceEnded =
+      status === 'COMPLETE' ||
+      status === 'CANCEL' ||
+      (eventMs != null && eventMs < todayMs);
+
+    const daysToRace =
+      eventMs != null
+        ? Math.max(0, Math.ceil((eventMs - todayMs) / 86_400_000))
+        : 0;
+
+    // 4) recentDailyRate over last 7 days (need ≥8 points — BR-70-05).
+    let recentDailyRate = 0;
+    if (cumulative.length >= 8) {
+      const lastCum = cumulative[cumulative.length - 1].value;
+      const prevCum = cumulative[cumulative.length - 8].value;
+      recentDailyRate = (lastCum - prevCum) / 7;
+    }
+
+    // 5) projection (BR-70-05/06).
+    const projectedValue =
+      raceEnded || cumulative.length < 8
+        ? null
+        : Math.round(
+            cumulative[cumulative.length - 1].value +
+              recentDailyRate * daysToRace,
+          );
+
+    const projectionDate =
+      eventStartDate != null ? eventStartDate.toISOString() : null;
+
+    // 6) target từ Mongo (null nếu absent hoặc 0 — BR-70-07/09).
+    const targetDoc = await this.raceTargetModel
+      .findOne({ raceId })
+      .lean()
+      .exec();
+    const target =
+      targetDoc && targetDoc.target > 0 ? targetDoc.target : null;
+
+    const result: TicketForecastDto = {
+      cumulative,
+      projectedValue,
+      projectionDate,
+      recentDailyRate,
+      target,
+      raceEnded,
+    };
+
+    try {
+      await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 300);
+    } catch (err) {
+      this.logger.warn(
+        `Redis write ${cacheKey} failed: ${(err as Error).message}`,
+      );
+    }
+    return result;
+  }
+
+  /**
+   * F-070 BR-70-10/11 — Heatmap: khung giờ vàng đăng ký (giờ VN).
+   *
+   * payment_on lưu UTC → +7h TRƯỚC khi tính DAYOFWEEK/HOUR (BR-70-10).
+   * Grid 7 dòng (Mon..Sun) × 7 cột khung giờ [0-6,6-9,9-12,12-15,15-18,18-21,21-24].
+   * MySQL DAYOFWEEK: 1=Sun..7=Sat → row index Mon=0..Sun=6.
+   * Read-through Redis cache TTL 300s.
+   */
+  async getTicketHeatmap(
+    userId: string,
+    raceId: number,
+  ): Promise<TicketHeatmapDto> {
+    await this.assertRaceForUser(userId, raceId);
+
+    const cacheKey = `merchant-portal:heatmap:${raceId}`;
+    const cachedHeatmap = await this.readJsonCache<TicketHeatmapDto>(cacheKey);
+    if (cachedHeatmap) return cachedHeatmap;
+
+    const rows: Array<{
+      dow: number | string;
+      hr: number | string;
+      n: number | string;
+    }> = await this.db.query(
+      `SELECT DAYOFWEEK(DATE_ADD(om.payment_on, INTERVAL 7 HOUR)) AS dow,
+              HOUR(DATE_ADD(om.payment_on, INTERVAL 7 HOUR)) AS hr,
+              COUNT(DISTINCT om.id) AS n
+       FROM order_metadata om
+       WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
+         AND om.payment_on IS NOT NULL
+       GROUP BY dow, hr`,
+      [raceId],
+    );
+
+    // grid[row Mon..Sun][bucket 0..6] = count.
+    const grid: number[][] = Array.from({ length: 7 }, () =>
+      new Array<number>(7).fill(0),
+    );
+    let max = 0;
+    for (const row of rows) {
+      const mysqlDow = Number(row.dow); // 1=Sun..7=Sat
+      const hr = Number(row.hr); // 0..23
+      const count = Number(row.n ?? 0);
+      const rowIndex = this.mysqlDowToMonFirst(mysqlDow);
+      const bucketIndex = this.hourToBucketIndex(hr);
+      if (rowIndex < 0 || bucketIndex < 0) continue;
+      grid[rowIndex][bucketIndex] += count;
+      if (grid[rowIndex][bucketIndex] > max) max = grid[rowIndex][bucketIndex];
+    }
+
+    const result: TicketHeatmapDto = {
+      dayLabels: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
+      bucketLabels: [
+        '0-6',
+        '6-9',
+        '9-12',
+        '12-15',
+        '15-18',
+        '18-21',
+        '21-24',
+      ],
+      grid,
+      max,
+    };
+
+    try {
+      await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 300);
+    } catch (err) {
+      this.logger.warn(
+        `Redis write ${cacheKey} failed: ${(err as Error).message}`,
+      );
+    }
+    return result;
+  }
+
+  /**
+   * F-070 BR-70-07/08/09 — Set per-race ticket target (WRITE).
+   *
+   * assertRaceForUser FIRST (IDOR — BR-70-08) → upsert Mongo merchant_race_target
+   * (unique raceId → concurrent idempotent) → DEL forecast cache. Output
+   * target=null khi dto.target===0 (BR-70-09 — 0 = xoá mục tiêu hiệu lực FE).
+   */
+  async setTicketTarget(
+    userId: string,
+    dto: { raceId: number; target: number },
+  ): Promise<TicketTargetDto> {
+    await this.assertRaceForUser(userId, dto.raceId);
+
+    await this.raceTargetModel
+      .findOneAndUpdate(
+        { raceId: dto.raceId },
+        { $set: { target: dto.target, updatedBy: userId } },
+        { upsert: true, new: true },
+      )
+      .exec();
+
+    try {
+      await this.redis.del(`merchant-portal:forecast:${dto.raceId}`);
+    } catch (err) {
+      this.logger.warn(
+        `Redis del forecast:${dto.raceId} failed: ${(err as Error).message}`,
+      );
+    }
+
+    return {
+      raceId: dto.raceId,
+      target: dto.target === 0 ? null : dto.target,
+    };
+  }
+
+  /**
+   * Best-effort read-through JSON cache. Returns null on miss, Redis error, OR
+   * corrupt payload (logged) so a poisoned cache entry never crashes the request
+   * — caller recomputes from source-of-truth.
+   */
+  private async readJsonCache<T>(cacheKey: string): Promise<T | null> {
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (!cached) return null;
+      return JSON.parse(cached) as T;
+    } catch (err) {
+      this.logger.warn(
+        `Redis read ${cacheKey} failed: ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  /** Normalize a SQL DATE result (Date or 'YYYY-MM-DD' string) → 'YYYY-MM-DD'. */
+  private toYmd(value: string | Date): string {
+    if (value instanceof Date) {
+      const y = value.getUTCFullYear();
+      const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(value.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    return String(value).slice(0, 10);
+  }
+
+  /** MySQL DAYOFWEEK (1=Sun..7=Sat) → grid row (Mon=0..Sun=6). */
+  private mysqlDowToMonFirst(mysqlDow: number): number {
+    // Sun(1)→6, Mon(2)→0, Tue(3)→1, … Sat(7)→5.
+    if (mysqlDow < 1 || mysqlDow > 7) return -1;
+    return mysqlDow === 1 ? 6 : mysqlDow - 2;
+  }
+
+  /** Hour 0..23 → bucket [0-6,6-9,9-12,12-15,15-18,18-21,21-24]. */
+  private hourToBucketIndex(hr: number): number {
+    if (hr < 0 || hr > 23) return -1;
+    if (hr < 6) return 0;
+    if (hr < 9) return 1;
+    if (hr < 12) return 2;
+    if (hr < 15) return 3;
+    if (hr < 18) return 4;
+    if (hr < 21) return 5;
+    return 6; // 21-24
   }
 }

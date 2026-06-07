@@ -4,9 +4,10 @@
  * F-069 Merchant Portal — hand-rolled SVG charts + time controls
  * (ported from mp-charts.jsx). Zero chart deps. Typed data props.
  */
-import { useRef, useState, type ReactNode, type RefObject } from "react";
-import { fmt } from "@/lib/mp/fmt";
+import { useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { fmt, parseDate } from "@/lib/mp/fmt";
 import { t, type Lang } from "@/lib/mp/i18n";
+import type { TicketForecastDto, TicketHeatmapDto, TicketSalesSummaryDto } from "@/lib/api-generated/types.gen";
 
 export const CH = {
   blue: "#1D49FF",
@@ -525,6 +526,400 @@ export function DeltaPill({ value }: { value: number }) {
       </svg>
       {fmt.pct(value)}
     </span>
+  );
+}
+
+// ============================================================
+// F-070 MKT analytics — insight footer + empty state helpers
+// ============================================================
+function InsightFooter({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ display: "flex", gap: 9, marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--5s-surface)" }}>
+      <div
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 8,
+          background: "var(--5s-magenta-100)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flex: "0 0 auto",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--5s-magenta)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" />
+        </svg>
+      </div>
+      <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--5s-text-muted)" }}>{children}</div>
+    </div>
+  );
+}
+
+function ChartEmpty({ msg }: { msg: string }) {
+  return <div style={{ padding: "48px 0", textAlign: "center", fontSize: 13, color: CH.textSubtle }}>{msg}</div>;
+}
+
+// ============================================================
+// PaceChart (F-070) — cumulative + projection + target line
+// ============================================================
+export function PaceChart({
+  data,
+  lang = "vi",
+  target,
+  width = 1080,
+  height = 280,
+}: {
+  data: TicketForecastDto;
+  lang?: Lang;
+  target?: number | null;
+  width?: number;
+  height?: number;
+}) {
+  const [hi, setHi] = useState<number | null>(null);
+  const ref = useRef<SVGSVGElement>(null);
+
+  // effective target: explicit prop overrides DTO field (lets the page redraw
+  // optimistically), 0 → treated as "no target" per BR-70-09.
+  const rawTarget = target !== undefined ? target : data.target;
+  const effTarget = rawTarget != null && rawTarget > 0 ? rawTarget : null;
+
+  const cum = useMemo(
+    () =>
+      data.cumulative
+        .map((p) => ({ ms: parseDate(p.date)?.getTime() ?? NaN, v: p.value, date: p.date }))
+        .filter((p) => Number.isFinite(p.ms)),
+    [data.cumulative],
+  );
+
+  if (cum.length < 2) {
+    return <ChartEmpty msg={t("not_enough_data", lang)} />;
+  }
+
+  const raceEnded = data.raceEnded;
+  const projection = !raceEnded && data.projectedValue != null && data.projectionDate != null ? data.projectedValue : null;
+  const projMs = projection != null ? parseDate(data.projectionDate)?.getTime() ?? null : null;
+
+  const pad = { l: 56, r: 16, t: 16, b: 28 };
+  const iw = width - pad.l - pad.r;
+  const ih = height - pad.t - pad.b;
+
+  const t0 = cum[0].ms;
+  const lastActual = cum[cum.length - 1];
+  // right edge = race day (projection) if known & after last actual, else last actual
+  const t1 = projMs != null && projMs > lastActual.ms ? projMs : lastActual.ms;
+  const span = Math.max(1, t1 - t0);
+
+  const topVal = Math.max(lastActual.v, effTarget ?? 0, projection ?? 0);
+  const niceMax = niceCeil(topVal * 1.05);
+
+  const xx = (ms: number) => pad.l + ((ms - t0) / span) * iw;
+  const y = (v: number) => pad.t + ih - (v / niceMax) * ih;
+
+  const actualPts = cum.map((p) => `${xx(p.ms)},${y(p.v)}`).join(" ");
+  const lastX = xx(lastActual.ms);
+  const lastY = y(lastActual.v);
+  const projX = projMs != null ? xx(projMs) : null;
+  const projY = projection != null ? y(projection) : null;
+
+  // month ticks across the window
+  const ticks: { ms: number; label: string }[] = [];
+  const d = new Date(t0);
+  d.setDate(1);
+  let guard = 0;
+  while (d.getTime() <= t1 && guard < 60) {
+    if (d.getTime() >= t0) ticks.push({ ms: d.getTime(), label: fmt.monthShort(d, lang) });
+    d.setMonth(d.getMonth() + 1);
+    guard++;
+  }
+
+  const yLines = [0, 0.25, 0.5, 0.75, 1].map((f) => niceMax * f);
+
+  const onMove = (e: React.MouseEvent) => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (width / r.width);
+    const ms = t0 + ((px - pad.l) / iw) * span;
+    let best = 0;
+    let bd = Infinity;
+    cum.forEach((p, i) => {
+      const dd = Math.abs(p.ms - ms);
+      if (dd < bd) {
+        bd = dd;
+        best = i;
+      }
+    });
+    setHi(best);
+  };
+
+  // ---- insight text ----
+  let insight: ReactNode;
+  if (raceEnded) {
+    insight = (
+      <>
+        <strong style={{ color: "var(--5s-text)", fontWeight: 700 }}>{t("insight", lang)} · </strong>
+        {lang === "en"
+          ? `Race ended — ${fmt.num(lastActual.v, lang)} tickets.`
+          : `Giải đã kết thúc — ${fmt.num(lastActual.v, lang)} vé.`}
+      </>
+    );
+  } else if (projection != null) {
+    const above = effTarget != null && projection >= effTarget;
+    let body: string;
+    if (effTarget != null) {
+      body =
+        lang === "en"
+          ? `Projected ~${fmt.num(projection, lang)} tickets by race day — ${above ? "above" : "below"} the ${fmt.num(effTarget, lang)} target. ${above ? "Hold current spend." : "A push is needed to hit goal."}`
+          : `Theo tốc độ 7 ngày gần nhất, dự kiến đạt ~${fmt.num(projection, lang)} vé vào ngày đua — ${above ? "vượt" : "thấp hơn"} mục tiêu ${fmt.num(effTarget, lang)}. ${above ? "Duy trì ngân sách hiện tại." : "Cần một đợt đẩy để chạm mục tiêu."}`;
+    } else {
+      body =
+        lang === "en"
+          ? `Projected ~${fmt.num(projection, lang)} tickets by race day at the last-7-day pace. Set a target to compare.`
+          : `Theo tốc độ 7 ngày gần nhất, dự kiến đạt ~${fmt.num(projection, lang)} vé về ngày đua. Đặt mục tiêu để so sánh.`;
+    }
+    insight = (
+      <>
+        <strong style={{ color: "var(--5s-text)", fontWeight: 700 }}>{t("insight", lang)} · </strong>
+        {body}
+      </>
+    );
+  } else {
+    insight = (
+      <>
+        <strong style={{ color: "var(--5s-text)", fontWeight: 700 }}>{t("insight", lang)} · </strong>
+        {t("not_enough_data", lang)}
+      </>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ position: "relative" }}>
+        <svg ref={ref} viewBox={`0 0 ${width} ${height}`} width="100%" style={{ display: "block" }} onMouseMove={onMove} onMouseLeave={() => setHi(null)}>
+          {yLines.map((v, i) => (
+            <g key={i}>
+              <line x1={pad.l} x2={pad.l + iw} y1={y(v)} y2={y(v)} stroke={CH.grid} strokeWidth="1" />
+              <text x={pad.l - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill={CH.textSubtle} fontFamily="var(--font-mono)">
+                {fmt.num(v, lang)}
+              </text>
+            </g>
+          ))}
+
+          {/* target line (purple) */}
+          {effTarget != null && (
+            <g>
+              <line x1={pad.l} x2={pad.l + iw} y1={y(effTarget)} y2={y(effTarget)} stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="5 4" />
+              <text x={pad.l + iw} y={y(effTarget) - 6} textAnchor="end" fontSize="11" fontWeight="700" fill="#7C3AED">
+                {t("target_label", lang)} {fmt.num(effTarget, lang)}
+              </text>
+            </g>
+          )}
+
+          {/* race-day marker */}
+          {projX != null && (
+            <g>
+              <line x1={projX} x2={projX} y1={pad.t} y2={pad.t + ih} stroke="var(--5s-danger)" strokeWidth="1" strokeDasharray="2 3" opacity="0.6" />
+              <text x={projX} y={pad.t + 9} textAnchor="end" fontSize="10.5" fontWeight="700" fill="var(--5s-danger)">
+                {t("race_day", lang)}
+              </text>
+            </g>
+          )}
+
+          {/* projection line (blue dashed) */}
+          {projX != null && projY != null && (
+            <g>
+              <line x1={lastX} y1={lastY} x2={projX} y2={projY} stroke={CH.blue} strokeWidth="2" strokeDasharray="6 5" opacity="0.7" />
+              <circle cx={projX} cy={projY} r="4.5" fill="#fff" stroke={CH.blue} strokeWidth="2" />
+            </g>
+          )}
+
+          {/* actual cumulative */}
+          <polyline points={actualPts} fill="none" stroke={CH.blue} strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round" />
+
+          {ticks.map((tk, i) => (
+            <text key={i} x={xx(tk.ms)} y={height - 8} textAnchor="middle" fontSize="11" fill={CH.textSubtle} fontFamily="var(--font-mono)">
+              {tk.label}
+            </text>
+          ))}
+
+          {hi != null && (
+            <g>
+              <line x1={xx(cum[hi].ms)} x2={xx(cum[hi].ms)} y1={pad.t} y2={pad.t + ih} stroke={CH.blue} strokeWidth="1" strokeDasharray="3 3" opacity="0.5" />
+              <circle cx={xx(cum[hi].ms)} cy={y(cum[hi].v)} r="5" fill="#fff" stroke={CH.blue} strokeWidth="2.5" />
+            </g>
+          )}
+        </svg>
+        {hi != null && (
+          <Tooltip width={width} cx={xx(cum[hi].ms)} cyTop={pad.t}>
+            <div style={{ fontSize: 11, color: CH.textSubtle, marginBottom: 3 }}>{fmtPaceDate(cum[hi].date, lang)}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 15, color: CH.text }}>
+              {fmt.num(cum[hi].v, lang)} <span style={{ fontWeight: 500, color: CH.textSubtle, fontSize: 12 }}>{t("cumulative_tickets", lang)}</span>
+            </div>
+          </Tooltip>
+        )}
+      </div>
+      <InsightFooter>{insight}</InsightFooter>
+    </div>
+  );
+}
+
+function fmtPaceDate(iso: string, lang: Lang): string {
+  const d = parseDate(iso);
+  return d ? fmt.date(d, lang) : iso;
+}
+
+// ============================================================
+// Heatmap (F-070) — 7 days × 7 time buckets
+// ============================================================
+export function Heatmap({ data, lang = "vi", width = 1080 }: { data: TicketHeatmapDto; lang?: Lang; width?: number }) {
+  const [hi, setHi] = useState<{ r: number; c: number } | null>(null);
+  const max = Math.max(1, data.max);
+  const totalCells = data.grid.reduce((a, row) => a + row.reduce((b, v) => b + v, 0), 0);
+
+  if (totalCells === 0) {
+    return <ChartEmpty msg={t("no_reg_data", lang)} />;
+  }
+
+  const cellBg = (v: number) => `rgba(29,73,255,${0.06 + (v / max) * 0.92})`;
+  const labelW = 54;
+  const cw = (width - labelW) / 7;
+
+  // insight: find peak cell
+  let peak = { r: 0, c: 0, v: -1 };
+  data.grid.forEach((row, r) =>
+    row.forEach((v, c) => {
+      if (v > peak.v) peak = { r, c, v };
+    }),
+  );
+  const peakDay = data.dayLabels[peak.r] ?? "";
+  const peakBucket = data.bucketLabels[peak.c] ?? "";
+
+  return (
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", paddingLeft: labelW }}>
+          {data.bucketLabels.map((b, i) => (
+            <div key={i} style={{ width: cw, textAlign: "center", fontSize: 10, color: CH.textSubtle, fontFamily: "var(--font-mono)" }}>
+              {b}
+            </div>
+          ))}
+        </div>
+        {data.grid.map((row, r) => (
+          <div key={r} style={{ display: "flex", alignItems: "center" }}>
+            <div style={{ width: labelW, fontSize: 11.5, fontWeight: 700, color: "var(--5s-text-muted)" }}>{data.dayLabels[r]}</div>
+            {row.map((v, c) => {
+              const on = hi?.r === r && hi?.c === c;
+              return (
+                <div
+                  key={c}
+                  onMouseEnter={() => setHi({ r, c })}
+                  onMouseLeave={() => setHi(null)}
+                  style={{
+                    width: cw - 4,
+                    height: 30,
+                    margin: 2,
+                    borderRadius: 6,
+                    background: cellBg(v),
+                    cursor: "pointer",
+                    outline: on ? "2px solid var(--5s-magenta)" : "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 10.5, fontFamily: "var(--font-mono)", fontWeight: 700, color: v / max > 0.5 ? "#fff" : "var(--5s-text-subtle)" }}>
+                    {fmt.num(v, lang)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: labelW }}>
+          <span style={{ fontSize: 10.5, color: CH.textSubtle }}>{t("legend_low", lang)}</span>
+          <div style={{ flex: 1, maxWidth: 160, height: 8, borderRadius: 99, background: "linear-gradient(90deg, rgba(29,73,255,0.08), rgba(29,73,255,0.98))" }} />
+          <span style={{ fontSize: 10.5, color: CH.textSubtle }}>{t("legend_high", lang)}</span>
+          <span style={{ fontSize: 10.5, color: CH.textSubtle, marginLeft: 6 }}>· {t("vn_hours", lang)}</span>
+        </div>
+      </div>
+      <InsightFooter>
+        <strong style={{ color: "var(--5s-text)", fontWeight: 700 }}>{t("insight", lang)} · </strong>
+        {lang === "en"
+          ? `Peak registration window: ${peakDay} ${peakBucket}h. Schedule ads & email/notification blasts just before these windows.`
+          : `Cao điểm đăng ký: ${peakDay} khung ${peakBucket}h. Lên lịch chạy ads & gửi email/notification ngay trước các khung này.`}
+      </InsightFooter>
+    </div>
+  );
+}
+
+// ============================================================
+// Funnel (F-070) — derived from ticket summary (counts only)
+// ============================================================
+function statusOrderCount(summary: TicketSalesSummaryDto, statuses: string[]): number {
+  return summary.byStatus.filter((s) => statuses.includes(s.financialStatus)).reduce((a, s) => a + s.orderCount, 0);
+}
+
+function FunnelStat({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ flex: 1, padding: "12px 14px", border: "1px solid var(--5s-border)", borderRadius: 11, background: "var(--5s-bg)" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--5s-text-subtle)", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 22, color }}>{value}</div>
+    </div>
+  );
+}
+
+export function Funnel({ summary, lang = "vi" }: { summary: TicketSalesSummaryDto; lang?: Lang }) {
+  const total = summary.totalOrders;
+
+  if (total === 0) {
+    return <ChartEmpty msg={t("no_reg_data", lang)} />;
+  }
+
+  const confirmed = statusOrderCount(summary, ["paid", "completed"]);
+  const pending = statusOrderCount(summary, ["pending"]);
+  const dropped = statusOrderCount(summary, ["voided", "cancelled", "refunded"]);
+
+  const conv = (confirmed / total) * 100;
+  const pendRate = (pending / total) * 100;
+  const cancelRate = (dropped / total) * 100;
+
+  const stages = [
+    { label: t("orders_created", lang), v: total, color: "var(--5s-blue-300)" },
+    { label: t("paid_confirmed", lang), v: confirmed, color: "var(--5s-blue)" },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {stages.map((st, i) => {
+          const w = (st.v / total) * 100;
+          return (
+            <div key={i}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--5s-text)" }}>{st.label}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, color: "var(--5s-text)" }}>
+                  {fmt.num(st.v, lang)} <span style={{ color: CH.textSubtle }}>· {w.toFixed(1)}%</span>
+                </span>
+              </div>
+              <div style={{ height: 34, background: "var(--5s-surface)", borderRadius: 8, overflow: "hidden" }}>
+                <div style={{ width: w + "%", height: "100%", background: st.color, borderRadius: 8, transition: "width .5s var(--ease-out-expo)" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
+        <FunnelStat label={t("conversion", lang)} value={conv.toFixed(1) + "%"} color="var(--5s-success)" />
+        <FunnelStat label={t("pending_rate", lang)} value={pendRate.toFixed(1) + "%"} color="var(--5s-warning)" />
+        <FunnelStat label={t("cancel_rate", lang)} value={cancelRate.toFixed(1) + "%"} color="var(--5s-danger)" />
+      </div>
+      <InsightFooter>
+        <strong style={{ color: "var(--5s-text)", fontWeight: 700 }}>{t("insight", lang)} · </strong>
+        {lang === "en"
+          ? `${conv.toFixed(0)}% close rate; ${pendRate.toFixed(0)}% orders pending payment — send payment reminders to recover them. ${cancelRate.toFixed(0)}% cancel/refund rate is worth investigating.`
+          : `Tỷ lệ chốt ${conv.toFixed(0)}%; còn ${pendRate.toFixed(0)}% đơn treo chưa thanh toán — gửi nhắc thanh toán để thu hồi. Tỷ lệ huỷ/hoàn ${cancelRate.toFixed(0)}% cần theo dõi nguyên nhân.`}
+      </InsightFooter>
+    </div>
   );
 }
 

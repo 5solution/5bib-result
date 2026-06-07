@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /**
  * F-069 M2b-2b — Ticket Sales chart DTOs (BR-MP-07 Phase 1 charts).
@@ -188,4 +188,53 @@ export class TicketOrderListDto {
 
   @ApiProperty({ example: 20 })
   pageSize!: number;
+}
+
+// ────────────────────────────────────────────────────────────────
+// F-070 — Advanced MKT analytics (forecast / heatmap / target).
+// 3 chart đều ticket-scope (BR-70-01/02) — NO financial values.
+// ────────────────────────────────────────────────────────────────
+
+/** Shared query for forecast + heatmap (raceId required). */
+export class TicketChartRaceQueryDto {
+  @ApiProperty({ description: 'MySQL race_id', example: 138 })
+  @Type(() => Number)
+  @IsInt({ message: 'raceId phải là số nguyên' })
+  @Min(1, { message: 'raceId không hợp lệ' })
+  @IsNotEmpty({ message: 'raceId bắt buộc' })
+  raceId!: number;
+}
+
+export class TicketForecastPointDto {
+  @ApiProperty({ description: 'Ngày (YYYY-MM-DD)' }) date!: string;
+  @ApiProperty({ description: 'Vé lũy kế tới hết ngày này' }) value!: number;
+}
+export class TicketForecastDto {
+  @ApiProperty({ type: [TicketForecastPointDto] }) cumulative!: TicketForecastPointDto[];
+  @ApiProperty({ description: 'Vé dự báo về ngày đua (null nếu race ended hoặc <8 điểm dữ liệu)', nullable: true })
+  projectedValue!: number | null;
+  @ApiProperty({ description: 'Ngày đua = races.event_start_date (ISO, null nếu thiếu)', nullable: true })
+  projectionDate!: string | null;
+  @ApiProperty({ description: 'Tốc độ vé/ngày 7 ngày gần nhất' }) recentDailyRate!: number;
+  @ApiProperty({ description: 'Mục tiêu BTC nhập (null nếu chưa set)', nullable: true }) target!: number | null;
+  @ApiProperty({ description: 'true nếu race COMPLETE/CANCEL hoặc đã qua ngày đua' }) raceEnded!: boolean;
+}
+
+export class TicketHeatmapDto {
+  @ApiProperty({ description: 'Nhãn 7 dòng thứ trong tuần (Mon..Sun)', type: [String] }) dayLabels!: string[];
+  @ApiProperty({ description: 'Nhãn 7 cột khung giờ (giờ VN)', type: [String] }) bucketLabels!: string[];
+  @ApiProperty({ description: 'grid[dayIndex][bucketIndex] = số đơn paid', type: 'array', items: { type: 'array', items: { type: 'number' } } })
+  grid!: number[][];
+  @ApiProperty({ description: 'Giá trị cell lớn nhất (để FE scale màu)' }) max!: number;
+}
+
+export class SetTicketTargetDto {
+  @ApiProperty({ description: 'MySQL race_id' }) @Type(() => Number) @IsInt() @Min(1) raceId!: number;
+  @ApiProperty({ description: 'Mục tiêu vé (0 = xoá mục tiêu)' })
+  @Type(() => Number) @IsInt() @Min(0) @Max(10_000_000, { message: 'Mục tiêu phải là số nguyên 0–10.000.000' })
+  target!: number;
+}
+export class TicketTargetDto {
+  @ApiProperty() raceId!: number;
+  @ApiProperty({ nullable: true }) target!: number | null;
 }

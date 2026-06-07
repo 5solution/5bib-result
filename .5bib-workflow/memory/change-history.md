@@ -7,6 +7,37 @@
 
 ---
 
+## [2026-06-07] FEATURE-070: Merchant Portal Advanced MKT Analytics — ✅ DEPLOYED (DEV)
+
+**Type:** EXTEND_EXISTING (merchant-portal module + merchant frontend). Branch `5bib_merchant_v1` → main.
+
+### Files changed
+- ➕ `backend/src/modules/merchant-portal/schemas/merchant-race-target.schema.ts` — Mongo collection `merchant_race_target` (unique raceId, target, updatedBy, timestamps). BTC-editable forecast target.
+- ✏️ `backend/src/modules/merchant-portal/dto/ticket-charts.dto.ts` — +TicketForecastDto/Point, TicketHeatmapDto, SetTicketTargetDto, TicketTargetDto.
+- ✏️ `backend/src/modules/merchant-portal/services/merchant-portal.service.ts` — +getTicketForecast (cumsum+projection rate7d×daysToRace, raceEnded null, target from Mongo), +getTicketHeatmap (DOW×HOUR +7h UTC→VN, grid 7×7), +setTicketTarget (assertRaceForUser→upsert→cache del), +readJsonCache/toYmd/mysqlDowToMonFirst/hourToBucketIndex helpers.
+- ✏️ `backend/src/modules/merchant-portal/merchant-portal.controller.ts` — +GET forecast, +GET heatmap, +PUT target (LogtoMerchantGuard ticket-scope, @CurrentUser).
+- ✏️ `backend/src/modules/merchant-portal/merchant-portal.module.ts` — register MerchantRaceTarget.
+- ✏️ service.spec + adversarial.spec — +20 test (TC-01..10).
+- ✏️ `merchant/src/components/mp/charts.tsx` — +PaceChart, Heatmap, Funnel (hand-rolled SVG, port mockup mp-analytics.jsx).
+- ✏️ `merchant/src/app/races/[raceId]/page.tsx` — wire 3 chart vào tab Vé + ô nhập target + Lưu.
+- ✏️ `merchant/src/lib/mp/i18n.ts` — +label VI/EN.
+- 🔄 SDK regen (admin + merchant): +3 fn GetTicketForecast/GetTicketHeatmap/SetTicketTarget.
+
+### Architecture / DB / Cache
+- MongoDB: NEW collection `merchant_race_target`. MySQL: READ-ONLY aggregate order_metadata (race_id, payment_on). Redis: `merchant-portal:forecast:<raceId>` + `:heatmap:<raceId>` TTL 300s; PUT target DEL forecast key.
+- **WRITE đầu tiên** cho merchant user (portal vốn read-only) — bảo vệ bằng assertRaceForUser trước upsert.
+
+### Manager Code Review
+- Đọc thật `getTicketForecast` (BR-70-05/06 encode đúng: rate cần ≥8 điểm, projectedValue null khi raceEnded||<8, target null khi 0/absent, assertRaceForUser first, cache read-through), `setTicketTarget` (IDOR before upsert). Grep verify: assertRaceForUser 3/3 method, SQL 0 `${}` interpolation, 0 money field leak, INTERVAL 7 HOUR present. 0 red flag.
+
+### Lessons learned
+- **races PK = `race_id` (bigint), KHÔNG phải `id`** — PRD assume sai, Coder catch (silent-break risk). PRD/codebase-map lần sau note rõ.
+- Funnel derivable frontend từ summary → tiết kiệm 1 endpoint.
+- Timezone: order_metadata.payment_on lưu UTC (DB tz=SYSTEM=UTC) → analytics theo giờ VN phải +7h.
+
+### Tech debt (→ known-issues)
+- Forecast linear projection (no seasonal curve-fit). Heatmap GMT+7 hardcoded (no per-tenant TZ). Target no audit log.
+
 ## [2026-06-07] FEATURE-069: Merchant Reporting Portal — ✅ COMPLETE + RECOVERED (branch, chưa push/merge/deploy)
 
 **Branch:** `5bib_merchant_v1`. Recovery commits `ea64c97` (backend module + M1/M3b tracked edits) → `1ca38ba` (authentic backend source từ transcript + 5 specs + admin M3 UI + 45 docs) → `199713c` (merchant M4 standalone + SDK regen) → `488be7a` (guard specs + merchant configs/deploy) → `d15e0f6` (CI merchant job) → `2b632a6` (merchant pnpm-lock) → `bee0008` (trim test/e2e baggage → next build PASS).

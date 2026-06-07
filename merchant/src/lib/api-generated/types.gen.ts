@@ -6969,6 +6969,76 @@ export type TicketOrderListDto = {
     pageSize: number;
 };
 
+export type TicketForecastPointDto = {
+    /**
+     * Ngày (YYYY-MM-DD)
+     */
+    date: string;
+    /**
+     * Vé lũy kế tới hết ngày này
+     */
+    value: number;
+};
+
+export type TicketForecastDto = {
+    cumulative: Array<TicketForecastPointDto>;
+    /**
+     * Vé dự báo về ngày đua (null nếu race ended hoặc <8 điểm dữ liệu)
+     */
+    projectedValue: number | null;
+    /**
+     * Ngày đua = races.event_start_date (ISO, null nếu thiếu)
+     */
+    projectionDate: string | null;
+    /**
+     * Tốc độ vé/ngày 7 ngày gần nhất
+     */
+    recentDailyRate: number;
+    /**
+     * Mục tiêu BTC nhập (null nếu chưa set)
+     */
+    target: number | null;
+    /**
+     * true nếu race COMPLETE/CANCEL hoặc đã qua ngày đua
+     */
+    raceEnded: boolean;
+};
+
+export type TicketHeatmapDto = {
+    /**
+     * Nhãn 7 dòng thứ trong tuần (Mon..Sun)
+     */
+    dayLabels: Array<string>;
+    /**
+     * Nhãn 7 cột khung giờ (giờ VN)
+     */
+    bucketLabels: Array<string>;
+    /**
+     * grid[dayIndex][bucketIndex] = số đơn paid
+     */
+    grid: Array<Array<number>>;
+    /**
+     * Giá trị cell lớn nhất (để FE scale màu)
+     */
+    max: number;
+};
+
+export type SetTicketTargetDto = {
+    /**
+     * MySQL race_id
+     */
+    raceId: number;
+    /**
+     * Mục tiêu vé (0 = xoá mục tiêu)
+     */
+    target: number;
+};
+
+export type TicketTargetDto = {
+    raceId: number;
+    target: number | null;
+};
+
 export type RevenueSummaryDto = {
     /**
      * MySQL race_id đã filter
@@ -16428,6 +16498,100 @@ export type MerchantPortalControllerGetTicketSalesOrdersResponses = {
 };
 
 export type MerchantPortalControllerGetTicketSalesOrdersResponse = MerchantPortalControllerGetTicketSalesOrdersResponses[keyof MerchantPortalControllerGetTicketSalesOrdersResponses];
+
+export type MerchantPortalControllerGetTicketForecastData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * MySQL race_id
+         */
+        raceId: number;
+    };
+    url: '/api/merchant-portal/ticket-sales/forecast';
+};
+
+export type MerchantPortalControllerGetTicketForecastErrors = {
+    /**
+     * raceId thiếu/sai
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Inactive OR race not accessible
+     */
+    403: unknown;
+};
+
+export type MerchantPortalControllerGetTicketForecastResponses = {
+    200: TicketForecastDto;
+};
+
+export type MerchantPortalControllerGetTicketForecastResponse = MerchantPortalControllerGetTicketForecastResponses[keyof MerchantPortalControllerGetTicketForecastResponses];
+
+export type MerchantPortalControllerGetTicketHeatmapData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * MySQL race_id
+         */
+        raceId: number;
+    };
+    url: '/api/merchant-portal/ticket-sales/heatmap';
+};
+
+export type MerchantPortalControllerGetTicketHeatmapErrors = {
+    /**
+     * raceId thiếu/sai
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Inactive OR race not accessible
+     */
+    403: unknown;
+};
+
+export type MerchantPortalControllerGetTicketHeatmapResponses = {
+    200: TicketHeatmapDto;
+};
+
+export type MerchantPortalControllerGetTicketHeatmapResponse = MerchantPortalControllerGetTicketHeatmapResponses[keyof MerchantPortalControllerGetTicketHeatmapResponses];
+
+export type MerchantPortalControllerSetTicketTargetData = {
+    body: SetTicketTargetDto;
+    path?: never;
+    query?: never;
+    url: '/api/merchant-portal/ticket-sales/target';
+};
+
+export type MerchantPortalControllerSetTicketTargetErrors = {
+    /**
+     * Validation (target âm/quá lớn)
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Inactive OR race not accessible
+     */
+    403: unknown;
+};
+
+export type MerchantPortalControllerSetTicketTargetResponses = {
+    200: TicketTargetDto;
+};
+
+export type MerchantPortalControllerSetTicketTargetResponse = MerchantPortalControllerSetTicketTargetResponses[keyof MerchantPortalControllerSetTicketTargetResponses];
 
 export type MerchantPortalControllerGetRevenueSummaryData = {
     body?: never;

@@ -14,6 +14,10 @@ import {
   MerchantPortalAccess,
   MerchantPortalAccessSchema,
 } from './schemas/merchant-portal-access.schema';
+import {
+  MerchantRaceTarget,
+  MerchantRaceTargetSchema,
+} from './schemas/merchant-race-target.schema';
 import { MerchantPortalAccessService } from './services/merchant-portal-access.service';
 import { MerchantPortalService } from './services/merchant-portal.service';
 
@@ -36,6 +40,7 @@ import { MerchantPortalService } from './services/merchant-portal.service';
   imports: [
     MongooseModule.forFeature([
       { name: MerchantPortalAccess.name, schema: MerchantPortalAccessSchema },
+      { name: MerchantRaceTarget.name, schema: MerchantRaceTargetSchema }, // F-070
     ]),
     TypeOrmModule.forFeature([Tenant], 'platform'),
     LogtoAuthModule,

@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
 import { useLang } from "@/lib/mp/lang-context";
@@ -23,6 +24,9 @@ import {
   merchantPortalControllerGetTicketSalesByType,
   merchantPortalControllerGetTicketSalesTrend,
   merchantPortalControllerGetTicketSalesOrders,
+  merchantPortalControllerGetTicketForecast,
+  merchantPortalControllerGetTicketHeatmap,
+  merchantPortalControllerSetTicketTarget,
   merchantPortalControllerGetRevenueSummary,
   merchantPortalControllerGetRevenueByCategory,
   merchantPortalControllerGetRevenueTrend,
@@ -34,6 +38,8 @@ import type {
   TicketSalesBreakdownDto,
   TicketTrendDto,
   TicketOrderListDto,
+  TicketForecastDto,
+  TicketHeatmapDto,
   RevenueSummaryDto,
   RevenueByCategoryDto,
   RevenueTrendDto,
@@ -57,9 +63,12 @@ import {
   AreaChart,
   CH,
   Donut,
+  Funnel,
   GranularityToggle,
   HBars,
+  Heatmap,
   MultiLineChart,
+  PaceChart,
   PeriodSelector,
   type DonutItem,
   type GranularityValue,
@@ -270,6 +279,15 @@ export default function RaceReportPage() {
   const [orders, setOrders] = useState<TicketOrderListDto | null>(null);
   const [ordersPage, setOrdersPage] = useState(1);
 
+  // F-070 MKT analytics
+  const [forecast, setForecast] = useState<TicketForecastDto | null>(null);
+  const [heatmap, setHeatmap] = useState<TicketHeatmapDto | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [targetInput, setTargetInput] = useState("");
+  const [targetErr, setTargetErr] = useState<string | null>(null);
+  const [savingTarget, setSavingTarget] = useState(false);
+
   // Revenue
   const [revSummary, setRevSummary] = useState<RevenueSummaryDto | null>(null);
   const [revByCat, setRevByCat] = useState<RevenueByCategoryDto | null>(null);
@@ -324,6 +342,61 @@ export default function RaceReportPage() {
     if (!r.error) setOrders(r.data ?? null);
   }, [token, raceId, ordersPage]);
 
+  const loadAnalytics = useCallback(async () => {
+    if (!token || !Number.isFinite(raceId)) return;
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const idQ = { query: { raceId }, ...authHeaders(token) };
+      const [fcR, hmR] = await Promise.all([
+        merchantPortalControllerGetTicketForecast(idQ),
+        merchantPortalControllerGetTicketHeatmap(idQ),
+      ]);
+      const firstErr = [fcR, hmR].find((r) => r.error)?.error;
+      if (firstErr) throw firstErr;
+      setForecast(fcR.data ?? null);
+      setHeatmap(hmR.data ?? null);
+      // seed target input with saved value (only when non-null)
+      const tg = fcR.data?.target;
+      setTargetInput(tg != null && tg > 0 ? String(tg) : "");
+      setTargetErr(null);
+    } catch (err) {
+      console.error("[merchant race report] analytics load failed:", err);
+      setAnalyticsError(extractMsg(err));
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [token, raceId]);
+
+  const savedTarget = forecast?.target != null && forecast.target > 0 ? forecast.target : null;
+
+  const saveTarget = useCallback(async () => {
+    if (!token || !Number.isFinite(raceId)) return;
+    const trimmed = targetInput.trim();
+    if (trimmed === "") return;
+    const n = Number(trimmed);
+    if (!Number.isInteger(n) || n < 0 || n > 10_000_000) {
+      setTargetErr(t("target_invalid", lang));
+      return;
+    }
+    setTargetErr(null);
+    setSavingTarget(true);
+    try {
+      const r = await merchantPortalControllerSetTicketTarget({
+        body: { raceId, target: n },
+        ...authHeaders(token),
+      });
+      if (r.error) throw r.error;
+      toast.success(t("target_saved", lang));
+      await loadAnalytics();
+    } catch (err) {
+      console.error("[merchant race report] save target failed:", err);
+      toast.error(extractMsg(err));
+    } finally {
+      setSavingTarget(false);
+    }
+  }, [token, raceId, targetInput, lang, loadAnalytics]);
+
   const loadRevenue = useCallback(async () => {
     if (!token || !Number.isFinite(raceId) || !hasRevenue) return;
     const idQ = { query: { raceId }, ...authHeaders(token) };
@@ -344,6 +417,9 @@ export default function RaceReportPage() {
   useEffect(() => {
     if (isAuthenticated) loadOrders();
   }, [isAuthenticated, loadOrders]);
+  useEffect(() => {
+    if (isAuthenticated) loadAnalytics();
+  }, [isAuthenticated, loadAnalytics]);
   useEffect(() => {
     if (isAuthenticated && tab === "revenue") loadRevenue();
   }, [isAuthenticated, tab, loadRevenue]);
@@ -402,6 +478,7 @@ export default function RaceReportPage() {
       onRefresh={() => {
         loadCore();
         loadOrders();
+        loadAnalytics();
         if (tab === "revenue") loadRevenue();
       }}
       user={user}
@@ -526,6 +603,115 @@ export default function RaceReportPage() {
               </div>
             )}
           </Card>
+
+          {/* F-070 — MKT analytics */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "30px 0 16px" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--5s-magenta)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3v18h18" />
+              <path d="m19 9-5 5-4-4-3 3" />
+            </svg>
+            <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, letterSpacing: "-0.01em", color: "var(--5s-text)" }}>
+              {t("mkt_analytics", lang)}
+            </h2>
+          </div>
+
+          {analyticsLoading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="shimmer" style={{ height: 250, borderRadius: 14, background: "var(--5s-surface)" }} />
+              ))}
+            </div>
+          ) : analyticsError ? (
+            <Card style={{ borderColor: "var(--5s-danger)", background: "var(--5s-danger-bg)" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "12px 0" }}>
+                <Icons.Alert size={28} color="var(--5s-danger)" />
+                <p style={{ fontSize: 14, color: "var(--5s-danger)", textAlign: "center", margin: 0 }}>{analyticsError}</p>
+                <button onClick={loadAnalytics} className="mp-focusable" style={{ border: "1px solid var(--5s-border)", background: "#fff", borderRadius: 9, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  {t("retry", lang)}
+                </button>
+              </div>
+            </Card>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              {/* Forecast card */}
+              <Card>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--5s-text)" }}>{t("forecast_title", lang)}</h3>
+                  {forecast?.raceEnded ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 99, background: "var(--5s-surface)", color: "var(--5s-text-subtle)", fontSize: 12, fontWeight: 700 }}>
+                      {t("race_ended_note", lang)}
+                    </span>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <label htmlFor="mkt-target" style={{ fontSize: 12.5, fontWeight: 700, color: "var(--5s-text-muted)" }}>
+                          {t("ticket_target", lang)}
+                        </label>
+                        <input
+                          id="mkt-target"
+                          type="number"
+                          min={0}
+                          max={10_000_000}
+                          step={1}
+                          value={targetInput}
+                          onChange={(e) => {
+                            setTargetInput(e.target.value);
+                            if (targetErr) setTargetErr(null);
+                          }}
+                          className="mp-focusable"
+                          style={{
+                            width: 130,
+                            padding: "7px 11px",
+                            border: `1px solid ${targetErr ? "var(--5s-danger)" : "var(--5s-border)"}`,
+                            borderRadius: 9,
+                            fontSize: 13,
+                            fontFamily: "var(--font-mono)",
+                            color: "var(--5s-text)",
+                            background: "#fff",
+                          }}
+                        />
+                        <Btn
+                          variant="primary"
+                          size="sm"
+                          onClick={saveTarget}
+                          disabled={savingTarget || targetInput.trim() === "" || (savedTarget != null && Number(targetInput.trim()) === savedTarget)}
+                        >
+                          {savingTarget ? t("saving", lang) : t("save", lang)}
+                        </Btn>
+                      </div>
+                      {targetErr && <span style={{ fontSize: 11.5, color: "var(--5s-danger)" }}>{targetErr}</span>}
+                    </div>
+                  )}
+                </div>
+                {forecast ? (
+                  <PaceChart data={forecast} lang={lang} target={forecast.raceEnded ? null : savedTarget} />
+                ) : (
+                  <EmptyState icon={Icons.Inbox} title={t("no_reg_data", lang)} body={t("no_data", lang)} />
+                )}
+              </Card>
+
+              {/* Heatmap card */}
+              <Card>
+                <SectionTitle>{t("heatmap_title", lang)}</SectionTitle>
+                {heatmap ? (
+                  <Heatmap data={heatmap} lang={lang} />
+                ) : (
+                  <EmptyState icon={Icons.Inbox} title={t("no_reg_data", lang)} body={t("no_data", lang)} />
+                )}
+              </Card>
+
+              {/* Funnel card */}
+              <Card>
+                <SectionTitle>{t("funnel_title", lang)}</SectionTitle>
+                {summary ? (
+                  <Funnel summary={summary} lang={lang} />
+                ) : (
+                  <EmptyState icon={Icons.Inbox} title={t("no_reg_data", lang)} body={t("no_data", lang)} />
+                )}
+              </Card>
+            </div>
+          )}
+
           <UpdatedFooter lang={lang} />
         </>
       ) : (

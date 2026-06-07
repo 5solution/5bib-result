@@ -18,6 +18,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { FeeService } from '../../finance/services/fee.service';
 import { MerchantPortalAccess } from '../schemas/merchant-portal-access.schema';
+import { MerchantRaceTarget } from '../schemas/merchant-race-target.schema';
 import { MerchantPortalService } from './merchant-portal.service';
 
 function makeConfigDoc(overrides: Record<string, unknown> = {}) {
@@ -36,16 +37,26 @@ function makeConfigDoc(overrides: Record<string, unknown> = {}) {
 describe('MerchantPortalService — ADVERSARIAL (QC)', () => {
   let service: MerchantPortalService;
   let mockModel: { findOne: jest.Mock };
+  let mockTargetModel: { findOne: jest.Mock; findOneAndUpdate: jest.Mock };
   let mockDb: { query: jest.Mock };
-  let mockRedis: { get: jest.Mock; set: jest.Mock };
+  let mockRedis: { get: jest.Mock; set: jest.Mock; del: jest.Mock };
   let mockFee: { computeFeeForOrdersAggregate: jest.Mock };
 
   beforeEach(async () => {
     mockModel = { findOne: jest.fn() };
+    mockTargetModel = {
+      findOne: jest.fn().mockReturnValue({
+        lean: () => ({ exec: () => Promise.resolve(null) }),
+      }),
+      findOneAndUpdate: jest.fn().mockReturnValue({
+        exec: () => Promise.resolve(null),
+      }),
+    };
     mockDb = { query: jest.fn() };
     mockRedis = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
     };
     mockFee = {
       computeFeeForOrdersAggregate: jest.fn().mockResolvedValue({
@@ -64,6 +75,7 @@ describe('MerchantPortalService — ADVERSARIAL (QC)', () => {
       providers: [
         MerchantPortalService,
         { provide: getModelToken(MerchantPortalAccess.name), useValue: mockModel },
+        { provide: getModelToken(MerchantRaceTarget.name), useValue: mockTargetModel },
         { provide: getDataSourceToken('platform'), useValue: mockDb },
         { provide: getRedisConnectionToken(), useValue: mockRedis },
         { provide: FeeService, useValue: mockFee },
@@ -296,5 +308,89 @@ describe('MerchantPortalService — ADVERSARIAL (QC)', () => {
       expect(k).toContain('138');
       expect(k).toContain('daily');
     }
+  });
+
+  // ── F-070 adversarial ──────────────────────────────────────────
+
+  it('Attack #15 — forecast NEVER leaks financial fields (gmv/fee/price)', async () => {
+    mockConfigFound({ tenantIds: [42] });
+    mockDb.query
+      .mockResolvedValueOnce([{ race_id: 138 }])
+      .mockResolvedValueOnce([
+        { d: '2026-03-01', n: 5 },
+        { d: '2026-03-02', n: 5 },
+        { d: '2026-03-03', n: 5 },
+        { d: '2026-03-04', n: 5 },
+        { d: '2026-03-05', n: 5 },
+        { d: '2026-03-06', n: 5 },
+        { d: '2026-03-07', n: 5 },
+        { d: '2026-03-08', n: 5 },
+      ])
+      .mockResolvedValueOnce([
+        { event_start_date: new Date('2026-04-01T00:00:00Z'), status: 'ONGOING' },
+      ]);
+    const r = await service.getTicketForecast(
+      'logto_user_a',
+      138,
+      new Date('2026-03-10T00:00:00Z'),
+    );
+    expect(JSON.stringify(r)).not.toMatch(/gmv|fee|price|total_price|net\b/i);
+    // forecast SQL parameterizes raceId (no interpolation)
+    expect(mockDb.query.mock.calls[1][1]).toEqual([138]);
+    expect(mockDb.query.mock.calls[1][0]).toContain('?');
+  });
+
+  it('Attack #16 — heatmap dow=0/8 (out-of-range) defensively skipped, no crash', async () => {
+    mockConfigFound({ tenantIds: [42] });
+    mockDb.query
+      .mockResolvedValueOnce([{ race_id: 138 }])
+      .mockResolvedValueOnce([
+        { dow: 0, hr: 5, n: 99 }, // invalid dow → skipped
+        { dow: 8, hr: 5, n: 99 }, // invalid dow → skipped
+        { dow: 2, hr: 25, n: 99 }, // invalid hr → skipped
+        { dow: 2, hr: 5, n: 7 }, // valid Mon 05h → row0 bucket0
+      ]);
+    const r = await service.getTicketHeatmap('logto_user_a', 138);
+    expect(r.grid[0][0]).toBe(7);
+    expect(r.max).toBe(7); // the 99s never landed
+  });
+
+  it('Attack #17 — setTicketTarget cannot upsert a race OUTSIDE access (IDOR pre-check)', async () => {
+    mockConfigFound({ tenantIds: [42] });
+    mockDb.query.mockResolvedValueOnce([{ race_id: 138 }]); // accessible {138}
+    await expect(
+      service.setTicketTarget('logto_user_a', { raceId: 7777, target: 9000 }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(mockTargetModel.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('Attack #18 — corrupt forecast cache payload → graceful fallback recompute, no crash', async () => {
+    mockConfigFound({ tenantIds: [42] });
+    mockRedis.get.mockImplementation((key: string) => {
+      if (key === 'merchant-portal:forecast:138') {
+        return Promise.resolve('{not json'); // poisoned entry
+      }
+      return Promise.resolve(null);
+    });
+    mockDb.query
+      .mockResolvedValueOnce([{ race_id: 138 }])
+      .mockResolvedValueOnce([{ d: '2026-03-01', n: 3 }])
+      .mockResolvedValueOnce([
+        { event_start_date: new Date('2026-04-01T00:00:00Z'), status: 'ONGOING' },
+      ]);
+    const r = await service.getTicketForecast(
+      'logto_user_a',
+      138,
+      new Date('2026-03-10T00:00:00Z'),
+    );
+    // Recomputed from DB despite corrupt cache.
+    expect(r.cumulative).toEqual([{ date: '2026-03-01', value: 3 }]);
+    // And refreshed the poisoned key.
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      'merchant-portal:forecast:138',
+      expect.any(String),
+      'EX',
+      300,
+    );
   });
 });

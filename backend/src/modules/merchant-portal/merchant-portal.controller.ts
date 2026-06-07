@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   ApiBearerAuth,
@@ -23,10 +23,15 @@ import {
 import { RevenueSummaryDto } from './dto/revenue-summary.dto';
 import { RevenueTrendDto } from './dto/revenue-trend.dto';
 import {
+  SetTicketTargetDto,
   TicketChartQueryDto,
+  TicketChartRaceQueryDto,
+  TicketForecastDto,
+  TicketHeatmapDto,
   TicketOrderListDto,
   TicketOrdersQueryDto,
   TicketStackedDto,
+  TicketTargetDto,
   TicketTrendDto,
 } from './dto/ticket-charts.dto';
 import type { TicketChartGranularity } from './dto/ticket-sales.dto';
@@ -224,6 +229,73 @@ export class MerchantPortalController {
       query.financialStatus,
       query.search,
     );
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // F-070 — Advanced MKT analytics (forecast / heatmap / target).
+  // Ticket-scope (BR-70-01) — class-level LogtoMerchantGuard, NO finance.
+  // ────────────────────────────────────────────────────────────────
+
+  @Get('ticket-sales/forecast')
+  @ApiOperation({
+    summary: 'Lũy kế & dự báo vé về ngày đua (F-070 BR-70-04/05/06)',
+    description:
+      'Cumulative đơn paid (FULL window) + projection theo tốc độ 7 ngày × số ngày ' +
+      'tới ngày đua. raceEnded ⇒ projectedValue=null. target từ BTC nhập (null nếu ' +
+      'chưa set). NO financial (BR-70-02). 403 nếu raceId ngoài scope (IDOR).',
+  })
+  @ApiResponse({ status: 200, type: TicketForecastDto })
+  @ApiResponse({ status: 400, description: 'raceId thiếu/sai' })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Inactive OR race not accessible' })
+  async getTicketForecast(
+    @CurrentUser() user: LogtoUser,
+    @Query() query: TicketChartRaceQueryDto,
+  ): Promise<TicketForecastDto> {
+    return this.merchantPortalService.getTicketForecast(
+      user.userId,
+      query.raceId,
+    );
+  }
+
+  @Get('ticket-sales/heatmap')
+  @ApiOperation({
+    summary: 'Khung giờ vàng đăng ký — heatmap 7×7 (F-070 BR-70-10/11)',
+    description:
+      'Grid 7 dòng (T2..CN) × 7 khung giờ (giờ VN, payment_on UTC +7h). Cell = số ' +
+      'đơn paid. NO financial. 403 nếu raceId ngoài scope (IDOR).',
+  })
+  @ApiResponse({ status: 200, type: TicketHeatmapDto })
+  @ApiResponse({ status: 400, description: 'raceId thiếu/sai' })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Inactive OR race not accessible' })
+  async getTicketHeatmap(
+    @CurrentUser() user: LogtoUser,
+    @Query() query: TicketChartRaceQueryDto,
+  ): Promise<TicketHeatmapDto> {
+    return this.merchantPortalService.getTicketHeatmap(
+      user.userId,
+      query.raceId,
+    );
+  }
+
+  @Put('ticket-sales/target')
+  @ApiOperation({
+    summary: 'Đặt mục tiêu vé cho giải (F-070 BR-70-07/08/09 — WRITE)',
+    description:
+      'BTC nhập target số vé (upsert merchant_race_target). assertRaceForUser ' +
+      'TRƯỚC upsert (IDOR — BR-70-08). target=0 ⇒ output target=null (xoá mục tiêu). ' +
+      'Ticket-scope (KHÔNG cần finance). DEL forecast cache.',
+  })
+  @ApiResponse({ status: 200, type: TicketTargetDto })
+  @ApiResponse({ status: 400, description: 'Validation (target âm/quá lớn)' })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Inactive OR race not accessible' })
+  async setTicketTarget(
+    @CurrentUser() user: LogtoUser,
+    @Body() body: SetTicketTargetDto,
+  ): Promise<TicketTargetDto> {
+    return this.merchantPortalService.setTicketTarget(user.userId, body);
   }
 
   // ────────────────────────────────────────────────────────────────
