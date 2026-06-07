@@ -34,6 +34,23 @@ function fmtDate(d: string | null): string {
   return Number.isNaN(t.getTime()) ? "—" : t.toLocaleDateString("vi-VN");
 }
 
+/** Extract VN error message — backend trả message dạng {vi,en} object. */
+function extractMsg(err: unknown): string {
+  if (err && typeof err === "object") {
+    const e = err as { message?: unknown; vi?: unknown; en?: unknown };
+    const m = e.message;
+    if (typeof m === "string") return m;
+    if (m && typeof m === "object") {
+      const o = m as { vi?: unknown; en?: unknown };
+      if (typeof o.vi === "string") return o.vi;
+      if (typeof o.en === "string") return o.en;
+    }
+    if (typeof e.vi === "string") return e.vi;
+    if (typeof e.en === "string") return e.en;
+  }
+  return "Không tải được dữ liệu";
+}
+
 export default function MerchantDashboard() {
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
   const [me, setMe] = useState<MerchantMeResponseDto | null>(null);
@@ -62,11 +79,8 @@ export default function MerchantDashboard() {
       setMe(meRes.data ?? null);
       setRaces(racesRes.data?.races ?? []);
     } catch (err) {
-      const msg =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message: unknown }).message)
-          : "Không tải được dữ liệu";
-      setError(msg);
+      console.error("[merchant dashboard] load failed:", err);
+      setError(extractMsg(err));
     } finally {
       setLoading(false);
     }
