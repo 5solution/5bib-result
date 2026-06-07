@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>5BIB Content Seed Tool</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", system-ui, sans-serif;
+    background: #faf8f5;
+    color: #1c1917;
+    margin: 0;
+    padding: 32px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 {
+    font-family: "Be Vietnam Pro", sans-serif;
+    font-weight: 900;
+    font-size: 32px;
+    letter-spacing: -0.025em;
+    margin: 0 0 8px;
+  }
+  .lede { color: #78716c; margin: 0 0 24px; }
+  .card {
+    background: #fff;
+    border: 1px solid #e7e2d9;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .row { display: flex; align-items: center; gap: 12px; margin: 8px 0; font-size: 14px; }
+  .row .icon { width: 20px; text-align: center; }
+  .ok { color: #16a34a; font-weight: bold; }
+  .warn { color: #d97706; font-weight: bold; }
+  .fail { color: #dc2626; font-weight: bold; }
+  .pending { color: #78716c; }
+  button {
+    background: #1d49ff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 22px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { background: #0b36e6; }
+  button:disabled { background: #c7c0b4; cursor: not-allowed; }
+  pre {
+    background: #f3f0eb;
+    border-radius: 8px;
+    padding: 14px;
+    overflow-x: auto;
+    font-size: 12px;
+    margin: 8px 0;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+    font-size: 13px;
+  }
+  .summary .stat {
+    background: #f3f0eb;
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .summary .stat b { display: block; font-size: 22px; font-family: monospace; }
+  .next-step {
+    background: #e6ecff;
+    border-left: 4px solid #1d49ff;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .next-step h3 { margin: 0 0 8px; font-size: 14px; }
+  .next-step ol { margin: 0; padding-left: 20px; font-size: 13px; }
+  code {
+    background: #1c1917;
+    color: #faf8f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌱 5BIB Content Seed Tool</h1>
+  <p class="lede">
+    Tự động tạo 5 categories + 5 bài viết hướng dẫn về 5BIB Result + publish ngay.
+    Idempotent — chạy nhiều lần OK, slug đã tồn tại sẽ skip.
+  </p>
+
+  <div class="card">
+    <p style="margin:0 0 12px;font-size:14px;">
+      <b>Yêu cầu</b>: bạn đang đăng nhập admin (cookie session active).
+      Script sẽ gọi <code>/api/admin/article-categories</code> + <code>/api/admin/articles</code>
+      qua proxy của admin → backend tự động inject Logto Bearer token.
+    </p>
+    <button id="run">Bắt đầu seed</button>
+  </div>
+
+  <div class="card" id="log-card" style="display:none;">
+    <h2 style="margin:0 0 12px;font-size:18px;">📋 Tiến trình</h2>
+    <div id="log"></div>
+    <div class="summary" id="summary" style="display:none;"></div>
+  </div>
+
+  <div class="next-step" id="next" style="display:none;">
+    <h3>✅ Tiếp theo</h3>
+    <ol>
+      <li>Mở <a href="/articles" target="_blank"><code>/articles</code></a> để xem 5 bài viết đã publish</li>
+      <li>Mở <a href="/article-categories" target="_blank"><code>/article-categories</code></a> xem 5 danh mục</li>
+      <li>Vào <a href="/api-keys" target="_blank"><code>/api-keys</code></a> tạo key mới name <code>content-web local dev</code></li>
+      <li>Copy full key → paste vào <code>content-web/.env.local</code> dòng <code>ARTICLES_API_KEY=ak_xxx</code></li>
+      <li>Restart preview content-web (báo Claude restart giúp)</li>
+      <li>Mở <a href="http://localhost:3015" target="_blank">http://localhost:3015</a> → thấy categories + featured + grid bài viết</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(async function() {
+  const logEl = document.getElementById('log');
+  const summaryEl = document.getElementById('summary');
+  const nextEl = document.getElementById('next');
+  const logCard = document.getElementById('log-card');
+  const btn = document.getElementById('run');
+
+  const log = (msg, kind = 'pending') => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<span class="icon">${
+      kind === 'ok' ? '✅' : kind === 'warn' ? '⚠️' : kind === 'fail' ? '❌' : '⏳'
+    }</span><span class="${kind}">${msg}</span>`;
+    logEl.appendChild(row);
+    row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  const api = async (method, path, body) => {
+    const res = await fetch(path, {
+      method,
+      credentials: 'include',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!res.ok) {
+      const err = new Error(`${method} ${path} → ${res.status}`);
+      err.status = res.status;
+      err.body = data;
+      throw err;
+    }
+    return data;
+  };
+
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = 'Đang seed…';
+    logCard.style.display = 'block';
+    logEl.innerHTML = '';
+
+    try {
+      log('Loading seed data…');
+      const [categories, articles] = await Promise.all([
+        fetch('/seed/categories.json').then(r => r.json()),
+        fetch('/seed/articles.json').then(r => r.json()),
+      ]);
+      log(`Loaded ${categories.length} categories + ${articles.length} articles`, 'ok');
+
+      // ── Categories ──
+      log('─── Step 1: Categories ───');
+      let existingCats;
+      try {
+        existingCats = await api('GET', '/api/admin/article-categories');
+      } catch (err) {
+        log(`Auth check failed (${err.status}). Bạn đã đăng nhập admin chưa?`, 'fail');
+        return;
+      }
+      const existingCatSlugs = new Set(existingCats.map(c => c.slug));
+      log(`Tìm thấy ${existingCats.length} category đang có sẵn`);
+
+      let catCreated = 0, catSkipped = 0;
+      for (const cat of categories) {
+        if (existingCatSlugs.has(cat.slug)) {
+          log(`Skip "${cat.slug}" (đã tồn tại)`, 'warn');
+          catSkipped++;
+          continue;
+        }
+        try {
+          await api('POST', '/api/admin/article-categories', cat);
+          log(`Tạo category: ${cat.icon} ${cat.name}`, 'ok');
+          catCreated++;
+        } catch (err) {
+          log(`Failed "${cat.slug}": ${err.body?.message ?? err.message}`, 'fail');
+        }
+      }
+
+      // ── Articles ──
+      log('─── Step 2: Articles ───');
+      const { items: existingArticles } = await api('GET',
+        '/api/admin/articles?status=all&includeDeleted=true&limit=50');
+      const existingArtMap = new Map(existingArticles.map(a => [a.slug, a]));
+      log(`Tìm thấy ${existingArticles.length} bài viết đang có sẵn`);
+
+      let artCreated = 0, artPublished = 0, artSkipped = 0;
+      for (const art of articles) {
+        const existing = existingArtMap.get(art.slug);
+        if (existing) {
+          log(`Skip "${art.slug}" (đã tồn tại)`, 'warn');
+          artSkipped++;
+          if (existing.status !== 'published') {
+            try {
+              await api('POST', `/api/admin/articles/${existing.id}/publish`);
+              log(`  → Publish lại: ${existing.title}`, 'ok');
+              artPublished++;
+            } catch (err) {
+              if (err.status === 422) {
+                log(`  → Publish 422: thiếu ${(err.body?.missing ?? []).join(', ')}`, 'fail');
+              } else {
+                log(`  → Publish failed: ${err.body?.message ?? err.message}`, 'fail');
+              }
+            }
+          }
+          continue;
+        }
+        try {
+          const created = await api('POST', '/api/admin/articles', {
+            title: art.title,
+            slug: art.slug,
+            type: art.type,
+            products: art.products,
+            category: art.category,
+            excerpt: art.excerpt,
+            coverImageUrl: art.coverImageUrl,
+            seoTitle: art.seoTitle,
+            seoDescription: art.seoDescription,
+            featured: art.featured,
+            content: art.content,
+          });
+          log(`Tạo bài: ${art.title}`, 'ok');
+          artCreated++;
+          try {
+            await api('POST', `/api/admin/articles/${created.id}/publish`);
+            log(`  → Publish thành công`, 'ok');
+            artPublished++;
+          } catch (err) {
+            if (err.status === 422) {
+              log(`  → Publish 422: thiếu ${(err.body?.missing ?? []).join(', ')}`, 'fail');
+            } else {
+              log(`  → Publish failed: ${err.body?.message ?? err.message}`, 'fail');
+            }
+          }
+        } catch (err) {
+          log(`Failed "${art.slug}": ${err.body?.message ?? err.message}`, 'fail');
+        }
+      }
+
+      // ── Summary ──
+      summaryEl.style.display = 'grid';
+      summaryEl.innerHTML = `
+        <div class="stat"><b>${catCreated}</b>Categories tạo mới</div>
+        <div class="stat"><b>${catSkipped}</b>Categories đã có (skip)</div>
+        <div class="stat"><b>${artCreated}</b>Bài viết tạo mới</div>
+        <div class="stat"><b>${artPublished}</b>Bài viết đã publish</div>
+      `;
+      log('═══ HOÀN TẤT ═══', 'ok');
+      nextEl.style.display = 'block';
+    } catch (err) {
+      log(`Lỗi không xử lý được: ${err.message}`, 'fail');
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Chạy lại';
+    }
+  };
+})();
+</script>
+</body>
+</html>

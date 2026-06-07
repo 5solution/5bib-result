@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Xem kết quả",
+    "slug": "xem-ket-qua",
+    "type": "help",
+    "icon": "🏁",
+    "tint": "#1D49FF",
+    "description": "Tra cứu kết quả, BIB, pace, split — mọi thứ về race day",
+    "isActive": true
+  },
+  {
+    "name": "Certificate",
+    "slug": "certificate",
+    "type": "help",
+    "icon": "🏆",
+    "tint": "#D97706",
+    "description": "Tải giấy chứng nhận finisher PDF",
+    "isActive": true
+  },
+  {
+    "name": "BIB & Avatar",
+    "slug": "bib-avatar",
+    "type": "help",
+    "icon": "👤",
+    "tint": "#16A34A",
+    "description": "Cập nhật ảnh đại diện và thông tin VĐV",
+    "isActive": true
+  },
+  {
+    "name": "Khiếu nại",
+    "slug": "khieu-nai",
+    "type": "help",
+    "icon": "📝",
+    "tint": "#DC2626",
+    "description": "Phản hồi sai thông tin kết quả, sai BIB, mất thời gian",
+    "isActive": true
+  },
+  {
+    "name": "Tin tức 5BIB",
+    "slug": "tin-tuc-5bib",
+    "type": "news",
+    "icon": "📰",
+    "tint": "#EA580C",
+    "description": "Cập nhật mới nhất từ 5BIB Result và cộng đồng running Việt Nam",
+    "isActive": true
+  }
+]
