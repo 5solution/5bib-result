@@ -2,6 +2,19 @@
 
 Frontend app `merchant/` — Next.js standalone, Logto auth (merchant scopes), runtime proxy → backend. Mirrors admin deploy pattern.
 
+---
+## ✅ DEV ĐÃ DEPLOY (2026-06-07) — `https://merchant-dev.5bib.com` LIVE
+Thực tế đã làm trên VPS 5solution-vps:
+- **Host port 3089** (KHÔNG phải 3006/3086 như draft dưới — 3086 đã bị crew chiếm, 3087/3088 cũng bận). Map `3089:3006`.
+- VPS `/opt/5bib-result/docker-compose.yml` đã thêm service `5bib-result-merchant` (image `ghcr.io/5solution/5bib-result/merchant:0aaad7b`, `env_file: ./merchant.env`, `3089:3006`). Backup: `docker-compose.yml.bak-merchant`.
+- VPS `/opt/5bib-result/merchant.env` đã tạo (mirror admin.env): BACKEND_URL + LOGTO_ENDPOINT=https://auth.5bib.com + LOGTO_APP_ID=v6g8edb1fmcsmawy1y64e + LOGTO_APP_SECRET + LOGTO_API_RESOURCE=https://api.5bib.com + LOGTO_COOKIE_SECRET (random) + LOGTO_BASE_URL=https://merchant-dev.5bib.com.
+- nginx `/etc/nginx/sites-available/merchant-dev.5bib.com` → proxy `localhost:3089` + symlink sites-enabled. certbot SSL issued (expires 2026-09-05, auto-renew).
+- Verify: `https://merchant-dev.5bib.com` → 307 → `/sign-in` → 200. Auth redirect OK.
+- **Còn lại:** (a) backend DEV `.env` cần `LOGTO_M2M_APP_ID/SECRET` + `LOGTO_MANAGEMENT_RESOURCE=https://default.logto.app/api` + `MERCHANT_PORTAL_LOGIN_URL=https://merchant-dev.5bib.com` để M3b auto-provision invite chạy (chưa set → lookup/provision graceful-degrade). (b) Tạo merchant user + gán role qua admin merchant-portal để test login E2E. (c) Cosmetic: `<title>` còn "5BIB Admin" (clone metadata) — đổi `merchant/src/app/layout.tsx`. (d) PROD `merchant.5bib.com` lặp lại các bước dưới với domain prod.
+- ⚠️ CI deploy block (`build-and-deploy.yml`) đã wire `5bib-result-merchant` — lần push main sau sẽ tự bump tag + `docker compose up` service này (an toàn vì service đã tồn tại trên VPS).
+
+---
+
 ## 1. DNS (Danny / GoDaddy)
 | Env | Domain | A record → |
 |-----|--------|-----------|

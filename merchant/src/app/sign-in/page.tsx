@@ -9,10 +9,10 @@ export default function SignInPage() {
           <Logo5bib className="h-10" />
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
-              5BIB Admin
+              5BIB Merchant Portal
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Đăng nhập bằng tài khoản 5BIB Admin được cấp quyền
+              Đăng nhập bằng tài khoản BTC được 5BIB cấp quyền
             </p>
           </div>
         </div>

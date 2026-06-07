@@ -6,8 +6,8 @@ import { beVietnamPro, jetBrainsMono } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "5BIB Admin",
-  description: "Trang quản trị hệ thống kết quả giải chạy 5BIB",
+  title: "5BIB Merchant Portal",
+  description: "Cổng báo cáo dành cho Ban tổ chức giải chạy — 5BIB Merchant Portal",
 };
 
 export default function RootLayout({
