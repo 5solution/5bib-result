@@ -475,3 +475,117 @@ body[data-fullscreen="true"] {
   height: 100vh;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   F-069 Merchant Portal — 5Solution Design System tokens (rebuild)
+   Lifted from /tmp/5bib-merchant-template/mp-styles.css. These extend &
+   override the legacy --5s-* aliases above with the full 5Solution palette
+   used by the new merchant component library (src/components/mp/*).
+   Scoped helpers (.mp-root etc.) keep merchant chrome isolated.
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  /* Brand primaries */
+  --5s-blue:            #1D49FF;
+  --5s-blue-600:        #0B36E6;
+  --5s-blue-700:        #0026B3;
+  --5s-blue-400:        #4A6EFF;
+  --5s-blue-300:        #88A2FF;
+  --5s-blue-100:        #DCE3FF;
+  --5s-blue-50:         #F0F3FF;
+
+  --5s-magenta:         #FF0E65;
+  --5s-magenta-600:     #E60057;
+  --5s-magenta-400:     #FF4D89;
+  --5s-magenta-100:     #FFD6E3;
+
+  --5s-sky:             #1FAAFF;
+  --5s-sky-600:         #0B8FE0;
+  --5s-sky-100:         #D6EEFF;
+  --5s-midnight:        #1B2238;
+  --5s-midnight-800:    #141A2D;
+  --5s-midnight-600:    #2A3354;
+  --5s-lime:            #BEE14A;
+
+  /* Warm stone neutrals */
+  --5s-bg:              #FAF8F5;
+  --5s-surface:         #F3F0EB;
+  --5s-surface-2:       #E8E4DD;
+  --5s-border:          #D6D3D1;
+  --5s-border-strong:   #A8A29E;
+  --5s-text:            #1C1917;
+  --5s-text-muted:      #57534E;
+  --5s-text-subtle:     #78716C;
+  --5s-white:           #FFFFFF;
+  --5s-black:           #0A0A0A;
+
+  /* Cool slate neutrals (data context) */
+  --5s-slate:           #1E293B;
+  --5s-slate-500:       #64748B;
+  --5s-slate-200:       #E2E8F0;
+  --5s-slate-100:       #F1F5F9;
+  --5s-slate-50:        #F8FAFC;
+
+  /* Semantic */
+  --5s-success:         #166534;
+  --5s-success-bg:      #DCFCE7;
+  --5s-warning:         #D97706;
+  --5s-warning-bg:      #FEF3C7;
+  --5s-danger:          #DC2626;
+  --5s-danger-bg:       #FEE2E2;
+  --5s-live:            #DC2626;
+  --5s-info:            var(--5s-blue);
+
+  --5s-gold:            #D97706;
+  --5s-silver:          #78716C;
+  --5s-bronze:          #92400E;
+  --5s-energy:          #EA580C;
+  --5s-trail:           #166534;
+
+  /* Typography stacks (resolved from next/font CSS vars set on <html>) */
+  --font-display: var(--font-display), "Be Vietnam Pro", system-ui, sans-serif;
+  --font-body:    var(--font-body), "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono:    var(--font-mono), "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+
+  --tracking-tighter: -0.03em;
+  --tracking-tight:   -0.02em;
+  --tracking-wide:     0.02em;
+  --tracking-wider:    0.08em;
+  --tracking-widest:   0.18em;
+
+  --shadow-glow-blue: 0 0 0 1px rgba(29,73,255,0.08), 0 8px 32px rgba(29,73,255,0.22);
+}
+
+.mp-root {
+  font-family: var(--font-body);
+  color: var(--5s-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.mp-root h1, .mp-root h2, .mp-root h3, .mp-root h4 {
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
+  margin: 0;
+}
+
+.mp-eyebrow {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--5s-text-subtle);
+}
+
+.mp-data { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* thin custom scrollbars inside frames */
+.mp-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.mp-scroll::-webkit-scrollbar-thumb { background: var(--5s-border); border-radius: 99px; }
+
+/* live pulse + auth spinner */
+@keyframes mp-ping { 75%, 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes mp-spin { to { transform: rotate(360deg); } }
+
+.mp-focusable:focus-visible { outline: 2px solid var(--5s-blue); outline-offset: 2px; }
+

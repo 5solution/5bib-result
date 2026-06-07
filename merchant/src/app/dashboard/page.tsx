@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * F-069 M4 — Merchant Portal dashboard (merchant.5bib.com).
- * Shows the logged-in BTC user + their accessible races. Auth via Logto
- * merchant session (proxy injects merchant-scoped token → backend guard).
+ * F-069 — Merchant Portal race list (merchant.5bib.com/dashboard).
+ * 5Solution "Velocity" design. Shows the logged-in BTC user + their
+ * accessible races as cover-image cards. Auth via Logto merchant session
+ * (proxy injects merchant-scoped token → backend guard).
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authHeaders } from "@/lib/api";
+import { useLang } from "@/lib/mp/lang-context";
 import {
   merchantPortalControllerGetMe,
   merchantPortalControllerGetRaces,
@@ -16,23 +18,12 @@ import type {
   MerchantMeResponseDto,
   MerchantRaceItemDto,
 } from "@/lib/api-generated/types.gen";
+import { t } from "@/lib/mp/i18n";
+import { fmt, parseDate } from "@/lib/mp/fmt";
+import { AppShell, Card, EmptyState, RaceStatusBadge, type MpUser } from "@/components/mp/ui";
+import { Icons } from "@/components/mp/icons";
 
-const RACE_STATUS_LABEL: Record<string, string> = {
-  COMPLETE: "Đã kết thúc",
-  ONGOING: "Đang diễn ra",
-  GENERATED_CODE: "Chuẩn bị",
-  CANCEL: "Đã hủy",
-};
-const PERMISSION_LABEL: Record<string, string> = {
-  ticket_report: "Báo cáo vé",
-  revenue_report: "Báo cáo doanh thu",
-};
-
-function fmtDate(d: string | null): string {
-  if (!d) return "—";
-  const t = new Date(d);
-  return Number.isNaN(t.getTime()) ? "—" : t.toLocaleDateString("vi-VN");
-}
+const COVERS = ["/mp/race-cover-1.jpg", "/mp/race-cover-2.jpg"];
 
 /** Extract VN error message — backend trả message dạng {vi,en} object. */
 function extractMsg(err: unknown): string {
@@ -51,18 +42,103 @@ function extractMsg(err: unknown): string {
   return "Không tải được dữ liệu";
 }
 
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function toMpUser(me: MerchantMeResponseDto | null): MpUser {
+  if (!me) return { name: "—", email: "", initials: "?" };
+  return { name: me.userName, email: me.email, initials: initialsOf(me.userName) };
+}
+
+function RaceCard({ race, lang, cover }: { race: MerchantRaceItemDto; lang: "vi" | "en"; cover: string }) {
+  const [hover, setHover] = useState(false);
+  const d = parseDate(race.eventStartDate);
+  return (
+    <a
+      href={`/races/${race.raceId}`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "block",
+        textDecoration: "none",
+        color: "inherit",
+        background: "#fff",
+        border: "1px solid var(--5s-border)",
+        borderRadius: 14,
+        overflow: "hidden",
+        cursor: "pointer",
+        boxShadow: hover ? "var(--shadow-lg)" : "var(--shadow-sm)",
+        transform: hover ? "translateY(-2px)" : "none",
+        transition: "all .28s var(--ease-out-expo)",
+      }}
+    >
+      <div style={{ height: 132, position: "relative", overflow: "hidden" }}>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage: `url(${cover})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            transform: hover ? "scale(1.05)" : "scale(1)",
+            transition: "transform .7s ease",
+          }}
+        />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.4), transparent 60%)" }} />
+        <div style={{ position: "absolute", top: 11, left: 11 }}>
+          <RaceStatusBadge status={race.status} lang={lang} />
+        </div>
+      </div>
+      <div style={{ padding: 16 }}>
+        <h3
+          style={{
+            fontSize: 15.5,
+            fontWeight: 800,
+            lineHeight: 1.25,
+            color: "var(--5s-text)",
+            marginBottom: 8,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            minHeight: 38,
+          }}
+        >
+          {race.title}
+        </h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--5s-text-muted)", marginBottom: 14 }}>
+          <Icons.Calendar size={13} color="var(--5s-text-subtle)" />
+          <span className="mp-data">{d ? fmt.date(d, lang) : "—"}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 13, borderTop: "1px solid var(--5s-surface)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Icons.Ticket size={15} color="var(--5s-blue)" />
+            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 16, color: "var(--5s-text)" }}>{fmt.num(race.ticketsSold, lang)}</span>
+            <span style={{ fontSize: 11.5, color: "var(--5s-text-subtle)" }}>{t("tickets_sold", lang)}</span>
+          </div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12.5, fontWeight: 700, color: "var(--5s-blue)" }}>
+            {t("view_report", lang)} <Icons.ChevR size={13} color="var(--5s-blue)" />
+          </span>
+        </div>
+      </div>
+    </a>
+  );
+}
+
 export default function MerchantDashboard() {
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { lang, toggleLang } = useLang();
   const [me, setMe] = useState<MerchantMeResponseDto | null>(null);
   const [races, setRaces] = useState<MerchantRaceItemDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirect to Logto sign-in if not authenticated.
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      window.location.href = "/api/logto/sign-in";
-    }
+    if (!authLoading && !isAuthenticated) window.location.href = "/api/logto/sign-in";
   }, [authLoading, isAuthenticated]);
 
   const load = useCallback(async () => {
@@ -90,104 +166,105 @@ export default function MerchantDashboard() {
     if (isAuthenticated) load();
   }, [isAuthenticated, load]);
 
+  const finance = !!me?.permissions.includes("revenue_report");
+  const user = useMemo(() => toMpUser(me), [me]);
+
+  // Group by tenant only when the user spans multiple BTCs.
+  const multiTenant = (me?.tenantIds.length ?? 0) > 1;
+  const groups = useMemo(() => {
+    if (!multiTenant) return [{ tenantId: null as number | null, races }];
+    const byTenant = new Map<number, MerchantRaceItemDto[]>();
+    for (const r of races) {
+      const arr = byTenant.get(r.tenantId) ?? [];
+      arr.push(r);
+      byTenant.set(r.tenantId, arr);
+    }
+    return [...byTenant.entries()].map(([tenantId, rs]) => ({ tenantId, races: rs }));
+  }, [races, multiTenant]);
+
   if (authLoading || (!isAuthenticated && !error)) {
     return (
-      <div className="grid min-h-screen place-items-center text-sm text-stone-500">
-        Đang tải…
+      <div className="mp-root" style={{ display: "grid", minHeight: "100vh", placeItems: "center", fontSize: 14, color: "var(--5s-text-muted)", background: "var(--5s-bg)" }}>
+        {t("loading", lang)}
       </div>
     );
   }
 
+  let coverIdx = 0;
+  const nextCover = () => COVERS[coverIdx++ % COVERS.length];
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-stone-200 pb-4">
-        <div>
-          <h1 className="text-xl font-bold text-stone-900">
-            Báo cáo giải chạy
-          </h1>
-          {me && (
-            <p className="mt-1 text-sm text-stone-500">
-              Xin chào <span className="font-medium text-stone-700">{me.userName}</span> · {me.email}
-            </p>
-          )}
-        </div>
-        {me && (
-          <div className="flex flex-wrap gap-1.5">
-            {me.permissions.map((p) => (
-              <span
-                key={p}
-                className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
-              >
-                {PERMISSION_LABEL[p] ?? p}
-              </span>
-            ))}
-          </div>
-        )}
-      </header>
+    <AppShell lang={lang} onLang={toggleLang} finance={finance} active="races" breadcrumb={[t("nav_races", lang)]} user={user} onRefresh={load}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 26, letterSpacing: "-0.02em" }}>{t("your_races", lang)}</h1>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 13px",
+            borderRadius: 99,
+            background: "var(--5s-blue-50)",
+            color: "var(--5s-blue)",
+            fontWeight: 700,
+            fontSize: 13,
+          }}
+        >
+          <Icons.Trophy size={14} color="var(--5s-blue)" />
+          {fmt.num(races.length, lang)} {t("races_count", lang)}
+        </span>
+      </div>
 
       {loading ? (
-        <div className="space-y-2">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-lg bg-stone-100" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="shimmer" style={{ height: 244, borderRadius: 14, background: "var(--5s-surface)" }} />
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center">
-          <p className="text-sm text-red-700">{error}</p>
-          <button
-            onClick={load}
-            className="mt-3 rounded-md border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-50"
-          >
-            Thử lại
-          </button>
-        </div>
+        <Card style={{ borderColor: "var(--5s-danger)", background: "var(--5s-danger-bg)" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "12px 0" }}>
+            <Icons.Alert size={28} color="var(--5s-danger)" />
+            <p style={{ fontSize: 14, color: "var(--5s-danger)", textAlign: "center", margin: 0 }}>{error}</p>
+            <button
+              onClick={load}
+              className="mp-focusable"
+              style={{ border: "1px solid var(--5s-border)", background: "#fff", borderRadius: 9, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            >
+              {t("retry", lang)}
+            </button>
+          </div>
+        </Card>
       ) : races.length === 0 ? (
-        <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-12 text-center text-sm text-stone-500">
-          Chưa có giải nào được gán cho tài khoản của bạn. Liên hệ BTC/5BIB để được cấp quyền.
-        </div>
+        <Card>
+          <EmptyState icon={Icons.Inbox} title={t("no_races_title", lang)} body={t("no_races_body", lang)} />
+        </Card>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-stone-200">
-          <table className="w-full text-sm">
-            <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
-              <tr>
-                <th className="px-4 py-2.5 font-medium">Giải</th>
-                <th className="px-4 py-2.5 font-medium">Ngày</th>
-                <th className="px-4 py-2.5 font-medium">Trạng thái</th>
-                <th className="px-4 py-2.5 text-right font-medium">Vé đã bán</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {races.map((r) => (
-                <tr key={r.raceId} className="hover:bg-stone-50">
-                  <td className="px-4 py-3">
-                    <a
-                      href={`/races/${r.raceId}`}
-                      className="font-medium text-blue-700 hover:underline"
-                    >
-                      {r.title}
-                    </a>
-                    <div className="font-mono text-xs text-stone-400">id={r.raceId}</div>
-                  </td>
-                  <td className="px-4 py-3 text-stone-600">{fmtDate(r.eventStartDate)}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600">
-                      {RACE_STATUS_LABEL[r.status] ?? r.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-stone-800">
-                    {r.ticketsSold.toLocaleString("vi-VN")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {groups.map((g) => (
+            <div key={g.tenantId ?? "all"} style={{ marginBottom: 28 }}>
+              {multiTenant && g.tenantId != null && (
+                <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
+                  <Icons.Building size={15} color="var(--5s-text-subtle)" />
+                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14, letterSpacing: ".02em", color: "var(--5s-text)" }}>BTC #{g.tenantId}</span>
+                  <span style={{ fontSize: 12, color: "var(--5s-text-subtle)" }}>
+                    · {fmt.num(g.races.length, lang)} {t("races_count", lang)}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: "var(--5s-border)" }} />
+                </div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+                {g.races.map((r) => (
+                  <RaceCard key={r.raceId} race={r} lang={lang} cover={nextCover()} />
+                ))}
+              </div>
+            </div>
+          ))}
+          <div style={{ fontSize: 12.5, color: "var(--5s-text-subtle)", marginTop: 4 }}>
+            {t("showing", lang)} {fmt.num(races.length, lang)} {t("races_count", lang)}
+          </div>
+        </>
       )}
-
-      <footer className="mt-8 flex items-center justify-between border-t border-stone-200 pt-4 text-xs text-stone-400">
-        <span>5BIB Merchant Portal{me ? ` · ${me.assignedRaceCount} giải` : ""}</span>
-        <a href="/api/logto/sign-out" className="hover:text-stone-600">Đăng xuất</a>
-      </footer>
-    </div>
+    </AppShell>
   );
 }

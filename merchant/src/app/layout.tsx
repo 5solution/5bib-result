@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth-context";
 import { QueryProvider } from "@/lib/query-provider";
-import { beVietnamPro, jetBrainsMono } from "@/lib/fonts";
+import { LangProvider } from "@/lib/mp/lang-context";
+import { beVietnamPro, plusJakartaSans, jetBrainsMono } from "@/lib/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,11 +19,13 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
-      className={`${beVietnamPro.variable} ${jetBrainsMono.variable} h-full antialiased`}
+      className={`${beVietnamPro.variable} ${plusJakartaSans.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <LangProvider>{children}</LangProvider>
+          </AuthProvider>
         </QueryProvider>
         <Toaster richColors position="top-right" />
       </body>

@@ -1,26 +1,34 @@
 /**
- * 5BIB Admin Font Loader
+ * 5BIB Merchant Portal Font Loader (F-069 rebuild)
  *
- * FEATURE-022 BR-DESIGN-06 / BR-DESIGN-07.
- * - Be Vietnam Pro: UI font chinh (heading + body).
- * - JetBrains Mono: data font (BIB, time, ID, currency, hex chip ID).
+ * 5Solution design system fonts:
+ * - Be Vietnam Pro  → display (headings)   → --font-display
+ * - Plus Jakarta Sans → body (UI text)     → --font-body
+ * - JetBrains Mono  → data (numbers/codes)  → --font-mono
  *
- * Su dung next/font/google de preload local — KHONG fetch tu Google CDN runtime.
- * Display: swap → tranh FOIT, fallback system font trong vai ms dau.
+ * Loaded via next/font/google (self-hosted, no runtime CDN fetch).
+ * display: swap → avoids FOIT, falls back to system font for a few ms.
  */
 
-import { Be_Vietnam_Pro, JetBrains_Mono } from "next/font/google";
+import { Be_Vietnam_Pro, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 
 export const beVietnamPro = Be_Vietnam_Pro({
-  variable: "--font-be-vietnam-pro",
+  variable: "--font-display",
   subsets: ["latin", "vietnamese"],
   weight: ["400", "500", "600", "700", "800", "900"],
   display: "swap",
 });
 
+export const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-body",
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
 export const jetBrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+  variable: "--font-mono",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
