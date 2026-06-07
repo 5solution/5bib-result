@@ -38,6 +38,13 @@ export class MerchantRaceItemDto {
     example: 1234,
   })
   ticketsSold!: number;
+
+  @ApiProperty({
+    description: 'URL ảnh bìa giải (races.images) — null nếu chưa có',
+    nullable: true,
+    example: 'https://.../cover.jpg',
+  })
+  coverUrl!: string | null;
 }
 
 export class MerchantRaceListResponseDto {

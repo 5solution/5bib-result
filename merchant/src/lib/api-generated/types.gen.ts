@@ -6793,6 +6793,10 @@ export type MerchantRaceItemDto = {
      * Tổng vé đã bán (paid orders)
      */
     ticketsSold: number;
+    /**
+     * URL ảnh bìa giải (races.images) — null nếu chưa có
+     */
+    coverUrl: string | null;
 };
 
 export type MerchantRaceListResponseDto = {

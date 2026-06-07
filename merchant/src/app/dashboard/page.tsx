@@ -81,7 +81,7 @@ function RaceCard({ race, lang, cover }: { race: MerchantRaceItemDto; lang: "vi"
           style={{
             position: "absolute",
             inset: 0,
-            backgroundImage: `url(${cover})`,
+            backgroundImage: `url(${race.coverUrl && race.coverUrl.trim() ? race.coverUrl : cover})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
             transform: hover ? "scale(1.05)" : "scale(1)",

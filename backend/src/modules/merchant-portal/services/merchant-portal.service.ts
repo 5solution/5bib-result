@@ -377,8 +377,9 @@ export class MerchantPortalService {
       status: string | null;
       event_start_date: Date | null;
       tenant_id: number | string;
+      images: string | null;
     }> = await this.db.query(
-      `SELECT r.race_id, r.title, r.status, r.event_start_date, r.tenant_id
+      `SELECT r.race_id, r.title, r.status, r.event_start_date, r.tenant_id, r.images
        FROM races r
        WHERE r.race_id IN (${placeholders}) AND r.is_delete = 0 ${tenantClause}
        ORDER BY r.event_start_date DESC`,
@@ -412,6 +413,10 @@ export class MerchantPortalService {
         eventStartDate: row.event_start_date,
         tenantId: Number(row.tenant_id),
         ticketsSold: ticketByRace.get(raceId) ?? 0,
+        coverUrl:
+          typeof row.images === 'string' && row.images.trim()
+            ? row.images.trim()
+            : null,
       };
     });
 

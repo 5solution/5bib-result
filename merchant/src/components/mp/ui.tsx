@@ -76,7 +76,6 @@ export function Sidebar({ lang, finance, active, user }: SidebarProps) {
         background: "var(--5s-midnight)",
         display: "flex",
         flexDirection: "column",
-        height: "100%",
       }}
     >
       <div style={{ height: 56, display: "flex", alignItems: "center", padding: "0 18px", background: "var(--5s-blue-700)" }}>
