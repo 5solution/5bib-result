@@ -7,6 +7,30 @@
 
 ---
 
+## [2026-06-07] FEATURE-069: Merchant Reporting Portal — ✅ COMPLETE + RECOVERED (branch, chưa push/merge/deploy)
+
+**Branch:** `5bib_merchant_v1`. Recovery commits `ea64c97` (backend module + M1/M3b tracked edits) → `1ca38ba` (authentic backend source từ transcript + 5 specs + admin M3 UI + 45 docs) → `199713c` (merchant M4 standalone + SDK regen) → `488be7a` (guard specs + merchant configs/deploy) → `d15e0f6` (CI merchant job) → `2b632a6` (merchant pnpm-lock) → `bee0008` (trim test/e2e baggage → next build PASS).
+**Type:** NEW_MODULE (backend merchant-portal + 2 Logto guards) + NEW_APP (merchant.5bib.com standalone) + EXTEND (logto.service, config, period-resolver, app.module, nav-groups, docker-compose, CI workflow).
+
+### Files (backend)
+- NEW `backend/src/modules/merchant-portal/` (19 file): `merchant-portal.controller.ts` (13 read endpoints, class `@UseGuards(LogtoMerchantGuard)`, revenue methods thêm `LogtoMerchantFinanceGuard`), `merchant-portal-admin.controller.ts` (7 admin CRUD endpoints `@UseGuards(LogtoAdminGuard)`), `merchant-portal.module.ts` (imports MongooseModule.forFeature + TypeOrmModule.forFeature([Tenant],'platform') + LogtoAuthModule + AuditModule + FinanceModule + NotificationModule), services `merchant-portal.service.ts` (data reads MySQL 'platform' + Redis cache + FeeService.computeFeeForOrdersAggregate + exceljs export) + `merchant-portal-access.service.ts` (CRUD + SETNX lock + M3b resolveOrProvisionUser email→createUser+assignRoles+invite), schema `merchant-portal-access.schema.ts`, 9 DTO, 4 spec (128 tests).
+- NEW `backend/src/modules/logto-auth/logto-merchant.guard.ts` + `logto-merchant-finance.guard.ts` + 2 spec (24 tests).
+- EXTEND `logto-auth/logto.service.ts` (lookupByEmail/lookupByIdWithCache cache 300s + createUser/resolveRoleIdsByNames/assignUserRoles M2M, management token resource = `env.logto.managementResource`), `logto-auth/{index.ts,logto-auth.module.ts}` (export guards + LogtoService), `config/index.ts` (LOGTO_MANAGEMENT_RESOURCE default `https://default.logto.app/api` + MERCHANT_PORTAL_LOGIN_URL), `analytics/services/period-resolver.ts` ('90d' additive), `modules/app.module.ts` (register MerchantPortalModule).
+
+### Files (admin / merchant / infra)
+- NEW admin `(dashboard)/merchant-portal/` (page.tsx gate+list+filter+pagination + 6 _components: access-form-dialog email-first, tenant-multi-picker, logto-lookup-field, access-list-table, permission-badge, empty-state) + `lib/merchant-portal-labels.ts` + spec. EXTEND `lib/nav-groups.ts` (merchant nav item, admin-only). SDK regen (17 merchant functions).
+- NEW `merchant/` standalone Next.js app (port 3006): src/app/dashboard + races/[raceId] (ticket + revenue tabs, CSS bar charts) + login/callback/sign-in + api/[...proxy] (Logto session → backend bearer) + src/lib/{logto.ts merchant scopes, merchant-labels.ts} + Dockerfile + deploy/ (nginx dev+prod + DEPLOY.md). Clone admin scaffold (test/e2e baggage trimmed cho next build).
+- EXTEND `docker-compose.yml` (5bib-result-merchant service) + `.github/workflows/build-and-deploy.yml` (paths-filter merchant + build-merchant job + deploy block).
+
+### Business rules / patterns
+- 2-tier guard: viewer (ticket reports) vs finance (revenue). M3b auto-provision = magic-link invite, KHÔNG plaintext password (admin chỉ cần EMAIL của BTC, system tự match/create + assign role). Independent fee calc qua FeeService cascade (MANUAL fixed VNĐ/vé, others %). VN labels qua `*-labels.ts` (KHÔNG raw enum). Tenant 31 no MerchantConfig → Tier 3 default 5.5% warning.
+
+### Verification
+- Backend 152 tests PASS (128 merchant-portal + 24 guard), tsc 0 lỗi F-069, `nest build` clean, swagger 17 endpoints. Admin merchant-portal tsc clean. Merchant 4 file F-069 tsc clean + `next build` PASS 14 routes.
+
+### Data-loss + recovery note
+- 2026-06-07 `git clean -fd` từ session khác xoá toàn bộ untracked F-069 (chưa từng commit lên git). Recover: backend từ `backend/dist` compiled + bản gốc transcript replay; tracked edits từ stash patch; admin/merchant/docs từ transcript; SDK regen từ running swagger. **CHƯA push/merge/deploy — chờ Danny duyệt.** M5 ops (DNS/Logto redirect/backend .env M2M/nginx+certbot/VPS compose) còn lại Danny — xem `merchant/deploy/DEPLOY.md`.
+
 ## [2026-06-01] FEATURE-068: Course Data Ops UX — ✅ DEPLOYED (branch awaiting main merge + PROD)
 
 **Branch:** `feat/F-068-course-data-ops-ux` 8 commits (`b075f49` docs → `1de23f0` Phase 1 → `6eb1971` Phase 2-7 → `ed35b0b` Phase 8-11 → `8ba9405` 03 + IMPLEMENTATION_NOTES → `125f4d0` feature-log → `14b3346` QC report + Manager 05)
