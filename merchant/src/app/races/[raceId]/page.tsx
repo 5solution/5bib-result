@@ -30,6 +30,7 @@ import {
   merchantPortalControllerGetRevenueSummary,
   merchantPortalControllerGetRevenueByCategory,
   merchantPortalControllerGetRevenueTrend,
+  merchantPortalControllerGetParticipantInsights,
 } from "@/lib/api-generated/sdk.gen";
 import type {
   MerchantMeResponseDto,
@@ -43,6 +44,7 @@ import type {
   RevenueSummaryDto,
   RevenueByCategoryDto,
   RevenueTrendDto,
+  ParticipantInsightsDto,
 } from "@/lib/api-generated/types.gen";
 import { t, lab, L, type Lang } from "@/lib/mp/i18n";
 import { fmt, fmtDateStr, parseDate } from "@/lib/mp/fmt";
@@ -256,6 +258,73 @@ function RevenueBreakdownTable({ rev, lang }: { rev: RevenueByCategoryDto; lang:
   );
 }
 
+// ---------- F-072 Participants tab ----------
+function ParticipantsTab({
+  data,
+  lang,
+  exporting,
+  onExport,
+}: {
+  data: ParticipantInsightsDto | null;
+  lang: Lang;
+  exporting: boolean;
+  onExport: () => void;
+}) {
+  const toBars = (b: { label: string; count: number }[]) =>
+    b.map((x) => ({ name: x.label, count: x.count }));
+  const toDonut = (b: { label: string; count: number }[]): DonutItem[] =>
+    b.map((x) => ({ key: x.label, vi: x.label, en: x.label, count: x.count }));
+
+  if (!data) {
+    return (
+      <div className="shimmer" style={{ height: 280, borderRadius: 14, background: "var(--5s-surface)" }} />
+    );
+  }
+  if (data.totalParticipants === 0) {
+    return <EmptyState icon={Icons.Users} title={t("no_participants", lang)} body={t("no_participants", lang)} />;
+  }
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+        <KpiCard icon={Icons.Users} iconBg="var(--5s-blue-50)" iconFg="var(--5s-blue)" label={t("kpi_participants", lang)} value={fmt.num(data.totalParticipants, lang)} lang={lang} />
+        <Btn variant="secondary" icon={Icons.Download} onClick={onExport} disabled={exporting}>
+          {exporting ? t("exporting", lang) : t("export_size", lang)}
+        </Btn>
+      </div>
+
+      <Card style={{ marginBottom: 18 }}>
+        <SectionTitle>{t("by_size", lang)}</SectionTitle>
+        <HBars items={toBars(data.shirtSizes)} lang={lang} color={CH.blue} />
+      </Card>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>
+        <Card>
+          <SectionTitle>{t("by_gender", lang)}</SectionTitle>
+          <Donut items={toDonut(data.genders)} lang={lang} />
+        </Card>
+        <Card>
+          <SectionTitle>{t("by_agegroup", lang)}</SectionTitle>
+          <HBars items={toBars(data.ageGroups)} lang={lang} color={CH.blue} />
+        </Card>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+        <Card>
+          <SectionTitle>{t("by_nationality", lang)}</SectionTitle>
+          <HBars items={toBars(data.nationalities)} lang={lang} color={CH.blue} />
+        </Card>
+        <Card>
+          <SectionTitle>{t("by_province", lang)}</SectionTitle>
+          <HBars items={toBars(data.provinces)} lang={lang} color={CH.blue} />
+        </Card>
+      </div>
+
+      <UpdatedFooter lang={lang} />
+    </>
+  );
+}
+
 export default function RaceReportPage() {
   const params = useParams<{ raceId: string }>();
   const searchParams = useSearchParams();
@@ -265,8 +334,13 @@ export default function RaceReportPage() {
 
   const [me, setMe] = useState<MerchantMeResponseDto | null>(null);
   const [race, setRace] = useState<MerchantRaceItemDto | null>(null);
-  const initialTab = searchParams?.get("tab") === "revenue" ? "revenue" : "ticket";
-  const [tab, setTab] = useState<"ticket" | "revenue">(initialTab);
+  const initialTab =
+    searchParams?.get("tab") === "revenue"
+      ? "revenue"
+      : searchParams?.get("tab") === "participants"
+        ? "participants"
+        : "ticket";
+  const [tab, setTab] = useState<"ticket" | "revenue" | "participants">(initialTab);
   const [period, setPeriod] = useState<PeriodValue>("30d");
   const [ticketGran, setTicketGran] = useState<GranularityValue>("daily");
   const [revGran, setRevGran] = useState<GranularityValue>("daily");
@@ -287,6 +361,10 @@ export default function RaceReportPage() {
   const [targetInput, setTargetInput] = useState("");
   const [targetErr, setTargetErr] = useState<string | null>(null);
   const [savingTarget, setSavingTarget] = useState(false);
+
+  // F-072 Participant insights
+  const [participants, setParticipants] = useState<ParticipantInsightsDto | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Revenue
   const [revSummary, setRevSummary] = useState<RevenueSummaryDto | null>(null);
@@ -411,6 +489,44 @@ export default function RaceReportPage() {
     if (!tR.error) setRevTrend(tR.data ?? null);
   }, [token, raceId, hasRevenue, period, revGran]);
 
+  const loadParticipants = useCallback(async () => {
+    if (!token || !Number.isFinite(raceId)) return;
+    const res = await merchantPortalControllerGetParticipantInsights({
+      query: { raceId },
+      ...authHeaders(token),
+    });
+    if (!res.error) setParticipants(res.data ?? null);
+  }, [token, raceId]);
+
+  const exportSize = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      // Goes through the runtime /api proxy (injects Logto token server-side).
+      const resp = await fetch(
+        `/api/merchant-portal/participants/export?raceId=${raceId}`,
+      );
+      if (!resp.ok) throw new Error(String(resp.status));
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `co-cau-vdv-race-${raceId}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* swallow — button returns to idle */
+    } finally {
+      setExporting(false);
+    }
+  }, [raceId, exporting]);
+
+  useEffect(() => {
+    if (isAuthenticated && tab === "participants") loadParticipants();
+  }, [isAuthenticated, tab, loadParticipants]);
+
   useEffect(() => {
     if (isAuthenticated) loadCore();
   }, [isAuthenticated, loadCore]);
@@ -512,6 +628,9 @@ export default function RaceReportPage() {
             {t("revenue_report", lang)}
           </TabButton>
         )}
+        <TabButton active={tab === "participants"} onClick={() => setTab("participants")}>
+          {t("participants_report", lang)}
+        </TabButton>
       </div>
 
       {loading ? (
@@ -713,7 +832,7 @@ export default function RaceReportPage() {
 
           <UpdatedFooter lang={lang} />
         </>
-      ) : (
+      ) : tab === "revenue" ? (
         /* Revenue tab (finance only) */
         <>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
@@ -762,6 +881,14 @@ export default function RaceReportPage() {
           </Card>
           <UpdatedFooter lang={lang} />
         </>
+      ) : (
+        /* F-072 Participants tab (ticket-scope, no-PII) */
+        <ParticipantsTab
+          data={participants}
+          lang={lang}
+          exporting={exporting}
+          onExport={exportSize}
+        />
       )}
     </AppShell>
   );

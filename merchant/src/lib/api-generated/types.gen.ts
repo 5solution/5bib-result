@@ -16751,3 +16751,40 @@ export type MerchantPortalControllerGetRevenueExportResponses = {
      */
     200: unknown;
 };
+
+// ── F-072 Participant Insights (hand-added; reconcile on next generate:api) ──
+export type InsightBucketDto = {
+    label: string;
+    count: number;
+};
+
+export type ParticipantInsightsDto = {
+    raceId: number;
+    totalParticipants: number;
+    shirtSizes: Array<InsightBucketDto>;
+    genders: Array<InsightBucketDto>;
+    ageGroups: Array<InsightBucketDto>;
+    nationalities: Array<InsightBucketDto>;
+    provinces: Array<InsightBucketDto>;
+};
+
+export type MerchantPortalControllerGetParticipantInsightsData = {
+    body?: never;
+    path?: never;
+    query: {
+        raceId: number;
+    };
+    url: '/api/merchant-portal/participants/insights';
+};
+
+export type MerchantPortalControllerGetParticipantInsightsErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type MerchantPortalControllerGetParticipantInsightsResponses = {
+    200: ParticipantInsightsDto;
+};
+
+export type MerchantPortalControllerGetParticipantInsightsResponse = MerchantPortalControllerGetParticipantInsightsResponses[keyof MerchantPortalControllerGetParticipantInsightsResponses];

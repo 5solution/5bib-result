@@ -198,6 +198,18 @@ export const DICT: Dict = {
   legend_low: { vi: "Ít", en: "Low", km: "តិច", lo: "ໜ້ອຍ", ms: "Rendah" },
   legend_high: { vi: "Nhiều", en: "High", km: "ច្រើន", lo: "ຫຼາຍ", ms: "Tinggi" },
 
+  // F-072 — participant insights (Cơ cấu VĐV)
+  participants_report: { vi: "Cơ cấu VĐV", en: "Participants", km: "រចនាសម្ព័ន្ធអត្តពលិក", lo: "ໂຄງສ້າງນັກກິລາ", ms: "Peserta" },
+  kpi_participants: { vi: "Tổng VĐV", en: "Total participants", km: "អត្តពលិកសរុប", lo: "ນັກກິລາທັງໝົດ", ms: "Jumlah peserta" },
+  by_size: { vi: "Phân bổ size áo", en: "Shirt size distribution", km: "ការបែងចែកទំហំអាវ", lo: "ການແບ່ງຂະໜາດເສື້ອ", ms: "Taburan saiz baju" },
+  by_gender: { vi: "Theo giới tính", en: "By gender", km: "តាមភេទ", lo: "ຕາມເພດ", ms: "Mengikut jantina" },
+  by_agegroup: { vi: "Theo nhóm tuổi", en: "By age group", km: "តាមក្រុមអាយុ", lo: "ຕາມກຸ່ມອາຍຸ", ms: "Mengikut kumpulan umur" },
+  by_nationality: { vi: "Theo quốc tịch", en: "By nationality", km: "តាមសញ្ជាតិ", lo: "ຕາມສັນຊາດ", ms: "Mengikut warganegara" },
+  by_province: { vi: "Theo tỉnh/thành", en: "By province", km: "តាមខេត្ត/ក្រុង", lo: "ຕາມແຂວງ/ເມືອງ", ms: "Mengikut wilayah" },
+  export_size: { vi: "Xuất Excel size", en: "Export size (Excel)", km: "នាំចេញទំហំ (Excel)", lo: "ສົ່ງອອກຂະໜາດ (Excel)", ms: "Eksport saiz (Excel)" },
+  exporting: { vi: "Đang xuất…", en: "Exporting…", km: "កំពុងនាំចេញ…", lo: "ກຳລັງສົ່ງອອກ…", ms: "Mengeksport…" },
+  no_participants: { vi: "Chưa có VĐV đã thanh toán", en: "No paid participants yet", km: "មិនទាន់មានអត្តពលិកដែលបានបង់ប្រាក់", lo: "ຍັງບໍ່ມີນັກກິລາທີ່ຈ່າຍແລ້ວ", ms: "Tiada peserta berbayar lagi" },
+
   // revenue
   revenue_report: { vi: "Báo cáo doanh thu", en: "Revenue Report", km: "របាយការណ៍ចំណូល", lo: "ລາຍງານລາຍຮັບ", ms: "Laporan Hasil" },
   fee_rate_now: { vi: "Mức phí hiện tại", en: "Current fee rate", km: "អត្រាថ្លៃសេវាបច្ចុប្បន្ន", lo: "ອັດຕາຄ່າທຳນຽມປັດຈຸບັນ", ms: "Kadar yuran semasa" },
