@@ -869,3 +869,10 @@ Admin Partner EDIT form chỉ render "Tạo mới" path. EDIT shortName flow def
 | **TD-F072-LABEL-I18N** 🟢 | gender "Nam/Nữ", "Không rõ", "Khác" backend trả tiếng Việt — non-VN user thấy VN (số liệu+size+AG universal) | BTC thường VN, chấp nhận v1. Map L.gender dict nếu cần |
 | **TD-F072-IS-REPRESENT** 🟡 | Đếm mọi athlete_subinfo row join paid oli; CHƯA lọc is_represent (giám hộ) | QC verify trên DEV data: nếu total > tổng vé paid → thêm `AND is_represent=0` |
 | **TD-F072-SDK-HANDADD** 🟢 | SDK merchant (sdk.gen/types.gen) hand-add cho participants insights vì DEV backend chậm deploy | Khi generate:api chạy được (DEV backend up) → regen reconcile, xoá block hand-add |
+
+## F-073 Capacity/Quota (DEV 2026-06-08) — tech debt
+| ID | Debt | Cảnh báo |
+|----|------|----------|
+| **TD-F073-SOLD-SEMANTICS** 🟡 | sold = quota − remained_ticket (vendor "chỗ còn"), KHÔNG phải paid-count | "Đã bán" có thể gồm chỗ đang giữ/pending. Verify ý nghĩa với BTC; nếu cần "đã thanh toán" → dùng paid count |
+| **TD-F073-DEFAULT-1000** 🟢 | Nhiều ticket_type max_participate=1000 default → pctFilled thấp giả | BTC chưa set quota thật sẽ thấy % thấp. Data thật, không phải bug |
+| **TD-F073-SDK-HANDADD** 🟢 | SDK capacity hand-add (DEV backend deploy chậm) | Reconcile khi generate:api chạy được |

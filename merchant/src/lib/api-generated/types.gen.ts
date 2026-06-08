@@ -16788,3 +16788,45 @@ export type MerchantPortalControllerGetParticipantInsightsResponses = {
 };
 
 export type MerchantPortalControllerGetParticipantInsightsResponse = MerchantPortalControllerGetParticipantInsightsResponses[keyof MerchantPortalControllerGetParticipantInsightsResponses];
+
+// ── F-073 Capacity / Quota (hand-added; reconcile on next generate:api) ──
+export type CapacityTicketTypeDto = {
+    ticketTypeId: number;
+    name: string;
+    quota: number;
+    sold: number;
+    remaining: number;
+    unlimited: boolean;
+    pctFilled: number;
+};
+export type CapacityCourseDto = {
+    courseId: number;
+    courseName: string;
+    quota: number;
+    sold: number;
+    remaining: number;
+    unlimited: boolean;
+    pctFilled: number;
+    ticketTypes: Array<CapacityTicketTypeDto>;
+};
+export type RaceCapacityDto = {
+    raceId: number;
+    courses: Array<CapacityCourseDto>;
+};
+export type MerchantPortalControllerGetCapacityData = {
+    body?: never;
+    path?: never;
+    query: {
+        raceId: number;
+    };
+    url: '/api/merchant-portal/capacity';
+};
+export type MerchantPortalControllerGetCapacityErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+};
+export type MerchantPortalControllerGetCapacityResponses = {
+    200: RaceCapacityDto;
+};
+export type MerchantPortalControllerGetCapacityResponse = MerchantPortalControllerGetCapacityResponses[keyof MerchantPortalControllerGetCapacityResponses];

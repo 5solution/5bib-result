@@ -31,6 +31,7 @@ import {
   merchantPortalControllerGetRevenueByCategory,
   merchantPortalControllerGetRevenueTrend,
   merchantPortalControllerGetParticipantInsights,
+  merchantPortalControllerGetCapacity,
 } from "@/lib/api-generated/sdk.gen";
 import type {
   MerchantMeResponseDto,
@@ -45,6 +46,7 @@ import type {
   RevenueByCategoryDto,
   RevenueTrendDto,
   ParticipantInsightsDto,
+  RaceCapacityDto,
 } from "@/lib/api-generated/types.gen";
 import { t, lab, L, type Lang } from "@/lib/mp/i18n";
 import { fmt, fmtDateStr, parseDate } from "@/lib/mp/fmt";
@@ -258,6 +260,48 @@ function RevenueBreakdownTable({ rev, lang }: { rev: RevenueByCategoryDto; lang:
   );
 }
 
+// ---------- F-073 Capacity / quota card ----------
+function CapacityCard({ data, lang }: { data: RaceCapacityDto; lang: Lang }) {
+  if (!data.courses.length) return null;
+  const barColor = (pct: number) =>
+    pct >= 90 ? "var(--5s-danger)" : pct >= 70 ? "var(--5s-energy)" : "var(--5s-blue)";
+  return (
+    <Card style={{ marginBottom: 18 }}>
+      <SectionTitle>{t("capacity_title", lang)}</SectionTitle>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
+        {data.courses.map((c) => (
+          <div key={c.courseId}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5, gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--5s-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.courseName}>
+                {c.courseName}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--5s-text-muted)", fontFamily: "var(--font-mono)", flex: "0 0 auto" }}>
+                {c.unlimited ? (
+                  t("unlimited_word", lang)
+                ) : (
+                  <>
+                    {fmt.num(c.sold, lang)} / {fmt.num(c.quota, lang)} · {c.pctFilled.toFixed(1)}%
+                  </>
+                )}
+              </span>
+            </div>
+            {!c.unlimited && (
+              <div style={{ height: 9, borderRadius: 99, background: "var(--5s-surface)", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${Math.min(100, c.pctFilled)}%`, background: barColor(c.pctFilled), borderRadius: 99, transition: "width .3s" }} />
+              </div>
+            )}
+            {!c.unlimited && (
+              <div style={{ fontSize: 11, color: "var(--5s-text-subtle)", marginTop: 3 }}>
+                {t("remaining_word", lang)}: {fmt.num(c.remaining, lang)}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 // ---------- F-072 Participants tab ----------
 function ParticipantsTab({
   data,
@@ -366,6 +410,9 @@ export default function RaceReportPage() {
   const [participants, setParticipants] = useState<ParticipantInsightsDto | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  // F-073 Capacity / quota
+  const [capacity, setCapacity] = useState<RaceCapacityDto | null>(null);
+
   // Revenue
   const [revSummary, setRevSummary] = useState<RevenueSummaryDto | null>(null);
   const [revByCat, setRevByCat] = useState<RevenueByCategoryDto | null>(null);
@@ -387,14 +434,16 @@ export default function RaceReportPage() {
     try {
       const idQ = { query: { raceId }, ...authHeaders(token) };
       const trendQ = { query: { raceId, period, granularity: ticketGran }, ...authHeaders(token) };
-      const [meR, racesR, sumR, courseR, typeR, trendR] = await Promise.all([
+      const [meR, racesR, sumR, courseR, typeR, trendR, capR] = await Promise.all([
         merchantPortalControllerGetMe({ ...authHeaders(token) }),
         merchantPortalControllerGetRaces({ ...authHeaders(token) }),
         merchantPortalControllerGetTicketSalesSummary(idQ),
         merchantPortalControllerGetTicketSalesByCourse(idQ),
         merchantPortalControllerGetTicketSalesByType(idQ),
         merchantPortalControllerGetTicketSalesTrend(trendQ),
+        merchantPortalControllerGetCapacity(idQ),
       ]);
+      // capacity is additive — a capacity error must not blank the ticket tab
       const firstErr = [meR, racesR, sumR, courseR, typeR, trendR].find((r) => r.error)?.error;
       if (firstErr) throw firstErr;
       setMe(meR.data ?? null);
@@ -403,6 +452,7 @@ export default function RaceReportPage() {
       setByCourse(courseR.data ?? null);
       setByType(typeR.data ?? null);
       setTrend(trendR.data ?? null);
+      if (!capR.error) setCapacity(capR.data ?? null);
     } catch (err) {
       console.error("[merchant race report] load failed:", err);
       setError(extractMsg(err));
@@ -679,6 +729,11 @@ export default function RaceReportPage() {
               <Donut items={typeDonut} lang={lang} />
             </Card>
           </div>
+
+          {/* F-073 — Capacity / quota */}
+          {capacity && capacity.courses.length > 0 && (
+            <CapacityCard data={capacity} lang={lang} />
+          )}
 
           {/* Orders table */}
           <Card pad={0}>

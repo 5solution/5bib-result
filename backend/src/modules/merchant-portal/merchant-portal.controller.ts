@@ -13,6 +13,7 @@ import { LogtoMerchantGuard } from '../logto-auth/logto-merchant.guard';
 import type { LogtoUser } from '../logto-auth/types';
 import { MerchantMeResponseDto } from './dto/merchant-me.dto';
 import { ParticipantInsightsDto } from './dto/participant-insights.dto';
+import { RaceCapacityDto } from './dto/capacity.dto';
 import {
   MerchantRaceListQueryDto,
   MerchantRaceListResponseDto,
@@ -461,5 +462,24 @@ export class MerchantPortalController {
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
+  }
+
+  // ── F-073 Capacity / Quota (sức chứa từng cự ly) ──
+  @Get('capacity')
+  @ApiOperation({
+    summary: 'Sức chứa / quota từng cự ly (F-073)',
+    description:
+      'Quota + đã bán + còn lại + % lấp đầy theo cự ly (aggregate ticket_type). ' +
+      'Ticket-scope, no-PII. Sort %filled DESC. 403 nếu raceId ngoài quyền.',
+  })
+  @ApiResponse({ status: 200, type: RaceCapacityDto })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Inactive OR race not accessible' })
+  @ApiResponse({ status: 404, description: 'No access config' })
+  async getCapacity(
+    @CurrentUser() user: LogtoUser,
+    @Query() query: TicketSalesQueryDto,
+  ): Promise<RaceCapacityDto> {
+    return this.merchantPortalService.getCapacity(user.userId, query.raceId);
   }
 }

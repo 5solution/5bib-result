@@ -198,6 +198,14 @@ export const DICT: Dict = {
   legend_low: { vi: "Ít", en: "Low", km: "តិច", lo: "ໜ້ອຍ", ms: "Rendah" },
   legend_high: { vi: "Nhiều", en: "High", km: "ច្រើន", lo: "ຫຼາຍ", ms: "Tinggi" },
 
+  // F-073 — capacity / quota (Sức chứa)
+  capacity_title: { vi: "Sức chứa theo cự ly", en: "Capacity by course", km: "សមត្ថភាពតាមចម្ងាយ", lo: "ຄວາມຈຸຕາມໄລຍະ", ms: "Kapasiti mengikut kategori" },
+  quota_word: { vi: "Quota", en: "Quota", km: "កូតា", lo: "Quota", ms: "Kuota" },
+  sold_word: { vi: "Đã bán", en: "Sold", km: "បានលក់", lo: "ຂາຍແລ້ວ", ms: "Terjual" },
+  remaining_word: { vi: "Còn lại", en: "Remaining", km: "នៅសល់", lo: "ຍັງເຫຼືອ", ms: "Baki" },
+  filled_word: { vi: "Lấp đầy", en: "Filled", km: "បានបំពេញ", lo: "ເຕັມ", ms: "Penuh" },
+  unlimited_word: { vi: "Không giới hạn", en: "Unlimited", km: "គ្មានដែនកំណត់", lo: "ບໍ່ຈຳກັດ", ms: "Tanpa had" },
+
   // F-072 — participant insights (Cơ cấu VĐV)
   participants_report: { vi: "Cơ cấu VĐV", en: "Participants", km: "រចនាសម្ព័ន្ធអត្តពលិក", lo: "ໂຄງສ້າງນັກກິລາ", ms: "Peserta" },
   kpi_participants: { vi: "Tổng VĐV", en: "Total participants", km: "អត្តពលិកសរុប", lo: "ນັກກິລາທັງໝົດ", ms: "Jumlah peserta" },

@@ -36,6 +36,11 @@ import {
 } from '../dto/admin-search.dto';
 import { MerchantMeResponseDto } from '../dto/merchant-me.dto';
 import { ParticipantInsightsDto } from '../dto/participant-insights.dto';
+import { RaceCapacityDto } from '../dto/capacity.dto';
+import {
+  aggregateCapacity,
+  type RawCapacityRow,
+} from '../utils/capacity.util';
 import {
   aggregateParticipants,
   type RawParticipantRow,
@@ -860,6 +865,45 @@ export class MerchantPortalService {
       mimeType:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     };
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // F-073 — Capacity / Quota (sức chứa từng cự ly) — ticket-scope
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * BR-73 — Capacity per course/ticket-type. Quota từ ticket_type.max_participate
+   * + remained_ticket (race_course.max_participate KHÔNG dùng — toàn placeholder=1).
+   * sold = quota - remaining. Aggregate per course in Node. Ticket-scope, no-PII.
+   */
+  async getCapacity(userId: string, raceId: number): Promise<RaceCapacityDto> {
+    await this.assertRaceForUser(userId, raceId);
+    const cacheKey = `merchant-portal:capacity:${userId}:${raceId}`;
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as RaceCapacityDto;
+    } catch (err) {
+      this.logger.warn(`Redis read ${cacheKey} failed: ${(err as Error).message}`);
+    }
+
+    const rows: RawCapacityRow[] = await this.db.query(
+      `SELECT rc.id AS course_id, rc.name AS course_name,
+              tt.id AS tt_id, tt.type_name AS type_name,
+              tt.max_participate AS quota, tt.remained_ticket AS remaining
+       FROM ticket_type tt
+       JOIN race_course rc ON tt.race_course_id = rc.id
+       WHERE rc.race_id = ? AND rc.deleted = 0 AND tt.deleted = 0
+       ORDER BY rc.id`,
+      [raceId],
+    );
+    const dto = aggregateCapacity(raceId, rows);
+
+    try {
+      await this.redis.set(cacheKey, JSON.stringify(dto), 'EX', 300);
+    } catch (err) {
+      this.logger.warn(`Redis write ${cacheKey} failed: ${(err as Error).message}`);
+    }
+    return dto;
   }
 
   // ────────────────────────────────────────────────────────────────

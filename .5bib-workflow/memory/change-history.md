@@ -7,6 +7,14 @@
 
 ---
 
+## [2026-06-08] FEATURE-073: Capacity/Quota (Sức chứa từng cự ly) — ✅ DEV
+**Type:** EXTEND_EXISTING. BE+FE gộp 1 push (né concurrency-cancel F-072 lesson).
+### Files: BE ➕utils/capacity.util.ts(+spec 7) +dto/capacity.dto.ts; ✏️services/merchant-portal.service.ts (getCapacity) +merchant-portal.controller.ts (GET /capacity). FE ✏️races/[raceId]/page.tsx (CapacityCard section tab Vé + loadCore fetch additive) +i18n.ts (6 key×5) +SDK hand-add.
+### Data: ticket_type.max_participate (quota) + remained_ticket (sold=quota-remaining). race_course.max_participate BỎ (placeholder=1). scope rc.race_id+deleted. aggregate-in-Node per course, sort %filled DESC. cache 300s. IDOR + no-PII + ticket-scope.
+### Tests: 7 util + 161 merchant-portal jest + FE tsc0/vitest13/build/no-Thai.
+### TD: SOLD-SEMANTICS (remained vs paid), DEFAULT-1000, SDK-HANDADD.
+### Lesson: race_course quota = rác → luôn sample data thật trước khi tin field (memory-first). Gộp BE+FE 1 push tránh CI concurrency cancel.
+
 ## [2026-06-08] FEATURE-072: Merchant Participant Insights (size áo + giới/AG/quốc tịch) — ✅ DEV (pending CI)
 
 **Type:** EXTEND_EXISTING. BE `be9a634` + FE `2f32f50`.
