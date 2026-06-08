@@ -101,6 +101,10 @@
   ```
   RefID format = `<orderId>-<timestamp>` cho B2C (vd `200029416-20260608172739`). RefID format GUID (vd `90d6eb31-a652-...`) là B2B contracts (out of scope F-076).
 
+- **BR-05b — Order code display (Danny chốt 2026-06-08):** Mọi alert + UI render `order_metadata.name` (format `#5B<id>IB`, vd `#5B200029416IB`) thay vì `order_metadata.id` raw. `name` là public order code (human-readable, đã ship khắp legacy 5BIB UI). Backend service logic vẫn dùng `id` cho mapping (BR-05) + JOIN, nhưng response DTO + Telegram + admin UI table phải SELECT thêm `name` và render `name` ở mọi visible position.
+  - Sample verify (DB query): order 200029417 → name `"#5B200029417IB"`; order 200025061 → name `"#5B200025061IB"`
+  - SQL filter F-076 SELECT phải bao gồm `o.name` ngoài `o.id`
+
 - **BR-06 — B2C filter regex (loại B2B contracts khỏi reconcile):**
   ```regex
   ^\d+-(\d{14}|\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}Z)$
@@ -237,7 +241,7 @@
     ```
     🟡 WARN — Đơn sắp đến deadline xuất hóa đơn
     
-    Race 220 — order #200030145 — 1.200.000 đ
+    Race 220 — order #5B200030145IB — 1.200.000 đ
       • Paid: 2026-06-08 22:00 ICT
       • Age:  12h (còn 12h trước phạt)
       • Status: Chưa có vat_ref + MISA chưa thấy
@@ -255,7 +259,7 @@
     ```
     🔴 CRITICAL — Còn <4h trước khi bị phạt 6tr
     
-    Race 220 — order #200030145 — 1.200.000 đ
+    Race 220 — order #5B200030145IB — 1.200.000 đ
       • Paid: 2026-06-08 14:00 ICT
       • Age:  20h
       • Deadline xuất: 2026-06-09 14:00 ICT (còn ~4h)
@@ -272,7 +276,7 @@
     ```
     🔥 BREACHED — Đã quá deadline, dự kiến phạt 6.000.000 đ
     
-    Race 220 — order #200030145 — 1.200.000 đ
+    Race 220 — order #5B200030145IB — 1.200.000 đ
       • Paid: 2026-06-08 09:00 ICT
       • Age:  25h (đã quá 1h)
       • Phí phạt dự kiến: 6.000.000 đ (NĐ 125/2020 Art. 24)
@@ -289,7 +293,7 @@
     ```
     🔥 DUPLICATE INVOICE — MISA có nhiều hóa đơn gốc cùng order
     
-    Order #200029416 — race 140 — 12.000 đ
+    Order #5B200029416IB — race 140 — 12.000 đ
       • 5 hóa đơn gốc trong MISA (InvNo 00000018-22)
       • Cùng buyer "Hiền Nghiêm", cùng InvSeries 1C26MBB
       • Phát hiện lúc: 14:23 ICT
@@ -333,7 +337,7 @@
       • Đơn cần xuất:   48 đơn / 3.840.000 đ
       • Đã xuất thành công:  45 đơn / 3.500.000 đ (94%)
       • Còn pending:    3 đơn / 340.000 đ
-        - 🟡 SYNC_LAG:  1 đơn (#200029416, InvNo 00000022)
+        - 🟡 SYNC_LAG:  1 đơn (#5B200029416IB, InvNo 00000022)
         - 🔴 UNISSUED:  2 đơn (max age 18h)
         - 🔥 DUPLICATE: 0 đơn
       • 🔥 BREACHED:    0 đơn ✅ (KHÔNG đơn nào trễ >24h)
@@ -355,7 +359,7 @@
     
     📌 Action cho ngày mai:
       • 2 đơn UNISSUED chưa xử lý — sáng mai 08:00 sẽ alert CRITICAL nếu vẫn pending
-      • #200029416 SYNC_LAG kéo dài → DEV check sync bug
+      • #5B200029416IB SYNC_LAG kéo dài → DEV check sync bug
     
     🔗 Dashboard
     ```
@@ -367,12 +371,12 @@
   ⏱ Cron: 14:00 ICT (manual trigger)
   
   ⚠️ <b>UNISSUED: 3 đơn</b>, đơn lâu nhất <b>22h</b> (sắp phạt!)
-    • Race 220 — order <code>#200030145</code> — 1.200.000 đ — paid 22h trước
-    • Race 220 — order <code>#200030148</code> — 800.000 đ — paid 21h trước
-    • Race 140 — order <code>#200030200</code> — 50.000 đ — paid 20h trước
+    • Race 220 — order <code>#5B200030145IB</code> — 1.200.000 đ — paid 22h trước
+    • Race 220 — order <code>#5B200030148IB</code> — 800.000 đ — paid 21h trước
+    • Race 140 — order <code>#5B200030200IB</code> — 50.000 đ — paid 20h trước
   
   🟡 <b>SYNC_LAG: 1 đơn</b> (MISA xuất rồi, DB chưa update)
-    • Race 140 — order <code>#200029416</code> — InvNo 00000022 — báo DEV check sync
+    • Race 140 — order <code>#5B200029416IB</code> — InvNo 00000022 — báo DEV check sync
   
   🔥 <b>DUPLICATE: 0 đơn</b>
   
@@ -385,7 +389,7 @@
   - Body length cap 4096 chars (Telegram limit) — nếu missing list > 20 đơn, truncate + suffix "... và N đơn nữa, xem dashboard"
   - HTTP request: `parse_mode=HTML`, `disable_web_page_preview=true`
 
-- **BR-21 — Email format:** plain text Vietnamese (KHÔNG HTML tags Telegram), content tương tự. Subject: `[5BIB Invoice Alert] {ALERT_TYPE} - {SUMMARY} - {DATE}` (vd `[5BIB Invoice Alert] CRITICAL - Order #200030145 còn 4h trước phạt - 2026-06-09`).
+- **BR-21 — Email format:** plain text Vietnamese (KHÔNG HTML tags Telegram), content tương tự. Subject: `[5BIB Invoice Alert] {ALERT_TYPE} - {SUMMARY} - {DATE}` (vd `[5BIB Invoice Alert] CRITICAL - Order #5B200030145IB còn 4h trước phạt - 2026-06-09`).
   Email **CHỈ gửi khi Telegram fail** (kicked/network down) — KHÔNG gửi song song để tránh inbox spam.
 
 #### Performance & Reliability
@@ -439,7 +443,7 @@
 - Table 8 cột:
   1. Severity badge (🔴/🟡/🔥)
   2. Race ID
-  3. Order ID (mono font, clickable copy)
+  3. Mã đơn (`order_code` mono font, clickable copy — format `#5B<id>IB`)
   4. Email người mua
   5. Total price (vi-VN locale, "1.200.000 đ")
   6. Paid at (relative time vi-VN, "3 giờ trước")
@@ -462,7 +466,7 @@
 | 1 | Open `/admin/invoice-reconcile` | Server Component fetch initial report từ cache Redis | Next.js SSR | Page hydrate với data |
 | 2 | Page render | 4 KPI cards + Section B table + Section C collapse | TanStack Query `useGetReconcileReport()` | Data state |
 | 3 | Click filter pill "UNISSUED" off | Table re-filter client-side (no refetch) | useState filter | Table show SYNC_LAG + DUPLICATE only |
-| 4 | Click row order ID | Copy to clipboard + toast "Đã copy order #200030145" | onClick + navigator.clipboard | Toast 2s |
+| 4 | Click row order ID | Copy to clipboard + toast "Đã copy order #5B200030145IB" | onClick + navigator.clipboard | Toast 2s |
 
 #### Journey J2: Admin chạy manual trigger sau khi Finance fix data
 
@@ -510,7 +514,7 @@
 | KPI footer "Next alert" | computed: next hourly tick OR 21:00 EOD | "Hourly recap lúc 15:00 ICT" | — |
 | Table "Severity" | `row.severity` (enum) | Badge BUCKET_LABEL[severity] | — |
 | Table "Race ID" | `row.raceId` | "Race {id}" | — |
-| Table "Order ID" | `row.orderId` | "#{id}" mono | — |
+| Table "Mã đơn" | `row.orderCode` (= `order_metadata.name`, format `#5B<id>IB`) | mono font | "—" |
 | Table "Email" | `row.email` | text | "—" |
 | Table "Total price" | `row.totalPrice` | `new Intl.NumberFormat('vi-VN').format(v) + ' đ'` | "0 đ" |
 | Table "Paid at" | `row.paymentOn` | relative VN ("3 giờ trước") via dayjs.fromNow vi locale | "—" |
@@ -639,8 +643,11 @@ export const LAYER2_STATUS_LABEL = {
 ```typescript
 // dto/reconcile-report.dto.ts
 export class MissingInvoiceRowDto {
-  @ApiProperty({ description: 'order_metadata.id', example: 200029416 })
+  @ApiProperty({ description: 'order_metadata.id (internal, dùng mapping)', example: 200029416 })
   orderId!: number;
+
+  @ApiProperty({ description: 'order_metadata.name = public order code, render trên UI/alert (BR-05b)', example: '#5B200029416IB' })
+  orderCode!: string;
 
   @ApiProperty({ description: 'race_id', example: 140 })
   raceId!: number;
@@ -1137,10 +1144,14 @@ Cron chạy 08-22h ICT. Cuối tuần + lễ tết KHÔNG ân hạn (luật VN t
 #### #4 — Kênh alert + recipient?
 **Trả lời:** **Telegram bot** (Danny chốt 2026-06-08):
 - Bot tạo qua @BotFather: `@invoice_5bib_daily_bot`, token `TELEGRAM_BOT_TOKEN=8804367165:AAG...` (Manager đã verify live)
-- Group supergroup "5BIB Invoice Arlert" — `TELEGRAM_INVOICE_ALERT_CHAT_ID=-1003743947167` (supergroup chat_id, stable)
+- Group supergroup "5BIB Invoice Arlert" — `INVOICE_RECONCILE_TELEGRAM_CHAT_ID=-1003743947167` (supergroup chat_id, stable)
 - **KHÔNG mention `@username`** — chỉ gửi vào group, ai check thì thấy (Danny chốt — đơn giản)
 - Email fallback `danny@5bib.com, ketoan@5bib.com` (env `INVOICE_ALERT_EMAILS`) — CHỈ gửi khi Telegram API fail (kicked/network down)
 - SMS KHÔNG dùng MVP (defer)
+- **⚠️ ISOLATION — KHÔNG đụng group claim hiện hữu:** Codebase đã có 2 Telegram channels khác đang chạy:
+  - `notification/telegram.service.ts` (claim kết quả thi đấu) — dùng env `TELEGRAM_GROUP_CHAT_ID`
+  - `timing-alert/services/notification-dispatcher.service.ts` (timing alert race day) — dùng env `TIMING_ALERT_TELEGRAM_CHAT_ID`
+  → F-076 dùng env RIÊNG `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` và group RIÊNG. **TUYỆT ĐỐI KHÔNG được route F-076 alert vào group claim/timing-alert.** Coder MUST verify chat_id env khác hoàn toàn 2 channel cũ trước khi smoke test.
 
 #### #5 — Escalation rule?
 **Trả lời:** Theo TUỔI đơn lâu nhất (BR-08 + BR-09), KHÔNG theo count:

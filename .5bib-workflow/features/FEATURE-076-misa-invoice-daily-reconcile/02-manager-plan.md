@@ -48,13 +48,28 @@ PRD section 3.5 đề xuất tạo `services/telegram-bot.client.ts` mới với
 - **Extend `TelegramService`** thêm method `sendToChat(chatId: string, html: string): Promise<void>` để route F-076 alert sang group riêng (chat_id env `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` thay vì hardcode chat_id chung từ `TELEGRAM_GROUP_CHAT_ID`)
 - Logic 429/403/4096 truncate + HTML escape: extend trong TelegramService method MỚI (chứ KHÔNG copy paste). Pattern: thêm option `chatIdOverride?: string` vào `sendMessage(text, chatIdOverride?)`.
 
-### ⚠️ Manager Adjustment #2 — Env naming consistency
+### ⚠️ Manager Adjustment #2 — Env naming consistency + CHANNEL ISOLATION
 PRD đề xuất `TELEGRAM_INVOICE_ALERT_CHAT_ID`. Codebase đã có precedent:
 - `TELEGRAM_BOT_TOKEN` (chung, dùng cho cả claim + timing-alert)
-- `TELEGRAM_GROUP_CHAT_ID` (claim default)
-- `TIMING_ALERT_TELEGRAM_CHAT_ID` (timing-alert specific, prefix module name)
+- `TELEGRAM_GROUP_CHAT_ID` (claim default — **đang chạy PROD, KHÔNG ĐƯỢC ĐỤNG**)
+- `TIMING_ALERT_TELEGRAM_CHAT_ID` (timing-alert specific — **đang chạy PROD, KHÔNG ĐƯỢC ĐỤNG**)
 
 → **Đổi tên env F-076:** `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` (match pattern `<MODULE>_TELEGRAM_CHAT_ID`). Token vẫn dùng chung `TELEGRAM_BOT_TOKEN` đã có.
+
+**⚠️⚠️ CRITICAL — CHANNEL ISOLATION (Danny mandate 2026-06-08):**
+- F-076 alert MUST chỉ gửi vào group `5BIB Invoice Arlert` (chat_id `-1003743947167`)
+- TUYỆT ĐỐI KHÔNG được route alert F-076 sang group claim (`TELEGRAM_GROUP_CHAT_ID`) hoặc timing-alert (`TIMING_ALERT_TELEGRAM_CHAT_ID`)
+- KHÔNG được modify `notifyClaimSubmitted()`, `notifyClaimResolved()`, hoặc bất kỳ logic claim existing trong `telegram.service.ts`
+- Khi extend `TelegramService` thêm method mới: signature MUST require `chatId` param explicit (KHÔNG fallback default sang `TELEGRAM_GROUP_CHAT_ID` cho F-076)
+- Coder MUST verify chat_id env khác hoàn toàn 2 channel cũ TRƯỚC khi smoke test PROD
+
+### ⚠️ Manager Adjustment #3 — Order code display (Danny 2026-06-08)
+Mọi alert + UI render `order_metadata.name` (format `#5B<id>IB`, vd `#5B200029416IB`) thay vì `order_metadata.id` raw.
+- Backend service logic vẫn dùng `id` cho mapping BR-05 (RefID split, JOIN orderId)
+- Response DTO `MissingInvoiceRowDto` thêm field `orderCode: string` mapping từ `order_metadata.name`
+- Alert composer + admin UI table render `orderCode`
+- SQL filter F-076 SELECT phải bao gồm `o.name AS orderCode` ngoài `o.id`
+- BR-05b trong PRD đã được BA add
 
 ### Security
 - [x] **LogtoAdminGuard** trên tất cả 3 endpoint admin
@@ -309,9 +324,10 @@ PRD chi tiết, technical mandates đầy đủ, test plan rõ ràng. Manager đ
 - ✅ Cross-DB pattern F-016/F-028 precedent ready
 - ✅ ScheduleModule.forRoot() đã có (line 187)
 
-**2 Manager Adjustments bắt buộc Coder follow:**
+**3 Manager Adjustments bắt buộc Coder follow:**
 1. REUSE `TelegramService` từ NotificationModule, KHÔNG tạo `telegram-bot.client.ts` mới
-2. Đổi tên env `TELEGRAM_INVOICE_ALERT_CHAT_ID` → `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` match codebase naming pattern
+2. Đổi tên env `TELEGRAM_INVOICE_ALERT_CHAT_ID` → `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` + CHANNEL ISOLATION (KHÔNG route alert F-076 sang group claim/timing-alert)
+3. Render `order_metadata.name` (format `#5B<id>IB`) thay vì `id` raw — DTO thêm `orderCode` field
 
 **Branch:** `5bib_invoice_v1` đã cut từ `main@b184068`, untracked file `01-ba-prd.md` đã carry forward.
 
