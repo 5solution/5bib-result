@@ -12,6 +12,7 @@ import { LogtoMerchantFinanceGuard } from '../logto-auth/logto-merchant-finance.
 import { LogtoMerchantGuard } from '../logto-auth/logto-merchant.guard';
 import type { LogtoUser } from '../logto-auth/types';
 import { MerchantMeResponseDto } from './dto/merchant-me.dto';
+import { ParticipantInsightsDto } from './dto/participant-insights.dto';
 import {
   MerchantRaceListQueryDto,
   MerchantRaceListResponseDto,
@@ -410,6 +411,53 @@ export class MerchantPortalController {
   ): Promise<void> {
     const { buffer, filename, mimeType } =
       await this.merchantPortalService.getRevenueExport(user.userId, query.raceId);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  // ── F-072 Participant Insights (ticket-scope, no-PII aggregate) ──
+  @Get('participants/insights')
+  @ApiOperation({
+    summary: 'Cơ cấu VĐV: size áo + giới tính + nhóm tuổi (AG) + quốc tịch + tỉnh (F-072)',
+    description:
+      'Aggregate đếm theo nhóm (paid only). KHÔNG PII (không trả tên/dob cá nhân). ' +
+      'Ticket-scope (không cần quyền doanh thu). 403 nếu raceId ngoài quyền.',
+  })
+  @ApiResponse({ status: 200, type: ParticipantInsightsDto })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Inactive OR race not accessible' })
+  @ApiResponse({ status: 404, description: 'No access config' })
+  async getParticipantInsights(
+    @CurrentUser() user: LogtoUser,
+    @Query() query: TicketSalesQueryDto,
+  ): Promise<ParticipantInsightsDto> {
+    return this.merchantPortalService.getParticipantInsights(
+      user.userId,
+      query.raceId,
+    );
+  }
+
+  @Get('participants/export')
+  @ApiOperation({
+    summary: 'Xuất Excel cơ cấu VĐV (.xlsx) — Size áo × cự ly + Cơ cấu (F-072)',
+    description:
+      'Workbook 2 sheet (Size áo theo cự ly để gửi xưởng may + Cơ cấu VĐV). ' +
+      'Ticket-scope. Stream attachment. Reuse aggregate.',
+  })
+  @ApiResponse({ status: 200, description: 'File .xlsx stream' })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Inactive OR race not accessible' })
+  async getParticipantInsightsExport(
+    @CurrentUser() user: LogtoUser,
+    @Query() query: TicketSalesQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, filename, mimeType } =
+      await this.merchantPortalService.getParticipantInsightsExport(
+        user.userId,
+        query.raceId,
+      );
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);

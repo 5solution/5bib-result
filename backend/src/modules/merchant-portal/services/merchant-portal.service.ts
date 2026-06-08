@@ -35,6 +35,11 @@ import {
   AdminTenantSearchResponseDto,
 } from '../dto/admin-search.dto';
 import { MerchantMeResponseDto } from '../dto/merchant-me.dto';
+import { ParticipantInsightsDto } from '../dto/participant-insights.dto';
+import {
+  aggregateParticipants,
+  type RawParticipantRow,
+} from '../utils/participant-insights.util';
 import {
   RevenueAggregateDto,
   RevenueByCategoryDto,
@@ -701,6 +706,160 @@ export class MerchantPortalService {
     }));
     const totalTickets = items.reduce((s, i) => s + i.ticketCount, 0);
     return { raceId, totalTickets, items };
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // F-072 — Participant Insights (size áo + giới/AG/quốc tịch) — ticket-scope, no-PII
+  // ────────────────────────────────────────────────────────────────
+
+  /** Pull raw participant rows (paid) for a race. Includes course name for export pivot. */
+  private async pullParticipantRows(
+    raceId: number,
+  ): Promise<Array<RawParticipantRow & { course_name: string | null }>> {
+    return this.db.query(
+      `SELECT asi.tshirt_size AS tshirt_size, asi.gender AS gender, asi.dob AS dob,
+              asi.nationality AS nationality, asi.city_province AS city_province,
+              rc.name AS course_name
+       FROM athlete_subinfo asi
+       JOIN order_line_item oli ON oli.id = asi.order_line_item_id
+       JOIN order_metadata om ON oli.order_id = om.id
+       LEFT JOIN ticket_type tt ON oli.ticket_type_id = tt.id
+       LEFT JOIN race_course rc ON tt.race_course_id = rc.id
+       WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'`,
+      [raceId],
+    );
+  }
+
+  /** Race day (event_start_date) for age-group calc; falls back to now. */
+  private async getRaceDay(raceId: number): Promise<Date> {
+    try {
+      const rows: Array<{ event_start_date: Date | string | null }> =
+        await this.db.query(
+          `SELECT event_start_date FROM races WHERE race_id = ? LIMIT 1`,
+          [raceId],
+        );
+      const raw = rows[0]?.event_start_date;
+      if (raw) {
+        const d = new Date(raw as string);
+        if (!Number.isNaN(d.getTime())) return d;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `getRaceDay(${raceId}) failed: ${(err as Error).message}`,
+      );
+    }
+    return new Date();
+  }
+
+  /**
+   * BR-72-01..10 — Aggregate participant insights (paid). Pull-then-aggregate in
+   * Node for robust parsing of messy varchar dob/nationality/size. NO PII (counts only).
+   */
+  async getParticipantInsights(
+    userId: string,
+    raceId: number,
+  ): Promise<ParticipantInsightsDto> {
+    await this.assertRaceForUser(userId, raceId);
+    const cacheKey = `merchant-portal:participants:${userId}:${raceId}`;
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as ParticipantInsightsDto;
+    } catch (err) {
+      this.logger.warn(`Redis read ${cacheKey} failed: ${(err as Error).message}`);
+    }
+
+    const [rows, asOf] = await Promise.all([
+      this.pullParticipantRows(raceId),
+      this.getRaceDay(raceId),
+    ]);
+    const agg = aggregateParticipants(rows, asOf);
+    const dto: ParticipantInsightsDto = { raceId, ...agg };
+
+    try {
+      await this.redis.set(cacheKey, JSON.stringify(dto), 'EX', 300);
+    } catch (err) {
+      this.logger.warn(`Redis write ${cacheKey} failed: ${(err as Error).message}`);
+    }
+    return dto;
+  }
+
+  /** F-072 — Excel export: Sheet1 size × cự ly, Sheet2 cơ cấu VĐV. */
+  async getParticipantInsightsExport(
+    userId: string,
+    raceId: number,
+  ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    await this.assertRaceForUser(userId, raceId);
+    const [rows, asOf] = await Promise.all([
+      this.pullParticipantRows(raceId),
+      this.getRaceDay(raceId),
+    ]);
+    const agg = aggregateParticipants(rows, asOf);
+
+    // Per-course size pivot: course → (sizeLabel → count), reusing canonicalisation.
+    const byCourse = new Map<string, Map<string, number>>();
+    const sizeLabels = new Set<string>(agg.shirtSizes.map((s) => s.label));
+    for (const courseName of new Set(
+      rows.map((r) => (r.course_name ?? '').trim() || 'Không rõ'),
+    )) {
+      const subset = rows.filter(
+        (r) => ((r.course_name ?? '').trim() || 'Không rõ') === courseName,
+      );
+      const courseAgg = aggregateParticipants(subset, asOf);
+      const sizeMap = new Map<string, number>();
+      for (const s of courseAgg.shirtSizes) {
+        sizeMap.set(s.label, s.count);
+        sizeLabels.add(s.label);
+      }
+      byCourse.set(courseName, sizeMap);
+    }
+    const sizeCols = [...sizeLabels];
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '5BIB Merchant Portal';
+
+    const s1 = wb.addWorksheet('Size áo theo cự ly');
+    s1.columns = [
+      { header: 'Cự ly', key: 'course', width: 28 },
+      ...sizeCols.map((sz) => ({ header: sz, key: sz, width: 10 })),
+      { header: 'Tổng', key: '__total', width: 10 },
+    ];
+    for (const [course, sizeMap] of byCourse) {
+      const row: Record<string, string | number> = { course };
+      let total = 0;
+      for (const sz of sizeCols) {
+        const c = sizeMap.get(sz) ?? 0;
+        row[sz] = c;
+        total += c;
+      }
+      row.__total = total;
+      s1.addRow(row);
+    }
+
+    const s2 = wb.addWorksheet('Cơ cấu VĐV');
+    s2.columns = [
+      { header: 'Nhóm', key: 'group', width: 22 },
+      { header: 'Giá trị', key: 'label', width: 24 },
+      { header: 'Số VĐV', key: 'count', width: 12 },
+    ];
+    const dims: Array<[string, typeof agg.genders]> = [
+      ['Giới tính', agg.genders],
+      ['Nhóm tuổi', agg.ageGroups],
+      ['Quốc tịch', agg.nationalities],
+      ['Tỉnh/thành', agg.provinces],
+    ];
+    for (const [group, buckets] of dims) {
+      for (const b of buckets) {
+        s2.addRow({ group, label: b.label, count: b.count });
+      }
+    }
+
+    const buffer = (await wb.xlsx.writeBuffer()) as Buffer;
+    return {
+      buffer,
+      filename: `co-cau-vdv-race-${raceId}.xlsx`,
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
   }
 
   // ────────────────────────────────────────────────────────────────
