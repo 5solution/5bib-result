@@ -890,3 +890,11 @@ csv_import_tracking.hash_code vs import_unique_key — 0 match trên race 209 & 
 → Cơ cấu VĐV (size/giới/AG/quốc tịch/tỉnh) chỉ phản ánh vé qua 5BIB; phần import hiện
 ở bucket "Chưa có dữ liệu". Tổng vé/đếm vẫn đúng đủ (codes-based). Nếu import flow sau
 này lưu demographics (hoặc thêm cột link code↔athlete_subinfo) → revisit để phủ đủ.
+
+## [2026-06-08] FIXED — TD-F069-MERCHANT-ROLE-EXISTING-USER (v1.15.2 hotfix)
+**Bug:** Gán quyền cho user Logto CÓ SẴN (qua userId/email-existing) tạo access config
+Mongo nhưng KHÔNG gán role Logto `merchant_viewer/finance` → LogtoMerchantGuard 403
+mọi endpoint (/me, /races). Chỉ Path 3 (provision user MỚI) gán role.
+**Fix:** `MerchantPortalAccessService.ensureMerchantRole()` gọi ở create (Path 1/2) +
+update (self-heal viewer↔finance). Backfill `POST /api/admin/merchant-portal/access/sync-roles`
+cho config cũ. ⚠️ User phải re-login để token nhận role mới (access token ~1h TTL).
