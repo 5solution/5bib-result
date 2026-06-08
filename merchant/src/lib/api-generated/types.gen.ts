@@ -6848,6 +6848,10 @@ export type TicketSalesSummaryDto = {
      * Vé import vào 5BIB (codes order_id NULL) — không có giao dịch tiền trên 5BIB
      */
     issuedImport: number;
+    /**
+     * F-IMPORT — Vé đã huỷ THẬT = codes INACTIVE (KHÔNG dùng voided-order quantity)
+     */
+    cancelledIssued: number;
 };
 
 export type TicketBreakdownItemDto = {

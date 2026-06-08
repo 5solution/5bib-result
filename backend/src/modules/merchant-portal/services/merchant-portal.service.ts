@@ -668,20 +668,32 @@ export class MerchantPortalService {
   private static readonly CODE_SOLD_FILTER =
     "c.deleted = 0 AND c.status IN ('ACTIVE','SENT')";
 
-  /** Issued-code totals for a race: total + 5BIB vs import split. */
-  private async pullIssuedCodeTotals(
-    raceId: number,
-  ): Promise<{ totalIssued: number; issued5bib: number; issuedImport: number }> {
+  /**
+   * Issued-code totals for a race (single pass over non-deleted `codes`):
+   * - issued (ACTIVE/SENT) total + 5BIB/import split
+   * - cancelled = INACTIVE codes (vé đã phát rồi vô hiệu hoá). This is the REAL
+   *   "vé đã huỷ" — NOT voided-order quantity, which counts abandoned/failed
+   *   checkout attempts and massively over-states cancellations (F-077 follow-up).
+   */
+  private async pullIssuedCodeTotals(raceId: number): Promise<{
+    totalIssued: number;
+    issued5bib: number;
+    issuedImport: number;
+    cancelledIssued: number;
+  }> {
     const rows: Array<{
       total_issued: number | string;
       sbib_count: number | string;
       import_count: number | string;
+      cancelled_count: number | string;
     }> = await this.db.query(
-      `SELECT COUNT(*) AS total_issued,
-              SUM(CASE WHEN c.order_id IS NOT NULL THEN 1 ELSE 0 END) AS sbib_count,
-              SUM(CASE WHEN c.order_id IS NULL THEN 1 ELSE 0 END) AS import_count
+      `SELECT
+         SUM(CASE WHEN c.status IN ('ACTIVE','SENT') THEN 1 ELSE 0 END) AS total_issued,
+         SUM(CASE WHEN c.status IN ('ACTIVE','SENT') AND c.order_id IS NOT NULL THEN 1 ELSE 0 END) AS sbib_count,
+         SUM(CASE WHEN c.status IN ('ACTIVE','SENT') AND c.order_id IS NULL THEN 1 ELSE 0 END) AS import_count,
+         SUM(CASE WHEN c.status = 'INACTIVE' THEN 1 ELSE 0 END) AS cancelled_count
        FROM codes c
-       WHERE c.race_id = ? AND ${MerchantPortalService.CODE_SOLD_FILTER}`,
+       WHERE c.race_id = ? AND c.deleted = 0`,
       [raceId],
     );
     const r = rows?.[0];
@@ -689,6 +701,7 @@ export class MerchantPortalService {
       totalIssued: Number(r?.total_issued ?? 0),
       issued5bib: Number(r?.sbib_count ?? 0),
       issuedImport: Number(r?.import_count ?? 0),
+      cancelledIssued: Number(r?.cancelled_count ?? 0),
     };
   }
 

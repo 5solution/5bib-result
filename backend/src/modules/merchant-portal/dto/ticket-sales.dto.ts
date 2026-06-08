@@ -77,6 +77,13 @@ export class TicketSalesSummaryDto {
     example: 212,
   })
   issuedImport!: number;
+
+  @ApiProperty({
+    description:
+      "Vé đã huỷ THẬT = codes INACTIVE (deleted=0). KHÔNG dùng voided-order quantity (đếm cả đơn checkout hỏng/bỏ giữa chừng → thổi phồng).",
+    example: 15,
+  })
+  cancelledIssued!: number;
 }
 
 /** One row in a breakdown (course OR ticket type). */

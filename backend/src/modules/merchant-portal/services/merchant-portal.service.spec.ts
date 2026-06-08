@@ -373,7 +373,7 @@ describe('MerchantPortalService', () => {
 
     // F-IMPORT — issued-code totals query runs AFTER the byStatus query.
     const ISSUED_644 = [
-      { total_issued: 644, sbib_count: 432, import_count: 212 },
+      { total_issued: 644, sbib_count: 432, import_count: 212, cancelled_count: 2 },
     ];
 
     it('happy path → totalTickets all-status + byStatus has 3 canonical + issued incl import', async () => {
@@ -393,6 +393,8 @@ describe('MerchantPortalService', () => {
       expect(r.issued5bib).toBe(432);
       expect(r.issuedImport).toBe(212);
       expect(r.totalIssued).toBe(r.issued5bib + r.issuedImport);
+      // F-IMPORT — vé đã huỷ = INACTIVE codes (not voided-order qty)
+      expect(r.cancelledIssued).toBe(2);
       // 3 canonical always present, in order, pending 0-filled
       expect(r.byStatus.map((b) => b.financialStatus)).toEqual([
         'paid',

@@ -848,7 +848,7 @@ export default function RaceReportPage() {
               sub={`${t("via_5bib", lang)}`} />
             <KpiCard icon={Icons.Download} iconBg="var(--5s-surface)" iconFg="var(--5s-text-muted)" label={t("kpi_import", lang)} value={fmt.num(summary?.issuedImport ?? 0, lang)} lang={lang}
               sub={`${t("import_hint", lang)}`} />
-            <KpiCard icon={Icons.XCircle} iconBg="var(--5s-danger-bg)" iconFg="var(--5s-danger)" label={t("kpi_cancelled", lang)} value={fmt.num(statusCount(summary, "voided"), lang)} lang={lang} />
+            <KpiCard icon={Icons.XCircle} iconBg="var(--5s-danger-bg)" iconFg="var(--5s-danger)" label={t("kpi_cancelled", lang)} value={fmt.num(summary?.cancelledIssued ?? 0, lang)} lang={lang} />
           </div>
 
           {/* Registration trend */}
