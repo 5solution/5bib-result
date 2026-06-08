@@ -126,6 +126,9 @@ const TICKET_SALES_CACHE_TTL_SECONDS = 60;
  */
 const CANONICAL_FINANCIAL_STATUSES = ['paid', 'voided', 'pending'] as const;
 
+/** F-IMPORT — bucket label for import vé that have no demographic row (reconciles charts to total). */
+const NO_DATA_LABEL = 'Chưa có dữ liệu';
+
 /**
  * BR-MP-12 (Danny chốt Option A 2026-06-05): only `MANUAL` order_category uses
  * fixed fee (VNĐ/vé). EVERYTHING else — incl null/unknown — is %-based.
@@ -866,12 +869,22 @@ export class MerchantPortalService {
     ]);
     const agg = aggregateParticipants(rows, asOf);
     // F-IMPORT — total VĐV = issued codes (incl. imports). Demographics breakdown
-    // (size/giới/AG/quốc tịch) only covers 5BIB-order tickets via athlete_subinfo;
-    // import/MANUAL BIBs have no demographic row (no user_id, no clean FK) → FE shows
-    // a coverage note. `participantsWithData` = rows that DID have a demographic row.
+    // (giới/AG/quốc tịch/tỉnh) only covers 5BIB-order tickets via athlete_subinfo;
+    // import/MANUAL BIBs have no demographic row (no user_id, no clean FK).
+    // To keep charts reconciling to the headline total, append a "Chưa có dữ liệu"
+    // bucket = (totalIssued − withData) so every demographic breakdown SUMS to
+    // totalIssued (Danny 2026-06-08: "7k VĐV mà thông số dưới chỉ ~3000"). Size áo
+    // is left untouched — it has its own empty-state (size collection ≠ import gap).
+    const gap = Math.max(0, issued.totalIssued - agg.totalParticipants);
+    const withGap = (arr: typeof agg.genders) =>
+      gap > 0 ? [...arr, { label: NO_DATA_LABEL, count: gap }] : arr;
     const dto: ParticipantInsightsDto = {
       raceId,
       ...agg,
+      genders: withGap(agg.genders),
+      ageGroups: withGap(agg.ageGroups),
+      nationalities: withGap(agg.nationalities),
+      provinces: withGap(agg.provinces),
       totalIssued: issued.totalIssued,
       participantsWithData: agg.totalParticipants,
       issuedImport: issued.issuedImport,

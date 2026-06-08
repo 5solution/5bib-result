@@ -557,6 +557,43 @@ describe('MerchantPortalService', () => {
     });
   });
 
+  // F-IMPORT — participant insights gap-bucket reconciliation
+  describe('getParticipantInsights() — "Chưa có dữ liệu" gap bucket', () => {
+    const mkParticipantFlow = (rows: unknown[], issued: object) => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 501 }]) // resolveAccessibleRaces scope
+        .mockResolvedValueOnce(rows) // pullParticipantRows
+        .mockResolvedValueOnce([{ event_start_date: '2026-08-16' }]) // getRaceDay
+        .mockResolvedValueOnce([issued]); // pullIssuedCodeTotals
+    };
+    const dataRows = [
+      { tshirt_size: 'M', gender: 'male', dob: '1990-01-01', nationality: 'VN', city_province: 'Hà Nội', course_name: '42K' },
+      { tshirt_size: 'L', gender: 'female', dob: '1985-01-01', nationality: 'VN', city_province: 'Hà Nội', course_name: '42K' },
+      { tshirt_size: 'S', gender: 'male', dob: '2000-01-01', nationality: 'VN', city_province: 'HCM', course_name: '42K' },
+    ];
+
+    it('gap = totalIssued − withData appended → every demographic chart sums to totalIssued', async () => {
+      mkParticipantFlow(dataRows, { total_issued: 10, sbib_count: 3, import_count: 7, cancelled_count: 0 });
+      const r = await service.getParticipantInsights('logto_user_a', 501);
+      expect(r.totalIssued).toBe(10);
+      expect(r.participantsWithData).toBe(3);
+      const sum = (arr: { count: number }[]) => arr.reduce((s, x) => s + x.count, 0);
+      expect(sum(r.genders)).toBe(10);
+      expect(sum(r.ageGroups)).toBe(10);
+      expect(sum(r.nationalities)).toBe(10);
+      expect(sum(r.provinces)).toBe(10);
+      expect(r.genders.find((g) => g.label === 'Chưa có dữ liệu')?.count).toBe(7);
+    });
+
+    it('no gap (all issued have data) → no extra bucket', async () => {
+      mkParticipantFlow([dataRows[0]], { total_issued: 1, sbib_count: 1, import_count: 0, cancelled_count: 0 });
+      const r = await service.getParticipantInsights('logto_user_a', 501);
+      expect(r.genders.find((g) => g.label === 'Chưa có dữ liệu')).toBeUndefined();
+      expect(r.genders.reduce((s, g) => s + g.count, 0)).toBe(1);
+    });
+  });
+
   // ──────────────────────────────────────────────────────────
   // M2b-3 — Revenue (permission-gated, GMV + fee + net)
   // ──────────────────────────────────────────────────────────
