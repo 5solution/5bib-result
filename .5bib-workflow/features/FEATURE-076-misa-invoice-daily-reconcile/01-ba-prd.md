@@ -166,6 +166,12 @@
 
 #### MISA API integration
 
+- **BR-14a — Telegram bot ISOLATION (Danny chốt 2026-06-08, Option A):** F-076 dùng **bot RIÊNG `@invoice_5bib_daily_bot` (token 8804367165:...)** + **group RIÊNG "5BIB Invoice Arlert" (chat_id -1003743947167)**.
+  - **TUYỆT ĐỐI KHÔNG** dùng env `TELEGRAM_BOT_TOKEN` existing (đang chạy claim PROD = bot 8568954265, group chat_id `-5178735117`)
+  - **TUYỆT ĐỐI KHÔNG** reuse `notification/telegram.service.ts` (vì nó hardcode `TELEGRAM_BOT_TOKEN` global)
+  - F-076 PHẢI tạo Telegram HTTP client RIÊNG trong module — axios POST tới `https://api.telegram.org/bot<INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN>/sendMessage` với param `chat_id: INVOICE_RECONCILE_TELEGRAM_CHAT_ID`
+  - Lý do: defense-in-depth security — nếu F-076 bot bị compromise (token leak), claim bot vẫn an toàn. Tách bot luôn = tách channel = isolation tuyệt đối.
+
 - **BR-14 — Token cache:** Redis key `misa:token` TTL = MISA expiry - 5 phút (token 14 ngày per spec).
   - Refresh khi MISA trả `TokenExpiredCode` 401 hoặc TTL < 5 phút
   - Single-tenant cron → không cần concurrent auth pool
@@ -200,11 +206,12 @@
 #### Alert channel
 
 - **BR-19 — Alert channel priority:**
-  1. **Telegram bot** (primary) — gửi vào group chat Finance + Danny.
-     - Bot: BotFather tạo, lấy `bot_token` đặt env `TELEGRAM_BOT_TOKEN`
-     - Group chat: thêm bot làm member admin, lấy `chat_id` (negative integer cho group) đặt env `TELEGRAM_INVOICE_ALERT_CHAT_ID`
-     - API endpoint: `POST https://api.telegram.org/bot<token>/sendMessage`
-     - Mention user: dùng Telegram `@username` (vd `@dannynguyen`) inline trong message body — Telegram tự highlight + push notify thành viên có @username matching.
+  1. **Telegram bot RIÊNG cho F-076** (primary) — gửi vào group chat `5BIB Invoice Arlert`.
+     - Bot: `@invoice_5bib_daily_bot` Danny tạo riêng cho F-076, token đặt env `INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN`
+     - Group chat: `chat_id -1003743947167` (supergroup), đặt env `INVOICE_RECONCILE_TELEGRAM_CHAT_ID`
+     - API endpoint: `POST https://api.telegram.org/bot<INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN>/sendMessage`
+     - HTTP client: axios trong module F-076 RIÊNG (KHÔNG dùng TelegramService notification module — xem BR-14a)
+     - Mention user: KHÔNG dùng (Danny chốt — chỉ gửi vào group)
   2. **Email** (fallback) — qua Mailchimp transactional, recipient list env `INVOICE_ALERT_EMAILS="danny@5bib.com,ketoan@5bib.com"`
   3. Nếu Telegram env unset → log warn + chỉ send email
   4. Nếu cả 2 unset → log warn + KHÔNG fail cron (alert tới `Logger.warn` đủ)
@@ -801,7 +808,7 @@ backend/src/modules/invoice-reconcile/
 │   ├── invoice-reconcile.service.ts       # core scan() — Layer 1 + Layer 2 + bucket classify
 │   ├── misa-meinvoice.client.ts           # axios wrapper + token cache + retry
 │   ├── invoice-alert.service.ts           # orchestrator 7 loại alert + Telegram + email fallback
-│   ├── telegram-bot.client.ts             # POST sendMessage + HTML escape + 4096 truncate
+│   ├── invoice-telegram.client.ts         # ⚠️ BOT RIÊNG cho F-076 (BR-14a) — axios POST sendMessage tới @invoice_5bib_daily_bot + HTML escape + 4096 truncate + 429/403 handle. KHÔNG reuse notification/telegram.service.ts (hardcode TELEGRAM_BOT_TOKEN claim PROD).
 │   ├── reconcile-classifier.ts            # pure function bucket classify (testable)
 │   ├── alert-composer.ts                  # pure functions render 7 loại Telegram HTML message
 │   ├── diff-computer.ts                   # pure function compute diff (current vs previous snapshot)
@@ -847,10 +854,11 @@ INVOICE_RECONCILE_AGE_WARN_HOURS=12
 INVOICE_RECONCILE_AGE_CRITICAL_HOURS=20
 INVOICE_RECONCILE_AGE_BREACHED_HOURS=24
 
-# F-076 alert channels — Telegram primary
-TELEGRAM_BOT_TOKEN=<Danny tạo bot qua @BotFather và paste token>
-TELEGRAM_INVOICE_ALERT_CHAT_ID=<chat_id của group "5BIB Finance Alert", negative integer e.g. -1001234567890>
-TELEGRAM_MENTION_USERNAMES=dannynguyen,ketoan_5bib  # CSV, KHÔNG có @ prefix
+# F-076 alert channels — Telegram primary (BOT RIÊNG, channel isolation tuyệt đối)
+# ⚠️ KHÔNG dùng chung TELEGRAM_BOT_TOKEN existing (đang chạy claim PROD = bot 8568954265).
+# F-076 dùng bot riêng @invoice_5bib_daily_bot (8804367165).
+INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN=8804367165:AAGJxs0iGII1znpAw_LUKYM1RXbQ_QrDYbM
+INVOICE_RECONCILE_TELEGRAM_CHAT_ID=-1003743947167  # supergroup "5BIB Invoice Arlert"
 INVOICE_ALERT_EMAILS=danny@5bib.com,ketoan@5bib.com  # email fallback
 ```
 
@@ -996,7 +1004,7 @@ INVOICE_ALERT_EMAILS=danny@5bib.com,ketoan@5bib.com  # email fallback
 | Mock | timeout × 3 |
 | Expected | Throw `MisaUnavailableError` |
 
-#### Telegram bot client tests (telegram-bot.client.spec.ts)
+#### Telegram bot client tests (invoice-telegram.client.spec.ts)
 
 **TC-23a — Send message happy path**
 | Mock POST `https://api.telegram.org/bot.../sendMessage` | 200 `{ ok: true, result: { message_id: 42 } }` |
@@ -1142,16 +1150,19 @@ AND order_category NOT IN ('INSURANCE', 'MANUAL')
 Cron chạy 08-22h ICT. Cuối tuần + lễ tết KHÔNG ân hạn (luật VN tính theo ngày làm việc nhưng F-076 conservative — alert tất cả ngày).
 
 #### #4 — Kênh alert + recipient?
-**Trả lời:** **Telegram bot** (Danny chốt 2026-06-08):
-- Bot tạo qua @BotFather: `@invoice_5bib_daily_bot`, token `TELEGRAM_BOT_TOKEN=8804367165:AAG...` (Manager đã verify live)
+**Trả lời:** **Telegram bot RIÊNG cho F-076** (Danny chốt 2026-06-08, Option A):
+- Bot: `@invoice_5bib_daily_bot` tạo riêng qua @BotFather, token `INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN=8804367165:AAGJxs0iGII1znpAw_LUKYM1RXbQ_QrDYbM` (Manager verify live)
 - Group supergroup "5BIB Invoice Arlert" — `INVOICE_RECONCILE_TELEGRAM_CHAT_ID=-1003743947167` (supergroup chat_id, stable)
-- **KHÔNG mention `@username`** — chỉ gửi vào group, ai check thì thấy (Danny chốt — đơn giản)
+- **KHÔNG mention `@username`** — chỉ gửi vào group (Danny chốt — đơn giản)
 - Email fallback `danny@5bib.com, ketoan@5bib.com` (env `INVOICE_ALERT_EMAILS`) — CHỈ gửi khi Telegram API fail (kicked/network down)
 - SMS KHÔNG dùng MVP (defer)
-- **⚠️ ISOLATION — KHÔNG đụng group claim hiện hữu:** Codebase đã có 2 Telegram channels khác đang chạy:
-  - `notification/telegram.service.ts` (claim kết quả thi đấu) — dùng env `TELEGRAM_GROUP_CHAT_ID`
-  - `timing-alert/services/notification-dispatcher.service.ts` (timing alert race day) — dùng env `TIMING_ALERT_TELEGRAM_CHAT_ID`
-  → F-076 dùng env RIÊNG `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` và group RIÊNG. **TUYỆT ĐỐI KHÔNG được route F-076 alert vào group claim/timing-alert.** Coder MUST verify chat_id env khác hoàn toàn 2 channel cũ trước khi smoke test.
+- **⚠️⚠️ ISOLATION TUYỆT ĐỐI — Bot RIÊNG + env RIÊNG (BR-14a):**
+  - Codebase đã có 2 Telegram channels existing PROD running:
+    - `notification/telegram.service.ts` (claim) — bot token `8568954265:AAE8i...` env `TELEGRAM_BOT_TOKEN`, group `-5178735117` env `TELEGRAM_GROUP_CHAT_ID`
+    - `timing-alert/services/notification-dispatcher.service.ts` (timing) — env `TIMING_ALERT_TELEGRAM_CHAT_ID`
+  - F-076 dùng **bot KHÁC HOÀN TOÀN** (`8804367165`, `@invoice_5bib_daily_bot`) — KHÔNG share token với claim/timing
+  - F-076 **KHÔNG reuse `TelegramService` existing** (vì nó hardcode `TELEGRAM_BOT_TOKEN` global) — implement Telegram HTTP client riêng axios POST tới `api.telegram.org`
+  - Coder MUST verify token + chat_id env khác hoàn toàn 2 channel cũ TRƯỚC khi smoke test. Tách bot = tách channel = isolation tuyệt đối, defense-in-depth.
 
 #### #5 — Escalation rule?
 **Trả lời:** Theo TUỔI đơn lâu nhất (BR-08 + BR-09), KHÔNG theo count:

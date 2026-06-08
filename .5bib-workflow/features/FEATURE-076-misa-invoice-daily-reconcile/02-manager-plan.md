@@ -41,27 +41,48 @@
 - [x] **ScheduleModule.forRoot() đã có** — không cần Coder add (verify line 187)
 - [x] **`telegraf` package đã install** — không cần Coder `pnpm install`
 
-### ⚠️ Manager Adjustment #1 — REUSE TelegramService có sẵn
-PRD section 3.5 đề xuất tạo `services/telegram-bot.client.ts` mới với axios + retry custom.
-**Manager OVERRIDE**: KHÔNG được tạo file mới. PHẢI:
-- **Inject `TelegramService` từ NotificationModule** (`@Global()` nên không cần import) HOẶC
-- **Extend `TelegramService`** thêm method `sendToChat(chatId: string, html: string): Promise<void>` để route F-076 alert sang group riêng (chat_id env `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` thay vì hardcode chat_id chung từ `TELEGRAM_GROUP_CHAT_ID`)
-- Logic 429/403/4096 truncate + HTML escape: extend trong TelegramService method MỚI (chứ KHÔNG copy paste). Pattern: thêm option `chatIdOverride?: string` vào `sendMessage(text, chatIdOverride?)`.
+### ⚠️ Manager Adjustment #1 — REVERTED 2026-06-08 (Option A — Danny chốt)
 
-### ⚠️ Manager Adjustment #2 — Env naming consistency + CHANNEL ISOLATION
-PRD đề xuất `TELEGRAM_INVOICE_ALERT_CHAT_ID`. Codebase đã có precedent:
-- `TELEGRAM_BOT_TOKEN` (chung, dùng cho cả claim + timing-alert)
-- `TELEGRAM_GROUP_CHAT_ID` (claim default — **đang chạy PROD, KHÔNG ĐƯỢC ĐỤNG**)
-- `TIMING_ALERT_TELEGRAM_CHAT_ID` (timing-alert specific — **đang chạy PROD, KHÔNG ĐƯỢC ĐỤNG**)
+**Phiên bản cũ:** "REUSE TelegramService" → **SAI**, retract.
+**Lý do retract:** Manager đoán nhầm "chung 1 bot". Danny verify PROD env confirm:
+- PROD `TELEGRAM_BOT_TOKEN=8568954265:AAE8i...` (bot CLAIM, đang chạy production)
+- F-076 dùng bot RIÊNG `8804367165:AAGJx...` (`@invoice_5bib_daily_bot`, Danny tạo riêng chiều 2026-06-08)
+- → **2 BOT KHÁC NHAU**, KHÔNG share token được
 
-→ **Đổi tên env F-076:** `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` (match pattern `<MODULE>_TELEGRAM_CHAT_ID`). Token vẫn dùng chung `TELEGRAM_BOT_TOKEN` đã có.
+**Phiên bản mới (Option A — Channel + Bot isolation tuyệt đối):**
+- Coder PHẢI tạo file mới `services/invoice-telegram.client.ts` trong module F-076
+- HTTP client RIÊNG: axios POST tới `https://api.telegram.org/bot<INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN>/sendMessage`
+- Body: `chat_id=INVOICE_RECONCILE_TELEGRAM_CHAT_ID`, `text`, `parse_mode='HTML'`, `disable_web_page_preview=true`
+- KHÔNG inject `TelegramService` từ NotificationModule (vì TelegramService hardcode `process.env.TELEGRAM_BOT_TOKEN` — claim bot, KHÔNG phải F-076 bot)
+- KHÔNG modify `notification/telegram.service.ts` — giữ nguyên cho claim
+- Implement HTML escape + 4096 truncate + 429 retry 1× + 403 throw `TelegramKickedError` → fallback email
+- ~80-100 LoC tổng, đơn giản hơn dự kiến vì không cần wrap telegraf SDK
 
-**⚠️⚠️ CRITICAL — CHANNEL ISOLATION (Danny mandate 2026-06-08):**
-- F-076 alert MUST chỉ gửi vào group `5BIB Invoice Arlert` (chat_id `-1003743947167`)
-- TUYỆT ĐỐI KHÔNG được route alert F-076 sang group claim (`TELEGRAM_GROUP_CHAT_ID`) hoặc timing-alert (`TIMING_ALERT_TELEGRAM_CHAT_ID`)
-- KHÔNG được modify `notifyClaimSubmitted()`, `notifyClaimResolved()`, hoặc bất kỳ logic claim existing trong `telegram.service.ts`
-- Khi extend `TelegramService` thêm method mới: signature MUST require `chatId` param explicit (KHÔNG fallback default sang `TELEGRAM_GROUP_CHAT_ID` cho F-076)
-- Coder MUST verify chat_id env khác hoàn toàn 2 channel cũ TRƯỚC khi smoke test PROD
+### ⚠️ Manager Adjustment #2 — Env naming + BOT + CHANNEL ISOLATION (Option A final)
+
+PROD VPS env verified 2026-06-08:
+| Env hiện hữu | Value | Owner | Status |
+|--------------|-------|-------|--------|
+| `TELEGRAM_BOT_TOKEN` | `8568954265:AAE8i...` | Claim bot | ✅ PROD running, **KHÔNG ĐỤNG** |
+| `TELEGRAM_GROUP_CHAT_ID` | `-5178735117` | Claim group | ✅ PROD running, **KHÔNG ĐỤNG** |
+| `TIMING_ALERT_TELEGRAM_CHAT_ID` | (existing nếu set) | Timing alert group | ✅ PROD running, **KHÔNG ĐỤNG** |
+
+F-076 env mới hoàn toàn (Coder add vào `config/index.ts` + `.env.example` + docker-compose):
+| Env mới | Value | Purpose |
+|---------|-------|---------|
+| **`INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN`** | `8804367165:AAGJxs0iGII1znpAw_LUKYM1RXbQ_QrDYbM` | F-076 bot riêng `@invoice_5bib_daily_bot` |
+| **`INVOICE_RECONCILE_TELEGRAM_CHAT_ID`** | `-1003743947167` | F-076 supergroup "5BIB Invoice Arlert" |
+
+**⚠️⚠️ CRITICAL — BOT + CHANNEL ISOLATION (Danny mandate 2026-06-08, Option A):**
+- F-076 alert MUST gửi từ bot `@invoice_5bib_daily_bot` (token `8804367165`) vào group `-1003743947167` ONLY
+- F-076 PHẢI tạo `invoice-telegram.client.ts` mới đọc env `INVOICE_RECONCILE_TELEGRAM_*`
+- TUYỆT ĐỐI KHÔNG được:
+  - Đụng env `TELEGRAM_BOT_TOKEN` (claim bot, PROD running)
+  - Đụng `TELEGRAM_GROUP_CHAT_ID` (claim group, PROD running)
+  - Reuse `notification/telegram.service.ts` (vì service hardcode `TELEGRAM_BOT_TOKEN` claim bot)
+  - Route F-076 alert sang group claim hoặc timing-alert
+  - Modify `notifyClaimSubmitted()`, `notifyClaimResolved()` hoặc bất kỳ logic claim existing
+- Coder MUST verify trước smoke test: F-076 env values khác hoàn toàn claim/timing env (grep từng env trên VPS xác nhận)
 
 ### ⚠️ Manager Adjustment #3 — Order code display (Danny 2026-06-08)
 Mọi alert + UI render `order_metadata.name` (format `#5B<id>IB`, vd `#5B200029416IB`) thay vì `order_metadata.id` raw.
@@ -129,6 +150,7 @@ Mọi alert + UI render `order_metadata.name` (format `#5B<id>IB`, vd `#5B200029
 - ➕ `modules/invoice-reconcile/services/invoice-reconcile.service.ts`
 - ➕ `modules/invoice-reconcile/services/misa-meinvoice.client.ts`
 - ➕ `modules/invoice-reconcile/services/invoice-alert.service.ts`
+- ➕ `modules/invoice-reconcile/services/invoice-telegram.client.ts` ⭐ NEW (Option A) — axios POST tới api.telegram.org dùng `INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN` riêng
 - ➕ `modules/invoice-reconcile/services/reconcile-classifier.ts`
 - ➕ `modules/invoice-reconcile/services/alert-composer.ts`
 - ➕ `modules/invoice-reconcile/services/diff-computer.ts`
@@ -141,17 +163,19 @@ Mọi alert + UI render `order_metadata.name` (format `#5B<id>IB`, vd `#5B200029
 - ➕ `modules/invoice-reconcile/__tests__/reconcile-classifier.spec.ts`
 - ➕ `modules/invoice-reconcile/__tests__/invoice-reconcile.service.spec.ts`
 - ➕ `modules/invoice-reconcile/__tests__/misa-meinvoice.client.spec.ts`
+- ➕ `modules/invoice-reconcile/__tests__/invoice-telegram.client.spec.ts` (5 TC: happy/HTML escape/truncate/429/403)
 - ➕ `modules/invoice-reconcile/__tests__/alert-composer.spec.ts`
 - ➕ `modules/invoice-reconcile/__tests__/diff-computer.spec.ts`
 
 **Modify (limited scope):**
 - ✏️ `modules/app.module.ts` — register `InvoiceReconcileModule` (1 import + 1 entry trong array imports). KHÔNG đụng ScheduleModule (đã có) hoặc TypeOrmModule platform (đã có).
-- ✏️ `modules/notification/telegram.service.ts` — **Manager Adjustment #1**: thêm method `sendMessage(text, chatIdOverride?)` (backward compat) HOẶC method mới `sendToChat(chatId, text)`. KHÔNG xoá/đổi signature method existing.
+- ❌ `modules/notification/telegram.service.ts` — **REVERTED Manager Adjustment #1**: KHÔNG ĐỤNG. F-076 dùng bot riêng + client riêng (xem `invoice-telegram.client.ts` trong NEW files trên).
 - ✏️ `config/index.ts` — thêm env keys:
   ```
   MISA_AIO_BASE_URL, MISA_APP_ID, MISA_TAX_CODE, MISA_USERNAME, MISA_PASSWORD
   INVOICE_RECONCILE_ENABLED_RACES, INVOICE_RECONCILE_AGE_WARN_HOURS, INVOICE_RECONCILE_AGE_CRITICAL_HOURS, INVOICE_RECONCILE_AGE_BREACHED_HOURS
-  INVOICE_RECONCILE_TELEGRAM_CHAT_ID  ← Manager Adjustment #2 (KHÔNG dùng TELEGRAM_INVOICE_ALERT_CHAT_ID)
+  INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN  ← Manager Adjustment #2 (BOT riêng F-076, KHÔNG dùng TELEGRAM_BOT_TOKEN claim PROD)
+  INVOICE_RECONCILE_TELEGRAM_CHAT_ID    ← Manager Adjustment #2 (group riêng F-076)
   INVOICE_ALERT_EMAILS
   ```
 
@@ -325,8 +349,8 @@ PRD chi tiết, technical mandates đầy đủ, test plan rõ ràng. Manager đ
 - ✅ ScheduleModule.forRoot() đã có (line 187)
 
 **3 Manager Adjustments bắt buộc Coder follow:**
-1. REUSE `TelegramService` từ NotificationModule, KHÔNG tạo `telegram-bot.client.ts` mới
-2. Đổi tên env `TELEGRAM_INVOICE_ALERT_CHAT_ID` → `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` + CHANNEL ISOLATION (KHÔNG route alert F-076 sang group claim/timing-alert)
+1. **(REVERTED Option A)** Tạo `services/invoice-telegram.client.ts` RIÊNG (axios POST sendMessage) — KHÔNG reuse `TelegramService` notification module (vì hardcode `TELEGRAM_BOT_TOKEN` claim bot khác hoàn toàn)
+2. Env mới hoàn toàn `INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN` + `INVOICE_RECONCILE_TELEGRAM_CHAT_ID` + BOT + CHANNEL ISOLATION tuyệt đối (KHÔNG đụng `TELEGRAM_BOT_TOKEN` / `TELEGRAM_GROUP_CHAT_ID` claim PROD running)
 3. Render `order_metadata.name` (format `#5B<id>IB`) thay vì `id` raw — DTO thêm `orderCode` field
 
 **Branch:** `5bib_invoice_v1` đã cut từ `main@b184068`, untracked file `01-ba-prd.md` đã carry forward.
