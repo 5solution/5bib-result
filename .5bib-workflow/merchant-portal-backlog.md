@@ -63,3 +63,17 @@ Manager đã DESCRIBE `5bib_platform_live`. Kết quả gom 7 ứng viên → **
 **Thứ tự build (Manager):** F-072 (value cao nhất, 1 bảng) → F-073 (reuse forecast) → fee-banner bugfix (nhanh) → F-074 → F-075.
 
 **PII note:** F-072 chỉ aggregate (đếm/% theo size/giới/AG-bracket/quốc tịch) — KHÔNG list VĐV cá nhân (giữ BR-MP no-PII F-069). Danny "k cần PII" = ✅ aggregate-only, không match cá nhân.
+
+---
+
+## 🏁 PROGRAM KẾT THÚC (2026-06-08) — 4 feature + fee-fix DELIVERED, F-075 DROPPED
+
+| Feature | Trạng thái | Browser-QC |
+|---------|-----------|------------|
+| F-072 Participant Insights (size/giới/AG/quốc tịch + Excel) | ✅ DEV | ✅ (fix size canonical + empty-state) |
+| F-073 Capacity/Quota | ✅ DEV | ✅ (fix sold=paid count) |
+| F-074 YoY So với mùa trước | ✅ DEV | ✅ (overlay 2 đường đẹp) |
+| Fee-banner leak fix | ✅ DEV | ✅ |
+| ~~F-075 Promo/Wave~~ | ❌ **DROPPED** | Data-driven (Danny chốt) |
+
+**F-075 DROP lý do (sample data thật 2026-06-08):** (1) "wave" = ticket_type (EARLY BIRD/LATE/Regular) ĐÃ hiển thị ở "Theo loại vé" donut → redundant; (2) discount cực thưa (race 209: 3/402 đơn, 0 manual) → feature gần như rỗng cho mọi race. Build = UI redundant/empty → low ROI. **Lesson: sample real data TRƯỚC khi build feature — như size (NULL)/quota (placeholder)/promo (sparse) đều khác giả định.**
