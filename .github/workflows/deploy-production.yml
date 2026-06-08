@@ -141,8 +141,34 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  build-merchant:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.REPO }}/merchant
+          tags: |
+            type=sha,prefix=
+            type=raw,value=production
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./merchant
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   deploy:
-    needs: [build-backend, build-frontend, build-admin, build-crew, build-content-web]
+    needs: [build-backend, build-frontend, build-admin, build-crew, build-content-web, build-merchant]
     if: ${{ always() && !cancelled() && needs.build-backend.result == 'success' && needs.build-frontend.result == 'success' && needs.build-admin.result == 'success' && needs.build-crew.result == 'success' && needs.build-content-web.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -164,7 +190,13 @@ jobs:
             sed -i "s|ghcr.io/5solution/5bib-result/admin:.*|ghcr.io/5solution/5bib-result/admin:${TAG}|" docker-compose.yml
             sed -i "s|ghcr.io/5solution/5bib-result/crew:.*|ghcr.io/5solution/5bib-result/crew:${TAG}|" docker-compose.yml
             sed -i "s|ghcr.io/5solution/5bib-result/content-web:.*|ghcr.io/5solution/5bib-result/content-web:${TAG}|" docker-compose.yml
-            docker compose pull
+            docker compose pull 5bib-result-backend 5bib-result-frontend 5bib-result-admin 5bib-result-crew 5bib-result-content-web
             docker compose up -d --force-recreate 5bib-result-backend 5bib-result-frontend 5bib-result-admin 5bib-result-crew 5bib-result-content-web
-            docker image prune -f
+            # Merchant (F-069) — chỉ deploy nếu service đã có trong prod compose (ops thêm sẵn).
+            if docker compose config --services | grep -q '^5bib-result-merchant$'; then
+              sed -i "s|ghcr.io/5solution/5bib-result/merchant:.*|ghcr.io/5solution/5bib-result/merchant:${TAG}|" docker-compose.yml
+              docker compose pull 5bib-result-merchant && docker compose up -d --force-recreate 5bib-result-merchant || echo "merchant image ${TAG} chưa sẵn — skip"
+            else
+              echo "5bib-result-merchant chưa có trong prod compose — skip"
+            fi
             docker image prune -f
