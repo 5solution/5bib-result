@@ -32,6 +32,8 @@ import {
   merchantPortalControllerGetRevenueTrend,
   merchantPortalControllerGetParticipantInsights,
   merchantPortalControllerGetCapacity,
+  merchantPortalControllerGetYoyComparable,
+  merchantPortalControllerGetYoyCurve,
 } from "@/lib/api-generated/sdk.gen";
 import type {
   MerchantMeResponseDto,
@@ -47,6 +49,8 @@ import type {
   RevenueTrendDto,
   ParticipantInsightsDto,
   RaceCapacityDto,
+  YoyComparableDto,
+  YoyCurveDto,
 } from "@/lib/api-generated/types.gen";
 import { t, lab, L, type Lang } from "@/lib/mp/i18n";
 import { fmt, fmtDateStr, parseDate } from "@/lib/mp/fmt";
@@ -260,6 +264,87 @@ function RevenueBreakdownTable({ rev, lang }: { rev: RevenueByCategoryDto; lang:
   );
 }
 
+// ---------- F-074 YoY card ----------
+function YoYCard({
+  cands,
+  compareId,
+  onPick,
+  curve,
+  lang,
+}: {
+  cands: YoyComparableDto | null;
+  compareId: number | null;
+  onPick: (id: number | null) => void;
+  curve: YoyCurveDto | null;
+  lang: Lang;
+}) {
+  const candidates = cands?.candidates ?? [];
+
+  const data: MultiLinePoint[] = useMemo(() => {
+    if (!curve) return [];
+    const cur = curve.current.points;
+    const cmp = curve.compare.points;
+    const merged = cur.map((p, i) => ({
+      label: `${p.daysBefore}`,
+      current: p.cum,
+      compare: cmp[i]?.cum ?? 0,
+    }));
+    // trim leading stretch where both series are 0
+    const first = merged.findIndex((m) => m.current > 0 || m.compare > 0);
+    return first <= 0 ? merged : merged.slice(first);
+  }, [curve]);
+
+  const series = useMemo(
+    () => [
+      { key: "current", color: CH.blue, label: t("this_race", lang) },
+      { key: "compare", color: CH.textSubtle, label: curve?.compare.title || t("vs_prev", lang) },
+    ],
+    [lang, curve],
+  );
+
+  return (
+    <Card style={{ marginBottom: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+        <SectionTitle>{t("yoy_title", lang)}</SectionTitle>
+        {candidates.length > 0 ? (
+          <select
+            value={compareId ?? ""}
+            onChange={(e) => onPick(e.target.value ? Number(e.target.value) : null)}
+            className="mp-focusable"
+            style={{ border: "1px solid var(--5s-border)", background: "#fff", borderRadius: 9, padding: "7px 11px", fontSize: 13, fontWeight: 600, color: "var(--5s-text)", maxWidth: 320, cursor: "pointer" }}
+          >
+            <option value="">{t("yoy_pick", lang)}</option>
+            {candidates.map((c) => (
+              <option key={c.raceId} value={c.raceId}>
+                {c.title || `#${c.raceId}`}
+                {c.eventStartDate ? ` · ${fmtDateStr(c.eventStartDate, lang)}` : ""}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span style={{ fontSize: 12.5, color: "var(--5s-text-subtle)" }}>{t("yoy_empty", lang)}</span>
+        )}
+      </div>
+      {compareId == null ? (
+        <div style={{ padding: "28px 0", textAlign: "center", fontSize: 13, color: "var(--5s-text-subtle)" }}>
+          {t("yoy_pick", lang)}
+        </div>
+      ) : curve && data.length > 0 ? (
+        <>
+          <MultiLineChart data={data} lang={lang} width={1080} height={260} series={series} />
+          <div style={{ fontSize: 11.5, color: "var(--5s-text-subtle)", marginTop: 6, textAlign: "right" }}>
+            ← {t("days_before_unit", lang)}
+          </div>
+        </>
+      ) : (
+        <div style={{ padding: "28px 0", textAlign: "center", fontSize: 13, color: "var(--5s-text-subtle)" }}>
+          {t("not_enough_data", lang)}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ---------- F-073 Capacity / quota card ----------
 function CapacityCard({ data, lang }: { data: RaceCapacityDto; lang: Lang }) {
   if (!data.courses.length) return null;
@@ -412,6 +497,11 @@ export default function RaceReportPage() {
 
   // F-073 Capacity / quota
   const [capacity, setCapacity] = useState<RaceCapacityDto | null>(null);
+
+  // F-074 YoY
+  const [yoyCands, setYoyCands] = useState<YoyComparableDto | null>(null);
+  const [yoyCompareId, setYoyCompareId] = useState<number | null>(null);
+  const [yoyCurve, setYoyCurve] = useState<YoyCurveDto | null>(null);
 
   // Revenue
   const [revSummary, setRevSummary] = useState<RevenueSummaryDto | null>(null);
@@ -576,6 +666,31 @@ export default function RaceReportPage() {
   useEffect(() => {
     if (isAuthenticated && tab === "participants") loadParticipants();
   }, [isAuthenticated, tab, loadParticipants]);
+
+  const loadYoyCandidates = useCallback(async () => {
+    if (!token || !Number.isFinite(raceId)) return;
+    const r = await merchantPortalControllerGetYoyComparable({ query: { raceId }, ...authHeaders(token) });
+    if (!r.error) setYoyCands(r.data ?? null);
+  }, [token, raceId]);
+
+  const loadYoyCurve = useCallback(async () => {
+    if (!token || !Number.isFinite(raceId) || yoyCompareId == null) {
+      setYoyCurve(null);
+      return;
+    }
+    const r = await merchantPortalControllerGetYoyCurve({
+      query: { raceId, compareRaceId: yoyCompareId },
+      ...authHeaders(token),
+    });
+    if (!r.error) setYoyCurve(r.data ?? null);
+  }, [token, raceId, yoyCompareId]);
+
+  useEffect(() => {
+    if (isAuthenticated) loadYoyCandidates();
+  }, [isAuthenticated, loadYoyCandidates]);
+  useEffect(() => {
+    if (isAuthenticated) loadYoyCurve();
+  }, [isAuthenticated, loadYoyCurve]);
 
   useEffect(() => {
     if (isAuthenticated) loadCore();
@@ -884,6 +999,15 @@ export default function RaceReportPage() {
               </Card>
             </div>
           )}
+
+          {/* F-074 — YoY so với mùa trước */}
+          <YoYCard
+            cands={yoyCands}
+            compareId={yoyCompareId}
+            onPick={setYoyCompareId}
+            curve={yoyCurve}
+            lang={lang}
+          />
 
           <UpdatedFooter lang={lang} />
         </>

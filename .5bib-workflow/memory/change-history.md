@@ -7,6 +7,13 @@
 
 ---
 
+## [2026-06-08] FEATURE-074: YoY So với mùa trước — ✅ DEV
+**Type:** EXTEND_EXISTING. BE+FE 1 push. Danny chốt BTC tự chọn giải so sánh (dropdown).
+### Files: BE ➕utils/yoy.util.ts(+spec 7) +dto/yoy.dto.ts; ✏️service (getRaceMeta+getYoyComparable+buildYoySeries+getYoyCurve) +controller (GET yoy/comparable + yoy/curve). FE ✏️races/[raceId]/page.tsx (YoYCard MKT section: dropdown + MultiLineChart overlay theo days-before) +i18n(5 key×5) +SDK hand-add.
+### Data: races(tenant_id/event_start_date/title) + order_metadata.payment_on. daysBefore align (0=ngày đua), cumulativeCurve Node. comparable = cùng tenant + earlier + ACCESSIBLE (IDOR-safe). curve IDOR assertRaceForUser CẢ 2 race. cache 300s. no-PII.
+### Tests: 7 util + 168 merchant-portal jest + FE tsc0/vitest13/build/no-Thai.
+### TD: 180DAY-CAP, SDK-HANDADD. Lesson: align days-before để overlay 2 giải khác lịch.
+
 ## [2026-06-08] BUGFIX: Ẩn fee-warning leak khỏi merchant portal
 FeeService warnings ("MerchantConfig không tồn tại cho tenantId=X — fallback Tier 3 platform default 5.5%...") đẩy thẳng ra merchant qua `revSummary.warnings` → **leak tenantId + cơ cấu phí nội bộ** cho BTC.
 Fix: `merchant-portal.service.ts` 4 site (revenue summary/by-category/aggregate/trend) → `logFeeWarningsInternal()` log server-side, KHÔNG đẩy ra merchant (warnings=[] → FE banner tự ẩn via `!warnings.length` guard). Backend-only. Test cũ "propagates Tier-3" → đảo thành "HIDDEN (no tenantId/tier leak)". 161 jest PASS.

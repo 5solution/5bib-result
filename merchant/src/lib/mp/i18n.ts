@@ -198,6 +198,13 @@ export const DICT: Dict = {
   legend_low: { vi: "Ít", en: "Low", km: "តិច", lo: "ໜ້ອຍ", ms: "Rendah" },
   legend_high: { vi: "Nhiều", en: "High", km: "ច្រើន", lo: "ຫຼາຍ", ms: "Tinggi" },
 
+  // F-074 — YoY (So với mùa trước)
+  yoy_title: { vi: "So với mùa trước", en: "vs previous edition", km: "ធៀបនឹងលើកមុន", lo: "ທຽບກັບຄັ້ງກ່ອນ", ms: "vs edisi sebelumnya" },
+  yoy_pick: { vi: "Chọn giải so sánh…", en: "Pick a race to compare…", km: "ជ្រើសរើសការប្រណាំងដើម្បីប្រៀបធៀប…", lo: "ເລືອກການແຂ່ງຂັນເພື່ອປຽບທຽບ…", ms: "Pilih perlumbaan untuk dibandingkan…" },
+  this_race: { vi: "Giải này", en: "This race", km: "ការប្រណាំងនេះ", lo: "ການແຂ່ງຂັນນີ້", ms: "Perlumbaan ini" },
+  days_before_unit: { vi: "ngày trước đua", en: "days before race", km: "ថ្ងៃមុនការប្រណាំង", lo: "ມື້ກ່ອນແຂ່ງ", ms: "hari sebelum perlumbaan" },
+  yoy_empty: { vi: "Chưa có giải nào trước đó cùng BTC để so sánh", en: "No earlier race from this organizer to compare", km: "គ្មានការប្រណាំងមុននេះពីអ្នករៀបចំនេះដើម្បីប្រៀបធៀប", lo: "ບໍ່ມີການແຂ່ງຂັນກ່ອນໜ້າຈາກຜູ້ຈັດນີ້ເພື່ອປຽບທຽບ", ms: "Tiada perlumbaan terdahulu daripada penganjur ini" },
+
   // F-073 — capacity / quota (Sức chứa)
   capacity_title: { vi: "Sức chứa theo cự ly", en: "Capacity by course", km: "សមត្ថភាពតាមចម្ងាយ", lo: "ຄວາມຈຸຕາມໄລຍະ", ms: "Kapasiti mengikut kategori" },
   quota_word: { vi: "Quota", en: "Quota", km: "កូតា", lo: "Quota", ms: "Kuota" },

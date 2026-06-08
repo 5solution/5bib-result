@@ -16830,3 +16830,18 @@ export type MerchantPortalControllerGetCapacityResponses = {
     200: RaceCapacityDto;
 };
 export type MerchantPortalControllerGetCapacityResponse = MerchantPortalControllerGetCapacityResponses[keyof MerchantPortalControllerGetCapacityResponses];
+
+// ── F-074 YoY (hand-added; reconcile on next generate:api) ──
+export type YoyComparableItemDto = { raceId: number; title: string; eventStartDate: string | null };
+export type YoyComparableDto = { raceId: number; candidates: Array<YoyComparableItemDto> };
+export type YoyPointDto = { daysBefore: number; cum: number };
+export type YoySeriesDto = { raceId: number; title: string; eventStartDate: string | null; points: Array<YoyPointDto> };
+export type YoyCurveDto = { current: YoySeriesDto; compare: YoySeriesDto };
+export type MerchantPortalControllerGetYoyComparableData = { body?: never; path?: never; query: { raceId: number }; url: '/api/merchant-portal/yoy/comparable' };
+export type MerchantPortalControllerGetYoyComparableErrors = { 401: unknown; 403: unknown };
+export type MerchantPortalControllerGetYoyComparableResponses = { 200: YoyComparableDto };
+export type MerchantPortalControllerGetYoyComparableResponse = MerchantPortalControllerGetYoyComparableResponses[keyof MerchantPortalControllerGetYoyComparableResponses];
+export type MerchantPortalControllerGetYoyCurveData = { body?: never; path?: never; query: { raceId: number; compareRaceId: number }; url: '/api/merchant-portal/yoy/curve' };
+export type MerchantPortalControllerGetYoyCurveErrors = { 401: unknown; 403: unknown };
+export type MerchantPortalControllerGetYoyCurveResponses = { 200: YoyCurveDto };
+export type MerchantPortalControllerGetYoyCurveResponse = MerchantPortalControllerGetYoyCurveResponses[keyof MerchantPortalControllerGetYoyCurveResponses];

@@ -876,3 +876,9 @@ Admin Partner EDIT form chỉ render "Tạo mới" path. EDIT shortName flow def
 | **TD-F073-SOLD-SEMANTICS** 🟡 | sold = quota − remained_ticket (vendor "chỗ còn"), KHÔNG phải paid-count | "Đã bán" có thể gồm chỗ đang giữ/pending. Verify ý nghĩa với BTC; nếu cần "đã thanh toán" → dùng paid count |
 | **TD-F073-DEFAULT-1000** 🟢 | Nhiều ticket_type max_participate=1000 default → pctFilled thấp giả | BTC chưa set quota thật sẽ thấy % thấp. Data thật, không phải bug |
 | **TD-F073-SDK-HANDADD** 🟢 | SDK capacity hand-add (DEV backend deploy chậm) | Reconcile khi generate:api chạy được |
+
+## F-074 YoY (DEV 2026-06-08) — tech debt
+| ID | Debt | Cảnh báo |
+|----|------|----------|
+| **TD-F074-180DAY-CAP** 🟢 | Đơn đặt >180 ngày trước đua gộp tại mốc D-180 | Hầu hết giải mở bán <180 ngày. Nâng YOY_MAX_DAYS nếu cần |
+| **TD-F074-SDK-HANDADD** 🟢 | SDK yoy hand-add | Reconcile khi generate:api chạy được |

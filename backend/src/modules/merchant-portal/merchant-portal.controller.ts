@@ -14,6 +14,7 @@ import type { LogtoUser } from '../logto-auth/types';
 import { MerchantMeResponseDto } from './dto/merchant-me.dto';
 import { ParticipantInsightsDto } from './dto/participant-insights.dto';
 import { RaceCapacityDto } from './dto/capacity.dto';
+import { YoyComparableDto, YoyCurveDto, YoyCurveQueryDto } from './dto/yoy.dto';
 import {
   MerchantRaceListQueryDto,
   MerchantRaceListResponseDto,
@@ -481,5 +482,42 @@ export class MerchantPortalController {
     @Query() query: TicketSalesQueryDto,
   ): Promise<RaceCapacityDto> {
     return this.merchantPortalService.getCapacity(user.userId, query.raceId);
+  }
+
+  // ── F-074 YoY (so với mùa trước) ──
+  @Get('yoy/comparable')
+  @ApiOperation({
+    summary: 'Danh sách giải để so sánh YoY (cùng BTC, sớm hơn, có quyền) (F-074)',
+    description: 'Cho dropdown chọn giải mùa trước. IDOR-safe (chỉ giải user có quyền).',
+  })
+  @ApiResponse({ status: 200, type: YoyComparableDto })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Inactive OR race not accessible' })
+  async getYoyComparable(
+    @CurrentUser() user: LogtoUser,
+    @Query() query: TicketSalesQueryDto,
+  ): Promise<YoyComparableDto> {
+    return this.merchantPortalService.getYoyComparable(user.userId, query.raceId);
+  }
+
+  @Get('yoy/curve')
+  @ApiOperation({
+    summary: 'Đường lũy kế đăng ký 2 giải theo "ngày trước đua" (F-074)',
+    description:
+      'Overlay giải hiện tại vs giải so sánh, căn theo days-before-race. ' +
+      'IDOR cả 2 giải. No-PII (chỉ lũy kế).',
+  })
+  @ApiResponse({ status: 200, type: YoyCurveDto })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Inactive OR race not accessible' })
+  async getYoyCurve(
+    @CurrentUser() user: LogtoUser,
+    @Query() query: YoyCurveQueryDto,
+  ): Promise<YoyCurveDto> {
+    return this.merchantPortalService.getYoyCurve(
+      user.userId,
+      query.raceId,
+      query.compareRaceId,
+    );
   }
 }

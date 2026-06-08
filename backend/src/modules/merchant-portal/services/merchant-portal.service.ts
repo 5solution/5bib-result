@@ -42,6 +42,12 @@ import {
   type RawCapacityRow,
 } from '../utils/capacity.util';
 import {
+  YoyComparableDto,
+  YoyCurveDto,
+  YoySeriesDto,
+} from '../dto/yoy.dto';
+import { daysBefore, cumulativeCurve } from '../utils/yoy.util';
+import {
   aggregateParticipants,
   type RawParticipantRow,
 } from '../utils/participant-insights.util';
@@ -878,6 +884,122 @@ export class MerchantPortalService {
       mimeType:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     };
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // F-074 — YoY (so với mùa trước) — ticket-scope, no-PII
+  // ────────────────────────────────────────────────────────────────
+
+  /** Race meta (tenant + event date + title) for YoY. */
+  private async getRaceMeta(
+    raceId: number,
+  ): Promise<{ tenantId: number | null; eventStartDate: Date | null; title: string } | null> {
+    const rows: Array<{
+      tenant_id: number | string | null;
+      event_start_date: Date | string | null;
+      title: string | null;
+    }> = await this.db.query(
+      `SELECT tenant_id, event_start_date, title FROM races WHERE race_id = ? LIMIT 1`,
+      [raceId],
+    );
+    const r = rows[0];
+    if (!r) return null;
+    const d = r.event_start_date ? new Date(r.event_start_date as string) : null;
+    return {
+      tenantId: r.tenant_id != null ? Number(r.tenant_id) : null,
+      eventStartDate: d && !Number.isNaN(d.getTime()) ? d : null,
+      title: (r.title ?? '').trim(),
+    };
+  }
+
+  /**
+   * BR-74 — Candidate races for YoY dropdown: same tenant, earlier event date,
+   * accessible to the user (IDOR-safe). Non-draft, non-deleted.
+   */
+  async getYoyComparable(
+    userId: string,
+    raceId: number,
+  ): Promise<YoyComparableDto> {
+    await this.assertRaceForUser(userId, raceId);
+    const cur = await this.getRaceMeta(raceId);
+    if (!cur || cur.tenantId == null) return { raceId, candidates: [] };
+
+    const accessible = await this.resolveAccessibleRaces(userId);
+    const rows: Array<{
+      race_id: number | string;
+      title: string | null;
+      event_start_date: Date | string | null;
+    }> = await this.db.query(
+      `SELECT race_id, title, event_start_date FROM races
+       WHERE tenant_id = ? AND is_delete = 0 AND status != 'DRAFT' AND race_id != ?
+         AND (event_start_date IS NULL OR event_start_date < ?)
+       ORDER BY event_start_date DESC LIMIT 50`,
+      [cur.tenantId, raceId, cur.eventStartDate ?? new Date()],
+    );
+    const candidates = rows
+      .filter((r) => accessible.has(Number(r.race_id)))
+      .map((r) => ({
+        raceId: Number(r.race_id),
+        title: (r.title ?? '').trim(),
+        eventStartDate: r.event_start_date
+          ? new Date(r.event_start_date as string).toISOString()
+          : null,
+      }));
+    return { raceId, candidates };
+  }
+
+  /** Build one cumulative-by-days-before series for a race (paid orders). */
+  private async buildYoySeries(raceId: number): Promise<YoySeriesDto> {
+    const meta = await this.getRaceMeta(raceId);
+    const evt = meta?.eventStartDate ?? null;
+    const rows: Array<{ payment_on: Date | string | null }> = await this.db.query(
+      `SELECT payment_on FROM order_metadata
+       WHERE race_id = ? AND deleted = 0 AND financial_status = 'paid'
+         AND payment_on IS NOT NULL`,
+      [raceId],
+    );
+    const list = rows
+      .map((r) => daysBefore(evt, r.payment_on ? new Date(r.payment_on as string) : null))
+      .filter((d): d is number => d != null);
+    return {
+      raceId,
+      title: meta?.title ?? '',
+      eventStartDate: evt ? evt.toISOString() : null,
+      points: cumulativeCurve(list),
+    };
+  }
+
+  /**
+   * BR-74 — YoY curve: overlay current vs a chosen earlier race aligned by
+   * days-before-race. IDOR on BOTH races. Cache 300s.
+   */
+  async getYoyCurve(
+    userId: string,
+    raceId: number,
+    compareRaceId: number,
+  ): Promise<YoyCurveDto> {
+    await this.assertRaceForUser(userId, raceId);
+    await this.assertRaceForUser(userId, compareRaceId);
+    const cacheKey = `merchant-portal:yoy:${userId}:${raceId}:${compareRaceId}`;
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as YoyCurveDto;
+    } catch (err) {
+      this.logger.warn(`Redis read ${cacheKey} failed: ${(err as Error).message}`);
+    }
+
+    const [current, compare] = await Promise.all([
+      this.buildYoySeries(raceId),
+      this.buildYoySeries(compareRaceId),
+    ]);
+    const dto: YoyCurveDto = { current, compare };
+
+    try {
+      await this.redis.set(cacheKey, JSON.stringify(dto), 'EX', 300);
+    } catch (err) {
+      this.logger.warn(`Redis write ${cacheKey} failed: ${(err as Error).message}`);
+    }
+    return dto;
   }
 
   // ────────────────────────────────────────────────────────────────
