@@ -50,3 +50,34 @@ Báo cáo bán vé đếm từ `order_metadata` (paid orders) → BỎ SÓT vé 
 ## Pending
 - Browser-QC on DEV after deploy (BE+FE single push). PROD release after Danny approval.
 - Reconcile hand-added SDK via `pnpm generate:api` later.
+
+---
+
+## Follow-up fixes (Danny PROD review 2026-06-08)
+
+### F2 — "Vé đã huỷ" = voided-order qty → codes INACTIVE (commit 4d31e34)
+- Bug có sẵn từ F-069: "Vé đã huỷ" = SUM(quantity) đơn financial_status='voided'
+  → đếm cả đơn checkout hỏng/bỏ giữa chừng/hoàn tiền → thổi phồng.
+  Race 124: 2.202 (777 đơn voided) vs vé huỷ THẬT (codes INACTIVE) = 15. Race 209: 213 vs 2.
+- Fix: `pullIssuedCodeTotals` gộp `cancelled_count` (status='INACTIVE', deleted=0) trong 1 query.
+  DTO +cancelledIssued; FE KPI đọc summary.cancelledIssued thay statusCount('voided').
+
+### F3 — Cơ cấu VĐV charts không cộng ra tổng (commit 21bcae3)
+- Tổng VĐV = codes incl import (race 124 = 7.176) nhưng demographics chỉ ~3.559 (vé qua 5BIB)
+  → charts giới/tuổi/quốc tịch/tỉnh nhìn như lỗi.
+- Đào lại import→demographics cho race 124 (CSV import, không phải MANUAL như 209):
+  external_order_ref="12.bv" (mảnh tên file), receipt_email, csv_import_tracking.hash_code —
+  **đều 0 match** athlete_subinfo.import_unique_key. → Xác nhận data gap THẬT, không recover.
+- Fix (Danny chốt): append bucket "Chưa có dữ liệu" = (totalIssued − participantsWithData) vào
+  4 biểu đồ nhân khẩu → mọi chart SUM = totalIssued. Size áo giữ empty-state riêng.
+- Verified DEV race 209: donut center 644, Nam 276 + Nữ 152 + Chưa có dữ liệu 216 = 644.
+
+## KNOWN LIMITATION (TD-F077-IMPORT-DEMOGRAPHICS)
+Vé import (codes order_id NULL) KHÔNG có dữ liệu nhân khẩu trong platform DB —
+không có user_id, không FK sạch tới athlete_subinfo (cả MANUAL adds lẫn CSV import).
+Cơ cấu VĐV chỉ phản ánh vé qua 5BIB; phần import hiện ở bucket "Chưa có dữ liệu".
+Nếu sau này import flow lưu demographics → revisit để phủ đủ.
+
+## Release chain
+- v1.15.0 (f9eda42): F-072/073/074 + fee-fix + F-077 import counting + participant sub fix.
+- v1.15.1 (21bcae3): + "Vé đã huỷ"=INACTIVE + Cơ cấu gap bucket.

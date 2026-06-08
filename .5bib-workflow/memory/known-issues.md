@@ -882,3 +882,11 @@ Admin Partner EDIT form chỉ render "Tạo mới" path. EDIT shortName flow def
 |----|------|----------|
 | **TD-F074-180DAY-CAP** 🟢 | Đơn đặt >180 ngày trước đua gộp tại mốc D-180 | Hầu hết giải mở bán <180 ngày. Nâng YOY_MAX_DAYS nếu cần |
 | **TD-F074-SDK-HANDADD** 🟢 | SDK yoy hand-add | Reconcile khi generate:api chạy được |
+
+## [2026-06-08] TD-F077-IMPORT-DEMOGRAPHICS — vé import không có dữ liệu nhân khẩu
+Vé import (`codes.order_id NULL` — cả MANUAL adds lẫn CSV import) KHÔNG có user_id và
+không có FK sạch tới `athlete_subinfo` (đã đào external_order_ref/receipt_email/
+csv_import_tracking.hash_code vs import_unique_key — 0 match trên race 209 & 124).
+→ Cơ cấu VĐV (size/giới/AG/quốc tịch/tỉnh) chỉ phản ánh vé qua 5BIB; phần import hiện
+ở bucket "Chưa có dữ liệu". Tổng vé/đếm vẫn đúng đủ (codes-based). Nếu import flow sau
+này lưu demographics (hoặc thêm cột link code↔athlete_subinfo) → revisit để phủ đủ.

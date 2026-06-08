@@ -2975,3 +2975,29 @@ Major modules đã có trong codebase tính đến bootstrap (2026-05-03):
 - **LESSON container_name collision:** prod merchant ban đầu để container_name `5bib-result-merchant` TRÙNG container DEV (docker name global-unique) → up fail "name in use". Prod convention = `5bib-production-X`. Fix → `5bib-production-merchant`. Mọi service prod PHẢI dùng prefix `5bib-production-` cho container_name.
 - Verified PROD: result.5bib.com merchant endpoints 401-gated; merchant.5bib.com 307→sign-in 200 + SSL; admin.5bib.com 200.
 - **Còn lại:** PROD Mongo (27019) chưa có access record → BTC dùng được sau khi gán quyền qua admin PROD (M2M đã set, dialog đã chạy). Platform MySQL dùng chung → data thật sẵn.
+
+## [2026-06-08] FEATURE-077 — Merchant báo cáo: đếm vé IMPORT (codes-based) + 2 follow-up
+
+**Trigger:** Danny — "vé import cần tính vào mới ra số tổng" + PROD review bắt 2 lỗi.
+
+**Root cause:** báo cáo bán vé đếm từ `order_metadata` (đơn 5BIB) → bỏ sót vé import
+(`codes.order_id NULL`, import_tracking_id). Race 209: 402→644; race 124: undercount→7176.
+
+**Files (backend/src/modules/merchant-portal):**
+- `services/merchant-portal.service.ts`: +CODE_SOLD_FILTER, +NO_DATA_LABEL, +pullIssuedCodeTotals
+  (total/5bib/import/cancelled trong 1 query). getTicketSalesSummary +totalIssued/issued5bib/
+  issuedImport/cancelledIssued. getTicketSalesByCourse/ByType → codes-based + source split.
+  getCapacity sold → codes correlated subquery. getParticipantInsights +totalIssued/
+  participantsWithData/issuedImport + gap bucket "Chưa có dữ liệu" cho 4 chart nhân khẩu.
+- `dto/ticket-sales.dto.ts` (+5 field), `dto/participant-insights.dto.ts` (+3 field).
+- `services/*.spec.ts`: codes-based mocks + gap-bucket tests. 172 jest PASS.
+- merchant FE `app/races/[raceId]/page.tsx`: Tổng vé=totalIssued + source sub, KPI "Vé import",
+  "Vé đã huỷ"=cancelledIssued (was voided-order qty), participant total+coverage note.
+  `lib/api-generated/types.gen.ts` (+fields), `lib/mp/i18n.ts` (+6 key ×5 lang).
+
+**2 follow-up (PROD review):**
+- "Vé đã huỷ" = SUM voided-order qty (thổi phồng: race 124=2202) → codes INACTIVE (=15).
+- Cơ cấu VĐV charts không cộng ra tổng → bucket "Chưa có dữ liệu"=(totalIssued−withData).
+
+**Releases:** v1.15.0 (f9eda42: F-072/073/074 + fee-fix + import counting) → v1.15.1 (21bcae3:
++đã-huỷ INACTIVE + cơ cấu gap bucket). Cả 2 trên PROD.
