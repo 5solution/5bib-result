@@ -424,7 +424,13 @@ function ParticipantsTab({
 
       <Card style={{ marginBottom: 18 }}>
         <SectionTitle>{t("by_size", lang)}</SectionTitle>
-        <HBars items={toBars(data.shirtSizes)} lang={lang} color={CH.blue} />
+        {data.shirtSizes.some((s) => s.label !== "Khác" && s.label !== "Không rõ") ? (
+          <HBars items={toBars(data.shirtSizes)} lang={lang} color={CH.blue} />
+        ) : (
+          <div style={{ padding: "20px 0", textAlign: "center", fontSize: 13, color: "var(--5s-text-subtle)" }}>
+            {t("no_size_data", lang)}
+          </div>
+        )}
       </Card>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>

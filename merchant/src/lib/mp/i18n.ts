@@ -224,6 +224,7 @@ export const DICT: Dict = {
   export_size: { vi: "Xuất Excel size", en: "Export size (Excel)", km: "នាំចេញទំហំ (Excel)", lo: "ສົ່ງອອກຂະໜາດ (Excel)", ms: "Eksport saiz (Excel)" },
   exporting: { vi: "Đang xuất…", en: "Exporting…", km: "កំពុងនាំចេញ…", lo: "ກຳລັງສົ່ງອອກ…", ms: "Mengeksport…" },
   no_participants: { vi: "Chưa có VĐV đã thanh toán", en: "No paid participants yet", km: "មិនទាន់មានអត្តពលិកដែលបានបង់ប្រាក់", lo: "ຍັງບໍ່ມີນັກກິລາທີ່ຈ່າຍແລ້ວ", ms: "Tiada peserta berbayar lagi" },
+  no_size_data: { vi: "Giải này chưa thu dữ liệu size áo", en: "No shirt-size data collected for this race", km: "ការប្រណាំងនេះមិនទាន់ប្រមូលទិន្នន័យទំហំអាវ", lo: "ການແຂ່ງຂັນນີ້ຍັງບໍ່ໄດ້ເກັບຂໍ້ມູນຂະໜາດເສື້ອ", ms: "Tiada data saiz baju dikumpul untuk perlumbaan ini" },
 
   // revenue
   revenue_report: { vi: "Báo cáo doanh thu", en: "Revenue Report", km: "របាយការណ៍ចំណូល", lo: "ລາຍງານລາຍຮັບ", ms: "Laporan Hasil" },

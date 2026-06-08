@@ -132,13 +132,19 @@ export function normalizeGender(raw: string | null | undefined): string {
   return OTHER_LABEL;
 }
 
-const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
-/** Canonical size token (uppercased, XXL→2XL) or null if unrecognised. */
+const SIZE_ORDER = ['3XS', '2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
+/** Canonical size token (uppercased, XXL→2XL, XXS→2XS) or null if unrecognised. */
 function canonicalSize(raw: string | null | undefined): string | null {
   if (!raw || typeof raw !== 'string') return null;
   let t = raw.trim().toUpperCase().replace(/\s+/g, '');
   if (!t) return null;
-  t = t.replace('XXXL', '3XL').replace('XXL', '2XL').replace('XXXXL', '4XL');
+  // large end (longest first), then small end
+  t = t
+    .replace('XXXXL', '4XL')
+    .replace('XXXL', '3XL')
+    .replace('XXL', '2XL')
+    .replace('XXXS', '3XS')
+    .replace('XXS', '2XS');
   return SIZE_ORDER.includes(t) ? t : null;
 }
 

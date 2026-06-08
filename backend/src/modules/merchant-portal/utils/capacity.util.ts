@@ -11,7 +11,7 @@ export interface RawCapacityRow {
   tt_id: number | string;
   type_name: string | null;
   quota: number | string | null; // tt.max_participate
-  remaining: number | string | null; // tt.remained_ticket
+  sold: number | string | null; // PAID count (consistent with by-course report)
 }
 
 export interface CapacityTicketType {
@@ -59,16 +59,18 @@ export function aggregateCapacity(
   for (const r of rows) {
     const courseId = n(r.course_id);
     const quota = n(r.quota);
-    const remaining = Math.min(n(r.remaining), quota || n(r.remaining)); // remaining never > quota
     const unlimited = quota <= 0;
-    const sold = unlimited ? 0 : Math.max(0, quota - remaining);
+    // sold = PAID count (same source as by-course report → numbers stay consistent
+    // on the page). remaining derived = quota - sold (clamped ≥0).
+    const sold = Math.max(0, n(r.sold));
+    const remaining = unlimited ? 0 : Math.max(0, quota - sold);
 
     const tt: CapacityTicketType = {
       ticketTypeId: n(r.tt_id),
       name: (r.type_name as string | null)?.trim() || '—',
       quota,
       sold,
-      remaining: unlimited ? 0 : Math.max(0, remaining),
+      remaining,
       unlimited,
       pctFilled: pct(sold, quota),
     };

@@ -1024,10 +1024,17 @@ export class MerchantPortalService {
     const rows: RawCapacityRow[] = await this.db.query(
       `SELECT rc.id AS course_id, rc.name AS course_name,
               tt.id AS tt_id, tt.type_name AS type_name,
-              tt.max_participate AS quota, tt.remained_ticket AS remaining
+              tt.max_participate AS quota,
+              COALESCE(SUM(
+                CASE WHEN om.financial_status = 'paid' AND om.deleted = 0
+                     THEN oli.quantity ELSE 0 END
+              ), 0) AS sold
        FROM ticket_type tt
        JOIN race_course rc ON tt.race_course_id = rc.id
+       LEFT JOIN order_line_item oli ON oli.ticket_type_id = tt.id
+       LEFT JOIN order_metadata om ON oli.order_id = om.id
        WHERE rc.race_id = ? AND rc.deleted = 0 AND tt.deleted = 0
+       GROUP BY rc.id, rc.name, tt.id, tt.type_name, tt.max_participate
        ORDER BY rc.id`,
       [raceId],
     );

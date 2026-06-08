@@ -83,7 +83,7 @@ describe('participant-insights util', () => {
       // note: aggregate canonicalises XXL→2XL & Free→Khác; here raw indices
       expect(sizeSortIndex('S')).toBeLessThan(sizeSortIndex('M'));
       expect(sizeSortIndex('M')).toBeLessThan(sizeSortIndex('L'));
-      expect(sizeSortIndex('Free')).toBe(8); // unknown → last
+      expect(sizeSortIndex('Free')).toBeGreaterThan(sizeSortIndex('4XL')); // unknown → last
       expect(labels[0]).toBe('S');
     });
   });
@@ -95,6 +95,23 @@ describe('participant-insights util', () => {
     nationality: null,
     city_province: null,
     ...o,
+  });
+
+  describe('TC-05b small sizes XXS/2XS/3XS canonicalised (QC fix)', () => {
+    const rows = [
+      mkRow({ tshirt_size: 'XXS' }),
+      mkRow({ tshirt_size: '2XS' }),
+      mkRow({ tshirt_size: 'XS' }),
+      mkRow({ tshirt_size: 'M' }),
+    ];
+    const agg = aggregateParticipants(rows, RACE_DAY);
+    it('XXS + 2XS merge to 2XS, ordered before XS/M, none → Khác', () => {
+      expect(agg.shirtSizes.find((s) => s.label === '2XS')?.count).toBe(2);
+      const order = agg.shirtSizes.map((s) => s.label);
+      expect(order.indexOf('2XS')).toBeLessThan(order.indexOf('XS'));
+      expect(order.indexOf('XS')).toBeLessThan(order.indexOf('M'));
+      expect(agg.shirtSizes.find((s) => s.label === 'Khác')).toBeUndefined();
+    });
   });
 
   describe('TC-06 aggregate counts + total + size canonical order', () => {
