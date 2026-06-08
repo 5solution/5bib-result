@@ -7,6 +7,28 @@
 
 ---
 
+## [2026-06-08] Merchant Portal — UAT fixes + Admin per-race access (post F-070)
+
+**Type:** BUGFIX + EXTEND_EXISTING (merchant-portal). Branch main → DEV. Danny UAT browser phát hiện.
+
+### ⚠️ CORRECTION cho entry F-070 bên dưới (timezone)
+- F-070 entry ghi "payment_on lưu UTC → +7h" → **SAI**. UAT 2026-06-08 chứng minh `order_metadata.payment_on` **lưu sẵn giờ VN (GMT+7)**: order mới nhất payment_on='2026-06-07 23:06' > dbnow UTC ~15:2x ⇒ nếu UTC là tương lai 7h (bất khả). DB session tz=UTC **KHÔNG** đồng nghĩa column lưu UTC. → Heatmap **BỎ `DATE_ADD(+7h)`**, dùng raw `DAYOFWEEK/HOUR(payment_on)`. **LESSON: timezone phải verify bằng UAT render thật, không suy từ session tz.**
+
+### Fixes (commits 4755251, ba31d0c, aebab15)
+- ✏️ `merchant-portal.service.ts` getTicketHeatmap — bỏ +7h (raw payment_on, VN-local). getRaces — thêm `r.images`→`coverUrl`.
+- ✏️ `dto/race-list.dto.ts` — +coverUrl (ảnh bìa thật từ races.images).
+- ✏️ merchant `components/mp/ui.tsx` Sidebar — bỏ height:100% (fix "ngắn tủn", flex-stretch full); bỏ nav 'Bán vé'/'Doanh thu' (là tab theo-giải, không global → dead-link). `app/dashboard/page.tsx` — dùng race.coverUrl fallback placeholder. `races/[raceId]` active='races'.
+
+### Admin per-race access (commit dad9170)
+- ➕ `GET admin/merchant-portal/tenants/search` (BTC CÓ tổ chức giải, join races, full+search, MST=cột `vat`) + `races/search` (per-race picker). +`dto/admin-search.dto.ts` + tests (137 PASS).
+- ✏️ admin dialog: radio "Phạm vi quyền" Theo BTC (tenantIds) | Chọn giải cụ thể (raceOverrides.include). +`race-picker.tsx`. Tenant picker đổi nguồn (bỏ contracts finance-api). → minhnb9897=tenant cả giải; danny=chỉ giải A. resolveAccessibleRaces (tenant∪include−exclude) đã hỗ trợ sẵn từ F-069.
+
+### QC (04-qc-report-FULL-PORTAL.md) ✅ APPROVED
+- 137 merchant-portal test, 0 regression (14 full-suite fail đều PRE-EXISTING unrelated). 17 endpoint live DEV 401-gated. IDOR/SQL/no-money clean. Browser UAT 2 persona (BTC + admin) verified.
+
+### Tech debt → known-issues
+- Forecast linear projection; heatmap GMT+7 hardcoded (toàn giải VN OK); target no audit-log; exclude-mode UI defer; **7 suite test PRE-EXISTING hỏng** (upload `vi`, dashboard sparkline F-059, admin.service, race-result, reconciliation, chip concurrency) — task BUGFIX riêng.
+
 ## [2026-06-07] FEATURE-070: Merchant Portal Advanced MKT Analytics — ✅ DEPLOYED (DEV)
 
 **Type:** EXTEND_EXISTING (merchant-portal module + merchant frontend). Branch `5bib_merchant_v1` → main.
