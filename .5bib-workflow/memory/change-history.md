@@ -2888,3 +2888,11 @@ Major modules đã có trong codebase tính đến bootstrap (2026-05-03):
 - Race master data sync (Redis HSET cache, MySQL fallback — wait, dù CLAUDE.md đề cập MySQL, project repo này KHÔNG có MySQL platform DB; có thể fallback dùng external service hoặc deprecated)
 - "Velocity" frontend design system
 - VPS deployment via GitHub Actions → GHCR
+
+## [2026-06-08] PROD GO-LIVE — Merchant Portal (F-069 + F-070) release/v1.13.0
+- Cut release/v1.13.0 từ main (prod đang v1.12.2 `b6382f0`, delta = 18 commit 100% merchant) → deploy-production.yml.
+- Prod ops (/opt/5bib-result-production, VPS same as dev 157.10.42.171): backend.env M2M + MANAGEMENT_RESOURCE + MERCHANT_PORTAL_LOGIN_URL=merchant.5bib.com; merchant.env (BASE_URL prod, cookie riêng); compose +service 5bib-result-merchant **port 3090:3006** container_name **5bib-production-merchant**; nginx merchant.5bib.com + certbot SSL; Logto redirect URI prod đã có.
+- deploy-production.yml: +build-merchant job + guarded deploy (non-blocking).
+- **LESSON container_name collision:** prod merchant ban đầu để container_name `5bib-result-merchant` TRÙNG container DEV (docker name global-unique) → up fail "name in use". Prod convention = `5bib-production-X`. Fix → `5bib-production-merchant`. Mọi service prod PHẢI dùng prefix `5bib-production-` cho container_name.
+- Verified PROD: result.5bib.com merchant endpoints 401-gated; merchant.5bib.com 307→sign-in 200 + SSL; admin.5bib.com 200.
+- **Còn lại:** PROD Mongo (27019) chưa có access record → BTC dùng được sau khi gán quyền qua admin PROD (M2M đã set, dialog đã chạy). Platform MySQL dùng chung → data thật sẵn.
