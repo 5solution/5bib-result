@@ -592,6 +592,44 @@ describe('MerchantPortalService', () => {
       expect(r.genders.find((g) => g.label === 'Chưa có dữ liệu')).toBeUndefined();
       expect(r.genders.reduce((s, g) => s + g.count, 0)).toBe(1);
     });
+
+    it('export Cơ cấu sheet reconciles to totalIssued via gap bucket (matches UI)', async () => {
+      mockConfigFound({ tenantIds: [42] });
+      mockDb.query
+        .mockResolvedValueOnce([{ race_id: 501 }]) // scope
+        .mockResolvedValueOnce(dataRows) // pullParticipantRows (3 with data)
+        .mockResolvedValueOnce([{ event_start_date: '2026-08-16' }]) // getRaceDay
+        .mockResolvedValueOnce([
+          { total_issued: 10, sbib_count: 3, import_count: 7, cancelled_count: 0 },
+        ]) // pullIssuedCodeTotals
+        .mockResolvedValueOnce([{ course_name: '42K', cnt: 10 }]); // pullIssuedCodesByCourse
+      const { buffer, filename } = await service.getParticipantInsightsExport(
+        'logto_user_a',
+        501,
+      );
+      expect(filename).toBe('co-cau-vdv-race-501.xlsx');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const ExcelJS = require('exceljs');
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const s2 = wb.getWorksheet('Cơ cấu VĐV');
+      const genderTotal = s2
+        .getRows(1, s2.rowCount)
+        .filter((r: any) => r.getCell(1).value === 'Giới tính')
+        .reduce((sum: number, r: any) => sum + Number(r.getCell(3).value), 0);
+      expect(genderTotal).toBe(10); // 3 with-data + 7 gap = totalIssued
+      // summary header carries the source split
+      const summary = s2
+        .getRows(1, s2.rowCount)
+        .filter((r: any) => r.getCell(1).value === 'Tổng quan')
+        .map((r: any) => [r.getCell(2).value, Number(r.getCell(3).value)]);
+      expect(summary).toEqual(
+        expect.arrayContaining([
+          ['Tổng VĐV', 10],
+          ['Vé import', 7],
+        ]),
+      );
+    });
   });
 
   // ──────────────────────────────────────────────────────────

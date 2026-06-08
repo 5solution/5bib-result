@@ -898,24 +898,53 @@ export class MerchantPortalService {
     return dto;
   }
 
+  /** F-IMPORT — issued codes (ACTIVE/SENT incl import) grouped by course NAME. */
+  private async pullIssuedCodesByCourse(
+    raceId: number,
+  ): Promise<Map<string, number>> {
+    const rows: Array<{ course_name: string | null; cnt: number | string }> =
+      await this.db.query(
+        `SELECT rc.name AS course_name, COUNT(*) AS cnt
+         FROM codes c JOIN race_course rc ON c.course_id = rc.id
+         WHERE c.race_id = ? AND ${MerchantPortalService.CODE_SOLD_FILTER}
+         GROUP BY rc.id, rc.name`,
+        [raceId],
+      );
+    const m = new Map<string, number>();
+    for (const r of rows) {
+      const name = (r.course_name ?? '').trim() || 'Không rõ';
+      m.set(name, (m.get(name) ?? 0) + Number(r.cnt ?? 0));
+    }
+    return m;
+  }
+
   /** F-072 — Excel export: Sheet1 size × cự ly, Sheet2 cơ cấu VĐV. */
   async getParticipantInsightsExport(
     userId: string,
     raceId: number,
   ): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
     await this.assertRaceForUser(userId, raceId);
-    const [rows, asOf] = await Promise.all([
+    const [rows, asOf, issued, codesByCourse] = await Promise.all([
       this.pullParticipantRows(raceId),
       this.getRaceDay(raceId),
+      this.pullIssuedCodeTotals(raceId),
+      this.pullIssuedCodesByCourse(raceId),
     ]);
     const agg = aggregateParticipants(rows, asOf);
+
+    // F-IMPORT — export PHẢI khớp UI: tổng = issued codes (incl import). Vé import
+    // không có demographics → gom vào nhóm "Chưa có dữ liệu" để mọi cột cộng ra tổng.
+    const gap = Math.max(0, issued.totalIssued - agg.totalParticipants);
 
     // Per-course size pivot: course → (sizeLabel → count), reusing canonicalisation.
     const byCourse = new Map<string, Map<string, number>>();
     const sizeLabels = new Set<string>(agg.shirtSizes.map((s) => s.label));
-    for (const courseName of new Set(
-      rows.map((r) => (r.course_name ?? '').trim() || 'Không rõ'),
-    )) {
+    // Union course names from athlete_subinfo rows AND codes (courses chỉ có vé import).
+    const courseNames = new Set<string>([
+      ...rows.map((r) => (r.course_name ?? '').trim() || 'Không rõ'),
+      ...codesByCourse.keys(),
+    ]);
+    for (const courseName of courseNames) {
       const subset = rows.filter(
         (r) => ((r.course_name ?? '').trim() || 'Không rõ') === courseName,
       );
@@ -925,9 +954,21 @@ export class MerchantPortalService {
         sizeMap.set(s.label, s.count);
         sizeLabels.add(s.label);
       }
+      // Per-course gap = codes (incl import) − vé có demographics ở cự ly đó.
+      const courseGap = Math.max(
+        0,
+        (codesByCourse.get(courseName) ?? 0) - subset.length,
+      );
+      if (courseGap > 0) {
+        sizeMap.set(NO_DATA_LABEL, courseGap);
+        sizeLabels.add(NO_DATA_LABEL);
+      }
       byCourse.set(courseName, sizeMap);
     }
-    const sizeCols = [...sizeLabels];
+    // "Chưa có dữ liệu" cột cuối cùng (sau các size thật).
+    const sizeCols = [...sizeLabels].sort((a, b) =>
+      a === NO_DATA_LABEL ? 1 : b === NO_DATA_LABEL ? -1 : 0,
+    );
 
     const wb = new ExcelJS.Workbook();
     wb.creator = '5BIB Merchant Portal';
@@ -956,11 +997,24 @@ export class MerchantPortalService {
       { header: 'Giá trị', key: 'label', width: 24 },
       { header: 'Số VĐV', key: 'count', width: 12 },
     ];
+    // F-IMPORT — summary đầu sheet: tổng khớp UI (codes incl import).
+    s2.addRow({ group: 'Tổng quan', label: 'Tổng VĐV', count: issued.totalIssued });
+    s2.addRow({ group: 'Tổng quan', label: 'Bán qua 5BIB', count: issued.issued5bib });
+    s2.addRow({ group: 'Tổng quan', label: 'Vé import', count: issued.issuedImport });
+    s2.addRow({
+      group: 'Tổng quan',
+      label: 'Có dữ liệu cơ cấu',
+      count: agg.totalParticipants,
+    });
+    s2.addRow({});
+    // Append gap bucket "Chưa có dữ liệu" → mỗi nhóm cộng ra Tổng VĐV (khớp UI).
+    const withGap = (arr: typeof agg.genders) =>
+      gap > 0 ? [...arr, { label: NO_DATA_LABEL, count: gap }] : arr;
     const dims: Array<[string, typeof agg.genders]> = [
-      ['Giới tính', agg.genders],
-      ['Nhóm tuổi', agg.ageGroups],
-      ['Quốc tịch', agg.nationalities],
-      ['Tỉnh/thành', agg.provinces],
+      ['Giới tính', withGap(agg.genders)],
+      ['Nhóm tuổi', withGap(agg.ageGroups)],
+      ['Quốc tịch', withGap(agg.nationalities)],
+      ['Tỉnh/thành', withGap(agg.provinces)],
     ];
     for (const [group, buckets] of dims) {
       for (const b of buckets) {
