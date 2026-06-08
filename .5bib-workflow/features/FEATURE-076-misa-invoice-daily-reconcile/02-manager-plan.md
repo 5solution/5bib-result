@@ -228,6 +228,12 @@ Trước khi làm các bước sau, Coder DỪNG và confirm với Danny + Manag
 
 6. **🛑 Trước khi viết test integration** — Verify Coder hiểu `data` của MISA response là **double-encoded JSON string** (Manager đã verify session). Parse defensive: `JSON.parse(outer.data).PageData` rồi `JSON.parse(...)` lần nữa nếu `PageData` cũng là string. KHÔNG hardcode shape mà không có defensive check.
 
+7. **🛑 Production code KHÔNG hardcode sample data** — Manager đã vi phạm 2026-06-08 khi bịa 3 fake orderId (#200030145/#200030148/#200030200) trong Telegram setup verify message. Danny đã catch và challenge. Coder PHẢI:
+   - Mọi MissingRow/MisaOrphan trả về từ classifier MUST derive từ real DB/MISA query result
+   - Test fixture trong `*.spec.ts` được phép hardcode orderId (e.g. `200029416`) NHƯNG phải dùng orderId TỒN TẠI THẬT từ verified PROD data (Manager session đã verify race 140 có 200029416/200029420/200029458, race 220 có 200029393/200029396/200029493)
+   - KHÔNG được copy demo sample data từ doc/Telegram message vào production constants
+   - Snapshot test cho `alert-composer.spec.ts` được phép dùng fixture orderId, NHƯNG comment rõ `// FIXTURE — NOT real data`
+
 ---
 
 ## 🧪 Unit test BẮT BUỘC (Coder phải viết, QC sẽ check)
