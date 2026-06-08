@@ -898,3 +898,12 @@ mọi endpoint (/me, /races). Chỉ Path 3 (provision user MỚI) gán role.
 **Fix:** `MerchantPortalAccessService.ensureMerchantRole()` gọi ở create (Path 1/2) +
 update (self-heal viewer↔finance). Backfill `POST /api/admin/merchant-portal/access/sync-roles`
 cho config cũ. ⚠️ User phải re-login để token nhận role mới (access token ~1h TTL).
+
+### [RESOLVED 2026-06-08] danny@5bib.com vẫn 403 sau backfill → token SSO cũ kẹt
+Sau khi gán role (backfill sync-roles processed 3/3), danny@5bib.com vẫn 403. Logto xác nhận
+user iq2bczj0exxt CÓ merchant_finance (scopes merchant:read+finance đúng). Nguyên nhân: token
+truy cập cũ (mint TRƯỚC khi gán role) vẫn được merchant app/SSO tái dùng khi "đăng nhập lại"
+thông thường → token thiếu scope merchant. **Fix: session sạch** (Incognito / logout hẳn Logto)
+→ token mới mang scope → vào được (Danny confirm). Lưu ý vận hành: user ĐANG đăng nhập trước
+khi được cấp quyền cần logout hẳn (không chỉ revisit) HOẶC chờ access token hết hạn (~1h).
+Merchant mới (provision qua email) login lần đầu → token fresh → không gặp.
