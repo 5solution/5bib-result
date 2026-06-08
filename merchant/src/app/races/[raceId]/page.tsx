@@ -117,11 +117,6 @@ function defaultGran(period: PeriodValue): GranularityValue {
   return period === "90d" ? "weekly" : "daily";
 }
 
-// status helper: find ticketCount for a financial_status
-function statusCount(summary: TicketSalesSummaryDto | null, status: string): number {
-  return summary?.byStatus.find((s) => s.financialStatus === status)?.ticketCount ?? 0;
-}
-
 // ---------- Tabs ----------
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -840,15 +835,16 @@ export default function RaceReportPage() {
         </Card>
       ) : tab === "ticket" ? (
         <>
-          {/* KPIs */}
-          <div style={{ display: "flex", gap: 16, marginBottom: 18 }}>
-            <KpiCard icon={Icons.Ticket} iconBg="var(--5s-blue-50)" iconFg="var(--5s-blue)" label={t("kpi_total", lang)} value={fmt.num(summary?.totalIssued ?? 0, lang)} lang={lang}
-              sub={`${t("src_5bib", lang)}: ${fmt.num(summary?.issued5bib ?? 0, lang)} · ${t("src_import", lang)}: ${fmt.num(summary?.issuedImport ?? 0, lang)}`} />
-            <KpiCard icon={Icons.CheckCircle} iconBg="var(--5s-success-bg)" iconFg="var(--5s-success)" label={t("kpi_paid", lang)} value={fmt.num(statusCount(summary, "paid"), lang)} lang={lang}
-              sub={`${t("via_5bib", lang)}`} />
-            <KpiCard icon={Icons.Download} iconBg="var(--5s-surface)" iconFg="var(--5s-text-muted)" label={t("kpi_import", lang)} value={fmt.num(summary?.issuedImport ?? 0, lang)} lang={lang}
-              sub={`${t("import_hint", lang)}`} />
+          {/* KPIs — Đơn hàng / Số vé đã bán / Số vé import / Số vé hủy / Tổng số vé.
+              Tất cả vé-count dùng codes (chuẩn); Đơn hàng = đơn paid (loại bảo hiểm).
+              Tổng số vé = đã bán + import (codes ACTIVE/SENT). */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 18 }}>
+            <KpiCard icon={Icons.Inbox} iconBg="var(--5s-surface)" iconFg="var(--5s-text-muted)" label={t("kpi_orders", lang)} value={fmt.num(summary?.byStatus.find((b) => b.financialStatus === "paid")?.orderCount ?? 0, lang)} lang={lang} />
+            <KpiCard icon={Icons.Ticket} iconBg="var(--5s-blue-50)" iconFg="var(--5s-blue)" label={t("kpi_sold", lang)} value={fmt.num(summary?.issued5bib ?? 0, lang)} lang={lang} />
+            <KpiCard icon={Icons.Download} iconBg="var(--5s-surface)" iconFg="var(--5s-text-muted)" label={t("kpi_import", lang)} value={fmt.num(summary?.issuedImport ?? 0, lang)} lang={lang} />
             <KpiCard icon={Icons.XCircle} iconBg="var(--5s-danger-bg)" iconFg="var(--5s-danger)" label={t("kpi_cancelled", lang)} value={fmt.num(summary?.cancelledIssued ?? 0, lang)} lang={lang} />
+            <KpiCard icon={Icons.CheckCircle} iconBg="var(--5s-success-bg)" iconFg="var(--5s-success)" label={t("kpi_total_all", lang)} value={fmt.num(summary?.totalIssued ?? 0, lang)} lang={lang} accent="var(--5s-success)"
+              sub={`${t("kpi_sold", lang)}: ${fmt.num(summary?.issued5bib ?? 0, lang)} · ${t("kpi_import", lang)}: ${fmt.num(summary?.issuedImport ?? 0, lang)}`} />
           </div>
 
           {/* Registration trend */}
