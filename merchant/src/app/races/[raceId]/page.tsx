@@ -412,7 +412,11 @@ function ParticipantsTab({
   // F-IMPORT — true total includes import BIBs; demographics only cover 5BIB tickets.
   const totalIssued = data.totalIssued ?? data.totalParticipants;
   const withData = data.participantsWithData ?? data.totalParticipants;
-  const hasImport = (data.issuedImport ?? 0) > 0;
+  const issuedImport = data.issuedImport ?? 0;
+  // 5BIB ticket count (codes có order_id) — source split sums to totalIssued.
+  // NOTE: distinct from `withData` (vé qua 5BIB CÓ athlete_subinfo) shown in coverage note.
+  const issued5bib = Math.max(0, totalIssued - issuedImport);
+  const hasImport = issuedImport > 0;
   if (totalIssued === 0) {
     return <EmptyState icon={Icons.Users} title={t("no_participants", lang)} body={t("no_participants", lang)} />;
   }
@@ -421,7 +425,7 @@ function ParticipantsTab({
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
         <KpiCard icon={Icons.Users} iconBg="var(--5s-blue-50)" iconFg="var(--5s-blue)" label={t("kpi_participants", lang)} value={fmt.num(totalIssued, lang)} lang={lang}
-          sub={hasImport ? `${t("src_5bib", lang)}: ${fmt.num(withData, lang)} · ${t("src_import", lang)}: ${fmt.num(data.issuedImport ?? 0, lang)}` : undefined} />
+          sub={hasImport ? `${t("src_5bib", lang)}: ${fmt.num(issued5bib, lang)} · ${t("src_import", lang)}: ${fmt.num(issuedImport, lang)}` : undefined} />
         <Btn variant="secondary" icon={Icons.Download} onClick={onExport} disabled={exporting}>
           {exporting ? t("exporting", lang) : t("export_size", lang)}
         </Btn>
