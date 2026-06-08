@@ -390,7 +390,7 @@ export function Donut({ items, lang = "vi", size = 168 }: { items: DonutItem[]; 
             {hiItem ? (hiItem.frac * 100).toFixed(0) + "%" : fmt.num(total, lang)}
           </div>
           <div style={{ fontSize: 10, color: CH.textSubtle, textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 700 }}>
-            {hiItem ? (lang === "en" ? hiItem.it.en : hiItem.it.vi) : lang === "en" ? "tickets" : "vé"}
+            {hiItem ? (lang === "en" ? hiItem.it.en : hiItem.it.vi) : t("tickets_word", lang)}
           </div>
         </div>
       </div>
@@ -658,24 +658,18 @@ export function PaceChart({
     insight = (
       <>
         <strong style={{ color: "var(--5s-text)", fontWeight: 700 }}>{t("insight", lang)} · </strong>
-        {lang === "en"
-          ? `Race ended — ${fmt.num(lastActual.v, lang)} tickets.`
-          : `Giải đã kết thúc — ${fmt.num(lastActual.v, lang)} vé.`}
+        {t("insight_race_ended", lang).replace("{n}", fmt.num(lastActual.v, lang))}
       </>
     );
   } else if (projection != null) {
     const above = effTarget != null && projection >= effTarget;
     let body: string;
     if (effTarget != null) {
-      body =
-        lang === "en"
-          ? `Projected ~${fmt.num(projection, lang)} tickets by race day — ${above ? "above" : "below"} the ${fmt.num(effTarget, lang)} target. ${above ? "Hold current spend." : "A push is needed to hit goal."}`
-          : `Theo tốc độ 7 ngày gần nhất, dự kiến đạt ~${fmt.num(projection, lang)} vé vào ngày đua — ${above ? "vượt" : "thấp hơn"} mục tiêu ${fmt.num(effTarget, lang)}. ${above ? "Duy trì ngân sách hiện tại." : "Cần một đợt đẩy để chạm mục tiêu."}`;
+      body = t(above ? "insight_proj_above" : "insight_proj_below", lang)
+        .replace("{proj}", fmt.num(projection, lang))
+        .replace("{target}", fmt.num(effTarget, lang));
     } else {
-      body =
-        lang === "en"
-          ? `Projected ~${fmt.num(projection, lang)} tickets by race day at the last-7-day pace. Set a target to compare.`
-          : `Theo tốc độ 7 ngày gần nhất, dự kiến đạt ~${fmt.num(projection, lang)} vé về ngày đua. Đặt mục tiêu để so sánh.`;
+      body = t("insight_proj_notarget", lang).replace("{proj}", fmt.num(projection, lang));
     }
     insight = (
       <>
@@ -844,9 +838,7 @@ export function Heatmap({ data, lang = "vi", width = 1080 }: { data: TicketHeatm
       </div>
       <InsightFooter>
         <strong style={{ color: "var(--5s-text)", fontWeight: 700 }}>{t("insight", lang)} · </strong>
-        {lang === "en"
-          ? `Peak registration window: ${peakDay} ${peakBucket}h. Schedule ads & email/notification blasts just before these windows.`
-          : `Cao điểm đăng ký: ${peakDay} khung ${peakBucket}h. Lên lịch chạy ads & gửi email/notification ngay trước các khung này.`}
+        {t("insight_heatmap", lang).replace("{day}", peakDay).replace("{bucket}", peakBucket)}
       </InsightFooter>
     </div>
   );
@@ -915,9 +907,10 @@ export function Funnel({ summary, lang = "vi" }: { summary: TicketSalesSummaryDt
       </div>
       <InsightFooter>
         <strong style={{ color: "var(--5s-text)", fontWeight: 700 }}>{t("insight", lang)} · </strong>
-        {lang === "en"
-          ? `${conv.toFixed(0)}% close rate; ${pendRate.toFixed(0)}% orders pending payment — send payment reminders to recover them. ${cancelRate.toFixed(0)}% cancel/refund rate is worth investigating.`
-          : `Tỷ lệ chốt ${conv.toFixed(0)}%; còn ${pendRate.toFixed(0)}% đơn treo chưa thanh toán — gửi nhắc thanh toán để thu hồi. Tỷ lệ huỷ/hoàn ${cancelRate.toFixed(0)}% cần theo dõi nguyên nhân.`}
+        {t("insight_funnel", lang)
+          .replace("{conv}", conv.toFixed(0))
+          .replace("{pend}", pendRate.toFixed(0))
+          .replace("{cancel}", cancelRate.toFixed(0))}
       </InsightFooter>
     </div>
   );

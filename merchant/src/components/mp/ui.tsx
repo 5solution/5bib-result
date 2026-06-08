@@ -248,7 +248,7 @@ export function LangDropdown() {
             borderRadius: 11,
             boxShadow: "var(--shadow-glow-blue, 0 8px 28px rgba(0,0,0,0.12))",
             padding: 5,
-            zIndex: 50,
+            zIndex: 1000,
           }}
         >
           {LANGS.map((l) => {
@@ -316,6 +316,10 @@ export function Topbar({ lang, breadcrumb, center, showRefresh, onRefresh }: Top
         alignItems: "center",
         padding: "0 22px",
         gap: 16,
+        // F-071: establish stacking context above <main> so LangDropdown popover
+        // is not covered by race cards below.
+        position: "relative",
+        zIndex: 40,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "var(--5s-text-muted)", minWidth: 0 }}>
