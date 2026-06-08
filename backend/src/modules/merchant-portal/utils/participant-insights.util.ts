@@ -218,3 +218,5 @@ export function aggregateParticipants(
     provinces,
   };
 }
+
+// CI re-trigger: backend build for F-072 (prior build cancelled by concurrent pushes)
