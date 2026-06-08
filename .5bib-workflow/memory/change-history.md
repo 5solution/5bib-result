@@ -7,6 +7,17 @@
 
 ---
 
+## [2026-06-08] FEATURE-072: Merchant Participant Insights (size áo + giới/AG/quốc tịch) — ✅ DEV (pending CI)
+
+**Type:** EXTEND_EXISTING. BE `be9a634` + FE `2f32f50`.
+### Files
+- BE ➕ utils/participant-insights.util.ts(+spec 17) + dto/participant-insights.dto.ts; ✏️ services/merchant-portal.service.ts (pullParticipantRows/getRaceDay/getParticipantInsights/getParticipantInsightsExport) + merchant-portal.controller.ts (2 GET: participants/insights + /export)
+- FE ✏️ races/[raceId]/page.tsx (tab "Cơ cấu VĐV" + ParticipantsTab) + lib/mp/i18n.ts (10 key×5) + SDK hand-add (types.gen+sdk.gen)
+### Data: athlete_subinfo join oli.id=asi.order_line_item_id → om (paid, om.race_id scope). Pull-then-aggregate-in-Node (robust messy varchar dob/nationality/size). AG WA 5-năm. Excel export size×cự ly.
+### Tests: 17 util + 154 merchant-portal jest + FE tsc 0/vitest 13/build 15 routes. IDOR assertRaceForUser, no-PII aggregate.
+### TD: LABEL-I18N, IS-REPRESENT (verify guardian), SDK-HANDADD (reconcile generate:api).
+### Lesson: DEV CI backend deploy chậm/không đáng tin → hand-add SDK để unblock; reconcile sau. Verify schema TRƯỚC (athlete_subinfo goldmine: size+dob+gender+nat+province 1 bảng).
+
 ## [2026-06-08] FEATURE-071: Merchant Portal +3 ngôn ngữ ĐNA (Khmer/Lào/Mã Lai) — ✅ DEPLOYED (DEV pending push)
 
 **Type:** EXTEND_EXISTING (refactor merchant i18n core + content dịch). Frontend-only `merchant/`, 0 backend/SDK/DB/migration.
