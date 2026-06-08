@@ -811,7 +811,12 @@ export class MerchantPortalService {
     raceId: number,
   ): Promise<Array<RawParticipantRow & { course_name: string | null }>> {
     return this.db.query(
-      `SELECT asi.tshirt_size AS tshirt_size, asi.gender AS gender, asi.dob AS dob,
+      // F-077 size fix — size áo nằm ở `racekit` (XS/S/M/L/XL/2XL...), KHÔNG phải
+      // `tshirt_size` (gần như luôn NULL toàn hệ). racekit đôi khi là free-text
+      // (vd "Áo bán tại sự kiện") → canonicalSize tự map về "Khác". Fallback
+      // tshirt_size nếu racekit rỗng.
+      `SELECT COALESCE(NULLIF(TRIM(asi.racekit), ''), asi.tshirt_size) AS tshirt_size,
+              asi.gender AS gender, asi.dob AS dob,
               asi.nationality AS nationality, asi.city_province AS city_province,
               rc.name AS course_name
        FROM athlete_subinfo asi
