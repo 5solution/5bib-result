@@ -7,6 +7,13 @@
 
 ---
 
+## [2026-06-08] QC-ROUND (browser UAT): fix 3 lỗi data-thực F-072/F-073
+Danny challenge "đã QC FE chưa?". Browser-UAT thật trên merchant-dev (giải Mẫu Sơn 452 vé) → bắt 3 lỗi compile/unit không thấy:
+1. **F-073 capacity sold**: dùng quota−remained_ticket → lệch by-course paid (253 vs 261 cùng trang). FIX: sold=PAID count (LEFT JOIN paid oli SUM quantity), remaining=quota−sold. → verified 261/125/66 khớp.
+2. **F-072 size canonical**: SIZE_ORDER thiếu XXS/2XS/3XS → race có size thật rơi "Khác". FIX: thêm 3XS/2XS + map XXS→2XS/XXXS→3XS.
+3. **F-072 size empty-state**: race không thu size (tshirt_size NULL toàn bộ, BTC bán áo tại sự kiện) → bar "Khác 100%" vô nghĩa. FIX: empty-state "Giải này chưa thu dữ liệu size áo".
+169 backend jest + FE tsc/vitest/build. commit 9c3344e. **LESSON: browser-QC bắt lỗi data-thực mà unit/compile KHÔNG thấy — KHÔNG defer DEV-smoke cho Danny, QC FE là việc của agent.**
+
 ## [2026-06-08] FEATURE-074: YoY So với mùa trước — ✅ DEV
 **Type:** EXTEND_EXISTING. BE+FE 1 push. Danny chốt BTC tự chọn giải so sánh (dropdown).
 ### Files: BE ➕utils/yoy.util.ts(+spec 7) +dto/yoy.dto.ts; ✏️service (getRaceMeta+getYoyComparable+buildYoySeries+getYoyCurve) +controller (GET yoy/comparable + yoy/curve). FE ✏️races/[raceId]/page.tsx (YoYCard MKT section: dropdown + MultiLineChart overlay theo days-before) +i18n(5 key×5) +SDK hand-add.

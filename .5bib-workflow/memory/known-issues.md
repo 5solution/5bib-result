@@ -873,7 +873,7 @@ Admin Partner EDIT form chỉ render "Tạo mới" path. EDIT shortName flow def
 ## F-073 Capacity/Quota (DEV 2026-06-08) — tech debt
 | ID | Debt | Cảnh báo |
 |----|------|----------|
-| **TD-F073-SOLD-SEMANTICS** 🟡 | sold = quota − remained_ticket (vendor "chỗ còn"), KHÔNG phải paid-count | "Đã bán" có thể gồm chỗ đang giữ/pending. Verify ý nghĩa với BTC; nếu cần "đã thanh toán" → dùng paid count |
+| ~~TD-F073-SOLD-SEMANTICS~~ ✅ **RESOLVED 2026-06-08 (9c3344e)** | (was) sold=quota−remained lệch paid | FIXED: sold=PAID count, đồng bộ by-course. Browser-verified 261/125/66 |
 | **TD-F073-DEFAULT-1000** 🟢 | Nhiều ticket_type max_participate=1000 default → pctFilled thấp giả | BTC chưa set quota thật sẽ thấy % thấp. Data thật, không phải bug |
 | **TD-F073-SDK-HANDADD** 🟢 | SDK capacity hand-add (DEV backend deploy chậm) | Reconcile khi generate:api chạy được |
 
