@@ -452,6 +452,10 @@ describe('MerchantPortalService', () => {
       expect(issuedSql).toMatch(/FROM codes c/);
       expect(issuedSql).toMatch(/status IN \('ACTIVE','SENT'\)/);
       expect(issuedSql).toMatch(/c\.order_id IS NULL/);
+      // F-077 — byStatus (order-based) MUST exclude INSURANCE add-on orders
+      // (else "Vé đã thanh toán" gồm cả đơn bảo hiểm → lệch ORG, vd race 216: 9 vs 5).
+      const byStatusSql = mockDb.query.mock.calls[1][0] as string;
+      expect(byStatusSql).toMatch(/order_category.*INSURANCE/);
     });
 
     it('IDOR → race NOT in scope → 403 before summary SQL', async () => {

@@ -502,7 +502,7 @@ export class MerchantPortalService {
        FROM order_metadata om
        LEFT JOIN order_line_item oli ON oli.order_id = om.id
        WHERE om.race_id IN (${placeholders})
-         AND om.deleted = 0 AND om.financial_status = 'paid'
+         AND om.deleted = 0 AND om.financial_status = 'paid' AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')
        GROUP BY om.race_id`,
       raceIds,
     );
@@ -615,6 +615,7 @@ export class MerchantPortalService {
          FROM order_metadata om
          LEFT JOIN order_line_item oli ON oli.order_id = om.id
          WHERE om.race_id = ? AND om.deleted = 0
+           AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')
          GROUP BY om.financial_status`,
         [raceId],
       );
@@ -824,7 +825,7 @@ export class MerchantPortalService {
        JOIN order_metadata om ON oli.order_id = om.id
        LEFT JOIN ticket_type tt ON oli.ticket_type_id = tt.id
        LEFT JOIN race_course rc ON tt.race_course_id = rc.id
-       WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'`,
+       WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid' AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')`,
       [raceId],
     );
   }
@@ -1105,6 +1106,7 @@ export class MerchantPortalService {
     const rows: Array<{ payment_on: Date | string | null }> = await this.db.query(
       `SELECT payment_on FROM order_metadata
        WHERE race_id = ? AND deleted = 0 AND financial_status = 'paid'
+         AND (order_category IS NULL OR order_category <> 'INSURANCE')
          AND payment_on IS NOT NULL`,
       [raceId],
     );
@@ -1244,7 +1246,7 @@ export class MerchantPortalService {
     const cacheKey = `merchant-portal:revenue-summary:${userId}:${raceId}`;
     return this.cachedTicketRead(cacheKey, async () => {
       // Pull paid orders for this race, grouped by tenant (chain via JOIN races).
-      const byTenant = await pullOrdersForFeeAggregate(this.db, '', [], {
+      const byTenant = await pullOrdersForFeeAggregate(this.db, "(om.order_category IS NULL OR om.order_category <> 'INSURANCE')", [], {
         raceId,
       });
 
@@ -1320,7 +1322,7 @@ export class MerchantPortalService {
 
     const cacheKey = `merchant-portal:revenue-by-category:${userId}:${raceId}`;
     return this.cachedTicketRead(cacheKey, async () => {
-      const byTenant = await pullOrdersForFeeAggregate(this.db, '', [], {
+      const byTenant = await pullOrdersForFeeAggregate(this.db, "(om.order_category IS NULL OR om.order_category <> 'INSURANCE')", [], {
         raceId,
       });
       const warnings: string[] = [];
@@ -1399,7 +1401,7 @@ export class MerchantPortalService {
       const warnings: string[] = [];
 
       for (const tenantId of cfg.tenantIds) {
-        const ordersMap = await pullOrdersForFeeAggregate(this.db, '', [], {
+        const ordersMap = await pullOrdersForFeeAggregate(this.db, "(om.order_category IS NULL OR om.order_category <> 'INSURANCE')", [], {
           tenantId,
         });
         const orders = (ordersMap.get(tenantId) ?? []).filter((o) =>
@@ -1512,7 +1514,7 @@ export class MerchantPortalService {
         await this.db.query(
           `SELECT ${expr} AS bucket, COUNT(DISTINCT om.id) AS order_count
            FROM order_metadata om
-           WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
+           WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid' AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')
              AND om.payment_on >= ? AND om.payment_on < ?
            GROUP BY bucket
            ORDER BY bucket`,
@@ -1560,7 +1562,7 @@ export class MerchantPortalService {
          JOIN order_metadata om ON oli.order_id = om.id
          JOIN ticket_type tt ON oli.ticket_type_id = tt.id
          JOIN race_course rc ON tt.race_course_id = rc.id
-         WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
+         WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid' AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')
            AND om.payment_on >= ? AND om.payment_on < ?
          GROUP BY bucket, rc.id, rc.name
          ORDER BY bucket`,
@@ -1618,7 +1620,12 @@ export class MerchantPortalService {
   ): Promise<TicketOrderListDto> {
     await this.assertRaceForUser(userId, raceId);
 
-    const conds: string[] = ['om.race_id = ?', 'om.deleted = 0'];
+    const conds: string[] = [
+      'om.race_id = ?',
+      'om.deleted = 0',
+      // F-077 — loại đơn bảo hiểm (INSURANCE) khỏi danh sách đơn (không phải vé bán).
+      "(om.order_category IS NULL OR om.order_category <> 'INSURANCE')",
+    ];
     const params: Array<string | number> = [raceId];
     if (financialStatus) {
       conds.push('om.financial_status = ?');
@@ -1749,7 +1756,7 @@ export class MerchantPortalService {
     return this.cachedTicketRead(cacheKey, async () => {
       const byTenant = await pullOrdersForFeeAggregate(
         this.db,
-        'om.payment_on >= ? AND om.payment_on < ?',
+        "om.payment_on >= ? AND om.payment_on < ? AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')",
         [fromIso, toIso],
         { raceId },
       );
@@ -1908,7 +1915,7 @@ export class MerchantPortalService {
       await this.db.query(
         `SELECT DATE(om.payment_on) AS d, COUNT(DISTINCT om.id) AS n
          FROM order_metadata om
-         WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
+         WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid' AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')
            AND om.payment_on IS NOT NULL
          GROUP BY d ORDER BY d ASC`,
         [raceId],
@@ -2034,7 +2041,7 @@ export class MerchantPortalService {
               HOUR(om.payment_on) AS hr,
               COUNT(DISTINCT om.id) AS n
        FROM order_metadata om
-       WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
+       WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid' AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')
          AND om.payment_on IS NOT NULL
        GROUP BY dow, hr`,
       [raceId],
