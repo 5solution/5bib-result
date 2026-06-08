@@ -812,20 +812,25 @@ export class MerchantPortalService {
     raceId: number,
   ): Promise<Array<RawParticipantRow & { course_name: string | null }>> {
     return this.db.query(
-      // F-077 size fix — size áo nằm ở `racekit` (XS/S/M/L/XL/2XL...), KHÔNG phải
-      // `tshirt_size` (gần như luôn NULL toàn hệ). racekit đôi khi là free-text
-      // (vd "Áo bán tại sự kiện") → canonicalSize tự map về "Khác". Fallback
-      // tshirt_size nếu racekit rỗng.
-      `SELECT COALESCE(NULLIF(TRIM(asi.racekit), ''), asi.tshirt_size) AS tshirt_size,
-              asi.gender AS gender, asi.dob AS dob,
-              asi.nationality AS nationality, asi.city_province AS city_province,
+      // F-077 participant fix — query từ bảng `athletes` (per-VĐV registration,
+      // có race_id + last_status + subinfo_id + code_id) thay vì đường
+      // order_line_item (chỉ phủ VĐV qua order, BỎ vé import).
+      //   - last_status='ACTIVE' = vé hợp lệ (= codes ACTIVE = Tổng số vé).
+      //   - demographics qua subinfo_id → athlete_subinfo (size=`racekit`,
+      //     gender/nationality/city_province). dob lấy a.dob (date chuẩn, phủ ~100%)
+      //     fallback subinfo.dob.
+      //   - course qua code_id → codes.course_id → race_course (mọi ACTIVE đều có code).
+      // → phủ CẢ import (Danny xác nhận import có data VĐV), gap = 0, hết "Chưa có dữ liệu".
+      `SELECT COALESCE(NULLIF(TRIM(s.racekit), ''), s.tshirt_size) AS tshirt_size,
+              s.gender AS gender,
+              COALESCE(DATE_FORMAT(a.dob, '%Y-%m-%d'), s.dob) AS dob,
+              s.nationality AS nationality, s.city_province AS city_province,
               rc.name AS course_name
-       FROM athlete_subinfo asi
-       JOIN order_line_item oli ON oli.id = asi.order_line_item_id
-       JOIN order_metadata om ON oli.order_id = om.id
-       LEFT JOIN ticket_type tt ON oli.ticket_type_id = tt.id
-       LEFT JOIN race_course rc ON tt.race_course_id = rc.id
-       WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid' AND (om.order_category IS NULL OR om.order_category <> 'INSURANCE')`,
+       FROM athletes a
+       LEFT JOIN athlete_subinfo s ON s.id = a.subinfo_id
+       LEFT JOIN codes c ON c.id = a.code_id
+       LEFT JOIN race_course rc ON c.course_id = rc.id
+       WHERE a.race_id = ? AND a.last_status = 'ACTIVE'`,
       [raceId],
     );
   }
