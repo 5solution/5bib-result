@@ -335,6 +335,12 @@ export class MerchantPortalAccessService {
         },
       });
 
+      // F-069 hotfix — user CÓ SẴN (Path 1/2) chưa có role Logto → gán ở đây.
+      // Path 3 (provision mới) đã gán trong resolveOrProvisionUser → skip (idempotent dù gọi lại).
+      if (!resolved.provisioned) {
+        await this.ensureMerchantRole(resolved.userId, dto.permissions);
+      }
+
       // BR-MP-13 cache invalidate
       await this.invalidateUserCache(resolved.userId);
 
@@ -346,6 +352,65 @@ export class MerchantPortalAccessService {
     } finally {
       await release();
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // F-069 hotfix — đảm bảo Logto merchant role (BR-MP-04 guard requirement)
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Gán role Logto merchant cho user (idempotent, best-effort).
+   *
+   * `LogtoMerchantGuard` đòi token có role `merchant_viewer`/`merchant_finance`.
+   * Trước đây CHỈ Path 3 (provision user MỚI qua email) gán role → user CÓ SẴN
+   * (gán quyền qua userId/email-existing) bị 403 dù access config active. Gọi ở
+   * create (mọi path) + update để self-heal. Permissions có revenue_report →
+   * `merchant_finance`, ngược lại `merchant_viewer`. KHÔNG remove role cũ khi
+   * downgrade — service-layer `assertRevenuePermission` đã defense-in-depth chặn
+   * revenue theo config.permissions, nên role thừa vô hại.
+   *
+   * Best-effort: lỗi Logto (422 role đã gán / network) KHÔNG block save — log warn,
+   * admin có thể chạy lại `syncAllRoles` backfill.
+   */
+  private async ensureMerchantRole(
+    userId: string,
+    permissions: MerchantPortalPermission[],
+  ): Promise<void> {
+    const roleNames = permissions.includes('revenue_report')
+      ? ['merchant_finance']
+      : ['merchant_viewer'];
+    try {
+      const roleIds = await this.logtoService.resolveRoleIdsByNames(roleNames);
+      await this.logtoService.assignUserRoles(userId, roleIds);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (!/already|422/i.test(msg)) {
+        this.logger.warn(`ensureMerchantRole(${userId}) failed: ${msg}`);
+      }
+    }
+  }
+
+  /**
+   * One-time backfill: gán role Logto cho MỌI access config active (sửa các user
+   * đã gán trước hotfix nên thiếu role → 403). Idempotent — chạy lại an toàn.
+   * Trả số user đã xử lý.
+   */
+  async syncAllRoles(): Promise<{ processed: number; total: number }> {
+    const docs = await this.accessModel
+      .find({ isActive: true })
+      .select('userId permissions')
+      .lean()
+      .exec();
+    let processed = 0;
+    for (const d of docs) {
+      await this.ensureMerchantRole(
+        d.userId,
+        d.permissions as MerchantPortalPermission[],
+      );
+      processed += 1;
+    }
+    this.logger.log(`syncAllRoles: processed ${processed}/${docs.length} configs`);
+    return { processed, total: docs.length };
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -638,6 +703,10 @@ export class MerchantPortalAccessService {
       existing.updatedBy = actorUserId;
 
       await existing.save();
+
+      // F-069 hotfix — self-heal Logto role theo permissions hiện tại (idempotent).
+      // Đảm bảo user vẫn có role merchant đúng sau khi đổi quyền (viewer↔finance).
+      await this.ensureMerchantRole(existing.userId, finalPermissions);
 
       const after = {
         tenantIds: existing.tenantIds,

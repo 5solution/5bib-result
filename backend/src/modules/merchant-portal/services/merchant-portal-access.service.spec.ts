@@ -176,10 +176,20 @@ describe('MerchantPortalAccessService', () => {
       });
       const newDoc = makeDoc({ userId: validDto.userId });
       mockModel.create.mockResolvedValue(newDoc);
+      mockLogtoService.resolveRoleIdsByNames.mockResolvedValue(['role_viewer']);
 
       const result = await service.create(validDto, 'admin_xyz');
 
       expect(result.userId).toBe(validDto.userId);
+      // F-069 hotfix — EXISTING user (Path 1) MUST get Logto merchant role
+      // (else LogtoMerchantGuard 403). ticket_report only → merchant_viewer.
+      expect(mockLogtoService.resolveRoleIdsByNames).toHaveBeenCalledWith([
+        'merchant_viewer',
+      ]);
+      expect(mockLogtoService.assignUserRoles).toHaveBeenCalledWith(
+        'logto_new_user',
+        ['role_viewer'],
+      );
       expect(mockModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: validDto.userId,

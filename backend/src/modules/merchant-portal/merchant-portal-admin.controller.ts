@@ -171,6 +171,23 @@ export class MerchantPortalAdminController {
   }
 
   // ────────────────────────────────────────────────────────────────
+  // POST /access/sync-roles — F-069 hotfix one-time backfill
+  // ────────────────────────────────────────────────────────────────
+
+  @Post('access/sync-roles')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Backfill Logto merchant role cho mọi access config active (F-069 hotfix)',
+    description:
+      'Sửa các user gán quyền trước hotfix nên thiếu role Logto → bị LogtoMerchantGuard ' +
+      '403. Idempotent, chạy lại an toàn. User cần re-login để token nhận role mới.',
+  })
+  @ApiResponse({ status: 200, description: '{ processed, total }' })
+  async syncRoles(): Promise<{ processed: number; total: number }> {
+    return this.accessService.syncAllRoles();
+  }
+
+  // ────────────────────────────────────────────────────────────────
   // PATCH /access/:id — Update
   // ────────────────────────────────────────────────────────────────
 
