@@ -62,6 +62,9 @@ import { OrderReadonly } from './finance/entities/order-readonly.entity';
 import { RaceReadonly } from './promo-hub/entities/race-readonly.entity';
 // FEATURE-037 — On-sale race detail page (race_course JOIN cho SEO detail)
 import { OnSaleCourseReadonly } from './promo-hub/entities/on-sale-course-readonly.entity';
+// F-076 — Invoice Reconcile (MISA Meinvoice daily reconcile + alert)
+import { InvoiceReconcileModule } from './invoice-reconcile/invoice-reconcile.module';
+import { OrderMetadataReadonly } from './invoice-reconcile/entities/order-metadata-readonly.entity';
 import { VolEvent } from './team-management/entities/vol-event.entity';
 import { VolRole } from './team-management/entities/vol-role.entity';
 import { VolRegistration } from './team-management/entities/vol-registration.entity';
@@ -109,6 +112,8 @@ const platformDbModules = env.platformDb.host
           RaceReadonly,
           // F-037 On-sale race detail — JOIN race_course cho SEO detail page
           OnSaleCourseReadonly,
+          // F-076 Invoice Reconcile — order_metadata read with vat_ref + name
+          OrderMetadataReadonly,
         ],
         synchronize: false, // KHÔNG auto-sync — DB là readonly
         logging: env.env === 'local' || env.env === 'development',
@@ -134,6 +139,9 @@ const platformDbModules = env.platformDb.host
       // KHÔNG load → endpoint /finance/* return 404 chứ không 500. Acceptable
       // vì F-028 chỉ cần thiết khi production có race revenue thật.
       FinanceModule,
+      // F-076 Invoice Reconcile — cross-DB MISA reconcile cron + alert dashboard.
+      // Conditional theo platform DB (cần SELECT order_metadata).
+      InvoiceReconcileModule,
     ]
   : [];
 

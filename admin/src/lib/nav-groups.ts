@@ -153,6 +153,15 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Coins,
         requireRole: "admin",
       },
+      // F-076 — MISA Meinvoice daily reconcile + alert (admin internal tool).
+      {
+        id: "invoice-reconcile",
+        href: "/invoice-reconcile",
+        label: "Đối soát hóa đơn MISA",
+        icon: ShieldCheck,
+        requireRole: "admin",
+        badge: "NEW",
+      },
     ],
   },
   {

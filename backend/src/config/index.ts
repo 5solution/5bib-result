@@ -91,6 +91,26 @@ const envVarsSchema = Joi.object()
     PROVIDER_REPRESENTATIVE_TITLE: Joi.string().default('Giám Đốc'),
     PROVIDER_BANK_ACCOUNT: Joi.string().default('110398986'),
     PROVIDER_BANK_NAME: Joi.string().default('Ngân hàng Quân Đội MB'),
+    // FEATURE-076 — MISA Meinvoice daily reconcile + alert system.
+    // All optional → module load conditionally (if MISA_USERNAME unset, skip
+    // Layer 2 MISA cross-check; if TELEGRAM token unset, skip Telegram alerts
+    // and fall back email). KHÔNG outage trên fresh deploy.
+    MISA_AIO_BASE_URL: Joi.string().default(
+      'https://api.meinvoice.vn/api/integration',
+    ),
+    MISA_APP_ID: Joi.string().optional().allow(''),
+    MISA_TAX_CODE: Joi.string().optional().allow(''),
+    MISA_USERNAME: Joi.string().optional().allow(''),
+    MISA_PASSWORD: Joi.string().optional().allow(''),
+    INVOICE_RECONCILE_ENABLED_RACES: Joi.string().optional().allow('').default(''),
+    INVOICE_RECONCILE_AGE_WARN_HOURS: Joi.number().default(12),
+    INVOICE_RECONCILE_AGE_CRITICAL_HOURS: Joi.number().default(20),
+    INVOICE_RECONCILE_AGE_BREACHED_HOURS: Joi.number().default(24),
+    // F-076 BR-14a — BOT RIÊNG cho F-076. KHÔNG share với TELEGRAM_BOT_TOKEN
+    // (claim bot existing PROD running). Defense-in-depth bot/channel isolation.
+    INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN: Joi.string().optional().allow(''),
+    INVOICE_RECONCILE_TELEGRAM_CHAT_ID: Joi.string().optional().allow(''),
+    INVOICE_ALERT_EMAILS: Joi.string().optional().allow('').default(''),
   })
   .unknown();
 
@@ -184,5 +204,34 @@ export const env = {
     representativeTitle: envVars.PROVIDER_REPRESENTATIVE_TITLE as string,
     bankAccount: envVars.PROVIDER_BANK_ACCOUNT as string,
     bankName: envVars.PROVIDER_BANK_NAME as string,
+  },
+  // F-076 — MISA Meinvoice daily reconcile + alert. BOT + CHANNEL isolation
+  // tuyệt đối (BR-14a) — KHÔNG share env với TELEGRAM_BOT_TOKEN claim bot.
+  invoiceReconcile: {
+    misa: {
+      baseUrl: (envVars.MISA_AIO_BASE_URL as string).replace(/\/$/, ''),
+      appId: (envVars.MISA_APP_ID as string) || '',
+      taxCode: (envVars.MISA_TAX_CODE as string) || '',
+      username: (envVars.MISA_USERNAME as string) || '',
+      password: (envVars.MISA_PASSWORD as string) || '',
+    },
+    enabledRaceIds: ((envVars.INVOICE_RECONCILE_ENABLED_RACES as string) || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => Number(s))
+      .filter((n) => Number.isInteger(n) && n > 0),
+    ageWarnHours: envVars.INVOICE_RECONCILE_AGE_WARN_HOURS as number,
+    ageCriticalHours: envVars.INVOICE_RECONCILE_AGE_CRITICAL_HOURS as number,
+    ageBreachedHours: envVars.INVOICE_RECONCILE_AGE_BREACHED_HOURS as number,
+    telegram: {
+      botToken:
+        (envVars.INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN as string) || '',
+      chatId: (envVars.INVOICE_RECONCILE_TELEGRAM_CHAT_ID as string) || '',
+    },
+    alertEmails: ((envVars.INVOICE_ALERT_EMAILS as string) || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 };
