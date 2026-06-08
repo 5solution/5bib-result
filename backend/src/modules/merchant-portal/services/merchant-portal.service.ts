@@ -830,7 +830,8 @@ export class MerchantPortalService {
        LEFT JOIN athlete_subinfo s ON s.id = a.subinfo_id
        LEFT JOIN codes c ON c.id = a.code_id
        LEFT JOIN race_course rc ON c.course_id = rc.id
-       WHERE a.race_id = ? AND a.last_status = 'ACTIVE'`,
+       WHERE a.race_id = ?
+         AND (a.last_status IS NULL OR a.last_status <> 'DEACTIVATE')`,
       [raceId],
     );
   }
