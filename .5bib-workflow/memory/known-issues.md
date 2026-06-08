@@ -845,3 +845,20 @@ Admin Partner EDIT form chỉ render "Tạo mới" path. EDIT shortName flow def
 2. Hoặc bundle thành 1 release branch single deploy (1 super-release thay vì 4 sub-releases)
 3. CI deploy script should ALWAYS update both backend + admin SHA in docker-compose.yml (paths-filter occasionally skip admin nếu commit chỉ touch backend file)
 4. Post-deploy verify VPS image SHA vs expected — manual `sed + docker compose pull + up -d` fallback nếu stale
+
+---
+
+## F-071 Merchant i18n (DEPLOYED 2026-06-08) — tech debt
+
+| ID | Module | Debt | Lý do hoãn | Cảnh báo |
+|----|--------|------|-----------|----------|
+| **TD-F071-GLYPH-UAT** 🟡 publish-gate | merchant i18n | Live browser screenshot render Khmer/Lào (không tofu □) + layout không vỡ — CHƯA chạy. Verify gián tiếp 2 lớp: script-range (chuỗi đúng khối Unicode) + next build (Noto subset load OK). | Shell merchant cần Logto auth → không UAT local; merchant-dev chạy code cũ trước deploy | Sau deploy DEV, Danny/Manager screenshot merchant-dev đổi Khmer/Lào xác nhận render OK trước khi coi feature "live thật". Risk LOW (Noto chuẩn). |
+| **TD-F071-TRANSLATION-NATIVE-REVIEW** 🟡 publish-gate (BR-10) | merchant i18n DICT km/lo | Bản dịch Khmer + Lào do Claude tạo = **provisional**. Coverage + script đúng nhưng nghĩa CHƯA native-review. | Danny chốt "Claude dịch, review sau" | Trước khi BTC Campuchia/Lào dùng PROD: native review nghĩa, ưu tiên chuỗi tài chính `kpi_net`/`kpi_fee`/`kpi_gmv`/`target_invalid`/`rev_gate_body`/`unauth_body`. ms (Latin) tin cậy cao hơn. |
+| **TD-F071-MONTHSHORT-KM-LO** 🟢 LOW | merchant fmt.ts | `monthShort` km/lo render "M{m}" ASCII thay tên tháng bản địa (tránh vỡ chart axis vì tên Khmer/Lào dài). | Axis-safety ưu tiên | Nếu cần tên tháng bản địa trên axis → cần axis rộng hơn hoặc xoay nhãn. Chấp nhận MVP. |
+
+## F-069/F-071 Merchant — known quirk
+
+| Module | Quirk | Lý do |
+|--------|-------|-------|
+| `merchant/` eslint | 27 lỗi lint pre-existing (any/set-state-in-effect/`<a>`-link) rải khắp login/dashboard/races/charts từ F-069 | `next build` (gate thật) PASS — lint không trong CI gate merchant. F-071 không thêm category mới. Dọn = feature riêng nếu cần. |
+| `merchant` i18n | Mọi nhãn UI qua `t()`/`lab()`; data backend (tên giải/BTC/người mua) render nguyên văn KHÔNG dịch (BR-06) | i18n chỉ UI chrome — đổi nguyên tắc này = sai scope |

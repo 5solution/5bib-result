@@ -4135,3 +4135,40 @@ const whereClause = `AND payment_on >= '${from}'`;  // SQL injection vector
 
 **Reference:** `backend/src/modules/analytics/services/bucket-helpers.ts`
 
+
+---
+
+## 🌐 i18n patterns (F-071 — merchant Portal multi-language)
+
+### Fallback-to-base-locale (KHÔNG hardcode `{vi,en}`)
+**Khi:** dict i18n cho ≥2 ngôn ngữ, có khả năng mở rộng.
+
+**Pattern:**
+```typescript
+type Entry = { vi: string } & Partial<Record<Exclude<Lang, "vi">, string>>; // vi BẮT BUỘC (base), rest optional
+function t(key, lang = "vi") { const e = DICT[key]; if (!e) return key; return e[lang] || e.vi; } // fallback base, raw-key on miss
+```
+- Base ngôn ngữ (vi) required ở type → tsc ép mọi entry có base; ngôn ngữ khác optional → ship dần an toàn.
+- `t()` fallback `e[lang] || e.vi` → KHÔNG bao giờ render rỗng; key thiếu hẳn → raw key (dev nhận biết).
+- **Coverage-as-test (BẮT BUỘC):** 1 unit test loop mọi key × mọi lang, assert non-empty → biến "dịch đủ" thành assertion tự động. Sót 1 key là test đỏ, không ship được. (vd `i18n.spec.ts` TC-06.)
+- Registry `LANGS` single-source cho switcher + localStorage validate (`isLang`/`LANG_CODES`) → không drift.
+
+**Anti-pattern (lesson F-069→F-071):** `type Entry = { vi: string; en: string }` shape cứng + switcher toggle nhị phân → thêm ngôn ngữ thứ 3 buộc refactor core + đổi UX. Làm đúng `Record<Lang,string>` ngay từ đầu.
+
+### next/font multi-script stacking (glyph phi-Latin)
+**Khi:** thêm ngôn ngữ chữ phi-Latin (Khmer/Lào/Thái/Ả-rập…) vào app đã có font Latin.
+
+**Pattern:**
+```typescript
+// fonts.ts — next/font/google (built-in, KHÔNG pnpm install)
+export const notoSansKhmer = Noto_Sans_Khmer({ variable: "--font-khmer", subsets: ["khmer"], display: "swap" });
+// layout.tsx — thêm .variable vào html className
+// globals.css — append vào CUỐI font stack (chỉ fallback glyph thiếu):
+//   --font-body: var(--font-body), "Plus Jakarta Sans", var(--font-khmer), var(--font-lao), system-ui, sans-serif;
+```
+- Append cuối stack → Latin/VN vẫn dùng primary font, browser chỉ fallback Noto cho glyph primary thiếu.
+- `subset` đúng tên block (`khmer`/`lao`) → `next build` fail nếu sai → build = gate verify font.
+- `display: "swap"` tránh FOIT.
+
+### Script-range validation (QC tool cho ngôn ngữ phi-Latin)
+QC nên quét: mỗi giá trị dịch chứa ≥1 codepoint trong khối Unicode mong đợi (Khmer U+1780–17FF, Lào U+0E80–0EFF). Bắt được class bug "lẫn ký tự Thái / copy nhầm Latin/vi / rỗng" mà mắt thường khó thấy. Ngoại lệ hợp lệ = acronym thuần (vd "% GMV").

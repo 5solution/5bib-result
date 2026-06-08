@@ -261,7 +261,7 @@ export default function RaceReportPage() {
   const searchParams = useSearchParams();
   const raceId = Number(params?.raceId);
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { lang, toggleLang } = useLang();
+  const { lang } = useLang();
 
   const [me, setMe] = useState<MerchantMeResponseDto | null>(null);
   const [race, setRace] = useState<MerchantRaceItemDto | null>(null);
@@ -469,7 +469,6 @@ export default function RaceReportPage() {
   return (
     <AppShell
       lang={lang}
-      onLang={toggleLang}
       finance={hasRevenue}
       active="races"
       breadcrumb={[t("nav_races", lang), raceTitle]}

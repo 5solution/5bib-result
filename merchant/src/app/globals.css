@@ -540,9 +540,11 @@ body[data-fullscreen="true"] {
   --5s-energy:          #EA580C;
   --5s-trail:           #166534;
 
-  /* Typography stacks (resolved from next/font CSS vars set on <html>) */
-  --font-display: var(--font-display), "Be Vietnam Pro", system-ui, sans-serif;
-  --font-body:    var(--font-body), "Plus Jakarta Sans", system-ui, sans-serif;
+  /* Typography stacks (resolved from next/font CSS vars set on <html>).
+     F-071: Noto Khmer/Lao appended as fallbacks — used only for glyphs the
+     Latin/Vietnamese fonts lack, so vi/en text is unaffected. */
+  --font-display: var(--font-display), "Be Vietnam Pro", var(--font-khmer), var(--font-lao), system-ui, sans-serif;
+  --font-body:    var(--font-body), "Plus Jakarta Sans", var(--font-khmer), var(--font-lao), system-ui, sans-serif;
   --font-mono:    var(--font-mono), "JetBrains Mono", "SF Mono", ui-monospace, monospace;
 
   --tracking-tighter: -0.03em;

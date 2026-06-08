@@ -5,16 +5,31 @@
  */
 import type { Lang } from "./i18n";
 
+/** BCP-47 locale per supported UI language (F-071). Used for Intl grouping. */
+const NF_LOCALE: Record<Lang, string> = {
+  vi: "vi-VN",
+  en: "en-US",
+  km: "km-KH",
+  lo: "lo-LA",
+  ms: "ms-MY",
+};
+
+function nf(lang: Lang): Intl.NumberFormat {
+  try {
+    return new Intl.NumberFormat(NF_LOCALE[lang] ?? "vi-VN");
+  } catch {
+    return new Intl.NumberFormat("vi-VN");
+  }
+}
+
 export const fmt = {
   /** Thousands-grouped integer. */
   num(n: number, lang: Lang = "vi"): string {
-    return new Intl.NumberFormat(lang === "en" ? "en-US" : "vi-VN").format(Math.round(n));
+    return nf(lang).format(Math.round(n));
   },
-  /** VND amount with " đ" suffix. */
+  /** VND amount with " đ" suffix. Currency stays VND for every language (BR-07). */
   vnd(n: number, lang: Lang = "vi"): string {
-    return (
-      new Intl.NumberFormat(lang === "en" ? "en-US" : "vi-VN").format(Math.round(n)) + " đ"
-    );
+    return nf(lang).format(Math.round(n)) + " đ";
   },
   /** Compact magnitude (K/M/B) for chart axes. */
   vndShort(n: number): string {
@@ -42,12 +57,21 @@ export const fmt = {
     const mi = String(d.getMinutes()).padStart(2, "0");
     return `${dd}/${mm}/${d.getFullYear()} ${hh}:${mi}`;
   },
-  /** Short month label, locale-aware. */
+  /**
+   * Short month label for chart axes. Kept ASCII-compact across languages so
+   * narrow axis ticks never overflow: vi → "Th{m}", en/ms → 3-letter abbr,
+   * km/lo → "M{m}" (non-Latin month names are too wide for an axis tick).
+   */
   monthShort(d: Date, lang: Lang = "vi"): string {
     const m = d.getMonth() + 1;
-    return lang === "en"
-      ? ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]
-      : "Th" + m;
+    if (lang === "vi") return "Th" + m;
+    if (lang === "en") {
+      return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1];
+    }
+    if (lang === "ms") {
+      return ["Jan", "Feb", "Mac", "Apr", "Mei", "Jun", "Jul", "Ogo", "Sep", "Okt", "Nov", "Dis"][m - 1];
+    }
+    return "M" + m; // km, lo — compact numeric for axis safety
   },
 };
 

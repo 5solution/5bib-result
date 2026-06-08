@@ -18,7 +18,7 @@ import type {
   MerchantMeResponseDto,
   MerchantRaceItemDto,
 } from "@/lib/api-generated/types.gen";
-import { t } from "@/lib/mp/i18n";
+import { t, LANGS } from "@/lib/mp/i18n";
 import { AppShell, Card, PermBadge, type MpUser } from "@/components/mp/ui";
 import { Segmented, type SegOption } from "@/components/mp/charts";
 import type { Lang } from "@/lib/mp/i18n";
@@ -45,7 +45,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function SettingsPage() {
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { lang, setLang, toggleLang } = useLang();
+  const { lang, setLang } = useLang();
   const [me, setMe] = useState<MerchantMeResponseDto | null>(null);
   const [races, setRaces] = useState<MerchantRaceItemDto[]>([]);
 
@@ -69,10 +69,10 @@ export default function SettingsPage() {
 
   const finance = !!me?.permissions.includes("revenue_report");
   const user = useMemo(() => toMpUser(me), [me]);
-  const langOptions: SegOption<Lang>[] = [
-    { value: "vi", label: "Tiếng Việt" },
-    { value: "en", label: "English" },
-  ];
+  const langOptions: SegOption<Lang>[] = LANGS.map((l) => ({
+    value: l.code,
+    label: `${l.flag} ${l.short}`,
+  }));
 
   if (authLoading || !isAuthenticated) {
     return (
@@ -83,16 +83,14 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppShell lang={lang} onLang={toggleLang} finance={finance} active="settings" breadcrumb={[t("nav_settings", lang)]} user={user}>
+    <AppShell lang={lang} finance={finance} active="settings" breadcrumb={[t("nav_settings", lang)]} user={user}>
       <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, letterSpacing: "-0.02em", marginBottom: 22 }}>{t("settings_title", lang)}</h1>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, maxWidth: 820 }}>
         <Card>
           <div className="mp-eyebrow" style={{ marginBottom: 14 }}>{t("language", lang)}</div>
           <Segmented<Lang> value={lang} onChange={setLang} options={langOptions} />
           <div style={{ fontSize: 12.5, color: "var(--5s-text-subtle)", marginTop: 12, lineHeight: 1.5 }}>
-            {lang === "en"
-              ? "Saved to this browser. Backend data (race & merchant names) is never translated."
-              : "Lưu trên trình duyệt này. Dữ liệu từ hệ thống (tên giải, tên BTC) không được dịch."}
+            {t("lang_save_note", lang)}
           </div>
         </Card>
         <Card>

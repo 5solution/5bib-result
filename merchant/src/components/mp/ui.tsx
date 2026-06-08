@@ -5,11 +5,12 @@
  * AppShell (sidebar + topbar), KPI cards, badges, buttons, empty states.
  * Inline-style approach kept from the mockup for fidelity (CSS vars).
  */
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Icons, type IconComponent } from "./icons";
 import { DeltaPill } from "./charts";
-import { t, lab, L, type Lang } from "@/lib/mp/i18n";
+import { t, lab, L, LANGS, type Lang } from "@/lib/mp/i18n";
 import { fmt } from "@/lib/mp/fmt";
+import { useLang } from "@/lib/mp/lang-context";
 
 const LOGO_WHITE = "/mp/5bib-logo-white.png";
 
@@ -179,17 +180,130 @@ export function IconBtn({
   );
 }
 
+// ---------- LangDropdown (F-071) ----------
+// Self-contained language switcher: flag + code trigger → popover of 5 langs.
+// Reads/writes via useLang() so no prop drilling. Closes on outside-click + Esc.
+export function LangDropdown() {
+  const { lang, setLang } = useLang();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const active = LANGS.find((l) => l.code === lang) ?? LANGS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={t("language", lang)}
+        className="mp-focusable"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          height: 34,
+          padding: "0 11px",
+          border: "1px solid var(--5s-border)",
+          background: "#fff",
+          borderRadius: 9,
+          cursor: "pointer",
+          fontFamily: "var(--font-body)",
+          fontWeight: 700,
+          fontSize: 12.5,
+          color: "var(--5s-text)",
+        }}
+      >
+        <span style={{ fontSize: 15, lineHeight: 1 }}>{active.flag}</span>
+        {active.short}
+        <Icons.ChevD size={13} color="var(--5s-text-muted)" />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            right: 0,
+            minWidth: 208,
+            background: "#fff",
+            border: "1px solid var(--5s-border)",
+            borderRadius: 11,
+            boxShadow: "var(--shadow-glow-blue, 0 8px 28px rgba(0,0,0,0.12))",
+            padding: 5,
+            zIndex: 50,
+          }}
+        >
+          {LANGS.map((l) => {
+            const on = l.code === lang;
+            return (
+              <button
+                key={l.code}
+                type="button"
+                role="option"
+                aria-selected={on}
+                onClick={() => {
+                  setLang(l.code);
+                  setOpen(false);
+                }}
+                className="mp-focusable"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  width: "100%",
+                  height: 38,
+                  padding: "0 10px",
+                  border: "none",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  fontFamily: "var(--font-body)",
+                  fontWeight: on ? 700 : 500,
+                  fontSize: 13,
+                  color: "var(--5s-text)",
+                  background: on ? "var(--5s-blue-soft, rgba(29,73,255,0.08))" : "transparent",
+                }}
+              >
+                <span style={{ fontSize: 16, lineHeight: 1 }}>{l.flag}</span>
+                <span style={{ flex: 1 }}>{l.native}</span>
+                {on && <Icons.Check size={15} color="var(--5s-blue, #1D49FF)" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- Topbar ----------
 interface TopbarProps {
   lang: Lang;
-  onLang: () => void;
   breadcrumb: string[];
   center?: ReactNode;
   showRefresh?: boolean;
   onRefresh?: () => void;
 }
 
-export function Topbar({ lang, onLang, breadcrumb, center, showRefresh, onRefresh }: TopbarProps) {
+export function Topbar({ lang, breadcrumb, center, showRefresh, onRefresh }: TopbarProps) {
   return (
     <header
       style={{
@@ -225,28 +339,7 @@ export function Topbar({ lang, onLang, breadcrumb, center, showRefresh, onRefres
       <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>{center}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {showRefresh && <IconBtn icon={Icons.Refresh} title={t("refresh", lang)} onClick={onRefresh} />}
-        <button
-          onClick={onLang}
-          className="mp-focusable"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            height: 34,
-            padding: "0 11px",
-            border: "1px solid var(--5s-border)",
-            background: "#fff",
-            borderRadius: 9,
-            cursor: "pointer",
-            fontFamily: "var(--font-body)",
-            fontWeight: 700,
-            fontSize: 12.5,
-            color: "var(--5s-text)",
-          }}
-        >
-          <Icons.Globe size={15} color="var(--5s-text-muted)" />
-          {lang === "vi" ? "VI" : "EN"}
-        </button>
+        <LangDropdown />
       </div>
     </header>
   );
@@ -255,7 +348,6 @@ export function Topbar({ lang, onLang, breadcrumb, center, showRefresh, onRefres
 // ---------- AppShell ----------
 interface AppShellProps {
   lang: Lang;
-  onLang: () => void;
   finance: boolean;
   active: NavId;
   breadcrumb: string[];
@@ -269,7 +361,6 @@ interface AppShellProps {
 
 export function AppShell({
   lang,
-  onLang,
   finance,
   active,
   breadcrumb,
@@ -284,7 +375,7 @@ export function AppShell({
     <div className="mp-root" style={{ width: "100%", minHeight: "100vh", display: "flex", background: "var(--5s-bg)" }}>
       <Sidebar lang={lang} finance={finance} active={active} user={user} currentRaceId={currentRaceId} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Topbar lang={lang} onLang={onLang} breadcrumb={breadcrumb} center={center} showRefresh={showRefresh} onRefresh={onRefresh} />
+        <Topbar lang={lang} breadcrumb={breadcrumb} center={center} showRefresh={showRefresh} onRefresh={onRefresh} />
         <main className="mp-scroll" style={{ flex: 1, padding: "24px 28px" }}>
           <div style={{ maxWidth: 1180, margin: "0 auto" }}>{children}</div>
         </main>

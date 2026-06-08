@@ -18,7 +18,7 @@ import type {
   MerchantMeResponseDto,
   MerchantRaceItemDto,
 } from "@/lib/api-generated/types.gen";
-import { t } from "@/lib/mp/i18n";
+import { t, type Lang } from "@/lib/mp/i18n";
 import { fmt, parseDate } from "@/lib/mp/fmt";
 import { AppShell, Card, EmptyState, RaceStatusBadge, type MpUser } from "@/components/mp/ui";
 import { Icons } from "@/components/mp/icons";
@@ -54,7 +54,7 @@ function toMpUser(me: MerchantMeResponseDto | null): MpUser {
   return { name: me.userName, email: me.email, initials: initialsOf(me.userName) };
 }
 
-function RaceCard({ race, lang, cover }: { race: MerchantRaceItemDto; lang: "vi" | "en"; cover: string }) {
+function RaceCard({ race, lang, cover }: { race: MerchantRaceItemDto; lang: Lang; cover: string }) {
   const [hover, setHover] = useState(false);
   const d = parseDate(race.eventStartDate);
   return (
@@ -131,7 +131,7 @@ function RaceCard({ race, lang, cover }: { race: MerchantRaceItemDto; lang: "vi"
 
 export default function MerchantDashboard() {
   const { token, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { lang, toggleLang } = useLang();
+  const { lang } = useLang();
   const [me, setMe] = useState<MerchantMeResponseDto | null>(null);
   const [races, setRaces] = useState<MerchantRaceItemDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,7 +194,7 @@ export default function MerchantDashboard() {
   const nextCover = () => COVERS[coverIdx++ % COVERS.length];
 
   return (
-    <AppShell lang={lang} onLang={toggleLang} finance={finance} active="races" breadcrumb={[t("nav_races", lang)]} user={user} onRefresh={load}>
+    <AppShell lang={lang} finance={finance} active="races" breadcrumb={[t("nav_races", lang)]} user={user} onRefresh={load}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 26, letterSpacing: "-0.02em" }}>{t("your_races", lang)}</h1>
         <span

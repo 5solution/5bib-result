@@ -7,6 +7,48 @@
 
 ---
 
+## [2026-06-08] FEATURE-071: Merchant Portal +3 ngôn ngữ ĐNA (Khmer/Lào/Mã Lai) — ✅ DEPLOYED (DEV pending push)
+
+**Type:** EXTEND_EXISTING (refactor merchant i18n core + content dịch). Frontend-only `merchant/`, 0 backend/SDK/DB/migration.
+
+### Files changed (9 + 2 new test/config, all `merchant/`)
+- ✏️ `src/lib/mp/i18n.ts` — `Lang` 2→5 (vi/en/km/lo/ms); `Entry` `{vi,en}`→`{vi}&Partial<Record<Exclude<Lang,'vi'>,string>>` (vi base-required, fallback); `t()`/`lab()` fallback `e[lang]||e.vi` + raw-key on miss; +`LANGS`/`LANG_CODES`/`isLang` registry; đổ 131 entry × km/lo/ms + key mới `lang_save_note`.
+- ✏️ `src/lib/mp/lang-context.tsx` — localStorage validate qua `isLang` (BR-04); `toggleLang`→cycle 5 lang.
+- ✏️ `src/lib/mp/fmt.ts` — `NF_LOCALE` map 5 locale (km-KH/lo-LA/ms-MY) + `nf()` try/catch; `vnd` giữ `" đ"` mọi lang (BR-07); `monthShort` 5-lang (km/lo dùng "M{m}" ASCII axis-safe).
+- ✏️ `src/components/mp/ui.tsx` — NEW `LangDropdown` (cờ+tên, click-outside+Esc, active ✓); Topbar pill→`<LangDropdown/>`; bỏ prop `onLang` khỏi Topbar+AppShell.
+- ✏️ `src/lib/fonts.ts` — Noto_Sans_Khmer + Noto_Sans_Lao (next/font/google, subset khmer/lao, no install).
+- ✏️ `src/app/layout.tsx` — 2 font variable vào html className.
+- ✏️ `src/app/globals.css` — nối `var(--font-khmer)`,`var(--font-lao)` vào `--font-body`/`--font-display` stacks (chỉ fallback glyph thiếu, Latin/VN không đổi).
+- ✏️ `src/app/settings/page.tsx` — `langOptions` từ LANGS (5); bỏ onLang; note song ngữ → `t('lang_save_note')`.
+- ✏️ `src/app/dashboard/page.tsx` — bỏ onLang/toggleLang; RaceCard prop `"vi"|"en"`→`Lang` (Forced #1, tsc bắt).
+- ✏️ `src/app/races/[raceId]/page.tsx` — bỏ onLang/toggleLang.
+- ➕ `src/lib/mp/i18n.spec.ts` — 13 test (TC-01..12).
+- ➕ `vitest.config.ts` + ✏️ `package.json`+`pnpm-lock.yaml` — devDep `vitest` 4.1.8 + script `test` (Manager DECISION-1).
+
+### Architecture impact
+- Không thêm node backend/integration. Thuần frontend i18n. architecture.md không đổi.
+
+### Conventions impact
+- **NEW pattern minted:** (1) "i18n fallback-to-base-locale" — `Entry` base-required (`vi`) + `Partial` rest + `t()` fallback + coverage-test ép đủ runtime; (2) "next/font multi-script stacking" — append CSS var Noto vào font stack cho glyph phi-Latin, primary font không đổi. → conventions.md updated.
+
+### DB / Cache impact
+- KHÔNG có. localStorage chỉ lưu `mp_lang` (2 ký tự, không PII).
+
+### Tech debt còn lại (→ known-issues)
+- TD-F071-GLYPH-UAT: live screenshot Khmer/Lào trên DEV (Logto-gated, không UAT local) — verify gián tiếp 2 lớp (script-range + build font-load).
+- TD-F071-TRANSLATION-NATIVE-REVIEW: km/lo provisional (Claude), cần native review nghĩa trước PROD (chuỗi tài chính kpi_net/kpi_fee/kpi_gmv).
+- TD-F071-MONTHSHORT-KM-LO: axis tháng km/lo "M{m}" ASCII thay tên bản địa (axis-safety).
+
+### QC/verify
+- vitest 13/13 PASS + adversarial coverage-net proven (xoá 1 km → đỏ đúng key) + script-range 130/131 đúng khối Unicode km/lo + XSS 0 (no dangerouslySetInnerHTML) + tsc 0 + next build 15 routes.
+
+### Lessons learned
+- **i18n nên dùng `Record<Lang,string>` từ đầu**, KHÔNG `{vi,en}` cứng — F-069 build binary toggle → F-071 phải refactor core + toggle→dropdown. Danny phản hồi "sai từ đầu" → đúng.
+- **Coverage-as-test** (loop ép đủ N lang non-empty) biến "dịch đủ" thành assertion tự động — pattern tái dùng cho mọi i18n đa-ngôn-ngữ.
+- **Script-range validation** (codepoint block check) = QC tool mạnh cho ngôn ngữ phi-Latin (bắt lẫn Thái/Latin/copy-vi mà mắt thường khó thấy).
+
+---
+
 ## [2026-06-08] Merchant Portal — UAT fixes + Admin per-race access (post F-070)
 
 **Type:** BUGFIX + EXTEND_EXISTING (merchant-portal). Branch main → DEV. Danny UAT browser phát hiện.
