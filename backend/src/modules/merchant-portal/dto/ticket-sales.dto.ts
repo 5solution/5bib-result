@@ -55,6 +55,28 @@ export class TicketSalesSummaryDto {
     type: [TicketStatusCountDto],
   })
   byStatus!: TicketStatusCountDto[];
+
+  // ── F-IMPORT — "Tổng vé" thật = issued codes (incl. import/MANUAL BIBs) ──
+
+  @ApiProperty({
+    description:
+      'Tổng vé THỰC = codes ACTIVE/SENT (gồm CẢ vé import không qua order 5BIB). Đây là số tổng đúng BTC cần (= issued5bib + issuedImport).',
+    example: 644,
+  })
+  totalIssued!: number;
+
+  @ApiProperty({
+    description: 'Số vé bán/cấp qua 5BIB (codes có order_id)',
+    example: 432,
+  })
+  issued5bib!: number;
+
+  @ApiProperty({
+    description:
+      'Số vé import vào 5BIB (codes order_id NULL — BTC bán nguồn khác rồi import). KHÔNG có giao dịch tiền trên 5BIB → tách khỏi doanh thu.',
+    example: 212,
+  })
+  issuedImport!: number;
 }
 
 /** One row in a breakdown (course OR ticket type). */
@@ -68,11 +90,24 @@ export class TicketBreakdownItemDto {
   })
   name!: string;
 
-  @ApiProperty({ description: 'Số đơn paid (COUNT DISTINCT order)', example: 1023 })
+  @ApiProperty({
+    description:
+      'Số vé bán qua 5BIB (codes có order_id) — giữ tên `orderCount` cho back-compat SDK',
+    example: 1023,
+  })
   orderCount!: number;
 
-  @ApiProperty({ description: 'Số vé paid (SUM quantity)', example: 1466 })
+  @ApiProperty({
+    description: 'Tổng vé (codes ACTIVE/SENT, GỒM import) = count5bib + countImport',
+    example: 1466,
+  })
   ticketCount!: number;
+
+  @ApiProperty({ description: 'Vé qua 5BIB (order_id NOT NULL)', example: 1023 })
+  count5bib!: number;
+
+  @ApiProperty({ description: 'Vé import (order_id NULL)', example: 443 })
+  countImport!: number;
 }
 
 /** GET /ticket-sales/by-course OR /by-type — breakdown bar/donut data (BR-MP-07). */

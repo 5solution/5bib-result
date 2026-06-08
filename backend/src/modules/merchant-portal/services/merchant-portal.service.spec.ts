@@ -371,16 +371,28 @@ describe('MerchantPortalService', () => {
       mockDb.query.mockResolvedValueOnce([{ race_id: 501 }]); // resolveAccessibleRaces
     }
 
-    it('happy path → totalTickets all-status + byStatus has 3 canonical', async () => {
+    // F-IMPORT — issued-code totals query runs AFTER the byStatus query.
+    const ISSUED_644 = [
+      { total_issued: 644, sbib_count: 432, import_count: 212 },
+    ];
+
+    it('happy path → totalTickets all-status + byStatus has 3 canonical + issued incl import', async () => {
       mockScope501();
-      mockDb.query.mockResolvedValueOnce([
-        { financial_status: 'paid', order_count: 1000, ticket_count: 1500 },
-        { financial_status: 'voided', order_count: 200, ticket_count: 300 },
-      ]); // summary query (no pending row)
+      mockDb.query
+        .mockResolvedValueOnce([
+          { financial_status: 'paid', order_count: 1000, ticket_count: 1500 },
+          { financial_status: 'voided', order_count: 200, ticket_count: 300 },
+        ]) // summary query (no pending row)
+        .mockResolvedValueOnce(ISSUED_644); // pullIssuedCodeTotals
       const r = await service.getTicketSalesSummary('logto_user_a', 501);
       expect(r.raceId).toBe(501);
       expect(r.totalTickets).toBe(1800); // 1500 + 300 (+ 0 pending)
       expect(r.totalOrders).toBe(1200);
+      // F-IMPORT — issued codes (incl import) is the TRUE total
+      expect(r.totalIssued).toBe(644);
+      expect(r.issued5bib).toBe(432);
+      expect(r.issuedImport).toBe(212);
+      expect(r.totalIssued).toBe(r.issued5bib + r.issuedImport);
       // 3 canonical always present, in order, pending 0-filled
       expect(r.byStatus.map((b) => b.financialStatus)).toEqual([
         'paid',
@@ -396,10 +408,12 @@ describe('MerchantPortalService', () => {
 
     it('unknown status from DB → appended after canonical 3', async () => {
       mockScope501();
-      mockDb.query.mockResolvedValueOnce([
-        { financial_status: 'paid', order_count: 10, ticket_count: 10 },
-        { financial_status: 'weird', order_count: 1, ticket_count: 2 },
-      ]);
+      mockDb.query
+        .mockResolvedValueOnce([
+          { financial_status: 'paid', order_count: 10, ticket_count: 10 },
+          { financial_status: 'weird', order_count: 1, ticket_count: 2 },
+        ])
+        .mockResolvedValueOnce(ISSUED_644);
       const r = await service.getTicketSalesSummary('logto_user_a', 501);
       expect(r.byStatus.map((b) => b.financialStatus)).toEqual([
         'paid',
@@ -410,14 +424,32 @@ describe('MerchantPortalService', () => {
       expect(r.totalTickets).toBe(12);
     });
 
-    it('empty race → all zero, no leak', async () => {
+    it('empty race → all zero (incl issued), no leak', async () => {
       mockScope501();
-      mockDb.query.mockResolvedValueOnce([]); // no orders
+      mockDb.query
+        .mockResolvedValueOnce([]) // no orders
+        .mockResolvedValueOnce([{ total_issued: 0, sbib_count: 0, import_count: 0 }]);
       const r = await service.getTicketSalesSummary('logto_user_a', 501);
       expect(r.totalTickets).toBe(0);
+      expect(r.totalIssued).toBe(0);
+      expect(r.issuedImport).toBe(0);
       expect(r.byStatus).toHaveLength(3);
       expect(r).not.toHaveProperty('gmv');
       expect(r).not.toHaveProperty('total_price');
+    });
+
+    it('issued query uses codes ACTIVE/SENT + order_id source split (NOT order_metadata)', async () => {
+      mockScope501();
+      mockDb.query
+        .mockResolvedValueOnce([
+          { financial_status: 'paid', order_count: 1, ticket_count: 1 },
+        ])
+        .mockResolvedValueOnce(ISSUED_644);
+      await service.getTicketSalesSummary('logto_user_a', 501);
+      const issuedSql = mockDb.query.mock.calls[2][0] as string;
+      expect(issuedSql).toMatch(/FROM codes c/);
+      expect(issuedSql).toMatch(/status IN \('ACTIVE','SENT'\)/);
+      expect(issuedSql).toMatch(/c\.order_id IS NULL/);
     });
 
     it('IDOR → race NOT in scope → 403 before summary SQL', async () => {
@@ -454,13 +486,19 @@ describe('MerchantPortalService', () => {
       mockDb.query
         .mockResolvedValueOnce([{ race_id: 501 }]) // scope
         .mockResolvedValueOnce([
-          { course_id: 540, course_name: '2,9 km', order_count: 100, ticket_count: 150 },
-          { course_id: 515, course_name: '2,9 km', order_count: 50, ticket_count: 80 },
+          { course_id: 540, course_name: '2,9 km', ticket_count: 150, sbib_count: 120, import_count: 30 },
+          { course_id: 515, course_name: '2,9 km', ticket_count: 80, sbib_count: 80, import_count: 0 },
         ]); // two distinct courses, same label
       const r = await service.getTicketSalesByCourse('logto_user_a', 501);
       expect(r.items).toHaveLength(2);
       expect(r.items.map((i) => i.id)).toEqual([540, 515]); // distinct ids preserved
       expect(r.totalTickets).toBe(230);
+      // F-IMPORT — source split per course
+      expect(r.items[0].count5bib).toBe(120);
+      expect(r.items[0].countImport).toBe(30);
+      expect(r.items[0].ticketCount).toBe(
+        r.items[0].count5bib + r.items[0].countImport,
+      );
       expect(r).not.toHaveProperty('total_price');
     });
 
@@ -473,17 +511,19 @@ describe('MerchantPortalService', () => {
       expect(mockDb.query).toHaveBeenCalledTimes(1);
     });
 
-    it('SQL uses paid filter + chain (not om.race_course_id)', async () => {
+    it('SQL counts codes (incl import) per course, NOT paid orders', async () => {
       mockConfigFound({ tenantIds: [42] });
       mockDb.query
         .mockResolvedValueOnce([{ race_id: 501 }])
         .mockResolvedValueOnce([]);
       await service.getTicketSalesByCourse('logto_user_a', 501);
       const sql = mockDb.query.mock.calls[1][0] as string;
-      expect(sql).toMatch(/financial_status = 'paid'/);
-      expect(sql).toMatch(/JOIN ticket_type tt/);
-      expect(sql).toMatch(/JOIN race_course rc/);
-      expect(sql).not.toMatch(/om\.race_course_id/); // DISC-1 — must NOT exist
+      // F-IMPORT — codes-based: includes import BIBs (order_id NULL)
+      expect(sql).toMatch(/FROM codes c/);
+      expect(sql).toMatch(/JOIN race_course rc ON c\.course_id = rc\.id/);
+      expect(sql).toMatch(/status IN \('ACTIVE','SENT'\)/);
+      expect(sql).toMatch(/c\.order_id IS NULL/); // import split
+      expect(sql).not.toMatch(/financial_status = 'paid'/); // no longer order-scoped
     });
   });
 
@@ -493,13 +533,14 @@ describe('MerchantPortalService', () => {
       mockDb.query
         .mockResolvedValueOnce([{ race_id: 501 }])
         .mockResolvedValueOnce([
-          { ticket_type_id: 7, ticket_type_name: 'Standard 21K', order_count: 200, ticket_count: 260 },
-          { ticket_type_id: 9, ticket_type_name: 'VIP 21K', order_count: 10, ticket_count: 12 },
+          { ticket_type_id: 7, ticket_type_name: 'Standard 21K', ticket_count: 260, sbib_count: 200, import_count: 60 },
+          { ticket_type_id: 9, ticket_type_name: 'VIP 21K', ticket_count: 12, sbib_count: 12, import_count: 0 },
         ]);
       const r = await service.getTicketSalesByType('logto_user_a', 501);
       expect(r.items[0].name).toBe('Standard 21K');
       expect(r.items[0].id).toBe(7);
       expect(r.totalTickets).toBe(272);
+      expect(r.items[0].countImport).toBe(60);
     });
 
     it('null type_name → empty string fallback', async () => {
@@ -507,7 +548,7 @@ describe('MerchantPortalService', () => {
       mockDb.query
         .mockResolvedValueOnce([{ race_id: 501 }])
         .mockResolvedValueOnce([
-          { ticket_type_id: 7, ticket_type_name: null, order_count: 1, ticket_count: 1 },
+          { ticket_type_id: 7, ticket_type_name: null, ticket_count: 1, sbib_count: 1, import_count: 0 },
         ]);
       const r = await service.getTicketSalesByType('logto_user_a', 501);
       expect(r.items[0].name).toBe('');

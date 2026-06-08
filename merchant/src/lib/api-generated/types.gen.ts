@@ -6836,6 +6836,18 @@ export type TicketSalesSummaryDto = {
      * Breakdown theo financial_status. LUÔN gồm paid/voided/pending (0 nếu vắng) — frontend render 3 KPI cards. Status lạ (nếu có) append cuối.
      */
     byStatus: Array<TicketStatusCountDto>;
+    /**
+     * F-IMPORT — Tổng vé THỰC = codes ACTIVE/SENT (gồm vé import) = issued5bib + issuedImport
+     */
+    totalIssued: number;
+    /**
+     * Vé bán/cấp qua 5BIB (codes có order_id)
+     */
+    issued5bib: number;
+    /**
+     * Vé import vào 5BIB (codes order_id NULL) — không có giao dịch tiền trên 5BIB
+     */
+    issuedImport: number;
 };
 
 export type TicketBreakdownItemDto = {
@@ -6848,13 +6860,21 @@ export type TicketBreakdownItemDto = {
      */
     name: string;
     /**
-     * Số đơn paid (COUNT DISTINCT order)
+     * Số vé qua 5BIB (codes có order_id) — giữ tên orderCount cho back-compat
      */
     orderCount: number;
     /**
-     * Số vé paid (SUM quantity)
+     * Tổng vé (codes ACTIVE/SENT, GỒM import)
      */
     ticketCount: number;
+    /**
+     * Vé qua 5BIB (order_id NOT NULL)
+     */
+    count5bib: number;
+    /**
+     * Vé import (order_id NULL)
+     */
+    countImport: number;
 };
 
 export type TicketSalesBreakdownDto = {
@@ -16766,6 +16786,18 @@ export type ParticipantInsightsDto = {
     ageGroups: Array<InsightBucketDto>;
     nationalities: Array<InsightBucketDto>;
     provinces: Array<InsightBucketDto>;
+    /**
+     * F-IMPORT — Tổng VĐV thật = codes ACTIVE/SENT (gồm import). Cơ cấu chỉ tính trên totalParticipants vé có dữ liệu.
+     */
+    totalIssued: number;
+    /**
+     * Số VĐV có dữ liệu cơ cấu (= totalParticipants)
+     */
+    participantsWithData: number;
+    /**
+     * Số vé import chưa có dữ liệu cơ cấu chi tiết
+     */
+    issuedImport: number;
 };
 
 export type MerchantPortalControllerGetParticipantInsightsData = {

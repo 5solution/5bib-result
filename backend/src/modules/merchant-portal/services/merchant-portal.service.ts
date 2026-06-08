@@ -643,8 +643,53 @@ export class MerchantPortalService {
       const totalTickets = byStatus.reduce((s, b) => s + b.ticketCount, 0);
       const totalOrders = byStatus.reduce((s, b) => s + b.orderCount, 0);
 
-      return { raceId, totalTickets, totalOrders, byStatus };
+      // F-IMPORT — "Tổng vé" TRUE source-of-truth = issued `codes` (ACTIVE/SENT),
+      // which INCLUDE import/MANUAL-added BIBs that have no 5BIB order. BTC bán qua
+      // nhiều nguồn rồi import toàn bộ vào 5BIB → order_metadata thiếu vé import.
+      // `order_id IS NULL` = import (no 5BIB order); NOT NULL = sold via 5BIB.
+      const issued = await this.pullIssuedCodeTotals(raceId);
+
+      return {
+        raceId,
+        totalTickets,
+        totalOrders,
+        byStatus,
+        ...issued,
+      };
     });
+  }
+
+  /**
+   * F-IMPORT — Canonical "valid issued ticket" predicate over the `codes` table:
+   * `deleted = 0 AND status IN ('ACTIVE','SENT')`. INACTIVE = huỷ/void. This is the
+   * sole counting basis that captures BOTH 5BIB-sold and imported BIBs. Source split:
+   * `order_id IS NULL` → import (incl. MANUAL adds), else sold via 5BIB order.
+   */
+  private static readonly CODE_SOLD_FILTER =
+    "c.deleted = 0 AND c.status IN ('ACTIVE','SENT')";
+
+  /** Issued-code totals for a race: total + 5BIB vs import split. */
+  private async pullIssuedCodeTotals(
+    raceId: number,
+  ): Promise<{ totalIssued: number; issued5bib: number; issuedImport: number }> {
+    const rows: Array<{
+      total_issued: number | string;
+      sbib_count: number | string;
+      import_count: number | string;
+    }> = await this.db.query(
+      `SELECT COUNT(*) AS total_issued,
+              SUM(CASE WHEN c.order_id IS NOT NULL THEN 1 ELSE 0 END) AS sbib_count,
+              SUM(CASE WHEN c.order_id IS NULL THEN 1 ELSE 0 END) AS import_count
+       FROM codes c
+       WHERE c.race_id = ? AND ${MerchantPortalService.CODE_SOLD_FILTER}`,
+      [raceId],
+    );
+    const r = rows?.[0];
+    return {
+      totalIssued: Number(r?.total_issued ?? 0),
+      issued5bib: Number(r?.sbib_count ?? 0),
+      issuedImport: Number(r?.import_count ?? 0),
+    };
   }
 
   /**
@@ -660,20 +705,22 @@ export class MerchantPortalService {
     const cacheKey = `merchant-portal:ticket-by-course:${userId}:${raceId}`;
 
     return this.cachedTicketRead(cacheKey, async () => {
+      // F-IMPORT — count issued `codes` per course (incl. imports), NOT paid orders.
+      // codes carries course_id directly → no oli→om→tt→rc chain needed.
       const rows: Array<{
         course_id: number | string;
         course_name: string | null;
-        order_count: number | string;
         ticket_count: number | string;
+        sbib_count: number | string;
+        import_count: number | string;
       }> = await this.db.query(
         `SELECT rc.id AS course_id, rc.name AS course_name,
-                COUNT(DISTINCT om.id) AS order_count,
-                COALESCE(SUM(oli.quantity),0) AS ticket_count
-         FROM order_line_item oli
-         JOIN order_metadata om ON oli.order_id = om.id
-         JOIN ticket_type tt ON oli.ticket_type_id = tt.id
-         JOIN race_course rc ON tt.race_course_id = rc.id
-         WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
+                COUNT(*) AS ticket_count,
+                SUM(CASE WHEN c.order_id IS NOT NULL THEN 1 ELSE 0 END) AS sbib_count,
+                SUM(CASE WHEN c.order_id IS NULL THEN 1 ELSE 0 END) AS import_count
+         FROM codes c
+         JOIN race_course rc ON c.course_id = rc.id
+         WHERE c.race_id = ? AND ${MerchantPortalService.CODE_SOLD_FILTER}
          GROUP BY rc.id, rc.name
          ORDER BY ticket_count DESC`,
         [raceId],
@@ -694,19 +741,22 @@ export class MerchantPortalService {
     const cacheKey = `merchant-portal:ticket-by-type:${userId}:${raceId}`;
 
     return this.cachedTicketRead(cacheKey, async () => {
+      // F-IMPORT — count issued `codes` per ticket type (incl. imports). codes
+      // carries ticket_type_id directly.
       const rows: Array<{
         ticket_type_id: number | string;
         ticket_type_name: string | null;
-        order_count: number | string;
         ticket_count: number | string;
+        sbib_count: number | string;
+        import_count: number | string;
       }> = await this.db.query(
         `SELECT tt.id AS ticket_type_id, tt.type_name AS ticket_type_name,
-                COUNT(DISTINCT om.id) AS order_count,
-                COALESCE(SUM(oli.quantity),0) AS ticket_count
-         FROM order_line_item oli
-         JOIN order_metadata om ON oli.order_id = om.id
-         JOIN ticket_type tt ON oli.ticket_type_id = tt.id
-         WHERE om.race_id = ? AND om.deleted = 0 AND om.financial_status = 'paid'
+                COUNT(*) AS ticket_count,
+                SUM(CASE WHEN c.order_id IS NOT NULL THEN 1 ELSE 0 END) AS sbib_count,
+                SUM(CASE WHEN c.order_id IS NULL THEN 1 ELSE 0 END) AS import_count
+         FROM codes c
+         JOIN ticket_type tt ON c.ticket_type_id = tt.id
+         WHERE c.race_id = ? AND ${MerchantPortalService.CODE_SOLD_FILTER}
          GROUP BY tt.id, tt.type_name
          ORDER BY ticket_count DESC`,
         [raceId],
@@ -725,8 +775,12 @@ export class MerchantPortalService {
     const items: TicketBreakdownItemDto[] = rows.map((row) => ({
       id: Number(row[idKey]),
       name: (row[nameKey] as string | null) ?? '',
-      orderCount: Number(row.order_count ?? 0),
+      // F-IMPORT — orderCount now = codes sold via 5BIB (kept name for SDK back-compat);
+      // count5bib/countImport expose the source split, ticketCount = total incl import.
+      orderCount: Number(row.sbib_count ?? row.order_count ?? 0),
       ticketCount: Number(row.ticket_count ?? 0),
+      count5bib: Number(row.sbib_count ?? 0),
+      countImport: Number(row.import_count ?? 0),
     }));
     const totalTickets = items.reduce((s, i) => s + i.ticketCount, 0);
     return { raceId, totalTickets, items };
@@ -792,12 +846,23 @@ export class MerchantPortalService {
       this.logger.warn(`Redis read ${cacheKey} failed: ${(err as Error).message}`);
     }
 
-    const [rows, asOf] = await Promise.all([
+    const [rows, asOf, issued] = await Promise.all([
       this.pullParticipantRows(raceId),
       this.getRaceDay(raceId),
+      this.pullIssuedCodeTotals(raceId),
     ]);
     const agg = aggregateParticipants(rows, asOf);
-    const dto: ParticipantInsightsDto = { raceId, ...agg };
+    // F-IMPORT — total VĐV = issued codes (incl. imports). Demographics breakdown
+    // (size/giới/AG/quốc tịch) only covers 5BIB-order tickets via athlete_subinfo;
+    // import/MANUAL BIBs have no demographic row (no user_id, no clean FK) → FE shows
+    // a coverage note. `participantsWithData` = rows that DID have a demographic row.
+    const dto: ParticipantInsightsDto = {
+      raceId,
+      ...agg,
+      totalIssued: issued.totalIssued,
+      participantsWithData: agg.totalParticipants,
+      issuedImport: issued.issuedImport,
+    };
 
     try {
       await this.redis.set(cacheKey, JSON.stringify(dto), 'EX', 300);
@@ -1021,18 +1086,17 @@ export class MerchantPortalService {
       this.logger.warn(`Redis read ${cacheKey} failed: ${(err as Error).message}`);
     }
 
+    // F-IMPORT — `sold` = issued codes per ticket type (incl. imports), correlated
+    // subquery over `codes` (tt.id is globally unique → no cross-race leak).
     const rows: RawCapacityRow[] = await this.db.query(
       `SELECT rc.id AS course_id, rc.name AS course_name,
               tt.id AS tt_id, tt.type_name AS type_name,
               tt.max_participate AS quota,
-              COALESCE(SUM(
-                CASE WHEN om.financial_status = 'paid' AND om.deleted = 0
-                     THEN oli.quantity ELSE 0 END
-              ), 0) AS sold
+              (SELECT COUNT(*) FROM codes c
+                 WHERE c.ticket_type_id = tt.id
+                   AND ${MerchantPortalService.CODE_SOLD_FILTER}) AS sold
        FROM ticket_type tt
        JOIN race_course rc ON tt.race_course_id = rc.id
-       LEFT JOIN order_line_item oli ON oli.ticket_type_id = tt.id
-       LEFT JOIN order_metadata om ON oli.order_id = om.id
        WHERE rc.race_id = ? AND rc.deleted = 0 AND tt.deleted = 0
        GROUP BY rc.id, rc.name, tt.id, tt.type_name, tt.max_participate
        ORDER BY rc.id`,

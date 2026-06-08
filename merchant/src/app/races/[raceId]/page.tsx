@@ -409,18 +409,29 @@ function ParticipantsTab({
       <div className="shimmer" style={{ height: 280, borderRadius: 14, background: "var(--5s-surface)" }} />
     );
   }
-  if (data.totalParticipants === 0) {
+  // F-IMPORT — true total includes import BIBs; demographics only cover 5BIB tickets.
+  const totalIssued = data.totalIssued ?? data.totalParticipants;
+  const withData = data.participantsWithData ?? data.totalParticipants;
+  const hasImport = (data.issuedImport ?? 0) > 0;
+  if (totalIssued === 0) {
     return <EmptyState icon={Icons.Users} title={t("no_participants", lang)} body={t("no_participants", lang)} />;
   }
 
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-        <KpiCard icon={Icons.Users} iconBg="var(--5s-blue-50)" iconFg="var(--5s-blue)" label={t("kpi_participants", lang)} value={fmt.num(data.totalParticipants, lang)} lang={lang} />
+        <KpiCard icon={Icons.Users} iconBg="var(--5s-blue-50)" iconFg="var(--5s-blue)" label={t("kpi_participants", lang)} value={fmt.num(totalIssued, lang)} lang={lang}
+          sub={hasImport ? `${t("src_5bib", lang)}: ${fmt.num(withData, lang)} · ${t("src_import", lang)}: ${fmt.num(data.issuedImport ?? 0, lang)}` : undefined} />
         <Btn variant="secondary" icon={Icons.Download} onClick={onExport} disabled={exporting}>
           {exporting ? t("exporting", lang) : t("export_size", lang)}
         </Btn>
       </div>
+
+      {hasImport && (
+        <div style={{ marginBottom: 14, padding: "9px 13px", borderRadius: 10, background: "var(--5s-surface)", border: "1px solid var(--5s-border)", fontSize: 12, color: "var(--5s-text-muted)" }}>
+          {t("demo_coverage_note", lang).replace("{n}", fmt.num(withData, lang))}
+        </div>
+      )}
 
       <Card style={{ marginBottom: 18 }}>
         <SectionTitle>{t("by_size", lang)}</SectionTitle>
@@ -827,9 +838,12 @@ export default function RaceReportPage() {
         <>
           {/* KPIs */}
           <div style={{ display: "flex", gap: 16, marginBottom: 18 }}>
-            <KpiCard icon={Icons.Ticket} iconBg="var(--5s-blue-50)" iconFg="var(--5s-blue)" label={t("kpi_total", lang)} value={fmt.num(summary?.totalTickets ?? 0, lang)} lang={lang} />
-            <KpiCard icon={Icons.CheckCircle} iconBg="var(--5s-success-bg)" iconFg="var(--5s-success)" label={t("kpi_paid", lang)} value={fmt.num(statusCount(summary, "paid"), lang)} lang={lang} />
-            <KpiCard icon={Icons.Clock} iconBg="var(--5s-warning-bg)" iconFg="var(--5s-warning)" label={t("kpi_pending", lang)} value={fmt.num(statusCount(summary, "pending"), lang)} lang={lang} />
+            <KpiCard icon={Icons.Ticket} iconBg="var(--5s-blue-50)" iconFg="var(--5s-blue)" label={t("kpi_total", lang)} value={fmt.num(summary?.totalIssued ?? 0, lang)} lang={lang}
+              sub={`${t("src_5bib", lang)}: ${fmt.num(summary?.issued5bib ?? 0, lang)} · ${t("src_import", lang)}: ${fmt.num(summary?.issuedImport ?? 0, lang)}`} />
+            <KpiCard icon={Icons.CheckCircle} iconBg="var(--5s-success-bg)" iconFg="var(--5s-success)" label={t("kpi_paid", lang)} value={fmt.num(statusCount(summary, "paid"), lang)} lang={lang}
+              sub={`${t("via_5bib", lang)}`} />
+            <KpiCard icon={Icons.Download} iconBg="var(--5s-surface)" iconFg="var(--5s-text-muted)" label={t("kpi_import", lang)} value={fmt.num(summary?.issuedImport ?? 0, lang)} lang={lang}
+              sub={`${t("import_hint", lang)}`} />
             <KpiCard icon={Icons.XCircle} iconBg="var(--5s-danger-bg)" iconFg="var(--5s-danger)" label={t("kpi_cancelled", lang)} value={fmt.num(statusCount(summary, "voided"), lang)} lang={lang} />
           </div>
 
