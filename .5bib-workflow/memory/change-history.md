@@ -7,6 +7,10 @@
 
 ---
 
+## [2026-06-08] BUGFIX: Ẩn fee-warning leak khỏi merchant portal
+FeeService warnings ("MerchantConfig không tồn tại cho tenantId=X — fallback Tier 3 platform default 5.5%...") đẩy thẳng ra merchant qua `revSummary.warnings` → **leak tenantId + cơ cấu phí nội bộ** cho BTC.
+Fix: `merchant-portal.service.ts` 4 site (revenue summary/by-category/aggregate/trend) → `logFeeWarningsInternal()` log server-side, KHÔNG đẩy ra merchant (warnings=[] → FE banner tự ẩn via `!warnings.length` guard). Backend-only. Test cũ "propagates Tier-3" → đảo thành "HIDDEN (no tenantId/tier leak)". 161 jest PASS.
+
 ## [2026-06-08] FEATURE-073: Capacity/Quota (Sức chứa từng cự ly) — ✅ DEV
 **Type:** EXTEND_EXISTING. BE+FE gộp 1 push (né concurrency-cancel F-072 lesson).
 ### Files: BE ➕utils/capacity.util.ts(+spec 7) +dto/capacity.dto.ts; ✏️services/merchant-portal.service.ts (getCapacity) +merchant-portal.controller.ts (GET /capacity). FE ✏️races/[raceId]/page.tsx (CapacityCard section tab Vé + loadCore fetch additive) +i18n.ts (6 key×5) +SDK hand-add.

@@ -538,6 +538,19 @@ export class MerchantPortalService {
     this.assertRaceAccessible(accessible, raceId);
   }
 
+  /**
+   * Fee-banner fix (2026-06-08): FeeService warnings leak internal tenantId +
+   * platform fee tiers (vd "MerchantConfig không tồn tại cho tenantId=14 — fallback
+   * Tier 3 platform default 5.5%..."). NEVER expose to merchant — log server-side only.
+   */
+  private logFeeWarningsInternal(warnings?: string[]): void {
+    if (warnings?.length) {
+      this.logger.warn(
+        `[merchant-portal] fee fallback (hidden from merchant): ${warnings.join(' | ')}`,
+      );
+    }
+  }
+
   /** Best-effort cached read helper for ticket-sales aggregates (60s TTL). */
   private async cachedTicketRead<T>(
     cacheKey: string,
@@ -984,7 +997,7 @@ export class MerchantPortalService {
         totalManualFee += fee.totalManualFee;
         totalVat += fee.totalVat;
         totalFee += fee.totalFee;
-        if (fee.warnings?.length) warnings.push(...fee.warnings);
+        this.logFeeWarningsInternal(fee.warnings); // hidden from merchant (leaks tenantId+tiers)
       }
 
       const net = gmv - totalFee;
@@ -1066,7 +1079,7 @@ export class MerchantPortalService {
             MerchantPortalService.NOMINAL_PERIOD,
           );
           acc[key].totalFee += fee.totalFee;
-          if (fee.warnings?.length) warnings.push(...fee.warnings);
+          this.logFeeWarningsInternal(fee.warnings); // hidden from merchant (leaks tenantId+tiers)
         }
       }
 
@@ -1125,7 +1138,7 @@ export class MerchantPortalService {
           orders,
           MerchantPortalService.NOMINAL_PERIOD,
         );
-        if (fee.warnings?.length) warnings.push(...fee.warnings);
+        this.logFeeWarningsInternal(fee.warnings); // hidden from merchant (leaks tenantId+tiers)
         byTenantRows.push({
           tenantId,
           gmv,
@@ -1489,7 +1502,7 @@ export class MerchantPortalService {
             list,
             { from: fromIso, to: toIso },
           );
-          if (fee.warnings?.length) warnings.push(...fee.warnings);
+          this.logFeeWarningsInternal(fee.warnings); // hidden from merchant (leaks tenantId+tiers)
           const acc = bucketMap.get(bucket) ?? {
             label,
             gmv: 0,

@@ -587,7 +587,7 @@ describe('MerchantPortalService', () => {
       expect(mockDb.query).toHaveBeenCalledTimes(1);
     });
 
-    it('missing MerchantConfig → propagates FeeService Tier-3 warning', async () => {
+    it('missing MerchantConfig → fee warning HIDDEN from merchant (no tenantId/tier leak)', async () => {
       mockConfigFound({ tenantIds: [42], permissions: ['revenue_report'] });
       mockDb.query
         .mockResolvedValueOnce([{ race_id: 501 }])
@@ -604,8 +604,11 @@ describe('MerchantPortalService', () => {
         warnings: ['MerchantConfig không tồn tại cho tenantId=42 — fallback Tier 3'],
       });
       const r = await service.getRevenueSummary('logto_user_a', 501);
-      expect(r.warnings.length).toBeGreaterThan(0);
-      expect(r.warnings[0]).toMatch(/Tier 3/);
+      // Fee-banner fix 2026-06-08: internal fee warnings (tenantId + tiers) MUST
+      // be hidden from merchant — logged server-side only.
+      expect(r.warnings).toEqual([]);
+      expect(JSON.stringify(r)).not.toMatch(/Tier 3/);
+      expect(JSON.stringify(r)).not.toMatch(/tenantId=/);
     });
 
     it('empty race (no paid orders) → all zero, no leak', async () => {
