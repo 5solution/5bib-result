@@ -354,8 +354,8 @@ export default function ContractDetailPage({
   const router = useRouter();
   const confirm = useConfirm();
   const { id } = use(params);
-  // F-029 BR-HD-30 — page-level RBAC gate.
-  const { isAdmin, isStaff, isLoading: authLoading } = useAuth();
+  // F-029 BR-HD-30 — page-level RBAC gate `isStaff || isFinance` (F-078 widen).
+  const { isAdmin, isStaff, isFinance, isLoading: authLoading } = useAuth();
 
   const [contract, setContract] = useState<ContractView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -619,7 +619,7 @@ export default function ContractDetailPage({
   }
 
   if (authLoading) return null;
-  if (!isStaff) return <RestrictedAccess />;
+  if (!isStaff && !isFinance) return <RestrictedAccess />;
   if (loading) return <DetailSkeleton sections={4} />;
   if (!contract) return <div className="p-6">Không tìm thấy hợp đồng</div>;
 

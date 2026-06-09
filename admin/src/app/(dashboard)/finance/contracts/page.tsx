@@ -7,8 +7,8 @@
  * STT / Số HĐ / Đối tác / Giải / Loại / Doanh thu / Chi phí / Lãi-Lỗ /
  * Margin badge / Status. Row click → detail page F-028 Phase 1.
  *
- * Page-level gate `isAdmin` defense-in-depth (mirror F-026 + F-028 Phase 2)
- * — backend `LogtoAdminGuard` đã enforce auth, page gate trả
+ * Page-level gate `isAdmin || isFinance` defense-in-depth (F-078 widen từ
+ * admin-only). Backend `LogtoFinanceGuard` đã enforce auth — page gate trả
  * `<RestrictedAccess />` để UX explain thay vì backend 403 silently.
  */
 import { Suspense } from "react";
@@ -30,11 +30,11 @@ function ContractsListLoading() {
 }
 
 export default function FinanceContractsListPage() {
-  const { isAdmin, isLoading } = useAuth();
+  const { isAdmin, isFinance, isLoading } = useAuth();
   if (isLoading) return <ContractsListLoading />;
-  if (!isAdmin) {
+  if (!isAdmin && !isFinance) {
     return (
-      <RestrictedAccess message="Module Tài chính chỉ dành cho admin — bạn không có quyền truy cập." />
+      <RestrictedAccess message="Module Tài chính chỉ dành cho admin hoặc kế toán (role `finance`) — bạn không có quyền truy cập." />
     );
   }
   return (

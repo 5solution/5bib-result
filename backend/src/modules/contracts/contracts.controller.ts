@@ -37,11 +37,11 @@ import {
   ContractHistoryResponseDto,
   GetHistoryQueryDto,
 } from './dto/contract-history.dto';
-import { LogtoStaffGuard } from '../logto-auth';
+import { LogtoStaffOrFinanceGuard } from '../logto-auth';
 
 @ApiTags('Contracts')
 @ApiBearerAuth()
-@UseGuards(LogtoStaffGuard)
+@UseGuards(LogtoStaffOrFinanceGuard)
 @Controller('contracts')
 export class ContractsController {
   constructor(private readonly contracts: ContractsService) {}

@@ -37,11 +37,11 @@ import {
   ServiceCatalogImportPreviewDto,
   ServiceCatalogImportResultDto,
 } from './dto/import-service-catalog.dto';
-import { LogtoStaffGuard } from '../logto-auth';
+import { LogtoStaffOrFinanceGuard } from '../logto-auth';
 
 @ApiTags('Service Catalog')
 @ApiBearerAuth()
-@UseGuards(LogtoStaffGuard)
+@UseGuards(LogtoStaffOrFinanceGuard)
 @Controller('service-catalog')
 export class ServiceCatalogController {
   constructor(

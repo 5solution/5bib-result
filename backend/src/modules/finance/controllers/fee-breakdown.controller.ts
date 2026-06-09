@@ -6,7 +6,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { PnLService } from '../services/pnl.service';
 import { FeeBreakdownDto } from '../dto/pnl-response.dto';
 
@@ -16,7 +16,7 @@ import { FeeBreakdownDto } from '../dto/pnl-response.dto';
  *   GET /api/finance/contracts/:id/fee-breakdown
  *
  * Returns full fee compute breakdown: source attribution + recon contributions
- * + self-compute slice + grossGMV reference. Admin-only (LogtoAdminGuard).
+ * + self-compute slice + grossGMV reference. Admin-only (LogtoFinanceGuard).
  * Cache `pnl:fee-breakdown:<contractId>:tenant=<tenantId>` TTL 3600s (BR-40-11).
  *
  * Decision D4 — split into own controller (NEW file) rather than extending
@@ -25,7 +25,7 @@ import { FeeBreakdownDto } from '../dto/pnl-response.dto';
  */
 @ApiTags('Finance')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoFinanceGuard)
 @Controller('finance/contracts')
 export class FeeBreakdownController {
   constructor(private readonly pnlService: PnLService) {}

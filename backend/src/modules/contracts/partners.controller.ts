@@ -37,11 +37,11 @@ import {
   PartnerImportPreviewDto,
   PartnerImportResultDto,
 } from './dto/import-partner.dto';
-import { LogtoStaffGuard } from '../logto-auth';
+import { LogtoStaffOrFinanceGuard } from '../logto-auth';
 
 @ApiTags('Partners')
 @ApiBearerAuth()
-@UseGuards(LogtoStaffGuard)
+@UseGuards(LogtoStaffOrFinanceGuard)
 @Controller('partners')
 export class PartnersController {
   constructor(

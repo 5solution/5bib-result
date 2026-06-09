@@ -1,17 +1,17 @@
 /**
  * QC E2E TC-24..30 + 10x stability (TC-29).
  *
- * Controller integration tests — uses Nest test bed (override LogtoAdminGuard
- * + AuditLogService + all deps with mocks). Verifies:
+ * Controller integration tests — uses Nest test bed (override LogtoFinanceGuard
+ * F-078 renamed from LogtoAdminGuard + AuditLogService + all deps with mocks). Verifies:
  *  - TC-24 GET /today returns ReconcileReportDto
  *  - TC-27 POST /trigger returns 200 + report
  *  - TC-28 POST /trigger 409 when lock held
  *  - TC-29 10× concurrent POST /trigger: exactly 1× success + 9× 409
  *  - TC-30 GET /health masks sensitive fields
  *
- * KHÔNG test 401/403 ở đây vì LogtoAdminGuard mocked thành allow-all
+ * KHÔNG test 401/403 ở đây vì LogtoFinanceGuard mocked thành allow-all
  * (testing controller logic, not guard). Guard tested separately trong
- * `logto-staff.guard.spec.ts` pattern existing.
+ * `logto-finance.guard.spec.ts` (F-078 BR-78-04 + TC-01..04).
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
@@ -21,7 +21,7 @@ import { InvoiceReconcileController } from '../invoice-reconcile.controller';
 import { InvoiceReconcileService } from '../services/invoice-reconcile.service';
 import { MisaMeinvoiceClient } from '../services/misa-meinvoice.client';
 import { InvoiceTelegramClient } from '../services/invoice-telegram.client';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { AuditLogService } from '../../audit/services/audit-log.service';
 import { env } from 'src/config';
 import type { ReconcileReportDto } from '../dto/reconcile-report.dto';
@@ -99,7 +99,7 @@ describe('InvoiceReconcileController (E2E controller integration)', () => {
         { provide: AuditLogService, useValue: mockAudit },
       ],
     })
-      .overrideGuard(LogtoAdminGuard)
+      .overrideGuard(LogtoFinanceGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(ThrottlerGuard)
       .useValue({ canActivate: () => true })

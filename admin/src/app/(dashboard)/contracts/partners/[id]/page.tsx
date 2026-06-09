@@ -46,8 +46,8 @@ export default function PartnerEditPage({
   const router = useRouter();
   const { id } = use(params);
   const isNew = id === "new";
-  // F-029 BR-HD-30 — page-level RBAC gate.
-  const { isStaff, isLoading: authLoading } = useAuth();
+  // F-029 BR-HD-30 — page-level RBAC gate `isStaff || isFinance` (F-078 widen).
+  const { isStaff, isFinance, isLoading: authLoading } = useAuth();
 
   const [form, setForm] = useState<CreatePartnerInput>(BLANK);
   const [loading, setLoading] = useState(!isNew);
@@ -127,7 +127,7 @@ export default function PartnerEditPage({
   }
 
   if (authLoading) return null;
-  if (!isStaff) return <RestrictedAccess />;
+  if (!isStaff && !isFinance) return <RestrictedAccess />;
   if (loading) return <DetailSkeleton sections={2} />;
 
   return (

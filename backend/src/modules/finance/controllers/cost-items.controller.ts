@@ -18,7 +18,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { CostItemsService } from '../services/cost-items.service';
 import { CreateCostItemDto } from '../dto/create-cost-item.dto';
 import { UpdateCostItemDto } from '../dto/update-cost-item.dto';
@@ -39,7 +39,7 @@ import { CostItemFilterDto } from '../dto/pnl-filter.dto';
  */
 @ApiTags('Finance')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoFinanceGuard)
 @Controller('finance/contracts/:contractId/cost-items')
 export class CostItemsController {
   constructor(private readonly service: CostItemsService) {}

@@ -12,7 +12,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { FeeService } from '../services/fee.service';
 import {
   RaceSearchResultDto,
@@ -26,7 +26,7 @@ import {
  */
 @ApiTags('Finance')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoFinanceGuard)
 @Controller('finance/mysql')
 export class MysqlLookupController {
   constructor(private readonly feeService: FeeService) {}

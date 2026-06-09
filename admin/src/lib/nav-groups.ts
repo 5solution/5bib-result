@@ -62,10 +62,12 @@ export type NavItem = {
   /** Route chua co page → render placeholder Coming soon (BR-DESIGN-10). */
   isComingSoon?: boolean;
   /**
-   * RBAC gate — neu set "admin" thi chi admin/super_admin xem duoc.
-   * Default undefined = staff tro len thay duoc (hau het muc).
+   * RBAC gate:
+   *   - "admin"   → chi admin/super_admin xem duoc
+   *   - "finance" → finance + admin/super_admin xem (F-078 BR-78-10)
+   *   - undefined → staff tro len thay duoc (hau het muc)
    */
-  requireRole?: "admin";
+  requireRole?: "admin" | "finance";
 };
 
 export type NavGroup = {
@@ -138,12 +140,14 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Tài chính",
     items: [
+      // F-078 BR-78-27 — 3 items đổi requireRole "admin" → "finance".
+      // Hiển thị cho finance/admin; staff-only KHÔNG thấy nav (defense-in-depth UX).
       {
         id: "finance-pnl-dashboard",
         href: "/finance",
         label: "Tổng quan P&L",
         icon: BarChart2,
-        requireRole: "admin",
+        requireRole: "finance",
         badge: "NEW",
       },
       {
@@ -151,15 +155,16 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/finance/contracts",
         label: "P&L theo HĐ",
         icon: Coins,
-        requireRole: "admin",
+        requireRole: "finance",
       },
-      // F-076 — MISA Meinvoice daily reconcile + alert (admin internal tool).
+      // F-076 — MISA Meinvoice daily reconcile + alert.
+      // F-078: requireRole "admin" → "finance" cho Hiền (kế toán) access.
       {
         id: "invoice-reconcile",
         href: "/invoice-reconcile",
         label: "Đối soát hóa đơn MISA",
         icon: ShieldCheck,
-        requireRole: "admin",
+        requireRole: "finance",
         badge: "NEW",
       },
     ],

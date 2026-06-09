@@ -72,10 +72,10 @@ const TYPES: { id: ContractType; label: string }[] = [
 ];
 
 export default function TemplatesPage(): React.ReactElement {
-  // F-029 BR-HD-30 — page-level RBAC gate.
-  const { isStaff, isLoading } = useAuth();
+  // F-029 BR-HD-30 — page-level RBAC gate `isStaff || isFinance` (F-078 widen).
+  const { isStaff, isFinance, isLoading } = useAuth();
   if (isLoading) return <></>;
-  if (!isStaff) return <RestrictedAccess />;
+  if (!isStaff && !isFinance) return <RestrictedAccess />;
   return (
     <div className="space-y-4 p-6">
       <header>

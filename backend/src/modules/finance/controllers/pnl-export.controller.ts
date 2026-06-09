@@ -13,7 +13,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { PnLExcelService } from '../services/pnl-excel.service';
 import { ExcelExportResponseDto } from '../dto/excel-export.dto';
 
@@ -24,7 +24,7 @@ import { ExcelExportResponseDto } from '../dto/excel-export.dto';
  */
 @ApiTags('Finance')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoFinanceGuard)
 @Controller('finance/contracts/:contractId/export')
 export class PnLExportController {
   constructor(private readonly excel: PnLExcelService) {}

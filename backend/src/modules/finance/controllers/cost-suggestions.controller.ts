@@ -14,7 +14,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { CostSuggestionsService } from '../services/cost-suggestions.service';
 import {
   BulkCreateCostItemsDto,
@@ -28,11 +28,11 @@ import { CostItemResponseDto } from '../dto/pnl-response.dto';
  *   GET  /finance/contracts/:contractId/cost-suggestions
  *   POST /finance/contracts/:contractId/cost-items/bulk
  *
- * Admin-only (LogtoAdminGuard) — pattern CostItemsController.
+ * Admin-only (LogtoFinanceGuard) — pattern CostItemsController.
  */
 @ApiTags('Finance')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoFinanceGuard)
 @Controller('finance/contracts/:contractId')
 export class CostSuggestionsController {
   constructor(private readonly service: CostSuggestionsService) {}

@@ -5,7 +5,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { PnLService } from '../services/pnl.service';
 import { PnLContractsListFilterDto } from '../dto/pnl-contracts-list-filter.dto';
 import { PnLContractsListResponseDto } from '../dto/pnl-contracts-list-response.dto';
@@ -17,7 +17,7 @@ import { PnLContractsListResponseDto } from '../dto/pnl-contracts-list-response.
  *     ?period=&dateFrom=&dateTo=
  *     &page=&limit=&sortBy=&sortDir=&q=
  *
- * Admin-only (LogtoAdminGuard class-level — mirror `pnl-dashboard.controller.ts`).
+ * Admin-only (LogtoFinanceGuard class-level — mirror `pnl-dashboard.controller.ts`).
  * Cache `pnl:contracts-list:<filterHash>` TTL 60s (BR-38-08). Invalidate
  * trên mutation `contract.*` + `cost-items.*` via shared flush helper —
  * mirror dashboard cache flush pattern (BR-38-09).
@@ -27,7 +27,7 @@ import { PnLContractsListResponseDto } from '../dto/pnl-contracts-list-response.
  */
 @ApiTags('Finance')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoFinanceGuard)
 @Controller('finance/pnl')
 export class PnLContractsListController {
   constructor(private readonly pnlService: PnLService) {}

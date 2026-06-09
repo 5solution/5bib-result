@@ -6,7 +6,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { PnLService } from '../services/pnl.service';
 import { PnLSummaryDto } from '../dto/pnl-response.dto';
 
@@ -16,7 +16,7 @@ import { PnLSummaryDto } from '../dto/pnl-response.dto';
  */
 @ApiTags('Finance')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoFinanceGuard)
 @Controller('finance/contracts/:contractId')
 export class PnLController {
   constructor(private readonly pnlService: PnLService) {}

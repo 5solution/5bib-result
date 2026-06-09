@@ -3,8 +3,8 @@
 /**
  * F-024 Contracts list page.
  *
- * F-029 BR-HD-30 — Page-level RBAC gate `isStaff` defense-in-depth.
- * Backend cũng enforce via LogtoStaffGuard.
+ * F-029 BR-HD-30 — Page-level RBAC gate `isStaff || isFinance` defense-in-depth
+ * (F-078 widen — staff + finance + admin pass). Backend enforce via LogtoStaffOrFinanceGuard.
  *
  * Client Component shell — boundary delegates state + data loading vào
  * ContractListTable (Client Component).
@@ -14,9 +14,9 @@ import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { ContractListTable } from "./_components/contract-list-table";
 
 export default function ContractsPage() {
-  const { isStaff, isLoading } = useAuth();
+  const { isStaff, isFinance, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!isStaff) return <RestrictedAccess />;
+  if (!isStaff && !isFinance) return <RestrictedAccess />;
   return (
     <div className="p-6">
       <ContractListTable />

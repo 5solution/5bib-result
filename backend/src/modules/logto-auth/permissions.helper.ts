@@ -69,3 +69,46 @@ export function isStaffOrHigher(user: LogtoUser | undefined): boolean {
     roles.includes('super_admin')
   );
 }
+
+/**
+ * F-078 BR-78-17 — True if user has `finance` permission or higher (finance /
+ * admin / super_admin / all). Staff DOES NOT pass — finance là tier song
+ * song staff, không subset.
+ *
+ * Use cho service-level branching cần biết user có quyền finance tier
+ * không (vd: future feature conditional rendering kpi summary).
+ *
+ * Mirrors `LogtoFinanceGuard.canActivate` permission check verbatim.
+ */
+export function isFinanceOrAdmin(user: LogtoUser | undefined): boolean {
+  if (!user) return false;
+  const roles = user.roles ?? [];
+  const scopes = user.scopes ?? [];
+  return (
+    // Finance tier
+    roles.includes('finance') ||
+    scopes.includes('finance') ||
+    // Admin inheritance
+    roles.includes('admin') ||
+    roles.includes('super_admin') ||
+    scopes.includes('admin') ||
+    scopes.includes('admin:all') ||
+    scopes.includes('all')
+  );
+}
+
+/**
+ * F-078 BR-78-05 — True if user has `staff` OR `finance` permission or higher.
+ * Loosened union for /contracts (PAUSE-78-01 chốt — staff Tâm/Hằng giữ quyền
+ * existing, finance Hiền access mới).
+ *
+ * Mirrors `LogtoStaffOrFinanceGuard.canActivate` permission check verbatim.
+ *
+ * Reserved cho future service-level branching trong contracts domain.
+ */
+export function isStaffOrFinanceOrHigher(
+  user: LogtoUser | undefined,
+): boolean {
+  if (!user) return false;
+  return isStaffOrHigher(user) || isFinanceOrAdmin(user);
+}

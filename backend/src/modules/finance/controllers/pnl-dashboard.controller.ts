@@ -14,7 +14,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LogtoAdminGuard } from '../../logto-auth';
+import { LogtoFinanceGuard } from '../../logto-auth';
 import { PnLService } from '../services/pnl.service';
 import { PnLExcelService } from '../services/pnl-excel.service';
 import { PnLDashboardFilterDto } from '../dto/dashboard-filter.dto';
@@ -27,11 +27,11 @@ import { ExcelExportResponseDto } from '../dto/excel-export.dto';
  *   GET  /api/finance/dashboard?period=&groupBy=&dateFrom=&dateTo=
  *   POST /api/finance/dashboard/export/excel
  *
- * Admin-only (LogtoAdminGuard). Cache 120s `pnl:dashboard:<filterHash>`.
+ * Admin-only (LogtoFinanceGuard). Cache 120s `pnl:dashboard:<filterHash>`.
  */
 @ApiTags('Finance')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard)
+@UseGuards(LogtoFinanceGuard)
 @Controller('finance/dashboard')
 export class PnLDashboardController {
   constructor(

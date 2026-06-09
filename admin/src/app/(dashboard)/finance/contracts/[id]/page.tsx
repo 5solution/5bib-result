@@ -3,8 +3,8 @@
 /**
  * F-028 Screen 3 — P&L Per Contract Detail.
  *
- * RBAC: FinancePageGate enforce `isAdmin` (UI defense-in-depth). Backend
- * cũng enforce qua LogtoAdminGuard.
+ * RBAC: FinancePageGate enforce `isAdmin || isFinance` (UI defense-in-depth).
+ * Backend cũng enforce qua LogtoFinanceGuard (F-078 widen từ admin-only).
  */
 import { use, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -30,11 +30,11 @@ export default function FinancePerContractGate({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { isAdmin, isLoading } = useAuth();
+  const { isAdmin, isFinance, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!isAdmin) {
+  if (!isAdmin && !isFinance) {
     return (
-      <RestrictedAccess message="Module Tài chính chỉ dành cho admin — bạn không có quyền truy cập." />
+      <RestrictedAccess message="Module Tài chính chỉ dành cho admin hoặc kế toán (role `finance`) — bạn không có quyền truy cập." />
     );
   }
   return <FinancePerContractPage params={params} />;

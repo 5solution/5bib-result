@@ -43,8 +43,8 @@ function useDebounced<T>(value: T, delay = 300): T {
 export default function PartnersPage() {
   const router = useRouter();
   const confirm = useConfirm();
-  // F-029 BR-HD-30 — page-level RBAC gate.
-  const { isStaff, isLoading: authLoading } = useAuth();
+  // F-029 BR-HD-30 — page-level RBAC gate `isStaff || isFinance` (F-078 widen).
+  const { isStaff, isFinance, isLoading: authLoading } = useAuth();
   const [items, setItems] = useState<PartnerView[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -88,7 +88,7 @@ export default function PartnersPage() {
   }
 
   if (authLoading) return null;
-  if (!isStaff) return <RestrictedAccess />;
+  if (!isStaff && !isFinance) return <RestrictedAccess />;
 
   return (
     <div className="space-y-4 p-6">

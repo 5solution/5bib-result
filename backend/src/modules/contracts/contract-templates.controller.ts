@@ -23,7 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { ContractTemplateService } from './services/contract-template.service';
 import { ContractType } from './schemas/contract.schema';
-import { LogtoStaffGuard } from '../logto-auth';
+import { LogtoStaffOrFinanceGuard } from '../logto-auth';
 import { AuditLogService } from '../audit/services/audit-log.service';
 import { Optional } from '@nestjs/common';
 import { LineItemTemplate } from './schemas/contract-template.schema';
@@ -54,11 +54,11 @@ const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10MB
  *   GET    /api/contract-templates/:type/line-items      — get default line items
  *   PATCH  /api/contract-templates/:type/line-items      — upsert default line items
  *
- * All endpoints class-level guarded by LogtoStaffGuard per BR-CM-13.
+ * All endpoints class-level guarded by LogtoStaffOrFinanceGuard per BR-CM-13.
  */
 @ApiTags('Contract Templates')
 @ApiBearerAuth()
-@UseGuards(LogtoStaffGuard)
+@UseGuards(LogtoStaffOrFinanceGuard)
 @Controller('contract-templates')
 export class ContractTemplatesController {
   constructor(

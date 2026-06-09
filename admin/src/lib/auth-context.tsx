@@ -43,6 +43,11 @@ interface AuthContextType {
   hasRole: (role: string) => boolean;
   /** True khi user là admin hoặc cao hơn (admin / super_admin / scope `admin`+`all`). */
   isAdmin: boolean;
+  /**
+   * F-078 — True khi user là finance hoặc admin/super_admin/all (inheritance).
+   * KHÔNG bao gồm staff-only. Use cho 4 finance pages + invoice-reconcile gate.
+   */
+  isFinance: boolean;
   /** True khi user là staff hoặc cao hơn (bao gồm admin / super_admin). */
   isStaff: boolean;
 }
@@ -94,6 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     roles.includes(role) || roles.includes("super_admin");
   const isAdmin =
     hasScope("admin") || hasScope("all") || hasRole("admin") || hasRole("super_admin");
+  // F-078 BR-78-07 — Finance tier: finance role/scope OR admin inheritance.
+  // Mirror backend LogtoFinanceGuard.canActivate verbatim.
+  const isFinance =
+    isAdmin || hasScope("finance") || hasRole("finance");
   const isStaff =
     isAdmin || hasScope("staff") || hasRole("staff");
 
@@ -127,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasScope,
     hasRole,
     isAdmin,
+    isFinance,
     isStaff,
   };
 

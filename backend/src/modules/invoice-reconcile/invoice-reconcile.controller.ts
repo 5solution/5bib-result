@@ -6,7 +6,7 @@
  *   - POST /trigger — manual reconcile (lock-aware, returns 409 if busy)
  *   - GET /health   — module health (env masked)
  *
- * All gated by `LogtoAdminGuard` (role admin or scope admin).
+ * All gated by `LogtoFinanceGuard` (role admin or scope admin).
  * `POST /trigger` rate-limited 6/min/user via ThrottlerGuard.
  */
 import {
@@ -29,7 +29,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { env } from 'src/config';
-import { LogtoAdminGuard } from '../logto-auth';
+import { LogtoFinanceGuard } from '../logto-auth';
 import { AuditLogService } from '../audit/services/audit-log.service';
 import { InvoiceReconcileService } from './services/invoice-reconcile.service';
 import { MisaMeinvoiceClient } from './services/misa-meinvoice.client';
@@ -39,7 +39,7 @@ import { ReconcileHealthDto } from './dto/reconcile-health.dto';
 
 @ApiTags('admin-invoice-reconcile')
 @ApiBearerAuth()
-@UseGuards(LogtoAdminGuard, ThrottlerGuard)
+@UseGuards(LogtoFinanceGuard, ThrottlerGuard)
 @Controller('admin/invoice-reconcile')
 export class InvoiceReconcileController {
   private readonly logger = new Logger(InvoiceReconcileController.name);

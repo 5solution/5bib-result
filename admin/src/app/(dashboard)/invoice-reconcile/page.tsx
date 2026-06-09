@@ -3,19 +3,19 @@
 /**
  * F-076 — Invoice Reconcile admin dashboard.
  *
- * Page-level RBAC gate `isAdmin` (defense-in-depth — backend cũng enforce
- * via `LogtoAdminGuard`). Pattern clone từ Finance F-028 `FinancePageGate`.
+ * Page-level RBAC gate `isAdmin || isFinance` (F-078 widen từ admin-only).
+ * Backend cũng enforce via `LogtoFinanceGuard`. Pattern: Finance F-028.
  */
 import { useAuth } from "@/lib/auth-context";
 import { RestrictedAccess } from "@/components/admin-shell/restricted-access";
 import { InvoiceReconcileClient } from "./_components/invoice-reconcile-client";
 
 export default function InvoiceReconcilePageGate() {
-  const { isAdmin, isLoading } = useAuth();
+  const { isAdmin, isFinance, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!isAdmin) {
+  if (!isAdmin && !isFinance) {
     return (
-      <RestrictedAccess message="Module Đối soát hóa đơn MISA chỉ dành cho admin — bạn không có quyền truy cập." />
+      <RestrictedAccess message="Module Đối soát hóa đơn MISA chỉ dành cho admin hoặc kế toán (role `finance`) — bạn không có quyền truy cập." />
     );
   }
   return <InvoiceReconcileClient />;

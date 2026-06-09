@@ -83,15 +83,21 @@ function NavLink({
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isFinance } = useAuth();
 
-  // RBAC filter — bỏ item requireRole="admin" khỏi sidebar nếu user không phải admin.
-  // Đồng thời ẩn group hoàn toàn nếu sau filter không còn item nào.
+  // F-078 BR-78-11 — RBAC filter mở rộng cho 2 tier:
+  //   - requireRole="admin"   → chỉ admin xem
+  //   - requireRole="finance" → finance + admin xem (isFinance đã inherit isAdmin)
+  //   - requireRole undefined → ai cũng xem (staff trở lên)
+  // Ẩn group hoàn toàn nếu sau filter không còn item nào.
   const visibleGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter(
-      (item) => !item.requireRole || (item.requireRole === "admin" && isAdmin),
-    ),
+    items: group.items.filter((item) => {
+      if (!item.requireRole) return true;
+      if (item.requireRole === "admin") return isAdmin;
+      if (item.requireRole === "finance") return isFinance || isAdmin;
+      return false;
+    }),
   })).filter((g) => g.items.length > 0);
 
   return (
