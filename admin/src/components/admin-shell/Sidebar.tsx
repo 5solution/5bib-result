@@ -83,20 +83,24 @@ function NavLink({
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { isAdmin, isFinance } = useAuth();
+  const { isAdmin, isFinance, isStaff } = useAuth();
 
-  // F-078 BR-78-11 — RBAC filter mở rộng cho 2 tier:
-  //   - requireRole="admin"   → chỉ admin xem
-  //   - requireRole="finance" → finance + admin xem (isFinance đã inherit isAdmin)
-  //   - requireRole undefined → ai cũng xem (staff trở lên)
+  // F-078 BR-78-11 + hotfix3 — RBAC filter 4 tier:
+  //   - requireRole="admin"             → chỉ admin xem
+  //   - requireRole="finance"           → finance + admin xem
+  //   - requireRole="staff-or-finance"  → staff + finance + admin xem (vd Hợp đồng)
+  //   - requireRole undefined           → CHỈ staff trở lên (default operational items)
+  //                                       Finance thuần tuý KHÔNG thấy → tránh confuse
+  //                                       Hiền với items vận hành (Giải đấu, Merchant, etc).
   // Ẩn group hoàn toàn nếu sau filter không còn item nào.
   const visibleGroups = NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
-      if (!item.requireRole) return true;
       if (item.requireRole === "admin") return isAdmin;
       if (item.requireRole === "finance") return isFinance || isAdmin;
-      return false;
+      if (item.requireRole === "staff-or-finance") return isStaff || isFinance;
+      // Default = staff trở lên (admin inherits isStaff). Finance KHÔNG thấy.
+      return isStaff;
     }),
   })).filter((g) => g.items.length > 0);
 

@@ -63,11 +63,15 @@ export type NavItem = {
   isComingSoon?: boolean;
   /**
    * RBAC gate:
-   *   - "admin"   → chi admin/super_admin xem duoc
-   *   - "finance" → finance + admin/super_admin xem (F-078 BR-78-10)
-   *   - undefined → staff tro len thay duoc (hau het muc)
+   *   - "admin"             → chi admin/super_admin xem duoc
+   *   - "finance"           → finance + admin xem (F-078 BR-78-10)
+   *   - "staff-or-finance"  → staff + finance + admin xem (F-078 hotfix3 — cho
+   *                            module dual-tier vd Hop dong access ca 2 role)
+   *   - undefined           → CHI staff tro len thay duoc (default 5BIB
+   *                            internal nav = operational items, ko cho finance
+   *                            thuan tuy nhin). Finance items phai tag explicit.
    */
-  requireRole?: "admin" | "finance";
+  requireRole?: "admin" | "finance" | "staff-or-finance";
 };
 
 export type NavGroup = {
@@ -131,10 +135,12 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Hợp đồng",
     items: [
-      { id: "contracts", href: "/contracts", label: "Danh sách hợp đồng", icon: FileSignature, badge: "NEW" },
-      { id: "contracts-partners", href: "/contracts/partners", label: "Đối tác", icon: Building2 },
-      { id: "contracts-services", href: "/contracts/services", label: "Danh mục dịch vụ", icon: Package },
-      { id: "contracts-templates", href: "/contracts/templates", label: "Mẫu hợp đồng", icon: ScrollText },
+      // F-078 hotfix3 — Tag explicit "staff-or-finance" để Hiền (finance only)
+      // thấy items dù KHÔNG có staff role. Tâm/Hằng (staff) + Danny (admin) cũng thấy.
+      { id: "contracts", href: "/contracts", label: "Danh sách hợp đồng", icon: FileSignature, badge: "NEW", requireRole: "staff-or-finance" },
+      { id: "contracts-partners", href: "/contracts/partners", label: "Đối tác", icon: Building2, requireRole: "staff-or-finance" },
+      { id: "contracts-services", href: "/contracts/services", label: "Danh mục dịch vụ", icon: Package, requireRole: "staff-or-finance" },
+      { id: "contracts-templates", href: "/contracts/templates", label: "Mẫu hợp đồng", icon: ScrollText, requireRole: "staff-or-finance" },
     ],
   },
   {
