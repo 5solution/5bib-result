@@ -216,3 +216,259 @@ describe('InvoiceReconcileService', () => {
     expect(repoQuery).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * F-079 — runHourlyRecap integration tests with race title resolver.
+ *
+ * Coverage map:
+ *   TC-79-05 Skip removed verify (sendHourlyRecap CALLED kể cả missing=0)
+ *   TC-79-06 Telegram dispatch fail → service handle gracefully
+ *   TC-79-08 runHourlyRecap end-to-end với resolver wired
+ *   TC-79-10 10x concurrent runHourlyRecap → no duplicate (Redis snapshot guard)
+ *   TC-79-11 Resolver cache hit verify
+ *   TC-79-12 Resolver cache miss → Mongo fallback verify (via mock)
+ *   TC-79-13 Resolver throws → graceful empty Map fallback (BR-79-23)
+ *   TC-79-14 Resolver returns partial Map (some IDs missing) → composer fallback
+ */
+function makeMocksWithResolver(resolverImpl?: {
+  getRaceTitlesByMysqlIds?: jest.Mock;
+}) {
+  const repoQuery = jest.fn();
+  const orderRepo = { manager: { query: repoQuery } } as any;
+  const misa = {
+    isConfigured: jest.fn().mockReturnValue(true),
+    listInvoicesByDateRange: jest.fn().mockResolvedValue([]),
+    getLastStatus: jest.fn().mockReturnValue('OK'),
+    getTokenExpiry: jest.fn().mockResolvedValue(null),
+  } as any;
+  const alert = {
+    emitUrgentAlerts: jest.fn().mockResolvedValue({ sent: 0 }),
+    sendHourlyRecap: jest.fn().mockResolvedValue(true),
+    sendEodRecap: jest.fn().mockResolvedValue(true),
+  } as any;
+  const counters = {
+    increment: jest.fn().mockResolvedValue(undefined),
+    getAll: jest.fn().mockResolvedValue({}),
+  } as any;
+  const redisStore = new Map<string, string>();
+  const redis = {
+    get: jest.fn(async (k: string) => redisStore.get(k) ?? null),
+    set: jest.fn(async (k: string, v: string, ...args: unknown[]) => {
+      const isNx = args.includes('NX');
+      if (isNx && redisStore.has(k)) return null;
+      redisStore.set(k, v);
+      return 'OK';
+    }),
+    del: jest.fn(async (k: string) => {
+      redisStore.delete(k);
+      return 1;
+    }),
+    ttl: jest.fn(async () => -1),
+  } as any;
+
+  const resolver = {
+    getRaceTitlesByMysqlIds:
+      resolverImpl?.getRaceTitlesByMysqlIds ??
+      jest.fn().mockResolvedValue(
+        new Map<number, string>([
+          [140, '5BIB x COROS'],
+          [220, 'LÀO CAI MARATHON 2026 - DÒNG CHẢY BIÊN CƯƠNG'],
+        ]),
+      ),
+  } as any;
+
+  const service = new InvoiceReconcileService(
+    orderRepo,
+    misa,
+    alert,
+    counters,
+    redis,
+    resolver,
+  );
+
+  return { service, alert, redis, redisStore, resolver };
+}
+
+describe('F-079 — runHourlyRecap + race title resolver', () => {
+  const today = '2026-06-09';
+
+  function cachedReport(overrides: Record<string, unknown> = {}): unknown {
+    return {
+      date: today,
+      runAt: '2026-06-09T07:00:00Z',
+      mode: 'cron',
+      raceIdsScanned: [220],
+      expectedCount: 23,
+      issuedCount: 23,
+      skippedCount: 2,
+      missingCount: 0,
+      atRiskCount: 0,
+      duplicateCount: 0,
+      breachedCount: 0,
+      missing: [],
+      misaOrphan: [],
+      layer2Status: 'OK',
+      maxSeverity: 'INFO',
+      alertSent: false,
+      ...overrides,
+    };
+  }
+
+  describe('TC-79-05 — Skip removed: sendHourlyRecap CALLED kể cả missing=0', () => {
+    it('dispatches Telegram even when missing=0 AND diff=[]', async () => {
+      const { service, alert, redisStore } = makeMocksWithResolver();
+      redisStore.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(cachedReport()),
+      );
+      const result = await service.runHourlyRecap(today);
+      expect(result.sent).toBe(true);
+      expect(alert.sendHourlyRecap).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('TC-79-06 — Telegram dispatch fail → service handle gracefully', () => {
+    it('returns sent=false but does not throw', async () => {
+      const { service, alert, redisStore } = makeMocksWithResolver();
+      alert.sendHourlyRecap.mockResolvedValueOnce(false);
+      redisStore.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(cachedReport()),
+      );
+      const result = await service.runHourlyRecap(today);
+      expect(result.sent).toBe(false);
+      expect(result.report).not.toBeNull();
+    });
+  });
+
+  describe('TC-79-08 — runHourlyRecap passes resolved titles to alert', () => {
+    it('calls sendHourlyRecap with raceTitlesByid Map populated', async () => {
+      const { service, alert, redisStore, resolver } = makeMocksWithResolver();
+      redisStore.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(cachedReport({ raceIdsScanned: [140, 220] })),
+      );
+      await service.runHourlyRecap(today);
+      expect(resolver.getRaceTitlesByMysqlIds).toHaveBeenCalledWith([
+        140, 220,
+      ]);
+      const [, , raceTitlesByid] = alert.sendHourlyRecap.mock.calls[0];
+      expect(raceTitlesByid).toBeInstanceOf(Map);
+      expect(raceTitlesByid.get(140)).toBe('5BIB x COROS');
+      expect(raceTitlesByid.get(220)).toBe(
+        'LÀO CAI MARATHON 2026 - DÒNG CHẢY BIÊN CƯƠNG',
+      );
+    });
+  });
+
+  describe('TC-79-10 — 10x concurrent runHourlyRecap', () => {
+    it('handles 10 concurrent calls without throwing', async () => {
+      const { service, redisStore } = makeMocksWithResolver();
+      redisStore.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(cachedReport()),
+      );
+      const results = await Promise.all(
+        Array.from({ length: 10 }, () => service.runHourlyRecap(today)),
+      );
+      // All should complete with report not-null
+      results.forEach((r) => expect(r.report).not.toBeNull());
+    });
+  });
+
+  describe('TC-79-11/12 — Resolver cache behavior delegated to F-049 (verify call)', () => {
+    it('invokes resolver exactly once per tick (resolver internally caches)', async () => {
+      const { service, redisStore, resolver } = makeMocksWithResolver();
+      redisStore.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(cachedReport()),
+      );
+      await service.runHourlyRecap(today);
+      expect(resolver.getRaceTitlesByMysqlIds).toHaveBeenCalledTimes(1);
+      // Note: TC-79-11 cache hit + TC-79-12 cache miss → Mongo fallback are
+      // F-049 unit-tested in athlete-identity-clustering.service.spec.ts.
+      // F-079 only verifies the integration call.
+    });
+  });
+
+  describe('TC-79-13 — Resolver throws → graceful empty Map fallback (BR-79-23)', () => {
+    it('catches error + sends Telegram with empty Map (composer falls back Race {id})', async () => {
+      const { service, alert, redisStore } = makeMocksWithResolver({
+        getRaceTitlesByMysqlIds: jest
+          .fn()
+          .mockRejectedValue(new Error('Mongo down')),
+      });
+      redisStore.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(cachedReport()),
+      );
+      const result = await service.runHourlyRecap(today);
+      // Heartbeat MUST still dispatch (defensive — KHÔNG block alert flow)
+      expect(result.sent).toBe(true);
+      const [, , raceTitlesByid] = alert.sendHourlyRecap.mock.calls[0];
+      expect(raceTitlesByid).toBeInstanceOf(Map);
+      expect(raceTitlesByid.size).toBe(0);
+    });
+  });
+
+  describe('TC-79-14 — Resolver returns partial Map (some IDs missing)', () => {
+    it('composer falls back Race {id} for missing entries (handled by composer test)', async () => {
+      const { service, alert, redisStore } = makeMocksWithResolver({
+        getRaceTitlesByMysqlIds: jest.fn().mockResolvedValue(
+          // Only race 140 resolved, 220 missing
+          new Map<number, string>([[140, '5BIB x COROS']]),
+        ),
+      });
+      redisStore.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(cachedReport({ raceIdsScanned: [140, 220] })),
+      );
+      await service.runHourlyRecap(today);
+      const [, , raceTitlesByid] = alert.sendHourlyRecap.mock.calls[0];
+      expect(raceTitlesByid.size).toBe(1);
+      expect(raceTitlesByid.has(140)).toBe(true);
+      expect(raceTitlesByid.has(220)).toBe(false);
+      // Composer test TC-79-16 verifies Race 220 fallback render.
+    });
+  });
+
+  describe('Resolver not wired (boot without RaceMasterDataModule)', () => {
+    it('returns empty Map gracefully + heartbeat still sends', async () => {
+      // makeMocksWithResolver returns shared redisStore-backed mock — populate
+      // cached report directly via store, then construct fresh service without resolver.
+      const { redisStore, redis } = makeMocksWithResolver();
+      redisStore.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(cachedReport()),
+      );
+      const orderRepo = { manager: { query: jest.fn() } } as any;
+      const misa = {
+        isConfigured: jest.fn().mockReturnValue(true),
+        listInvoicesByDateRange: jest.fn().mockResolvedValue([]),
+        getLastStatus: jest.fn().mockReturnValue('OK'),
+      } as any;
+      const counters = {
+        increment: jest.fn(),
+        getAll: jest.fn().mockResolvedValue({}),
+      } as any;
+      const standaloneAlert = {
+        emitUrgentAlerts: jest.fn().mockResolvedValue({ sent: 0 }),
+        sendHourlyRecap: jest.fn().mockResolvedValue(true),
+        sendEodRecap: jest.fn().mockResolvedValue(true),
+      } as any;
+      const noResolverService = new InvoiceReconcileService(
+        orderRepo,
+        misa,
+        standaloneAlert,
+        counters,
+        redis,
+        // No 6th arg = no raceTitleResolver (Optional inject undefined)
+      );
+      const result = await noResolverService.runHourlyRecap(today);
+      expect(result.sent).toBe(true);
+      const [, , raceTitlesByid] = standaloneAlert.sendHourlyRecap.mock.calls[0];
+      expect(raceTitlesByid).toBeInstanceOf(Map);
+      expect(raceTitlesByid.size).toBe(0);
+    });
+  });
+});

@@ -1,13 +1,14 @@
 /**
- * F-076 BR-11 + BR-25 Hourly recap — `@Cron('0 0 8-20 * * *')` ICT
+ * F-076 + F-079 BR-79-01 Heartbeat Recap — `@Cron('0 0 8,10,12,14,16,18,20,22 * * *')` ICT
  *
- * Đúng tiếng tròn 08:00-20:00 ICT (13 tick/ngày — skip 21:00 vì EOD thay).
+ * 2 tiếng/lần 08:00-22:00 ICT (8 tick/ngày). Bao gồm 22:00 sau EOD 21:00 vì
+ * content khác (heartbeat = current snapshot, EOD = full-day counters).
  *
  * KHÔNG re-scan; chỉ đọc cached report + previous snapshot → compute diff
- * → render Loại 1 INFO Hourly Recap → send Telegram.
+ * + resolve race titles → render Loại 1 INFO Heartbeat/Recap → send Telegram.
  *
- * Skip condition (BR-25): no missing AND no diff → bỏ qua tick để tránh
- * noise (xem alert.service.sendHourlyRecap).
+ * F-079 BR-79-04: ALWAYS send (relax BR-25 skip-when-OK condition) — heartbeat
+ * giúp Danny + Hiền visibility cron alive kể cả khi missing=0.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
@@ -19,7 +20,9 @@ export class InvoiceHourlyRecapCron {
 
   constructor(private readonly reconcile: InvoiceReconcileService) {}
 
-  @Cron('0 0 8-20 * * *', {
+  // F-079 BR-79-01 — đổi từ '0 0 8-20 * * *' (13 tick) → 2h tick 8-22.
+  // Name + TZ giữ NGUYÊN BR-79-03 — KHÔNG đổi ScheduleRegistry mapping.
+  @Cron('0 0 8,10,12,14,16,18,20,22 * * *', {
     name: 'invoice-reconcile-hourly-recap',
     timeZone: 'Asia/Ho_Chi_Minh',
   })

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MissingInvoiceRowDto, AlertSeverity } from './missing-invoice-row.dto';
 import { MisaOrphanRowDto } from './misa-orphan-row.dto';
 
@@ -44,6 +44,14 @@ export class ReconcileReportDto {
     example: 44,
   })
   issuedCount!: number;
+
+  @ApiPropertyOptional({
+    description:
+      'F-079 BR-79-12 — Số đơn skip khỏi expected pool (INSURANCE/MANUAL category).' +
+      ' = dbOrders.length - expectedCount. Default 0 nếu old cached report.',
+    example: 2,
+  })
+  skippedCount?: number;
 
   @ApiProperty({
     description: 'Đơn UNISSUED + SYNC_LAG (cần action)',

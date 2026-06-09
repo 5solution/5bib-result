@@ -100,16 +100,28 @@ export class InvoiceAlertService {
     return { sent };
   }
 
-  /** BR-25 Loại 1 — Hourly Recap. Send always (no dedup) unless skip condition. */
+  /**
+   * F-076 BR-25 + F-079 BR-79-04..06 — Heartbeat/Recap.
+   *
+   * F-079: ALWAYS send (relax BR-25 skip-when-OK condition). Heartbeat semantics
+   * — Danny + Hiền visibility cron alive kể cả khi missing=0.
+   * Cron 2h/lần (8 tick/ngày, 8h-22h ICT) đảm bảo no duplicate without dedup.
+   *
+   * `raceTitlesByid` Map resolved bởi caller (InvoiceReconcileService) qua
+   * F-049 `AthleteIdentityClusteringService.getRaceTitlesByMysqlIds()`.
+   * Default empty Map → composer fallback `Race {raceId}` per BR-79-23.
+   */
   async sendHourlyRecap(
     report: ReconcileReportDto,
     diffEvents: DiffEvent[],
+    raceTitlesByid: Map<number, string> = new Map(),
   ): Promise<boolean> {
-    // Skip condition: no missing AND no diff
-    if (report.missingCount === 0 && diffEvents.length === 0) {
-      return false;
-    }
-    const html = composeHourlyRecap(report, diffEvents, this.dashboardUrl());
+    const html = composeHourlyRecap(
+      report,
+      diffEvents,
+      this.dashboardUrl(),
+      raceTitlesByid,
+    );
     return this.dispatch(html, 'hourly-recap');
   }
 

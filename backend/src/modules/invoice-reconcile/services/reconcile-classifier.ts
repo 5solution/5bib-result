@@ -80,6 +80,11 @@ export interface ClassifierOutput {
   expectedCount: number;
   /** OK bucket count = expectedCount - missing.length. */
   issuedCount: number;
+  /**
+   * F-079 BR-79-12 — Số đơn skip khỏi expected pool (INSURANCE/MANUAL category).
+   * = dbOrders.length - expectedCount. Render trong heartbeat "Skipped" line.
+   */
+  skippedCount: number;
   /** Computed for fast UI render. */
   atRiskCount: number;
   breachedCount: number;
@@ -295,13 +300,16 @@ export function classify(input: ClassifierInput): ClassifierOutput {
     return b.ageHours - a.ageHours;
   });
 
+  const expectedCount = dbOrders.filter(
+    (o) => !SKIP_CATEGORIES.has(o.orderCategory),
+  ).length;
   return {
     missing,
     orphan,
-    expectedCount: dbOrders.filter(
-      (o) => !SKIP_CATEGORIES.has(o.orderCategory),
-    ).length,
+    expectedCount,
     issuedCount,
+    // F-079 BR-79-12 — skipped = total dbOrders - expectedCount (post-filter).
+    skippedCount: dbOrders.length - expectedCount,
     atRiskCount,
     breachedCount,
     duplicateCount,

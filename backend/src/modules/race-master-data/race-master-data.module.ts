@@ -120,6 +120,12 @@ import { EndedRaceMasterSyncCron } from './jobs/ended-race-master-sync.cron';
     BulkSyncOrchestratorService,
     EndedRaceMasterSyncCron,
   ],
-  exports: [RaceAthleteLookupService],
+  exports: [
+    RaceAthleteLookupService,
+    // F-079 BR-79-21 — export AthleteIdentityClusteringService cho InvoiceReconcileModule
+    // reuse `getRaceTitlesByMysqlIds()` method (Redis cache F-049 + Mongo fallback).
+    // Forced cascade: Manager `/5bib-plan` đọc nhầm providers thành exports.
+    AthleteIdentityClusteringService,
+  ],
 })
 export class RaceMasterDataModule {}

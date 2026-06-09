@@ -9,11 +9,14 @@ import {
   composeHourlyRecap,
   composeMisaUnavailableAlert,
   composeMisaAuthFailAlert,
+  composeRaceTag,
   composeWarnAlert,
+  computeNextHeartbeatHour,
   escapeHtml,
   formatVnd,
   truncate,
 } from '../services/alert-composer';
+import type { DiffEvent } from '../services/diff-computer';
 import { MissingInvoiceRowDto } from '../dto/missing-invoice-row.dto';
 import { ReconcileReportDto } from '../dto/reconcile-report.dto';
 
@@ -194,5 +197,237 @@ describe('alert-composer — render snapshot tests', () => {
     expect(out).toContain('Scan ticks chạy: 180');
     expect(out).toContain('WARN:      2 lần');
     expect(out).toContain('CRITICAL:  1 lần');
+  });
+});
+
+/**
+ * F-079 — 3-state Heartbeat composer + race title resolver render tests.
+ *
+ * Coverage map (theo PRD `01-ba-prd.md`):
+ *   TC-79-01 "All OK" state
+ *   TC-79-02 "All OK + diff" state
+ *   TC-79-03 "Có issue" state (regression BR-25 4-line stats intact)
+ *   TC-79-04 computeNextHeartbeatHour mapping
+ *   TC-79-15 race title truncate >80 char
+ *   TC-79-16 multi-race title integration via raceTitlesByid Map
+ *   TC-79-17 escape HTML diacritics + <script>
+ */
+describe('F-079 — Heartbeat composer 3-state + race title', () => {
+  const TITLE_LCM = 'LÀO CAI MARATHON 2026 - DÒNG CHẢY BIÊN CƯƠNG';
+  const TITLE_COROS = '5BIB x COROS';
+
+  describe('TC-79-04 — computeNextHeartbeatHour', () => {
+    it.each([
+      [8, '10:00 ICT'],
+      [10, '12:00 ICT'],
+      [12, '14:00 ICT'],
+      [14, '16:00 ICT'],
+      [16, '18:00 ICT'],
+      [18, '20:00 ICT'],
+      [20, '22:00 ICT'],
+      [22, '08:00 ICT (ngày hôm sau)'],
+      [9, '08:00 ICT (ngày hôm sau)'], // not a heartbeat hour → fallback next-day
+      [0, '08:00 ICT (ngày hôm sau)'],
+    ])('hour %i → %s', (input, expected) => {
+      expect(computeNextHeartbeatHour(input)).toBe(expected);
+    });
+  });
+
+  describe('TC-79-15 — composeRaceTag truncate + escape + fallback', () => {
+    it('returns "Race {id}" fallback when title undefined (BR-79-23)', () => {
+      expect(composeRaceTag(undefined, 220)).toBe('Race 220');
+    });
+
+    it('renders {title} - {id} for short title (BR-79-20)', () => {
+      expect(composeRaceTag(TITLE_COROS, 140)).toBe('5BIB x COROS - 140');
+    });
+
+    it('escapes HTML diacritics + <> (BR-79-24)', () => {
+      expect(composeRaceTag('<script>alert(1)</script> Marathon', 99)).toContain(
+        '&lt;script&gt;alert(1)&lt;/script&gt; Marathon',
+      );
+    });
+
+    it('truncates title > 80 chars to slice(0,77) + "..." (BR-79-25)', () => {
+      const longTitle = 'A'.repeat(100);
+      const result = composeRaceTag(longTitle, 220);
+      expect(result).toMatch(/^A{77}\.\.\. - 220$/);
+    });
+
+    it('keeps real PROD race 220 title (47 chars under threshold)', () => {
+      const result = composeRaceTag(TITLE_LCM, 220);
+      expect(result).toBe(`${TITLE_LCM} - 220`);
+      expect(result.length).toBeLessThan(80);
+    });
+  });
+
+  describe('TC-79-01 — "All OK" state (missing=0, diff=[])', () => {
+    it('renders Heartbeat header + ✅ All OK status + stats block', () => {
+      const r = report({
+        missingCount: 0,
+        issuedCount: 23,
+        expectedCount: 23,
+        skippedCount: 2,
+        duplicateCount: 0,
+        atRiskCount: 0,
+        missing: [],
+        raceIdsScanned: [220],
+      });
+      const titles = new Map<number, string>([[220, TITLE_LCM]]);
+      const out = composeHourlyRecap(r, [], 'https://result.5bib.com/invoice-reconcile', titles);
+      expect(out).toContain('5BIB Invoice Heartbeat');
+      expect(out).not.toContain('5BIB Invoice Recap'); // heartbeat header, not recap
+      expect(out).toContain(`Giải: <b>${TITLE_LCM} - 220</b>`);
+      expect(out).toContain('✅ <b>All OK</b>');
+      expect(out).toContain('23/23 đơn ORDINARY');
+      expect(out).toContain('Expected:  <b>23</b>');
+      expect(out).toContain('Skipped (INSURANCE/MANUAL): <b>2</b>');
+      expect(out).not.toContain('🔴 UNISSUED');
+      expect(out).not.toContain('🟡 SYNC_LAG');
+      expect(out).toContain('🕐 Next heartbeat:');
+    });
+  });
+
+  describe('TC-79-02 — "All OK + diff" state (missing=0, diff > 0)', () => {
+    it('adds Diff block + Heartbeat header + ✅ All OK retained', () => {
+      const r = report({
+        missingCount: 0,
+        issuedCount: 25,
+        expectedCount: 25,
+        skippedCount: 2,
+        duplicateCount: 0,
+        atRiskCount: 0,
+        missing: [],
+        raceIdsScanned: [220],
+      });
+      const diffEvents: DiffEvent[] = [
+        {
+          type: 'PAID_NEW',
+          orderId: 200029534,
+          orderCode: '#5B200029534IB',
+          raceId: 220,
+          totalPrice: 500000,
+        },
+        {
+          type: 'ISSUED',
+          orderId: 200029530,
+          orderCode: '#5B200029530IB',
+          misaInvNo: '00000043',
+        },
+      ];
+      const titles = new Map<number, string>([[220, TITLE_LCM]]);
+      const out = composeHourlyRecap(r, diffEvents, 'https://result.5bib.com', titles);
+      expect(out).toContain('5BIB Invoice Heartbeat');
+      expect(out).toContain('✅ <b>All OK</b>');
+      expect(out).toContain('<b>Diff vs 2h trước:</b>');
+      expect(out).toContain('#5B200029534IB');
+      expect(out).toContain(`${TITLE_LCM} - 220`);
+      expect(out).toContain('Đã xuất');
+      expect(out).toContain('InvNo 00000043');
+    });
+  });
+
+  describe('TC-79-03 — "Có issue" state (missing > 0) regression BR-25', () => {
+    it('renders Recap header (NOT Heartbeat) + 4-line BR-25 stats intact', () => {
+      const r = report({
+        missingCount: 3,
+        issuedCount: 20,
+        expectedCount: 23,
+        skippedCount: 2,
+        duplicateCount: 0,
+        atRiskCount: 1,
+        missing: [
+          row({ bucket: 'UNISSUED', severity: 'CRITICAL', ageHours: 22 }),
+          row({ bucket: 'SYNC_LAG', severity: 'WARN', ageHours: 4 }),
+          row({ bucket: 'UNISSUED', severity: 'WARN', ageHours: 14 }),
+        ],
+        raceIdsScanned: [220],
+      });
+      const titles = new Map<number, string>([[220, TITLE_LCM]]);
+      const out = composeHourlyRecap(r, [], 'https://result.5bib.com', titles);
+      expect(out).toContain('5BIB Invoice Recap');
+      expect(out).not.toContain('5BIB Invoice Heartbeat');
+      expect(out).toContain(`Giải: <b>${TITLE_LCM} - 220</b>`);
+      expect(out).toContain('🟢 OK:');
+      expect(out).toContain('🟡 SYNC_LAG');
+      expect(out).toContain('🔴 UNISSUED');
+      expect(out).toContain('🔥 DUPLICATE');
+      expect(out).toContain('max age 22h');
+      expect(out).toContain('Cần action');
+      expect(out).not.toContain('✅ <b>All OK</b>');
+    });
+  });
+
+  describe('TC-79-16 — multi-race title integration', () => {
+    it('renders both race titles in Giải line for raceIdsScanned=[140,220]', () => {
+      const r = report({
+        missingCount: 0,
+        issuedCount: 50,
+        expectedCount: 50,
+        skippedCount: 2,
+        duplicateCount: 0,
+        missing: [],
+        raceIdsScanned: [140, 220],
+      });
+      const titles = new Map<number, string>([
+        [140, TITLE_COROS],
+        [220, TITLE_LCM],
+      ]);
+      const out = composeHourlyRecap(r, [], 'https://result.5bib.com', titles);
+      expect(out).toContain(`${TITLE_COROS} - 140`);
+      expect(out).toContain(`${TITLE_LCM} - 220`);
+      // Both in same Giải line
+      expect(out).toMatch(/Giải: <b>.*140.*220.*<\/b>/);
+    });
+
+    it('falls back Race {id} when raceTitlesByid empty Map (BR-79-23)', () => {
+      const r = report({
+        missingCount: 0,
+        issuedCount: 23,
+        expectedCount: 23,
+        skippedCount: 2,
+        duplicateCount: 0,
+        missing: [],
+        raceIdsScanned: [220],
+      });
+      const out = composeHourlyRecap(r, [], 'https://result.5bib.com');
+      expect(out).toContain('Giải: <b>Race 220</b>');
+    });
+  });
+
+  describe('TC-79-17 — escape HTML in race title (BR-79-24)', () => {
+    it('escapes <script> tag from malicious race title', () => {
+      const r = report({
+        missingCount: 0,
+        issuedCount: 5,
+        expectedCount: 5,
+        skippedCount: 0,
+        missing: [],
+        raceIdsScanned: [666],
+      });
+      const titles = new Map<number, string>([
+        [666, '<script>alert(1)</script> Marathon'],
+      ]);
+      const out = composeHourlyRecap(r, [], 'https://result.5bib.com', titles);
+      expect(out).toContain('&lt;script&gt;alert(1)&lt;/script&gt; Marathon - 666');
+      expect(out).not.toContain('<script>alert(1)</script>');
+    });
+  });
+
+  describe('Backward compat — composeHourlyRecap without raceTitlesByid param', () => {
+    it('still works with old 3-arg signature (default empty Map)', () => {
+      const r = report({
+        missingCount: 0,
+        issuedCount: 10,
+        expectedCount: 10,
+        skippedCount: 0,
+        missing: [],
+        raceIdsScanned: [220],
+      });
+      // Call without 4th arg — backward compat
+      const out = composeHourlyRecap(r, [], 'https://result.5bib.com');
+      expect(out).toContain('Race 220'); // fallback
+      expect(out).toContain('Heartbeat');
+    });
   });
 });

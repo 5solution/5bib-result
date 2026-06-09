@@ -12,6 +12,9 @@ import { InvoiceScanTickCron } from './crons/scan-tick.cron';
 import { InvoiceHourlyRecapCron } from './crons/hourly-recap.cron';
 import { InvoiceEodRecapCron } from './crons/eod-recap.cron';
 import { AuditModule } from '../audit/audit.module';
+// F-079 BR-79-21 — reuse F-049 race-title resolver
+// `AthleteIdentityClusteringService.getRaceTitlesByMysqlIds()` via cross-module DI.
+import { RaceMasterDataModule } from '../race-master-data/race-master-data.module';
 
 /**
  * F-076 — Invoice Reconcile module.
@@ -29,6 +32,8 @@ import { AuditModule } from '../audit/audit.module';
     TypeOrmModule.forFeature([OrderMetadataReadonly], 'platform'),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     AuditModule,
+    // F-079 — Import RaceMasterDataModule for race-title resolver reuse (BR-79-21).
+    RaceMasterDataModule,
   ],
   controllers: [InvoiceReconcileController],
   providers: [

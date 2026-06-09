@@ -39,6 +39,7 @@ import {
 import { InvoiceAlertService } from './invoice-alert.service';
 import { computeDiff, DiffSnapshot } from './diff-computer';
 import { DailyCountersService } from './daily-counters.service';
+import { AthleteIdentityClusteringService } from '../../race-master-data/services/athlete-identity-clustering.service';
 import {
   ReconcileReportDto,
   Layer2Status,
@@ -64,6 +65,12 @@ export class InvoiceReconcileService {
     private readonly alert: InvoiceAlertService,
     private readonly counters: DailyCountersService,
     @Optional() @InjectRedis() private readonly redis?: Redis,
+    // F-079 BR-79-21 — reuse F-049 race-title resolver. APPENDED to end of
+    // constructor để backward compat positional calls F-076 spec (5 args).
+    // Optional: tests / boot without RaceMasterDataModule don't break — composer
+    // falls back `Race {raceId}` per BR-79-23.
+    @Optional()
+    private readonly raceTitleResolver?: AthleteIdentityClusteringService,
   ) {}
 
   /** Public: thresholds (for health endpoint). */
@@ -189,6 +196,8 @@ export class InvoiceReconcileService {
       raceIdsScanned: enabledRaceIds,
       expectedCount: classified.expectedCount,
       issuedCount: classified.issuedCount,
+      // F-079 BR-79-12 — wire skippedCount from classifier output
+      skippedCount: classified.skippedCount,
       missingCount: classified.missing.filter(
         (m) => m.bucket === 'UNISSUED' || m.bucket === 'SYNC_LAG',
       ).length,
@@ -246,7 +255,19 @@ export class InvoiceReconcileService {
       { missing: current.missing, issuedCount: current.issuedCount },
       previous ?? undefined,
     );
-    const sent = await this.alert.sendHourlyRecap(current, diffEvents);
+
+    // F-079 BR-79-21 — resolve race titles via F-049 cache pattern.
+    // Defensive: if resolver KHÔNG wired (test/boot) → empty Map → composer
+    // fallback `Race {raceId}` per BR-79-23. KHÔNG block alert flow.
+    const raceTitlesByid = await this.resolveRaceTitlesSafe(
+      current.raceIdsScanned,
+    );
+
+    const sent = await this.alert.sendHourlyRecap(
+      current,
+      diffEvents,
+      raceTitlesByid,
+    );
 
     // Cache snapshot for next-hour diff
     await this.saveHourlySnapshot(date, {
@@ -465,6 +486,7 @@ export class InvoiceReconcileService {
       raceIdsScanned,
       expectedCount: 0,
       issuedCount: 0,
+      skippedCount: 0,
       missingCount: 0,
       atRiskCount: 0,
       duplicateCount: 0,
@@ -475,6 +497,34 @@ export class InvoiceReconcileService {
       maxSeverity: 'INFO',
       alertSent: false,
     };
+  }
+
+  /**
+   * F-079 BR-79-21 + BR-79-23 — defensive race title resolver wrapper.
+   *
+   * Reuse F-049 `AthleteIdentityClusteringService.getRaceTitlesByMysqlIds()`
+   * (Redis cache `races:title:byMysqlId:<id>` TTL 3600s + MongoDB `race`
+   * collection fallback + graceful Redis fail handling).
+   *
+   * Defensive:
+   *   - If resolver KHÔNG wired (Optional inject undefined) → return empty Map
+   *   - If F-049 method throws → log warn + return empty Map
+   *   - Composer falls back `Race {raceId}` per BR-79-23 — heartbeat KHÔNG block
+   */
+  private async resolveRaceTitlesSafe(
+    raceIds: number[],
+  ): Promise<Map<number, string>> {
+    if (!this.raceTitleResolver || raceIds.length === 0) {
+      return new Map<number, string>();
+    }
+    try {
+      return await this.raceTitleResolver.getRaceTitlesByMysqlIds(raceIds);
+    } catch (err) {
+      this.logger.warn(
+        `[F-079 race title resolve fail] ${(err as Error).message} — fallback empty Map`,
+      );
+      return new Map<number, string>();
+    }
   }
 
   /** Helper for unused import warning. */
