@@ -24,5 +24,10 @@ export const logtoConfig: LogtoNextConfig = {
   // Explicit flag — avoids "next start sets NODE_ENV=production → cookieSecure=true → HTTP localhost breaks"
   cookieSecure: process.env.LOGTO_COOKIE_SECURE === "true",
   resources: [LOGTO_API_RESOURCE],
-  scopes: ["openid", "profile", "email", "offline_access", "roles", "admin"],
+  // F-078 — Add "finance" scope cho kế toán role. Logto cấp scope nếu user có
+  // permission `finance` (qua role `finance` HOẶC admin inherit). Backend guard
+  // dual-check `roles.includes('finance') || scopes.includes('finance')` —
+  // both paths work. Adding here ensures token consistency cho frontend
+  // hasScope("finance") match.
+  scopes: ["openid", "profile", "email", "offline_access", "roles", "admin", "finance"],
 };

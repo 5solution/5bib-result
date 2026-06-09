@@ -38,7 +38,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, logout, userRole, userInfo } = useAuth();
+  const { isAuthenticated, isLoading, logout, userRole, userInfo, isAdmin, isFinance, isStaff } = useAuth();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -64,7 +64,12 @@ export default function DashboardLayout({
     );
   }
 
-  if (userRole !== "admin") {
+  // F-078 BR-78-04/05 — Cho phép user có ÍT NHẤT 1 role internal (admin/staff/finance)
+  // truy cập dashboard shell. Role gate chi tiết per-module nằm ở page-level
+  // (gate `!isAdmin && !isFinance` cho /finance + /invoice-reconcile, gate
+  // `!isStaff && !isFinance` cho /contracts). Layout chỉ chặn user KHÔNG có
+  // bất kỳ role internal nào — vd merchant/viewer accidentally landing admin.
+  if (!isAdmin && !isStaff && !isFinance) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="max-w-md text-center space-y-4">
@@ -75,8 +80,8 @@ export default function DashboardLayout({
             Không có quyền truy cập
           </h1>
           <p className="text-sm text-muted-foreground">
-            Tài khoản của bạn chưa được cấp role admin. Vui lòng liên hệ
-            superadmin để cấp quyền, hoặc đăng nhập tài khoản khác.
+            Tài khoản của bạn chưa được cấp role internal (admin/staff/finance).
+            Vui lòng liên hệ superadmin để cấp quyền, hoặc đăng nhập tài khoản khác.
           </p>
           <Button variant="default" onClick={() => logout()}>
             Đăng xuất
