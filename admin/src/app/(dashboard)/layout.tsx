@@ -94,6 +94,15 @@ export default function DashboardLayout({
   const handleLogout = () => logout();
   const userName =
     userInfo?.name ?? userInfo?.username ?? userInfo?.email ?? "Admin";
+  // F-078 — Dynamic role label thay vì hardcode "Super Admin".
+  // Priority: Admin > Kế toán (finance) > Nhân viên (staff) > User.
+  const userRoleLabel = isAdmin
+    ? "Admin"
+    : isFinance
+      ? "Kế toán"
+      : isStaff
+        ? "Nhân viên"
+        : "User";
 
   return (
     <BreadcrumbProvider>
@@ -107,7 +116,7 @@ export default function DashboardLayout({
       >
         <Sidebar
           userName={userName}
-          userRole="Super Admin"
+          userRole={userRoleLabel}
           onLogout={handleLogout}
         />
       </aside>
@@ -139,7 +148,7 @@ export default function DashboardLayout({
                 <div className="border-t border-white/8">
                   <SidebarUserCard
                     userName={userName}
-                    userRole="Super Admin"
+                    userRole={userRoleLabel}
                     onLogout={() => {
                       setMobileOpen(false);
                       handleLogout();
