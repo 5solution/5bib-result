@@ -3,6 +3,169 @@
 > **Owner:** 5bib-manager
 > **Append-only, mới nhất ở TOP.**
 >
+
+## 2026-06-09 FEATURE-079: F-076 Heartbeat Recap 2h + Race Title Resolver (incident response)
+
+**PR/Commit:** TBD — branch decision pending Danny (suggest commit straight to PROD release nhanh do incident-driven F-076 visibility gap, hoặc branch riêng nếu group với F-078)
+**Type:** BUGFIX (extend F-076 BR-25 noise control + add race title resolver)
+**Trigger:** Sáng 2026-06-09 10:00 ICT F-076 vừa golive race 220 bán vé. Đến 13:54 bot `@invoice_5bib_daily_bot` im lặng — Danny báo. Manager triage: 47 cron tick PASS từ 10:00→13:50, tất cả `missing=0 maxSeverity=INFO`. BR-25 `if (missingCount === 0 && diffEvents.length === 0) return false` — đúng spec nhưng KHÔNG match Danny intent "tổng hợp theo tiếng cho kế toán nắm thông tin". Danny chốt heartbeat 2h/lần.
+**QC verdict:** ✅ APPROVED (189/189 tests + 6 phase complete + 4 QC structural assertions)
+**Manager Code Review:** ✅ ALL 5 priority files PASS (zero red flag, zero BR conflict)
+
+### Files changed (12 total)
+
+**Backend modified (8):**
+- ✏️ `backend/src/modules/invoice-reconcile/crons/hourly-recap.cron.ts` — cron expression `'0 0 8-20 * * *'` (13 tick/ngày) → `'0 0 8,10,12,14,16,18,20,22 * * *'` (8 tick/ngày 2h tròn) + comment update
+- ✏️ `backend/src/modules/invoice-reconcile/services/invoice-alert.service.ts` — Remove skip block (BR-79-04) + signature mở rộng `raceTitlesByid` param + doc update heartbeat semantics
+- ✏️ `backend/src/modules/invoice-reconcile/services/alert-composer.ts` — Add `composeRaceTag()` helper (BR-79-20/23/24/25) + `computeNextHeartbeatHour()` helper (BR-79-11) + 3-state branch render (All OK Heartbeat header / All OK + diff / Có issue Recap header BR-25 intact) + `formatDiffEvent()` race tag context
+- ✏️ `backend/src/modules/invoice-reconcile/services/invoice-reconcile.service.ts` — Inject `AthleteIdentityClusteringService` Optional + `resolveRaceTitlesSafe()` defensive 3-path wrapper (BR-79-23) + wire to `sendHourlyRecap`. Constructor `raceTitleResolver` APPENDED END (sau redis) cho backward compat F-076 spec 8 existing positional calls (Deviation #1)
+- ✏️ `backend/src/modules/invoice-reconcile/services/reconcile-classifier.ts` — Add `skippedCount: number` field (BR-79-12) + compute `dbOrders.length - expectedCount`
+- ✏️ `backend/src/modules/invoice-reconcile/dto/reconcile-report.dto.ts` — Add `@ApiPropertyOptional() skippedCount?` field optional backward compat cached old reports
+- ✏️ `backend/src/modules/invoice-reconcile/invoice-reconcile.module.ts` — Import `RaceMasterDataModule` cross-module DI
+- ✏️ `backend/src/modules/race-master-data/race-master-data.module.ts` — **FORCED CASCADE** add `AthleteIdentityClusteringService` to exports[] (Manager Plan đọc nhầm providers thành exports — F-079 IMPLEMENTATION_NOTES Section 2 Forced #1)
+
+**Backend tests (3):**
+- ✏️ `backend/src/modules/invoice-reconcile/__tests__/alert-composer.spec.ts` — extend +14 NEW F-079 tests (TC-79-01/02/03 3-state + TC-79-04 computeNextHeartbeatHour 10-row truth table + TC-79-15 truncate + TC-79-16 multi-race + TC-79-17 XSS escape)
+- ✏️ `backend/src/modules/invoice-reconcile/__tests__/invoice-reconcile.service.spec.ts` — extend +8 NEW F-079 tests (TC-79-05 skip removed + TC-79-06 dispatch fail graceful + TC-79-08 resolver wire + TC-79-10 concurrent + TC-79-11/12 resolver call + TC-79-13 defensive fallback + TC-79-14 partial Map + Resolver-not-wired)
+- ➕ `backend/src/modules/invoice-reconcile/__tests__/hourly-recap.cron.spec.ts` (NEW) — 6 tests (TC-79-07 source assertion via readFileSync + Reflect metadata + math verification + regression OLD `'0 0 8-20'` 13 ticks → NEW 8 ticks)
+- ➕ `backend/src/modules/invoice-reconcile/__qc__/f079-module-wiring.spec.ts` (NEW QC) — 4 structural assertions Reflect.getMetadata Nest module inspection + Test.createTestingModule().compile() boot integration
+
+**Frontend:** ZERO change. SDK regen NOT needed (DTO field optional, zero endpoint shape change).
+
+### Architecture impact
+
+- **No structural change to high-level architecture.** Heartbeat = internal alert-flow widen (relax skip + add race title), KHÔNG thêm node mới vào sơ đồ.
+- **Cross-module DI: `InvoiceReconcileModule` → `RaceMasterDataModule`** consume `AthleteIdentityClusteringService.getRaceTitlesByMysqlIds()`. F-049 cache pattern `races:title:byMysqlId:<id>` 3600s + Mongo fallback shared namespace.
+- **No new endpoints, no new database collection, no new Redis key, no new S3 prefix.**
+
+### Conventions impact
+
+4 patterns minted (F-079.1 → F-079.4):
+
+1. **F-079.1 Cross-module exports[] explicit checklist** — Pattern grep `grep -n "exports:" [target].module.ts` BEFORE claiming "service exported". Phân biệt `providers[]` (DI-internal) vs `exports[]` (cross-module). F-079 Forced Cascade #1 lesson.
+2. **F-079.2 Heartbeat 3-state composer pattern** — Branch theo state `report.missingCount === 0`: "Heartbeat" header (All OK) vs "Recap" header (Có issue). Visual cue cho recipient glance. Reusable cho future periodic alert.
+3. **F-079.3 Resource resolver reuse via cross-module DI** — Khi cần data từ module khác (vd race title), reuse existing battle-tested service thay vì viết direct query. F-049 `AthleteIdentityClusteringService.getRaceTitlesByMysqlIds()` production-hardened (Redis mget batch + Mongo fallback + graceful Redis fail).
+4. **F-079.4 Optional inject + defensive wrapper pattern** — `@Optional() resolver?` cho cross-module DI + try/catch wrapper return safe default. Heartbeat MUST NOT block on dependency failure (BR-79-23). Pattern reusable cho future feature có "nice-to-have" dependency.
+
+### DB / Cache impact
+
+- **MongoDB:** ZERO change. F-079 chỉ READ `race` collection qua F-049 method.
+- **MySQL platform:** ZERO change.
+- **Redis:** ZERO new key. SHARE F-049 cache namespace `races:title:byMysqlId:<id>` 3600s.
+- **S3:** ZERO change.
+
+### Tech debt còn lại (moved to known-issues.md)
+
+5 entries — all non-blocking deploy:
+
+- **TD-F079-EXTRACT-RACE-TITLE-RESOLVER** — Future extract `getRaceTitlesByMysqlIds()` thành shared `RaceTitleResolverService` trong `common/` (LOW priority)
+- **TD-F079-TZ-BOUNDARY-FILTER** (Manager Init carry-forward) — DB 23 ORDINARY today vs F-076 expected=22 lệch 1 đơn cross-midnight ICT 04:14 (MEDIUM, defer feature riêng)
+- **TD-F079-CRON-PARSER-NOT-INSTALLED** — Cron spec source assertion thay vì cron-parser lib (LOW, non-blocking)
+- **TD-F079-SMOKE-TEST-PRE-MERGE** — PRD BR-79-18 5-step smoke (cron tick + Telegram dispatch + race 220 verify) — Danny execute PRE-MERGE (CRITICAL pre-merge, NOT blocking QC)
+- **TD-F079-MODULE-EXPORTS-CONVENTION** — Manager Plan template update phân biệt providers vs exports[] cho cross-module DI (process improvement)
+
+### Lessons learned
+
+1. **F-076 BR-25 design intent gap** — Coder hiểu "skip-when-OK" để tránh noise; Danny hiểu "gửi đều cho visibility". Future PRD nên explicit "noise vs visibility" tradeoff khi design alert system. Incident response F-079 fixes this in 1 cron + 1 service + 1 composer change.
+2. **Pattern reuse F-049 worked beautifully** — Cross-module DI consume battle-tested service + Optional inject defensive wrapper = ship faster + lower risk than viết riêng MySQL direct query.
+3. **Forced cascade `RaceMasterDataModule.exports[]`** — Manager Plan template gap. Future Plan spot-check rule: grep `exports:` explicit khi claim "service exported". Tracked TD-F079-MODULE-EXPORTS-CONVENTION.
+4. **Constructor positional backward compat** — Append Optional dependencies to END of constructor instead of inserting middle. Avoid forced cascade tất cả existing test factories. Coder Deviation #1 chuẩn pattern.
+5. **Cron lib version drift** — `@nestjs/schedule` v3+ uses `cron` lib internally; `cron-parser` lib KHÔNG bundled. Source assertion + math verification pattern = robust test without external dep.
+
+### Branch decision
+
+F-076 vừa golive sáng nay 2026-06-09 (race 220 bán vé) + F-078 Finance Role + F-079 incident response — 3 features cùng ngày. Manager đề xuất Danny:
+- Option A: Branch riêng `5bib_invoice_heartbeat_v1` off main, port F-079, smoke test, merge → main → release tag bao gồm cả F-076 fix + F-079 incident response
+- Option B: Cherry-pick vào release branch nếu release window cho phép
+- Option C (recommended): Group F-078 + F-079 cùng release branch `5bib_q2_compliance_v1` (cả 2 feature đụng admin + RBAC + invoice flow)
+Danny chốt khi sẵn sàng commit + smoke.
+
+---
+
+## 2026-06-09 FEATURE-078: Finance Role RBAC — Logto role `finance` cho kế toán nội bộ
+
+**PR/Commit:** TBD (branch decision pending Danny — suggest `5bib_finance_role_v1` off main per F-076 precedent vì `release/v1.16.0` đang stabilize)
+**Type:** EXTEND_EXISTING
+**QC verdict:** ✅ APPROVED (769/769 tests + 6 phase complete)
+**Manager Code Review:** ✅ ALL 5 priority files PASS (zero red flag, zero BR conflict, zero type bypass)
+
+### Files changed (37 total)
+
+**Backend (22):**
+- ➕ Added: `backend/src/modules/logto-auth/logto-finance.guard.ts` — Internal Finance tier guard (finance + admin inheritance dual-check + VN error message). Pattern reuse F-069 LogtoMerchantFinanceGuard.
+- ➕ Added: `backend/src/modules/logto-auth/logto-staff-or-finance.guard.ts` — Loosened union guard cho contracts (staff∪finance∪admin per PAUSE-78-01 — staff Tâm/Hằng giữ quyền)
+- ➕ Added: `backend/src/modules/logto-auth/logto-finance.guard.spec.ts` — 17 test (TC-01..04 + TC-08..10 + edge case)
+- ➕ Added: `backend/src/modules/logto-auth/logto-staff-or-finance.guard.spec.ts` — 20 test (TC-05..07 + union matrix)
+- ➕ Added: `backend/src/modules/logto-auth/permissions.helper.spec.ts` — 47 test (TC-12 isFinanceOrAdmin truth table + isStaffOrFinanceOrHigher parity)
+- ➕ Added: `backend/src/modules/logto-auth/__qc__/f078-rbac-controller-wiring.spec.ts` — 44 test QC structural assertion (Reflect.getMetadata verify mỗi 13 controller decorated đúng guard)
+- ✏️ Modified: `backend/src/modules/logto-auth/permissions.helper.ts` — append `isFinanceOrAdmin` + `isStaffOrFinanceOrHigher` helpers (mirror guards verbatim per F-029 convention)
+- ✏️ Modified: `backend/src/modules/logto-auth/index.ts` — export 2 guard + 2 helper new
+- ✏️ Modified: `backend/src/modules/logto-auth/logto-auth.module.ts` — register 2 guard mới vào providers + exports (PAUSE-Coder-05 Manager spot-check catch)
+- ✏️ Modified: 9 controller LogtoAdminGuard → LogtoFinanceGuard:
+  - `finance/controllers/{pnl,pnl-dashboard,pnl-contracts-list,pnl-export,cost-items,cost-suggestions,fee-breakdown,mysql-lookup}.controller.ts`
+  - `invoice-reconcile/invoice-reconcile.controller.ts`
+- ✏️ Modified: 4 controller LogtoStaffGuard → LogtoStaffOrFinanceGuard:
+  - `contracts/{contracts,contract-templates,partners,service-catalog}.controller.ts`
+- ✏️ Modified: `backend/src/modules/invoice-reconcile/__tests__/invoice-reconcile.controller.spec.ts` — **FORCED CASCADE** override `LogtoAdminGuard` → `LogtoFinanceGuard` (4 vị trí: import + overrideGuard + 2 doc comment). KHÔNG trong Scope Lock plan — Coder honest disclose IMPLEMENTATION_NOTES Section 2 + Manager accept.
+
+**Frontend (14):**
+- ✏️ Modified: `admin/src/lib/auth-context.tsx` — add `isFinance` flag (mirror backend dual-check verbatim line 99-105)
+- ✏️ Modified: `admin/src/lib/nav-groups.ts` — widen `requireRole?: "admin" | "finance"` type + đổi 3 Tài chính items từ "admin" → "finance" + giữ Hợp đồng items KHÔNG có requireRole (BR-78-26 loosened nav)
+- ✏️ Modified: `admin/src/components/admin-shell/Sidebar.tsx` — filter logic 3-branch ternary (admin/finance/default) BR-78-11
+- ✏️ Modified: 4 finance pages gate `!isAdmin && !isFinance` (BR-78-21): `(dashboard)/finance/page.tsx`, `(dashboard)/finance/contracts/page.tsx`, `(dashboard)/finance/contracts/[id]/page.tsx`, `(dashboard)/invoice-reconcile/page.tsx`
+- ✏️ Modified: 7 contracts pages gate `!isStaff && !isFinance` (BR-78-22): `(dashboard)/contracts/{page,[id]/page,create/page,services/page,templates/page,partners/page,partners/[id]/page}.tsx`
+
+**Tests (1 NEW QC):**
+- ➕ Added: `backend/src/modules/logto-auth/__qc__/` directory với QC structural test
+
+### Architecture impact
+
+- **Security Boundaries (architecture.md):** new tier `finance` giữa `staff` và `admin` cho internal routes. Defense layers:
+  - Layer 1 (Logto Dashboard): permission `finance` + role `finance` + admin inherits `finance`
+  - Layer 2 (Backend Guard): `LogtoFinanceGuard` + `LogtoStaffOrFinanceGuard` extends LogtoAuthGuard JWT verify
+  - Layer 3 (Frontend page gate): `!isAdmin && !isFinance` (finance pages) hoặc `!isStaff && !isFinance` (contracts pages)
+  - Layer 4 (Sidebar UX hide): `requireRole="finance"` filter
+- KHÔNG đổi data flow (RBAC pure gate widen, không touch DB/cache/integration).
+
+### Conventions impact
+
+3 conventions mới được mint:
+1. **Internal RBAC tier — Finance role pattern** — `LogtoFinanceGuard extends LogtoAuthGuard` (root, KHÔNG nested admin/staff). Defense-in-depth dual-layer Logto + Guard fallback. Mirror frontend `isFinance` flag derivation.
+2. **Loosened union guard pattern** — `LogtoStaffOrFinanceGuard` union staff∪finance∪admin cho trường hợp mở role mới mà KHÔNG được làm tier cũ regress. Anti-pattern: strict replace (sẽ break existing user).
+3. **Forced spec cascade rule** — Khi đổi `@UseGuards()` controller, MUST audit `__tests__/[controller].spec.ts` xem có `overrideGuard()` reference không + include vào Scope Lock. F-078 forced cascade lesson: F-076 invoice-reconcile.controller.spec.ts dùng `overrideGuard(LogtoAdminGuard)` → 10 test fail 401 sau rename → buộc fix ngoài Scope Lock. Manager Plan template cần thêm rule này.
+
+### DB / Cache impact
+
+- **MongoDB:** ZERO change
+- **MySQL platform:** ZERO change
+- **Redis:** ZERO change
+- **S3:** ZERO change
+- **Logto Dashboard:** Danny manual setup 5 step (permission `finance` + role `finance` + admin inherit + Hiền assign + sign-out/in)
+
+### Tech debt còn lại (moved to known-issues.md)
+
+5 entries — all non-blocking deploy:
+- **TD-F078-DOCS-CONVENTIONS-INTERNAL-FINANCE-TIER** — `docs/conventions.md` section append (LOW)
+- **TD-F078-SMOKE-TEST-PROD-DEFERRED** — F-076 BR-18 6-step + Telegram BR-19 verify PRE-MERGE (CRITICAL pre-merge, NOT blocking QC/Manager review)
+- **TD-F078-FORCED-SPEC-PATTERN** — Manager Scope Lock template addendum cho future @UseGuards rename (MEDIUM, process improvement)
+- **TD-F078-F026-E2E-FINANCE-FORBID-REGRESSION** — Future E2E: finance token → /analytics (F-026 admin-only) → expect 403 (LOW, defer-able)
+- **TD-F078-E2E-PLAYWRIGHT-4-PERSONA** — Full Playwright 4 persona × 13 controller (MEDIUM, post-deploy)
+
+### Lessons learned
+
+1. **Pattern reuse precedent works** — F-069 LogtoMerchantFinanceGuard → F-078 LogtoFinanceGuard 80%+ identical structure. Convention mature đủ để clone confidently.
+2. **Forced cascade là failure mode lặp lại** — Scope Lock đã miss F-076 spec mock. Coder hand-disclose nhờ IMPLEMENTATION_NOTES Section 2 trust check. Future: Manager Plan add "controller spec audit" step.
+3. **Defense-in-depth dual-layer Logto + Guard** valuable — admin user KHÔNG bị 403 bất ngờ nếu Danny quên tick permission. TC-10 explicit verify.
+4. **Manager Code Review Priority order từ IMPLEMENTATION_NOTES Section 4 hiệu quả** — Coder chỉ ra 5 hotspot, Manager spot-check theo order, all PASS. Trust pattern Danny 2026-05-19 directive worth it.
+
+### Branch decision
+
+`release/v1.16.0` đang stabilize cho PROD release. Manager đề xuất Danny:
+- Option A: Tạo branch mới `5bib_finance_role_v1` off main, port F-078 changes, smoke test, merge → main → next release tag bao gồm F-078
+- Option B: Cherry-pick / commit F-078 trực tiếp vào `release/v1.16.0` nếu release v1.16.0 chấp nhận RBAC addition
+Danny chốt khi run smoke test + push commit.
+
+
 > Lịch sử chi tiết per-feature (chỉ qua workflow). Đọc khi cần hiểu **tại sao** một file/module đang ở trạng thái hiện tại.
 
 ---

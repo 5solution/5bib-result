@@ -3326,6 +3326,269 @@ Failure caused F-015 (Check-In Kiosk = duplicate of ORG.5bib.com pickup module) 
 
 ---
 
+## 🆕 Patterns được team confirm (FEATURE-079 — F-076 Heartbeat + Race Title Resolver)
+
+### F-079.1. Cross-module exports[] explicit checklist (BEFORE claim "service exported")
+
+**Anti-pattern lesson:** Manager Plan F-079 đọc nhầm `RaceMasterDataModule.providers[]` (line 117) thành `exports[]` (line 123, chỉ có `RaceAthleteLookupService`). Coder forced cascade fix khi develop. NestJS DI requires service trong `exports[]` (NOT chỉ `providers[]`) để consumer module inject được.
+
+**Process improvement:** Manager `/5bib-plan` MUST grep verify trước khi claim "service X exported từ Module Y":
+
+```bash
+grep -n "exports:" backend/src/modules/[target-module]/[target].module.ts
+```
+
+Module structure:
+```typescript
+@Module({
+  providers: [InternalServiceA, ExternalServiceB],   // ← DI-internal scope
+  exports: [ExternalServiceB],                        // ← cross-module access
+})
+```
+
+**Anti-pattern REJECT:** "Service exported per line N" without verifying exact section. Always quote line N của `exports:` array, KHÔNG `providers:` array.
+
+### F-079.2. Heartbeat 3-state composer pattern (state-based render branch)
+
+**Pattern:** Khi compose alert/notification render theo state (vd: OK / Warning / Issue), dùng 3-state branch trong pure composer:
+
+```typescript
+export function composeAlert(
+  report: ReportDto,
+  diffEvents: DiffEvent[],
+  ...
+): string {
+  const isAllOk = report.missingCount === 0;
+  const lines: string[] = [];
+
+  // State 1 vs State 3 — distinct headers cho visual cue
+  if (isAllOk) {
+    lines.push(`📊 <b>Heartbeat — ${time}</b>`);
+  } else {
+    lines.push(`📊 <b>Recap — ${time}</b>`);
+  }
+
+  if (isAllOk) {
+    // State 1/2 — ✅ status line + stats block
+  } else {
+    // State 3 — issue 4-line stats (GIỮ NGUYÊN spec cũ)
+  }
+
+  // State 2 — diff block applies cho cả OK + diff
+  if (diffEvents.length > 0) { /* render */ }
+}
+```
+
+**Use case:** F-079 heartbeat (Danny + Hiền visibility). Reusable cho future periodic alert (vd weekly summary, daily KPI).
+
+### F-079.3. Resource resolver reuse via cross-module DI (anti-rewrite pattern)
+
+**Pattern:** Khi cần data từ module khác (race title, athlete name, merchant config), reuse existing battle-tested service thay vì viết direct query.
+
+**Anti-pattern (REJECT):** Viết MySQL/Mongo direct query trong F-079 module dù F-049 đã có method tương đương.
+
+**Correct:**
+```typescript
+// 1. Import target module
+@Module({
+  imports: [RaceMasterDataModule],
+})
+export class InvoiceReconcileModule {}
+
+// 2. Inject service (Optional cho graceful boot)
+constructor(
+  @Optional()
+  private readonly raceTitleResolver?: AthleteIdentityClusteringService,
+) {}
+
+// 3. Wrap call in defensive helper (F-079.4 pattern)
+private async resolveRaceTitlesSafe(raceIds: number[]) {
+  if (!this.raceTitleResolver) return new Map();
+  try { return await this.raceTitleResolver.getRaceTitlesByMysqlIds(raceIds); }
+  catch (err) { this.logger.warn(...); return new Map(); }
+}
+```
+
+**Lý do prefer:**
+1. F-049 production-hardened (Redis mget batch + Mongo fallback + graceful Redis fail + setex write-back) — 1 month PROD verified
+2. Share Redis cache namespace `races:title:byMysqlId:<id>` 3600s TTL — consistent source-of-truth
+3. ZERO duplicate resolver code = lower maintenance burden
+
+### F-079.4. Optional inject + defensive wrapper pattern
+
+**Pattern:** Cross-module dependency là "nice-to-have" (KHÔNG critical core logic) → `@Optional()` inject + `try/catch` wrapper return safe default.
+
+```typescript
+@Optional()
+private readonly resource?: SomeService;
+
+private async useResourceSafe<T>(input: any, fallback: T): Promise<T> {
+  if (!this.resource) return fallback;
+  try {
+    return await this.resource.method(input);
+  } catch (err) {
+    this.logger.warn(`[feature resource fail] ${err.message} — using fallback`);
+    return fallback;
+  }
+}
+```
+
+**Use case F-079:** Race title resolver — heartbeat MUST send kể cả Mongo/Redis hiccup (BR-79-23). Resolver fail → empty Map → composer renders `Race {raceId}` fallback. Critical path KHÔNG block.
+
+**Constructor pattern:** Append `@Optional() resource?` to END of constructor (sau core deps) để backward compat existing test factories instantiating positional args.
+
+### F-079.5. Source assertion test pattern (when external lib unavailable)
+
+**Pattern:** Khi test cron/regex/config expression nhưng external parse lib KHÔNG bundled, dùng `readFileSync` + regex assertion + math verification thay vì runtime parse.
+
+```typescript
+import { readFileSync } from 'fs';
+const source = readFileSync(join(__dirname, '..', 'crons', 'hourly-recap.cron.ts'), 'utf-8');
+
+it('source file embeds new expression', () => {
+  expect(source).toContain(HEARTBEAT_EXPR);
+});
+
+it('does NOT use old expression', () => {
+  const match = source.match(/@Cron\(['"](0 0 [0-9,*-]+ \* \* \*)['"]/);
+  expect(match?.[1]).toBe(HEARTBEAT_EXPR);
+  expect(match?.[1]).not.toBe(OLD_EXPR);
+});
+```
+
+**Use case F-079:** Cron `'0 0 8,10,12,14,16,18,20,22 * * *'` verified via source + math (split comma-list, verify 8 distinct hours spaced 2h). `@nestjs/schedule` runtime validates parse at boot — fallback layer.
+
+**Tradeoff documented:** Test KHÔNG detect "valid syntax but wrong values" at compile-time (vd hours 7,9 instead of 8,10). Boot smoke catches before deploy.
+
+---
+
+## 🆕 Patterns được team confirm (FEATURE-078 — Internal Finance role RBAC)
+
+### F-078.1. Internal Finance role guard pattern — clone F-069 merchant convention
+
+**Pattern:** Khi mở role internal mới (KHÔNG phải merchant), tạo guard `LogtoXxxGuard extends LogtoAuthGuard` (root, KHÔNG nested admin/staff). Define union role/scope check trực tiếp + defense-in-depth admin inheritance fallback.
+
+```typescript
+@Injectable()
+export class LogtoFinanceGuard extends LogtoAuthGuard implements CanActivate {
+  async canActivate(ctx: ExecutionContext): Promise<boolean> {
+    const ok = await super.canActivate(ctx);  // JWT verify first
+    if (!ok) return false;
+
+    const req = ctx.switchToHttp().getRequest();
+    const roles: string[] = req.logto?.roles ?? [];
+    const scopes: string[] = req.logto?.scopes ?? [];
+
+    const hasPermission =
+      // Primary tier (NEW role)
+      roles.includes('finance') ||
+      scopes.includes('finance') ||
+      // Admin inheritance fallback (defense-in-depth)
+      roles.includes('admin') ||
+      roles.includes('super_admin') ||
+      scopes.includes('admin') ||
+      scopes.includes('admin:all') ||
+      scopes.includes('all');
+
+    if (!hasPermission) {
+      throw new ForbiddenException('VN message rõ ràng action + actor + how to fix');
+    }
+    return true;
+  }
+}
+```
+
+**Trade-off accepted:** 6-line role/scope check duplicate per guard file (Admin/Staff/Finance/StaffOrFinance). Acceptable vì rõ ràng + dễ debug per-guard.
+
+### F-078.2. Loosened union guard pattern — khi mở role mới mà KHÔNG được làm tier cũ regress
+
+**Pattern:** Khi 1 module đang gated `LogtoStaffGuard` + cần mở thêm role `finance` access, tạo `LogtoStaffOrFinanceGuard` accept UNION staff∪finance∪admin. KHÔNG strict replace (sẽ break existing user).
+
+```typescript
+const hasPermission =
+  // Staff tier (existing — không regress)
+  roles.includes('staff') ||
+  scopes.includes('staff') ||
+  // NEW tier
+  roles.includes('finance') ||
+  scopes.includes('finance') ||
+  // Admin inheritance
+  roles.includes('admin') ||
+  /* ... */;
+```
+
+**Anti-pattern REJECT:** Strict replace `LogtoStaffGuard` → `LogtoFinanceGuard` = staff existing mất quyền silently. F-078 PAUSE-78-01 lesson: staff Tâm/Hằng đang dùng /contracts daily ops → loosened union required.
+
+### F-078.3. Defense-in-depth Logto + Guard dual-layer inheritance
+
+**Pattern:** Inheritance `admin ⊃ finance` setup CẢ 2 layer:
+- **Logto Dashboard:** admin role assign permission `finance` (Layer 1)
+- **Guard code:** explicit accept `admin` role/scope independent of Logto permission tick (Layer 2 fallback)
+
+**Lý do:** Phòng Danny quên tick permission Logto Dashboard → admin user KHÔNG bị 403 bất ngờ. TC-10 test verify edge case "admin token without finance permission tick still passes".
+
+### F-078.4. Frontend `isFinance` flag mirror backend guard verbatim
+
+**Pattern:** `auth-context.tsx` thêm flag với inheritance:
+```typescript
+const isFinance =
+  isAdmin || hasScope("finance") || hasRole("finance");
+```
+
+Short-circuit `isAdmin` first cho performance (admin pass instant).
+
+**Convention requirement:** Frontend flag MUST mirror backend `LogtoXxxGuard.canActivate` verbatim per F-029 dual-check helper convention. Update đồng thời cả 2 layer khi đổi role logic.
+
+### F-078.5. Nav-groups type widening pattern
+
+**Pattern:** Khi thêm role-gated nav item, widen `requireRole` union type + Sidebar filter ternary chain:
+```typescript
+requireRole?: "admin" | "finance";  // widen from "admin" only
+
+// Sidebar.tsx filter:
+items: group.items.filter((item) => {
+  if (!item.requireRole) return true;            // default visible
+  if (item.requireRole === "admin") return isAdmin;
+  if (item.requireRole === "finance") return isFinance || isAdmin;
+  return false;                                   // safe default
+}),
+```
+
+Explicit ternary chain (vs compact short-circuit) cho readability dev mới — không phải trace inheritance chain.
+
+### F-078.6. Forced cascade — controller spec mock guard reference
+
+**Anti-pattern lesson:** Khi đổi `@UseGuards()` controller decorator, MUST audit `__tests__/[controller].spec.ts` cho `overrideGuard(OldGuard)` reference + include vào Scope Lock.
+
+F-078 forced cascade case: `invoice-reconcile.controller.spec.ts` dùng `overrideGuard(LogtoAdminGuard)` mock pattern. Khi controller đổi sang `LogtoFinanceGuard`, override không match → 10 test fail 401. Coder forced fix ngoài Scope Lock (Manager Plan đã miss).
+
+**Process improvement:** Manager Plan template add pre-flight grep:
+```bash
+grep -rn "overrideGuard(LogtoAdminGuard)\|overrideGuard(LogtoStaffGuard)" \
+  backend/src/modules/[affected-module]/__tests__/
+```
+
+Mọi match → include trong Scope Lock 32+ files.
+
+### F-078.7. QC adversarial structural assertion test pattern
+
+**Pattern:** Cho feature RBAC widen/migrate, viết structural test dùng `Reflect.getMetadata('__guards__', ControllerClass)` để verify mỗi controller đính đúng guard class:
+
+```typescript
+function getClassGuards(controllerClass: object): unknown[] {
+  return (Reflect.getMetadata('__guards__', controllerClass) ?? []) as unknown[];
+}
+
+it.each(controllers)('$name has LogtoFinanceGuard decorator', ({ cls }) => {
+  expect(getClassGuards(cls)).toContain(LogtoFinanceGuard);
+  expect(getClassGuards(cls)).not.toContain(LogtoAdminGuard);  // regression check
+});
+```
+
+**Use case:** Permanent regression gate — nếu dev tương lai accidentally revert 1 controller guard, CI catch. Fast (<1s) + đủ chặt. F-078 QC test 44 assertion cover 13 controller.
+
+---
+
 ## 🆕 Patterns được team confirm (FEATURE-029 — Hardening Phase 1 + Phase 1.1)
 
 ### 1. Dual-check permission helpers (`logto-auth/permissions.helper.ts`)
