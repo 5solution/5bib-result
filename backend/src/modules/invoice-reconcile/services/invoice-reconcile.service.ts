@@ -328,15 +328,16 @@ export class InvoiceReconcileService {
     date: string,
     raceIds: number[],
   ): Promise<RawDbOrder[]> {
-    // Compute UTC range cho ICT day(date). ICT = UTC+7.
-    // ICT 00:00 of `date` = UTC of `date` - 07:00
-    // To be safe + simple: pull `date - 1 day` UTC midnight → `date + 1 day`
-    // UTC midnight. Filter age in classifier handles details.
-    const fromUtc = `${date} 00:00:00`; // treat as UTC, includes ICT prev day
-    // BR-15 — pull 2-day window (today-1 → today+1) covers ICT boundary
+    // F-079 hotfix4 TZ-BOUNDARY-FIX — Pull 3-day UTC window (date-1 → date+1)
+    // để cover ICT day fully. ICT = UTC+7 → ICT 00:00 = UTC-7 of date prev day.
+    // PROD bug: order 200029493 paid `2026-06-08 21:14:31 UTC` = `ICT 04:14 June 9`
+    // (cross midnight) bị exclude do filter `payment_on >= '2026-06-09 00:00:00'`
+    // → MISA invoice 00000025 marked orphan. Fix expand window back 1 day UTC.
     const dt = new Date(date + 'T00:00:00Z');
-    const tomorrow = new Date(dt.getTime() + 2 * 24 * 3600 * 1000);
-    const toUtc = tomorrow.toISOString().slice(0, 10) + ' 23:59:59';
+    const fromDate = new Date(dt.getTime() - 24 * 3600 * 1000); // -1 day UTC
+    const toDate = new Date(dt.getTime() + 24 * 3600 * 1000); // +1 day UTC
+    const fromUtc = fromDate.toISOString().slice(0, 10) + ' 00:00:00';
+    const toUtc = toDate.toISOString().slice(0, 10) + ' 23:59:59';
 
     // Defensive: race IDs come from env Number().filter() — guaranteed int > 0
     // Raw SQL pattern F-016/F-028: `?` placeholder + params array (NO interpolation).
