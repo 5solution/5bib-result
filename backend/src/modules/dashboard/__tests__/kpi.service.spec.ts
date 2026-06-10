@@ -4,6 +4,11 @@ import { getModelToken } from '@nestjs/mongoose';
 import { DashboardKpiService } from '../services/kpi.service';
 import { FeeService } from '../../finance/services/fee.service';
 import { MerchantConfig } from '../../merchant/schemas/merchant-config.schema';
+// F-081 A1-1 — ICT month boundary (test dispatch match service semantic mới)
+import {
+  startOfMonthIct,
+  toUtcSqlDatetime,
+} from '../../../common/utils/ict-date.util';
 
 /**
  * Legacy F-023 specs — preserved for edge-case coverage (delta NULL semantics,
@@ -72,13 +77,14 @@ describe('DashboardKpiService — legacy edge cases', () => {
    * Tests below mock both via SQL-pattern dispatch so order does not matter.
    */
   function mockPeriods(curAgg: any, prevAgg: any) {
+    // F-081 A1-1 — service giờ dùng ICT month boundary: cur start =
+    // toUtcSqlDatetime(startOfMonthIct(now)) vd '2026-05-31 17:00:00' cho
+    // tháng 6 ICT. Dispatch exact-match thay vì UTC month prefix.
+    const curStartStr = toUtcSqlDatetime(startOfMonthIct(new Date()));
     mockDb.query.mockImplementation(async (sql: string, params: unknown[]) => {
       const isPullOrders = sql.includes('FROM order_metadata om');
       const start = String(params?.[0] ?? '');
-      const now = new Date();
-      const curMonth = String(now.getUTCMonth() + 1).padStart(2, '0');
-      const curYear = now.getUTCFullYear();
-      const isCur = start.startsWith(`${curYear}-${curMonth}`);
+      const isCur = start === curStartStr;
       if (isPullOrders) return [];
       return isCur ? [curAgg] : [prevAgg];
     });

@@ -16,6 +16,12 @@ import {
   MerchantConfigDocument,
 } from '../../merchant/schemas/merchant-config.schema';
 import { OrderForFeeAggregate } from '../../finance/dto/fee-aggregate.dto';
+// F-081 A1-2 — ICT date helpers (UTC+7 business time).
+import {
+  nowIctDateString,
+  toIctDateString,
+  ictDayRangeUtc,
+} from '../../../common/utils/ict-date.util';
 
 /**
  * F-023 BR-DASH-05 — Sparkline 30 ngày daily aggregate.
@@ -121,11 +127,21 @@ export class DashboardSparklineService {
    * sửa `days` param. Production decision documented in 03-coder-implementation.md.
    */
   private async compute(days: number): Promise<SparklinesResponseDto> {
-    const today = new Date();
-    const start = new Date(today);
-    start.setUTCDate(start.getUTCDate() - days);
-    const startStr = start.toISOString().slice(0, 10);
-    const endStr = new Date(today.getTime() + 86400000).toISOString().slice(0, 10);
+    // F-081 A1-2 TZ-FIX — series theo NGÀY ICT (UTC+7), không phải UTC date.
+    // Trước: đơn paid ICT 00:00-06:59 sáng group vào ngày hôm trước.
+    const todayIct = nowIctDateString();
+    const labels: string[] = [];
+    {
+      const base = new Date(todayIct + 'T00:00:00Z');
+      for (let i = days - 1; i >= 0; i -= 1) {
+        labels.push(
+          new Date(base.getTime() - i * 86400000).toISOString().slice(0, 10),
+        );
+      }
+    }
+    // SQL boundary = UTC datetime cover trọn range ngày ICT [labels[0] .. todayIct].
+    const startStr = ictDayRangeUtc(labels[0]).fromUtc;
+    const endStr = ictDayRangeUtc(todayIct).toUtcExclusive;
 
     // STEP 1+2 — Daily GMV/net/athletes (existing query, exclude MANUAL)
     const rows = await this.queryDaily(startStr, endStr).catch((e) => {
@@ -183,8 +199,8 @@ export class DashboardSparklineService {
       byDateTenant.set(o.dateKey, dateMapInner);
     }
 
-    // STEP 6+7 — Backfill 30 điểm liên tục + per-day fee compute
-    const dates = this.dateRange(start, today, days);
+    // STEP 6+7 — Backfill 30 điểm liên tục + per-day fee compute (ICT labels)
+    const dates = labels;
     const gmvPoints: SparklinePointDto[] = [];
     const netPoints: SparklinePointDto[] = [];
     const athletePoints: SparklinePointDto[] = [];
@@ -240,9 +256,10 @@ export class DashboardSparklineService {
   ): Promise<
     Array<{ d: string; gmv: number; net: number; athletes: number }>
   > {
+    // F-081 A1-2 — GROUP BY ngày ICT: shift payment_on (UTC) +7h trước khi DATE().
     return this.db.query(
       `SELECT
-        DATE(payment_on) AS d,
+        DATE(DATE_ADD(payment_on, INTERVAL 7 HOUR)) AS d,
         COALESCE(SUM(CASE WHEN order_category != 'MANUAL' THEN total_price ELSE 0 END), 0) AS gmv,
         COALESCE(SUM(CASE WHEN order_category != 'MANUAL'
           THEN GREATEST(total_price - IFNULL(total_discounts, 0), 0)
@@ -251,7 +268,7 @@ export class DashboardSparklineService {
       FROM order_metadata
       WHERE financial_status = 'paid'
         AND payment_on >= ? AND payment_on < ?
-      GROUP BY DATE(payment_on)
+      GROUP BY DATE(DATE_ADD(payment_on, INTERVAL 7 HOUR))
       ORDER BY d ASC`,
       [startStr, endStr],
     );
@@ -302,10 +319,11 @@ export class DashboardSparklineService {
     );
 
     return rows.map((r) => {
+      // F-081 A1-2 — dateKey theo ICT date (match labels + SQL group).
       const dateKey =
         r.payment_on instanceof Date
-          ? r.payment_on.toISOString().slice(0, 10)
-          : String(r.payment_on).slice(0, 10);
+          ? toIctDateString(r.payment_on)
+          : toIctDateString(new Date(String(r.payment_on)));
       return {
         id: Number(r.id),
         tenantId: Number(r.tenant_id),
@@ -349,6 +367,9 @@ export class DashboardSparklineService {
   }
 
   private normalizeDateKey(d: Date | string): string {
+    // F-081 — SQL đã GROUP BY ICT date: nếu driver trả Date object thì đó là
+    // midnight của date-string (no TZ info) → đọc UTC fields trực tiếp,
+    // KHÔNG shift thêm. String thì cắt 10 ký tự đầu.
     if (d instanceof Date) return d.toISOString().slice(0, 10);
     return String(d).slice(0, 10);
   }
@@ -359,16 +380,7 @@ export class DashboardSparklineService {
     return d.toISOString().slice(0, 10);
   }
 
-  private dateRange(start: Date, end: Date, days: number): string[] {
-    const out: string[] = [];
-    for (let i = 0; i < days; i += 1) {
-      const d = new Date(start);
-      d.setUTCDate(d.getUTCDate() + i + 1);
-      if (d.getTime() > end.getTime() + 86400000) break;
-      out.push(d.toISOString().slice(0, 10));
-    }
-    return out;
-  }
+  // F-081 — dateRange (UTC-based) removed; labels giờ generate ICT trong compute().
 }
 
 export { FALLBACK_DAYS, DEFAULT_DAYS };

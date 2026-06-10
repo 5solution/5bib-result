@@ -12,6 +12,12 @@ import {
   MerchantConfigDocument,
 } from '../../merchant/schemas/merchant-config.schema';
 import { OrderForFeeAggregate } from '../../finance/dto/fee-aggregate.dto';
+// F-081 A1-1 — ICT month/day boundary helpers (UTC+7 business time).
+import {
+  startOfMonthIct,
+  startOfDayIct,
+  toUtcSqlDatetime,
+} from '../../../common/utils/ict-date.util';
 
 /**
  * F-023 BR-DASH-01/02/04/21 — KPI MTD vs prev MTD.
@@ -54,27 +60,39 @@ export class DashboardKpiService {
     const cached = await this.readCache();
     if (cached) return cached;
 
+    // F-081 A1-1 TZ-FIX — MTD theo THÁNG ICT (UTC+7), không phải UTC month.
+    // Trước: startOfMonth UTC → đơn ICT 00:00-06:59 ngày 1 rơi vào tháng trước.
     const now = new Date();
-    const periodStart = this.startOfMonth(now);
+    const periodStart = startOfMonthIct(now);
+    const todayStartIct = startOfDayIct(now);
     const elapsedDays = Math.max(
       1,
-      Math.floor((now.getTime() - periodStart.getTime()) / 86400000) + 1,
+      Math.floor((todayStartIct.getTime() - periodStart.getTime()) / 86400000) +
+        1,
     );
 
-    // Prev MTD = cùng số ngày của tháng trước (BR-DASH-01).
+    // Prev MTD = cùng số ngày của tháng ICT trước (BR-DASH-01).
+    const periodStartIctWall = new Date(periodStart.getTime() + 7 * 3_600_000);
     const prevMonthStart = new Date(
-      Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() - 1, 1),
+      Date.UTC(
+        periodStartIctWall.getUTCFullYear(),
+        periodStartIctWall.getUTCMonth() - 1,
+        1,
+      ) -
+        7 * 3_600_000,
     );
-    const prevPeriodEnd = new Date(prevMonthStart);
-    prevPeriodEnd.setUTCDate(prevPeriodEnd.getUTCDate() + elapsedDays);
+    const prevPeriodEnd = new Date(
+      prevMonthStart.getTime() + elapsedDays * 86400000,
+    );
 
+    // SQL boundary = UTC datetime string (payment_on là UTC datetime).
     const curRange = {
-      start: this.fmtDate(periodStart),
-      end: this.fmtDateExclusive(now),
+      start: toUtcSqlDatetime(periodStart),
+      end: toUtcSqlDatetime(new Date(todayStartIct.getTime() + 86400000)),
     };
     const prevRange = {
-      start: this.fmtDate(prevMonthStart),
-      end: this.fmtDate(prevPeriodEnd),
+      start: toUtcSqlDatetime(prevMonthStart),
+      end: toUtcSqlDatetime(prevPeriodEnd),
     };
 
     const [cur, prev] = await Promise.all([
@@ -309,17 +327,6 @@ export class DashboardKpiService {
     return Math.round(((cur - prev) / prev) * 1000) / 10;
   }
 
-  private startOfMonth(d: Date): Date {
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-  }
-
-  private fmtDate(d: Date): string {
-    return d.toISOString().slice(0, 10);
-  }
-
-  private fmtDateExclusive(d: Date): string {
-    const next = new Date(d);
-    next.setUTCDate(next.getUTCDate() + 1);
-    return next.toISOString().slice(0, 10);
-  }
+  // F-081 — UTC-based helpers removed (startOfMonth/fmtDate/fmtDateExclusive).
+  // Dùng `common/utils/ict-date.util` cho mọi boundary nghiệp vụ VN.
 }

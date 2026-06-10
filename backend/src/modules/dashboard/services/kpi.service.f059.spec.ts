@@ -22,6 +22,11 @@ import { DashboardKpiService } from './kpi.service';
 import { FeeService } from '../../finance/services/fee.service';
 import { MerchantConfig } from '../../merchant/schemas/merchant-config.schema';
 import type { AnalyticsFeeAggregateResultDto } from '../../finance/dto/fee-aggregate.dto';
+// F-081 A1-1 — ICT month boundary helpers (match service semantic)
+import {
+  startOfMonthIct,
+  toUtcSqlDatetime,
+} from '../../../common/utils/ict-date.util';
 
 const REDIS_TOKEN = 'default_IORedisModuleConnectionToken';
 
@@ -79,12 +84,10 @@ describe('F-059 — DashboardKpiService (cascade fee)', () => {
     mockDb.query.mockImplementation(async (sql: string, params: unknown[]) => {
       const isPullOrders = sql.includes('FROM order_metadata om');
       const start = String(params?.[0] ?? '');
-      // cur start = current month YYYY-MM-01; prev start = previous month
-      const now = new Date();
-      const curMonth = String(now.getUTCMonth() + 1).padStart(2, '0');
-      const curYear = now.getUTCFullYear();
-      const curStartPrefix = `${curYear}-${curMonth}`;
-      const isCur = start.startsWith(curStartPrefix);
+      // F-081 A1-1 — service dùng ICT month boundary: cur start =
+      // toUtcSqlDatetime(startOfMonthIct(now)). Exact-match dispatch.
+      const curStartStr = toUtcSqlDatetime(startOfMonthIct(new Date()));
+      const isCur = start === curStartStr;
 
       if (isPullOrders) {
         return isCur ? curOrders : prevOrders;

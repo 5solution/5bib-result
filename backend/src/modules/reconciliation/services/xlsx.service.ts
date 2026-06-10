@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { ReconciliationDocument } from '../schemas/reconciliation.schema';
 import { renderPeriodLabel } from './period-label.helper';
+import { nowIctDateString } from '../../../common/utils/ict-date.util';
 
 const FONT_BASE: Partial<ExcelJS.Font> = {
   name: 'Times New Roman',
@@ -97,7 +98,7 @@ export class XlsxService {
     r++;
     styleCell(
       ws.getRow(r).getCell(1),
-      `Ngày đối soát: ${formatDate(rec.signed_date_str ?? new Date().toISOString().slice(0, 10))}`,
+      `Ngày đối soát: ${formatDate(rec.signed_date_str ?? nowIctDateString())}`,
       { font: FONT_HEADER, border: false },
     );
     r++;

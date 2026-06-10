@@ -27,6 +27,7 @@ import {
 } from '../../merchant/schemas/merchant-config.schema';
 import { env } from 'src/config';
 import { renderPeriodLabel } from './period-label.helper';
+import { nowIctDateString } from '../../../common/utils/ict-date.util';
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -234,7 +235,7 @@ export class DocxService {
 
     const periodLabel = renderPeriodLabel(rec.period_start, rec.period_end);
     const signedDate = formatDate(
-      rec.signed_date_str ?? new Date().toISOString().slice(0, 10),
+      rec.signed_date_str ?? nowIctDateString(),
     );
 
     const payoutWords = this.numToWords(Math.round(rec.payout_amount));

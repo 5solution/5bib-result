@@ -18,6 +18,7 @@ import {
 } from '../constants/awards-thresholds';
 import { PodiumDocument } from '../schemas/podium.schema';
 import { PdfExportOptionsDto, PodiumPdfResponseDto } from '../dto/pdf-export-options.dto';
+import { nowIctDateString } from '../../../common/utils/ict-date.util';
 
 const PAGE_WIDTH = 2480;
 const PAGE_HEIGHT = 3508;
@@ -204,7 +205,7 @@ export class PodiumPdfService {
       ctx.fillStyle = '#a8a29e';
       ctx.fillText('______________________________', MARGIN, sigY + 60);
       ctx.fillText(
-        `Ký tên & ghi rõ họ tên — ${new Date().toISOString().slice(0, 10)}`,
+        `Ký tên & ghi rõ họ tên — ${nowIctDateString()}`,
         MARGIN,
         sigY + 110,
       );

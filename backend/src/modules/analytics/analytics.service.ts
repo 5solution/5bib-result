@@ -38,6 +38,8 @@ import {
 } from './services/period-resolver';
 // F-062 Wave 2C-1 — shared FeeService pre-aggregate helper (extracted)
 import { pullOrdersForFeeAggregate as pullOrdersShared } from './services/fee-aggregate.helpers';
+// F-081 A1-3 — ICT "hôm nay" helper (UTC+7 business time).
+import { nowIctDateString } from '../../common/utils/ict-date.util';
 import {
   dateToWeekKey,
   dateToMonthKey,
@@ -166,15 +168,18 @@ export class AnalyticsService {
       const end = `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
       return { from: start, to: end };
     }
+    // F-081 A1-3 TZ-FIX — "hôm nay"/"tháng này" theo ICT, không phải UTC.
+    // Trước: 00:00-07:00 ICT sáng → default `to` = hôm qua → thiếu data hôm nay.
     if (query.from || query.to) {
       return {
         from: query.from ?? '1970-01-01',
-        to: query.to ?? new Date().toISOString().slice(0, 10),
+        to: query.to ?? nowIctDateString(),
       };
     }
+    const todayIct = nowIctDateString();
     return {
-      from: new Date().toISOString().slice(0, 7) + '-01',
-      to: new Date().toISOString().slice(0, 10),
+      from: todayIct.slice(0, 7) + '-01',
+      to: todayIct,
     };
   }
 
