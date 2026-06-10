@@ -472,3 +472,206 @@ describe('F-079 — runHourlyRecap + race title resolver', () => {
     });
   });
 });
+
+/**
+ * F-080 — Layer 3 MySQL platform fallback trong resolveRaceTitlesSafe.
+ *
+ * Resolver chain: Redis(F-049) → MongoDB(F-049) → MySQL platform(F-080)
+ * → composer fallback `Race {id}` (F-079 BR-79-23).
+ *
+ * Coverage: TC-80-01..07 per PRD.
+ */
+describe('F-080 — Layer 3 MySQL race title fallback', () => {
+  const today = '2026-06-09';
+  const TITLE_LCM = 'LÀO CAI MARATHON 2026 - DÒNG CHẢY BIÊN CƯƠNG';
+  const TITLE_COROS = '5BIB x COROS';
+
+  function makeF080Mocks(opts: {
+    resolverResult?: Map<number, string> | Error;
+    mysqlRows?: Array<{ raceId: number; title: string | null }> | Error;
+    redisSetexThrows?: boolean;
+  }) {
+    const repoQuery = jest.fn();
+    if (opts.mysqlRows instanceof Error) {
+      repoQuery.mockRejectedValue(opts.mysqlRows);
+    } else {
+      repoQuery.mockResolvedValue(opts.mysqlRows ?? []);
+    }
+    const orderRepo = { manager: { query: repoQuery } } as any;
+    const misa = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      listInvoicesByDateRange: jest.fn().mockResolvedValue([]),
+      getLastStatus: jest.fn().mockReturnValue('OK'),
+    } as any;
+    const alert = {
+      emitUrgentAlerts: jest.fn().mockResolvedValue({ sent: 0 }),
+      sendHourlyRecap: jest.fn().mockResolvedValue(true),
+      sendEodRecap: jest.fn().mockResolvedValue(true),
+    } as any;
+    const counters = {
+      increment: jest.fn(),
+      getAll: jest.fn().mockResolvedValue({}),
+    } as any;
+    const redisStore = new Map<string, string>();
+    const setexMock = opts.redisSetexThrows
+      ? jest.fn().mockRejectedValue(new Error('redis down'))
+      : jest.fn(async (k: string, _ttl: number, v: string) => {
+          redisStore.set(k, v);
+          return 'OK';
+        });
+    const redis = {
+      get: jest.fn(async (k: string) => redisStore.get(k) ?? null),
+      set: jest.fn(async (k: string, v: string) => {
+        redisStore.set(k, v);
+        return 'OK';
+      }),
+      setex: setexMock,
+      del: jest.fn(async () => 1),
+      ttl: jest.fn(async () => -1),
+    } as any;
+    const resolver = {
+      getRaceTitlesByMysqlIds:
+        opts.resolverResult instanceof Error
+          ? jest.fn().mockRejectedValue(opts.resolverResult)
+          : jest
+              .fn()
+              .mockResolvedValue(
+                opts.resolverResult ?? new Map<number, string>(),
+              ),
+    } as any;
+    const service = new InvoiceReconcileService(
+      orderRepo,
+      misa,
+      alert,
+      counters,
+      redis,
+      resolver,
+    );
+    // Seed cached report cho runHourlyRecap path
+    redisStore.set(
+      `invoice-reconcile:last-run:${today}`,
+      JSON.stringify({
+        date: today,
+        runAt: '2026-06-09T07:00:00Z',
+        mode: 'cron',
+        raceIdsScanned: [140, 220],
+        expectedCount: 29,
+        issuedCount: 29,
+        skippedCount: 0,
+        missingCount: 0,
+        atRiskCount: 0,
+        duplicateCount: 0,
+        breachedCount: 0,
+        missing: [],
+        misaOrphan: [],
+        layer2Status: 'OK',
+        maxSeverity: 'INFO',
+        alertSent: false,
+      }),
+    );
+    return { service, repoQuery, alert, redis, setexMock, resolver };
+  }
+
+  async function getDispatchedMap(mocks: {
+    service: InvoiceReconcileService;
+    alert: { sendHourlyRecap: jest.Mock };
+  }): Promise<Map<number, string>> {
+    await mocks.service.runHourlyRecap(today);
+    return mocks.alert.sendHourlyRecap.mock.calls[0][2];
+  }
+
+  it('TC-80-01: F-049 đủ Map → MySQL KHÔNG query (BR-80-05)', async () => {
+    const m = makeF080Mocks({
+      resolverResult: new Map([
+        [140, TITLE_COROS],
+        [220, TITLE_LCM],
+      ]),
+    });
+    const map = await getDispatchedMap(m);
+    expect(map.size).toBe(2);
+    expect(m.repoQuery).not.toHaveBeenCalled();
+  });
+
+  it('TC-80-02: F-049 empty → MySQL fills + Redis warm 2 lần TTL 3600', async () => {
+    const m = makeF080Mocks({
+      resolverResult: new Map(),
+      mysqlRows: [
+        { raceId: 140, title: TITLE_COROS },
+        { raceId: 220, title: TITLE_LCM },
+      ],
+    });
+    const map = await getDispatchedMap(m);
+    expect(map.get(140)).toBe(TITLE_COROS);
+    expect(map.get(220)).toBe(TITLE_LCM);
+    expect(m.repoQuery).toHaveBeenCalledWith(
+      expect.stringContaining('SELECT race_id AS raceId, title FROM races'),
+      [[140, 220]],
+    );
+    expect(m.setexMock).toHaveBeenCalledWith(
+      'races:title:byMysqlId:140',
+      3600,
+      TITLE_COROS,
+    );
+    expect(m.setexMock).toHaveBeenCalledWith(
+      'races:title:byMysqlId:220',
+      3600,
+      TITLE_LCM,
+    );
+  });
+
+  it('TC-80-03: F-049 partial (140 only) → MySQL query [220] only', async () => {
+    const m = makeF080Mocks({
+      resolverResult: new Map([[140, TITLE_COROS]]),
+      mysqlRows: [{ raceId: 220, title: TITLE_LCM }],
+    });
+    const map = await getDispatchedMap(m);
+    expect(map.size).toBe(2);
+    expect(m.repoQuery).toHaveBeenCalledWith(expect.any(String), [[220]]);
+  });
+
+  it('TC-80-04: MySQL throw → partial F-049 giữ nguyên, KHÔNG throw', async () => {
+    const m = makeF080Mocks({
+      resolverResult: new Map([[140, TITLE_COROS]]),
+      mysqlRows: new Error('mysql connection refused'),
+    });
+    const map = await getDispatchedMap(m);
+    expect(map.size).toBe(1);
+    expect(map.get(140)).toBe(TITLE_COROS);
+    expect(map.has(220)).toBe(false);
+  });
+
+  it('TC-80-05: MySQL title rỗng → skip set + skip warm (BR-80-03)', async () => {
+    const m = makeF080Mocks({
+      resolverResult: new Map(),
+      mysqlRows: [
+        { raceId: 140, title: '   ' },
+        { raceId: 220, title: TITLE_LCM },
+      ],
+    });
+    const map = await getDispatchedMap(m);
+    expect(map.has(140)).toBe(false);
+    expect(map.get(220)).toBe(TITLE_LCM);
+    expect(m.setexMock).toHaveBeenCalledTimes(1); // chỉ warm 220
+  });
+
+  it('TC-80-06: F-049 throw + MySQL throw → empty Map, heartbeat vẫn sent', async () => {
+    const m = makeF080Mocks({
+      resolverResult: new Error('mongo down'),
+      mysqlRows: new Error('mysql down'),
+    });
+    const result = await m.service.runHourlyRecap(today);
+    expect(result.sent).toBe(true); // BR-79-23 — KHÔNG block
+    const map = m.alert.sendHourlyRecap.mock.calls[0][2];
+    expect(map.size).toBe(0);
+  });
+
+  it('TC-80-07: Redis setex throw khi warm → Map VẪN filled, KHÔNG throw', async () => {
+    const m = makeF080Mocks({
+      resolverResult: new Map(),
+      mysqlRows: [{ raceId: 220, title: TITLE_LCM }],
+      redisSetexThrows: true,
+    });
+    const map = await getDispatchedMap(m);
+    expect(map.get(220)).toBe(TITLE_LCM); // warm best-effort
+  });
+});

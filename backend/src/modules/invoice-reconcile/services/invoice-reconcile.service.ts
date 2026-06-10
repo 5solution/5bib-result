@@ -515,17 +515,72 @@ export class InvoiceReconcileService {
   private async resolveRaceTitlesSafe(
     raceIds: number[],
   ): Promise<Map<number, string>> {
-    if (!this.raceTitleResolver || raceIds.length === 0) {
-      return new Map<number, string>();
+    if (raceIds.length === 0) return new Map<number, string>();
+
+    // Phase A — Layer 1+2: F-049 resolver (Redis cache → MongoDB races).
+    let result = new Map<number, string>();
+    if (this.raceTitleResolver) {
+      try {
+        result = await this.raceTitleResolver.getRaceTitlesByMysqlIds(raceIds);
+      } catch (err) {
+        this.logger.warn(
+          `[F-079 race title resolve fail] ${(err as Error).message} — try MySQL fallback`,
+        );
+      }
     }
+
+    // Phase B — F-080 Layer 3: MySQL platform fallback cho missing IDs
+    // (BR-80-01/05 — chỉ chạy khi miss; PROD gap: races 140/220 chưa sync MongoDB).
+    const missing = raceIds.filter((id) => !result.has(id));
+    if (missing.length > 0) {
+      const fromMysql = await this.queryRaceTitlesMysql(missing);
+      for (const [id, title] of fromMysql) result.set(id, title);
+    }
+    return result;
+  }
+
+  /**
+   * F-080 BR-80-01..04 — Layer 3 MySQL platform race title lookup.
+   *
+   * READ-ONLY `SELECT race_id, title FROM races` connection 'platform'
+   * (`?` placeholder pattern F-016/F-028 — ZERO interpolation).
+   * Warm-back Redis F-049 key `races:title:byMysqlId:<id>` TTL 3600s
+   * (best-effort — Redis fail KHÔNG block, BR-80-02).
+   * Title rỗng → skip (BR-80-03, composer fallback `Race {id}`).
+   * Query throw → catch + warn + return empty (BR-80-04 — heartbeat MUST NOT block).
+   */
+  private async queryRaceTitlesMysql(
+    raceIds: number[],
+  ): Promise<Map<number, string>> {
+    const out = new Map<number, string>();
     try {
-      return await this.raceTitleResolver.getRaceTitlesByMysqlIds(raceIds);
+      const rows: Array<{ raceId: unknown; title: unknown }> =
+        await this.orderRepo.manager.query(
+          `SELECT race_id AS raceId, title FROM races WHERE race_id IN (?)`,
+          [raceIds],
+        );
+      for (const r of rows) {
+        const id = Number(r.raceId);
+        const title = typeof r.title === 'string' ? r.title.trim() : '';
+        if (!Number.isInteger(id) || !title) continue; // BR-80-03 skip empty
+        out.set(id, title);
+        // Warm-back F-049 Redis key — next tick Layer 1 hits (BR-80-02).
+        if (this.redis) {
+          await this.redis
+            .setex(`races:title:byMysqlId:${id}`, 3600, title)
+            .catch((err: Error) =>
+              this.logger.warn(
+                `[F-080 redis warm fail] id=${id}: ${err.message}`,
+              ),
+            );
+        }
+      }
     } catch (err) {
       this.logger.warn(
-        `[F-079 race title resolve fail] ${(err as Error).message} — fallback empty Map`,
+        `[F-080 mysql race title fail] ${(err as Error).message} — composer fallback Race {id}`,
       );
-      return new Map<number, string>();
     }
+    return out;
   }
 
   /** Helper for unused import warning. */
