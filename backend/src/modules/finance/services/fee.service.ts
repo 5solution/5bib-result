@@ -40,6 +40,8 @@ import {
   isPaymentRefEmpty,
   FIVE_BIB_SQL_LIST,
 } from '../../../common/constants/order-classification';
+// F-082 — period-keyed TZ cutover đồng bộ reconciliation (kỳ >= 2026-06 ICT).
+import { periodRangeUtc } from '../../../common/utils/ict-date.util';
 
 /**
  * F-028 BR-PNL-04 + BR-PNL-22 — cross-DB MySQL platform pull cho TICKET_SALES.
@@ -756,8 +758,13 @@ export class FeeService {
 
     const params: Array<string | number> = [serviceFeeRate, mysqlRaceId];
     if (periodFromStr && periodToStr) {
-      params.push(`${periodFromStr} 00:00:00`);
-      params.push(`${periodToStr} 23:59:59`);
+      // F-082 — period-keyed TZ cutover ĐỒNG BỘ với reconciliation
+      // queryOrders: kỳ >= 2026-06 ICT boundary, kỳ cũ UTC. Nếu lệch pha,
+      // F-058 discrepancy check sẽ báo MAJOR_DRIFT giả (analytics/dashboard
+      // fee khác số đối soát cho cùng kỳ).
+      const { fromUtc, toUtc } = periodRangeUtc(periodFromStr, periodToStr);
+      params.push(fromUtc);
+      params.push(toUtc);
     }
 
     const rows: Array<{

@@ -4435,3 +4435,22 @@ export const notoSansKhmer = Noto_Sans_Khmer({ variable: "--font-khmer", subsets
 
 ### Script-range validation (QC tool cho ngôn ngữ phi-Latin)
 QC nên quét: mỗi giá trị dịch chứa ≥1 codepoint trong khối Unicode mong đợi (Khmer U+1780–17FF, Lào U+0E80–0EFF). Bắt được class bug "lẫn ký tự Thái / copy nhầm Latin/vi / rỗng" mà mắt thường khó thấy. Ngoại lệ hợp lệ = acronym thuần (vd "% GMV").
+
+### F-081.1. Business date PHẢI qua `ict-date.util.ts` — CẤM `toISOString().slice(0,10)`
+**Khi:** mọi chỗ derive "hôm nay / đầu tháng / nhãn ngày" cho nghiệp vụ VN (MTD, sparkline label, ngày ký chứng từ, prev-month cron).
+
+Server (Node + MySQL) chạy UTC → `new Date().toISOString().slice(0,10)` từ 00:00–06:59 sáng ICT trả về **ngày hôm qua**. Bug class này đã trúng kpi MTD + sparkline + docx/xlsx/podium ngày ký (F-081 audit, order 200029493 real case).
+
+**Pattern:** `common/utils/ict-date.util.ts` — `toIctDateString` / `nowIctDateString` / `startOfMonthIct` / `startOfDayIct` / `toUtcSqlDatetime` / `ictDayRangeUtc`. SQL group-by-ngày-ICT: `DATE(DATE_ADD(col, INTERVAL 7 HOUR))`. Cron tick: `@Cron(expr, { timeZone: 'Asia/Ho_Chi_Minh' })`.
+
+**Anti-pattern:** inline `toISOString().slice(0,10)` / `getMonth()` trên `new Date()` server-TZ cho business date. QC grep gate: `toISOString\(\)\.slice\(0,\s*10\)` trong modules tài chính/analytics phải = 0 match ngoài util.
+
+### F-082.1. Period-keyed cutover pattern (financial boundary change)
+**Khi:** đổi cách tính boundary/số liệu tài chính mà kỳ cũ đã chốt sổ/ký chứng từ merchant (TZ boundary, fee formula, category whitelist…).
+
+**3 mandate:**
+1. **Key theo PERIOD, KHÔNG theo createdAt/now.** Cutover quyết định bằng period string (`period >= ICT_PERIOD_CUTOVER`), để admin delete + re-create kỳ cũ SAU deploy vẫn ra đúng số cũ — deterministic, bất biến chứng từ. Anti-pattern: F040_PRE_F016_CUTOFF created-at-keyed (re-create đổi số âm thầm).
+2. **Seam Continuity Invariant:** `startOf(P) = endOf(prevPeriod(P)) + 1s`. Kỳ seam (kỳ cutover đầu tiên) lấy `from` theo continuity từ kỳ cũ, `to` theo rule mới → zero gap / zero double-count **by construction**, kèm test chain N kỳ assert đúng 1000ms gap mỗi seam + test single-count cửa sổ seam (`inT6=false`).
+3. **Workflow map → adversarial verify → empirical TRƯỚC khi code.** Financial change PHẢI: (a) map mọi consumer cross-module cùng boundary (F-082: fee.service + analytics cùng bug — fix lệch pha = F-058 MAJOR_DRIFT giả); (b) verify altitude — shift đúng 1 tầng (date→SQL param), calendar strings TZ-agnostic không đụng; (c) empirical verify TZ/data thật trên PROD (`@@time_zone`, so NOW() vs UTC_TIMESTAMP(), sample row) — KHÔNG suy diễn từ tên cột.
+
+**Reference impl:** `ict-date.util.ts` `ICT_PERIOD_CUTOVER` + `periodRangeUtc()` + 11-test cutover matrix; QC param-assert gate `reconciliation/services/__qc__/f082-period-boundary.spec.ts`.

@@ -39,7 +39,7 @@ import {
 // F-062 Wave 2C-1 — shared FeeService pre-aggregate helper (extracted)
 import { pullOrdersForFeeAggregate as pullOrdersShared } from './services/fee-aggregate.helpers';
 // F-081 A1-3 — ICT "hôm nay" helper (UTC+7 business time).
-import { nowIctDateString } from '../../common/utils/ict-date.util';
+import { nowIctDateString, periodRangeUtc } from '../../common/utils/ict-date.util';
 import {
   dateToWeekKey,
   dateToMonthKey,
@@ -126,14 +126,19 @@ export class AnalyticsService {
     month?: string,
   ): { clause: string; params: any[] } {
     if (month) {
+      // F-082 — period-keyed TZ cutover ĐỒNG BỘ reconciliation (kỳ >= 2026-06
+      // ICT, kỳ cũ UTC). F-058 discrepancy check so analytics totals trực tiếp
+      // với reconciliation getTotalsByTenantMonth — lệch pha = MAJOR_DRIFT giả.
       const [year, mon] = month.split('-').map(Number);
-      const start = `${year}-${String(mon).padStart(2, '0')}-01`;
-      const nextMonth = mon === 12 ? 1 : mon + 1;
-      const nextYear = mon === 12 ? year + 1 : year;
-      const end = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+      const mm = String(mon).padStart(2, '0');
+      const lastDay = new Date(Date.UTC(year, mon, 0)).getUTCDate();
+      const { fromUtc, toUtc } = periodRangeUtc(
+        `${year}-${mm}-01`,
+        `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
+      );
       return {
-        clause: 'payment_on >= ? AND payment_on < ?',
-        params: [start, end],
+        clause: 'payment_on >= ? AND payment_on <= ?',
+        params: [fromUtc, toUtc],
       };
     }
     if (from || to) {

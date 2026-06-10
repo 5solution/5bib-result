@@ -4,6 +4,33 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-10 FEATURE-082: Reconciliation TZ Cutover — ICT boundary từ kỳ T6/2026
+
+**PR/Commit:** push main + release/v1.16.0 (commit F-082)
+**Type:** BUGFIX (financial — Tier A2 từ F-081 audit, Danny chốt PAUSE-81-01 "Ừm từ kì Tháng 6 thôi")
+**QC verdict:** ✅ APPROVED (23 util + 4 QC param-assert + 646/647 sweep, 2 pre-existing)
+
+**Files:**
+- ✏️ `backend/src/common/utils/ict-date.util.ts` — +`ICT_PERIOD_CUTOVER='2026-06'` + `prevPeriod`/`endOfPeriodMs` + `periodRangeUtc()` (seam continuity invariant `startOf(P)=endOf(P-1)+1s`)
+- ✏️ `backend/src/common/utils/ict-date.util.spec.ts` — +11 cutover matrix test (chain T4→T8 1000ms gap, seam single-count `inT6=false`, straddle, year boundary)
+- ✏️ `reconciliation/services/reconciliation-query.service.ts` — `queryOrders` boundary qua helper (preflight share → count nhất quán create())
+- ✏️ `reconciliation/services/reconciliation-preflight.service.ts` — `checkFeeChanged` cùng rule
+- ✏️ `finance/services/fee.service.ts` — periodClause đồng bộ (chống F-058 MAJOR_DRIFT giả)
+- ✏️ `analytics/analytics.service.ts` — buildDateFilter month branch qua helper (clause exclusive → inclusive)
+- ✏️ `reconciliation/services/reconciliation.cron.ts` — `timeZone: 'Asia/Ho_Chi_Minh'` + prev-month derive ICT
+- ✏️ `finance/services/pnl.service.ts` — presets `monthStartIctOffset()` ICT trực tiếp (rolling, KHÔNG cutover; custom branch đã ICT-aware)
+- ➕ `reconciliation/services/__qc__/f082-period-boundary.spec.ts` — 4 param-assert regression gate (T4 UTC / T6 seam / T7 ICT / re-create-T5 determinism)
+
+**KHÔNG đổi (altitude verdict):** parsePeriod ×2, Mongo overlap queries, schema period_start/end, admin period-helpers, regenerate(), period.validator.
+
+**Lesson:** ultracode workflow map (4 readers + adversarial verify) chặn 3 blocking gaps TRƯỚC code — minted convention F-082.1. +4 TD mới (xlsx processed_on display cần Danny chốt / parsePeriod dup / pnl isoMonth / effective_from lexico).
+
+## 2026-06-09→10 FEATURE-080 + FEATURE-081: Race Title MySQL Fallback + Systemic TZ Audit (ghi bù)
+
+**PR/Commit:** `37e0a6d` (F-080) + `58f0826` (F-081) — đã DEPLOYED PROD, entry ghi bù vào change-history (feature-log đã sync trước).
+**F-080:** `invoice-reconcile.service.ts` `resolveRaceTitlesSafe` 2-phase + `queryRaceTitlesMysql` ('platform' connection, `?` placeholder) + warm-back Redis F-049 key 3600s. Chain 4 layer: Redis → Mongo → MySQL → `Race {id}`. Resolves TD-F079-MONGODB-RACE-SYNC-MISSING. +7 TC.
+**F-081 (scope A1+B):** NEW `common/utils/ict-date.util.ts` 6 helper + 12 boundary test. Fixed: kpi.service MTD ICT + sparkline ICT labels/SQL `DATE(DATE_ADD(payment_on, INTERVAL 7 HOUR))` + analytics default from/to + docx/xlsx/podium-pdf ngày ký. Tier A2 financial deferred → F-082. Convention F-081.1.
+
 ## 2026-06-09 FEATURE-079: F-076 Heartbeat Recap 2h + Race Title Resolver (incident response)
 
 **PR/Commit:** TBD — branch decision pending Danny (suggest commit straight to PROD release nhanh do incident-driven F-076 visibility gap, hoặc branch riêng nếu group với F-078)

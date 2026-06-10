@@ -38,6 +38,8 @@ import {
 import { PnLContractsListResponseDto } from '../dto/pnl-contracts-list-response.dto';
 import { escapeRegex } from '../../contracts/utils/escape-regex';
 import * as crypto from 'crypto';
+// F-082 — ICT month boundary cho rolling preset ranges.
+import { startOfMonthIct } from '../../../common/utils/ict-date.util';
 
 /**
  * F-028 — compute P&L per contract.
@@ -369,10 +371,26 @@ export class PnLService {
     const period: DashboardPeriod = filter.period ?? 'last_3_months';
     const now = new Date();
 
+    // F-082 — preset boundaries theo THÁNG ICT (rolling live analytics —
+    // fix trực tiếp KHÔNG cutover, treatment giống dashboard KPI F-081 A1).
+    // `custom` branch ĐÃ ICT-aware từ trước (T00:00:00+07:00) — giữ nguyên.
+    const monthStartIctOffset = (monthsBack: number): Date => {
+      const base = startOfMonthIct(now); // UTC instant của 00:00 ICT ngày 1 tháng này
+      const ictWall = new Date(base.getTime() + 7 * 3_600_000);
+      return new Date(
+        Date.UTC(
+          ictWall.getUTCFullYear(),
+          ictWall.getUTCMonth() - monthsBack,
+          1,
+        ) -
+          7 * 3_600_000,
+      );
+    };
+
     if (period === 'custom') {
       const from = filter.dateFrom
         ? new Date(`${filter.dateFrom}T00:00:00+07:00`)
-        : new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        : monthStartIctOffset(3);
       const to = filter.dateTo
         ? new Date(`${filter.dateTo}T23:59:59+07:00`)
         : now;
@@ -383,22 +401,26 @@ export class PnLService {
     let dateFrom: Date;
     switch (period) {
       case 'current_month':
-        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        dateFrom = monthStartIctOffset(0);
         break;
       case 'last_3_months':
-        dateFrom = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        dateFrom = monthStartIctOffset(2);
         break;
       case 'last_6_months':
-        dateFrom = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        dateFrom = monthStartIctOffset(5);
         break;
       case 'last_12_months':
-        dateFrom = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+        dateFrom = monthStartIctOffset(11);
         break;
-      case 'ytd':
-        dateFrom = new Date(now.getFullYear(), 0, 1);
+      case 'ytd': {
+        const ictWall = new Date(startOfMonthIct(now).getTime() + 7 * 3_600_000);
+        dateFrom = new Date(
+          Date.UTC(ictWall.getUTCFullYear(), 0, 1) - 7 * 3_600_000,
+        );
         break;
+      }
       default:
-        dateFrom = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        dateFrom = monthStartIctOffset(2);
     }
     return { period, dateFrom, dateTo };
   }

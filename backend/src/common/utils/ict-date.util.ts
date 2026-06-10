@@ -83,3 +83,69 @@ export function ictDayRangeUtc(ictDate: string): {
     toUtcExclusive: toUtcSqlDatetime(new Date(startUtcMs + 24 * 3_600_000)),
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F-082 — Period-keyed TZ cutover cho kỳ đối soát/phí (Danny chốt 2026-06-10)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * F-082 — Kỳ ĐẦU TIÊN dùng ICT boundary. Kỳ < cutover giữ UTC boundary
+ * nguyên trạng để số chứng từ đã ký với merchant KHÔNG đổi khi
+ * preview/re-create/re-query kỳ cũ sau deploy.
+ *
+ * QUAN TRỌNG: cutover key theo PERIOD (YYYY-MM của kỳ), KHÔNG theo thời điểm
+ * chạy/createdAt (anti-pattern F040_PRE_F016_CUTOFF createdAt-based).
+ */
+export const ICT_PERIOD_CUTOVER = '2026-06';
+
+/** 'YYYY-MM' kỳ trước. Vd '2026-01' → '2025-12'. */
+function prevPeriod(period: string): string {
+  const [y, m] = period.split('-').map(Number);
+  const py = m === 1 ? y - 1 : y;
+  const pm = m === 1 ? 12 : m - 1;
+  return `${py}-${String(pm).padStart(2, '0')}`;
+}
+
+/** Epoch ms của giây CUỐI kỳ `YYYY-MM` theo cutover rule. */
+function endOfPeriodMs(period: string): number {
+  const [y, m] = period.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lastDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  if (period >= ICT_PERIOD_CUTOVER) {
+    // ICT end: 23:59:59 ICT = (23:59:59 UTC) - 7h
+    return Date.parse(lastDate + 'T23:59:59Z') - ICT_OFFSET_MS;
+  }
+  // Legacy UTC end (kỳ cũ giữ nguyên)
+  return Date.parse(lastDate + 'T23:59:59Z');
+}
+
+/**
+ * F-082 — UTC datetime range [fromUtc, toUtc] (inclusive, SQL `>= ? AND <= ?`)
+ * cho dải kỳ calendar VN `[periodStartDate, periodEndDate]` (YYYY-MM-DD,
+ * luôn là ngày 1 và ngày cuối tháng per `IsPeriodBoundaryDate` validator).
+ *
+ * SEAM CONTINUITY INVARIANT (chống double-count 7h tại cutover):
+ *   startOf(P) = endOf(prevPeriod(P)) + 1s
+ * → Kỳ T5/2026 (UTC) end '2026-05-31 23:59:59'; kỳ T6/2026 start
+ *   '2026-06-01 00:00:00' (KHÔNG phải ICT start 31/5 17:00 — tránh đếm lại
+ *   đơn 17:00-23:59:59 UTC 31/5 đã thuộc T5); T6 end ICT '2026-06-30
+ *   16:59:59'; từ T7/2026 full ICT cả 2 đầu. Đơn ICT 00:00-06:59 sáng 1/6
+ *   thuộc kỳ T5 theo số đã ký — chấp nhận 1 lần duy nhất tại seam.
+ *
+ * Multi-month range (straddle cutover OK): from theo tháng của
+ * periodStartDate, to theo tháng của periodEndDate — continuity đảm bảo
+ * không gap/không overlap với các kỳ lân cận.
+ */
+export function periodRangeUtc(
+  periodStartDate: string,
+  periodEndDate: string,
+): { fromUtc: string; toUtc: string } {
+  const startPeriod = periodStartDate.slice(0, 7);
+  const endPeriod = periodEndDate.slice(0, 7);
+  const fromMs = endOfPeriodMs(prevPeriod(startPeriod)) + 1_000;
+  const toMs = endOfPeriodMs(endPeriod);
+  return {
+    fromUtc: toUtcSqlDatetime(new Date(fromMs)),
+    toUtc: toUtcSqlDatetime(new Date(toMs)),
+  };
+}

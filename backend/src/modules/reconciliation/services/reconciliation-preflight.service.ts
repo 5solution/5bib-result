@@ -11,6 +11,8 @@ import {
   MerchantConfig,
   MerchantConfigDocument,
 } from '../../merchant/schemas/merchant-config.schema';
+// F-082 — period-keyed TZ cutover (kỳ >= 2026-06 ICT, kỳ cũ UTC).
+import { periodRangeUtc } from '../../../common/utils/ict-date.util';
 
 export interface PreflightFlag {
   type: string;
@@ -456,10 +458,13 @@ export class ReconciliationPreflightService {
     // Use raw query since TenantFeeHistory is on the platform DB
     // This check is best-effort — skip if not available
     try {
+      // F-082 — cùng period-keyed cutover với queryOrders (changed_at là
+      // NOW()-written UTC, verified server @@time_zone = SYSTEM = UTC).
+      const { fromUtc, toUtc } = periodRangeUtc(period_start, period_end);
       const rows: any[] = await this.queryService['tenantRepo'].manager.query(
         `SELECT COUNT(*) as cnt FROM tenant_fee_history
          WHERE tenant_id = ? AND changed_at >= ? AND changed_at <= ?`,
-        [tenant_id, period_start + ' 00:00:00', period_end + ' 23:59:59'],
+        [tenant_id, fromUtc, toUtc],
       );
       const cnt = Number(rows?.[0]?.cnt ?? 0);
       if (cnt > 0) {

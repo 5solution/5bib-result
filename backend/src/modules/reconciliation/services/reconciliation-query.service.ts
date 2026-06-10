@@ -14,6 +14,8 @@ import {
   isPaymentRefEmpty,
   isFreePromoOrder,
 } from '../../../common/constants/order-classification';
+// F-082 — period-keyed TZ cutover (kỳ >= 2026-06 ICT, kỳ cũ UTC).
+import { periodRangeUtc } from '../../../common/utils/ict-date.util';
 
 /**
  * FEATURE-016 v1.6.5 — extend FIVE_BIB_CATEGORIES to 6 categories.
@@ -122,9 +124,14 @@ export class ReconciliationQueryService {
       ORDER BY o.order_category, oli.id ASC
     `;
 
+    // F-082 — period-keyed TZ cutover: kỳ >= 2026-06 dùng ICT boundary,
+    // kỳ cũ giữ UTC nguyên trạng (số chứng từ đã ký không đổi). Seam
+    // continuity chống double-count 7h tại cutover. Preflight share method
+    // này → count đơn nhất quán với create().
+    const { fromUtc, toUtc } = periodRangeUtc(period_start, period_end);
     const rows: Record<string, unknown>[] = await this.tenantRepo.manager.query(
       sql,
-      [mysql_race_id, period_start + ' 00:00:00', period_end + ' 23:59:59'],
+      [mysql_race_id, fromUtc, toUtc],
     );
 
     return this.categorize(rows, mysql_race_id, period_start, period_end);

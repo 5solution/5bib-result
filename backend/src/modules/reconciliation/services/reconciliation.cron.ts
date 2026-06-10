@@ -16,6 +16,8 @@ import {
   ReconciliationCronLog,
   ReconciliationCronLogDocument,
 } from '../schemas/reconciliation-cron-log.schema';
+// F-082 — ICT-safe date derive cho cron prev-month.
+import { nowIctDateString } from '../../../common/utils/ict-date.util';
 
 const TELEGRAM_BOT_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN ||
@@ -46,8 +48,9 @@ export class ReconciliationCron {
     private readonly cronLogModel: Model<ReconciliationCronLogDocument>,
   ) {}
 
-  // Chạy lúc 08:00 ngày 1 hàng tháng
-  @Cron('0 8 1 * *')
+  // F-082 — Chạy 08:00 SÁNG VN ngày 1 hàng tháng (trước: 08:00 UTC = 15:00 ICT
+  // + prev-month derive theo server TZ → label sai nếu fire trong cửa sổ lệch).
+  @Cron('0 8 1 * *', { timeZone: 'Asia/Ho_Chi_Minh' })
   async handleMonthlyReconciliation() {
     if (this.isRunning) {
       this.logger.warn('Previous reconciliation cron still running, skipping.');
@@ -55,12 +58,16 @@ export class ReconciliationCron {
     }
     this.isRunning = true;
 
-    const now = new Date();
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-    const period_start = this.fmtDate(prevMonthStart);
-    const period_end = this.fmtDate(prevMonthEnd);
+    // F-082 — derive prev-month theo NGÀY ICT (TZ-safe mọi giờ fire).
+    const todayIct = nowIctDateString(); // YYYY-MM-DD theo ICT
+    const [cy, cm] = todayIct.split('-').map(Number);
+    const py = cm === 1 ? cy - 1 : cy;
+    const pm = cm === 1 ? 12 : cm - 1;
+    const prevLastDay = new Date(Date.UTC(py, pm, 0)).getUTCDate();
+    const period_start = `${py}-${String(pm).padStart(2, '0')}-01`;
+    const period_end = `${py}-${String(pm).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`;
     const period = period_start.slice(0, 7); // YYYY-MM
+    const prevMonthStart = new Date(period_start + 'T00:00:00Z'); // label-only use
 
     this.logger.log(`Monthly reconciliation cron started — ${period_start} → ${period_end}`);
 
@@ -187,7 +194,8 @@ export class ReconciliationCron {
       this.logger.error(`Failed to save cron log: ${logErr.message}`);
     }
 
-    const month = `T${String(prevMonthStart.getMonth() + 1).padStart(2, '0')}/${prevMonthStart.getFullYear()}`;
+    // F-082 — getUTC* trên date parse từ 'YYYY-MM-01T00:00:00Z' (TZ-safe label).
+    const month = `T${String(prevMonthStart.getUTCMonth() + 1).padStart(2, '0')}/${prevMonthStart.getUTCFullYear()}`;
     let msg = `🤖 Auto đối soát ${month} hoàn thành\n`;
     msg += `✅ Đã tạo: ${created} bản\n`;
     msg += `⏭ Bỏ qua: ${skipped} (0 đơn hoặc đã có)\n`;
