@@ -42,6 +42,7 @@ import {
   UsersRound,
   DatabaseZap,
   ShieldCheck,
+  Globe,
 } from "lucide-react";
 
 export type NavItem = {
@@ -128,6 +129,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "sponsors", href: "/sponsors", label: "Nhà tài trợ", icon: Handshake },
       { id: "banner", href: "/sponsored", label: "Banner Zone", icon: Megaphone },
       { id: "promo-hub", href: "/promo-hub", label: "Trang quảng bá", icon: Sparkles, badge: "NEW", requireRole: "admin" },
+      { id: "landing", href: "/landing", label: "Trang giải chạy", icon: Globe, badge: "NEW", requireRole: "admin" },
       { id: "certificates", href: "/certificates", label: "Certificates", icon: Award },
       { id: "result-images", href: "/result-image-stats", label: "Ảnh kết quả", icon: ImageIcon },
     ],

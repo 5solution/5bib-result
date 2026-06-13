@@ -1,6 +1,6 @@
 # FEATURE-083: Coder Implementation Log
 
-**Status:** 🟠 IN_PROGRESS (backend module done + typecheck clean; tests/SDK/frontend/admin pending)
+**Status:** 🟠 READY_FOR_QC (Phase 1 code complete — backend + public frontend + admin all tsc-clean; 15 unit tests pass. Live render + SDK regen → QC/deploy env. See caveats.)
 **Started:** 2026-06-14
 **Branch:** `5bib_landing_v1`
 **Author:** 5bib-fullstack-engineer
@@ -52,10 +52,23 @@
 - **next.config.ts: NO change** — `assetPrefix` already env-driven (`NEXT_PUBLIC_ASSET_PREFIX ?? ''`), F-056 fixed; Phase 1 subdomains same-origin. (R-3 resolved.)
 - **Verify:** `npx tsc --noEmit` 0 landing errors. Live render needs `next dev` restart to register the new route group (existing :3002 server didn't hot-add it) OR deploy — `/__preview` shows all 10 sections with sample data.
 
-## ⏳ Pending (M4 — Admin)
-- SDK regen `pnpm --filter admin generate:api` (needs backend running).
-- Admin builder: list + `[id]/builder` + components (section editor + theme picker + domain tab + preview) + `landing-{api,hooks,labels}.ts` + nav-groups entry.
-- Then: full self-review pipeline + IMPLEMENTATION_NOTES.md → READY_FOR_QC.
+## ✅ Admin M4 DONE
+- `lib/landing-{api,hooks,labels}.ts` (hand-typed `/api/*` proxy wrappers + TanStack hooks + VN dicts — mirror F-068 `course-data-ops-*`; SDK regen deferred to QC).
+- `(dashboard)/landing/page.tsx` (list + create dialog [raceId] + delete confirm) + `[id]/builder/page.tsx` (async params) + `components/landing/LandingBuilder.tsx` (tabs: Section enable/▲▼/variant + JSON content · Giao diện theme main/sec + presets + overlay · Tên miền subdomain · SEO).
+- `nav-groups.ts`: entry "Trang giải chạy" (Globe, requireRole admin) next to Promo Hub.
+- **Verify:** admin `tsc --noEmit` 0 landing errors.
+
+## 🧪 Self-Review Pipeline (honest)
+- [x] Bước 1: tsc clean — backend + frontend(10 sections) + admin (Scope Lock files).
+- [x] Bước 3: anti-pattern scan — no `any`/`as unknown`/console.log in landing src (sanitize/log via Logger).
+- [x] Bước 8: Files vs Scope Lock — within scope (+ 2 plan adjustments upload/mysql, + dev-only `/__preview` harness flagged).
+- [x] Bước 10: unit tests PASS (15/15) output pasted.
+- [x] Bước 11: IMPLEMENTATION_NOTES.md written (4 sections).
+- [⚠️] Bước 5/6 (PROD smoke + browser UI inspection): **NOT done in this env** — port 3002 dev server (not killed) hadn't registered new route group; real page needs backend+published landing. → live verification belongs to QC/deploy. `/__preview` harness available.
+- [⏳] Bước 9: SDK regen — deferred to QC (needs backend :8081).
+
+## 🐛 Tech debt (for QC/known-issues)
+TD-F083-AUTODATA (live SSR enrich course/sponsors/results) · TD-F083-SECTIONFORMS (rich admin forms vs JSON) · TD-F083-RACEPICKER · TD-F083-PREVIEWPANE · SDK-regen-pending · live-verify-pending.
 
 ```
 PASS src/modules/landing/landing.service.spec.ts
