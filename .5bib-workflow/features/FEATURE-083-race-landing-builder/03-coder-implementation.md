@@ -40,13 +40,20 @@
 - ✏️ `backend/src/modules/app.module.ts` (register LandingModule)
 - **Typecheck:** `npx tsc --noEmit` → 0 landing errors. (Pre-existing unrelated: `vi` global in upload.*.spec.ts.)
 
-## ⏳ Pending (next turns — Scope Lock remaining)
-1. `landing.service.spec.ts` unit tests (TC-83-01..20 mapping — 12 mandatory per plan).
-2. ADJUSTMENT #1: `upload.service.ts` + `upload.controller.ts` thêm `folder` param (backward-compat).
-3. CLAUDE.md: Redis registry + S3 lifecycle rule 7.
-4. SDK regen `pnpm generate:api`.
-5. Frontend: `(landing)` route-group + `RaceLandingRenderer` + **10 section component premium** (chuẩn prototype) + middleware subdomain + next.config assetPrefix host-conditional.
-6. Admin: builder (list + [id]/builder + components) + `landing-{api,hooks,labels}.ts` + nav-groups.
+## ✅ Backend slice DONE (milestone M2)
+1. ✅ `landing.service.spec.ts` — **15 tests PASS** (TC-83-01/02/04/06/07/08/09/10/11/13/19 + ADJUSTMENT#2 + 404/empty edges). Jest, mocked models + redis-null graceful path.
+2. ✅ ADJUSTMENT #1: `upload.service.ts` + `upload.controller.ts` — optional `folder` param (sanitized, path-traversal-safe, backward-compat: no folder → date prefix). tsc clean.
+3. ✅ CLAUDE.md — Redis registry (`landing:slug`/`landing:resolve`/`landing-lock`/`ratelimit:landing-view`) + S3 lifecycle rule 7 (`landing-assets/` no-expire).
+
+## ⏳ Pending (next milestones)
+4. **SDK regen** `pnpm --filter admin generate:api` — DEFERRED: reads `http://localhost:8081/swagger/json`, needs backend running. Done as part of admin phase.
+5. **Frontend (M3):** `(landing)` route-group + `RaceLandingRenderer` + **10 section component premium** (chuẩn prototype) + middleware subdomain + next.config assetPrefix host-conditional.
+6. **Admin (M4):** builder (list + [id]/builder + components) + `landing-{api,hooks,labels}.ts` + nav-groups + SDK regen.
+
+```
+PASS src/modules/landing/landing.service.spec.ts
+Tests: 15 passed, 15 total
+```
 
 ## 🛑 PAUSE/Confirmation log
 | Date | What | Danny |

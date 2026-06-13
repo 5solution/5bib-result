@@ -177,6 +177,10 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `dashboard:cron-lock:sparkline` | F-023 SETNX anti-stampede lock cho cron `EVERY_HOUR` `DashboardAggregatorCron.aggregate()` refresh sparkline cache. KHÔNG đổi với F-059. | 3300s |
 | `admin:course-stats:<raceId>:<courseId>` | F-068 admin `CourseDataOpsService.getStats()` 4-field DTO cache (rowCount via Mongo countDocuments + sync_logs latest + apiUrl mask + cron status). Bounds multi-admin polling cost — 5s × N admins → max N Mongo hits/5s per resource. DEL on mutation: reset-data + clear-apiUrl + disable-and-reset (via `invalidateStatsCache` helper in service). | 5s |
 | `reset-lock:<raceId>:<courseId>` | F-068 Danny chốt H — Redis SETNX serializes concurrent reset-data + disable-and-reset (1 winner xóa, others nhận 409 `RESET_IN_PROGRESS` VN message "Đang có người khác xóa, chờ vài giây"). Port pattern F-018 medical:incident-lock / F-019 awards:state-lock. Released in `try/finally` block even on throw. Pre-checks (404 + race=live confirm) BEFORE lock acquire so confirm rejection doesn't leak lock. | 30s |
+| `landing:slug:<subdomain>` | F-083 Race Landing public render cache — stores stripped `liveSnapshot` JSON for `GET /api/landings/slug/:slug`. DEL on publish/unpublish/update/delete. Lean-fork F-027 PromoHub cache pattern. | 60s |
+| `landing:resolve:<host>` | F-083 middleware host→slug resolution cache (`GET /api/landings/resolve?host=`). DEL when subdomain changes (pattern `landing:resolve:<subdomain>.*`). | 300s |
+| `landing-lock:<subdomain>` | F-083 SETNX anti-stampede lock during public cache-miss compute (port F-027 `promo-hub-lock`). retry 3×200ms then direct-query fallback. | 5s |
+| `ratelimit:landing-view:<slug>:<ipHash>` | F-083 per-IP view dedup for public landing (reserved Phase 1; analytics Phase 2). | 5m |
 
 Cache invalidation: any admin write (create/update/publish/unpublish/delete/restore on articles OR categories) flushes ALL `articles:*` keys via `scanStream` + pipeline. Rate-limit keys use a different `ratelimit:*` prefix so they survive cache flushes — view/vote dedup state is preserved across admin edits.
 
@@ -246,6 +250,14 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - **Access**: SIGNED URL ONLY — 5min upload PUT, 15min read GET. NO public bucket policy.
 - **Reason**: HĐ dịch vụ là chứng từ kế toán + bằng chứng pháp lý cho merchant/partner relationship. Sau 5 năm pii-anonymization cron strip client.taxId/representative/bankAccount nhưng giữ contractNumber/totalAmount/contractType cho audit analytics.
 - **CRITICAL**: do NOT mix `contracts/` với `result-images/` (24h TTL) — HĐ artifact phải persist 5y. Distinct từ `medical-attachments/` (7y strict PII) và `awards-pdf/` (no expire).
+
+### Lifecycle rule 7 — Race Landing assets (F-083)
+- **Prefix**: `landing-assets/`
+- **Expiration**: NONE (keep indefinitely — landing hero/gallery/schedule-poster images are race-asset artifacts referenced by published landing config; same lifecycle as `courses/`).
+- **Path convention**: `landing-assets/<landingId>/<randomHex>-<originalname>` via extended `UploadService.uploadFile(file, folder)` (FEATURE-083 added optional `folder` param — backward-compat: callers without folder keep the `YYYY-MM-DD/` date prefix).
+- **Max size**: 5MB per image. MIME: png/jpeg/webp (video sections embed external URLs, not uploaded).
+- **Reason**: per-race microsite assets must persist so a published landing keeps rendering; admin may also reference past races' assets.
+- **CRITICAL**: do NOT mix `landing-assets/` with `result-images/` (24h TTL) — landing images must persist. Distinct from `courses/` (GPX, no PII) and `result-kiosk-sponsors/` (public logos).
 
 
 ## Development Rules

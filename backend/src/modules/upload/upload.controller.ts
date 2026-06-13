@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Post,
   UploadedFile,
@@ -33,15 +34,22 @@ export class UploadController {
           type: 'string',
           format: 'binary',
         },
+        folder: {
+          // FEATURE-083 — optional S3 key prefix (e.g. "landing-assets/<id>").
+          type: 'string',
+        },
       },
     },
   })
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('folder') folder?: string,
+  ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-    const url = await this.uploadService.uploadFile(file);
+    const url = await this.uploadService.uploadFile(file, folder);
     if (!url) {
       throw new BadRequestException('Upload failed');
     }
