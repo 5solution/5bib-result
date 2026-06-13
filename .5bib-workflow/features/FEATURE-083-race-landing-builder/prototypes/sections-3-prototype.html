@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>5BIB Landing — Sections 3 (Gallery + Schedule variants)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --stone:#faf9f7; --stone-2:#f2ede4; --line:#e2dbcd;
+    --ink:#1c1917; --ink-soft:#57534e; --ink-faint:#8a837a;
+    --blue:#1d4ed8; --energy:#ea580c; --energy-hi:#fb923c;
+    --trail:#166534; --night:#0a0a0a; --night-2:#16130f;
+    --ease:cubic-bezier(.16,1,.3,1); --spring:cubic-bezier(.34,1.56,.64,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:var(--stone);-webkit-font-smoothing:antialiased}
+  .sec{padding:clamp(48px,7vw,100px) clamp(20px,5vw,72px);position:relative;overflow:hidden}
+  .shell{max-width:1180px;margin:0 auto;position:relative;z-index:2}
+  .kicker{display:inline-flex;align-items:center;gap:11px;font-family:'JetBrains Mono';font-weight:700;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--energy)}
+  .kicker::before{content:"";width:30px;height:2px;background:var(--energy)}
+  h2{font-family:'Be Vietnam Pro';font-weight:900;letter-spacing:-.02em;line-height:.98;font-size:clamp(30px,5vw,60px);text-transform:uppercase;margin:18px 0 0}
+  h2 em{font-style:normal;color:var(--energy)}
+  .lead{color:var(--ink-soft);font-size:clamp(15px,1.6vw,18px);max-width:58ch;margin-top:16px;line-height:1.65}
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  .d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}
+
+  /* variant chips (config affordance) */
+  .variants{display:inline-flex;align-items:center;gap:6px;margin:24px 0 4px;background:#fff;border:1px solid var(--line);padding:5px;border-radius:999px}
+  .variants .vlbl{font-family:'JetBrains Mono';font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);padding:0 10px 0 8px}
+  .variants button{font-family:'Inter';font-weight:600;font-size:13px;color:var(--ink-soft);background:transparent;border:0;padding:8px 16px;border-radius:999px;cursor:pointer;transition:.2s}
+  .variants button.on{color:#fff;background:var(--ink)}
+  .variants.dark{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}
+  .variants.dark .vlbl{color:rgba(255,255,255,.5)}
+  .variants.dark button{color:rgba(255,255,255,.7)}
+  .variants.dark button.on{background:var(--energy);color:#fff}
+
+  /* ===== GALLERY ===== */
+  #gallery{background:var(--night);color:#fff}
+  #gallery .mesh{position:absolute;inset:0;z-index:0;background:radial-gradient(70% 60% at 90% 0%,rgba(29,78,216,.22),transparent 55%),radial-gradient(60% 60% at 0% 100%,rgba(234,88,12,.2),transparent 55%)}
+  #gallery h2{color:#fff}#gallery .lead{color:rgba(255,255,255,.62)}
+  .gfilter{display:flex;gap:8px;margin:28px 0 22px}
+  .gfilter button{font-family:'Be Vietnam Pro';font-weight:700;font-size:13px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);padding:8px 18px;border-radius:999px;cursor:pointer;transition:.2s}
+  .gfilter button.on{background:#fff;color:var(--ink);border-color:#fff}
+  .bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:158px;gap:12px}
+  @media(max-width:820px){.bento{grid-template-columns:repeat(2,1fr);grid-auto-rows:140px}}
+  .tile{position:relative;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#241f1a,#16130f);border:1px solid rgba(255,255,255,.08);cursor:pointer}
+  .tile img{width:100%;height:100%;object-fit:cover;transition:transform .65s var(--ease)}
+  .tile:hover img{transform:scale(1.07)}
+  .tile.big{grid-column:span 2;grid-row:span 2}
+  .tile.wide{grid-column:span 2}
+  @media(max-width:820px){.tile.big{grid-column:span 2;grid-row:span 2}.tile.wide{grid-column:span 2}}
+  .tile .ov{position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(10,10,10,.55));opacity:0;transition:opacity .3s}
+  .tile:hover .ov{opacity:1}
+  .play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .play .pb{width:56px;height:56px;border-radius:50%;background:rgba(234,88,12,.92);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px -8px rgba(234,88,12,.8);transition:transform .3s var(--spring)}
+  .tile.big .play .pb{width:72px;height:72px}
+  .tile:hover .play .pb{transform:scale(1.1)}
+  .play .pb svg{width:22px;height:22px;fill:#fff;margin-left:3px}
+  .vtag{position:absolute;top:11px;left:11px;display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono';font-size:10px;font-weight:700;letter-spacing:.1em;color:#fff;background:rgba(10,10,10,.6);border:1px solid rgba(255,255,255,.2);padding:4px 9px;border-radius:7px;backdrop-filter:blur(4px)}
+  .dur{position:absolute;right:11px;bottom:11px;font-family:'JetBrains Mono';font-size:11px;font-weight:700;color:#fff;background:rgba(10,10,10,.65);padding:3px 8px;border-radius:6px}
+  .gfoot{margin-top:18px;font-family:'JetBrains Mono';font-size:12px;color:rgba(255,255,255,.5)}
+
+  /* ===== SCHEDULE (timeline + image variant) ===== */
+  #schedule{background:var(--stone)}
+  .tl{margin-top:8px;position:relative;padding-left:30px}
+  .tl::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .daylabel{font-family:'Be Vietnam Pro';font-weight:800;font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--energy);margin:22px 0 14px}
+  .daylabel:first-child{margin-top:0}
+  .tlitem{position:relative;padding:0 0 22px}
+  .tlitem::before{content:"";position:absolute;left:-30px;top:4px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--energy)}
+  .tlitem.key::before{background:var(--energy)}
+  .tltime{font-family:'JetBrains Mono';font-weight:700;font-size:13px;color:var(--ink)}
+  .tltitle{font-family:'Be Vietnam Pro';font-weight:800;font-size:18px;margin:3px 0 4px}
+  .tlloc{font-size:13.5px;color:var(--ink-faint)}
+
+  /* schedule image variant */
+  .schedimg{margin-top:8px;display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+  .uploadtag{display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono';font-size:11px;letter-spacing:.06em;color:var(--ink-soft);background:#fff;border:1px solid var(--line);padding:8px 13px;border-radius:10px;margin-top:14px}
+  .uploadtag svg{width:15px;height:15px;stroke:var(--trail);fill:none;stroke-width:1.9}
+  .poster{width:min(420px,100%);aspect-ratio:4/5;border-radius:18px;overflow:hidden;position:relative;
+    box-shadow:0 30px 60px -34px rgba(28,25,23,.55);border:1px solid var(--line)}
+  .poster .bg{position:absolute;inset:0}.poster .bg img{width:100%;height:100%;object-fit:cover}
+  .poster .ov{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.5),rgba(10,10,10,.82))}
+  .poster .pc{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;padding:26px;color:#fff}
+  .poster .pk{font-family:'JetBrains Mono';font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--energy-hi)}
+  .poster .pt{font-family:'Be Vietnam Pro';font-weight:900;font-size:30px;line-height:.96;text-transform:uppercase;margin:6px 0 2px}
+  .poster .pd{font-size:12.5px;color:rgba(255,255,255,.7);margin-bottom:auto}
+  .poster .prow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;border-top:1px solid rgba(255,255,255,.16)}
+  .poster .prow .tt{font-family:'JetBrains Mono';font-weight:700;font-size:13px;color:var(--energy-hi)}
+  .poster .prow .nn{font-weight:600;font-size:14px;text-align:right}
+  .poster .pf{margin-top:14px;font-family:'JetBrains Mono';font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+  .schednote{max-width:320px;color:var(--ink-soft);font-size:14.5px;line-height:1.6}
+  .schednote b{color:var(--ink)}
+
+  .demobar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:4px;justify-content:center;background:rgba(250,249,247,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:10px}
+  .demobar .tag{font-family:'JetBrains Mono';font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);padding-right:12px;margin-right:6px;border-right:1px solid var(--line)}
+  .demobar a{font-family:'Inter';font-size:13px;font-weight:600;color:var(--ink-soft);text-decoration:none;padding:7px 14px;border-radius:999px}
+  .demobar a:hover{background:#fff;color:var(--ink)}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+  <div class="demobar"><span class="tag">Section library · demo</span><a href="#gallery">Thư viện</a><a href="#schedule">Lịch trình</a></div>
+
+  <!-- ===== THƯ VIỆN ẢNH & VIDEO ===== -->
+  <section class="sec" id="gallery" data-section="gallery">
+    <div class="mesh"></div>
+    <div class="shell">
+      <span class="kicker reveal">Thư viện · Gallery</span>
+      <h2 class="reveal d1">Khoảnh khắc <em>đường đua</em></h2>
+      <p class="lead reveal d2">Ảnh &amp; video từ các mùa giải — trộn lẫn trong lưới bento, bấm để xem lớn / phát video.</p>
+      <div class="gfilter reveal d2">
+        <button class="on" data-f="all">Tất cả</button><button data-f="image">Ảnh</button><button data-f="video">Video</button>
+      </div>
+      <div class="bento reveal d2" id="bento">
+        <div class="tile big" data-type="video">
+          <img src="https://images.unsplash.com/photo-1502904550040-7534597429ae?auto=format&fit=crop&w=900&q=75" alt="">
+          <div class="ov"></div><span class="vtag"><svg width="11" height="11" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>VIDEO</span>
+          <div class="play"><span class="pb"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span></div><span class="dur">2:14</span>
+        </div>
+        <div class="tile" data-type="image"><img src="https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=500&q=72" alt=""><div class="ov"></div></div>
+        <div class="tile" data-type="image"><img src="https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=500&q=72" alt=""><div class="ov"></div></div>
+        <div class="tile wide" data-type="image"><img src="https://images.unsplash.com/photo-1486218119243-13883505764c?auto=format&fit=crop&w=900&q=72" alt=""><div class="ov"></div></div>
+        <div class="tile" data-type="image"><img src="https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=500&q=72" alt=""><div class="ov"></div></div>
+        <div class="tile" data-type="video">
+          <img src="https://images.unsplash.com/photo-1571008887538-b36bb32f4571?auto=format&fit=crop&w=500&q=72" alt="">
+          <div class="ov"></div><span class="vtag"><svg width="11" height="11" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>VIDEO</span>
+          <div class="play"><span class="pb"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span></div><span class="dur">0:48</span>
+        </div>
+        <div class="tile wide" data-type="image"><img src="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=900&q=72" alt=""><div class="ov"></div></div>
+      </div>
+      <div class="gfoot reveal">42 ảnh · 6 video · nguồn từ album giải + 5pix</div>
+    </div>
+  </section>
+
+  <!-- ===== LỊCH TRÌNH (Timeline / Ảnh) ===== -->
+  <section class="sec" id="schedule" data-section="schedule">
+    <div class="shell">
+      <span class="kicker reveal">Lịch trình · Schedule</span>
+      <h2 class="reveal d1">Cuối tuần <em>đua</em></h2>
+      <p class="lead reveal d2">2 chế độ cấu hình: <b>Timeline</b> (5BIB render từ dữ liệu) hoặc <b>Ảnh</b> (BTC tự thiết kế &amp; tải lên).</p>
+
+      <div class="variants reveal d2" id="sv">
+        <span class="vlbl">Chế độ</span>
+        <button class="on" data-v="timeline">Timeline</button>
+        <button data-v="image">Ảnh</button>
+      </div>
+
+      <!-- variant: timeline -->
+      <div id="sched-timeline">
+        <div class="tl reveal d2">
+          <div class="daylabel">Thứ 7 · 13.03 — Nhận BIB &amp; EXPO</div>
+          <div class="tlitem"><div class="tltime">08:00 – 18:00</div><div class="tltitle">Race EXPO &amp; nhận racekit</div><div class="tlloc">Quảng trường Sun World, Bãi Cháy</div></div>
+          <div class="tlitem"><div class="tltime">16:00</div><div class="tltitle">Briefing kỹ thuật 42K</div><div class="tlloc">Sân khấu chính</div></div>
+          <div class="daylabel">Chủ Nhật · 14.03 — Ngày đua</div>
+          <div class="tlitem key"><div class="tltime">04:00</div><div class="tltitle">Xuất phát 42K (Wave A)</div><div class="tlloc">Cổng Start chính</div></div>
+          <div class="tlitem key"><div class="tltime">05:00 – 05:30</div><div class="tltitle">Xuất phát 21K · 10K · 5K</div><div class="tlloc">Cổng Start chính</div></div>
+          <div class="tlitem"><div class="tltime">09:30</div><div class="tltitle">Lễ trao giải &amp; Gala</div><div class="tlloc">Sân khấu chính</div></div>
+        </div>
+      </div>
+
+      <!-- variant: image -->
+      <div id="sched-image" style="display:none">
+        <div class="schedimg">
+          <div class="poster">
+            <div class="bg"><img src="https://images.unsplash.com/photo-1486218119243-13883505764c?auto=format&fit=crop&w=700&q=78" alt=""></div>
+            <div class="ov"></div>
+            <div class="pc">
+              <div class="pk">Vịnh Hạ Long Marathon</div>
+              <div class="pt">Lịch trình<br>sự kiện</div>
+              <div class="pd">13–14 Tháng 3, 2026 · Bãi Cháy</div>
+              <div class="prow"><span class="tt">SAT 08:00</span><span class="nn">Nhận BIB &amp; EXPO</span></div>
+              <div class="prow"><span class="tt">SUN 04:00</span><span class="nn">Xuất phát 42K</span></div>
+              <div class="prow"><span class="tt">SUN 05:00</span><span class="nn">Xuất phát 21·10·5K</span></div>
+              <div class="prow"><span class="tt">SUN 09:30</span><span class="nn">Trao giải &amp; Gala</span></div>
+              <div class="pf">Thiết kế bởi BTC · halongmarathon.vn</div>
+            </div>
+          </div>
+          <div class="schednote">
+            <b>Chế độ Ảnh:</b> BTC tải lên một ảnh lịch trình tự thiết kế (poster/infographic) — 5BIB hiển thị nguyên ảnh, responsive, bấm phóng to.
+            <div class="uploadtag"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>lich-trinh-halong-2026.jpg · 1.4 MB</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+<script>
+  // gallery filter
+  document.querySelectorAll('.gfilter button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.gfilter button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    const f=b.dataset.f;document.querySelectorAll('#bento .tile').forEach(t=>{t.style.display=(f==='all'||t.dataset.type===f)?'':'none';});
+  }));
+  // schedule variant
+  function setSched(v){
+    document.querySelectorAll('#sv button').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
+    document.getElementById('sched-timeline').style.display=v==='timeline'?'':'none';
+    document.getElementById('sched-image').style.display=v==='image'?'':'none';
+  }
+  document.querySelectorAll('#sv button').forEach(b=>b.addEventListener('click',()=>setSched(b.dataset.v)));
+
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.1});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+  const q=new URLSearchParams(location.search),only=q.get('only');
+  if(only){document.querySelectorAll('section[data-section]').forEach(s=>{if(s.dataset.section!==only)s.style.display='none';});
+    document.querySelector('.demobar').style.display='none';
+    document.querySelectorAll('#'+only+' .reveal').forEach(el=>el.classList.add('in'));}
+  if(q.get('v')==='image')setSched('image');
+</script>
+</body>
+</html>

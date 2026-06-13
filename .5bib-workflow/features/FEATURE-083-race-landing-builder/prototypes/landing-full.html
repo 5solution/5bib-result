@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vịnh Hạ Long Marathon 2026 — Landing (FEATURE-083 full)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --stone:#faf9f7; --stone-2:#f2ede4; --line:#e2dbcd;
+    --ink:#1c1917; --ink-soft:#57534e; --ink-faint:#8a837a;
+    --blue:#1d4ed8; --energy:#ea580c; --energy-hi:#fb923c; --energy-50:#fff3ec;
+    --trail:#166534; --gold:#d4a017; --silver:#7d8590; --bronze:#a8632a;
+    --night:#0a0a0a; --night-2:#16130f;
+    --ease:cubic-bezier(.16,1,.3,1); --spring:cubic-bezier(.34,1.56,.64,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-padding-top:74px}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:var(--stone);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .sec{padding:clamp(54px,7vw,104px) clamp(20px,5vw,72px);position:relative;overflow:hidden}
+  .shell{max-width:1180px;margin:0 auto;position:relative;z-index:2}
+  .kicker{display:inline-flex;align-items:center;gap:11px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--energy)}
+  .kicker::before{content:"";width:30px;height:2px;background:var(--energy)}
+  h2{font-family:'Be Vietnam Pro';font-weight:900;letter-spacing:-.02em;line-height:.98;font-size:clamp(30px,5vw,60px);text-transform:uppercase;margin:18px 0 0}
+  h2 em{font-style:normal;color:var(--energy)}
+  .lead{color:var(--ink-soft);font-size:clamp(15px,1.6vw,18px);max-width:56ch;margin-top:16px;line-height:1.65}
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  .d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}.d5{transition-delay:.4s}.d6{transition-delay:.48s}
+
+  /* ===== NAV ===== */
+  .nav{position:fixed;top:0;left:0;right:0;z-index:60;display:flex;align-items:center;justify-content:space-between;
+    padding:14px clamp(20px,5vw,48px);transition:background .4s var(--ease),box-shadow .4s,border-color .4s;border-bottom:1px solid transparent}
+  .nav.solid{background:rgba(250,249,247,.86);backdrop-filter:blur(16px);border-color:var(--line);box-shadow:0 8px 30px -20px rgba(0,0,0,.4)}
+  .brand{font-family:'Be Vietnam Pro';font-weight:900;font-size:15px;letter-spacing:.01em;text-transform:uppercase;color:#fff;transition:color .4s}
+  .brand .t{color:var(--energy-hi)}
+  .nav.solid .brand{color:var(--ink)}
+  .navlinks{display:flex;gap:4px}
+  .navlinks a{font-size:13.5px;font-weight:500;color:rgba(255,255,255,.82);text-decoration:none;padding:8px 13px;border-radius:999px;transition:.25s}
+  .navlinks a:hover{background:rgba(255,255,255,.12);color:#fff}
+  .nav.solid .navlinks a{color:var(--ink-soft)}
+  .nav.solid .navlinks a:hover{background:#fff;color:var(--ink)}
+  .navcta{font-weight:600;font-size:13.5px;color:#fff;background:var(--energy);padding:10px 20px;border-radius:999px;text-decoration:none;transition:transform .3s var(--spring)}
+  .navcta:hover{transform:translateY(-2px)}
+  @media(max-width:900px){.navlinks{display:none}}
+
+  /* ===== HERO ===== */
+  .hero{position:relative;min-height:100svh;width:100%;overflow:hidden;isolation:isolate;display:flex;flex-direction:column;justify-content:flex-end}
+  .hero .media{position:absolute;inset:0;z-index:0}
+  .hero .media img{width:100%;height:100%;object-fit:cover;animation:kenburns 24s var(--ease) infinite alternate}
+  @keyframes kenburns{from{transform:scale(1.08)}to{transform:scale(1.2) translate(-2%,-2%)}}
+  .hero .scrim{position:absolute;inset:0;z-index:1;pointer-events:none;background:
+    linear-gradient(180deg,rgba(10,10,10,.6) 0%,rgba(10,10,10,.05) 34%,rgba(10,10,10,.4) 62%,rgba(10,10,10,.92) 100%),
+    radial-gradient(120% 80% at 12% 90%,rgba(234,88,12,.26),transparent 55%)}
+  .hero .vig{position:absolute;inset:0;z-index:1;box-shadow:inset 0 0 240px 40px rgba(0,0,0,.7);pointer-events:none}
+  .hwrap{position:relative;z-index:5;max-width:1180px;margin:0 auto;width:100%;padding:0 clamp(20px,5vw,72px) clamp(40px,6vw,72px)}
+  .hkick{display:inline-flex;align-items:center;gap:10px;font-family:'JetBrains Mono';font-weight:700;font-size:clamp(11px,1.1vw,13px);letter-spacing:.28em;text-transform:uppercase;color:var(--energy-hi);margin-bottom:20px}
+  .hkick::before{content:"";width:34px;height:2px;background:var(--energy)}
+  .hkick .dot{width:7px;height:7px;border-radius:50%;background:var(--energy);animation:ping 2s var(--ease) infinite}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(234,88,12,.6)}100%{box-shadow:0 0 0 14px rgba(234,88,12,0)}}
+  h1{font-family:'Be Vietnam Pro';font-weight:900;line-height:.92;letter-spacing:-.02em;font-size:clamp(46px,8.5vw,120px);text-transform:uppercase;color:#fff}
+  h1 .l2{display:block;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.85)}
+  h1 em{font-style:italic;color:var(--energy-hi)}
+  .hmeta{display:flex;flex-wrap:wrap;gap:10px 26px;margin:26px 0 0;font-size:clamp(13px,1.4vw,16px);color:rgba(255,255,255,.84);font-weight:500}
+  .hmeta span{display:inline-flex;align-items:center;gap:9px}
+  .hmeta svg{width:17px;height:17px;stroke:var(--energy-hi);fill:none;stroke-width:1.8}
+  .count{display:flex;gap:10px;margin:30px 0 4px}
+  .count .blk{min-width:74px;padding:12px 8px 10px;text-align:center;border-radius:14px;background:rgba(255,255,255,.06);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12)}
+  .count .n{font-family:'JetBrains Mono';font-weight:700;font-size:clamp(24px,3.2vw,38px);line-height:1;color:#fff;font-variant-numeric:tabular-nums}
+  .count .u{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-top:7px}
+  .hcta{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+  .btn{display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:clamp(14px,1.5vw,16px);padding:16px 28px;border-radius:999px;text-decoration:none;cursor:pointer;border:0;transition:transform .35s var(--spring),box-shadow .35s}
+  .btn .ar{transition:transform .35s var(--spring)}.btn:hover .ar{transform:translateX(5px)}
+  .btn-primary{position:relative;color:#fff;background:var(--energy);overflow:hidden;box-shadow:0 12px 34px -10px rgba(234,88,12,.75)}
+  .btn-primary::after{content:"";position:absolute;inset:0;transform:translateX(-130%) skewX(-18deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.42),transparent);transition:transform .7s var(--ease)}
+  .btn-primary:hover{transform:translateY(-3px)}.btn-primary:hover::after{transform:translateX(130%) skewX(-18deg)}
+  .btn-ghost{color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.28);backdrop-filter:blur(6px)}
+  .btn-ghost:hover{background:rgba(255,255,255,.16);transform:translateY(-3px)}
+
+  /* ===== COURSE ===== */
+  #course{background:radial-gradient(70% 50% at 100% 0%,rgba(29,78,216,.05),transparent 60%),radial-gradient(60% 50% at 0% 100%,rgba(22,101,52,.06),transparent 60%),var(--stone)}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:32px 0 26px}
+  .tab{font-family:'Be Vietnam Pro';font-weight:800;font-size:15px;color:var(--ink-soft);background:#fff;border:1.5px solid var(--line);padding:11px 22px;border-radius:999px;cursor:pointer;transition:.25s var(--ease)}
+  .tab:hover{border-color:var(--ink-faint)}.tab.on{color:#fff;background:var(--ink);border-color:var(--ink)}
+  .tab .km{color:var(--energy-hi)}
+  .coursegrid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px}
+  @media(max-width:860px){.coursegrid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:22px;position:relative}
+  .card .ct{font-family:'JetBrains Mono';font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .card .ct svg{width:15px;height:15px;stroke:var(--energy);fill:none;stroke-width:1.8}
+  .mapwrap{aspect-ratio:16/11;border-radius:14px;overflow:hidden;position:relative;background:linear-gradient(135deg,#eef3ee,#e7ede9 60%,#e9efe9)}
+  .mapwrap .topo2{position:absolute;inset:0}.mapwrap .topo2 path{fill:none;stroke:rgba(22,101,52,.16);stroke-width:1}
+  .route{fill:none;stroke:var(--energy);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1400;stroke-dashoffset:1400;transition:stroke-dashoffset 1.6s var(--ease)}
+  .route.in{stroke-dashoffset:0}
+  .pin{fill:#fff;stroke:var(--ink);stroke-width:2}.pin.start{stroke:var(--trail)}.pin.fin{stroke:var(--energy)}.aid{fill:var(--energy);opacity:.9}
+  .elev{width:100%;height:auto;display:block}.elev .grid{stroke:var(--line);stroke-width:1}.elev .area{fill:url(#eg)}
+  .elev .ln{fill:none;stroke:var(--trail);stroke-width:2.5;stroke-linejoin:round;stroke-dasharray:2000;stroke-dashoffset:2000;transition:stroke-dashoffset 1.4s var(--ease) .2s}
+  .elev .ln.in{stroke-dashoffset:0}.elev .as{fill:var(--energy);stroke:#fff;stroke-width:1.5}
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}
+  .stat{background:var(--stone-2);border-radius:12px;padding:13px 15px}
+  .stat .l{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-family:'JetBrains Mono'}
+  .stat .v{font-family:'Be Vietnam Pro';font-weight:800;font-size:22px;margin-top:3px}.stat .v small{font-weight:600;font-size:13px;color:var(--ink-soft)}
+  .terr{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono';font-size:11px;letter-spacing:.12em;text-transform:uppercase;background:var(--energy-50);color:#9a3d12;border:1px solid #f6d2bd;padding:6px 12px;border-radius:999px;margin-top:14px}
+
+  /* ===== SCHEDULE ===== */
+  #schedule{background:var(--stone)}
+  .tl{margin-top:40px;position:relative;padding-left:30px}
+  .tl::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .daylabel{font-family:'Be Vietnam Pro';font-weight:800;font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--energy);margin:26px 0 14px}
+  .daylabel:first-child{margin-top:0}
+  .tlitem{position:relative;padding:0 0 22px}
+  .tlitem::before{content:"";position:absolute;left:-30px;top:4px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--energy)}
+  .tlitem.key::before{background:var(--energy)}
+  .tltime{font-family:'JetBrains Mono';font-weight:700;font-size:13px;color:var(--ink);letter-spacing:.04em}
+  .tltitle{font-family:'Be Vietnam Pro';font-weight:800;font-size:18px;margin:3px 0 4px}
+  .tlloc{font-size:13.5px;color:var(--ink-faint);display:inline-flex;align-items:center;gap:6px}
+  .tlloc svg{width:14px;height:14px;stroke:var(--ink-faint);fill:none;stroke-width:1.8}
+
+  /* ===== PRICING ===== */
+  #pricing{background:var(--stone-2)}
+  .price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:38px}
+  @media(max-width:980px){.price-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:520px){.price-grid{grid-template-columns:1fr}}
+  .pcard{background:#fff;border:1px solid var(--line);border-radius:20px;padding:24px 22px;display:flex;flex-direction:column;position:relative;transition:transform .35s var(--ease),box-shadow .35s var(--ease)}
+  .pcard:hover{transform:translateY(-6px);box-shadow:0 26px 50px -28px rgba(28,25,23,.4)}
+  .pcard.feat{border:2px solid var(--energy);box-shadow:0 26px 60px -30px rgba(234,88,12,.5)}
+  .pcard .pop{position:absolute;top:-12px;left:22px;background:var(--energy);color:#fff;font-family:'JetBrains Mono';font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:6px 12px;border-radius:999px}
+  .pdist{font-family:'Be Vietnam Pro';font-weight:900;font-size:30px}.pdist span{font-size:14px;color:var(--ink-faint);font-weight:700;letter-spacing:.1em}
+  .pold{font-family:'JetBrains Mono';font-size:13px;color:var(--ink-faint);text-decoration:line-through;margin-top:14px}
+  .pnow{display:flex;align-items:baseline;gap:6px;margin-top:2px}.pnow b{font-family:'Be Vietnam Pro';font-weight:900;font-size:30px}.pnow .cur{font-family:'JetBrains Mono';font-size:13px;color:var(--ink-soft)}
+  .eb{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono';font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--trail);background:#e7f3ea;border:1px solid #bfe0c8;padding:5px 10px;border-radius:999px;margin-top:12px;align-self:flex-start}
+  .inc{list-style:none;margin:18px 0 0;padding:16px 0 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:9px}
+  .inc li{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--ink-soft)}.inc li svg{width:16px;height:16px;stroke:var(--trail);fill:none;stroke-width:2.4;flex:none}
+  .pbtn{margin-top:20px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font-weight:600;font-size:14.5px;padding:13px;border-radius:12px;text-decoration:none;border:1.5px solid var(--ink);color:var(--ink);background:#fff;transition:.3s var(--ease)}
+  .pbtn:hover{background:var(--ink);color:#fff}.pcard.feat .pbtn{background:var(--energy);border-color:var(--energy);color:#fff}.pcard.feat .pbtn:hover{background:#c2410c}
+  .pbtn .ar{transition:transform .3s var(--spring)}.pbtn:hover .ar{transform:translateX(4px)}
+  .pnote{margin-top:24px;font-size:13px;color:var(--ink-faint);display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono'}
+  .pnote svg{width:15px;height:15px;stroke:var(--ink-faint);fill:none;stroke-width:1.8}
+
+  /* ===== RESULTS ===== */
+  #results{background:var(--stone-2)}
+  .frame{margin-top:34px;background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 30px 60px -40px rgba(28,25,23,.45)}
+  .frbar{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line);background:#fbfaf8}
+  .frbar .dots{display:flex;gap:6px}.frbar .dots i{width:11px;height:11px;border-radius:50%;background:var(--line);display:block}
+  .frbar .url{flex:1;font-family:'JetBrains Mono';font-size:12.5px;color:var(--ink-soft);background:var(--stone);border:1px solid var(--line);border-radius:8px;padding:6px 12px;display:flex;align-items:center;gap:8px}
+  .frbar .url svg{width:13px;height:13px;stroke:var(--trail);fill:none;stroke-width:2}
+  .embedchip{display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono';font-size:11px;letter-spacing:.08em;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;color:var(--ink-soft)}
+  .embedchip .live{width:8px;height:8px;border-radius:50%;background:var(--trail);animation:lp 1.8s var(--ease) infinite}
+  @keyframes lp{100%{box-shadow:0 0 0 9px rgba(22,101,52,0)}}
+  .frbody{padding:18px}
+  .rtabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .rtab{font-family:'Be Vietnam Pro';font-weight:700;font-size:13px;color:var(--ink-soft);background:var(--stone-2);border:1px solid var(--line);padding:8px 16px;border-radius:999px;cursor:pointer}
+  .rtab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .rsearch{display:flex;gap:10px;margin-bottom:14px}
+  .rsearch input{flex:1;border:1.5px solid var(--line);border-radius:11px;padding:11px 15px;font-size:14px;font-family:inherit;outline:none}
+  .rsearch input:focus{border-color:var(--energy)}.rsearch button{background:var(--ink);color:#fff;border:0;border-radius:11px;padding:0 20px;font-weight:600;font-size:14px;cursor:pointer}
+  table.res{width:100%;border-collapse:collapse;font-size:14px}
+  table.res th{text-align:left;font-family:'JetBrains Mono';font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);padding:9px 10px;border-bottom:1px solid var(--line)}
+  table.res td{padding:12px 10px;border-bottom:1px solid var(--stone-2)}
+  table.res .rk{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono';font-weight:700;font-size:13px;background:var(--stone-2);color:var(--ink-soft)}
+  tr.m1 .rk{background:#fdf3d6;color:#9a6b00;box-shadow:inset 0 0 0 1.5px var(--gold)}
+  tr.m2 .rk{background:#eef1f3;color:#4b545c;box-shadow:inset 0 0 0 1.5px var(--silver)}
+  tr.m3 .rk{background:#f7e9dd;color:#8a4a1c;box-shadow:inset 0 0 0 1.5px var(--bronze)}
+  table.res .nm{font-weight:600}table.res .nm small{display:block;color:var(--ink-faint);font-weight:400;font-size:12px}
+  table.res .tm{font-family:'JetBrains Mono';font-weight:700}table.res .pc{font-family:'JetBrains Mono';color:var(--ink-soft)}
+  .frfoot{padding:13px 18px;border-top:1px solid var(--line);text-align:center}
+  .frfoot a{color:var(--energy);font-weight:600;font-size:14px;text-decoration:none}
+
+  /* ===== PHOTOS ===== */
+  #photos{background:var(--night);color:#fff}
+  #photos .mesh{position:absolute;inset:0;z-index:0;background:radial-gradient(70% 60% at 90% 0%,rgba(29,78,216,.25),transparent 55%),radial-gradient(60% 60% at 0% 100%,rgba(234,88,12,.22),transparent 55%)}
+  #photos h2{color:#fff}#photos .lead{color:rgba(255,255,255,.62)}
+  .pixsearch{display:flex;gap:10px;max-width:520px;margin:30px 0 24px}
+  .pixsearch input{flex:1;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.16);border-radius:13px;padding:15px 18px;font-size:15px;color:#fff;outline:none;font-family:inherit}
+  .pixsearch input::placeholder{color:rgba(255,255,255,.5)}.pixsearch input:focus{border-color:var(--energy)}
+  .pixsearch button{background:var(--energy);color:#fff;border:0;border-radius:13px;padding:0 26px;font-weight:600;font-size:15px;cursor:pointer;display:flex;align-items:center;gap:9px}
+  .pixgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:760px){.pixgrid{grid-template-columns:repeat(2,1fr)}}
+  .pix{aspect-ratio:1;border-radius:14px;overflow:hidden;position:relative;background:linear-gradient(135deg,#241f1a,#16130f);border:1px solid rgba(255,255,255,.08)}
+  .pix img{width:100%;height:100%;object-fit:cover;transition:transform .6s var(--ease)}.pix:hover img{transform:scale(1.08)}
+  .pix .bib{position:absolute;left:10px;bottom:10px;font-family:'JetBrains Mono';font-weight:700;font-size:11px;background:rgba(10,10,10,.7);border:1px solid rgba(255,255,255,.2);padding:4px 9px;border-radius:7px;color:#fff}
+  .pixfoot{margin-top:18px;font-family:'JetBrains Mono';font-size:12px;color:rgba(255,255,255,.5)}
+
+  /* ===== SPONSORS ===== */
+  #sponsors{background:var(--stone)}
+  .tier{margin-top:34px}
+  .tierlabel{display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono';font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;margin-bottom:16px}
+  .tierlabel::after{content:"";flex:1;height:1px;background:var(--line)}
+  .tierlabel.diamond{color:#2563eb}.tierlabel.gold{color:#b8860b}.tierlabel.silver{color:#6b7280}
+  .logos{display:grid;gap:14px}.logos.d{grid-template-columns:repeat(2,1fr)}.logos.g{grid-template-columns:repeat(4,1fr)}.logos.s{grid-template-columns:repeat(6,1fr)}
+  @media(max-width:760px){.logos.g{grid-template-columns:repeat(2,1fr)}.logos.s{grid-template-columns:repeat(3,1fr)}}
+  .logo{background:#fff;border:1px solid var(--line);border-radius:16px;display:flex;align-items:center;justify-content:center;font-family:'Be Vietnam Pro';font-weight:900;color:var(--ink);transition:.3s var(--ease)}
+  .logo:hover{border-color:var(--ink-faint);transform:translateY(-3px)}
+  .logos.d .logo{height:108px;font-size:28px}.logos.g .logo{height:84px;font-size:20px;color:var(--ink-soft)}.logos.s .logo{height:64px;font-size:15px;color:var(--ink-faint)}
+  .logo .t{color:var(--energy)}
+
+  /* ===== CONTACT ===== */
+  #contact{background:var(--night);color:#fff}
+  #contact .mesh{position:absolute;inset:0;z-index:0;background:radial-gradient(70% 60% at 88% 0%,rgba(29,78,216,.3),transparent 55%),radial-gradient(60% 60% at 0% 100%,rgba(234,88,12,.32),transparent 55%)}
+  #contact h2{color:#fff}#contact .lead{color:rgba(255,255,255,.62)}
+  .cgrid{display:grid;grid-template-columns:1.1fr .9fr;gap:30px;margin-top:38px;align-items:start}
+  @media(max-width:860px){.cgrid{grid-template-columns:1fr}}
+  .crow{display:flex;align-items:center;gap:14px;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+  .crow .ic{width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex:none}
+  .crow .ic svg{width:19px;height:19px;stroke:var(--energy-hi);fill:none;stroke-width:1.8}
+  .crow .k{font-family:'JetBrains Mono';font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+  .crow .val{font-weight:600;font-size:16px;margin-top:2px}
+  .socials{display:flex;gap:10px;margin-top:24px;flex-wrap:wrap}
+  .soc{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;transition:.25s var(--spring)}
+  .soc:hover{transform:translateY(-4px)}.soc svg{width:20px;height:20px;fill:currentColor}
+  .chatcard{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.13);border-radius:20px;padding:24px}
+  .chatcard .h{font-family:'Be Vietnam Pro';font-weight:800;font-size:19px}
+  .chatcard .s{color:rgba(255,255,255,.55);font-size:14px;margin:6px 0 18px;line-height:1.6}
+  .chat{display:flex;align-items:center;gap:13px;width:100%;padding:15px 18px;border-radius:14px;text-decoration:none;font-weight:600;font-size:15px;color:#fff;margin-bottom:11px;transition:.3s var(--spring)}
+  .chat:hover{transform:translateX(4px)}.chat.zalo{background:#0068ff}.chat.fb{background:#1877f2}
+  .chat .ci{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex:none}
+  .chat .ci svg{width:19px;height:19px;fill:#fff}.chat .ci b{font-family:'Be Vietnam Pro';font-weight:900;font-size:15px;color:#fff}
+  .chat small{display:block;font-weight:400;font-size:12px;color:rgba(255,255,255,.7);margin-top:1px}.chat .ar{margin-left:auto;opacity:.7}
+  .finalcta{margin-top:46px;border-top:1px solid rgba(255,255,255,.12);padding-top:34px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  .finalcta .big{font-family:'Be Vietnam Pro';font-weight:900;font-size:clamp(24px,3.4vw,40px);text-transform:uppercase}
+  .finalcta .big em{font-style:normal;color:var(--energy-hi)}
+  .ctabtn{display:inline-flex;align-items:center;gap:11px;background:var(--energy);color:#fff;font-weight:600;font-size:16px;padding:17px 30px;border-radius:999px;text-decoration:none;box-shadow:0 14px 36px -12px rgba(234,88,12,.7);transition:transform .35s var(--spring)}
+  .ctabtn:hover{transform:translateY(-3px)}
+
+  /* ===== FOOTER ===== */
+  footer{background:#070706;color:rgba(255,255,255,.6);padding:54px clamp(20px,5vw,72px) 32px}
+  .foot{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:32px}
+  @media(max-width:760px){.foot{grid-template-columns:1fr}}
+  .foot .fb{font-family:'Be Vietnam Pro';font-weight:900;font-size:20px;text-transform:uppercase;color:#fff}
+  .foot .fb .t{color:var(--energy-hi)}
+  .foot p{font-size:13.5px;line-height:1.6;margin-top:12px;max-width:34ch}
+  .foot h4{font-family:'JetBrains Mono';font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:14px}
+  .foot a{display:block;color:rgba(255,255,255,.7);text-decoration:none;font-size:14px;padding:5px 0;transition:.2s}.foot a:hover{color:#fff}
+  .footbar{max-width:1180px;margin:34px auto 0;padding-top:22px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12.5px;font-family:'JetBrains Mono'}
+  .footbar .pw b{color:rgba(255,255,255,.85);font-family:'Be Vietnam Pro';font-weight:800}
+
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}.route,.elev .ln{stroke-dashoffset:0!important}}
+</style>
+</head>
+<body>
+
+  <nav class="nav" id="nav">
+    <a href="#top" class="brand">Hạ Long<span class="t"> Marathon</span></a>
+    <div class="navlinks">
+      <a href="#course">Cung đường</a><a href="#schedule">Lịch trình</a><a href="#pricing">Vé</a>
+      <a href="#results">Kết quả</a><a href="#photos">Ảnh</a><a href="#sponsors">Tài trợ</a><a href="#contact">Liên hệ</a>
+    </div>
+    <a href="#pricing" class="navcta">Đăng ký</a>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero" id="top">
+    <div class="media"><img src="https://images.unsplash.com/photo-1502904550040-7534597429ae?auto=format&fit=crop&w=1800&q=80" alt="" /></div>
+    <div class="scrim"></div><div class="vig"></div>
+    <div class="hwrap">
+      <span class="hkick reveal"><span class="dot"></span>Ultra Trail · Quảng Ninh · 14.03.2026</span>
+      <h1><span class="reveal d1">Vịnh Hạ Long</span><span class="l2 reveal d2">Marathon<em>.</em></span></h1>
+      <div class="hmeta reveal d3">
+        <span><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>14 Tháng 3, 2026</span>
+        <span><svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Bãi Cháy, Quảng Ninh</span>
+        <span><svg viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>5K · 10K · 21K · 42K</span>
+      </div>
+      <div class="count reveal d4">
+        <div class="blk"><div class="n" id="dd">00</div><div class="u">Ngày</div></div>
+        <div class="blk"><div class="n" id="hh">00</div><div class="u">Giờ</div></div>
+        <div class="blk"><div class="n" id="mm">00</div><div class="u">Phút</div></div>
+        <div class="blk"><div class="n" id="ss">00</div><div class="u">Giây</div></div>
+      </div>
+      <div class="hcta reveal d5">
+        <a class="btn btn-primary" href="#pricing">Đăng ký ngay <span class="ar">→</span></a>
+        <a class="btn btn-ghost" href="#course">Xem cung đường</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- COURSE -->
+  <section class="sec" id="course">
+    <div class="shell">
+      <span class="kicker reveal">Cung đường · Courses</span>
+      <h2 class="reveal d1">Chinh phục <em>4 cự ly</em></h2>
+      <p class="lead reveal d2">Bản đồ &amp; biểu đồ độ cao lấy <b>tự động từ dữ liệu GPX của giải</b> trên 5BIB.</p>
+      <div class="tabs reveal d2" id="tabs">
+        <button class="tab on" data-d="5K">5K <span class="km">· Road</span></button>
+        <button class="tab" data-d="10K">10K <span class="km">· Road</span></button>
+        <button class="tab" data-d="21K">21K <span class="km">· Trail</span></button>
+        <button class="tab" data-d="42K">42K <span class="km">· Ultra</span></button>
+      </div>
+      <div class="coursegrid">
+        <div class="card reveal d2">
+          <div class="ct"><svg viewBox="0 0 24 24"><path d="M9 20l-5.5 2V6L9 4m0 16 6-2m-6 2V4m6 14 5.5 2V4l-5.5 2m0 12V6m0 0L9 4"/></svg>Bản đồ GPX · auto từ dữ liệu giải</div>
+          <div class="mapwrap">
+            <svg class="topo2" viewBox="0 0 400 280" preserveAspectRatio="none"><path d="M-10,60 C120,20 240,90 410,50"/><path d="M-10,130 C140,90 250,160 410,120"/><path d="M-10,200 C120,160 260,230 410,190"/></svg>
+            <svg viewBox="0 0 400 280" width="100%" height="100%">
+              <path class="route" id="route" d="M60,210 C110,120 150,180 190,120 230,60 280,130 320,70"/>
+              <circle class="pin start" cx="60" cy="210" r="8"/><circle class="aid" cx="150" cy="155" r="4.5"/><circle class="aid" cx="230" cy="92" r="4.5"/><circle class="pin fin" cx="320" cy="70" r="8"/>
+            </svg>
+          </div>
+        </div>
+        <div class="card reveal d3">
+          <div class="ct"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 5-8 4 5"/></svg>Biểu đồ độ cao · <span id="elKm" style="color:var(--ink)">5K</span></div>
+          <svg class="elev" id="elev" viewBox="0 0 600 200">
+            <defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#166534" stop-opacity=".24"/><stop offset="1" stop-color="#166534" stop-opacity="0"/></linearGradient></defs>
+            <line class="grid" x1="8" y1="60" x2="592" y2="60"/><line class="grid" x1="8" y1="120" x2="592" y2="120"/><line class="grid" x1="8" y1="178" x2="592" y2="178"/>
+            <path class="area" id="elArea" d=""/><path class="ln" id="elLine" d=""/><g id="elAid"></g>
+          </svg>
+          <div class="stats">
+            <div class="stat"><div class="l">Cự ly</div><div class="v" id="sDist">5,2 <small>km</small></div></div>
+            <div class="stat"><div class="l">Tích lũy D+</div><div class="v" id="sGain">80 <small>m</small></div></div>
+            <div class="stat"><div class="l">Trạm tiếp nước</div><div class="v" id="sAid">2</div></div>
+            <div class="stat"><div class="l">Cut-off</div><div class="v" id="sCut">1:30</div></div>
+          </div>
+          <span class="terr" id="sTerr">● Đường nhựa · phù hợp người mới</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCHEDULE -->
+  <section class="sec" id="schedule">
+    <div class="shell">
+      <span class="kicker reveal">Lịch trình · Schedule</span>
+      <h2 class="reveal d1">Cuối tuần <em>đua</em></h2>
+      <div class="tl reveal d2">
+        <div class="daylabel">Thứ 7 · 13.03 — Nhận BIB &amp; EXPO</div>
+        <div class="tlitem"><div class="tltime">08:00 – 18:00</div><div class="tltitle">Race EXPO &amp; nhận racekit</div><div class="tlloc"><svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Quảng trường Sun World, Bãi Cháy</div></div>
+        <div class="tlitem"><div class="tltime">16:00</div><div class="tltitle">Briefing kỹ thuật 42K</div><div class="tlloc"><svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Sân khấu chính</div></div>
+        <div class="daylabel">Chủ Nhật · 14.03 — Ngày đua</div>
+        <div class="tlitem key"><div class="tltime">04:00</div><div class="tltitle">Xuất phát 42K (Wave A)</div><div class="tlloc"><svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Cổng Start chính</div></div>
+        <div class="tlitem key"><div class="tltime">05:00 – 05:30</div><div class="tltitle">Xuất phát 21K · 10K · 5K</div><div class="tlloc"><svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Cổng Start chính</div></div>
+        <div class="tlitem"><div class="tltime">09:30</div><div class="tltitle">Lễ trao giải &amp; Gala</div><div class="tlloc"><svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Sân khấu chính</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="sec" id="pricing">
+    <div class="shell">
+      <span class="kicker reveal">Vé · Đăng ký</span>
+      <h2 class="reveal d1">Chọn <em>cự ly của bạn</em></h2>
+      <p class="lead reveal d2">Giá early-bird còn hạn. Nút "Đăng ký" dẫn thẳng sang trang thanh toán 5bib.com.</p>
+      <div class="price-grid">
+        <div class="pcard reveal d1"><div class="pdist">5K <span>FUN RUN</span></div><div class="pold">350.000đ</div><div class="pnow"><b>250.000</b><span class="cur">đ</span></div><span class="eb">● Early bird · còn 12 ngày</span><ul class="inc"><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>BIB + chip điện tử</li><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Áo finisher</li><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Nước + trạm y tế</li></ul><a class="pbtn" href="#">Đăng ký <span class="ar">→</span></a></div>
+        <div class="pcard reveal d2"><div class="pdist">10K <span>ROAD</span></div><div class="pold">450.000đ</div><div class="pnow"><b>350.000</b><span class="cur">đ</span></div><span class="eb">● Early bird · còn 12 ngày</span><ul class="inc"><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>BIB + chip điện tử</li><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Áo + medal finisher</li><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Ảnh số theo BIB</li></ul><a class="pbtn" href="#">Đăng ký <span class="ar">→</span></a></div>
+        <div class="pcard feat reveal d3"><div class="pop">Phổ biến nhất</div><div class="pdist">21K <span>HALF</span></div><div class="pold">650.000đ</div><div class="pnow"><b>520.000</b><span class="cur">đ</span></div><span class="eb">● Early bird · còn 12 ngày</span><ul class="inc"><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>BIB + chip + medal cao cấp</li><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Áo kỹ thuật + túi runner</li><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>E-certificate + ảnh AI</li></ul><a class="pbtn" href="#">Đăng ký <span class="ar">→</span></a></div>
+        <div class="pcard reveal d4"><div class="pdist">42K <span>FULL</span></div><div class="pold">950.000đ</div><div class="pnow"><b>780.000</b><span class="cur">đ</span></div><span class="eb">● Early bird · còn 12 ngày</span><ul class="inc"><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Trọn gói 21K +</li><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Drop-bag + pacer</li><li><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Live tracking GPS</li></ul><a class="pbtn" href="#">Đăng ký <span class="ar">→</span></a></div>
+      </div>
+      <div class="pnote reveal"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>Thanh toán an toàn qua cổng 5bib.com · hỗ trợ chuyển BIB</div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="sec" id="results">
+    <div class="shell">
+      <span class="kicker reveal">Kết quả · Live results</span>
+      <h2 class="reveal d1">Kết quả <em>trực tiếp</em></h2>
+      <p class="lead reveal d2">Nhúng trực tiếp từ <b>result.5bib.com</b> — chip time, pace, tra cứu theo BIB, real-time.</p>
+      <div class="frame reveal d2">
+        <div class="frbar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>result.5bib.com/giai-chay/halong-marathon-2026</span><span class="embedchip"><span class="live"></span>LIVE</span></div>
+        <div class="frbody">
+          <div class="rtabs"><button class="rtab on">21K</button><button class="rtab">42K</button><button class="rtab">10K</button><button class="rtab">5K</button></div>
+          <div class="rsearch"><input placeholder="Tra cứu theo số BIB hoặc tên VĐV…" /><button>Tìm</button></div>
+          <table class="res"><thead><tr><th>Hạng</th><th>VĐV</th><th>BIB</th><th>Chip time</th><th>Pace</th></tr></thead><tbody>
+            <tr class="m1"><td><span class="rk">1</span></td><td class="nm">Nguyễn Văn Hùng<small>Nam · 30-39</small></td><td class="pc">21048</td><td class="tm">1:14:22</td><td class="pc">3:31/km</td></tr>
+            <tr class="m2"><td><span class="rk">2</span></td><td class="nm">Trần Quốc Bảo<small>Nam · 18-29</small></td><td class="pc">21133</td><td class="tm">1:16:05</td><td class="pc">3:36/km</td></tr>
+            <tr class="m3"><td><span class="rk">3</span></td><td class="nm">Lê Minh Khoa<small>Nam · 30-39</small></td><td class="pc">21007</td><td class="tm">1:18:40</td><td class="pc">3:43/km</td></tr>
+            <tr><td><span class="rk">4</span></td><td class="nm">Phạm Thu Hà<small>Nữ · 18-29</small></td><td class="pc">21210</td><td class="tm">1:21:12</td><td class="pc">3:51/km</td></tr>
+            <tr><td><span class="rk">5</span></td><td class="nm">Đỗ Anh Tuấn<small>Nam · 40-49</small></td><td class="pc">21089</td><td class="tm">1:22:58</td><td class="pc">3:56/km</td></tr>
+          </tbody></table>
+        </div>
+        <div class="frfoot"><a href="#">Xem toàn bộ bảng kết quả trên result.5bib.com →</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PHOTOS -->
+  <section class="sec" id="photos">
+    <div class="mesh"></div>
+    <div class="shell">
+      <span class="kicker reveal">Ảnh giải · Powered by 5pix</span>
+      <h2 class="reveal d1">Tìm <em>ảnh của bạn</em></h2>
+      <p class="lead reveal d2">Nhập số BIB — AI của <b>5pix</b> nhận diện và trả về toàn bộ ảnh có bạn trong khung hình.</p>
+      <div class="pixsearch reveal d2"><input placeholder="Nhập số BIB của bạn, ví dụ 21048…" /><button><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Tìm ảnh</button></div>
+      <div class="pixgrid reveal d3">
+        <div class="pix"><img src="https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=420&q=70" alt=""><span class="bib">BIB 21048</span></div>
+        <div class="pix"><img src="https://images.unsplash.com/photo-1486218119243-13883505764c?auto=format&fit=crop&w=420&q=70" alt=""></div>
+        <div class="pix"><img src="https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=420&q=70" alt=""><span class="bib">BIB 21048</span></div>
+        <div class="pix"><img src="https://images.unsplash.com/photo-1571008887538-b36bb32f4571?auto=format&fit=crop&w=420&q=70" alt=""></div>
+        <div class="pix"><img src="https://images.unsplash.com/photo-1502904550040-7534597429ae?auto=format&fit=crop&w=420&q=70" alt=""><span class="bib">BIB 21048</span></div>
+        <div class="pix"><img src="https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=420&q=70" alt=""></div>
+        <div class="pix"><img src="https://images.unsplash.com/photo-1530143584546-02191bc84eb5?auto=format&fit=crop&w=420&q=70" alt=""></div>
+        <div class="pix"><img src="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=420&q=70" alt=""><span class="bib">BIB 21048</span></div>
+      </div>
+      <div class="pixfoot reveal">8 ảnh khớp BIB 21048 · bấm để tải bản gốc trên 5pix</div>
+    </div>
+  </section>
+
+  <!-- SPONSORS -->
+  <section class="sec" id="sponsors">
+    <div class="shell">
+      <span class="kicker reveal">Đồng hành · Sponsors</span>
+      <h2 class="reveal d1">Nhà <em>tài trợ</em></h2>
+      <div class="tier reveal d2"><div class="tierlabel diamond">◆ Kim cương</div><div class="logos d"><div class="logo">SUN<span class="t">WORLD</span></div><div class="logo">VIET<span class="t">COMBANK</span></div></div></div>
+      <div class="tier reveal d2"><div class="tierlabel gold">● Vàng</div><div class="logos g"><div class="logo">COROS</div><div class="logo">Garmin</div><div class="logo">Number 1</div><div class="logo">Pocari</div></div></div>
+      <div class="tier reveal d3"><div class="tierlabel silver">● Bạc &amp; Đồng hành</div><div class="logos s"><div class="logo">5BIB</div><div class="logo">5Pix</div><div class="logo">Salonpas</div><div class="logo">Revive</div><div class="logo">Decathlon</div><div class="logo">Strava</div></div></div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section class="sec" id="contact">
+    <div class="mesh"></div>
+    <div class="shell">
+      <span class="kicker reveal">Hỗ trợ · Liên hệ</span>
+      <h2 class="reveal d1">Cần <em>hỗ trợ?</em></h2>
+      <p class="lead reveal d2">Đội ngũ BTC trực Zalo &amp; Fanpage hằng ngày — phản hồi trong vài phút.</p>
+      <div class="cgrid">
+        <div class="reveal d2">
+          <div class="crow"><div class="ic"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></div><div><div class="k">Hotline</div><div class="val">1900 6868</div></div></div>
+          <div class="crow"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></div><div><div class="k">Email</div><div class="val">hotro@halongmarathon.vn</div></div></div>
+          <div class="crow"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div><div><div class="k">Địa điểm</div><div class="val">Quảng trường Sun World, Bãi Cháy</div></div></div>
+          <div class="socials">
+            <a class="soc" href="#" aria-label="Facebook"><svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12z"/></svg></a>
+            <a class="soc" href="#" aria-label="Instagram"><svg viewBox="0 0 24 24"><path d="M12 2c2.7 0 3 0 4.1.1 1 .1 1.7.2 2.3.5.6.2 1.1.5 1.6 1 .5.5.8 1 1 1.6.3.6.4 1.3.5 2.3.1 1.1.1 1.4.1 4.1s0 3-.1 4.1c-.1 1-.2 1.7-.5 2.3a4.4 4.4 0 0 1-1 1.6 4.4 4.4 0 0 1-1.6 1c-.6.3-1.3.4-2.3.5-1.1.1-1.4.1-4.1.1s-3 0-4.1-.1c-1-.1-1.7-.2-2.3-.5a4.4 4.4 0 0 1-1.6-1 4.4 4.4 0 0 1-1-1.6c-.3-.6-.4-1.3-.5-2.3C2 15 2 14.7 2 12s0-3 .1-4.1c.1-1 .2-1.7.5-2.3a4.4 4.4 0 0 1 1-1.6 4.4 4.4 0 0 1 1.6-1c.6-.3 1.3-.4 2.3-.5C9 2 9.3 2 12 2zm0 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4zm5.2-8.4a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg></a>
+            <a class="soc" href="#" aria-label="YouTube"><svg viewBox="0 0 24 24"><path d="M23 12s0-3.2-.4-4.7a2.5 2.5 0 0 0-1.7-1.7C19.4 5.2 12 5.2 12 5.2s-7.4 0-8.9.4A2.5 2.5 0 0 0 1.4 7.3C1 8.8 1 12 1 12s0 3.2.4 4.7a2.5 2.5 0 0 0 1.7 1.7c1.5.4 8.9.4 8.9.4s7.4 0 8.9-.4a2.5 2.5 0 0 0 1.7-1.7C23 15.2 23 12 23 12zM9.7 15.3V8.7l6 3.3-6 3.3z"/></svg></a>
+            <a class="soc" href="#" aria-label="Strava"><svg viewBox="0 0 24 24"><path d="M15.4 14.2 13 9.4l-2.4 4.8H7.2L13 2.5l5.8 11.7h-3.4z"/></svg></a>
+          </div>
+        </div>
+        <div class="chatcard reveal d3">
+          <div class="h">Chat trực tiếp</div>
+          <div class="s">Bấm để mở Zalo OA hoặc Messenger của BTC — không cần điền form.</div>
+          <a class="chat zalo" href="#"><span class="ci"><b>Z</b></span><span>Chat qua Zalo<small>Zalo OA · Hạ Long Marathon</small></span><span class="ar">→</span></a>
+          <a class="chat fb" href="#"><span class="ci"><svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12z"/></svg></span><span>Nhắn Fanpage<small>facebook.com/halongmarathon</small></span><span class="ar">→</span></a>
+        </div>
+      </div>
+      <div class="finalcta reveal"><div class="big">Sẵn sàng <em>bứt tốc?</em></div><a class="ctabtn" href="#pricing">Đăng ký ngay <span>→</span></a></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot">
+      <div><div class="fb">Hạ Long<span class="t"> Marathon</span> 2026</div><p>Giải chạy marathon bên bờ di sản Vịnh Hạ Long — 14.03.2026. Tổ chức bởi BTC &amp; vận hành trên nền tảng 5BIB.</p></div>
+      <div><h4>Liên kết</h4><a href="#course">Cung đường</a><a href="#pricing">Đăng ký</a><a href="#results">Kết quả</a><a href="#photos">Tìm ảnh</a></div>
+      <div><h4>Theo dõi</h4><a href="#">Facebook Fanpage</a><a href="#">Zalo OA</a><a href="#">Instagram</a><a href="#">Strava Club</a></div>
+    </div>
+    <div class="footbar"><span>© 2026 Hạ Long Marathon. All rights reserved.</span><span class="pw">Powered by <b>5BIB</b> · result.5bib.com · 5pix</span></div>
+  </footer>
+
+<script>
+  // nav scroll state
+  const nav=document.getElementById('nav');
+  const onScroll=()=>nav.classList.toggle('solid',window.scrollY>60);
+  onScroll();window.addEventListener('scroll',onScroll,{passive:true});
+
+  // hero entrance
+  document.querySelectorAll('.hero .reveal').forEach(el=>requestAnimationFrame(()=>el.classList.add('in')));
+
+  // countdown
+  const TARGET=new Date('2026-03-14T05:00:00+07:00').getTime();
+  const p=n=>String(Math.max(0,n)).padStart(2,'0');
+  function tick(){const s=Math.floor(Math.max(0,TARGET-Date.now())/1000);
+    dd.textContent=p(Math.floor(s/86400));hh.textContent=p(Math.floor(s%86400/3600));mm.textContent=p(Math.floor(s%3600/60));ss.textContent=p(s%60);}
+  const dd=document.getElementById('dd'),hh=document.getElementById('hh'),mm=document.getElementById('mm'),ss=document.getElementById('ss');
+  tick();setInterval(tick,1000);
+
+  // course elevation
+  const DIST={
+    '5K':{dist:'5,2',gain:80,aid:2,cut:'1:30',terr:'● Đường nhựa · phù hợp người mới',ele:[10,12,14,18,22,20,24,30,28,26,30,34,30,28,32,36,40,36,34,30,28,24,20,16]},
+    '10K':{dist:'10,4',gain:180,aid:3,cut:'2:30',terr:'● Đường nhựa + ven biển',ele:[12,18,30,42,38,50,64,58,70,82,76,68,60,72,86,80,66,54,60,48,40,34,26,18]},
+    '21K':{dist:'21,1',gain:650,aid:5,cut:'4:30',terr:'● Trail đồi · kỹ thuật trung bình',ele:[20,40,90,140,120,180,240,200,260,330,290,360,420,380,300,360,300,240,180,220,140,90,60,30]},
+    '42K':{dist:'42,2',gain:1800,aid:9,cut:'8:00',terr:'● Ultra trail · địa hình khó',ele:[30,90,200,160,300,440,380,560,700,620,780,900,820,700,840,720,560,640,460,520,360,240,140,40]}
+  };
+  const W=600,H=200,PX=10;
+  function draw(d){
+    const e=DIST[d].ele,max=Math.max(...e),min=Math.min(...e);
+    const x=i=>PX+i*(W-2*PX)/(e.length-1),y=v=>H-14-((v-min)/(max-min||1))*(H-40);
+    let ln='M'+x(0).toFixed(1)+','+y(e[0]).toFixed(1);
+    for(let i=1;i<e.length;i++)ln+=' L'+x(i).toFixed(1)+','+y(e[i]).toFixed(1);
+    elLine.setAttribute('d',ln);elArea.setAttribute('d',ln+` L${x(e.length-1).toFixed(1)},${H} L${x(0).toFixed(1)},${H} Z`);
+    const ag=document.getElementById('elAid');ag.innerHTML='';
+    for(let k=1;k<=DIST[d].aid;k++){const i=Math.round(k*(e.length-1)/(DIST[d].aid+1));
+      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');c.setAttribute('cx',x(i));c.setAttribute('cy',y(e[i]));c.setAttribute('r','3.5');c.setAttribute('class','as');ag.appendChild(c);}
+    document.getElementById('sDist').innerHTML=DIST[d].dist+' <small>km</small>';
+    document.getElementById('sGain').innerHTML=DIST[d].gain+' <small>m</small>';
+    document.getElementById('sAid').textContent=DIST[d].aid;document.getElementById('sCut').textContent=DIST[d].cut;
+    document.getElementById('sTerr').textContent=DIST[d].terr;document.getElementById('elKm').textContent=d;
+    elLine.classList.remove('in');void elLine.offsetWidth;elLine.classList.add('in');
+  }
+  const elLine=document.getElementById('elLine'),elArea=document.getElementById('elArea');
+  document.querySelectorAll('#tabs .tab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');draw(t.dataset.d);}));
+  draw('5K');
+  document.querySelectorAll('.rtab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.rtab').forEach(x=>x.classList.remove('on'));t.classList.add('on');}));
+
+  // scroll reveal
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');
+    if(e.target.id==='route')e.target.classList.add('in');}}),{threshold:.12});
+  document.querySelectorAll('.sec .reveal').forEach(el=>io.observe(el));
+  const ro=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){document.getElementById('route').classList.add('in');document.getElementById('elLine').classList.add('in');}}),{threshold:.2});
+  ro.observe(document.getElementById('course'));
+
+  // capture mode: full-page static render (caps 100svh hero, forces reveals)
+  if(new URLSearchParams(location.search).has('cap')){
+    document.querySelector('.hero').style.minHeight='720px';
+    document.querySelectorAll('.reveal').forEach(el=>el.classList.add('in'));
+    document.getElementById('route').classList.add('in');document.getElementById('elLine').classList.add('in');
+  }
+</script>
+</body>
+</html>
