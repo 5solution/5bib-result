@@ -57,6 +57,8 @@ import { FinanceModule } from './finance/finance.module';
 // FEATURE-027 — Promo Hub (configurable marketing landing pages) + Analytics.
 import { PromoHubModule } from './promo-hub/promo-hub.module';
 import { PromoHubAnalyticsModule } from './promo-hub-analytics/promo-hub-analytics.module';
+// FEATURE-083 — Race Landing Page Builder (per-race microsite, subdomain Phase 1).
+import { LandingModule } from './landing/landing.module';
 import { OrderReadonly } from './finance/entities/order-readonly.entity';
 // FEATURE-033 — Promo Hub race calendar phase BÁN VÉ
 import { RaceReadonly } from './promo-hub/entities/race-readonly.entity';
@@ -207,6 +209,7 @@ const volunteerDbModules = env.volunteerDb.host
     // to other 5BIB business modules. Pure Mongo + Redis.
     PromoHubModule,
     PromoHubAnalyticsModule,
+    LandingModule,
     RacesModule,
     RaceResultModule,
     // F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
