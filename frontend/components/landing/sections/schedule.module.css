@@ -1,0 +1,173 @@
+/* ===== SCHEDULE — timeline variant ===== */
+.tl {
+  margin-top: 40px;
+  position: relative;
+  padding-left: 30px;
+}
+.tl::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--line);
+}
+
+.daylabel {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--main);
+  margin: 26px 0 14px;
+  position: relative;
+}
+.daylabel:first-child {
+  margin-top: 0;
+}
+
+.tlitem {
+  position: relative;
+  padding: 0 0 22px;
+}
+.tlitem::before {
+  content: "";
+  position: absolute;
+  left: -30px;
+  top: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--stone);
+  border: 3px solid var(--main);
+  transition: transform 0.3s var(--spring), box-shadow 0.3s var(--ease);
+}
+.tlitem:hover::before {
+  transform: scale(1.18);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--main) 14%, transparent);
+}
+.tlitem.key::before {
+  background: var(--main);
+}
+
+.tltime {
+  font-family: var(--font-jetbrains-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+.tltitle {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 18px;
+  margin: 3px 0 4px;
+  color: var(--ink);
+}
+.tlloc {
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tlloc svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--ink-faint);
+  fill: none;
+  stroke-width: 1.8;
+  flex-shrink: 0;
+}
+
+/* ===== SCHEDULE — image variant ===== */
+.schedimg {
+  margin-top: 34px;
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.poster {
+  width: min(420px, 100%);
+  border-radius: 18px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 30px 60px -34px rgba(28, 25, 23, 0.55);
+  border: 1px solid var(--line);
+  background: var(--stone-2);
+  transition: transform 0.5s var(--ease), box-shadow 0.5s var(--ease);
+}
+.poster:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 38px 72px -34px rgba(28, 25, 23, 0.6);
+}
+.poster img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.schednote {
+  max-width: 320px;
+  color: var(--ink-soft);
+}
+.schednoteText {
+  font-size: 14.5px;
+  line-height: 1.6;
+  margin: 0;
+}
+.schednoteText b {
+  color: var(--ink);
+}
+
+.uploadtag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-jetbrains-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  background: var(--stone);
+  border: 1px solid var(--line);
+  padding: 8px 13px;
+  border-radius: 10px;
+  margin-top: 14px;
+}
+.uploadtag svg {
+  width: 15px;
+  height: 15px;
+  stroke: var(--sec);
+  fill: none;
+  stroke-width: 1.9;
+  flex-shrink: 0;
+}
+
+/* ===== empty state ===== */
+.empty {
+  margin-top: 34px;
+  padding: 40px 28px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  background: var(--stone-2);
+  color: var(--ink-faint);
+  font-size: 15px;
+  text-align: center;
+}
+
+/* ===== responsive ===== */
+@media (max-width: 640px) {
+  .schedimg {
+    gap: 18px;
+  }
+  .schednote {
+    max-width: none;
+  }
+  .tltitle {
+    font-size: 17px;
+  }
+}

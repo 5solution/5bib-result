@@ -1,0 +1,148 @@
+/*
+ * FEATURE-083 — Photos embed (5pix) section visuals.
+ * Ported from prototype #photos. Dark section; brand colors via --main/--sec
+ * so the admin theme picker cascades (NO hardcoded brand hex).
+ */
+
+.section {
+  /* allow the mesh glow to bleed but clip overflow (landing-sec already does) */
+  isolation: isolate;
+}
+
+/* Ambient mesh glow — sec (secondary) top-right, main (energy) bottom-left. */
+.mesh {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 60% at 90% 0%, color-mix(in srgb, var(--sec) 26%, transparent), transparent 55%),
+    radial-gradient(60% 60% at 0% 100%, color-mix(in srgb, var(--main) 24%, transparent), transparent 55%);
+}
+
+/* ── BIB search row ── */
+.search {
+  display: flex;
+  gap: 10px;
+  max-width: 520px;
+  margin: 30px 0 24px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 13px;
+  padding: 15px 18px;
+  font-size: 15px;
+  color: #fff;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
+}
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+.input:focus {
+  border-color: var(--main);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.searchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  background: var(--main);
+  color: #fff;
+  border: 0;
+  border-radius: 13px;
+  padding: 0 26px;
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.3s var(--spring), filter 0.3s var(--ease);
+}
+.searchBtn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+}
+.searchBtn:active {
+  transform: translateY(0);
+}
+
+/* ── sample photo grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.tile {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(135deg, var(--night-2), var(--night));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s var(--ease);
+}
+.tile:hover img {
+  transform: scale(1.08);
+}
+
+/* tasteful empty placeholder tile */
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.18);
+}
+.empty svg {
+  width: 30%;
+  height: 30%;
+  max-width: 44px;
+  max-height: 44px;
+}
+
+/* ── footer link ── */
+.foot {
+  display: inline-block;
+  margin-top: 18px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  transition: color 0.25s var(--ease);
+}
+.foot:hover {
+  color: var(--main);
+}
+
+/* ── mobile ── */
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 440px) {
+  .search {
+    flex-wrap: wrap;
+  }
+  .searchBtn {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 26px;
+  }
+}

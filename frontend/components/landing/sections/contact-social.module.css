@@ -1,0 +1,280 @@
+/*
+ * FEATURE-083 — Contact + Zalo/FB section visuals (dark bookend).
+ * Ported from sections-prototype.html (#contact). Energy accents via var(--main)
+ * so the theme picker cascades; Zalo (#0068ff) / Messenger (#1877f2) keep their
+ * official brand blues per spec.
+ */
+
+.contact {
+  /* base dark bg + white text come from global .landing-dark */
+}
+
+/* mesh glow backdrop — energy (var(--main)) + secondary (var(--sec)) */
+.mesh {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(70% 60% at 88% 0%, color-mix(in srgb, var(--sec) 30%, transparent), transparent 55%),
+    radial-gradient(60% 60% at 0% 100%, color-mix(in srgb, var(--main) 32%, transparent), transparent 55%);
+  pointer-events: none;
+}
+
+/* ── 2-col grid ── */
+.cgrid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 30px;
+  margin-top: 38px;
+  align-items: start;
+}
+
+/* ── contact rows ── */
+.crow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+  color: inherit;
+  transition: padding-left 0.3s var(--ease);
+}
+a.crow:hover {
+  padding-left: 6px;
+}
+.crow .ic {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  transition: background 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+a.crow:hover .ic {
+  background: color-mix(in srgb, var(--main) 18%, transparent);
+  border-color: color-mix(in srgb, var(--main) 45%, transparent);
+}
+.crow .ic svg {
+  width: 19px;
+  height: 19px;
+  stroke: var(--main);
+  fill: none;
+  stroke-width: 1.8;
+}
+.crow .k {
+  display: block;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+.crow .val {
+  display: block;
+  font-weight: 600;
+  font-size: 16px;
+  margin-top: 2px;
+  color: #fff;
+  word-break: break-word;
+}
+
+.emptyLeft {
+  padding: 18px 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ── social icon row ── */
+.socials {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+.soc {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transition: transform 0.25s var(--spring), background 0.25s var(--ease),
+    border-color 0.25s var(--ease);
+}
+.soc:hover {
+  transform: translateY(-4px);
+  background: color-mix(in srgb, var(--main) 16%, transparent);
+  border-color: color-mix(in srgb, var(--main) 40%, transparent);
+}
+.soc svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+/* ── chat card ── */
+.chatcard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 20px;
+  padding: 24px;
+}
+.h {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 800;
+  font-size: 19px;
+  color: #fff;
+}
+.s {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+  margin: 6px 0 18px;
+  line-height: 1.6;
+}
+.chat {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 15px 18px;
+  border-radius: 14px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 15px;
+  color: #fff;
+  margin-bottom: 11px;
+  transition: transform 0.3s var(--spring), box-shadow 0.3s var(--ease);
+}
+.chat:last-child {
+  margin-bottom: 0;
+}
+.chat:hover {
+  transform: translateX(4px);
+}
+.zalo {
+  background: #0068ff;
+}
+.zalo:hover {
+  box-shadow: 0 12px 28px -14px rgba(0, 104, 255, 0.8);
+}
+.fb {
+  background: #1877f2;
+}
+.fb:hover {
+  box-shadow: 0 12px 28px -14px rgba(24, 119, 242, 0.8);
+}
+.ci {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.ci svg {
+  width: 19px;
+  height: 19px;
+  fill: #fff;
+}
+.ci b {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 900;
+  font-size: 15px;
+  color: #fff;
+}
+.label {
+  display: block;
+}
+.chat small {
+  display: block;
+  font-weight: 400;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 1px;
+}
+.ar {
+  margin-left: auto;
+  opacity: 0.7;
+  transition: transform 0.3s var(--spring);
+}
+.chat:hover .ar {
+  transform: translateX(3px);
+  opacity: 1;
+}
+
+/* ── final CTA band ── */
+.finalcta {
+  margin-top: 46px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.big {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 900;
+  font-size: clamp(24px, 3.4vw, 40px);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.big em {
+  font-style: normal;
+  color: var(--main);
+}
+.ctabtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  background: var(--main);
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 17px 30px;
+  border-radius: 999px;
+  text-decoration: none;
+  box-shadow: 0 14px 36px -12px color-mix(in srgb, var(--main) 70%, transparent);
+  transition: transform 0.35s var(--spring), box-shadow 0.35s var(--ease);
+}
+.ctabtn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 44px -14px color-mix(in srgb, var(--main) 78%, transparent);
+}
+.ctabtn span {
+  transition: transform 0.3s var(--spring);
+}
+.ctabtn:hover span {
+  transform: translateX(4px);
+}
+
+/* ── responsive → 1 col ── */
+@media (max-width: 860px) {
+  .cgrid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .finalcta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+  .ctabtn {
+    width: 100%;
+    justify-content: center;
+  }
+}

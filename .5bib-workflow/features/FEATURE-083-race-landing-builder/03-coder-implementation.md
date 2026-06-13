@@ -45,10 +45,17 @@
 2. ✅ ADJUSTMENT #1: `upload.service.ts` + `upload.controller.ts` — optional `folder` param (sanitized, path-traversal-safe, backward-compat: no folder → date prefix). tsc clean.
 3. ✅ CLAUDE.md — Redis registry (`landing:slug`/`landing:resolve`/`landing-lock`/`ratelimit:landing-view`) + S3 lifecycle rule 7 (`landing-assets/` no-expire).
 
-## ⏳ Pending (next milestones)
-4. **SDK regen** `pnpm --filter admin generate:api` — DEFERRED: reads `http://localhost:8081/swagger/json`, needs backend running. Done as part of admin phase.
-5. **Frontend (M3):** `(landing)` route-group + `RaceLandingRenderer` + **10 section component premium** (chuẩn prototype) + middleware subdomain + next.config assetPrefix host-conditional.
-6. **Admin (M4):** builder (list + [id]/builder + components) + `landing-{api,hooks,labels}.ts` + nav-groups + SDK regen.
+## ✅ Frontend M3 DONE
+- `app/(landing)/layout.tsx` (no 5BIB chrome) + `landing.css` (tokens scoped `.landing-root` + shared utils + nav + footer) + `l/[slug]/page.tsx` (server fetch `BACKEND_URL/api/landings/slug/:slug` + ISR 60s + generateMetadata) + `__preview/page.tsx` (dev-only harness, 404s in prod).
+- `components/landing/`: `types.ts` + `RaceLandingRenderer.tsx` (switch dispatch, unknown→null) + `LandingNav.tsx` (client sticky-solid) + `LandingFooter.tsx` + `sections/registry.ts` + **10 section components** (HeroSection 'use client' countdown/4-variant, AboutSection 3-variant, CourseSection 'use client' tabs+elevation, ScheduleSection timeline/image, PricingSection, ResultsEmbedSection native frame, PhotosEmbedSection 5pix, GallerySection 'use client' bento+filter, SponsorsSection tier/wall, ContactSocialSection Zalo/FB) — each + own `*.module.css`, theme via `var(--main)/var(--sec)`, mobile-responsive. **Built via 10-agent workflow fan-out (`way557kzd`), ports of verified prototypes.**
+- `middleware.ts`: subdomain branch `<slug>.5bib.com → /l/<slug>` (catch-all after known hosts, reserved-label excluded, no `.5bib.com` cookie — R-9).
+- **next.config.ts: NO change** — `assetPrefix` already env-driven (`NEXT_PUBLIC_ASSET_PREFIX ?? ''`), F-056 fixed; Phase 1 subdomains same-origin. (R-3 resolved.)
+- **Verify:** `npx tsc --noEmit` 0 landing errors. Live render needs `next dev` restart to register the new route group (existing :3002 server didn't hot-add it) OR deploy — `/__preview` shows all 10 sections with sample data.
+
+## ⏳ Pending (M4 — Admin)
+- SDK regen `pnpm --filter admin generate:api` (needs backend running).
+- Admin builder: list + `[id]/builder` + components (section editor + theme picker + domain tab + preview) + `landing-{api,hooks,labels}.ts` + nav-groups entry.
+- Then: full self-review pipeline + IMPLEMENTATION_NOTES.md → READY_FOR_QC.
 
 ```
 PASS src/modules/landing/landing.service.spec.ts

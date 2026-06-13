@@ -55,6 +55,26 @@ export default function middleware(req: NextRequest) {
     !is5SolutionHost &&
     (host.startsWith('solution.') || host.startsWith('solution-'));
 
+  // FEATURE-083 — Race Landing subdomains: `<slug>.5bib.com` → `/l/<slug>`.
+  // Catch-all AFTER the known-host checks; excludes the main app + reserved
+  // single-label subdomains so e.g. `result-fe-dev.5bib.com` is never caught.
+  const LANDING_RESERVED = new Set([
+    'www', 'result', 'result-fe', 'result-fe-dev', 'result-dev', 'admin',
+    'api', 'app', 'merchant', 'crew', 'timing', 'solution', '5solution',
+    '5sport', 'm', 'mail', 'staging', 'dev', 'cdn', 'static', 'blog', 'news',
+  ]);
+  const landingSub = host.endsWith('.5bib.com')
+    ? host.slice(0, -'.5bib.com'.length)
+    : '';
+  const isLandingHost =
+    !isSport5Host &&
+    !is5SolutionHost &&
+    !isTimingHost &&
+    !isSolutionHost &&
+    !!landingSub &&
+    !landingSub.includes('.') &&
+    !LANDING_RESERVED.has(landingSub);
+
   if (isSport5Host) {
     const url = req.nextUrl.clone();
     if (
@@ -94,6 +114,14 @@ export default function middleware(req: NextRequest) {
       url.pathname = `/solution${url.pathname === '/' ? '' : url.pathname}`;
       return NextResponse.rewrite(url);
     }
+  }
+
+  // FEATURE-083 — single-page landing: rewrite the subdomain root to /l/<slug>.
+  // No cookie is set here (R-9 — avoid `.5bib.com`-scoped session bleed).
+  if (isLandingHost && req.nextUrl.pathname === '/') {
+    const url = req.nextUrl.clone();
+    url.pathname = `/l/${landingSub}`;
+    return NextResponse.rewrite(url);
   }
 
   if (PROTECTED_PATTERN.test(req.nextUrl.pathname) && !hasLogtoSession(req)) {

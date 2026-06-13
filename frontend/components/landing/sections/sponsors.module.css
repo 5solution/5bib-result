@@ -1,0 +1,193 @@
+/*
+ * FEATURE-083 — Sponsors section visuals (ported from sections-2-prototype #sponsors).
+ * Brand accent uses var(--main) so the theme picker cascades; never hardcode.
+ */
+
+.tier {
+  margin-top: 34px;
+}
+.tier:first-of-type {
+  margin-top: 34px;
+}
+
+/* ── tier label + divider line ── */
+.tierlabel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.tierlabel::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.tierMark {
+  font-size: 11px;
+  line-height: 1;
+}
+.tierDiamond {
+  color: var(--sec);
+}
+.tierGold {
+  color: #b8860b;
+}
+.tierSilver {
+  color: #6b7280;
+}
+
+/* ── logo grids ── */
+.logos {
+  display: grid;
+  gap: 14px;
+}
+.gridD {
+  grid-template-columns: repeat(2, 1fr);
+}
+.gridG {
+  grid-template-columns: repeat(4, 1fr);
+}
+.gridS {
+  grid-template-columns: repeat(6, 1fr);
+}
+.gridWall {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+/* ── logo cell ── */
+.logo {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: border-color 0.3s var(--ease), transform 0.3s var(--ease),
+    box-shadow 0.3s var(--ease);
+}
+.logo:hover {
+  border-color: var(--ink-faint);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px -22px rgba(28, 25, 23, 0.5);
+}
+.logoText {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  text-align: center;
+  line-height: 1;
+  padding: 0 10px;
+}
+.logoImg {
+  max-width: 78%;
+  max-height: 62%;
+  object-fit: contain;
+  filter: grayscale(1);
+  opacity: 0.78;
+  transition: filter 0.3s var(--ease), opacity 0.3s var(--ease),
+    transform 0.4s var(--ease);
+}
+.logo:hover .logoImg {
+  filter: grayscale(0);
+  opacity: 1;
+  transform: scale(1.04);
+}
+.tm {
+  color: var(--main);
+}
+.logoEmpty {
+  opacity: 0.5;
+}
+
+/* per-tier sizing (diamond big → silver small) */
+.gridD .logo {
+  height: 108px;
+}
+.gridD .logoText {
+  font-size: 28px;
+}
+.gridG .logo {
+  height: 84px;
+}
+.gridG .logoText {
+  font-size: 20px;
+  color: var(--ink-soft);
+}
+.gridS .logo {
+  height: 64px;
+}
+.gridS .logoText {
+  font-size: 15px;
+  color: var(--ink-faint);
+}
+
+/* wall = uniform medium cell */
+.gridWall .logo {
+  height: 92px;
+}
+.gridWall .logoText {
+  font-size: 19px;
+  color: var(--ink-soft);
+}
+
+/* ── empty state ── */
+.empty {
+  margin-top: 34px;
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+}
+.emptyIcon {
+  width: 34px;
+  height: 34px;
+  fill: var(--ink-faint);
+  opacity: 0.7;
+}
+.emptyText {
+  font-size: 14.5px;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+/* ── responsive ── */
+@media (max-width: 760px) {
+  .gridG {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .gridS {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .gridWall {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .gridD .logo {
+    height: 92px;
+  }
+  .gridD .logoText {
+    font-size: 23px;
+  }
+}
+
+@media (max-width: 460px) {
+  .gridD {
+    grid-template-columns: 1fr;
+  }
+  .gridG,
+  .gridS,
+  .gridWall {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

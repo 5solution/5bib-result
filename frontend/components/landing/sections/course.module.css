@@ -1,0 +1,256 @@
+/*
+ * FEATURE-083 — Course section visuals (ported from #course prototype).
+ * Brand colors via theme vars: --main (route/energy) + --sec (elevation fill).
+ * Neutrals from landing.css tokens cascade through .landing-root.
+ */
+
+.course {
+  background:
+    radial-gradient(70% 50% at 100% 0%, color-mix(in srgb, var(--sec) 6%, transparent), transparent 60%),
+    radial-gradient(60% 50% at 0% 100%, color-mix(in srgb, var(--sec) 7%, transparent), transparent 60%),
+    var(--stone);
+}
+
+/* ── empty state ── */
+.empty {
+  margin-top: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 56px 24px;
+  background: #fff;
+  border: 1px dashed var(--line);
+  border-radius: 20px;
+  color: var(--ink-faint);
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.empty svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1.6;
+  opacity: 0.7;
+}
+
+/* ── distance tabs ── */
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 32px 0 26px;
+}
+.tab {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  background: #fff;
+  border: 1.5px solid var(--line);
+  padding: 11px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: 0.25s var(--ease);
+}
+.tab:hover {
+  border-color: var(--ink-faint);
+}
+.tabOn {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+  transform: translateY(-1px);
+}
+.km {
+  color: var(--main);
+}
+.tabOn .km {
+  color: color-mix(in srgb, var(--main) 80%, #fff);
+}
+
+/* ── grid + cards ── */
+.coursegrid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 22px;
+}
+.card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px;
+  position: relative;
+}
+.ct {
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ct svg {
+  width: 15px;
+  height: 15px;
+  stroke: var(--main);
+  fill: none;
+  stroke-width: 1.8;
+  flex: none;
+}
+.elKm {
+  color: var(--ink);
+}
+
+/* ── map placeholder ── */
+.mapwrap {
+  aspect-ratio: 16 / 11;
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(135deg, #eef3ee, #e7ede9 60%, #e9efe9);
+}
+.topo2 {
+  position: absolute;
+  inset: 0;
+}
+.topo2 path {
+  fill: none;
+  stroke: rgba(22, 101, 52, 0.16);
+  stroke-width: 1;
+}
+.route {
+  fill: none;
+  stroke: var(--main);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1400;
+  stroke-dashoffset: 1400;
+  animation: course-route-draw 1.6s var(--ease) forwards;
+}
+@keyframes course-route-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.pin {
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.pinStart {
+  stroke: var(--trail, #166534);
+}
+.pinFin {
+  stroke: var(--main);
+}
+.aid {
+  fill: var(--main);
+  opacity: 0.9;
+}
+
+/* ── elevation chart ── */
+.elev {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.area {
+  fill: url(#course-eg);
+}
+.ln {
+  fill: none;
+  stroke: var(--sec);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: course-line-draw 1.4s var(--ease) 0.2s forwards;
+}
+@keyframes course-line-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.as {
+  fill: var(--main);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+/* ── stat cards ── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+.stat {
+  background: var(--stone-2);
+  border-radius: 12px;
+  padding: 13px 15px;
+}
+.l {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-family: var(--font-jetbrains-mono), monospace;
+}
+.v {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  margin-top: 3px;
+}
+.v small {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* ── terrain badge ── */
+.terr {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--main) 8%, #fff);
+  color: color-mix(in srgb, var(--main) 70%, var(--ink));
+  border: 1px solid color-mix(in srgb, var(--main) 28%, #fff);
+  padding: 6px 12px;
+  border-radius: 999px;
+  margin-top: 14px;
+}
+
+/* ── responsive → 1 col ── */
+@media (max-width: 860px) {
+  .coursegrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route,
+  .ln {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
