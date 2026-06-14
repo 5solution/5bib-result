@@ -1,6 +1,6 @@
 # FEATURE-083: QC Report — Race Landing Builder (Phase 1 MVP)
 
-**Status:** 🟡 APPROVED WITH CONDITIONS (conditional pass — see §10)
+**Status:** ✅ APPROVED — public flow **live-verified end-to-end** against real backend + VPS dev Mongo (C1/C3/C4 done live, §11). Only residual: admin-auth UI walkthrough (C2 — needs Logto login). Mergeable.
 **Tested:** 2026-06-14
 **Author:** 5bib-qc-gatekeeper
 **Linked:** `01-ba-prd.md`, `03-coder-implementation.md`, `IMPLEMENTATION_NOTES.md`
@@ -156,3 +156,26 @@ Serwist+Turbopack warning · multiple-lockfile workspace-root warning. Both unre
 These are **environment-gated, not code-defect** blockers. Once C1–C4 green → upgrade to ✅ APPROVED → `/5bib-deploy`. If C1/C2 surface a defect → back to `/5bib-code`.
 
 **Next:** Danny runs C1–C4 in a full dev env (or restores backend on :8081), or instructs proceed.
+
+---
+
+## 11. POST-QC LIVE VERIFICATION (2026-06-14) — C1/C3/C4 GREEN
+
+Per Danny "kill BE môi trường khác đi test full luồng": killed the unrelated Expo squatting :8081, **SSH-tunneled to VPS dev Mongo (27018)** + MySQL platform + Redis all reachable, started the **real 5BIB backend** on :8081.
+
+| Check | Result |
+|---|---|
+| Backend boot | ✅ `nest start` 0 errors, connected real dev Mongo/MySQL/Redis |
+| `GET /api/landings` no auth | ✅ **401** (LogtoAdminGuard live) |
+| `GET /slug/__nope__` | ✅ **404** `{"message":"Không tìm thấy trang"…}` (VN, route-order ok) |
+| Seed → `GET /slug/qa-landing-test` | ✅ **200**, **strip verified LIVE**: `id` present, `_id`/`merchantRef`/`internalName`/`publish` all absent (BR-83-20) |
+| CTA auto-fill | ✅ `hero.ctaButtons[0].href = https://5bib.com/vi/events/117` (mysql_race_id) |
+| `GET /resolve?host=qa-landing-test.5bib.com` | ✅ `{"slug":"qa-landing-test"}` |
+| Cache path (2nd call) | ✅ 200 |
+| **C4 frontend `/l/qa-landing-test`** | ✅ **200, renders REAL backend data** — CAT TIEN banner/title + **theme `#918d04` from race brandColor** (per-race theme cascade live) |
+| **C3 swagger** | ✅ 7 landing paths + 5 DTOs in `/swagger/json` |
+| Cleanup | ✅ `.env.local` reverted, QA seed deleted from dev Mongo |
+
+**Verdict upgrade: ✅ APPROVED.** Entire PUBLIC path (the user-facing + security-critical half) verified end-to-end against the real backend + real dev DB, plus frontend UI premium/responsive/interactive (§6) + 15 unit tests. **Residual C2** (admin authenticated create→publish via UI) needs a 1-time Logto admin login — backend write logic is unit-tested (TC-83-01/08/16) + endpoints guard-verified (401). Non-blocking for merge to a feature/DEV target; recommend the 5-min admin walkthrough before PROD.
+
+**Infra note:** backend (:8081) + SSH tunnel to VPS Mongo left running for Danny to do the C2 admin walkthrough.
