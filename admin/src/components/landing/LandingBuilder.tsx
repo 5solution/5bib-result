@@ -28,6 +28,7 @@ import {
   VARIANTS_BY_TYPE,
   VARIANT_LABEL,
 } from '@/lib/landing-labels';
+import SectionForm from './SectionForm';
 
 type Tab = 'sections' | 'theme' | 'domain' | 'seo';
 
@@ -46,7 +47,6 @@ export default function LandingBuilder({ id }: { id: string }) {
 
   const [draft, setDraft] = useState<LandingAdmin | null>(null);
   const [tab, setTab] = useState<Tab>('sections');
-  const [dataErrors, setDataErrors] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (data && (!draft || draft.id !== data.id)) {
@@ -83,22 +83,8 @@ export default function LandingBuilder({ id }: { id: string }) {
     [arr[i].order, arr[j].order] = [arr[j].order, arr[i].order];
     patch({ sections: arr });
   }
-  function editData(sid: string, text: string) {
-    try {
-      const parsed = JSON.parse(text) as Record<string, unknown>;
-      setDataErrors((e) => ({ ...e, [sid]: false }));
-      patchSection(sid, { data: parsed });
-    } catch {
-      setDataErrors((e) => ({ ...e, [sid]: true }));
-    }
-  }
-
   async function save() {
     if (!draft) return;
-    if (Object.values(dataErrors).some(Boolean)) {
-      toast.error('Có section còn JSON nội dung sai — sửa trước khi lưu');
-      return;
-    }
     try {
       await updateMut.mutateAsync({
         internalName: draft.internalName,
@@ -193,7 +179,7 @@ export default function LandingBuilder({ id }: { id: string }) {
       {tab === 'sections' && (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Bật/tắt, sắp xếp (▲▼) và chọn kiểu cho từng section. Nội dung sửa ở ô JSON (form trực quan — bản sau).
+            Bật/tắt, sắp xếp (▲▼), chọn kiểu và điền nội dung trực quan cho từng section.
           </p>
           {sorted.map((s, idx) => (
             <Card key={s.id} className="p-4">
@@ -226,17 +212,12 @@ export default function LandingBuilder({ id }: { id: string }) {
                   </Button>
                 </div>
               </div>
-              <div className="mt-3">
-                <Label className="text-xs text-muted-foreground">Nội dung (JSON)</Label>
-                <Textarea
-                  defaultValue={JSON.stringify(s.data, null, 2)}
-                  onChange={(e) => editData(s.id, e.target.value)}
-                  rows={5}
-                  className={`mt-1 font-mono text-xs ${dataErrors[s.id] ? 'border-destructive' : ''}`}
+              <div className="mt-4 border-t pt-4">
+                <SectionForm
+                  type={s.type}
+                  data={s.data}
+                  onChange={(d) => patchSection(s.id, { data: d })}
                 />
-                {dataErrors[s.id] && (
-                  <p className="mt-1 text-xs text-destructive">JSON không hợp lệ</p>
-                )}
               </div>
             </Card>
           ))}
