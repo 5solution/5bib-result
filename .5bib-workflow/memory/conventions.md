@@ -4454,3 +4454,19 @@ Server (Node + MySQL) chạy UTC → `new Date().toISOString().slice(0,10)` từ
 3. **Workflow map → adversarial verify → empirical TRƯỚC khi code.** Financial change PHẢI: (a) map mọi consumer cross-module cùng boundary (F-082: fee.service + analytics cùng bug — fix lệch pha = F-058 MAJOR_DRIFT giả); (b) verify altitude — shift đúng 1 tầng (date→SQL param), calendar strings TZ-agnostic không đụng; (c) empirical verify TZ/data thật trên PROD (`@@time_zone`, so NOW() vs UTC_TIMESTAMP(), sample row) — KHÔNG suy diễn từ tên cột.
 
 **Reference impl:** `ict-date.util.ts` `ICT_PERIOD_CUTOVER` + `periodRangeUtc()` + 11-test cutover matrix; QC param-assert gate `reconciliation/services/__qc__/f082-period-boundary.spec.ts`.
+
+---
+
+## 🌐 F-083 patterns (Race Landing — per-race promo microsite)
+
+### F-083.1. Lean-fork plumbing (copy, KHÔNG import)
+**Khi:** cần một module mới giống module có sẵn nhưng KHÔNG muốn kế thừa UX/coupling của nó (vd Promo Hub UX bị Danny chê khó dùng). **Pattern:** copy các plumbing đã chứng minh (SETNX anti-stampede lock + sanitize-html + cache raw-write/strip-on-read + route-order slug-before-`:id` + LogtoAdminGuard) sang module mới như `landing/`, KHÔNG `import` module nguồn. **Lợi:** zero coupling, tự do build UI mới premium; **chi phí:** vài đoạn plumbing duplicate (chấp nhận — nó ổn định, ít đổi). Anti-pattern: extend module cũ → kế thừa luôn cả nợ UX + DI graph rối.
+
+### F-083.2. Publish snapshot = public source-of-truth
+**Khi:** trang public cần freeze nội dung tại thời điểm publish (không lộ draft đang sửa). **Pattern:** publish = atomic version-guarded `findOneAndUpdate({_id, 'publish.version': cur}, {$set:{'publish.version': cur+1, 'publish.liveSnapshot': {meta, theme, sections: enabled}}})` — chỉ freeze section `enabled`; null → 409 `PUBLISH_CONFLICT` (1-winner concurrency). **Public read CHỈ đọc `liveSnapshot`**, KHÔNG đọc live doc (draft sections không bao giờ lộ). Port từ F-082 version-guard + F-027 section-subdoc.
+
+### F-083.3. Subdomain catch-all middleware + reserved-set
+**Khi:** route `<slug>.5bib.com` → trang động mà không cần infra per-host. **Pattern:** `frontend/middleware.ts` branch chạy SAU known-host checks: `host.endsWith('.5bib.com')` + single-label (`!sub.includes('.')`) + `!RESERVED.has(sub)` → `rewrite('/' → '/l/<slug>')`. **TUYỆT ĐỐI KHÔNG set cookie scope `.5bib.com`** (R-9 — tránh rò session cross-subdomain). Reserved-list phải maintain (www/admin/api/app/...). Backend `resolve?host=` cache `landing:resolve:` 300s cho host→slug.
+
+### F-083.4. Allowlist-literal public strip > spread-delete
+**Khi:** strip field nhạy cảm khỏi public response (BR-83-20). **Pattern:** build response bằng **object literal liệt kê tường minh field cho phép** (`return { id: String(doc._id), raceRef:{...}, meta, theme, sections }`), KHÔNG `{...doc}` rồi `delete`. **Lý do:** miss-field = absent (an toàn mặc định); spread-delete dễ quên field mới thêm vào schema → leak âm thầm (PII/internalName/tenantId). Đồng pattern với `stripRacePrivateFields` nhưng nghiêm hơn (literal thay vì filter). Reference: `landing.service.ts toPublicResponse`.

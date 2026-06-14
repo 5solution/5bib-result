@@ -4,6 +4,57 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-14 FEATURE-083: Race Landing Page Builder (F-LP) Phase 1 MVP
+
+**Branch/Commit:** `5bib_landing_v1` (9 commit) → merge `main` → CI `build-and-deploy.yml` → DEV.
+**Type:** NEW_MODULE (lean-fork F-027 Promo Hub — copy plumbing, KHÔNG import module).
+
+### Files changed
+**Backend (➕ NEW module `backend/src/modules/landing/`):**
+- ➕ `landing.constants.ts` — `LANDING_SECTION_TYPES` (10), `VARIANTS_BY_TYPE`, `RESERVED_SUBDOMAINS`, `SUBDOMAIN_REGEX`, `HEX_COLOR_REGEX`, `LANDING_CACHE` keys, `TICKETING_BASE_URL`.
+- ➕ `schemas/race-landing.schema.ts` — collection `race_landings`, unique `raceRef.raceId`, sparse-unique `domain.subdomain`, section subdoc array, `publish.liveSnapshot`.
+- ➕ `dto/{section,landing-parts,create-landing,update-landing,reorder-sections,landing-response}.dto.ts`.
+- ➕ `landing.service.ts` — create-seed + publish atomic version-guarded snapshot + `toPublicResponse` allowlist strip (BR-83-20) + subdomain validate (reserved/unique) + SETNX cache + `invalidate()` mọi mutation + CTA mysql_race_id fallback.
+- ➕ `landing.controller.ts` — 10 endpoint; route-order `slug/:slug` + `resolve` (public) TRƯỚC `:id`; 8 admin `@UseGuards(LogtoAdminGuard)` + `@ApiResponse`.
+- ➕ `landing.module.ts` — Mongoose(RaceLanding+Race) + LogtoAuthModule; registered `app.module.ts` sau PromoHubAnalyticsModule.
+- ➕ `landing.service.spec.ts` — 15 unit tests PASS (mocked model + redis-null graceful).
+- ✏️ `upload/upload.service.ts` + `upload.controller.ts` — optional sanitized `folder` param (ADJUSTMENT #1, path-traversal-safe, backward-compat date prefix).
+- ➕ `backend/test/landing.e2e-spec.ts` — Supertest 401/404/route-order + gated full flow (`LANDING_E2E_ADMIN_TOKEN`).
+
+**Frontend (➕ `app/(landing)` + `components/landing/`):**
+- ➕ `app/(landing)/layout.tsx` (no 5BIB chrome) + `landing.css` (tokens scoped `.landing-root`) + `l/[slug]/page.tsx` (SSR fetch `${BACKEND_URL}/api/landings/slug/:slug` ISR 60s + generateMetadata + `notFound()`) + `landing-preview/page.tsx` (DEV harness prod-guarded — renamed từ `__preview` private-folder bug QC fix).
+- ➕ `components/landing/`: `types.ts` + `RaceLandingRenderer.tsx` (switch dispatch unknown→null) + `LandingNav.tsx` + `LandingFooter.tsx` + `sections/registry.ts` + **10 section** (Hero/About/Course/Schedule/Pricing/ResultsEmbed/PhotosEmbed/Gallery/Sponsors/ContactSocial) + `*.module.css` — theme `var(--main)`/`var(--sec)`, mobile-responsive, **built via 10-agent workflow fan-out**.
+- ✏️ `middleware.ts` — landing subdomain branch `<slug>.5bib.com → /l/<slug>` (`LANDING_RESERVED` set, single-label, no `.5bib.com` cookie R-9).
+
+**Admin (➕ `(dashboard)/landing/`):**
+- ➕ `lib/landing-{api,hooks,labels}.ts` (hand-typed `/api/*` proxy wrappers + TanStack hooks + VN dicts; SDK regen deferred TD-F083-SDK-REGEN).
+- ➕ `(dashboard)/landing/page.tsx` (list + create dialog raceId + delete) + `[id]/builder/page.tsx` + `components/landing/LandingBuilder.tsx` (tabs Section/Giao diện theme picker/Tên miền/SEO).
+- ✏️ `nav-groups.ts` — entry "Trang giải chạy" (Globe, requireRole admin).
+
+**Docs:** ✏️ `CLAUDE.md` — Redis registry 4 key + S3 Lifecycle rule 7 (`landing-assets/` no-expire).
+
+### Architecture impact
+- NEW public flow: subdomain middleware rewrite → `/l/[slug]` SSR → backend `GET /api/landings/slug/:slug` (cache 60s + SETNX) → strip `liveSnapshot` → render. Zero-cross-module-DI (auto-data at frontend SSR — Phase 2 enricher TD-F083-AUTODATA). architecture.md updated.
+
+### Conventions impact
+- 4 patterns minted: F-083.1 lean-fork plumbing without import, F-083.2 publish snapshot = public source-of-truth, F-083.3 subdomain catch-all middleware + reserved-set, F-083.4 allowlist-literal public strip > spread-delete.
+
+### DB / Cache impact
+- MongoDB: NEW collection `race_landings` (unique `raceRef.raceId` + sparse-unique `domain.subdomain`). NO migration.
+- Redis: `landing:slug:<sub>` (60s, stripped DTO) / `landing:resolve:<host>` (300s) / `landing-lock:<sub>` (5s SETNX) / `ratelimit:landing-view:` (reserved Phase 2).
+- S3: `landing-assets/<landingId>/...` no-expire (rule 7); upload.service `folder` param.
+
+### Tech debt còn lại (→ known-issues.md)
+- TD-F083-AUTODATA (HIGH Phase 2) · SECTIONFORMS · RACEPICKER · PREVIEWPANE · RESULTS-IFRAME-PHASE2 · SDK-REGEN · C2-ADMIN-AUTH-WALKTHROUGH-PRE-PROD.
+
+### Lessons learned
+- **Lean-fork > extend:** copy a proven module's plumbing WITHOUT importing it → zero coupling + free to build NEW premium UI without inheriting the source's UX debt (Danny's Promo Hub UX complaint).
+- **Allowlist-literal strip an toàn hơn spread-delete:** miss-field = absent, không leak (vs `delete obj.x` dễ quên field mới).
+- **Next.js `_`-prefix = private folder** (non-routable) → `__preview` 404; caught chỉ bằng LIVE testing, không bằng tsc. Manual E2E > static check cho routing.
+- **10-agent workflow fan-out** dựng 10 section premium song song + strict contract → tsc-clean, wall-clock thắng.
+
+---
+
 ## 2026-06-10 FEATURE-082: Reconciliation TZ Cutover — ICT boundary từ kỳ T6/2026
 
 **PR/Commit:** push main + release/v1.16.0 (commit F-082)

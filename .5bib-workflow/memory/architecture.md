@@ -439,6 +439,47 @@ SECURITY:
 
 ---
 
+### FEATURE-083 — Race Landing subdomain → SSR → public liveSnapshot flow
+
+```
+[BTC microsite visitor] GET https://<slug>.5bib.com/
+        │
+        ▼
+[frontend/middleware.ts]  isLandingHost? (host endsWith .5bib.com
+        │                  + single-label + NOT in LANDING_RESERVED)
+        │                  → rewrite '/' → '/l/<slug>'  (NO cookie set — R-9)
+        ▼
+[app/(landing)/l/[slug]/page.tsx]  SSR fetch (ISR 60s)
+        │   GET ${BACKEND_URL}/api/landings/slug/<slug>
+        ▼
+[LandingController.findBySlugPublic]  (PUBLIC — no guard; route BEFORE :id)
+        │
+        ▼
+[LandingService.findBySlugPublic]
+        ├─▶ Redis GET landing:slug:<sub>  ──hit──▶ return stripped DTO
+        │       miss
+        ▼
+        ├─▶ SETNX landing-lock:<sub> (5s, retry 3×200ms anti-stampede)
+        ├─▶ queryPublished(sub)  (Mongo: status='published')
+        ├─▶ toPublicResponse()  ── allowlist strip (liveSnapshot only,
+        │       _id→id, NO merchantRef/internalName/publish)
+        └─▶ Redis SET landing:slug:<sub> = stripped DTO (TTL 60s)
+        ▼
+[RaceLandingRenderer]  switch(section.type) → 10 section component
+        theme cascade: .landing-root style var(--main)/var(--sec)
+
+Admin write (create-seed / update / reorder / publish / unpublish / delete)
+        └─▶ invalidate(subdomain): DEL landing:slug:<sub> (+ landing:resolve:*)
+Publish = atomic findOneAndUpdate({_id,'publish.version':cur}) → version++,
+        freeze enabled sections into publish.liveSnapshot (1-winner concurrency).
+```
+
+**Phase 2 (tracked):** page-level SSR enricher injects live race/sponsors/results into
+auto-data sections (TD-F083-AUTODATA); iframe results embed + CSP (TD-F083-RESULTS-IFRAME-PHASE2);
+custom domain Caddy on-demand TLS (`domain.domainStatus`/`sslStatus` fields reserved).
+
+---
+
 ## ⚡ Performance Critical Paths + Redis Keys Registry
 
 > **Source of truth:** CLAUDE.md "Redis Keys Registry"
