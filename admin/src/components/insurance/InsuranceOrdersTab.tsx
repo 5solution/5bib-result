@@ -30,7 +30,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useIglooRequests, useRetryIglooRequest } from "@/lib/insurance-hooks";
 import {
@@ -49,6 +48,10 @@ const MAX_RETRY = 3;
 export function InsuranceOrdersTab() {
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
+  const [retryTarget, setRetryTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const { data, isLoading, isError, refetch, isFetching } = useIglooRequests({
     status: status === "all" ? undefined : status,
     page,
@@ -77,7 +80,7 @@ export function InsuranceOrdersTab() {
           <Select
             value={status}
             onValueChange={(v) => {
-              setStatus(v);
+              setStatus(v ?? "all");
               setPage(1);
             }}
           >
@@ -176,32 +179,15 @@ export function InsuranceOrdersTab() {
                   </TableCell>
                   <TableCell>
                     {r.status === "FAILED" && r.retryCount < MAX_RETRY ? (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            Thử lại
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Gửi lại đơn cho {r.insuredName}?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Đơn sẽ được đưa lại hàng đợi gửi Igloo. Số lần đã
-                              thử: {r.retryCount}/{MAX_RETRY}.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Huỷ</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleRetry(r.id, r.insuredName)}
-                            >
-                              Gửi lại
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setRetryTarget({ id: r.id, name: r.insuredName })
+                        }
+                      >
+                        Thử lại
+                      </Button>
                     ) : (
                       "—"
                     )}
@@ -236,6 +222,34 @@ export function InsuranceOrdersTab() {
           </Button>
         </div>
       )}
+
+      <AlertDialog
+        open={!!retryTarget}
+        onOpenChange={(o) => !o && setRetryTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Gửi lại đơn cho {retryTarget?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Đơn sẽ được đưa lại hàng đợi gửi Igloo (tối đa {MAX_RETRY} lần
+              thử).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Huỷ</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (retryTarget) handleRetry(retryTarget.id, retryTarget.name);
+                setRetryTarget(null);
+              }}
+            >
+              Gửi lại
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

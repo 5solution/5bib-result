@@ -118,7 +118,7 @@ export function InsuranceCreateTab() {
             <Select
               value={raceId ? String(raceId) : undefined}
               onValueChange={(v) => {
-                setRaceId(Number(v));
+                setRaceId(v ? Number(v) : undefined);
                 setSelected(new Set());
               }}
             >
