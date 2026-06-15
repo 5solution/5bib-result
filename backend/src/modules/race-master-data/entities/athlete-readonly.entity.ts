@@ -89,6 +89,14 @@ export class AthleteReadonly {
   @Column({ type: 'datetime', nullable: true })
   modified_on: Date | null;
 
+  /**
+   * FEATURE-085 — ngày bản ghi VĐV phát sinh. Dùng để chọn "VĐV phát sinh
+   * trong ngày" cho cron Igloo Insurance (BR-IGL-05). Verify SELECT grant +
+   * cột tồn tại trên `5bib_platform_live.athletes` 2026-06-15.
+   */
+  @Column({ type: 'datetime', nullable: true })
+  created_on: Date | null;
+
   @Column({
     type: 'bit',
     width: 1,

@@ -149,6 +149,19 @@ TTL chuẩn: 60s (stats), 300s (homepage/articles list), 600s (article detail), 
 
 ---
 
+### ⭐ External async integration pattern (F-085 — Igloo Insurance)
+
+Khi tích hợp **API bên thứ ba phát sinh tiền/hành động không hoàn tác** (insurance, payment gateway, e-invoice), dùng pattern:
+
+1. **Hàng đợi nội bộ + worker tách:** ghi row Mongo `QUEUED` → cron `submit-worker` POST → `PENDING`(+vendorRequestId) → cron `poll-worker` reconcile → terminal. Tách selection / submission / polling = 3 cron độc lập (KHÔNG POST đồng bộ trong request handler).
+2. **2-tier kill-switch ENV (default false):** 1 flag gate auto-cron selection (`*_DAILY_ENABLED`), 1 flag gate **egress thật** (`*_SUBMIT_ENABLED`) áp cho cả cron lẫn manual → **dev KHÔNG bao giờ gửi thật**. Production bật cả hai.
+3. **Idempotency unique key:** `partnerRefId` unique index + catch `E11000 → return false` (race-safe, KHÔNG cần lock cho insert). Check trước + DB unique làm chốt cuối.
+4. **Snapshot payload frozen** trong doc (typed đúng interface, KHÔNG `Record<string,unknown>` cast bẩn) → worker POST trực tiếp, data không đổi giữa chừng.
+5. **Redis SETNX lock** mỗi cron (`<prefix>:<job>-lock`) chống double-fire multi-instance (port `ended-race-master-sync.cron`).
+6. **Money-critical:** ép constant (`FLAT=10000`) + test `it.each` mọi nhánh ra đúng 1 con số. KHÔNG để path nào tính ra số khác.
+7. **HTTP client:** `@nestjs/axios` HttpService + `firstValueFrom` + header auth từ `env`, timeout 15s, KHÔNG retry tự động (FAILED → admin retry thủ công, max N).
+8. **Legacy MySQL query:** `@InjectDataSource('platform')` + `db.query(sql, params)` raw parameterized — user input CHỈ qua `?`/params array, hằng số SQL (SELECT_COLS/BASE_FROM) qua template literal OK.
+
 ## ⚛️ Frontend / Admin Rules (Next.js 16)
 
 ### ⭐ API Call Rules (BẮT BUỘC — CLAUDE.md)

@@ -4,6 +4,40 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-15 FEATURE-085: Igloo Insurance — Daily Auto-Order + Admin Manual-Create
+
+**Type:** NEW_MODULE (backend `igloo-insurance` + admin page) + EXTEND (athlete-readonly +created_on).
+**Branch:** `5bib_igloo_insurance_v1` → main (CI→DEV). QC ✅ 55 test PASS. Manager review 0 red flag.
+
+**Why:** Danny ký HĐ Igloo nhưng KHÔNG bán bảo hiểm — tự phát sinh đơn cho VĐV thật để **giữ volume hợp đồng**. 5Solution chịu phí. PRODUCTION + PII thật.
+
+### Files changed
+- ➕ `backend/src/modules/igloo-insurance/` (NEW module): `utils/igloo-helpers.ts`(+spec) · `igloo-insurance.constants.ts` · `schemas/igloo-insurance-request.schema.ts` · `dto/{create-igloo-requests,igloo-response}.dto.ts` · `services/{igloo-http,igloo-selection,igloo-request}.service.ts`(+request spec) · `igloo-insurance.controller.ts` (7 endpoint LogtoAdminGuard) · `crons/{igloo-daily,igloo-submit-worker,igloo-poll-worker}.cron.ts` · `__qc__/{igloo-insurance,igloo-workers}.qc.spec.ts`
+- ✏️ `race-master-data/entities/athlete-readonly.entity.ts` (+`created_on`) · `config/index.ts` (+`env.igloo` 6 var) · `app.module.ts` (register trong platformDbModules) · `.env.example`
+- ➕ `admin/src/app/(dashboard)/insurance/page.tsx` + `components/insurance/{InsuranceCreateTab,InsuranceOrdersTab}.tsx` + `lib/{insurance-api,insurance-hooks,insurance-labels}.ts` · ✏️ `lib/nav-groups.ts`
+
+### Architecture impact
+- NEW external integration: Igloo partner API (`api-igloo-insurance.5solution.vn`, X-API-Key) → đứng trước GIC. Hàng đợi nội bộ `QUEUED→submit-worker→PENDING→poll-worker→SUCCESS|FAILED` + 3 cron + 2 kill-switch ENV (`IGLOO_DAILY_ENABLED` + `IGLOO_SUBMIT_ENABLED`, default false).
+- Nguồn data = legacy MySQL `'platform'` trực tiếp (athletes+athlete_subinfo+races), KHÔNG dùng Mongo cache.
+
+### DB / Cache impact
+- MongoDB: collection mới `igloo_insurance_requests` (unique `partnerRefId`=`igloo:<athletesId>:<raceId>` idempotency + index status/mysqlRaceId/athletesId + `{status,lastPolledAt}`).
+- MySQL platform: +map cột `athletes.created_on` (readonly, no migration).
+- Redis: `igloo:daily-lock:<ymd>`(23h) / `igloo:submit-lock`(110s) / `igloo:poll-lock`(110s) SETNX.
+- ENV: `IGLOO_BASE_URL/API_KEY/DAILY_COUNT=10/CRON_HOUR=9/DAILY_ENABLED=false/SUBMIT_ENABLED=false`.
+
+### Business rules khoá
+- Phí **CỐ ĐỊNH 10.000đ/đơn**, **packageCode=ROAD luôn**, **coverage 1 ngày** từ event_start_date (Danny chốt — KHÔNG nhân ngày, KHÔNG đổi gói). 10 đơn/ngày. CCCD 9/12 số, KHÔNG VĐV nước ngoài, gender MALE/FEMALE. KHÔNG mask PII (Danny chốt).
+
+### Tech debt (→ known-issues)
+- TD-F085-IGLOO-LIVE-VERIFY 🔴 pre-golive (POST 1 đơn thật sau bật flag) · SDK-REGEN · LIVE-E2E · ELIGIBLE-COUNT-APPROX · COURSE-DISTANCE · PERF-SLA.
+
+### Lessons learned
+- Pattern "external async integration: queue nội bộ + 2-tier kill-switch + idempotency unique key" → tái dùng cho tích hợp bên thứ ba tương lai.
+- Money-critical: ép const + test mọi nhánh ra đúng 1 con số (MONEY-1 it.each).
+
+---
+
 ## 2026-06-14 FEATURE-083: Race Landing Page Builder (F-LP) Phase 1 MVP
 
 **Branch/Commit:** `5bib_landing_v1` (9 commit) → merge `main` → CI `build-and-deploy.yml` → DEV.

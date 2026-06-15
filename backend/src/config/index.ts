@@ -111,6 +111,16 @@ const envVarsSchema = Joi.object()
     INVOICE_RECONCILE_TELEGRAM_BOT_TOKEN: Joi.string().optional().allow(''),
     INVOICE_RECONCILE_TELEGRAM_CHAT_ID: Joi.string().optional().allow(''),
     INVOICE_ALERT_EMAILS: Joi.string().optional().allow('').default(''),
+    // FEATURE-085 — Igloo Insurance partner API (daily auto-order + admin manual).
+    // 2 kill-switch default false → dev KHÔNG egress đơn thật.
+    IGLOO_BASE_URL: Joi.string().default(
+      'https://api-igloo-insurance.5solution.vn',
+    ),
+    IGLOO_API_KEY: Joi.string().optional().allow('').default(''),
+    IGLOO_DAILY_COUNT: Joi.number().min(1).max(100).default(10),
+    IGLOO_CRON_HOUR: Joi.number().min(0).max(23).default(9),
+    IGLOO_DAILY_ENABLED: Joi.boolean().default(false),
+    IGLOO_SUBMIT_ENABLED: Joi.boolean().default(false),
   })
   .unknown();
 
@@ -233,5 +243,14 @@ export const env = {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
+  },
+  // FEATURE-085 — Igloo Insurance. 2 kill-switch default false (an toàn dev).
+  igloo: {
+    baseUrl: envVars.IGLOO_BASE_URL as string,
+    apiKey: (envVars.IGLOO_API_KEY as string) || '',
+    dailyCount: envVars.IGLOO_DAILY_COUNT as number,
+    cronHour: envVars.IGLOO_CRON_HOUR as number,
+    dailyEnabled: envVars.IGLOO_DAILY_ENABLED as boolean,
+    submitEnabled: envVars.IGLOO_SUBMIT_ENABLED as boolean,
   },
 };

@@ -102,6 +102,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "team", href: "/team-management", label: "Quản lý nhân sự", icon: Users },
       { id: "claims", href: "/claims", label: "Khiếu nại", icon: FileWarning, dot: true },
       { id: "timing-leads", href: "/timing-leads", label: "Timing Leads", icon: Timer },
+      { id: "igloo-insurance", href: "/insurance", label: "Bảo hiểm Igloo", icon: ShieldCheck, requireRole: "admin" },
       // F-048 Phase 3 — Athlete identity clusters management
       {
         id: "identity-clusters",
