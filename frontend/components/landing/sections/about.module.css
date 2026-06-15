@@ -55,7 +55,9 @@
   position: relative;
   border-radius: 20px;
   overflow: hidden;
-  aspect-ratio: 4 / 3;
+  /* 5bib about images are square (e.g. 2048×2048); a 4/3 frame cover-cropped
+   * ~25% of height. Match the source ratio so nothing is lost. */
+  aspect-ratio: 1 / 1;
   box-shadow: 0 30px 60px -36px rgba(28, 25, 23, 0.5);
 }
 .img img {

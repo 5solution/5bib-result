@@ -172,11 +172,10 @@ export default function HeroSection({ section, theme }: SectionProps) {
               src={media}
             />
           ) : (
-            <img
-              className={`${styles.mediaEl} ${variant === 'video' ? '' : styles.kb}`}
-              alt=""
-              src={media}
-            />
+            <>
+              <img className={styles.mediaBackdrop} alt="" src={media} aria-hidden="true" />
+              <img className={styles.mediaFg} alt="" src={media} />
+            </>
           )}
         </div>
       )}
@@ -208,8 +207,8 @@ export default function HeroSection({ section, theme }: SectionProps) {
       <div className={`${styles.scrim} ${styles.vignette}`} aria-hidden="true" />
       <div className={styles.grain} aria-hidden="true" />
 
-      {/* live badge for video variant */}
-      {variant === 'video' && (
+      {/* live badge — only when media is an ACTUAL video, not a static image */}
+      {mediaIsVideo && (
         <div className={styles.badgeVid}>
           <b />
           Video nền · Highlight reel
