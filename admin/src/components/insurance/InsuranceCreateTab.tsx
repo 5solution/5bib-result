@@ -149,6 +149,13 @@ export function InsuranceCreateTab() {
         </div>
       </div>
 
+      {raceId ? (
+        <p className="text-xs text-stone-500">
+          Bấm vào dòng để chọn / bỏ chọn VĐV — dòng được chọn sẽ tô xanh. (Hoặc
+          tick ô vuông đầu dòng.)
+        </p>
+      ) : null}
+
       <Card className="overflow-hidden">
         {!raceId ? (
           <div className="p-10 text-center text-sm text-stone-500">
@@ -179,6 +186,7 @@ export function InsuranceCreateTab() {
                     checked={allSelected}
                     onCheckedChange={toggleAll}
                     aria-label="Chọn tất cả"
+                    className="border-stone-400 data-[checked]:border-blue-600"
                   />
                 </TableHead>
                 <TableHead>Họ tên</TableHead>
@@ -192,14 +200,25 @@ export function InsuranceCreateTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((a) => (
-                <TableRow key={a.athletesId}>
+              {rows.map((a) => {
+                const isSel = selected.has(a.athletesId);
+                return (
+                <TableRow
+                  key={a.athletesId}
+                  onClick={a.hasOrder ? undefined : () => toggle(a.athletesId)}
+                  className={
+                    a.hasOrder
+                      ? "opacity-60"
+                      : `cursor-pointer ${isSel ? "bg-blue-50 hover:bg-blue-50" : "hover:bg-stone-50"}`
+                  }
+                >
                   <TableCell>
                     <Checkbox
-                      checked={selected.has(a.athletesId)}
-                      onCheckedChange={() => toggle(a.athletesId)}
+                      checked={isSel}
                       disabled={a.hasOrder}
                       aria-label={`Chọn ${a.fullName}`}
+                      className="pointer-events-none border-stone-400 data-[checked]:border-blue-600"
+                      onCheckedChange={() => {}}
                     />
                   </TableCell>
                   <TableCell className="font-medium">{a.fullName}</TableCell>
@@ -223,7 +242,8 @@ export function InsuranceCreateTab() {
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         )}
