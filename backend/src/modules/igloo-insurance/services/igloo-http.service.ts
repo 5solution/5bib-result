@@ -36,18 +36,28 @@ export class IglooHttpService {
     };
   }
 
+  /**
+   * Igloo bọc response trong envelope `{ success, data: {...} }` (verified
+   * PROD 2026-06-16). Đọc `.data` lồng; fallback flat phòng API đổi.
+   */
+  private unwrap<T extends Record<string, unknown>>(body: unknown): T {
+    const b = (body ?? {}) as { data?: T } & T;
+    return (b.data ?? b) as T;
+  }
+
   /** POST tạo đơn. Trả requestId (202). Throw nếu lỗi. */
   async createRequest(
     payload: CreateIglooRequestPayload,
   ): Promise<IglooCreateResult> {
     const url = `${this.baseUrl}${IGLOO_API.createRequest}`;
     const res = await firstValueFrom(
-      this.http.post<{ requestId?: string; id?: string }>(url, payload, {
+      this.http.post(url, payload, {
         headers: this.headers(),
         timeout: 15000,
       }),
     );
-    const requestId = res.data?.requestId ?? res.data?.id;
+    const d = this.unwrap<{ requestId?: string; id?: string }>(res.data);
+    const requestId = d.requestId ?? d.id;
     if (!requestId) {
       throw new Error(
         `Igloo createRequest: thiếu requestId trong response (status ${res.status})`,
@@ -60,16 +70,17 @@ export class IglooHttpService {
   async getStatus(iglooRequestId: string): Promise<IglooStatusResult> {
     const url = `${this.baseUrl}${IGLOO_API.getRequest(iglooRequestId)}`;
     const res = await firstValueFrom(
-      this.http.get<{
-        status?: string;
-        gicContractNo?: string | null;
-        certificateUrl?: string | null;
-      }>(url, { headers: this.headers(), timeout: 15000 }),
+      this.http.get(url, { headers: this.headers(), timeout: 15000 }),
     );
+    const d = this.unwrap<{
+      status?: string;
+      gicContractNo?: string | null;
+      certificateUrl?: string | null;
+    }>(res.data);
     return {
-      status: res.data?.status ?? 'PENDING',
-      gicContractNo: res.data?.gicContractNo ?? null,
-      certificateUrl: res.data?.certificateUrl ?? null,
+      status: d.status ?? 'PENDING',
+      gicContractNo: d.gicContractNo ?? null,
+      certificateUrl: d.certificateUrl ?? null,
     };
   }
 }
