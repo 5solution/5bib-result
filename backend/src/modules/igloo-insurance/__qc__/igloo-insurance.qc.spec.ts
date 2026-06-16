@@ -69,6 +69,17 @@ describe('QC FEATURE-085 — adversarial', () => {
     it('accepts a valid body', () => {
       expect(errs({ raceId: 220, athleteIds: [1, 2] }).length).toBe(0);
     });
+    it('coerces string ids from legacy BIGINT (no 400) — regression PROD bug', () => {
+      // TypeORM bigNumberStrings → athletes_id/race_id tới dạng string.
+      // @Type(() => Number) phải coerce → KHÔNG còn "each value must be integer".
+      const dto = plainToInstance(CreateIglooRequestsDto, {
+        raceId: '220',
+        athleteIds: ['123', '456'],
+      });
+      expect(validateSync(dto).length).toBe(0);
+      expect(dto.raceId).toBe(220);
+      expect(dto.athleteIds).toEqual([123, 456]);
+    });
   });
 
   describe('SEC-2 — controller guarded by LogtoAdminGuard (class-level)', () => {

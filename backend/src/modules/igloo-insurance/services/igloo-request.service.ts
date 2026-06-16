@@ -92,7 +92,7 @@ export class IglooRequestService {
       rows.map((r) => r.athletes_id),
     );
     const items: EligibleAthleteDto[] = rows.map((r) => ({
-      athletesId: r.athletes_id,
+      athletesId: Number(r.athletes_id),
       fullName: (r.name ?? '').trim(),
       bib: r.bib_number,
       gender: normalizeGender(r.gender) === 'FEMALE' ? 'Nữ' : 'Nam',
