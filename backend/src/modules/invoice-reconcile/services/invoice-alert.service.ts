@@ -31,6 +31,7 @@ import {
   composeMisaAuthFailAlert,
   composeMisaUnavailableAlert,
   composeWarnAlert,
+  RecapExtras,
 } from './alert-composer';
 import { ageBucket4h } from './reconcile-classifier';
 import { DiffEvent } from './diff-computer';
@@ -115,12 +116,15 @@ export class InvoiceAlertService {
     report: ReconcileReportDto,
     diffEvents: DiffEvent[],
     raceTitlesByid: Map<number, string> = new Map(),
+    // F-086 BR-86-03/04/05 — visibility extras (cumulative + misaFail hôm nay).
+    extras?: RecapExtras,
   ): Promise<boolean> {
     const html = composeHourlyRecap(
       report,
       diffEvents,
       this.dashboardUrl(),
       raceTitlesByid,
+      extras,
     );
     return this.dispatch(html, 'hourly-recap');
   }
@@ -129,9 +133,11 @@ export class InvoiceAlertService {
   async sendEodRecap(
     date: string,
     report: ReconcileReportDto,
+    // F-086 — cumulative tổng từ 08/06 (misaFail EOD đọc từ counters trong composer).
+    extras?: RecapExtras,
   ): Promise<boolean> {
     const counters = await this.counters.getAll(date);
-    const html = composeEodRecap(report, counters, this.dashboardUrl());
+    const html = composeEodRecap(report, counters, this.dashboardUrl(), extras);
     const ok = await this.dispatch(html, 'eod-recap');
     // Mark EOD sent (gate skip Hourly 21:00)
     if (this.redis) {

@@ -89,6 +89,27 @@
 
 ---
 
+## 2026-06-16 FEATURE-086: Invoice Visibility Counters (tổng/hôm nay/lỗi vào Telegram)
+
+**Branch:** `5bib_invoice_v2` off `2e3f993` (PROD v1.18.0) → release/v1.19.0
+**Type:** EXTEND_EXISTING (F-076 invoice-reconcile visibility layer)
+**Trigger:** Danny sau mấy ngày vận hành: "không biết tổng hóa đơn xuất / hôm nay / lỗi bao nhiêu, tin nhắn cũng đếch biết".
+**QC:** ✅ APPROVED — 145/145 + adversarial verify 7/7, 0 bug blocking.
+
+**Files (5 service + 2 test):**
+- ✏️ `invoice-reconcile/services/misa-meinvoice.client.ts` — `countInvoicesInRange(from,to)` 1-page take=1 → TotalCount
+- ✏️ `invoice-reconcile/services/daily-counters.service.ts` — `CUMULATIVE_ISSUED_KEY` no-TTL + set/get (idempotent SET)
+- ✏️ `invoice-reconcile/services/alert-composer.ts` — `RecapExtras` + `computeErrorBreakdown` + 3-dòng summary heartbeat (2 state) + EOD 2 dòng
+- ✏️ `invoice-reconcile/services/invoice-alert.service.ts` — sendHourly/EodRecap +extras
+- ✏️ `invoice-reconcile/services/invoice-reconcile.service.ts` — CUMULATIVE_START_DATE='2026-06-08' + refreshCumulativeIssued + buildRecapExtras (2-tầng throw-safe)
+- ➕ `__tests__/f086-visibility-counters.spec.ts` (18) + ✏️ misa spec (+2) + mock 3 method mới
+
+**Design lessons:**
+- Cumulative = MISA TotalCount SET (KHÔNG INCR snapshot ×288/ngày, KHÔNG diff-ISSUED undercount). Authoritative + idempotent.
+- Error = snapshot ("đang có N"), KHÔNG tích lũy (UNISSUED resolved → hết lỗi). breached ⊂ unissued.
+- Heartbeat MUST send (BR-86-06) — buildRecapExtras 2-tầng catch → {0,0} dù MISA+Redis throw.
+- +TD-F086-01-MISA-TOTALCOUNT-RAW (gồm HĐ hủy/thay thế).
+
 ## 2026-06-10 FEATURE-082: Reconciliation TZ Cutover — ICT boundary từ kỳ T6/2026
 
 **PR/Commit:** push main + release/v1.16.0 (commit F-082)

@@ -234,6 +234,30 @@ export class MisaMeinvoiceClient {
     return all;
   }
 
+  /**
+   * F-086 BR-86-01 — đếm TỔNG hóa đơn trong range mà KHÔNG kéo full list.
+   *
+   * MISA paging trả `TotalCount` ngay ở page đầu → fetch 1 page (skip=0, take=1)
+   * là đủ. MISA account 5BIB dùng tax code riêng → TotalCount = tổng hóa đơn 5BIB
+   * đã xuất trong range (authoritative, idempotent — query lại ra cùng số).
+   *
+   * Rẻ: 1 HTTP call, payload tối thiểu. Caller (refreshCumulativeIssued) bọc
+   * try/catch — MISA fail KHÔNG block heartbeat (BR-86-06).
+   */
+  async countInvoicesInRange(fromDate: string, toDate: string): Promise<number> {
+    if (!this.isConfigured()) {
+      throw new MisaAuthFailError('MISA env credentials chưa cấu hình');
+    }
+    const page = await this.fetchPageWithRetry(
+      fromDate,
+      toDate,
+      0,
+      1,
+      () => {},
+    );
+    return page.totalCount;
+  }
+
   private async fetchPageWithRetry(
     fromDate: string,
     toDate: string,

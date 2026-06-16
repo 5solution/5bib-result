@@ -19,6 +19,7 @@ function makeMocks() {
   const misa = {
     isConfigured: jest.fn().mockReturnValue(true),
     listInvoicesByDateRange: jest.fn().mockResolvedValue([]),
+    countInvoicesInRange: jest.fn().mockResolvedValue(0),
     getLastStatus: jest.fn().mockReturnValue('OK'),
     getTokenExpiry: jest.fn().mockResolvedValue(null),
   } as any;
@@ -34,6 +35,8 @@ function makeMocks() {
   const counters = {
     increment: jest.fn().mockResolvedValue(undefined),
     getAll: jest.fn().mockResolvedValue({}),
+    getCumulativeIssued: jest.fn().mockResolvedValue(0),
+    setCumulativeIssued: jest.fn().mockResolvedValue(undefined),
   } as any;
 
   const redisStore = new Map<string, string>();
@@ -238,6 +241,7 @@ function makeMocksWithResolver(resolverImpl?: {
   const misa = {
     isConfigured: jest.fn().mockReturnValue(true),
     listInvoicesByDateRange: jest.fn().mockResolvedValue([]),
+    countInvoicesInRange: jest.fn().mockResolvedValue(0),
     getLastStatus: jest.fn().mockReturnValue('OK'),
     getTokenExpiry: jest.fn().mockResolvedValue(null),
   } as any;
@@ -249,6 +253,8 @@ function makeMocksWithResolver(resolverImpl?: {
   const counters = {
     increment: jest.fn().mockResolvedValue(undefined),
     getAll: jest.fn().mockResolvedValue({}),
+    getCumulativeIssued: jest.fn().mockResolvedValue(0),
+    setCumulativeIssued: jest.fn().mockResolvedValue(undefined),
   } as any;
   const redisStore = new Map<string, string>();
   const redis = {
@@ -445,11 +451,14 @@ describe('F-079 — runHourlyRecap + race title resolver', () => {
       const misa = {
         isConfigured: jest.fn().mockReturnValue(true),
         listInvoicesByDateRange: jest.fn().mockResolvedValue([]),
+    countInvoicesInRange: jest.fn().mockResolvedValue(0),
         getLastStatus: jest.fn().mockReturnValue('OK'),
       } as any;
       const counters = {
         increment: jest.fn(),
         getAll: jest.fn().mockResolvedValue({}),
+    getCumulativeIssued: jest.fn().mockResolvedValue(0),
+    setCumulativeIssued: jest.fn().mockResolvedValue(undefined),
       } as any;
       const standaloneAlert = {
         emitUrgentAlerts: jest.fn().mockResolvedValue({ sent: 0 }),
@@ -501,6 +510,7 @@ describe('F-080 — Layer 3 MySQL race title fallback', () => {
     const misa = {
       isConfigured: jest.fn().mockReturnValue(true),
       listInvoicesByDateRange: jest.fn().mockResolvedValue([]),
+    countInvoicesInRange: jest.fn().mockResolvedValue(0),
       getLastStatus: jest.fn().mockReturnValue('OK'),
     } as any;
     const alert = {
@@ -511,6 +521,8 @@ describe('F-080 — Layer 3 MySQL race title fallback', () => {
     const counters = {
       increment: jest.fn(),
       getAll: jest.fn().mockResolvedValue({}),
+    getCumulativeIssued: jest.fn().mockResolvedValue(0),
+    setCumulativeIssued: jest.fn().mockResolvedValue(undefined),
     } as any;
     const redisStore = new Map<string, string>();
     const setexMock = opts.redisSetexThrows

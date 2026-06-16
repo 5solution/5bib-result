@@ -219,6 +219,38 @@ describe('MisaMeinvoiceClient', () => {
       ).rejects.toThrow(MisaAuthFailError);
     });
   });
+
+  describe('F-086 countInvoicesInRange (TC-86-06)', () => {
+    beforeEach(() => {
+      mockRedisGet.mockResolvedValue('cached-token');
+    });
+
+    it('TC-86-06: trả TotalCount từ page đầu, KHÔNG kéo full list (take=1)', async () => {
+      // PageData chỉ 1 item nhưng TotalCount = 147 → đếm dựa TotalCount.
+      mockPost.mockResolvedValue({
+        status: 200,
+        data: { success: true, data: makePage(1, 0, 147) },
+      });
+      const n = await client.countInvoicesInRange('2026-06-08', '2026-06-16');
+      expect(n).toBe(147);
+      // 1 HTTP call duy nhất (không loop paging vì chỉ đọc page đầu)
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      // take=1 trong body
+      const body = mockPost.mock.calls[0][1];
+      expect(body.Take).toBe(1);
+      expect(body.FromDate).toBe('2026-06-08');
+      expect(body.ToDate).toBe('2026-06-16');
+    });
+
+    it('TC-86-06b: range rỗng → TotalCount 0', async () => {
+      mockPost.mockResolvedValue({
+        status: 200,
+        data: { success: true, data: makePage(0, 0, 0) },
+      });
+      const n = await client.countInvoicesInRange('2026-06-08', '2026-06-16');
+      expect(n).toBe(0);
+    });
+  });
 });
 
 // Helper: build PROD-shape MISA paging response data (double-encoded JSON)

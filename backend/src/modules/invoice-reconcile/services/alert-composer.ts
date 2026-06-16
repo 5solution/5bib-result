@@ -129,11 +129,62 @@ export function computeNextHeartbeatHour(currentHour: number): string {
  * F-079 BR-79-04 — Caller (InvoiceAlertService.sendHourlyRecap) đã bỏ skip
  * condition. Composer luôn render đầy đủ — heartbeat semantics.
  */
+/**
+ * F-086 — extra visibility metrics cho block "Tóm tắt" (Danny 2026-06-16):
+ * cumulative tổng từ 08/06 + lỗi gọi MISA hôm nay (counter — composer không
+ * tự đọc Redis). Default {0,0} → backward-compat mọi call/test F-079 cũ.
+ */
+export interface RecapExtras {
+  cumulativeIssued: number;
+  misaFailToday: number;
+}
+
+const RECAP_EXTRAS_DEFAULT: RecapExtras = {
+  cumulativeIssued: 0,
+  misaFailToday: 0,
+};
+
+/**
+ * F-086 BR-86-04 — error snapshot breakdown từ report + misaFail counter.
+ * errorTotal = unissued + duplicate + orphan + misaFail. breached ⊂ unissued
+ * (KHÔNG cộng riêng → tránh double-count).
+ */
+export function computeErrorBreakdown(
+  report: ReconcileReportDto,
+  misaFailToday: number,
+): { total: number; unissued: number; duplicate: number; orphan: number; misaFail: number } {
+  const unissued = report.missing.filter((m) => m.bucket === 'UNISSUED').length;
+  const duplicate = report.duplicateCount;
+  const orphan = report.misaOrphan?.length ?? 0;
+  const misaFail = Math.max(0, misaFailToday);
+  return {
+    unissued,
+    duplicate,
+    orphan,
+    misaFail,
+    total: unissued + duplicate + orphan + misaFail,
+  };
+}
+
+/**
+ * F-086 BR-86-03/04/01 — 3-dòng "Tóm tắt" cố định (Danny visibility).
+ * Dùng chung cho cả 2 state heartbeat (đặt ngay đầu, trước stats).
+ */
+function composeSummaryBlock(report: ReconcileReportDto, extras: RecapExtras): string[] {
+  const err = computeErrorBreakdown(report, extras.misaFailToday);
+  return [
+    `📦 Hôm nay: <b>${report.issuedCount}</b>/${report.expectedCount} đã xuất`,
+    `⚠️ Đang lỗi: <b>${err.total}</b> (UNISSUED ${err.unissued} · trùng ${err.duplicate} · orphan ${err.orphan} · MISA-fail ${err.misaFail})`,
+    `📈 Tổng từ 08/06: <b>${extras.cumulativeIssued}</b> hóa đơn`,
+  ];
+}
+
 export function composeHourlyRecap(
   report: ReconcileReportDto,
   diffEvents: DiffEvent[],
   dashboardUrl: string,
   raceTitlesByid: Map<number, string> = new Map(),
+  extras: RecapExtras = RECAP_EXTRAS_DEFAULT,
 ): string {
   const time = formatTimeIct(report.runAt);
   const isAllOk = report.missingCount === 0;
@@ -153,6 +204,10 @@ export function composeHourlyRecap(
   if (raceTags.length > 0) {
     lines.push(`Giải: <b>${raceTags.join(', ')}</b>`);
   }
+  lines.push('');
+
+  // F-086 — Block "Tóm tắt" 3 dòng ngay đầu (Danny thấy trước tiên, cả 2 state).
+  for (const l of composeSummaryBlock(report, extras)) lines.push(l);
   lines.push('');
 
   if (isAllOk) {
@@ -418,6 +473,8 @@ export function composeEodRecap(
   /** Counters Redis hash: total scan ticks, MISA calls, alerts sent per loại. */
   dailyCounters: Record<string, number>,
   dashboardUrl: string,
+  /** F-086 — cumulative tổng từ 08/06 (default {0,0} backward-compat). */
+  extras: RecapExtras = RECAP_EXTRAS_DEFAULT,
 ): string {
   const lines: string[] = [];
   lines.push(`🌙 <b>5BIB Invoice EOD Recap — ${report.date} (21:00 ICT)</b>`);
@@ -444,6 +501,15 @@ export function composeEodRecap(
     `  • 🔥 BREACHED:           <b>${report.breachedCount}</b> đơn${
       report.breachedCount === 0 ? ' ✅' : ' (cần audit Q)'
     }`,
+  );
+
+  // F-086 BR-86-04 — tổng lỗi hôm nay (snapshot) + cumulative từ 08/06.
+  const err = computeErrorBreakdown(report, dailyCounters['misa-fail'] ?? 0);
+  lines.push(
+    `  • ⚠️ Đang lỗi (tổng):    <b>${err.total}</b> đơn (UNISSUED ${err.unissued} · trùng ${err.duplicate} · orphan ${err.orphan} · MISA-fail ${err.misaFail})`,
+  );
+  lines.push(
+    `  • 📈 Tổng từ 08/06:      <b>${extras.cumulativeIssued}</b> hóa đơn`,
   );
 
   lines.push('');

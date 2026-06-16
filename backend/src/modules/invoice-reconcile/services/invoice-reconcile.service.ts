@@ -53,6 +53,13 @@ const HOURLY_SNAPSHOT_PREFIX = 'invoice-reconcile:hourly-snapshot:';
 const SNAPSHOT_TTL_SECONDS = 24 * 3600;
 const REPORT_TTL_SECONDS = 24 * 3600;
 
+/**
+ * F-086 BR-86-02 — anchor "tổng hóa đơn đã xuất từ ngày này".
+ * Danny chốt 2026-06-16: 08/06/2026 — ngày mở bán Lào Cai Marathon 2026.
+ * Hardcoded const (KHÔNG đụng period/kỳ nào khác trong hệ thống).
+ */
+const CUMULATIVE_START_DATE = '2026-06-08';
+
 @Injectable()
 export class InvoiceReconcileService {
   private readonly logger = new Logger(InvoiceReconcileService.name);
@@ -263,10 +270,15 @@ export class InvoiceReconcileService {
       current.raceIdsScanned,
     );
 
+    // F-086 BR-86-01/04/05 — visibility extras: cumulative tổng từ 08/06
+    // (refresh fresh từ MISA, best-effort) + lỗi gọi MISA hôm nay.
+    const extras = await this.buildRecapExtras(date);
+
     const sent = await this.alert.sendHourlyRecap(
       current,
       diffEvents,
       raceTitlesByid,
+      extras,
     );
 
     // Cache snapshot for next-hour diff
@@ -292,11 +304,70 @@ export class InvoiceReconcileService {
         'eod-recap',
         this.getEnabledRaceIds(),
       );
-      const sent = await this.alert.sendEodRecap(date, empty);
+      const extrasEmpty = await this.buildRecapExtras(date);
+      const sent = await this.alert.sendEodRecap(date, empty, extrasEmpty);
       return { sent, report: empty };
     }
-    const sent = await this.alert.sendEodRecap(date, report);
+    const extras = await this.buildRecapExtras(date);
+    const sent = await this.alert.sendEodRecap(date, report, extras);
     return { sent, report };
+  }
+
+  /**
+   * F-086 BR-86-01/04/05 — assemble visibility extras cho recap composer.
+   *   - cumulativeIssued: refresh fresh từ MISA [08/06 → date], best-effort
+   *   - misaFailToday: lỗi gọi MISA hôm nay (daily counter)
+   * Mọi nhánh throw-safe — heartbeat MUST send (BR-86-06 / F-079 BR-79-23).
+   */
+  private async buildRecapExtras(
+    date: string,
+  ): Promise<{ cumulativeIssued: number; misaFailToday: number }> {
+    // Top-level guard — KHÔNG bao giờ throw (heartbeat MUST send, BR-86-06).
+    try {
+      const cumulativeIssued = await this.refreshCumulativeIssued(date);
+      let misaFailToday = 0;
+      try {
+        const counters = await this.counters.getAll(date);
+        misaFailToday = counters['misa-fail'] ?? 0;
+      } catch {
+        misaFailToday = 0;
+      }
+      return { cumulativeIssued, misaFailToday };
+    } catch (e) {
+      this.logger.warn(
+        `[F-086 buildRecapExtras fail] ${(e as Error).message} — extras 0/0`,
+      );
+      return { cumulativeIssued: 0, misaFailToday: 0 };
+    }
+  }
+
+  /**
+   * F-086 BR-86-01/05 — refresh "tổng hóa đơn đã xuất từ 08/06" từ MISA.
+   *
+   * MISA paging TotalCount over [CUMULATIVE_START_DATE → date] = authoritative
+   * (5BIB tax code riêng → mọi hóa đơn là của 5BIB), idempotent (query lại ra
+   * cùng số → SET không INCR, KHÔNG double-count).
+   *
+   * Best-effort: MISA fail / not configured → giữ value persisted cũ (KHÔNG
+   * overwrite 0 → tránh tụt số khi MISA tạm chết). Heartbeat MUST NOT block.
+   */
+  private async refreshCumulativeIssued(date: string): Promise<number> {
+    if (!this.misa.isConfigured()) {
+      return this.counters.getCumulativeIssued();
+    }
+    try {
+      const total = await this.misa.countInvoicesInRange(
+        CUMULATIVE_START_DATE,
+        date,
+      );
+      await this.counters.setCumulativeIssued(total);
+      return total;
+    } catch (e) {
+      this.logger.warn(
+        `[F-086 cumulative refresh fail] ${(e as Error).message} — giữ value cũ`,
+      );
+      return this.counters.getCumulativeIssued();
+    }
   }
 
   /** Public: get cached report (admin GET /today fast load). */

@@ -16,6 +16,13 @@ import Redis from 'ioredis';
 
 const COUNTERS_TTL_SECONDS = 48 * 3600;
 
+/**
+ * F-086 BR-86-05 — cumulative "tổng hóa đơn đã xuất từ 08/06" persist key.
+ * NO TTL (sống mãi). SET (không INCR) từ MISA authoritative count → idempotent,
+ * không double-count. Redis flush mất → refresh lại từ MISA ở heartbeat kế.
+ */
+const CUMULATIVE_ISSUED_KEY = 'invoice-reconcile:cumulative:issued';
+
 export type CounterField =
   | 'scan-ticks'
   | 'misa-ok'
@@ -48,6 +55,36 @@ export class DailyCountersService {
       this.logger.warn(
         `[counters] increment ${field} fail: ${(e as Error).message}`,
       );
+    }
+  }
+
+  /**
+   * F-086 BR-86-05 — persist cumulative issued count (SET no-TTL, best-effort).
+   * SET (không INCR) vì nguồn là MISA authoritative count — gọi lại ghi đè cùng số.
+   */
+  async setCumulativeIssued(n: number): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.set(CUMULATIVE_ISSUED_KEY, String(Math.max(0, Math.trunc(n))));
+    } catch (e) {
+      this.logger.warn(
+        `[counters] setCumulativeIssued fail: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  /** F-086 BR-86-05 — đọc cumulative issued. 0 nếu chưa có / Redis fail. */
+  async getCumulativeIssued(): Promise<number> {
+    if (!this.redis) return 0;
+    try {
+      const raw = await this.redis.get(CUMULATIVE_ISSUED_KEY);
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    } catch (e) {
+      this.logger.warn(
+        `[counters] getCumulativeIssued fail: ${(e as Error).message}`,
+      );
+      return 0;
     }
   }
 
