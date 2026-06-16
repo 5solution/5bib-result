@@ -113,9 +113,7 @@ const envVarsSchema = Joi.object()
     INVOICE_ALERT_EMAILS: Joi.string().optional().allow('').default(''),
     // FEATURE-085 — Igloo Insurance partner API (daily auto-order + admin manual).
     // 2 kill-switch default false → dev KHÔNG egress đơn thật.
-    IGLOO_BASE_URL: Joi.string().default(
-      'https://api-igloo-insurance.5solution.vn',
-    ),
+    IGLOO_BASE_URL: Joi.string().default('https://api-insurance.5solution.vn'),
     IGLOO_API_KEY: Joi.string().optional().allow('').default(''),
     IGLOO_DAILY_COUNT: Joi.number().min(1).max(100).default(10),
     IGLOO_CRON_HOUR: Joi.number().min(0).max(23).default(9),
