@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Check } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -39,6 +39,29 @@ import {
 import { formatVnd, IGLOO_SKIP_REASON_LABEL } from "@/lib/insurance-labels";
 
 const PER_ORDER_VND = 10000;
+
+/** Ô chọn tự vẽ — luôn hiện rõ (viền đậm + ✓ xanh khi chọn). */
+function SelectBox({
+  checked,
+  disabled,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
+        disabled
+          ? "border-stone-200 bg-stone-100"
+          : checked
+            ? "border-blue-600 bg-blue-600 text-white"
+            : "border-stone-400 bg-white"
+      }`}
+    >
+      {checked ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+    </span>
+  );
+}
 
 export function InsuranceCreateTab() {
   const [raceId, setRaceId] = useState<number | undefined>(undefined);
@@ -83,6 +106,10 @@ export function InsuranceCreateTab() {
       else selectableIds.forEach((id) => next.add(id));
       return next;
     });
+  }
+  /** Chọn nhanh N VĐV đầu tiên đủ điều kiện (mục đích volume). */
+  function quickSelect(n: number) {
+    setSelected(new Set(selectableIds.slice(0, n)));
   }
 
   async function handleCreate() {
@@ -149,11 +176,39 @@ export function InsuranceCreateTab() {
         </div>
       </div>
 
-      {raceId ? (
-        <p className="text-xs text-stone-500">
-          Bấm vào dòng để chọn / bỏ chọn VĐV — dòng được chọn sẽ tô xanh. (Hoặc
-          tick ô vuông đầu dòng.)
-        </p>
+      {raceId && rows.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-stone-50 px-3 py-2 text-sm">
+          <span className="font-medium">Chọn nhanh:</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => quickSelect(10)}
+            disabled={selectableIds.length === 0}
+          >
+            10 VĐV đầu
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => quickSelect(20)}
+            disabled={selectableIds.length === 0}
+          >
+            20 VĐV đầu
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={toggleAll}
+            disabled={selectableIds.length === 0}
+          >
+            {allSelected
+              ? "Bỏ chọn tất cả"
+              : `Chọn tất cả (${selectableIds.length})`}
+          </Button>
+          <span className="ml-auto text-stone-500">
+            Hoặc bấm vào từng dòng để chọn.
+          </span>
+        </div>
       ) : null}
 
       <Card className="overflow-hidden">
@@ -181,13 +236,11 @@ export function InsuranceCreateTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={toggleAll}
-                    aria-label="Chọn tất cả"
-                    className="border-stone-400 data-[checked]:border-blue-600"
-                  />
+                <TableHead
+                  className="w-10 cursor-pointer select-none"
+                  onClick={toggleAll}
+                >
+                  <SelectBox checked={allSelected} />
                 </TableHead>
                 <TableHead>Họ tên</TableHead>
                 <TableHead>BIB</TableHead>
@@ -213,13 +266,7 @@ export function InsuranceCreateTab() {
                   }
                 >
                   <TableCell>
-                    <Checkbox
-                      checked={isSel}
-                      disabled={a.hasOrder}
-                      aria-label={`Chọn ${a.fullName}`}
-                      className="pointer-events-none border-stone-400 data-[checked]:border-blue-600"
-                      onCheckedChange={() => {}}
-                    />
+                    <SelectBox checked={isSel} disabled={a.hasOrder} />
                   </TableCell>
                   <TableCell className="font-medium">{a.fullName}</TableCell>
                   <TableCell className="font-mono">{a.bib ?? "—"}</TableCell>
