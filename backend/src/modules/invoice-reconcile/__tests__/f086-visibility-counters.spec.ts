@@ -234,8 +234,9 @@ describe('F-086 — refreshCumulativeIssued qua runHourlyRecap (TC-86-05/08/09)'
     countImpl?: jest.Mock;
     getCumulativeImpl?: jest.Mock;
     getAllImpl?: jest.Mock;
+    skipCachePopulate?: boolean;
   } = {}) {
-    const repoQuery = jest.fn();
+    const repoQuery = jest.fn().mockResolvedValue([]);
     const orderRepo = { manager: { query: repoQuery } } as any;
     const misa = {
       isConfigured: jest.fn().mockReturnValue(true),
@@ -277,11 +278,13 @@ describe('F-086 — refreshCumulativeIssued qua runHourlyRecap (TC-86-05/08/09)'
       redis,
       resolver,
     );
-    store.set(
-      `invoice-reconcile:last-run:${today}`,
-      JSON.stringify(report({ raceIdsScanned: [220] })),
-    );
-    return { service, alert, misa, counters, setCumulative };
+    if (!opts.skipCachePopulate) {
+      store.set(
+        `invoice-reconcile:last-run:${today}`,
+        JSON.stringify(report({ raceIdsScanned: [220] })),
+      );
+    }
+    return { service, alert, misa, counters, setCumulative, repoQuery };
   }
 
   it('TC-86-05a: MISA OK → set + truyền cumulative vào sendHourlyRecap', async () => {
@@ -330,5 +333,27 @@ describe('F-086 — refreshCumulativeIssued qua runHourlyRecap (TC-86-05/08/09)'
     misa.isConfigured.mockReturnValue(false);
     await service.runHourlyRecap(today);
     expect(misa.countInvoicesInRange).not.toHaveBeenCalled();
+  });
+
+  // F-087 — Heartbeat self-heal khi thiếu report cache (incident 2026-06-17:
+  // scan-tick `8-22` → đêm không scan → 8:00 ICT report cache trống → recap CŨ
+  // skip câm). Fix: tự scan tạo report → heartbeat luôn gửi.
+  it('F-087: KHÔNG có report cache → tự scan → VẪN gửi heartbeat (không skip câm)', async () => {
+    const { service, alert } = makeService({ skipCachePopulate: true });
+    const scanSpy = jest.spyOn(service, 'scan');
+    const res = await service.runHourlyRecap(today);
+    expect(scanSpy).toHaveBeenCalledWith(today, 'cron'); // self-heal scan
+    expect(alert.sendHourlyRecap).toHaveBeenCalledTimes(1); // KHÔNG skip
+    expect(res.sent).toBe(true);
+    expect(res.report).not.toBeNull();
+  });
+
+  it('F-087: self-heal scan throw → graceful, KHÔNG crash cron, KHÔNG gửi', async () => {
+    const { service, alert } = makeService({ skipCachePopulate: true });
+    jest.spyOn(service, 'scan').mockRejectedValueOnce(new Error('DB down'));
+    const res = await service.runHourlyRecap(today);
+    expect(res.sent).toBe(false);
+    expect(res.report).toBeNull();
+    expect(alert.sendHourlyRecap).not.toHaveBeenCalled();
   });
 });

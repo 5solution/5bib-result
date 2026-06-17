@@ -253,9 +253,26 @@ export class InvoiceReconcileService {
         // fall-through
       }
     }
-    const current = await this.getCachedReport(date);
+    let current = await this.getCachedReport(date);
     if (!current) {
-      return { sent: false, report: null };
+      // F-087 — Heartbeat self-sufficiency. Root cause incident 2026-06-17:
+      // scan-tick cron chỉ chạy `8-22 ICT` → đêm không scan → sang ngày mới
+      // chưa có report cache. Đúng 8:00:00 ICT recap + scan-tick fire CÙNG giây
+      // → recap đọc cache TRƯỚC khi scan kịp ghi → null → heartbeat 8:00 skip
+      // CÂM mỗi sáng. Thay vì skip, tự chạy scan tạo report → heartbeat luôn tự
+      // đủ (triết lý F-079 "heartbeat MUST send"). scan() idempotent + alert
+      // dedup SETNX → an toàn dù scan-tick chạy song song (chỉ double-work 1 tick).
+      this.logger.log(
+        `[hourly-recap] no cached report for ${date} — running fresh scan (F-087 self-heal)`,
+      );
+      try {
+        current = await this.scan(date, 'cron');
+      } catch (e) {
+        this.logger.warn(
+          `[hourly-recap] F-087 self-heal scan fail ${date}: ${(e as Error).message}`,
+        );
+        return { sent: false, report: null };
+      }
     }
     const previous = await this.getHourlySnapshot(date);
     const diffEvents = computeDiff(
