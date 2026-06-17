@@ -25,9 +25,18 @@ const ALL_BUCKETS: ReconcileBucket[] = ["SYNC_LAG", "UNISSUED", "DUPLICATE"];
 
 interface Props {
   rows: MissingInvoiceRow[];
+  /** F-088 — đánh dấu / bỏ đánh dấu đơn đã xử lý. */
+  onResolve?: (orderId: number, resolved: boolean) => void;
+  hideResolved?: boolean;
+  onToggleHideResolved?: () => void;
 }
 
-export function MissingRowsTable({ rows }: Props) {
+export function MissingRowsTable({
+  rows,
+  onResolve,
+  hideResolved = false,
+  onToggleHideResolved,
+}: Props) {
   const [filter, setFilter] = useState<Set<ReconcileBucket>>(
     () => new Set(ALL_BUCKETS),
   );
@@ -39,13 +48,19 @@ export function MissingRowsTable({ rows }: Props) {
     return Array.from(s).sort((a, b) => a - b);
   }, [rows]);
 
+  const resolvedCount = useMemo(
+    () => rows.filter((r) => r.resolved).length,
+    [rows],
+  );
+
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       if (!filter.has(r.bucket as ReconcileBucket)) return false;
       if (raceFilter !== "all" && r.raceId !== raceFilter) return false;
+      if (hideResolved && r.resolved) return false;
       return true;
     });
-  }, [rows, filter, raceFilter]);
+  }, [rows, filter, raceFilter, hideResolved]);
 
   const toggleBucket = (b: ReconcileBucket) => {
     setFilter((prev) => {
@@ -121,6 +136,19 @@ export function MissingRowsTable({ rows }: Props) {
           ))}
         </select>
 
+        {resolvedCount > 0 && onToggleHideResolved && (
+          <button
+            onClick={onToggleHideResolved}
+            className={`ml-4 rounded-full border px-3 py-1 text-xs font-medium transition ${
+              hideResolved
+                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                : "border-stone-300 bg-white text-stone-500"
+            }`}
+          >
+            {hideResolved ? "Đang ẩn" : "Ẩn"} đã xử lý ({resolvedCount})
+          </button>
+        )}
+
         <span className="ml-auto text-xs text-stone-500">
           {filtered.length}/{rows.length} đơn
         </span>
@@ -138,13 +166,14 @@ export function MissingRowsTable({ rows }: Props) {
               <th className="px-3 py-2 text-left">Paid</th>
               <th className="px-3 py-2 text-right">Age</th>
               <th className="px-3 py-2 text-left">Lý do</th>
+              {onResolve && <th className="px-3 py-2 text-right">Xử lý</th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={onResolve ? 9 : 8}
                   className="px-3 py-8 text-center text-stone-500"
                 >
                   Không có đơn nào khớp filter.
@@ -154,7 +183,9 @@ export function MissingRowsTable({ rows }: Props) {
               filtered.map((row) => (
                 <tr
                   key={`${row.orderId}-${row.bucket}`}
-                  className="border-t border-stone-200 hover:bg-stone-50"
+                  className={`border-t border-stone-200 hover:bg-stone-50 ${
+                    row.resolved ? "opacity-50" : ""
+                  }`}
                 >
                   <td className="px-3 py-2">
                     <SeverityBadge bucket={row.bucket} />
@@ -202,6 +233,20 @@ export function MissingRowsTable({ rows }: Props) {
                       </span>
                     )}
                   </td>
+                  {onResolve && (
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => onResolve(row.orderId, !row.resolved)}
+                        className={`rounded border px-2 py-1 text-xs font-medium transition ${
+                          row.resolved
+                            ? "border-stone-300 bg-white text-stone-500 hover:bg-stone-50"
+                            : "border-emerald-400 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                        }`}
+                      >
+                        {row.resolved ? "↩ Bỏ đánh dấu" : "✓ Đã xử lý"}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

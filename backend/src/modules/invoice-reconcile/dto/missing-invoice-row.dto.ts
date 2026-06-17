@@ -98,4 +98,13 @@ export class MissingInvoiceRowDto {
     required: false,
   })
   duplicateCount?: number;
+
+  @ApiProperty({
+    description:
+      'F-088 — Admin đã đánh dấu "đã xử lý" (ẩn khỏi danh sách mặc định). ' +
+      'State nội bộ, KHÔNG ảnh hưởng đối soát thật.',
+    example: false,
+    required: false,
+  })
+  resolved?: boolean;
 }

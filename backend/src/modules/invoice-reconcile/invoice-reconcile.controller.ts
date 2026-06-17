@@ -10,6 +10,7 @@
  * `POST /trigger` rate-limited 6/min/user via ThrottlerGuard.
  */
 import {
+  Body,
   ConflictException,
   Controller,
   Get,
@@ -36,6 +37,11 @@ import { MisaMeinvoiceClient } from './services/misa-meinvoice.client';
 import { InvoiceTelegramClient } from './services/invoice-telegram.client';
 import { ReconcileReportDto } from './dto/reconcile-report.dto';
 import { ReconcileHealthDto } from './dto/reconcile-health.dto';
+import {
+  ResolveOrderDto,
+  ResolveOrderResultDto,
+  SendHeartbeatResultDto,
+} from './dto/resolve-order.dto';
 
 @ApiTags('admin-invoice-reconcile')
 @ApiBearerAuth()
@@ -64,17 +70,20 @@ export class InvoiceReconcileController {
   @ApiResponse({ status: 200, type: ReconcileReportDto })
   async getToday(@Query('date') date?: string): Promise<ReconcileReportDto> {
     const targetDate = this.resolveDate(date);
-    // Try cache first
+    const base = await this.getBaseReport(targetDate);
+    // F-088 — enrich với cumulative + errorBreakdown + dailyCounters + resolved flags
+    return this.reconcile.enrichReport(targetDate, base);
+  }
+
+  /** Base report: cache → scan inline (lock-aware) → empty placeholder. */
+  private async getBaseReport(targetDate: string): Promise<ReconcileReportDto> {
     const cached = await this.reconcile.getCachedReport(targetDate);
     if (cached) return cached;
-    // Cache miss → trigger 1 scan inline (with lock to dedupe with cron)
     const acquired = await this.reconcile.tryAcquireLock();
     if (!acquired) {
-      // Wait briefly + retry cache
       await this.sleep(500);
       const cached2 = await this.reconcile.getCachedReport(targetDate);
       if (cached2) return cached2;
-      // Still nothing — return empty placeholder
       return this.emptyPlaceholder(targetDate);
     }
     try {
@@ -82,6 +91,48 @@ export class InvoiceReconcileController {
     } finally {
       await this.reconcile.releaseLock();
     }
+  }
+
+  @Post('send-heartbeat')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'F-088 — Gửi heartbeat Telegram ngay (admin bấm nút). Rate-limit 3/phút.',
+  })
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @ApiResponse({ status: 200, type: SendHeartbeatResultDto })
+  async sendHeartbeat(): Promise<SendHeartbeatResultDto> {
+    const date = this.resolveDate(undefined);
+    const { sent } = await this.reconcile.runHourlyRecap(date);
+    await this.audit?.emit({
+      actor: { userId: 'unknown', role: 'admin' },
+      action: 'invoice_reconcile.heartbeat_sent',
+      entity: { type: 'invoice-reconcile', id: date },
+      metadata: { sent },
+    });
+    return { sent };
+  }
+
+  @Post('resolve')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'F-088 — Đánh dấu / bỏ đánh dấu 1 đơn "đã xử lý" (ẩn khỏi danh sách). ' +
+      'State nội bộ — KHÔNG ảnh hưởng đối soát thật.',
+  })
+  @ApiResponse({ status: 200, type: ResolveOrderResultDto })
+  async resolveOrder(
+    @Body() body: ResolveOrderDto,
+  ): Promise<ResolveOrderResultDto> {
+    const date = this.resolveDate(body.date);
+    await this.reconcile.markOrderResolved(date, body.orderId, body.resolved);
+    await this.audit?.emit({
+      actor: { userId: 'unknown', role: 'admin' },
+      action: 'invoice_reconcile.order_resolved',
+      entity: { type: 'invoice-reconcile-order', id: String(body.orderId) },
+      metadata: { resolved: body.resolved },
+    });
+    return { orderId: body.orderId, resolved: body.resolved };
   }
 
   @Post('trigger')
@@ -119,7 +170,8 @@ export class InvoiceReconcileController {
           layer2Status: report.layer2Status,
         },
       });
-      return report;
+      // F-088 — enrich để FE giữ card cumulative/error/resolved sau khi trigger.
+      return this.reconcile.enrichReport(date, report);
     } finally {
       await this.reconcile.releaseLock();
     }

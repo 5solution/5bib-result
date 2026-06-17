@@ -56,6 +56,9 @@ describe('InvoiceReconcileController (E2E controller integration)', () => {
     releaseLock: jest.Mock;
     getLastScanTickAt: jest.Mock;
     getEnabledRaceIds: jest.Mock;
+    enrichReport: jest.Mock;
+    runHourlyRecap: jest.Mock;
+    markOrderResolved: jest.Mock;
   };
   let mockMisa: {
     getTokenExpiry: jest.Mock;
@@ -76,6 +79,10 @@ describe('InvoiceReconcileController (E2E controller integration)', () => {
       releaseLock: jest.fn().mockResolvedValue(undefined),
       getLastScanTickAt: jest.fn().mockReturnValue(null),
       getEnabledRaceIds: jest.fn().mockReturnValue([140, 220]),
+      // F-088 — enrichReport pass-through (controller chỉ wrap base report).
+      enrichReport: jest.fn((_date, report) => Promise.resolve(report)),
+      runHourlyRecap: jest.fn().mockResolvedValue({ sent: true, report: null }),
+      markOrderResolved: jest.fn().mockResolvedValue(undefined),
     };
     mockMisa = {
       getTokenExpiry: jest.fn().mockResolvedValue(null),

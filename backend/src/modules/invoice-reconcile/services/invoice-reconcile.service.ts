@@ -38,6 +38,7 @@ import {
 } from './reconcile-classifier';
 import { InvoiceAlertService } from './invoice-alert.service';
 import { computeDiff, DiffSnapshot } from './diff-computer';
+import { computeErrorBreakdown } from './alert-composer';
 import { DailyCountersService } from './daily-counters.service';
 import { AthleteIdentityClusteringService } from '../../race-master-data/services/athlete-identity-clustering.service';
 import {
@@ -59,6 +60,18 @@ const REPORT_TTL_SECONDS = 24 * 3600;
  * Hardcoded const (KHÔNG đụng period/kỳ nào khác trong hệ thống).
  */
 const CUMULATIVE_START_DATE = '2026-06-08';
+
+/**
+ * F-088 — Redis SET orderId admin đã đánh dấu "đã xử lý", SCOPE THEO NGÀY
+ * (`invoice-reconcile:resolved:<date>`) + TTL 7 ngày → tránh phình vô hạn +
+ * ngữ nghĩa "đã xử lý hôm nay" không nhòe sang ngày khác (QC F-088 BUG-01).
+ */
+const RESOLVED_SET_PREFIX = 'invoice-reconcile:resolved:';
+const RESOLVED_TTL_SECONDS = 7 * 24 * 3600;
+/** F-088 — throttle refresh cumulative khi serve /today (max 1 MISA call/5p). */
+const CUMULATIVE_REFRESH_THROTTLE_KEY =
+  'invoice-reconcile:cumulative:refresh-throttle';
+const CUMULATIVE_REFRESH_THROTTLE_SECONDS = 300;
 
 @Injectable()
 export class InvoiceReconcileService {
@@ -669,6 +682,102 @@ export class InvoiceReconcileService {
       );
     }
     return out;
+  }
+
+  // ───────────────────────── F-088 dashboard control ─────────────────────────
+
+  /**
+   * F-088 — enrich cached/scan report cho admin dashboard:
+   *   - cumulativeIssued (tổng từ 08/06, refresh throttled 5p)
+   *   - errorBreakdown (cùng công thức tin Telegram F-086)
+   *   - dailyCounters hôm nay
+   *   - resolved flag per missing row (admin đã đánh dấu)
+   * KHÔNG mutate report gốc (clone) — cache vẫn raw. Best-effort: lỗi → field bỏ trống.
+   */
+  async enrichReport(
+    date: string,
+    report: ReconcileReportDto,
+  ): Promise<ReconcileReportDto> {
+    let cumulativeIssued = 0;
+    let dailyCounters: Record<string, number> = {};
+    try {
+      cumulativeIssued = await this.refreshCumulativeThrottled(date);
+    } catch {
+      cumulativeIssued = await this.counters.getCumulativeIssued().catch(() => 0);
+    }
+    try {
+      dailyCounters = await this.counters.getAll(date);
+    } catch {
+      dailyCounters = {};
+    }
+    const misaFailToday = dailyCounters['misa-fail'] ?? 0;
+    const errorBreakdown = computeErrorBreakdown(report, misaFailToday);
+    const resolvedSet = await this.getResolvedOrderIds(date);
+    const missing = report.missing.map((m) => ({
+      ...m,
+      resolved: resolvedSet.has(m.orderId),
+    }));
+    return {
+      ...report,
+      missing,
+      cumulativeIssued,
+      errorBreakdown,
+      dailyCounters,
+    };
+  }
+
+  /**
+   * F-088 — refresh cumulative throttled: max 1 MISA call / 5 phút (SETNX),
+   * else đọc persisted. Admin poll 60s không hammer MISA.
+   */
+  private async refreshCumulativeThrottled(date: string): Promise<number> {
+    if (!this.redis) return this.refreshCumulativeIssued(date);
+    try {
+      const acquired = await this.redis.set(
+        CUMULATIVE_REFRESH_THROTTLE_KEY,
+        '1',
+        'EX',
+        CUMULATIVE_REFRESH_THROTTLE_SECONDS,
+        'NX',
+      );
+      if (acquired === 'OK') return this.refreshCumulativeIssued(date);
+    } catch {
+      // fall-through → persisted
+    }
+    return this.counters.getCumulativeIssued();
+  }
+
+  /** F-088 — đánh dấu / bỏ đánh dấu đơn "đã xử lý" cho NGÀY date (SADD/SREM). */
+  async markOrderResolved(
+    date: string,
+    orderId: number,
+    resolved: boolean,
+  ): Promise<void> {
+    if (!this.redis) return;
+    const key = RESOLVED_SET_PREFIX + date;
+    try {
+      if (resolved) {
+        await this.redis.sadd(key, String(orderId));
+        await this.redis.expire(key, RESOLVED_TTL_SECONDS);
+      } else {
+        await this.redis.srem(key, String(orderId));
+      }
+    } catch (e) {
+      this.logger.warn(
+        `[F-088 markResolved fail] orderId=${orderId}: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  /** F-088 — tập orderId đã đánh dấu xử lý cho NGÀY date. Lỗi → empty set. */
+  private async getResolvedOrderIds(date: string): Promise<Set<number>> {
+    if (!this.redis) return new Set<number>();
+    try {
+      const raw = await this.redis.smembers(RESOLVED_SET_PREFIX + date);
+      return new Set(raw.map((s) => Number(s)).filter((n) => Number.isInteger(n)));
+    } catch {
+      return new Set<number>();
+    }
   }
 
   /** Helper for unused import warning. */

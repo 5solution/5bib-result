@@ -10,6 +10,27 @@ import { MisaOrphanRowDto } from './misa-orphan-row.dto';
  */
 export type Layer2Status = 'OK' | 'DEGRADED' | 'UNAVAILABLE';
 
+/**
+ * F-088 — error breakdown snapshot cho dashboard (cùng công thức tin Telegram
+ * F-086: total = unissued + duplicate + orphan + misaFail; breached ⊂ unissued).
+ */
+export class ErrorBreakdownDto {
+  @ApiProperty({ description: 'Đơn UNISSUED (gồm breached)', example: 1 })
+  unissued!: number;
+
+  @ApiProperty({ description: 'Đơn DUPLICATE', example: 0 })
+  duplicate!: number;
+
+  @ApiProperty({ description: 'MISA orphan (MISA có, DB không match)', example: 1 })
+  orphan!: number;
+
+  @ApiProperty({ description: 'Lỗi gọi MISA hôm nay (hạ tầng)', example: 0 })
+  misaFail!: number;
+
+  @ApiProperty({ description: 'Tổng = unissued+duplicate+orphan+misaFail', example: 2 })
+  total!: number;
+}
+
 export class ReconcileReportDto {
   @ApiProperty({
     description: 'Ngày báo cáo (yyyy-MM-dd ICT)',
@@ -105,4 +126,28 @@ export class ReconcileReportDto {
     example: true,
   })
   alertSent!: boolean;
+
+  // ───────────── F-088 dashboard enrichment (chỉ set khi serve /today) ─────────────
+
+  @ApiPropertyOptional({
+    description:
+      'F-086/F-088 — Tổng hóa đơn đã xuất từ 08/06/2026 (MISA TotalCount). ' +
+      'Đọc persisted, refresh throttled 5 phút khi serve /today.',
+    example: 98,
+  })
+  cumulativeIssued?: number;
+
+  @ApiPropertyOptional({
+    description: 'F-088 — Error breakdown snapshot (cùng công thức tin Telegram).',
+    type: ErrorBreakdownDto,
+  })
+  errorBreakdown?: ErrorBreakdownDto;
+
+  @ApiPropertyOptional({
+    description:
+      'F-088 — Daily counters hôm nay (scan-ticks, misa-ok/fail, alert-*). ' +
+      'Key→số. Rỗng nếu Redis fail.',
+    example: { 'scan-ticks': 96, 'misa-ok': 95, 'misa-fail': 1, 'alert-warn': 0 },
+  })
+  dailyCounters?: Record<string, number>;
 }

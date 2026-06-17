@@ -89,6 +89,13 @@
 
 ---
 
+## 2026-06-16 FEATURE-088: Invoice Control Dashboard (admin kiểm soát)
+
+**Branch:** `5bib_invoice_v2` → release/v1.21.0 · **Type:** EXTEND_EXISTING (trang /invoice-reconcile)
+**QC:** ✅ APPROVED — 155/155 + admin next build ✓ + adversarial 8 mục (1 MEDIUM + 2 LOW fixed)
+**Files:** BE: reconcile-report.dto (+ErrorBreakdownDto +3 optional), missing-invoice-row.dto (+resolved), resolve-order.dto (mới), invoice-reconcile.service (enrichReport + refreshCumulativeThrottled SETNX 5p + markOrderResolved/getResolvedOrderIds date-scoped TTL 7d), controller (/today+/trigger enrich, +/send-heartbeat throttle 3/min, +/resolve). FE: invoice-reconcile-api (sendHeartbeat/setOrderResolved), kpi-strip (+2 card VN), health-panel (mới), invoice-reconcile-client (health + heartbeat btn + onResolve overridesRef merge), missing-rows-table (resolve btn + hide toggle). +f088-dashboard-control.spec (8).
+**Lessons:** F-076 READ-ONLY → resolved = ack nội bộ. Optimistic + poll-race → overridesRef merge tự-clear. Cumulative trong /today refresh throttled SETNX tránh hammer MISA. +TD-F088-AUDIT-ACTOR (audit userId='unknown' pre-existing) + TD-F088-RESOLVE-NO-EXISTENCE-CHECK.
+
 ## 2026-06-16 FEATURE-086: Invoice Visibility Counters (tổng/hôm nay/lỗi vào Telegram)
 
 **Branch:** `5bib_invoice_v2` off `2e3f993` (PROD v1.18.0) → release/v1.19.0

@@ -16,6 +16,18 @@ function pct(n: number, total: number): string {
 }
 
 export function KpiStrip({ report }: Props) {
+  // F-088 — error breakdown: ưu tiên backend, fallback tính từ report.
+  const eb = report.errorBreakdown ?? {
+    unissued: report.missing.filter((m) => m.bucket === "UNISSUED").length,
+    duplicate: report.duplicateCount,
+    orphan: report.misaOrphan.length,
+    misaFail: 0,
+    total:
+      report.missing.filter((m) => m.bucket === "UNISSUED").length +
+      report.duplicateCount +
+      report.misaOrphan.length,
+  };
+
   const kpis: Array<{
     title: string;
     value: number;
@@ -29,16 +41,30 @@ export function KpiStrip({ report }: Props) {
       tone: "neutral",
     },
     {
-      title: "Đã xuất",
+      title: "Đã xuất hôm nay",
       value: report.issuedCount,
       subtitle: pct(report.issuedCount, report.expectedCount),
       tone: "good",
     },
     {
+      // F-088 — tổng tích lũy từ 08/06 (cumulativeIssued)
+      title: "Tổng từ 08/06",
+      value: report.cumulativeIssued ?? 0,
+      subtitle: "Hóa đơn MISA (tích lũy)",
+      tone: "neutral",
+    },
+    {
       title: "Còn thiếu",
       value: report.missingCount,
-      subtitle: "UNISSUED + SYNC_LAG",
+      subtitle: "Chưa xuất + DB chưa đồng bộ",
       tone: report.missingCount > 0 ? "warn" : "neutral",
+    },
+    {
+      // F-088 — đang lỗi (snapshot) + breakdown
+      title: "Đang lỗi",
+      value: eb.total,
+      subtitle: `Chưa xuất ${eb.unissued} · trùng ${eb.duplicate} · lạc ${eb.orphan} · MISA lỗi ${eb.misaFail}`,
+      tone: eb.total > 0 ? "danger" : "good",
     },
     {
       title: "Đơn sắp phạt",
@@ -49,7 +75,7 @@ export function KpiStrip({ report }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {kpis.map((k) => (
         <Card key={k.title} className="p-4">
           <div className="text-xs uppercase tracking-wide text-stone-500">

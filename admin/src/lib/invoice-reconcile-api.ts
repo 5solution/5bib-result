@@ -29,6 +29,17 @@ export interface MissingInvoiceRow {
   breached: boolean;
   misaInvNo?: string | null;
   duplicateCount?: number;
+  /** F-088 — admin đã đánh dấu "đã xử lý". */
+  resolved?: boolean;
+}
+
+/** F-088 — error breakdown snapshot. */
+export interface ErrorBreakdown {
+  unissued: number;
+  duplicate: number;
+  orphan: number;
+  misaFail: number;
+  total: number;
 }
 
 export interface MisaOrphanRow {
@@ -58,6 +69,10 @@ export interface ReconcileReport {
   layer2Status: Layer2Status;
   maxSeverity: AlertSeverity;
   alertSent: boolean;
+  /** F-088 dashboard enrichment (set khi /today). */
+  cumulativeIssued?: number;
+  errorBreakdown?: ErrorBreakdown;
+  dailyCounters?: Record<string, number>;
 }
 
 export interface ReconcileHealth {
@@ -117,6 +132,25 @@ export function triggerReconcile(): Promise<ReconcileReport> {
 
 export function getReconcileHealth(): Promise<ReconcileHealth> {
   return jsonFetch<ReconcileHealth>('/api/admin/invoice-reconcile/health');
+}
+
+/** F-088 — gửi heartbeat Telegram ngay (admin bấm nút). */
+export function sendHeartbeat(): Promise<{ sent: boolean }> {
+  return jsonFetch<{ sent: boolean }>(
+    '/api/admin/invoice-reconcile/send-heartbeat',
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+}
+
+/** F-088 — đánh dấu / bỏ đánh dấu 1 đơn "đã xử lý". */
+export function setOrderResolved(
+  orderId: number,
+  resolved: boolean,
+): Promise<{ orderId: number; resolved: boolean }> {
+  return jsonFetch<{ orderId: number; resolved: boolean }>(
+    '/api/admin/invoice-reconcile/resolve',
+    { method: 'POST', body: JSON.stringify({ orderId, resolved }) },
+  );
 }
 
 /** Format VND for UI display. */
