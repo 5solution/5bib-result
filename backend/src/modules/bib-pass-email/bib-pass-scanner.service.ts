@@ -90,7 +90,9 @@ export class BibPassScannerService {
   ): Promise<{ rows: ConfirmedAthleteRow[]; total: number }> {
     const params: unknown[] = [raceId];
     let extra = '';
-    const q = (opts.q ?? '').trim();
+    // Cap độ dài + escape ký tự đặc biệt LIKE (\ % _) → tránh wildcard injection
+    // (parameterized nên KHÔNG phải SQLi, nhưng `%` lọt vào sẽ match tất cả).
+    const q = (opts.q ?? '').trim().slice(0, 100).replace(/[\\%_]/g, '\\$&');
     if (q) {
       extra = ' AND (a.name LIKE ? OR a.bib_number LIKE ?)';
       const like = `%${q}%`;
