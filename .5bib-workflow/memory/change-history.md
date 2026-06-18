@@ -4,6 +4,79 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-17 FEATURE-090: GCN cho Crew — tìm theo tên + gen ảnh
+
+**PR/Commit:** working tree (branch đề xuất `5bib_crew_cert_v1`). Workflow full F-090 sau F-089 ("làm cả").
+**Type:** NEW_MODULE (`crew-certificates/`) + 1 shared-engine edit (additive)
+
+### Files changed
+- ✏️ `modules/certificates/services/certificate-render.service.ts` — **ADDITIVE:** import `TemplateCanvas`; `RenderData.variables?: Record<string,string>`; `RenderableTemplate` interface (subset render đọc); `render()` param `CertificateTemplate`→`RenderableTemplate` (CertificateTemplate vẫn assignable); `interpolate()` generic pass sau token cố định + `escapeToken()`. Athlete caller no-op (regression test PASS).
+- ➕ `modules/crew-certificates/`: constants, schemas/{crew-cert-batch (embed CrewTemplate reuse sub-schema), crew-cert-recipient (normalizedName index)}, dto/{crew-batch (reuse TemplateCanvas/Layer/PhotoArea DTO), crew-response}, roster-parser (exceljs+papaparse), service, controller (admin CRUD + roster preview/confirm + public search/render + preview), module (import CertificatesModule), service.spec (15) + qc.spec (5).
+- ✏️ `modules/app.module.ts` — register CrewCertificatesModule.
+- ➕ `frontend/app/gcn/[slug]/page.tsx` — public tìm + tải GCN (plain Tailwind, proxy).
+- ➕ `admin/src/app/(dashboard)/crew-certificates/{page,[id]/page}.tsx` + `lib/crew-cert-{api,hooks}.ts`; ✏️ `lib/nav-groups.ts`.
+
+### Architecture impact
+- Module mới reuse `CertificateRenderService` qua DI (CertificatesModule exports). Engine giờ phục vụ CẢ athlete cert (token cố định) VÀ generic render (variables) — additive. Template embed (decouple race_id). Sau deploy: codebase-map + CLAUDE.md Redis `crew-cert:*` + S3 rule 8.
+
+### Conventions impact
+- **CJS lib import:** `import * as Papa from 'papaparse'` (default import → undefined dưới ts-jest). Ghi conventions.
+- **Reuse sub-schema cross-module:** embed `TemplateCanvas/TemplateLayer/PhotoArea` Schema từ certificates vào crew batch.
+- **Engine generic-variable pattern:** fixed-token-first → generic `{key}` escaped pass; mở rộng render engine an toàn cho non-athlete.
+
+### DB / Cache / S3
+- MongoDB MỚI: `crew_cert_batches` (unique slug), `crew_cert_recipients` (index `{batchId, normalizedName}`).
+- Redis: `crew-cert:render:<recipientId>` (600s base64 PNG), `crew-cert-lock:<recipientId>` (SETNX 5s). DEL on batch/recipient mutation.
+- S3: phôi nền `crew-certificates/` (persist, lifecycle rule 8). GCN PNG render on-demand (stream, không lưu).
+- Dep mới: KHÔNG.
+
+### Tech debt (→ known-issues)
+- TD-F090-ROSTER-TXN (LOW) / TD-F090-KONVA (Phase 2) / TD-F090-PHOTO-UPLOAD (Phase 2) / TD-F090-LIVE-E2E (staging).
+
+### Lessons learned
+- Mở rộng shared engine: additive + if-guard + regression test (athlete path byte-identical) = an toàn ship chung.
+- `CertificateTemplate.race_id` required → standalone feature phải embed template riêng, KHÔNG reuse collection race-scoped.
+
+---
+
+## 2026-06-17 FEATURE-089: Short link rút gọn URL (s.5bib.com)
+
+**PR/Commit:** working tree (branch đề xuất `5bib_short_link_v1` — Danny commit thủ công, KHÔNG auto push). Workflow full F-089→F-090 ("làm cả").
+**Type:** NEW_MODULE (pure Mongo + Redis, 0 dep mới)
+
+### Files changed
+- ➕ `backend/src/modules/short-links/short-links.constants.ts` — `SHORTLINK_BASE_HOST`(env default `s.5bib.com`), code-gen base62 crypto, reserved set (case-insensitive), `SHORTLINK_CACHE` (port LANDING_CACHE), URL/alias regex.
+- ➕ `backend/src/modules/short-links/schemas/short-link.schema.ts` — `short_links` (code unique index, targetUrl, title?, clickCount, active, createdBy?, timestamps khai báo class cho TS).
+- ➕ `backend/src/modules/short-links/dto/{create,update}-short-link.dto.ts` + `short-link-response.dto.ts`.
+- ➕ `backend/src/modules/short-links/short-links.service.ts` — create (alias reserved/dup + random retry), list (search escapeRegex + paginate), update/remove (DEL cache), resolve (cache-aside + SETNX + $inc fire-and-forget + **re-read cache trước 404** Manager fix), generateQrPng.
+- ➕ `backend/src/modules/short-links/short-links.controller.ts` — resolve public (route-order trước `:id`) + admin CRUD + `:id/qr.png` (StreamableFile). LogtoAdminGuard mọi mutation.
+- ➕ `short-links.module.ts` + `short-links.service.spec.ts` (15) + `short-links.qc.spec.ts` (12).
+- ✏️ `backend/src/modules/app.module.ts` — register `ShortLinksModule`.
+- ➕ `frontend/app/r/[code]/route.ts` — GET: fetch backend resolve → 302; fallback `https://5bib.com` mọi lỗi.
+- ✏️ `frontend/middleware.ts` — `isShortLinkHost` (host `s.5bib.com`) rewrite `/<code>`→`/r/<code>` (TRƯỚC landing catch-all) + `s/go/link` vào `LANDING_RESERVED`.
+- ➕ `admin/src/app/(dashboard)/short-links/page.tsx` + `components/short-links/{ShortLinkDialog,QrDialog}.tsx` + `lib/short-links-{api,hooks}.ts`.
+- ✏️ `admin/src/lib/nav-groups.ts` — import `Link2` + nav "Link rút gọn" (Nội dung, requireRole admin).
+
+### Architecture impact
+- Module mới độc lập (Mongo+Redis), KHÔNG cross-module DI. **Redirect served FRONTEND** (middleware→route handler→backend resolve→302). Backend `setGlobalPrefix('api')` là lý do chọn FE-served (URL root ngắn + reuse middleware F-083 + 0 touch global prefix).
+
+### Conventions impact
+- Refinement SETNX cache-aside (port F-083): `queryActive()` null có 2 nghĩa (doc-absent vs contention-signal) → caller PHẢI re-read cache trước 404. F-083 landing có cùng latent spurious-404; F-089 fix đúng.
+
+### DB / Cache impact
+- MongoDB: collection MỚI `short_links` (unique `code`). KHÔNG migration.
+- Redis: `shortlink:code:<code>` (3600s string), `shortlink-lock:<code>` (SETNX 5s). DEL on update/delete.
+- S3/dep: KHÔNG.
+
+### Tech debt (→ known-issues)
+- TD-F089-RATELIMIT (LOW, nginx) / TD-F089-LIVE-E2E (LOW, staging) / TD-F089-ANALYTICS (Phase 2).
+
+### Lessons learned
+- **Manager Independent Review CATCH** lỗi latent contention-404 (Coder+QC miss) — defense-in-depth lại đúng (như F-062 MoM). Port SETNX pattern phải kiểm null-semantics 2 nghĩa.
+- `setGlobalPrefix('api')` → redirect public root phải FE-served.
+
+---
+
 ## 2026-06-15 FEATURE-085: Igloo Insurance — Daily Auto-Order + Admin Manual-Create
 
 **Type:** NEW_MODULE (backend `igloo-insurance` + admin page) + EXTEND (athlete-readonly +created_on).

@@ -181,6 +181,10 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `landing:resolve:<host>` | F-083 middleware host→slug resolution cache (`GET /api/landings/resolve?host=`). DEL when subdomain changes (pattern `landing:resolve:<subdomain>.*`). | 300s |
 | `landing-lock:<subdomain>` | F-083 SETNX anti-stampede lock during public cache-miss compute (port F-027 `promo-hub-lock`). retry 3×200ms then direct-query fallback. | 5s |
 | `ratelimit:landing-view:<slug>:<ipHash>` | F-083 per-IP view dedup for public landing (reserved Phase 1; analytics Phase 2). | 5m |
+| `shortlink:code:<code>` | F-089 Short link resolve cache — stores target URL string for `GET /api/short-links/resolve/:code` (redirect 302 served by frontend `s.5bib.com/<code>` → `/r/<code>`). DEL on update/delete/disable. Cache-aside + re-read-before-404 (port F-083 LANDING_CACHE). | 3600s |
+| `shortlink-lock:<code>` | F-089 SETNX anti-stampede lock during resolve cache-miss compute (port `landing-lock`). retry 3×200ms then direct-query fallback. | 5s |
+| `crew-cert:render:<recipientId>` | F-090 Crew GCN rendered PNG cache (base64) for `GET /api/crew-certificates/public/render/:recipientId`. DEL on batch/recipient mutation (`invalidateBatchRenders`). | 600s |
+| `crew-cert-lock:<recipientId>` | F-090 SETNX render lock (reserved; render is on-demand + cached). | 5s |
 
 Cache invalidation: any admin write (create/update/publish/unpublish/delete/restore on articles OR categories) flushes ALL `articles:*` keys via `scanStream` + pipeline. Rate-limit keys use a different `ratelimit:*` prefix so they survive cache flushes — view/vote dedup state is preserved across admin edits.
 
@@ -258,6 +262,14 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - **Max size**: 5MB per image. MIME: png/jpeg/webp (video sections embed external URLs, not uploaded).
 - **Reason**: per-race microsite assets must persist so a published landing keeps rendering; admin may also reference past races' assets.
 - **CRITICAL**: do NOT mix `landing-assets/` with `result-images/` (24h TTL) — landing images must persist. Distinct from `courses/` (GPX, no PII) and `result-kiosk-sponsors/` (public logos).
+
+### Lifecycle rule 8 — Crew Certificate phôi (F-090)
+- **Prefix**: `crew-certificates/`
+- **Expiration**: NONE (keep indefinitely — phôi GCN nền là race-asset artifact referenced by published crew batch template; same lifecycle as `landing-assets/`).
+- **Path convention**: `crew-certificates/<randomHex>-<originalname>` via `UploadService.uploadFile(file, 'crew-certificates')`.
+- **Max size**: 5MB per image (FileInterceptor limit). MIME: png/jpeg/webp.
+- **Reason**: phôi GCN nền phải persist để batch crew tiếp tục render GCN cho từng người. Generated GCN PNG render **on-demand** (streamed, KHÔNG lưu S3 — re-creatable from template).
+- **CRITICAL**: do NOT mix `crew-certificates/` with `result-images/` (24h TTL) — phôi must persist. Distinct from `landing-assets/` (landing) and `medical-attachments/` (PII).
 
 
 ## Development Rules
