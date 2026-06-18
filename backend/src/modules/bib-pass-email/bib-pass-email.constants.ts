@@ -29,15 +29,17 @@ export const BIB_PASS_LOCK_TTL_SEC = {
   cron: 110,
 } as const;
 
-/** BR-03 — token interpolate được trong layer text của phôi. */
+/** BR-03 — token interpolate được trong layer text của phôi (khung). */
 export const BIB_PASS_TOKENS = [
   '{name}',
+  '{name_on_bib}',
   '{bib}',
+  '{club}',
+  '{passport_no}',
   '{event_name}',
   '{location}',
   '{race_day}',
   '{distance}',
-  '{passport_no}',
 ] as const;
 
 /** Tên file đính kèm mặc định (interpolate {bib}). */

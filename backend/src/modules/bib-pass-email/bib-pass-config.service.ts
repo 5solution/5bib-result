@@ -184,6 +184,8 @@ export class BibPassConfigService {
       name: 'NGUYỄN THỊ HẬU',
       bib_number: '1234',
       email: null,
+      club: 'CLB Chạy Bộ Sa Pa',
+      name_on_bib: 'Nguyễn Thị Hậu',
     };
     // Ưu tiên giá trị draft (chưa lưu) → fallback config đã lưu → rỗng.
     const configLike = {
@@ -304,7 +306,9 @@ export class BibPassConfigService {
     const passportNo = `${sf?.passportPrefix ?? ''}${bib}`;
     const variables: Record<string, string> = {
       name,
+      name_on_bib: row.name_on_bib || name,
       bib,
+      club: row.club ?? '',
       event_name: config.raceName ?? '',
       location: sf?.location ?? '',
       race_day: sf?.raceDay ?? '',

@@ -50,27 +50,41 @@ interface TextLayerDraft {
   letterSpacing?: number;
 }
 
-const TOKENS = ['{name}', '{bib}', '{event_name}', '{location}', '{race_day}', '{distance}', '{passport_no}'];
+/** Trường động đặt được lên khung. `{...}` = token tự thay theo VĐV; "Chữ tự do" = text tĩnh. */
+const FIELD_PALETTE: Array<{ label: string; token: string }> = [
+  { label: 'Họ tên', token: '{name}' },
+  { label: 'Tên trên BIB', token: '{name_on_bib}' },
+  { label: 'Số BIB', token: '{bib}' },
+  { label: 'CLB / Đội', token: '{club}' },
+  { label: 'Passport No.', token: '{passport_no}' },
+  { label: 'Chữ tự do', token: 'Nội dung tự do' },
+];
 
-// Phôi mặc định kiểu boarding-pass (admin chỉnh từ đây). Shape = nền giữ
-// nguyên, text = chỉnh được. Khớp render smoke 2026-06-18.
-const DEFAULT_W = 1200;
-const DEFAULT_H = 560;
-const DEFAULT_SHAPES: BibPassLayer[] = [
-  { type: 'shape', shape: 'rect', x: 0, y: 0, width: 820, height: DEFAULT_H, fill: '#111827' },
-  { type: 'shape', shape: 'rect', x: 0, y: 0, width: 820, height: 12, fill: '#ea580c' },
-  { type: 'shape', shape: 'rect', x: 820, y: 0, width: 380, height: DEFAULT_H, fill: '#1e293b' },
-];
-const DEFAULT_TEXTS: TextLayerDraft[] = [
-  { text: 'BORDER PASS', x: 48, y: 40, fontSize: 30, color: '#ea580c', textAlign: 'left', fontFamily: 'Oswald', fontWeight: '700', letterSpacing: 6 },
-  { text: '{event_name}', x: 48, y: 80, fontSize: 40, color: '#ffffff', textAlign: 'left', fontFamily: 'Montserrat', fontWeight: '700' },
-  { text: '{name}', x: 48, y: 210, fontSize: 52, color: '#ffffff', textAlign: 'left', fontFamily: 'Playfair Display', fontWeight: '700' },
-  { text: '{distance}', x: 48, y: 380, fontSize: 34, color: '#ffffff', textAlign: 'left', fontFamily: 'Oswald', fontWeight: '700' },
-  { text: '{race_day}', x: 300, y: 380, fontSize: 34, color: '#ffffff', textAlign: 'left', fontFamily: 'Oswald', fontWeight: '700' },
-  { text: '{location}', x: 48, y: 486, fontSize: 26, color: '#ffffff', textAlign: 'left', fontFamily: 'Be Vietnam Pro', fontWeight: '600' },
-  { text: '{bib}', x: 850, y: 110, fontSize: 130, color: '#ea580c', textAlign: 'center', fontFamily: 'Oswald', fontWeight: '700' },
-  { text: '{passport_no}', x: 850, y: 356, fontSize: 30, color: '#ffffff', textAlign: 'center', fontFamily: 'Roboto', fontWeight: '700' },
-];
+const TOKEN_LABELS: Record<string, string> = {
+  '{name}': 'Họ tên',
+  '{name_on_bib}': 'Tên trên BIB',
+  '{bib}': 'Số BIB',
+  '{club}': 'CLB / Đội',
+  '{passport_no}': 'Passport',
+  '{event_name}': 'Tên giải',
+  '{location}': 'Địa điểm',
+  '{race_day}': 'Ngày thi',
+  '{distance}': 'Cự ly',
+};
+
+// Canvas blank mặc định (chân dung) — sẽ tự khớp kích thước ảnh khung khi tải.
+const DEFAULT_W = 1280;
+const DEFAULT_H = 1600;
+
+/** Đọc kích thước thật của ảnh (để canvas khớp khung, KHÔNG bị cắt). */
+function readImageDims(url: string): Promise<{ w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
 
 export default function BibPassEditor({ params }: { params: Promise<{ raceId: string }> }) {
   const { raceId: raceIdStr } = use(params);
@@ -94,11 +108,12 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
   const [raceName, setRaceName] = useState('');
   const [enabled, setEnabled] = useState(false);
   const [bgUrl, setBgUrl] = useState('');
-  const [bgColor, setBgColor] = useState('#0f172a');
+  const [bgColor, setBgColor] = useState('#ffffff');
   const [canvasW, setCanvasW] = useState(DEFAULT_W);
   const [canvasH, setCanvasH] = useState(DEFAULT_H);
-  const [preserved, setPreserved] = useState<BibPassLayer[]>(DEFAULT_SHAPES);
-  const [layers, setLayers] = useState<TextLayerDraft[]>(DEFAULT_TEXTS);
+  // Lớp KHÔNG phải text (shape/image) của config cũ — giữ nguyên round-trip.
+  const [preserved, setPreserved] = useState<BibPassLayer[]>([]);
+  const [layers, setLayers] = useState<TextLayerDraft[]>([]);
   // ── static fields + email ──
   const [location, setLocation] = useState('');
   const [raceDay, setRaceDay] = useState('');
@@ -124,7 +139,7 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
     if (!raceName && raceOption?.title) setRaceName(raceOption.title);
   }, [raceOption, raceName]);
 
-  // Load config khi có (404 = giải chưa cấu hình → giữ default seed).
+  // Load config khi có (404 = giải chưa cấu hình → giữ trạng thái trống).
   useEffect(() => {
     if (loaded) return;
     if (!config && !isError) return; // chờ
@@ -142,7 +157,7 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
       const t = config.template;
       if (t) {
         setBgUrl(t.canvas.backgroundImageUrl ?? '');
-        setBgColor(t.canvas.backgroundColor ?? '#0f172a');
+        setBgColor(t.canvas.backgroundColor ?? '#ffffff');
         setCanvasW(t.canvas.width);
         setCanvasH(t.canvas.height);
         setPreserved((t.layers ?? []).filter((l) => l.type !== 'text'));
@@ -154,7 +169,7 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
               x: l.x,
               y: l.y,
               fontSize: l.fontSize ?? 40,
-              color: l.color ?? '#ffffff',
+              color: l.color ?? '#1f2937',
               textAlign: (l.textAlign ?? 'left') as TextLayerDraft['textAlign'],
               fontFamily: l.fontFamily ?? 'Be Vietnam Pro',
               fontWeight: l.fontWeight ?? '700',
@@ -164,8 +179,6 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
       }
     }
     setLoaded(true);
-    // `loaded` guard ở trên đảm bảo effect chỉ chạy 1 lần → thêm raceOption vào
-    // deps an toàn (không ghi đè edit), chỉ để bắt trường hợp raceData về muộn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, isError, raceOption]);
 
@@ -174,7 +187,7 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
       type: 'text',
       x: l.x,
       y: l.y,
-      width: l.textAlign === 'center' ? canvasW - l.x * 2 : canvasW - l.x,
+      width: l.textAlign === 'center' ? Math.max(40, canvasW - l.x * 2) : canvasW - l.x,
       text: l.text,
       fontSize: l.fontSize,
       color: l.color,
@@ -222,6 +235,24 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
     } catch (err) {
       toast.error(err instanceof BibPassApiError ? err.message : 'Đổi trạng thái thất bại');
     }
+  }
+
+  /** Thêm 1 trường động lên khung — đặt giữa, font VN-safe, màu tối (khung thường sáng). */
+  function addField(token: string) {
+    const fontSize = Math.max(24, Math.round(canvasH * 0.028));
+    setLayers((prev) => [
+      ...prev,
+      {
+        text: token,
+        x: Math.round(canvasW * 0.12),
+        y: Math.round(canvasH * 0.45),
+        fontSize,
+        color: '#1f2937',
+        textAlign: 'left',
+        fontFamily: 'Be Vietnam Pro',
+        fontWeight: '700',
+      },
+    ]);
   }
 
   // LIVE preview (debounce) — render phôi chưa lưu.
@@ -279,17 +310,8 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
   }
 
   function tokenLabel(text: string): string {
-    const m: Record<string, string> = {
-      '{name}': 'Họ tên',
-      '{bib}': 'Số BIB',
-      '{event_name}': 'Tên giải',
-      '{location}': 'Địa điểm',
-      '{race_day}': 'Ngày thi',
-      '{distance}': 'Cự ly',
-      '{passport_no}': 'Passport',
-    };
-    for (const [k, v] of Object.entries(m)) if (text.includes(k)) return v;
-    return text.slice(0, 14) || 'Chữ';
+    for (const [k, v] of Object.entries(TOKEN_LABELS)) if (text.includes(k)) return v;
+    return text.slice(0, 16) || 'Chữ';
   }
 
   function updateLayer(i: number, patch: Partial<TextLayerDraft>) {
@@ -301,8 +323,16 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
     if (!file) return;
     setUploading(true);
     try {
-      setBgUrl(await uploadBibPassImage(file));
-      toast.success('Đã tải phôi nền');
+      const url = await uploadBibPassImage(file);
+      setBgUrl(url);
+      const dims = await readImageDims(url);
+      if (dims && dims.w > 0 && dims.h > 0) {
+        setCanvasW(dims.w);
+        setCanvasH(dims.h);
+        toast.success(`Đã tải khung — canvas khớp ${dims.w}×${dims.h}px`);
+      } else {
+        toast.success('Đã tải khung');
+      }
     } catch (err) {
       toast.error(err instanceof BibPassApiError ? err.message : 'Tải ảnh thất bại');
     } finally {
@@ -358,150 +388,143 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
             {raceOption ? ` · ${raceOption.confirmedCount} VĐV đã xác nhận BIB` : ''}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant={enabled ? 'default' : 'secondary'}>{enabled ? 'Đang gửi' : 'Đang tắt'}</Badge>
-        </div>
+        <Badge variant={enabled ? 'default' : 'secondary'}>{enabled ? 'Đang gửi' : 'Đang tắt'}</Badge>
       </div>
 
       <Tabs defaultValue="template">
         <TabsList>
-          <TabsTrigger value="template">Phôi Border Pass</TabsTrigger>
+          <TabsTrigger value="template">Khung & Trường</TabsTrigger>
           <TabsTrigger value="content">Thông tin & Email</TabsTrigger>
           <TabsTrigger value="send">Kích hoạt & Gửi</TabsTrigger>
         </TabsList>
 
-        {/* ── Phôi ── */}
+        {/* ── Khung + trường động ── */}
         <TabsContent value="template">
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="space-y-4 p-6">
+              {/* 1. Tải khung */}
               <div className="space-y-1.5">
-                <Label>Tên giải (hiển thị {'{event_name}'})</Label>
-                <Input value={raceName} onChange={(e) => setRaceName(e.target.value)} placeholder="Vietnam Mountain Marathon 2026" />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Rộng (px)</Label>
-                  <Input type="number" value={canvasW} onChange={(e) => setCanvasW(Number(e.target.value))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Cao (px)</Label>
-                  <Input type="number" value={canvasH} onChange={(e) => setCanvasH(Number(e.target.value))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Màu nền</Label>
-                  <Input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Ảnh phôi nền (tuỳ chọn — dùng làm nền cho cả pass)</Label>
+                <Label>1. Ảnh khung Border Pass (thiết kế sẵn)</Label>
                 <input type="file" accept="image/*" onChange={onBgFile} />
+                <p className="text-xs text-muted-foreground">
+                  Tải ảnh khung đã thiết kế hoàn chỉnh — canvas tự khớp kích thước ảnh. Sau đó đặt
+                  các trường động (Họ tên, Số BIB…) lên đúng vị trí.
+                </p>
                 {uploading && <p className="text-xs text-muted-foreground">Đang tải…</p>}
-                {bgUrl && (
+                {bgUrl ? (
                   <div className="flex items-center gap-2">
-                    <p className="truncate font-mono text-xs text-muted-foreground" title={bgUrl}>{bgUrl}</p>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setBgUrl('')}>Bỏ ảnh</Button>
+                    <p className="truncate font-mono text-xs text-muted-foreground" title={bgUrl}>
+                      {canvasW}×{canvasH}px · {bgUrl.split('/').pop()}
+                    </p>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setBgUrl('')}>Bỏ khung</Button>
+                  </div>
+                ) : (
+                  <div className="flex items-end gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Rộng</Label>
+                      <Input type="number" value={canvasW} onChange={(e) => setCanvasW(Number(e.target.value))} className="h-8 w-24" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Cao</Label>
+                      <Input type="number" value={canvasH} onChange={(e) => setCanvasH(Number(e.target.value))} className="h-8 w-24" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Màu nền</Label>
+                      <Input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="h-8 w-14 p-1" />
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Khối nền trang trí (phôi mặc định) — phủ LÊN ảnh nền nên che mất
-                  ảnh bạn tải. Cho xoá để ảnh phôi hiện ra. */}
+              {/* Round-trip: config cũ có shape → cho xoá (flow mới không tạo shape) */}
               {preserved.length > 0 && (
-                <div className={`flex items-center justify-between gap-3 rounded-md border p-3 text-xs ${bgUrl ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30' : 'border-dashed'}`}>
-                  <span className="text-muted-foreground">
-                    {bgUrl ? (
-                      <>⚠️ Có <b>{preserved.length} khối nền trang trí</b> (của phôi mẫu) đang <b>che ảnh bạn vừa tải</b>. Xoá để hiện ảnh.</>
-                    ) : (
-                      <>Phôi mẫu có <b>{preserved.length} khối nền trang trí</b>. Xoá nếu muốn dùng ảnh/màu nền của riêng bạn.</>
-                    )}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant={bgUrl ? 'default' : 'outline'}
-                    className="shrink-0"
-                    onClick={() => {
-                      setPreserved([]);
-                      toast.success('Đã xoá khối nền mặc định');
-                    }}
-                  >
+                <div className="flex items-center justify-between gap-3 rounded-md border border-dashed p-3 text-xs">
+                  <span className="text-muted-foreground">Phôi này có <b>{preserved.length} khối nền</b> cũ.</span>
+                  <Button size="sm" variant="outline" className="shrink-0" onClick={() => { setPreserved([]); toast.success('Đã xoá khối nền'); }}>
                     Xoá khối nền
                   </Button>
                 </div>
               )}
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Lớp chữ</Label>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setLayers([...layers, { text: '{name}', x: 100, y: 300, fontSize: 40, color: '#ffffff', textAlign: 'left', fontFamily: 'Be Vietnam Pro', fontWeight: '700' }])
-                    }
-                  >
-                    + Thêm dòng
-                  </Button>
+              {/* 2. Thêm trường động */}
+              <div className="space-y-2 border-t pt-4">
+                <Label>2. Thêm trường động lên khung</Label>
+                <div className="flex flex-wrap gap-2">
+                  {FIELD_PALETTE.map((f) => (
+                    <Button key={f.token} size="sm" variant="outline" onClick={() => addField(f.token)}>
+                      + {f.label}
+                    </Button>
+                  ))}
                 </div>
-                <p className="text-xs text-muted-foreground">Token: {TOKENS.join(' ')}</p>
-                {layers.map((l, i) => (
-                  <div key={i} className="space-y-2 rounded border p-2">
-                    <Input value={l.text} onChange={(e) => updateLayer(i, { text: e.target.value })} placeholder="{name}" />
-                    <div className="grid grid-cols-12 items-end gap-2">
-                      <div className="col-span-5">
-                        <Label className="text-xs">Phông</Label>
-                        <select
-                          className="h-9 w-full rounded border bg-background px-1 text-sm"
-                          value={l.fontFamily}
-                          onChange={(e) => updateLayer(i, { fontFamily: e.target.value })}
-                        >
-                          {fontList.map((f) => (
-                            <option key={f.family} value={f.family}>{f.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-span-3">
-                        <Label className="text-xs">Đậm</Label>
-                        <select
-                          className="h-9 w-full rounded border bg-background px-1 text-sm"
-                          value={l.fontWeight}
-                          onChange={(e) => updateLayer(i, { fontWeight: e.target.value })}
-                        >
-                          <option value="400">Thường</option>
-                          <option value="600">Vừa</option>
-                          <option value="700">Đậm</option>
-                          <option value="900">Rất đậm</option>
-                        </select>
-                      </div>
-                      <NumberField label="Cỡ" value={l.fontSize} onChange={(v) => updateLayer(i, { fontSize: v })} span={2} />
-                      <div className="col-span-2">
-                        <Label className="text-xs">Màu</Label>
-                        <Input type="color" value={l.color} onChange={(e) => updateLayer(i, { color: e.target.value })} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-12 items-end gap-2">
-                      <NumberField label="X" value={l.x} onChange={(v) => updateLayer(i, { x: v })} span={3} />
-                      <NumberField label="Y" value={l.y} onChange={(v) => updateLayer(i, { y: v })} span={3} />
-                      <div className="col-span-4">
-                        <Label className="text-xs">Căn</Label>
-                        <select
-                          className="h-9 w-full rounded border bg-background px-1 text-sm"
-                          value={l.textAlign}
-                          onChange={(e) => updateLayer(i, { textAlign: e.target.value as TextLayerDraft['textAlign'] })}
-                        >
-                          <option value="left">Trái</option>
-                          <option value="center">Giữa</option>
-                          <option value="right">Phải</option>
-                        </select>
-                      </div>
-                      <div className="col-span-2">
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setLayers(layers.filter((_, j) => j !== i))}>Xoá</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                {layers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Chưa có trường nào. Bấm nút trên để thêm — rồi kéo vào đúng ô trên khung.
+                  </p>
+                )}
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* 3. Danh sách trường */}
+              {layers.map((l, i) => (
+                <div key={i} className="space-y-2 rounded border p-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="shrink-0 font-normal">{tokenLabel(l.text)}</Badge>
+                    <Input value={l.text} onChange={(e) => updateLayer(i, { text: e.target.value })} placeholder="{name}" />
+                  </div>
+                  <div className="grid grid-cols-12 items-end gap-2">
+                    <div className="col-span-5">
+                      <Label className="text-xs">Phông</Label>
+                      <select
+                        className="h-9 w-full rounded border bg-background px-1 text-sm"
+                        value={l.fontFamily}
+                        onChange={(e) => updateLayer(i, { fontFamily: e.target.value })}
+                      >
+                        {fontList.map((f) => (
+                          <option key={f.family} value={f.family}>{f.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-3">
+                      <Label className="text-xs">Đậm</Label>
+                      <select
+                        className="h-9 w-full rounded border bg-background px-1 text-sm"
+                        value={l.fontWeight}
+                        onChange={(e) => updateLayer(i, { fontWeight: e.target.value })}
+                      >
+                        <option value="400">Thường</option>
+                        <option value="600">Vừa</option>
+                        <option value="700">Đậm</option>
+                        <option value="900">Rất đậm</option>
+                      </select>
+                    </div>
+                    <NumberField label="Cỡ" value={l.fontSize} onChange={(v) => updateLayer(i, { fontSize: v })} span={2} />
+                    <div className="col-span-2">
+                      <Label className="text-xs">Màu</Label>
+                      <Input type="color" value={l.color} onChange={(e) => updateLayer(i, { color: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-12 items-end gap-2">
+                    <NumberField label="X" value={l.x} onChange={(v) => updateLayer(i, { x: v })} span={3} />
+                    <NumberField label="Y" value={l.y} onChange={(v) => updateLayer(i, { y: v })} span={3} />
+                    <div className="col-span-4">
+                      <Label className="text-xs">Căn</Label>
+                      <select
+                        className="h-9 w-full rounded border bg-background px-1 text-sm"
+                        value={l.textAlign}
+                        onChange={(e) => updateLayer(i, { textAlign: e.target.value as TextLayerDraft['textAlign'] })}
+                      >
+                        <option value="left">Trái</option>
+                        <option value="center">Giữa</option>
+                        <option value="right">Phải</option>
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setLayers(layers.filter((_, j) => j !== i))}>Xoá</Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex items-center gap-3 border-t pt-4">
                 <Button onClick={() => void saveAll()} disabled={upsertMut.isPending}>
                   {upsertMut.isPending ? 'Đang lưu…' : 'Lưu phôi'}
                 </Button>
@@ -516,14 +539,14 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
               </div>
               {previewSrc ? (
                 <>
-                  <div ref={wrapRef} className="relative w-full select-none touch-none">
+                  <div ref={wrapRef} className="relative mx-auto w-full max-w-md select-none touch-none">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={previewSrc} alt="preview Border Pass" className="block w-full rounded border" draggable={false} />
                     {layers.map((l, i) => {
                       const centered = l.textAlign === 'center';
                       const topPct = (l.y / canvasH) * 100;
                       const hPct = Math.max(2, ((l.fontSize * 1.4) / canvasH) * 100);
-                      const leftPct = centered ? (l.x / canvasW) * 100 : (l.x / canvasW) * 100;
+                      const leftPct = (l.x / canvasW) * 100;
                       const wPct = centered ? Math.max(8, 100 - leftPct * 2) : Math.max(8, 100 - leftPct);
                       return (
                         <div
@@ -531,7 +554,7 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
                           onPointerDown={(e) => startDrag(e, i)}
                           title={`Kéo để di chuyển "${tokenLabel(l.text)}"`}
                           style={{ top: `${topPct}%`, left: `${leftPct}%`, width: `${wPct}%`, height: `${hPct}%` }}
-                          className={`group absolute flex items-center justify-center rounded border border-dashed border-blue-400/70 bg-blue-400/5 hover:bg-blue-400/20 ${centered ? 'cursor-ns-resize' : 'cursor-move'}`}
+                          className={`group absolute flex items-center justify-center rounded border border-dashed border-blue-500/80 bg-blue-500/10 hover:bg-blue-500/25 ${centered ? 'cursor-ns-resize' : 'cursor-move'}`}
                         >
                           <span className="pointer-events-none rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
                             {tokenLabel(l.text)} ⠿
@@ -541,11 +564,13 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
                     })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    💡 Kéo khung nét đứt để chỉnh vị trí (chữ căn giữa kéo lên/xuống). Ưng → “Lưu phôi”.
+                    💡 Kéo khung nét đứt vào đúng ô trên khung (chữ căn giữa kéo lên/xuống). Ưng → “Lưu phôi”.
                   </p>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">Đang tải xem trước…</p>
+                <p className="text-sm text-muted-foreground">
+                  {bgUrl ? 'Đang tải xem trước…' : 'Tải ảnh khung ở bên trái để bắt đầu.'}
+                </p>
               )}
             </Card>
           </div>
@@ -555,24 +580,32 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
         <TabsContent value="content">
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="space-y-4 p-6">
-              <h3 className="font-semibold">Thông tin in trên pass</h3>
+              <h3 className="font-semibold">Thông tin động</h3>
               <div className="space-y-1.5">
-                <Label>Địa điểm ({'{location}'})</Label>
-                <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Sa Pa, Lào Cai" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Ngày thi ({'{race_day}'})</Label>
-                  <Input value={raceDay} onChange={(e) => setRaceDay(e.target.value)} placeholder="21/06/2026" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Cự ly ({'{distance}'})</Label>
-                  <Input value={distance} onChange={(e) => setDistance(e.target.value)} placeholder="42KM" />
-                </div>
+                <Label>Tên giải (token {'{event_name}'})</Label>
+                <Input value={raceName} onChange={(e) => setRaceName(e.target.value)} placeholder="Lào Cai Marathon 2026" />
               </div>
               <div className="space-y-1.5">
                 <Label>Tiền tố Passport ({'{passport_no}'} = tiền tố + BIB)</Label>
-                <Input value={passportPrefix} onChange={(e) => setPassportPrefix(e.target.value)} placeholder="VMM2026-" />
+                <Input value={passportPrefix} onChange={(e) => setPassportPrefix(e.target.value)} placeholder="LCM-2026-" />
+              </div>
+              <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                Các trường dưới đây chỉ cần điền <b>nếu khung CHƯA in sẵn</b> (thường khung đã có).
+                Dùng làm token {'{location}'} / {'{race_day}'} / {'{distance}'} nếu bạn thêm chúng lên khung.
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Địa điểm ({'{location}'})</Label>
+                  <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Quảng trường Tráng A Pao" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Ngày thi ({'{race_day}'})</Label>
+                  <Input value={raceDay} onChange={(e) => setRaceDay(e.target.value)} placeholder="18/10/2026" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Cự ly ({'{distance}'})</Label>
+                  <Input value={distance} onChange={(e) => setDistance(e.target.value)} placeholder="5.5/10.5/21KM" />
+                </div>
               </div>
             </Card>
 
