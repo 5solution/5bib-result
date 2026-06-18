@@ -42,6 +42,8 @@ interface TextLayerDraft {
   text: string;
   x: number;
   y: number;
+  /** Bề rộng ô chữ (px). Quyết định wrap + vùng căn lề (giữa/phải). */
+  width: number;
   fontSize: number;
   color: string;
   textAlign: 'left' | 'center' | 'right';
@@ -168,6 +170,7 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
               text: l.text ?? '',
               x: l.x,
               y: l.y,
+              width: l.width && l.width > 0 ? l.width : Math.max(40, t.canvas.width - l.x),
               fontSize: l.fontSize ?? 40,
               color: l.color ?? '#1f2937',
               textAlign: (l.textAlign ?? 'left') as TextLayerDraft['textAlign'],
@@ -187,7 +190,7 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
       type: 'text',
       x: l.x,
       y: l.y,
-      width: l.textAlign === 'center' ? Math.max(40, canvasW - l.x * 2) : canvasW - l.x,
+      width: l.width && l.width > 0 ? l.width : Math.max(40, canvasW - l.x),
       text: l.text,
       fontSize: l.fontSize,
       color: l.color,
@@ -240,12 +243,14 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
   /** Thêm 1 trường động lên khung — đặt giữa, font VN-safe, màu tối (khung thường sáng). */
   function addField(token: string) {
     const fontSize = Math.max(24, Math.round(canvasH * 0.028));
+    const x = Math.round(canvasW * 0.12);
     setLayers((prev) => [
       ...prev,
       {
         text: token,
-        x: Math.round(canvasW * 0.12),
+        x,
         y: Math.round(canvasH * 0.45),
+        width: Math.round(canvasW * 0.5),
         fontSize,
         color: '#1f2937',
         textAlign: 'left',
@@ -281,27 +286,56 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, layers, preserved, canvasW, canvasH, bgUrl, bgColor, location, raceDay, distance, passportPrefix, raceName]);
 
-  // ── drag reposition ──
+  // ── drag reposition + resize width ──
   const wrapRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ index: number; cx: number; cy: number; sx: number; sy: number; centered: boolean } | null>(null);
+  const dragRef = useRef<{ index: number; cx: number; cy: number; sx: number; sy: number } | null>(null);
+  const resizeRef = useRef<{ index: number; cx: number; sw: number; sx: number } | null>(null);
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, Math.round(v)));
 
+  // Kéo cả ô để di chuyển (X + Y) — mọi kiểu căn lề.
   function startDrag(e: React.PointerEvent, index: number) {
     e.preventDefault();
     const l = layers[index];
-    dragRef.current = { index, cx: e.clientX, cy: e.clientY, sx: l.x, sy: l.y, centered: l.textAlign === 'center' };
+    dragRef.current = { index, cx: e.clientX, cy: e.clientY, sx: l.x, sy: l.y };
     const onMove = (ev: PointerEvent) => {
       const d = dragRef.current;
       const rect = wrapRef.current?.getBoundingClientRect();
       if (!d || !rect) return;
       const dx = ((ev.clientX - d.cx) / rect.width) * canvasW;
       const dy = ((ev.clientY - d.cy) / rect.height) * canvasH;
-      const ny = clamp(d.sy + dy, 0, canvasH);
-      const patch = d.centered ? { y: ny } : { x: clamp(d.sx + dx, 0, canvasW), y: ny };
-      setLayers((prev) => prev.map((l, j) => (j === d.index ? { ...l, ...patch } : l)));
+      setLayers((prev) =>
+        prev.map((l, j) =>
+          j === d.index
+            ? { ...l, x: clamp(d.sx + dx, 0, canvasW), y: clamp(d.sy + dy, 0, canvasH) }
+            : l,
+        ),
+      );
     };
     const onUp = () => {
       dragRef.current = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  // Kéo mép phải để chỉnh ĐỘ DÀI (width) của ô chữ.
+  function startResize(e: React.PointerEvent, index: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    const l = layers[index];
+    resizeRef.current = { index, cx: e.clientX, sw: l.width, sx: l.x };
+    const onMove = (ev: PointerEvent) => {
+      const d = resizeRef.current;
+      const rect = wrapRef.current?.getBoundingClientRect();
+      if (!d || !rect) return;
+      const dx = ((ev.clientX - d.cx) / rect.width) * canvasW;
+      const nw = clamp(d.sw + dx, 20, canvasW - d.sx);
+      setLayers((prev) => prev.map((l, j) => (j === d.index ? { ...l, width: nw } : l)));
+    };
+    const onUp = () => {
+      resizeRef.current = null;
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
@@ -503,10 +537,11 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
                     </div>
                   </div>
                   <div className="grid grid-cols-12 items-end gap-2">
-                    <NumberField label="X" value={l.x} onChange={(v) => updateLayer(i, { x: v })} span={3} />
-                    <NumberField label="Y" value={l.y} onChange={(v) => updateLayer(i, { y: v })} span={3} />
+                    <NumberField label="X" value={l.x} onChange={(v) => updateLayer(i, { x: v })} span={2} />
+                    <NumberField label="Y" value={l.y} onChange={(v) => updateLayer(i, { y: v })} span={2} />
+                    <NumberField label="Rộng" value={l.width} onChange={(v) => updateLayer(i, { width: Math.max(20, v) })} span={2} />
                     <div className="col-span-4">
-                      <Label className="text-xs">Căn</Label>
+                      <Label className="text-xs">Căn (trong ô rộng)</Label>
                       <select
                         className="h-9 w-full rounded border bg-background px-1 text-sm"
                         value={l.textAlign}
@@ -543,22 +578,27 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={previewSrc} alt="preview Border Pass" className="block w-full rounded border" draggable={false} />
                     {layers.map((l, i) => {
-                      const centered = l.textAlign === 'center';
                       const topPct = (l.y / canvasH) * 100;
                       const hPct = Math.max(2, ((l.fontSize * 1.4) / canvasH) * 100);
                       const leftPct = (l.x / canvasW) * 100;
-                      const wPct = centered ? Math.max(8, 100 - leftPct * 2) : Math.max(8, 100 - leftPct);
+                      const wPct = Math.max(3, (l.width / canvasW) * 100);
                       return (
                         <div
                           key={i}
                           onPointerDown={(e) => startDrag(e, i)}
-                          title={`Kéo để di chuyển "${tokenLabel(l.text)}"`}
+                          title={`Kéo để di chuyển "${tokenLabel(l.text)}" · kéo mép phải để chỉnh độ dài`}
                           style={{ top: `${topPct}%`, left: `${leftPct}%`, width: `${wPct}%`, height: `${hPct}%` }}
-                          className={`group absolute flex items-center justify-center rounded border border-dashed border-blue-500/80 bg-blue-500/10 hover:bg-blue-500/25 ${centered ? 'cursor-ns-resize' : 'cursor-move'}`}
+                          className="group absolute flex cursor-move items-center justify-center rounded border border-dashed border-blue-500/80 bg-blue-500/10 hover:bg-blue-500/25"
                         >
                           <span className="pointer-events-none rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
                             {tokenLabel(l.text)} ⠿
                           </span>
+                          {/* grip kéo độ dài (mép phải) */}
+                          <span
+                            onPointerDown={(e) => startResize(e, i)}
+                            title="Kéo để chỉnh độ dài ô chữ"
+                            className="absolute -right-1 top-0 h-full w-2.5 cursor-ew-resize rounded-sm bg-blue-600/70 opacity-0 transition group-hover:opacity-100"
+                          />
                         </div>
                       );
                     })}
