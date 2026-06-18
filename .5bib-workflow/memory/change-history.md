@@ -4,6 +4,23 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-18 GOLIVE F-089 + F-090 → PROD (release/v1.22.0)
+
+**Danny "retest đi ok thì merge main r golive".** Retest GREEN (47 unit + tsc + admin/frontend `next build` + DEV live E2E). Tách sạch CHỈ F-089+F-090 khỏi working tree lẫn lộn (loại F-084 landing-ai chưa QC, `@anthropic-ai/sdk` dep, env/launch junk) → 2 commit (code 8f022e3 + docs 8bf6195) trên branch `5bib_short_link_crew_v1`.
+
+**Deploy chain:** push branch → ff `main` (CI build xanh, deploy DEV — lần 1 timeout giữa `docker pull` 133MB layer → **rerun OK**) → smoke DEV (crew search + short-link route trên result-dev) → push `release/v1.22.0` → **Deploy Production OK lần đầu**. Prod verify: short-link + crew route sống (404 đúng) qua result.5bib.com; F-090 `/gcn/<slug>` dùng được luôn trên result.5bib.com (KHÔNG cần subdomain).
+
+**s.5bib.com infra fix (Danny "fix di"):** phát hiện s.5bib.com **chưa cấu hình thật** — chỉ có DNS, THIẾU nginx vhost + cert. Tạo vhost exact-match `s.5bib.com` → prod frontend `localhost:3084` (Host preserved cho middleware) + certbot cấp cert.
+
+### ⚠️ GOTCHA quan trọng — certbot --nginx + wildcard server block
+`certbot --nginx -d s.5bib.com` MATCH nhầm block `server_name *.5bib.com` (landing-wildcard F-083, dùng cert `5bib-wildcard`, proxy 3082) và **GHI ĐÈ ssl_certificate của nó thành cert s.5bib.com đơn lẻ** → mọi `*.5bib.com` landing khác sẽ serve cert sai (CN=s.5bib.com). **Fix:** (1) `sed` khôi phục wildcard block về `5bib-wildcard` cert; (2) thêm 443 block vào vhost exact-match `s.5bib.com` (exact thắng wildcard) trỏ prod 3084 + cert riêng. Verify: `openssl s_client -servername s.5bib.com` → CN=s.5bib.com; `-servername foo.5bib.com` → CN=*.5bib.com (wildcard giữ nguyên). **Bài học: khi certbot --nginx cho subdomain bị `*.5bib.com` catch, LUÔN kiểm tra nó không phá cert wildcard + dùng exact-match vhost.**
+
+### Lessons
+- CI deploy "Run Command Timeout" khi `docker pull` 3 image mới chậm → rerun (layer cached) thường qua. Cân nhắc tăng command_timeout hoặc stagger.
+- Working tree lẫn nhiều feature chưa commit → MUST tách bằng selective `git add` (verify từng shared-file diff sạch) trước khi merge main, tránh quét nhầm feature dở lên prod.
+
+---
+
 ## 2026-06-17 FEATURE-090: GCN cho Crew — tìm theo tên + gen ảnh
 
 **PR/Commit:** working tree (branch đề xuất `5bib_crew_cert_v1`). Workflow full F-090 sau F-089 ("làm cả").
