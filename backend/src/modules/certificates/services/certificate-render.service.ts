@@ -11,6 +11,7 @@ import { CertificateTemplate } from '../schemas/certificate-template.schema';
 import type {
   TemplateLayer,
   PhotoArea,
+  TemplateCanvas,
 } from '../schemas/certificate-template.schema';
 
 const FONTS_DIR = path.resolve(__dirname, '../../../../assets/fonts');
@@ -73,6 +74,24 @@ export interface RenderData {
   ag_rank?: string | number;
   overall_rank?: string | number;
   runner_photo_url?: string | null;
+  /**
+   * FEATURE-090 — generic token map cho non-athlete render (vd Crew GCN:
+   * {full_name}, {position}, {<cột tự do>}). Resolve SAU các token cố định.
+   * Caller athlete cũ KHÔNG truyền → hành vi không đổi.
+   */
+  variables?: Record<string, string>;
+}
+
+/**
+ * FEATURE-090 — subset template mà `render()` thực sự đọc. `CertificateTemplate`
+ * (race-scoped) assignable; Crew GCN embed template (không race) cũng assignable.
+ */
+export interface RenderableTemplate {
+  canvas: TemplateCanvas;
+  layers: TemplateLayer[];
+  photo_area?: PhotoArea | null;
+  placeholder_photo_url?: string | null;
+  photo_behind_background?: boolean;
 }
 
 @Injectable()
@@ -85,7 +104,7 @@ export class CertificateRenderService {
   }
 
   async render(
-    template: CertificateTemplate,
+    template: RenderableTemplate,
     data: RenderData,
     options: { includePhoto?: boolean } = {},
   ): Promise<Buffer> {
@@ -244,7 +263,7 @@ export class CertificateRenderService {
   }
 
   private interpolate(text: string, data: RenderData): string {
-    return text
+    let out = text
       .replace(/\{runner_name\}/g, String(data.runner_name ?? ''))
       .replace(/\{bib\}/g, String(data.bib ?? ''))
       .replace(/\{finish_time\}/g, String(data.finish_time ?? ''))
@@ -258,6 +277,21 @@ export class CertificateRenderService {
       .replace(/\{gender_rank\}/g, String(data.gender_rank ?? ''))
       .replace(/\{ag_rank\}/g, String(data.ag_rank ?? ''))
       .replace(/\{overall_rank\}/g, String(data.overall_rank ?? ''));
+    // FEATURE-090 — generic token pass (Crew GCN: {full_name}/{position}/<cột>).
+    // Chạy SAU token cố định; athlete cũ không truyền variables → no-op.
+    if (data.variables) {
+      for (const [key, value] of Object.entries(data.variables)) {
+        out = out.replace(
+          new RegExp(`\\{${this.escapeToken(key)}\\}`, 'g'),
+          String(value ?? ''),
+        );
+      }
+    }
+    return out;
+  }
+
+  private escapeToken(token: string): string {
+    return token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   private buildFontString(layer: TemplateLayer): string {

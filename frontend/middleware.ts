@@ -54,6 +54,9 @@ export default function middleware(req: NextRequest) {
     !isSport5Host &&
     !is5SolutionHost &&
     (host.startsWith('solution.') || host.startsWith('solution-'));
+  // FEATURE-089 — Short link host `s.5bib.com/<code>` → `/r/<code>`.
+  const isShortLinkHost =
+    !isSport5Host && !is5SolutionHost && host === 's.5bib.com';
 
   // FEATURE-083 — Race Landing subdomains: `<slug>.5bib.com` → `/l/<slug>`.
   // Catch-all AFTER the known-host checks; excludes the main app + reserved
@@ -62,6 +65,8 @@ export default function middleware(req: NextRequest) {
     'www', 'result', 'result-fe', 'result-fe-dev', 'result-dev', 'admin',
     'api', 'app', 'merchant', 'crew', 'timing', 'solution', '5solution',
     '5sport', 'm', 'mail', 'staging', 'dev', 'cdn', 'static', 'blog', 'news',
+    // FEATURE-089 — short link host (handled by its own branch below).
+    's', 'go', 'link',
   ]);
   const landingSub = host.endsWith('.5bib.com')
     ? host.slice(0, -'.5bib.com'.length)
@@ -112,6 +117,22 @@ export default function middleware(req: NextRequest) {
       !url.pathname.startsWith('/solution')
     ) {
       url.pathname = `/solution${url.pathname === '/' ? '' : url.pathname}`;
+      return NextResponse.rewrite(url);
+    }
+  }
+
+  // FEATURE-089 — Short link: `s.5bib.com/<code>` → `/r/<code>` route handler.
+  // Root path (no code) → marketing site. Excludes /api + already-rewritten /r.
+  if (isShortLinkHost) {
+    if (req.nextUrl.pathname === '/') {
+      return NextResponse.redirect('https://5bib.com', 302);
+    }
+    if (
+      !req.nextUrl.pathname.startsWith('/api') &&
+      !req.nextUrl.pathname.startsWith('/r/')
+    ) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/r${req.nextUrl.pathname}`;
       return NextResponse.rewrite(url);
     }
   }

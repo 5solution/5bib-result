@@ -60,6 +60,10 @@ import { PromoHubModule } from './promo-hub/promo-hub.module';
 import { PromoHubAnalyticsModule } from './promo-hub-analytics/promo-hub-analytics.module';
 // FEATURE-083 — Race Landing Page Builder (per-race microsite, subdomain Phase 1).
 import { LandingModule } from './landing/landing.module';
+// FEATURE-089 — Short link rút gọn URL (s.5bib.com generic shortener).
+import { ShortLinksModule } from './short-links/short-links.module';
+// FEATURE-090 — Crew Certificate (GCN) — upload roster + render PNG theo tên.
+import { CrewCertificatesModule } from './crew-certificates/crew-certificates.module';
 import { OrderReadonly } from './finance/entities/order-readonly.entity';
 // FEATURE-033 — Promo Hub race calendar phase BÁN VÉ
 import { RaceReadonly } from './promo-hub/entities/race-readonly.entity';
@@ -214,6 +218,10 @@ const volunteerDbModules = env.volunteerDb.host
     PromoHubModule,
     PromoHubAnalyticsModule,
     LandingModule,
+    // FEATURE-089 — Short link shortener (pure Mongo + Redis, unconditional).
+    ShortLinksModule,
+    // FEATURE-090 — Crew Certificate (GCN). Reuse CertificatesModule render engine.
+    CrewCertificatesModule,
     RacesModule,
     RaceResultModule,
     // F-015 CheckInModule REMOVED 2026-05-08 — duplicate of ORG.5bib.com pickup module.
