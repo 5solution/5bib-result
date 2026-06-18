@@ -16,9 +16,33 @@ import type {
 
 const FONTS_DIR = path.resolve(__dirname, '../../../../assets/fonts');
 
+/**
+ * FEATURE-091 — bảng phông CHỌN ĐƯỢC trong editor (Crew GCN + Border Pass).
+ * Mỗi entry: `family` = tên truyền vào `layer.fontFamily` (khớp alias register
+ * bên dưới) + `label` hiển thị dropdown + `category` để gom nhóm UI.
+ *
+ * Toàn bộ phông đã verify FULL Vietnamese glyph coverage + render thật qua
+ * @napi-rs/canvas (cmap check + render smoke 2026-06-18). Variable fonts
+ * (`*-VF.ttf`) — Skia tự chọn instance theo `fontWeight` trong font string.
+ *
+ * KHÔNG đổi default render logic — chỉ thêm phông + export danh sách.
+ */
+export const FONT_OPTIONS: ReadonlyArray<{
+  family: string;
+  label: string;
+  category: 'sans' | 'serif' | 'display' | 'script';
+}> = [
+  { family: 'Be Vietnam Pro', label: 'Be Vietnam Pro', category: 'sans' },
+  { family: 'Inter', label: 'Inter', category: 'sans' },
+  { family: 'Montserrat', label: 'Montserrat', category: 'sans' },
+  { family: 'Roboto', label: 'Roboto', category: 'sans' },
+  { family: 'Oswald', label: 'Oswald (đậm, thể thao)', category: 'display' },
+  { family: 'Lora', label: 'Lora (serif)', category: 'serif' },
+  { family: 'Playfair Display', label: 'Playfair Display (serif sang)', category: 'serif' },
+  { family: 'Dancing Script', label: 'Dancing Script (chữ viết tay)', category: 'script' },
+] as const;
+
 // Register bundled fonts once at module load.
-// Extra fonts (Roboto, Montserrat, Playfair Display) can be added later by
-// dropping TTFs into assets/fonts and adding registerFromPath calls here.
 let fontsRegistered = false;
 function ensureFonts() {
   if (fontsRegistered) return;
@@ -50,6 +74,31 @@ function ensureFonts() {
     GlobalFonts.registerFromPath(
       path.join(FONTS_DIR, 'BeVietnamPro-Black.ttf'),
       'Be Vietnam Pro',
+    );
+    // FEATURE-091 — phông đa dạng (Google Fonts OFL, variable). Verified VN.
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'Montserrat-VF.ttf'),
+      'Montserrat',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'Roboto-VF.ttf'),
+      'Roboto',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'Oswald-VF.ttf'),
+      'Oswald',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'Lora-VF.ttf'),
+      'Lora',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'PlayfairDisplay-VF.ttf'),
+      'Playfair Display',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'DancingScript-VF.ttf'),
+      'Dancing Script',
     );
     fontsRegistered = true;
   } catch (err) {

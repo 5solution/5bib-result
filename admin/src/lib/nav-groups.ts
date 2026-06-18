@@ -44,6 +44,7 @@ import {
   ShieldCheck,
   Globe,
   Link2,
+  Mail,
 } from "lucide-react";
 
 export type NavItem = {
@@ -135,6 +136,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "short-links", href: "/short-links", label: "Link rút gọn", icon: Link2, badge: "NEW", requireRole: "admin" },
       { id: "certificates", href: "/certificates", label: "Certificates", icon: Award },
       { id: "crew-certificates", href: "/crew-certificates", label: "GCN Crew", icon: Award, badge: "NEW", requireRole: "admin" },
+      { id: "bib-pass", href: "/bib-pass", label: "Border Pass email", icon: Mail, badge: "NEW", requireRole: "admin" },
       { id: "result-images", href: "/result-image-stats", label: "Ảnh kết quả", icon: ImageIcon },
     ],
   },

@@ -119,6 +119,11 @@ const envVarsSchema = Joi.object()
     IGLOO_CRON_HOUR: Joi.number().min(0).max(23).default(9),
     IGLOO_DAILY_ENABLED: Joi.boolean().default(false),
     IGLOO_SUBMIT_ENABLED: Joi.boolean().default(false),
+    // FEATURE-091 — Border Pass email (gửi ảnh pass cho VĐV đã xác nhận BIB).
+    // Kill-switch default false → dev/staging KHÔNG bao giờ gửi email thật.
+    BIB_PASS_SEND_ENABLED: Joi.boolean().default(false),
+    BIB_PASS_BATCH_LIMIT: Joi.number().min(1).max(2000).default(200),
+    BIB_PASS_SCAN_CRON: Joi.string().default('0 */2 * * *'),
   })
   .unknown();
 
@@ -250,5 +255,11 @@ export const env = {
     cronHour: envVars.IGLOO_CRON_HOUR as number,
     dailyEnabled: envVars.IGLOO_DAILY_ENABLED as boolean,
     submitEnabled: envVars.IGLOO_SUBMIT_ENABLED as boolean,
+  },
+  // FEATURE-091 — Border Pass email. Kill-switch default false (an toàn dev).
+  bibPass: {
+    sendEnabled: envVars.BIB_PASS_SEND_ENABLED as boolean,
+    batchLimit: envVars.BIB_PASS_BATCH_LIMIT as number,
+    scanCron: envVars.BIB_PASS_SCAN_CRON as string,
   },
 };

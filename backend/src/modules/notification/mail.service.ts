@@ -463,6 +463,54 @@ export class MailService {
     }
   }
 
+  /**
+   * FEATURE-091 — gửi 1 email Border Pass kèm ảnh PNG (đính kèm). Caller
+   * (BibPassSenderService) đã render PNG + tự áp kill-switch `BIB_PASS_SEND_ENABLED`
+   * TRƯỚC khi gọi hàm này. Hàm này chỉ phụ trách egress Mandrill — trả `false`
+   * khi Mailchimp chưa cấu hình (dev) hoặc send lỗi (lỗi đã log, KHÔNG throw —
+   * batch gửi tiếp các VĐV khác).
+   */
+  async sendBibPass(args: {
+    toEmail: string;
+    subject: string;
+    html: string;
+    png: Buffer;
+    filename: string;
+    fromName?: string;
+  }): Promise<boolean> {
+    if (!this.client) {
+      this.logger.warn(
+        `[DEV] sendBibPass to=${args.toEmail} subject="${args.subject}" file=${args.filename} (mailchimp not configured)`,
+      );
+      return false;
+    }
+    try {
+      await this.client.messages.send({
+        message: {
+          from_email: env.teamManagement.emailFrom,
+          from_name: args.fromName || '5BIB',
+          subject: args.subject,
+          html: args.html,
+          to: [{ email: args.toEmail, type: 'to' }],
+          attachments: [
+            {
+              type: 'image/png',
+              name: args.filename,
+              content: args.png.toString('base64'),
+            },
+          ],
+        },
+      });
+      this.logger.log(`Border Pass email sent to ${args.toEmail}`);
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `sendBibPass failed to=${args.toEmail}: ${(error as Error).message}`,
+      );
+      return false;
+    }
+  }
+
   async sendTeamAcceptanceSent(data: TeamAcceptanceSentData): Promise<void> {
     if (!this.client) {
       this.logger.warn(
