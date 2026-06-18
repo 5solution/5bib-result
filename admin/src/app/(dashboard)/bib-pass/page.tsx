@@ -7,12 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -159,53 +157,56 @@ export default function BibPassListPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="space-y-1 px-6 pb-4 pt-6">
             <DialogTitle>Chọn giải để cấu hình</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Chỉ hiện giải có VĐV đã xác nhận số BIB.
+            </p>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="race-search">Tìm giải (tên hoặc ID)</Label>
-              <Input
-                id="race-search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Vietnam Mountain Marathon…"
-              />
-              <p className="text-xs text-muted-foreground">
-                Chỉ hiện giải có VĐV ĐÃ xác nhận số BIB.
-              </p>
-            </div>
-            <div className="max-h-80 space-y-1 overflow-y-auto rounded border">
-              {raceOptions.length === 0 ? (
-                <p className="p-4 text-center text-sm text-muted-foreground">
-                  Không có giải khớp.
-                </p>
-              ) : (
-                raceOptions.map((r) => (
-                  <button
-                    key={r.raceId}
-                    type="button"
-                    onClick={() => router.push(`/bib-pass/${r.raceId}`)}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
-                        {r.title || `Giải #${r.raceId}`}
-                      </span>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        #{r.raceId} · {r.confirmedCount} VĐV đã xác nhận
-                      </span>
-                    </span>
-                    {r.configured && <Badge variant="secondary">Đã cấu hình</Badge>}
-                  </button>
-                ))
-              )}
-            </div>
+          <div className="px-6 pb-4">
+            <Input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm theo tên hoặc ID giải…"
+            />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Đóng</Button>
-          </DialogFooter>
+          <div className="max-h-[55vh] overflow-y-auto border-t">
+            {raceOptions.length === 0 ? (
+              <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+                Không có giải nào khớp.
+              </div>
+            ) : (
+              raceOptions.map((r) => (
+                <button
+                  key={r.raceId}
+                  type="button"
+                  onClick={() => router.push(`/bib-pass/${r.raceId}`)}
+                  className="flex w-full items-center justify-between gap-3 border-b px-6 py-3 text-left transition-colors last:border-b-0 hover:bg-muted"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">
+                      {r.title || `Giải #${r.raceId}`}
+                    </div>
+                    <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+                      #{r.raceId}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {r.configured && (
+                      <Badge variant="secondary" className="font-normal">
+                        Đã cấu hình
+                      </Badge>
+                    )}
+                    <span className="whitespace-nowrap rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                      {r.confirmedCount.toLocaleString('vi-VN')} VĐV
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
