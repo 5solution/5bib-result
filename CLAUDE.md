@@ -131,6 +131,11 @@ AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET
 # Result Image Creator v1.0
 RENDER_MAX_CONCURRENT=8              # In-process semaphore cap for canvas renders (tune per CPU)
 RESULT_PUBLIC_URL=https://result.5bib.com  # Used to embed QR code + share links in canvas
+
+# FEATURE-091 Border Pass email (gửi ảnh pass cho VĐV đã xác nhận BIB)
+BIB_PASS_SEND_ENABLED=false         # Kill-switch — false = cron/batch chỉ dry-run, KHÔNG gửi email thật (dev/staging default)
+BIB_PASS_BATCH_LIMIT=200            # Trần số email gửi mỗi lần quét/cron (throttle)
+BIB_PASS_SCAN_CRON=0 */2 * * *      # Lịch cron quét VĐV mới xác nhận BIB (mặc định mỗi 2 giờ, TZ Asia/Ho_Chi_Minh)
 ```
 
 ### Frontend / Admin (runtime)
@@ -185,6 +190,8 @@ BACKEND_URL=http://5bib-result-backend:8081  # Set in docker-compose, NOT at bui
 | `shortlink-lock:<code>` | F-089 SETNX anti-stampede lock during resolve cache-miss compute (port `landing-lock`). retry 3×200ms then direct-query fallback. | 5s |
 | `crew-cert:render:<recipientId>` | F-090 Crew GCN rendered PNG cache (base64) for `GET /api/crew-certificates/public/render/:recipientId`. DEL on batch/recipient mutation (`invalidateBatchRenders`). | 600s |
 | `crew-cert-lock:<recipientId>` | F-090 SETNX render lock (reserved; render is on-demand + cached). | 5s |
+| `bib-pass-lock:<raceId>` | F-091 Border Pass — SETNX per-race lock trong cron loop (1 race chỉ 1 batch gửi đồng thời). Released `finally`. | 120s |
+| `bib-pass-cron-lock:<YYYY-MM-DDTHH>` | F-091 SETNX lock chống cron double-fire (multi-instance) theo giờ. Port pattern F-085 IglooDailyCron. Idempotency thật nằm ở unique index Mongo `bib_pass_sends {raceId,athletesId}` — lock chỉ tránh phí công. | 110s |
 
 Cache invalidation: any admin write (create/update/publish/unpublish/delete/restore on articles OR categories) flushes ALL `articles:*` keys via `scanStream` + pipeline. Rate-limit keys use a different `ratelimit:*` prefix so they survive cache flushes — view/vote dedup state is preserved across admin edits.
 
@@ -269,6 +276,7 @@ Bucket: `AWS_S3_BUCKET` (shared with race/sponsor assets).
 - **Path convention**: `crew-certificates/<randomHex>-<originalname>` via `UploadService.uploadFile(file, 'crew-certificates')`.
 - **Max size**: 5MB per image (FileInterceptor limit). MIME: png/jpeg/webp.
 - **Reason**: phôi GCN nền phải persist để batch crew tiếp tục render GCN cho từng người. Generated GCN PNG render **on-demand** (streamed, KHÔNG lưu S3 — re-creatable from template).
+- **F-091 reuse**: Border Pass admin upload phôi nền cũng vào prefix `crew-certificates/` (cùng `UploadService.uploadFile(file, 'crew-certificates')`, cùng lifecycle persist). Generated Border Pass PNG **on-demand** (đính kèm email, KHÔNG lưu S3 — re-creatable from template; KHÔNG có prefix mới).
 - **CRITICAL**: do NOT mix `crew-certificates/` with `result-images/` (24h TTL) — phôi must persist. Distinct from `landing-assets/` (landing) and `medical-attachments/` (PII).
 
 

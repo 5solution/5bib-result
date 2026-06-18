@@ -46,6 +46,7 @@ import { AdminSeoModule } from './admin-seo/admin-seo.module';
 import { AdminInternalModule } from './admin-internal/admin-internal.module';
 import { RaceMasterDataModule } from './race-master-data/race-master-data.module';
 import { IglooInsuranceModule } from './igloo-insurance/igloo-insurance.module';
+import { BibPassEmailModule } from './bib-pass-email/bib-pass-email.module';
 import { AthleteReadonly } from './race-master-data/entities/athlete-readonly.entity';
 import { AthleteSubinfoReadonly } from './race-master-data/entities/athlete-subinfo-readonly.entity';
 import { OrderLineItemReadonly } from './race-master-data/entities/order-line-item-readonly.entity';
@@ -138,6 +139,9 @@ const platformDbModules = env.platformDb.host
       // FEATURE-085 — Igloo Insurance: inject DataSource('platform') cho selection
       // → chỉ load khi platform DB configured (cùng nhóm RaceMasterDataModule).
       IglooInsuranceModule,
+      // FEATURE-091 — Border Pass email: BibPassScannerService inject
+      // DataSource('platform') để quét athletes đã xác nhận BIB (read-only).
+      BibPassEmailModule,
       ReconciliationModule,
       AnalyticsModule,
       ChipVerificationModule,
