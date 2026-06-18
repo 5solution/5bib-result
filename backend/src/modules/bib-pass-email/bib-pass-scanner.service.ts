@@ -2,13 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
-/** 1 VĐV đã xác nhận BIB (đọc read-only từ legacy `athletes`). */
+/** 1 VĐV đã xác nhận BIB (đọc read-only từ legacy `athletes` + `athlete_subinfo`). */
 export interface ConfirmedAthleteRow {
   athletes_id: number;
   race_id: number;
   name: string | null;
   bib_number: string | null;
   email: string | null;
+  /** subinfo — token động cho khung Border Pass. */
+  club: string | null;
+  name_on_bib: string | null;
 }
 
 /**
@@ -18,8 +21,7 @@ export interface ConfirmedAthleteRow {
  * BR-01 — "đã xác nhận" khi cả 3 cột `athletes` đều có giá trị:
  *   - `bib_number` (số BIB đã gán),
  *   - `rolling_bib_last_time` (thời điểm quay BIB),
- *   - `bib_image` (URL ảnh BIB — verify thực tế 2026-06-18: chưa xác nhận =
- *     NULL hoặc rỗng).
+ *   - `bib_image` (URL ảnh BIB — chưa xác nhận = NULL hoặc rỗng).
  *
  * MỌI query parameterized (`?`) — KHÔNG interpolate input (SEC, port F-085).
  */
@@ -29,12 +31,24 @@ export class BibPassScannerService {
 
   constructor(@InjectDataSource('platform') private readonly db: DataSource) {}
 
-  /** Điều kiện "đã xác nhận BIB" (BR-01). Dùng chung cho mọi query. */
-  private static readonly CONFIRMED_WHERE = `
-    (a.deleted IS NULL OR a.deleted = 0)
-    AND a.bib_number IS NOT NULL AND a.bib_number <> ''
-    AND a.rolling_bib_last_time IS NOT NULL
-    AND a.bib_image IS NOT NULL AND a.bib_image <> ''`;
+  /** Cột trả về (token động cho khung). */
+  private static readonly SELECT_COLS = `
+    a.athletes_id   AS athletes_id,
+    a.race_id       AS race_id,
+    a.name          AS name,
+    a.bib_number    AS bib_number,
+    a.email         AS email,
+    s.club          AS club,
+    s.name_on_bib   AS name_on_bib`;
+
+  /** FROM + JOIN subinfo (LEFT — subinfo có thể null) + điều kiện confirmed (BR-01). */
+  private static readonly BASE_FROM = `
+    FROM athletes a
+    LEFT JOIN athlete_subinfo s ON a.subinfo_id = s.id
+    WHERE (a.deleted IS NULL OR a.deleted = 0)
+      AND a.bib_number IS NOT NULL AND a.bib_number <> ''
+      AND a.rolling_bib_last_time IS NOT NULL
+      AND a.bib_image IS NOT NULL AND a.bib_image <> ''`;
 
   /** Giải có VĐV đã xác nhận BIB (dropdown admin). */
   async listRacesWithConfirmed(): Promise<
@@ -44,7 +58,10 @@ export class BibPassScannerService {
       `SELECT a.race_id AS raceId, r.title AS title, COUNT(*) AS confirmedCount
        FROM athletes a
        JOIN races r ON a.race_id = r.race_id
-       WHERE ${BibPassScannerService.CONFIRMED_WHERE}
+       WHERE (a.deleted IS NULL OR a.deleted = 0)
+         AND a.bib_number IS NOT NULL AND a.bib_number <> ''
+         AND a.rolling_bib_last_time IS NOT NULL
+         AND a.bib_image IS NOT NULL AND a.bib_image <> ''
        GROUP BY a.race_id, r.title
        HAVING confirmedCount > 0
        ORDER BY a.race_id DESC
@@ -59,8 +76,7 @@ export class BibPassScannerService {
 
   async countConfirmed(raceId: number): Promise<number> {
     const res = (await this.db.query(
-      `SELECT COUNT(*) AS n FROM athletes a
-       WHERE ${BibPassScannerService.CONFIRMED_WHERE} AND a.race_id = ?`,
+      `SELECT COUNT(*) AS n ${BibPassScannerService.BASE_FROM} AND a.race_id = ?`,
       [raceId],
     )) as Array<{ n: number | string }>;
     return Number(res[0]?.n ?? 0);
@@ -72,10 +88,8 @@ export class BibPassScannerService {
    */
   async findConfirmed(raceId: number, cap = 10000): Promise<ConfirmedAthleteRow[]> {
     const rows = (await this.db.query(
-      `SELECT a.athletes_id AS athletes_id, a.race_id AS race_id,
-              a.name AS name, a.bib_number AS bib_number, a.email AS email
-       FROM athletes a
-       WHERE ${BibPassScannerService.CONFIRMED_WHERE} AND a.race_id = ?
+      `SELECT ${BibPassScannerService.SELECT_COLS}
+       ${BibPassScannerService.BASE_FROM} AND a.race_id = ?
        ORDER BY a.rolling_bib_last_time ASC
        LIMIT ?`,
       [raceId, cap],
@@ -100,17 +114,14 @@ export class BibPassScannerService {
     }
     const offset = (opts.page - 1) * opts.pageSize;
     const rows = (await this.db.query(
-      `SELECT a.athletes_id AS athletes_id, a.race_id AS race_id,
-              a.name AS name, a.bib_number AS bib_number, a.email AS email
-       FROM athletes a
-       WHERE ${BibPassScannerService.CONFIRMED_WHERE} AND a.race_id = ?${extra}
+      `SELECT ${BibPassScannerService.SELECT_COLS}
+       ${BibPassScannerService.BASE_FROM} AND a.race_id = ?${extra}
        ORDER BY a.rolling_bib_last_time DESC
        LIMIT ? OFFSET ?`,
       [...params, opts.pageSize, offset],
     )) as ConfirmedAthleteRow[];
     const countRes = (await this.db.query(
-      `SELECT COUNT(*) AS n FROM athletes a
-       WHERE ${BibPassScannerService.CONFIRMED_WHERE} AND a.race_id = ?${extra}`,
+      `SELECT COUNT(*) AS n ${BibPassScannerService.BASE_FROM} AND a.race_id = ?${extra}`,
       params,
     )) as Array<{ n: number | string }>;
     return { rows: rows.map(this.normalize), total: Number(countRes[0]?.n ?? 0) };
@@ -122,11 +133,8 @@ export class BibPassScannerService {
     athletesId: number,
   ): Promise<ConfirmedAthleteRow | null> {
     const rows = (await this.db.query(
-      `SELECT a.athletes_id AS athletes_id, a.race_id AS race_id,
-              a.name AS name, a.bib_number AS bib_number, a.email AS email
-       FROM athletes a
-       WHERE ${BibPassScannerService.CONFIRMED_WHERE}
-         AND a.race_id = ? AND a.athletes_id = ?
+      `SELECT ${BibPassScannerService.SELECT_COLS}
+       ${BibPassScannerService.BASE_FROM} AND a.race_id = ? AND a.athletes_id = ?
        LIMIT 1`,
       [raceId, athletesId],
     )) as ConfirmedAthleteRow[];
@@ -140,6 +148,8 @@ export class BibPassScannerService {
       name: r.name ?? null,
       bib_number: r.bib_number ?? null,
       email: r.email ?? null,
+      club: r.club ?? null,
+      name_on_bib: r.name_on_bib ?? null,
     };
   }
 }
