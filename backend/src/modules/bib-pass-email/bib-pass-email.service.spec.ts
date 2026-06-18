@@ -141,6 +141,26 @@ describe('FEATURE-091 — BibPassConfigService', () => {
     await expect(svc.getConfig(999)).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('FIX: draft preview KHÔNG cần config tồn tại (không 404) + dùng raceName/static từ draft', async () => {
+    const { svc, render } = build(null); // giải chưa cấu hình lần nào
+    const buf = await svc.renderPreview(123, {
+      template: { canvas: { width: 100, height: 100 }, layers: [] } as any,
+      raceName: 'VMM 2026',
+      staticFields: { distance: '42KM', passportPrefix: 'VM-' },
+    });
+    expect(render.render).toHaveBeenCalled();
+    expect(buf).toBeInstanceOf(Buffer);
+    const [, data] = render.render.mock.calls[0];
+    expect(data.variables.event_name).toBe('VMM 2026');
+    expect(data.variables.distance).toBe('42KM');
+    expect(data.variables.passport_no).toBe('VM-1234'); // sample bib 1234
+  });
+
+  it('saved preview (KHÔNG draft) + chưa có config → 404', async () => {
+    const { svc } = build(null);
+    await expect(svc.renderPreview(123)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('BR-06: buildRenderData — {name}/{bib} auto + passport_no = prefix+bib', () => {
     const { svc } = build(null);
     const data = svc.buildRenderData(
