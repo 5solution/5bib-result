@@ -393,16 +393,41 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Ảnh phôi nền (tuỳ chọn — phủ lên màu nền)</Label>
+                <Label>Ảnh phôi nền (tuỳ chọn — dùng làm nền cho cả pass)</Label>
                 <input type="file" accept="image/*" onChange={onBgFile} />
                 {uploading && <p className="text-xs text-muted-foreground">Đang tải…</p>}
                 {bgUrl && (
                   <div className="flex items-center gap-2">
                     <p className="truncate font-mono text-xs text-muted-foreground" title={bgUrl}>{bgUrl}</p>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setBgUrl('')}>Bỏ</Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setBgUrl('')}>Bỏ ảnh</Button>
                   </div>
                 )}
               </div>
+
+              {/* Khối nền trang trí (phôi mặc định) — phủ LÊN ảnh nền nên che mất
+                  ảnh bạn tải. Cho xoá để ảnh phôi hiện ra. */}
+              {preserved.length > 0 && (
+                <div className={`flex items-center justify-between gap-3 rounded-md border p-3 text-xs ${bgUrl ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30' : 'border-dashed'}`}>
+                  <span className="text-muted-foreground">
+                    {bgUrl ? (
+                      <>⚠️ Có <b>{preserved.length} khối nền trang trí</b> (của phôi mẫu) đang <b>che ảnh bạn vừa tải</b>. Xoá để hiện ảnh.</>
+                    ) : (
+                      <>Phôi mẫu có <b>{preserved.length} khối nền trang trí</b>. Xoá nếu muốn dùng ảnh/màu nền của riêng bạn.</>
+                    )}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant={bgUrl ? 'default' : 'outline'}
+                    className="shrink-0"
+                    onClick={() => {
+                      setPreserved([]);
+                      toast.success('Đã xoá khối nền mặc định');
+                    }}
+                  >
+                    Xoá khối nền
+                  </Button>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
