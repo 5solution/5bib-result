@@ -212,10 +212,22 @@ export class BibPassSenderService {
 
   // ─── Helpers ───────────────────────────────────────────────────
 
+  /**
+   * Downgrade claim 'sent' → 'failed' (best-effort). Bọc try/catch: nếu Mongo
+   * lỗi lúc downgrade, KHÔNG throw ra processOne (đã trả 'failed' đúng) — chỉ
+   * log để biết ledger có thể còn 'sent' lệch (at-most-once: VĐV bỏ lỡ pass,
+   * KHÔNG gửi trùng). Tránh inconsistency âm thầm.
+   */
   private async markFailed(claimId: unknown, reason: string): Promise<void> {
-    await this.sendModel
-      .updateOne({ _id: claimId }, { status: 'failed', failReason: reason })
-      .exec();
+    try {
+      await this.sendModel
+        .updateOne({ _id: claimId }, { status: 'failed', failReason: reason })
+        .exec();
+    } catch (err) {
+      this.logger.error(
+        `[batch] markFailed downgrade lỗi (ledger có thể còn 'sent' lệch) id=${String(claimId)} reason=${reason}: ${(err as Error).message}`,
+      );
+    }
   }
 
   private bodyOrDefault(config: BibPassConfigDocument): string {

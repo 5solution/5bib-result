@@ -164,8 +164,10 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
       }
     }
     setLoaded(true);
+    // `loaded` guard ở trên đảm bảo effect chỉ chạy 1 lần → thêm raceOption vào
+    // deps an toàn (không ghi đè edit), chỉ để bắt trường hợp raceData về muộn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config, isError]);
+  }, [config, isError, raceOption]);
 
   function buildTemplate(): BibPassTemplate {
     const textLayers: BibPassLayer[] = layers.map((l) => ({

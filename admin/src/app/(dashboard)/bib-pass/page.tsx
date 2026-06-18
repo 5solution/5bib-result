@@ -39,7 +39,7 @@ import {
   useBibPassRaceOptions,
   useDeleteBibPassConfig,
 } from '@/lib/bib-pass-hooks';
-import type { BibPassConfigListItem } from '@/lib/bib-pass-api';
+import { BibPassApiError, type BibPassConfigListItem } from '@/lib/bib-pass-api';
 
 export default function BibPassListPage() {
   const router = useRouter();
@@ -70,8 +70,8 @@ export default function BibPassListPage() {
     try {
       await deleteMut.mutateAsync(del.raceId);
       toast.success('Đã xoá cấu hình');
-    } catch {
-      toast.error('Xoá thất bại');
+    } catch (err) {
+      toast.error(err instanceof BibPassApiError ? err.message : 'Xoá thất bại');
     } finally {
       setDel(null);
     }

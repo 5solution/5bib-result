@@ -480,7 +480,7 @@ export class MailService {
   }): Promise<boolean> {
     if (!this.client) {
       this.logger.warn(
-        `[DEV] sendBibPass to=${args.toEmail} subject="${args.subject}" file=${args.filename} (mailchimp not configured)`,
+        `[DEV] sendBibPass to=${maskEmail(args.toEmail)} subject="${args.subject}" file=${args.filename} (mailchimp not configured)`,
       );
       return false;
     }
@@ -501,11 +501,12 @@ export class MailService {
           ],
         },
       });
-      this.logger.log(`Border Pass email sent to ${args.toEmail}`);
+      // PII — mask recipient in logs (F-090 convention).
+      this.logger.log(`Border Pass email sent to ${maskEmail(args.toEmail)}`);
       return true;
     } catch (error) {
       this.logger.error(
-        `sendBibPass failed to=${args.toEmail}: ${(error as Error).message}`,
+        `sendBibPass failed to=${maskEmail(args.toEmail)}: ${(error as Error).message}`,
       );
       return false;
     }
@@ -795,6 +796,14 @@ export class MailService {
       );
     }
   }
+}
+
+/** Mask email cho log (PII) — giữ 2 ký tự đầu local part. */
+function maskEmail(email: string): string {
+  if (!email) return '(none)';
+  const [user, domain] = email.split('@');
+  if (!domain) return '***';
+  return `${user.slice(0, 2)}${'*'.repeat(Math.max(1, user.length - 2))}@${domain}`;
 }
 
 function escapeHtml(s: string): string {

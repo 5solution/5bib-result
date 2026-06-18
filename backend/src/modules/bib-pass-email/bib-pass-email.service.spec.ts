@@ -54,6 +54,18 @@ describe('FEATURE-091 — BibPassScannerService (BR-01 detection)', () => {
     expect(sql).toContain('a.name LIKE ?');
     expect(params).toContain('%Nguy%');
   });
+
+  it('listConfirmedPaged: escape ký tự LIKE (% _ \\) trong q', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ n: 0 }]);
+    const svc = new BibPassScannerService({ query });
+    await svc.listConfirmedPaged(5, { q: '100%_a', page: 1, pageSize: 20 });
+    const [, params] = query.mock.calls[0];
+    // % và _ phải được escape → KHÔNG match-all
+    expect(params).toContain('%100\\%\\_a%');
+  });
 });
 
 // ────────────────────────────────────────────────────────────────
