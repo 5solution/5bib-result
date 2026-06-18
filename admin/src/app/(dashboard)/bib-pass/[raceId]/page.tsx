@@ -226,7 +226,11 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
   async function refreshPreview() {
     try {
       setPreviewing(true);
-      const src = await previewDraft(raceId, buildTemplate());
+      const src = await previewDraft(raceId, {
+        template: buildTemplate(),
+        raceName,
+        staticFields: { location, raceDay, distance, passportPrefix },
+      });
       setPreviewSrc((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return src;

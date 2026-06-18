@@ -25,7 +25,7 @@ import { FONT_OPTIONS } from '../certificates/services/certificate-render.servic
 import { BibPassConfigService } from './bib-pass-config.service';
 import { BibPassSenderService } from './bib-pass-sender.service';
 import {
-  BibPassTemplateDto,
+  BibPassPreviewDto,
   TestSendDto,
   UpsertBibPassConfigDto,
 } from './dto/bib-pass.dto';
@@ -134,9 +134,15 @@ export class BibPassEmailController {
   @ApiResponse({ status: 200, description: 'PNG' })
   async previewDraft(
     @Param('raceId', ParseIntPipe) raceId: number,
-    @Body() template: BibPassTemplateDto,
+    @Body() dto: BibPassPreviewDto,
   ): Promise<StreamableFile> {
-    return new StreamableFile(await this.configService.renderPreview(raceId, template));
+    return new StreamableFile(
+      await this.configService.renderPreview(raceId, {
+        template: dto.template,
+        raceName: dto.raceName,
+        staticFields: dto.staticFields,
+      }),
+    );
   }
 
   @Get('configs/:raceId/confirmed')

@@ -194,12 +194,19 @@ export function sendBatch(raceId: number): Promise<SendBatchResult> {
   return request(`/bib-pass/configs/${raceId}/send-batch`, { method: 'POST' });
 }
 
-/** LIVE preview: render phôi CHƯA lưu (draft) → blob object URL. */
-export async function previewDraft(raceId: number, template: BibPassTemplate): Promise<string> {
+/**
+ * LIVE preview: render phôi CHƯA lưu (draft) → blob object URL. Gửi kèm
+ * raceName + staticFields để preview phản ánh giá trị chưa lưu (KHÔNG cần
+ * config đã tồn tại — giải mới cấu hình lần đầu vẫn preview được).
+ */
+export async function previewDraft(
+  raceId: number,
+  draft: { template: BibPassTemplate; raceName?: string; staticFields?: Partial<BibPassStaticFields> },
+): Promise<string> {
   const res = await fetch(`/api/bib-pass/configs/${raceId}/preview`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(template),
+    body: JSON.stringify(draft),
   });
   if (!res.ok) throw new BibPassApiError(res.status, `Render preview lỗi (${res.status})`);
   return URL.createObjectURL(await res.blob());

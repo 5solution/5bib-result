@@ -129,6 +129,30 @@ export class UpsertBibPassConfigDto {
   attachmentFilename?: string;
 }
 
+/**
+ * Body cho POST draft-preview (LIVE preview). Mang theo raceName + staticFields
+ * để preview phản ánh giá trị CHƯA lưu (config có thể chưa tồn tại — preview
+ * KHÔNG được 404 khi giải chưa cấu hình lần nào).
+ */
+export class BibPassPreviewDto {
+  @ApiProperty({ type: BibPassTemplateDto })
+  @ValidateNested()
+  @Type(() => BibPassTemplateDto)
+  template!: BibPassTemplateDto;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  raceName?: string;
+
+  @ApiPropertyOptional({ type: BibPassStaticFieldsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BibPassStaticFieldsDto)
+  staticFields?: BibPassStaticFieldsDto;
+}
+
 /** Body cho POST test-send. */
 export class TestSendDto {
   @ApiProperty({ example: 'me@example.com', description: 'Email nhận thử (BẮT BUỘC — KHÔNG gửi cho VĐV thật).' })

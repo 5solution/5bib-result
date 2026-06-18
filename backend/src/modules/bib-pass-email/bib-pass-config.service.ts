@@ -155,14 +155,29 @@ export class BibPassConfigService {
 
   // ─── Preview render (admin, no mail) ───────────────────────────
 
-  /** Render PNG bằng phôi đã lưu HOẶC draft (live preview). */
+  /**
+   * Render PNG bằng phôi đã lưu HOẶC draft (live preview).
+   *
+   * Draft preview (admin đang sửa) KHÔNG yêu cầu config đã tồn tại — giải có
+   * thể chưa cấu hình lần nào (upsert-on-save). draft mang theo raceName +
+   * staticFields để preview phản ánh giá trị CHƯA lưu. Saved preview (không
+   * draft) cần config — 404 nếu chưa có.
+   */
   async renderPreview(
     raceId: number,
-    draftTemplate?: BibPassTemplateInput,
+    draft?: {
+      template?: BibPassTemplateInput;
+      raceName?: string;
+      staticFields?: Partial<BibPassConfig['staticFields']>;
+    },
   ): Promise<Buffer> {
-    const doc = await this.findOr404(raceId);
-    const template = draftTemplate ?? (doc.template as BibPassTemplateInput | null);
-    if (!template) throw new BadRequestException('Chưa cấu hình phôi');
+    const doc = await this.configModel.findOne({ raceId }).exec();
+    const template =
+      draft?.template ?? (doc?.template as BibPassTemplateInput | null) ?? null;
+    if (!template) {
+      if (!doc) throw new NotFoundException('Không tìm thấy cấu hình Border Pass');
+      throw new BadRequestException('Chưa cấu hình phôi');
+    }
     const sampleRow: ConfirmedAthleteRow = {
       athletes_id: 0,
       race_id: raceId,
@@ -170,9 +185,20 @@ export class BibPassConfigService {
       bib_number: '1234',
       email: null,
     };
+    // Ưu tiên giá trị draft (chưa lưu) → fallback config đã lưu → rỗng.
+    const configLike = {
+      raceName: draft?.raceName ?? doc?.raceName ?? '',
+      staticFields: {
+        location: draft?.staticFields?.location ?? doc?.staticFields?.location ?? '',
+        raceDay: draft?.staticFields?.raceDay ?? doc?.staticFields?.raceDay ?? '',
+        distance: draft?.staticFields?.distance ?? doc?.staticFields?.distance ?? '',
+        passportPrefix:
+          draft?.staticFields?.passportPrefix ?? doc?.staticFields?.passportPrefix ?? '',
+      },
+    };
     return this.renderService.render(
       this.toRenderable(template),
-      this.buildRenderData(sampleRow, doc),
+      this.buildRenderData(sampleRow, configLike),
       { includePhoto: false },
     );
   }
