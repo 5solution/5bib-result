@@ -1,6 +1,6 @@
 # FEATURE-091 — Coder Implementation Notes
 
-**Status:** ✅ CODE COMPLETE — backend build + 26 unit tests + regression green + live functional smoke (real DEV data). Admin builds. Pending: live UI E2E + real test-send on DEV (cần Danny duyệt merge main + permission gửi email).
+**Status:** ✅ DEPLOYED DEV + LIVE E2E PASS (real test-send danny@5bib.com OK) + adversarial QC done (0 critical, 8 fixed). 29/29 unit + 20/20 crew regression. Golive PROD chờ Danny (release/v* + set 3 env BIB_PASS_* + bật BIB_PASS_SEND_ENABLED khi muốn gửi thật).
 **Date:** 2026-06-18
 **Branch:** `5bib_short_link_crew_v1`
 
@@ -55,7 +55,7 @@ Tổng **8 family** (+ Inter, Be Vietnam Pro): sans (4) / serif (2) / display (1
 
 ## 🧪 Test evidence
 
-- **Unit (Jest):** 26/26 PASS — BR-01 detect SQL (3 điều kiện + param), BR-04 idempotency (anti-join + E11000), BR-06 render vars (passport_no=prefix+bib), BR-09 upsert validation (enabled thiếu phôi/subject→400), BR-10 kill-switch dry-run, BR-11 throttle, BR-13 no-email→failed, font VN smoke (8 family), sendBibPass attachment image/png base64.
+- **Unit (Jest):** 29/29 PASS — BR-01 detect SQL (3 điều kiện + param + LIKE escape), BR-04 idempotency (anti-join + E11000), BR-06 render vars (passport_no=prefix+bib), BR-09 upsert validation (enabled thiếu phôi/subject→400), BR-10 kill-switch dry-run, BR-11 throttle, BR-13 no-email→failed, draft-preview-no-config (fix), font VN smoke (8 family), sendBibPass attachment image/png base64.
 - **Regression:** crew-certificates + certificates 20/20 PASS (shared engine an toàn).
 - **Build:** `nest build` clean; admin `next build` clean (routes `/bib-pass`, `/bib-pass/[raceId]` compiled).
 - **Live functional smoke** (standalone Nest context, REAL dev Mongo + platform MySQL, kill-switch ON):
@@ -64,6 +64,26 @@ Tổng **8 family** (+ Inter, Be Vietnam Pro): sans (4) / serif (2) / display (1
   - Config upsert → Mongo write OK; renderPreview → PNG hợp lệ (VN "NGUYỄN THỊ HẬU" Playfair + {bib} Oswald).
   - Stats merge confirmed=72/sent=0/pending=72; confirmed list email masked.
   - sendBatch kill-switch → dryRun=true, sent=0 (KHÔNG gửi). Cleanup OK.
+
+## 🧪 Live E2E test (DEV — Chrome Danny đã login, 2026-06-18)
+Merged main → CI deploy DEV (PR #8). Test thật trên `admin-dev.5bib.com/bib-pass`:
+- ✅ List + nav "Border Pass email" + race picker (real platform: #220 Lào Cai Marathon = 72 VĐV đã xác nhận, #214=1020, #192=1493…).
+- ✅ Editor: phôi mặc định boarding-pass + **dropdown phông đa dạng** (Oswald/Montserrat/Playfair Display/Be Vietnam Pro/Roboto…) + kéo-thả overlay + **live preview render VN chuẩn** (NGUYỄN THỊ HẬU Playfair serif, {bib} Oswald).
+- ✅ Lưu phôi + static fields (Sa Pa, Lào Cai / 21/06/2026 / 42KM / LCM2026-) + email.
+- ✅ Stats 72/0/72 + danh sách VĐV thật (email masked, "Chưa gửi").
+- ✅ **Test-send email THẬT tới danny@5bib.com** — toast "Đã gửi email thử" (Mandrill OK).
+- ✅ "Gửi 1 đợt" → DRY-RUN (kill-switch BIB_PASS_SEND_ENABLED chưa set trên DEV = false) → KHÔNG gửi 72 VĐV thật, stats giữ 0 sent.
+- 🐛→✅ **BUG fix (PR #9):** draft preview gọi `findOr404` → **404** cho giải CHƯA cấu hình (upsert-on-save) → live preview kẹt lần đầu. Fixed: `BibPassPreviewDto` {template, raceName?, staticFields?}, draft preview không cần config tồn tại + phản ánh giá trị chưa lưu. +2 test (28/28). Re-deploy DEV verify.
+
+## 📋 QC (adversarial multi-agent, 6 dimension × verify) — PR #10
+6 reviewer (security/auth/SQL · PII · idempotency/concurrency · data correctness · frontend · engine-additive), mỗi finding qua 1 skeptic verify. **10 raised → 8 confirmed, 0 CRITICAL, 0 injection/auth-bypass/legacy-write.** Hard constraints đều đạt. Đã fix:
+- **PII (HIGH×2):** mask email trong `sendBibPass` log/error (`maskEmail`).
+- **Ledger honesty (HIGH):** `markFailed()` bọc try/catch + log (Mongo lỗi downgrade KHÔNG throw âm thầm; at-most-once giữ nguyên).
+- **Hooks (HIGH):** thêm `raceOption` vào config-load useEffect deps (loaded-guard nên an toàn).
+- **UX (MED):** delete-config toast surface API message.
+- **Search (LOW×2):** escape LIKE `\ % _` + cap 100 ký tự `q`.
+- **Accepted (MED):** admin send-batch không acquire per-race lock — chấp nhận (E11000 unique index chống gửi trùng; manual hiếm so với cron). Documented.
++1 test → **29/29 F-091 + 20/20 crew regression PASS.**
 
 ## ⏳ Còn lại (cần Danny)
 - **Live UI E2E** trên `result-admin-dev.5bib.com` (Chrome đã login) — cần merge `main` → DEV (git policy: merge main cần Danny duyệt).
