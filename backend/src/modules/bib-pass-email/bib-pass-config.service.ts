@@ -250,7 +250,7 @@ export class BibPassConfigService {
       athletesId: number;
       name: string | null;
       bib: string | null;
-      emailMasked: string | null;
+      email: string | null;
       hasEmail: boolean;
       sendStatus: string;
     }>;
@@ -275,7 +275,8 @@ export class BibPassConfigService {
         athletesId: r.athletes_id,
         name: r.name,
         bib: r.bib_number,
-        emailMasked: this.maskEmail(r.email),
+        // Admin nội bộ (LogtoAdminGuard) — hiện email đầy đủ (Danny chốt KHÔNG mask).
+        email: r.email,
         hasEmail: !!r.email,
         sendStatus: statusMap.get(r.athletes_id) ?? 'pending',
       })),
@@ -283,14 +284,6 @@ export class BibPassConfigService {
       page: opts.page,
       pageSize: opts.pageSize,
     };
-  }
-
-  private maskEmail(email: string | null): string | null {
-    if (!email) return null;
-    const [user, domain] = email.split('@');
-    if (!domain) return '***';
-    const head = user.slice(0, 2);
-    return `${head}${'*'.repeat(Math.max(1, user.length - 2))}@${domain}`;
   }
 
   // ─── Render helpers (shared với sender) ────────────────────────

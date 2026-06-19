@@ -29,6 +29,7 @@ import {
   useUpsertBibPassConfig,
   useTestSend,
   useSendBatch,
+  useResendOne,
 } from '@/lib/bib-pass-hooks';
 import {
   previewDraft,
@@ -100,6 +101,8 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
   const upsertMut = useUpsertBibPassConfig(raceId);
   const testMut = useTestSend(raceId);
   const sendMut = useSendBatch(raceId);
+  const resendMut = useResendOne(raceId);
+  const [resendingId, setResendingId] = useState<number | null>(null);
 
   const raceOption = useMemo(
     () => (raceData?.items ?? []).find((r) => r.raceId === raceId),
@@ -383,6 +386,19 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
       else toast.warning(res.message);
     } catch (err) {
       toast.error(err instanceof BibPassApiError ? err.message : 'Gửi thử thất bại');
+    }
+  }
+
+  async function doResend(athletesId: number) {
+    setResendingId(athletesId);
+    try {
+      const res = await resendMut.mutateAsync(athletesId);
+      if (res.ok) toast.success(res.message);
+      else toast.warning(res.message);
+    } catch (err) {
+      toast.error(err instanceof BibPassApiError ? err.message : 'Gửi lại thất bại');
+    } finally {
+      setResendingId(null);
     }
   }
 
@@ -734,6 +750,7 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
                     <TableHead>Họ tên</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Trạng thái gửi</TableHead>
+                    <TableHead className="text-right">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -742,13 +759,23 @@ export default function BibPassEditor({ params }: { params: Promise<{ raceId: st
                       <TableCell className="font-mono">{r.bib}</TableCell>
                       <TableCell>{r.name}</TableCell>
                       <TableCell className="font-mono text-xs">
-                        {r.hasEmail ? r.emailMasked : <span className="text-destructive">thiếu email</span>}
+                        {r.hasEmail ? r.email : <span className="text-destructive">thiếu email</span>}
                       </TableCell>
                       <TableCell><StatusBadge status={r.sendStatus} /></TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!r.hasEmail || resendingId === r.athletesId}
+                          onClick={() => void doResend(r.athletesId)}
+                        >
+                          {resendingId === r.athletesId ? 'Đang gửi…' : 'Gửi lại'}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {(confirmed?.items ?? []).length === 0 && (
-                    <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground">Chưa có VĐV khớp.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">Chưa có VĐV khớp.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
