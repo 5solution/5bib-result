@@ -186,6 +186,8 @@ export class BibPassConfigService {
       email: null,
       club: 'CLB Chạy Bộ Sa Pa',
       name_on_bib: 'Nguyễn Thị Hậu',
+      first_name: 'Nguyễn Thị',
+      last_name: 'Hậu',
     };
     // Ưu tiên giá trị draft (chưa lưu) → fallback config đã lưu → rỗng.
     const configLike = {
@@ -273,7 +275,7 @@ export class BibPassConfigService {
     return {
       items: rows.map((r) => ({
         athletesId: r.athletes_id,
-        name: r.name,
+        name: this.resolveName(r) || null,
         bib: r.bib_number,
         // Admin nội bộ (LogtoAdminGuard) — hiện email đầy đủ (Danny chốt KHÔNG mask).
         email: r.email,
@@ -289,11 +291,21 @@ export class BibPassConfigService {
   // ─── Render helpers (shared với sender) ────────────────────────
 
   /** Token map cho 1 VĐV (BR-03/06). passport_no = passportPrefix + bib. */
+  /** Tên hiển thị: athletes.name → name_on_bib → "first last" (tránh trống). */
+  resolveName(row: ConfirmedAthleteRow): string {
+    return (
+      row.name?.trim() ||
+      row.name_on_bib?.trim() ||
+      [row.first_name, row.last_name].map((s) => s?.trim()).filter(Boolean).join(' ').trim() ||
+      ''
+    );
+  }
+
   buildRenderData(
     row: ConfirmedAthleteRow,
     config: Pick<BibPassConfig, 'raceName' | 'staticFields'>,
   ): RenderData {
-    const name = row.name ?? '';
+    const name = this.resolveName(row);
     const bib = row.bib_number ?? '';
     const sf = config.staticFields ?? ({} as BibPassConfig['staticFields']);
     const passportNo = `${sf?.passportPrefix ?? ''}${bib}`;

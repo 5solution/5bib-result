@@ -187,6 +187,8 @@ export class BibPassSenderService {
         email: dto.toEmail,
         club: 'CLB Chạy Bộ Sa Pa',
         name_on_bib: 'Nguyễn Thị Hậu',
+        first_name: 'Nguyễn Thị',
+        last_name: 'Hậu',
       };
     }
 
