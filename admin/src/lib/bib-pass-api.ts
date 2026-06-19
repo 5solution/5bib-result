@@ -83,7 +83,7 @@ export interface ConfirmedAthleteRow {
   athletesId: number;
   name: string | null;
   bib: string | null;
-  emailMasked: string | null;
+  email: string | null;
   hasEmail: boolean;
   sendStatus: 'sent' | 'failed' | 'skipped' | 'pending';
 }
@@ -192,6 +192,12 @@ export function testSend(
 }
 export function sendBatch(raceId: number): Promise<SendBatchResult> {
   return request(`/bib-pass/configs/${raceId}/send-batch`, { method: 'POST' });
+}
+export function resendOne(
+  raceId: number,
+  athletesId: number,
+): Promise<{ ok: boolean; message: string }> {
+  return request(`/bib-pass/configs/${raceId}/resend/${athletesId}`, { method: 'POST' });
 }
 
 /**

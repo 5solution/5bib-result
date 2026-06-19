@@ -10,6 +10,7 @@ import {
   listConfirmed,
   listFonts,
   listRaceOptions,
+  resendOne,
   sendBatch,
   testSend,
   upsertConfig,
@@ -94,6 +95,17 @@ export function useSendBatch(raceId: number) {
       qc.invalidateQueries({ queryKey: ['bib-pass-stats', raceId] });
       qc.invalidateQueries({ queryKey: ['bib-pass-confirmed', raceId] });
       qc.invalidateQueries({ queryKey: ['bib-pass-configs'] });
+    },
+  });
+}
+
+export function useResendOne(raceId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (athletesId: number) => resendOne(raceId, athletesId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bib-pass-stats', raceId] });
+      qc.invalidateQueries({ queryKey: ['bib-pass-confirmed', raceId] });
     },
   });
 }

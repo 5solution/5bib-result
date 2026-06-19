@@ -185,6 +185,19 @@ export class BibPassEmailController {
     return this.senderService.testSend(raceId, dto);
   }
 
+  @Post('configs/:raceId/resend/:athletesId')
+  @ApiOperation({ summary: 'Admin — gửi lại pass cho 1 VĐV (ghi đè, bỏ qua anti-join)' })
+  @ApiParam({ name: 'raceId', type: Number })
+  @ApiParam({ name: 'athletesId', type: Number })
+  @ApiResponse({ status: 201, type: TestSendResultDto })
+  @ApiResponse({ status: 400, description: 'Chưa cấu hình / VĐV chưa xác nhận' })
+  async resend(
+    @Param('raceId', ParseIntPipe) raceId: number,
+    @Param('athletesId', ParseIntPipe) athletesId: number,
+  ): Promise<TestSendResultDto> {
+    return this.senderService.resendOne(raceId, athletesId);
+  }
+
   @Post('configs/:raceId/send-batch')
   @ApiOperation({ summary: 'Admin — gửi pass cho VĐV đã xác nhận CHƯA gửi (1 batch)' })
   @ApiParam({ name: 'raceId', type: Number })

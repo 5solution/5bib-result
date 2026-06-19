@@ -212,6 +212,73 @@ export class BibPassSenderService {
         };
   }
 
+  /**
+   * Gửi LẠI pass cho 1 VĐV cụ thể (nút "Gửi lại" trên từng dòng). Khác batch:
+   * BỎ QUA anti-join (gửi lại kể cả đã gửi) + ghi đè ledger. Vẫn tôn trọng
+   * kill-switch (BIB_PASS_SEND_ENABLED) để DEV không spam VĐV thật.
+   */
+  async resendOne(raceId: number, athletesId: number): Promise<TestSendResultDto> {
+    const config = await this.configService.getConfigDoc(raceId);
+    if (!config.template) throw new BadRequestException('Chưa cấu hình phôi');
+    const row = await this.scanner.findConfirmedOne(raceId, athletesId);
+    if (!row) {
+      throw new BadRequestException('VĐV không tồn tại hoặc chưa xác nhận BIB');
+    }
+    if (!env.bibPass.sendEnabled) {
+      return {
+        ok: false,
+        message: 'Kill-switch BIB_PASS_SEND_ENABLED=false — chưa gửi thật (dry-run)',
+      };
+    }
+    if (!row.email) {
+      await this.upsertLedger(row, 'failed', 'no_email');
+      return { ok: false, message: 'VĐV không có email' };
+    }
+    try {
+      const png = await this.configService.renderForRow(config, row);
+      const html = this.interpolate(this.bodyOrDefault(config), row, config);
+      const subject = this.interpolate(
+        config.email?.subject || '[5BIB] Border Pass của bạn',
+        row,
+        config,
+      );
+      const ok = await this.mailService.sendBibPass({
+        toEmail: row.email,
+        subject,
+        html,
+        png,
+        filename: this.filename(config, row),
+        fromName: config.email?.fromName || '5BIB',
+      });
+      await this.upsertLedger(row, ok ? 'sent' : 'failed', ok ? null : 'mail_error');
+      return ok
+        ? { ok: true, message: `Đã gửi lại tới ${row.email}` }
+        : { ok: false, message: 'Gửi lỗi (Mailchimp) — xem log' };
+    } catch (err) {
+      await this.upsertLedger(row, 'failed', 'render_error');
+      return { ok: false, message: `Lỗi render/gửi: ${(err as Error).message}` };
+    }
+  }
+
+  /** Ghi đè ledger cho 1 VĐV (resend) — upsert theo unique {raceId, athletesId}. */
+  private async upsertLedger(
+    row: ConfirmedAthleteRow,
+    status: 'sent' | 'failed' | 'skipped',
+    failReason: string | null,
+  ): Promise<void> {
+    try {
+      await this.sendModel
+        .updateOne(
+          { raceId: row.race_id, athletesId: row.athletes_id },
+          { $set: { bib: row.bib_number ?? '', email: row.email ?? '', status, failReason } },
+          { upsert: true },
+        )
+        .exec();
+    } catch (err) {
+      this.logger.error(`[resend] upsert ledger lỗi: ${(err as Error).message}`);
+    }
+  }
+
   // ─── Helpers ───────────────────────────────────────────────────
 
   /**

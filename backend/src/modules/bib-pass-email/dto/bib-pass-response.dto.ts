@@ -87,7 +87,7 @@ export class ConfirmedAthleteRowDto {
   @ApiProperty() athletesId!: number;
   @ApiProperty({ nullable: true }) name!: string | null;
   @ApiProperty({ nullable: true }) bib!: string | null;
-  @ApiProperty({ description: 'Email đã ẩn 1 phần (privacy)', nullable: true }) emailMasked!: string | null;
+  @ApiProperty({ description: 'Email đầy đủ (admin nội bộ)', nullable: true }) email!: string | null;
   @ApiProperty({ description: 'Đã có email không' }) hasEmail!: boolean;
   @ApiProperty({ enum: ['sent', 'failed', 'skipped', 'pending'], example: 'pending' })
   sendStatus!: string;
