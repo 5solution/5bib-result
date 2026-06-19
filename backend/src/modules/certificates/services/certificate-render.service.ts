@@ -37,6 +37,7 @@ export const FONT_OPTIONS: ReadonlyArray<{
   { family: 'Montserrat', label: 'Montserrat', category: 'sans' },
   { family: 'Roboto', label: 'Roboto', category: 'sans' },
   { family: 'Oswald', label: 'Oswald (đậm, thể thao)', category: 'display' },
+  { family: 'Big Shoulders', label: 'Big Shoulders (số to, thể thao)', category: 'display' },
   { family: 'Lora', label: 'Lora (serif)', category: 'serif' },
   { family: 'Playfair Display', label: 'Playfair Display (serif sang)', category: 'serif' },
   { family: 'Dancing Script', label: 'Dancing Script (chữ viết tay)', category: 'script' },
@@ -87,6 +88,10 @@ function ensureFonts() {
     GlobalFonts.registerFromPath(
       path.join(FONTS_DIR, 'Oswald-VF.ttf'),
       'Oswald',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'BigShoulders-VF.ttf'),
+      'Big Shoulders',
     );
     GlobalFonts.registerFromPath(
       path.join(FONTS_DIR, 'Lora-VF.ttf'),
