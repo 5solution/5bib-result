@@ -45,6 +45,13 @@ export interface BibPassTemplateInput {
   photoBehindBackground?: boolean;
 }
 
+/** An toàn hoá toISOString — doc thiếu timestamp (vd insert raw/migrate) KHÔNG crash list. */
+function toIso(v: unknown): string {
+  if (!v) return new Date().toISOString();
+  const d = v instanceof Date ? v : new Date(v as string | number);
+  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
 @Injectable()
 export class BibPassConfigService {
   private readonly logger = new Logger(BibPassConfigService.name);
@@ -74,7 +81,7 @@ export class BibPassConfigService {
         enabled: d.enabled,
         hasTemplate: !!d.template,
         sentCount: counts[i],
-        updatedAt: (d.updatedAt as Date).toISOString(),
+        updatedAt: toIso(d.updatedAt),
       })),
       total: docs.length,
     };
@@ -388,8 +395,8 @@ export class BibPassConfigService {
         fromName: o.email?.fromName ?? '5BIB',
       },
       attachmentFilename: o.attachmentFilename ?? 'border-pass-{bib}.png',
-      createdAt: (o.createdAt as Date).toISOString(),
-      updatedAt: (o.updatedAt as Date).toISOString(),
+      createdAt: toIso(o.createdAt),
+      updatedAt: toIso(o.updatedAt),
     };
   }
 }
