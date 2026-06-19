@@ -195,6 +195,7 @@ export class BibPassConfigService {
       name_on_bib: 'Nguyễn Thị Hậu',
       first_name: 'Nguyễn Thị',
       last_name: 'Hậu',
+      course_name: '21KM',
     };
     // Ưu tiên giá trị draft (chưa lưu) → fallback config đã lưu → rỗng.
     const configLike = {
@@ -316,6 +317,8 @@ export class BibPassConfigService {
     const bib = row.bib_number ?? '';
     const sf = config.staticFields ?? ({} as BibPassConfig['staticFields']);
     const passportNo = `${sf?.passportPrefix ?? ''}${bib}`;
+    // {distance} = cự ly VĐV đăng ký (course_name) → fallback staticFields nếu không có.
+    const distance = (row.course_name && row.course_name.trim()) || sf?.distance || '';
     const variables: Record<string, string> = {
       name,
       name_on_bib: row.name_on_bib || name,
@@ -324,14 +327,14 @@ export class BibPassConfigService {
       event_name: config.raceName ?? '',
       location: sf?.location ?? '',
       race_day: sf?.raceDay ?? '',
-      distance: sf?.distance ?? '',
+      distance,
       passport_no: passportNo,
     };
     return {
       runner_name: name,
       bib,
       event_name: config.raceName ?? '',
-      distance: sf?.distance ?? '',
+      distance,
       runner_photo_url: null,
       variables,
     };

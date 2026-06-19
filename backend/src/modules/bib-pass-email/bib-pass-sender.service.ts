@@ -189,6 +189,7 @@ export class BibPassSenderService {
         name_on_bib: 'Nguyễn Thị Hậu',
         first_name: 'Nguyễn Thị',
         last_name: 'Hậu',
+        course_name: '21KM',
       };
     }
 
