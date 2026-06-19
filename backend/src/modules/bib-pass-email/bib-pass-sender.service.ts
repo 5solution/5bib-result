@@ -194,9 +194,12 @@ export class BibPassSenderService {
 
     const png = await this.configService.renderForRow(config, row);
     const html = this.interpolate(this.bodyOrDefault(config), row, config);
-    const subject =
-      '[TEST] ' +
-      this.interpolate(config.email?.subject || '[5BIB] Border Pass của bạn', row, config);
+    // KHÔNG prefix [TEST] — preview giống hệt email VĐV thật nhận.
+    const subject = this.interpolate(
+      config.email?.subject || '[5BIB] Border Pass của bạn',
+      row,
+      config,
+    );
     const ok = await this.mailService.sendBibPass({
       toEmail: dto.toEmail,
       subject,
