@@ -485,6 +485,7 @@ export class MailService {
       return false;
     }
     try {
+      const b64 = args.png.toString('base64');
       await this.client.messages.send({
         message: {
           from_email: env.teamManagement.emailFrom,
@@ -492,13 +493,12 @@ export class MailService {
           subject: args.subject,
           html: args.html,
           to: [{ email: args.toEmail, type: 'to' }],
-          attachments: [
-            {
-              type: 'image/png',
-              name: args.filename,
-              content: args.png.toString('base64'),
-            },
-          ],
+          // Inline (cid:borderpass) → hiện ảnh pass NGAY trong thân email
+          // (HTML body tham chiếu <img src="cid:borderpass">). Port pattern
+          // sendTeamRegistrationApproved (cid:qr-code).
+          images: [{ type: 'image/png', name: 'borderpass', content: b64 }],
+          // Đính kèm full-res để VĐV tải về.
+          attachments: [{ type: 'image/png', name: args.filename, content: b64 }],
         },
       });
       // PII — mask recipient in logs (F-090 convention).
