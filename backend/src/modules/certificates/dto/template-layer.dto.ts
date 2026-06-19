@@ -70,7 +70,9 @@ export class TemplateLayerDto {
   @IsOptional()
   @IsInt()
   @Min(6)
-  @Max(400)
+  // Khung lớn (canvas tới 4096px) cần chữ rất to (vd số BIB) → nới trần
+  // theo cạnh canvas. Cũ 400 quá nhỏ cho phôi 3141×3917.
+  @Max(4096)
   fontSize?: number;
 
   @ApiPropertyOptional({ example: '700' })
