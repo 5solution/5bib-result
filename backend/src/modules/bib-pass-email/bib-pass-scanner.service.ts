@@ -14,6 +14,8 @@ export interface ConfirmedAthleteRow {
   name_on_bib: string | null;
   first_name: string | null;
   last_name: string | null;
+  /** Cự ly VĐV đăng ký (race_course.name, vd "21KM") — token {distance}. */
+  course_name: string | null;
 }
 
 /**
@@ -43,12 +45,22 @@ export class BibPassScannerService {
     s.club          AS club,
     s.name_on_bib   AS name_on_bib,
     s.first_name    AS first_name,
-    s.last_name     AS last_name`;
+    s.last_name     AS last_name,
+    COALESCE(rc_oli.name, rc_code.name) AS course_name`;
 
-  /** FROM + JOIN subinfo (LEFT — subinfo có thể null) + điều kiện confirmed (BR-01). */
+  /**
+   * FROM + JOIN subinfo + course (2 đường: order_line_item→ticket_type→race_course
+   * ưu tiên, fallback codes→race_course) + điều kiện confirmed (BR-01). Mọi JOIN
+   * LEFT + tới 1 dòng (không fan-out) nên COUNT(*) vẫn đúng.
+   */
   private static readonly BASE_FROM = `
     FROM athletes a
     LEFT JOIN athlete_subinfo s ON a.subinfo_id = s.id
+    LEFT JOIN order_line_item oli ON s.order_line_item_id = oli.id
+    LEFT JOIN ticket_type tt ON oli.ticket_type_id = tt.id
+    LEFT JOIN race_course rc_oli ON tt.race_course_id = rc_oli.id
+    LEFT JOIN codes cd ON a.code_id = cd.id
+    LEFT JOIN race_course rc_code ON cd.course_id = rc_code.id
     WHERE (a.deleted IS NULL OR a.deleted = 0)
       AND a.bib_number IS NOT NULL AND a.bib_number <> ''
       AND a.rolling_bib_last_time IS NOT NULL
@@ -156,6 +168,7 @@ export class BibPassScannerService {
       name_on_bib: r.name_on_bib ?? null,
       first_name: r.first_name ?? null,
       last_name: r.last_name ?? null,
+      course_name: r.course_name ?? null,
     };
   }
 }
