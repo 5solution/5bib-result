@@ -38,6 +38,8 @@ export const FONT_OPTIONS: ReadonlyArray<{
   { family: 'Roboto', label: 'Roboto', category: 'sans' },
   { family: 'Oswald', label: 'Oswald (đậm, thể thao)', category: 'display' },
   { family: 'Big Shoulders', label: 'Big Shoulders (số to, thể thao)', category: 'display' },
+  { family: 'SFU Machine', label: 'SFU Machine (số BIB, jersey)', category: 'display' },
+  { family: 'SFU Machine Slide07', label: 'SFU Machine (Slide07)', category: 'display' },
   { family: 'Lora', label: 'Lora (serif)', category: 'serif' },
   { family: 'Playfair Display', label: 'Playfair Display (serif sang)', category: 'serif' },
   { family: 'Dancing Script', label: 'Dancing Script (chữ viết tay)', category: 'script' },
@@ -107,6 +109,16 @@ function ensureFonts() {
     GlobalFonts.registerFromPath(
       path.join(FONTS_DIR, 'BigShoulders-900.ttf'),
       'Big Shoulders',
+    );
+    // SFU Machine — font số BIB jersey trong thiết kế Lào Cai (single-weight,
+    // verify FULL VN + digits). 2 biến thể Danny cung cấp.
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'SFUMachine-Regular.ttf'),
+      'SFU Machine',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'SFUMachine-Slide07.ttf'),
+      'SFU Machine Slide07',
     );
     GlobalFonts.registerFromPath(
       path.join(FONTS_DIR, 'Lora-VF.ttf'),
