@@ -89,8 +89,23 @@ function ensureFonts() {
       path.join(FONTS_DIR, 'Oswald-VF.ttf'),
       'Oswald',
     );
+    // Big Shoulders: variable font KHÔNG interpolate đúng trong @napi-rs/canvas
+    // (default instance = Thin 100 → "bold" thành faux-bold thô). Dùng static
+    // instances theo từng weight (opsz=72 display) để render đúng nét.
     GlobalFonts.registerFromPath(
-      path.join(FONTS_DIR, 'BigShoulders-VF.ttf'),
+      path.join(FONTS_DIR, 'BigShoulders-400.ttf'),
+      'Big Shoulders',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'BigShoulders-600.ttf'),
+      'Big Shoulders',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'BigShoulders-700.ttf'),
+      'Big Shoulders',
+    );
+    GlobalFonts.registerFromPath(
+      path.join(FONTS_DIR, 'BigShoulders-900.ttf'),
       'Big Shoulders',
     );
     GlobalFonts.registerFromPath(
