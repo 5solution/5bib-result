@@ -176,7 +176,7 @@ describe('FEATURE-091 — BibPassConfigService', () => {
   it('BR-06: buildRenderData — {name}/{bib} auto + passport_no = prefix+bib', () => {
     const { svc } = build(null);
     const data = svc.buildRenderData(
-      { athletes_id: 1, race_id: 192, name: 'Nguyễn Văn A', bib_number: '777', email: null, club: 'CLB X', name_on_bib: 'Văn A' },
+      { athletes_id: 1, race_id: 192, name: 'Nguyễn Văn A', bib_number: '777', email: null, club: 'CLB X', name_on_bib: 'Văn A', first_name: 'Nguyễn Văn', last_name: 'A' },
       { raceName: 'VMM 2026', staticFields: { location: 'Sa Pa', raceDay: '21/06', distance: '42K', passportPrefix: 'VM-' } } as any,
     );
     expect(data.variables?.name).toBe('Nguyễn Văn A');
@@ -187,6 +187,19 @@ describe('FEATURE-091 — BibPassConfigService', () => {
     expect(data.variables?.club).toBe('CLB X');
     expect(data.variables?.name_on_bib).toBe('Văn A');
     expect(data.runner_name).toBe('Nguyễn Văn A');
+  });
+
+  it('name fallback: athletes.name rỗng → name_on_bib → first+last (không để trống)', () => {
+    const { svc } = build(null);
+    const cfg = { raceName: 'X', staticFields: { passportPrefix: '' } } as any;
+    // name rỗng, có name_on_bib
+    expect(
+      svc.buildRenderData({ athletes_id: 1, race_id: 1, name: '', bib_number: '5', email: null, club: null, name_on_bib: 'Tùng Lâm', first_name: 'Tùng', last_name: 'Lâm' }, cfg).variables?.name,
+    ).toBe('Tùng Lâm');
+    // name + name_on_bib rỗng → first+last
+    expect(
+      svc.buildRenderData({ athletes_id: 2, race_id: 1, name: '  ', bib_number: '6', email: null, club: null, name_on_bib: '', first_name: 'Đức', last_name: 'Độ' }, cfg).variables?.name,
+    ).toBe('Đức Độ');
   });
 });
 

@@ -9,9 +9,11 @@ export interface ConfirmedAthleteRow {
   name: string | null;
   bib_number: string | null;
   email: string | null;
-  /** subinfo — token động cho khung Border Pass. */
+  /** subinfo — token động + fallback tên khi athletes.name rỗng. */
   club: string | null;
   name_on_bib: string | null;
+  first_name: string | null;
+  last_name: string | null;
 }
 
 /**
@@ -39,7 +41,9 @@ export class BibPassScannerService {
     a.bib_number    AS bib_number,
     a.email         AS email,
     s.club          AS club,
-    s.name_on_bib   AS name_on_bib`;
+    s.name_on_bib   AS name_on_bib,
+    s.first_name    AS first_name,
+    s.last_name     AS last_name`;
 
   /** FROM + JOIN subinfo (LEFT — subinfo có thể null) + điều kiện confirmed (BR-01). */
   private static readonly BASE_FROM = `
@@ -150,6 +154,8 @@ export class BibPassScannerService {
       email: r.email ?? null,
       club: r.club ?? null,
       name_on_bib: r.name_on_bib ?? null,
+      first_name: r.first_name ?? null,
+      last_name: r.last_name ?? null,
     };
   }
 }
