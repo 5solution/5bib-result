@@ -4,6 +4,28 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-27 ✅ GOLIVE PROD release/v1.23.4 — F-092 v2 + F-093/b/c (4 commit)
+
+**Danny "ok go"** sau khi test DEV. Cut `release/v1.23.4` từ origin/main (`4625d3c`) → Deploy Production **success, KHÔNG "Created" hang** (8 container "Up"). 4 commit:
+- `64fe3be` F-092 v2 — private list paginate (selector page size, cap totalPages theo privateListLimit, trim trang cuối)
+- `34a0aae` F-093 — `enableHideStats` mặc định BẬT + overview/athlete nhất quán
+- `817cf33` F-093b — null-safe Name (fix crash render khi Name=null)
+- `4625d3c` F-093c — trang VĐV panel Percentile ẩn số tổng (`hideAbsoluteCounts = A‖B`)
+
+**Backfill PROD:** `enableHideStats=true` cho 58 giải (`!= true`) → **63/63 true** (Danny chốt "áp cho tất cả"). Flush `race:*` config cache (4 key) để hiệu lực ngay. Reversible — BTC tự tắt per giải.
+
+**Verify LIVE PROD:**
+- pageSize: 100→100, **500→500** (totalPages 8 race 3922), 501→400 "max 500" ✓
+- 57/57 giải public `enableHideStats=true` (50 A-on-B-off · 4 A-on-B-false · 3 A-on-B-on) ✓
+- overview + ranking + race null-name (fastest-x-cat-ba) đều HTTP 200, render OK ✓
+- DEV verify trước đó: 8 kịch bản (cap/trim/default/overview-gate/search-bypass/null-name/athlete-percentile-ẩn-số) + 0 console error.
+
+**Tech debt mở (follow-up, Danny để sau):** TD-F093-COMPARE-SEARCH-NULLNAME (trang so sánh + tìm kiếm cùng pattern null-name chưa harden) · TD-F093-NULLRANK-COSMETIC (trang VĐV null-rank hiện "#undefined").
+
+**Lesson:** sửa cap/limit/flag display → grep MỌI lớp (DTO/service/frontend × mọi trang) + verify combo; QC sweep toàn-bộ-giải bắt được crash data-rác (null-name) mà test happy-path bỏ lọt.
+
+---
+
 ## 2026-06-27 FEATURE-093b: Null-safe Name render (crash fix, phát hiện khi QC sweep DEV)
 
 **Trigger:** Sweep toàn bộ 57 giải DEV → 5 anomaly NULLNAME (fastest-x-cat-ba 2024 + quang-binh 2024 có VĐV `Name=null` ở hạng 1). `formatName`/`getInitials` gọi `null.toLowerCase()`/`null.trim()` → **CRASH cả trang render** (ranking/athlete/overview blank). PRE-EXISTING (data rác 2024, KHÔNG do F-092/F-093), nhưng nằm trên trang đang ship → hardening luôn.
