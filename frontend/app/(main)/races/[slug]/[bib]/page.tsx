@@ -1230,7 +1230,7 @@ export default function AthleteDetailPage() {
         {/* === PERCENTILE GAUGE (F-06) === */}
         {!isUpcoming && (
           <div data-reveal>
-            <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} hideAbsoluteCounts={raceData?.enablePrivateList ?? false} />
+            <PercentileGauge raceId={raceId} bib={String(athlete.Bib)} hideAbsoluteCounts={(raceData?.enableHideStats ?? true) || (raceData?.enablePrivateList ?? false)} />
           </div>
         )}
 
