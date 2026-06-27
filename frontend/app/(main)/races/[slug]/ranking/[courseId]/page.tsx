@@ -222,14 +222,15 @@ export default function CourseRankingPage() {
 
   const isLive = race?.status === 'live';
 
-  // When private list mode is on and no search is active, cap the page size
-  // to privateListLimit so pagination is effectively hidden (only first N show).
+  // FEATURE-092: "Danh sách riêng tư" = paginate normally with a SMALL page size
+  // (the selector, ≤100) and CAP the navigable total to privateListLimit — NOT
+  // dump all `privateListLimit` rows in one request (would hammer payload + render
+  // 500 DOM rows per view). e.g. limit 500 @ 25/page = 20 pages. The real total
+  // count stays hidden (privacy); BIB search still bypasses the cap below.
   const isPrivateNoSearch = (race?.enablePrivateList ?? false) && !searchQuery.trim();
-  // F-092: clamp to [1, 500] so we never send a pageSize the backend rejects
-  // (backend @Max(500)). `|| 20` (not `??`) so a stray 0 also falls back to 20.
-  const effectivePageSize = isPrivateNoSearch
-    ? Math.min(500, Math.max(1, race?.privateListLimit || 20))
-    : pageSize;
+  const privateListLimit = Math.min(500, Math.max(1, race?.privateListLimit || 20));
+  // Per-page size always follows the selector (10/25/50/100), even in private mode.
+  const effectivePageSize = pageSize;
 
   const { data: resultsRaw, isLoading: loadingResults } = useRaceResults({
     raceId: race?.id !== undefined ? String(race.id) : undefined,
@@ -296,8 +297,14 @@ export default function CourseRankingPage() {
     router.push(`/races/${slug}/compare/${courseId}?bibs=${bibs}`);
   };
 
-  const totalPages = Math.ceil(totalItems / effectivePageSize);
-  const paginatedResults = results;
+  // Private mode caps the navigable total to privateListLimit (hides real count).
+  const visibleTotal = isPrivateNoSearch ? Math.min(totalItems, privateListLimit) : totalItems;
+  const totalPages = Math.ceil(visibleTotal / effectivePageSize);
+  // On the last private page, trim rows that exceed the cap (e.g. limit 90 @ 25/page
+  // → page 4 shows 15, not 25) so we never display more than privateListLimit.
+  const paginatedResults = isPrivateNoSearch
+    ? results.slice(0, Math.max(0, privateListLimit - (currentPage - 1) * effectivePageSize))
+    : results;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -772,8 +779,8 @@ export default function CourseRankingPage() {
               )}
             </div>
 
-            {/* Pagination — hidden when private list mode is on and no search */}
-            {totalPages > 1 && !isPrivateNoSearch && (
+            {/* Pagination — shown in private mode too (capped to privateListLimit pages). */}
+            {totalPages > 1 && (
               <div className="mt-6">
                 <RankingPagination
                   currentPage={currentPage}

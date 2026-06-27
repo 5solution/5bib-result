@@ -4,6 +4,24 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-27 FEATURE-092 v2 (correction): Private list = PAGINATE, không dump privateListLimit/1 request
+
+**Trigger:** Danny phản hồi sau v1.23.3 — "set max 500 nghĩa là phân trang ra ~50 trang, chứ kéo 500 thằng/page thì sập server". Hiểu nhầm intent ở v1: private mode (ẩn phân trang) gửi `pageSize = privateListLimit` → set 500 = bốc 500 dòng/1 request (payload + 500 DOM row/lượt xem, race live nhiều người = nặng).
+
+**Thiết kế đúng (Danny chốt):** `privateListLimit` = TỔNG số VĐV tối đa cho xem, **paginate** bằng page size nhỏ (selector 10/25/50/100, mặc định 25). Giữ backend `@Max(500)` làm headroom (Danny chốt — frontend không dùng tới).
+
+**File changed (frontend-only):** `frontend/app/(main)/races/[slug]/ranking/[courseId]/page.tsx`
+- `effectivePageSize = pageSize` (selector, ≤100) — KHÔNG còn = privateListLimit.
+- `visibleTotal = isPrivateNoSearch ? min(totalItems, privateListLimit) : totalItems`; `totalPages = ceil(visibleTotal / pageSize)` → cap số trang theo limit (vd 500/25 = 20 trang, 100/25 = 4 trang). Ẩn tổng thật (privacy giữ).
+- **HIỆN phân trang** trong private mode (bỏ gate `!isPrivateNoSearch` ở `{totalPages>1 ...}`).
+- Trim trang cuối: `paginatedResults = results.slice(0, max(0, privateListLimit - (currentPage-1)*pageSize))` → không lố quá cap (vd limit 90 @ 25/page → trang 4 hiện 15).
+
+**Verify (local preview code thật + DEV backend):** race cat-tien 21km (enablePrivateList, limit=100, total 432) → request `pageSize=25` (KHÔNG 100/432), render 25 dòng/trang, phân trang [1,2,3,4] = 4 trang (cap 100/25), click trang 2 vẫn 25 dòng. tsc clean.
+
+**Backend KHÔNG đổi** (v1.23.3 đã có @Max(500), giữ nguyên). Release v2 = **v1.23.4** (frontend-only). Resolves nỗi lo "sập server" của Danny.
+
+---
+
 ## 2026-06-27 FEATURE-092: Nâng trần pageSize race-results 100→500 (fix Danh sách riêng tư trống)
 
 **Type:** BUGFIX. **Trigger:** Danny báo trang ranking công khai trống trơn khi bật "Danh sách riêng tư" với `privateListLimit` > 100 (race "Không Ma Tuý 2026" course 3km, prod). Root cause: form admin cho `privateListLimit` max 500 nhưng endpoint `GET /api/race-results` chặn `pageSize` ở 100 tại **2 lớp** → ranking gửi pageSize>100 → 400 → list rỗng.
