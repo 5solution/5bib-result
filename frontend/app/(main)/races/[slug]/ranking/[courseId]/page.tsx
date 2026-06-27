@@ -913,9 +913,13 @@ function getAvatarColor(bib: number | string, raceId: number | string): string {
   return AVATAR_COLORS[simpleHash(`${raceId}-${bib}`) % AVATAR_COLORS.length];
 }
 function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
+  // F-093 hardening: vendor data can have null/empty Name (e.g. 2024 races) →
+  // guard against `null.trim()` / empty crashing the whole ranking render.
+  const n = (name ?? '').trim();
+  if (!n) return '?';
+  const words = n.split(/\s+/);
   if (words.length >= 2) return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-  return name.substring(0, 2).toUpperCase();
+  return n.substring(0, 2).toUpperCase();
 }
 
 function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFilter, raceStatus, raceId, courseId, isStarred, raceName, courseName }: { result: RaceResult; slug: string; selected: boolean; onToggle: () => void; genderFilter: string; categoryFilter: string; raceStatus: string; raceId: string; courseId: string; isStarred: boolean; raceName?: string; courseName?: string }) {
@@ -958,8 +962,12 @@ function RankingRow({ result, slug, selected, onToggle, genderFilter, categoryFi
     return '';
   };
 
-  const formatName = (name: string) =>
-    name.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const formatName = (name: string) => {
+    // F-093 hardening: null/empty vendor Name → show "—" instead of crashing.
+    const n = (name ?? '').trim();
+    if (!n) return '—';
+    return n.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
 
   return (
     <tr className={`group transition-all duration-200 hover:bg-blue-50/60 hover:shadow-[inset_4px_0_0_0_#2563eb] cursor-pointer ${getRowBg()} ${!selected ? getRowBorder() : ''}`}>
@@ -1128,8 +1136,12 @@ function MobileRankingCard({ result, slug, selected, onToggle, genderFilter, cat
     return '';
   };
 
-  const formatName = (name: string) =>
-    name.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const formatName = (name: string) => {
+    // F-093 hardening: null/empty vendor Name → show "—" instead of crashing.
+    const n = (name ?? '').trim();
+    if (!n) return '—';
+    return n.toLowerCase().split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
 
   return (
     <div className={`px-4 py-4 flex items-center gap-3 transition-colors ${getMobileBg()}`}>

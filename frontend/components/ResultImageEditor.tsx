@@ -57,8 +57,12 @@ export default function ResultImageEditor({
   const [downloading, setDownloading] = useState(false);
   const [sharing, setSharing] = useState(false);
 
-  const formatName = (name: string) =>
-    name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const formatName = (name: string) => {
+    // F-093 hardening: guard null/empty vendor Name.
+    const n = (name ?? '').trim();
+    if (!n) return '—';
+    return n.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  };
 
   const genderLabel = athlete.Gender === 'Male' || athlete.Gender === 'M' ? 'Nam' : 'Nữ';
 
@@ -104,7 +108,7 @@ export default function ResultImageEditor({
   }, [raceId, athlete.Bib, selectedBg, customBgFile, selectedRatio]);
 
   const getFileName = useCallback(() => {
-    return `result-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
+    return `result-${(athlete.Name ?? 'athlete').replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
   }, [athlete]);
 
   const handleDownload = useCallback(async () => {

@@ -367,7 +367,10 @@ export default function AthleteDetailPage() {
   };
 
   const formatName = (name: string) => {
-    return name
+    // F-093 hardening: null/empty vendor Name → "—" instead of crashing.
+    const n = (name ?? '').trim();
+    if (!n) return '—';
+    return n
       .toLowerCase()
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -375,12 +378,13 @@ export default function AthleteDetailPage() {
   };
 
   const getInitials = (name: string) => {
-    console.log('Generating initials for name:', name);
-    const words = name.trim().split(/\s+/);
+    const n = (name ?? '').trim();
+    if (!n) return '?';
+    const words = n.split(/\s+/);
     if (words.length >= 2) {
       return (words[0][0] + words[words.length - 1][0]).toUpperCase();
     }
-    return name.substring(0, 2).toUpperCase();
+    return n.substring(0, 2).toUpperCase();
   };
 
   const getAvatarColor = (bibVal: number | string, raceIdVal: string) => {
@@ -683,7 +687,7 @@ export default function AthleteDetailPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `certificate-${athlete.Name.replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
+      a.download = `certificate-${(athlete.Name ?? 'athlete').replace(/\s+/g, '-')}-BIB${athlete.Bib}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

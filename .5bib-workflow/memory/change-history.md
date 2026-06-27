@@ -4,6 +4,20 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-27 FEATURE-093b: Null-safe Name render (crash fix, phát hiện khi QC sweep DEV)
+
+**Trigger:** Sweep toàn bộ 57 giải DEV → 5 anomaly NULLNAME (fastest-x-cat-ba 2024 + quang-binh 2024 có VĐV `Name=null` ở hạng 1). `formatName`/`getInitials` gọi `null.toLowerCase()`/`null.trim()` → **CRASH cả trang render** (ranking/athlete/overview blank). PRE-EXISTING (data rác 2024, KHÔNG do F-092/F-093), nhưng nằm trên trang đang ship → hardening luôn.
+
+**Fix (defensive null-guard, rủi ro ~0 — tên thật chạy y nguyên):**
+- ranking `getInitials`/`formatName` (×2 desktop+mobile): `(name ?? '').trim()` → tên rỗng = "—", initials = "?"
+- athlete `[bib]` `formatName`/`getInitials` + bỏ `console.log` rác + download filename `(Name ?? 'athlete')`
+- overview `r.Name.charAt(0)` → `r.Name?.charAt(0) ?? '?'` (×2)
+- ResultImageEditor `formatName` + filename guard
+
+**Verify local preview (DEV data):** fastest-x-cat-ba ranking + athlete bib 615 (null name) render OK 25 dòng, hiện "—"/"?", **0 console error** (trước = crash). *TD-F093-NULLNAME-COSMETIC 🟢: trang VĐV null-rank hiện "#undefined" — cosmetic, pre-existing, flag fix sau. Compare/search page cùng pattern null-name — chưa harden (ngoài flow), flag follow-up.*
+
+---
+
 ## 2026-06-27 FEATURE-093: "Ẩn biểu đồ thống kê" mặc định BẬT + nhất quán mọi trang (đang test DEV)
 
 **Trigger:** Danny review logic 2 cờ privacy → 2 ý: (1) "Ẩn biểu đồ" nên **mặc định bật** (hiếm BTC muốn show số Xuất phát/Hoàn thành); (2) số Xuất phát/Hoàn thành/DNF thuộc cờ "Ẩn biểu đồ" quản. Phát hiện 2 lỗi: `enableHideStats` **chết ở trang giải (overview)** (chỉ enablePrivateList gate số liệu cự ly) + không tác dụng ở trang VĐV.
