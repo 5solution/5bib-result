@@ -1,6 +1,6 @@
 # FEATURE-092: Deploy & Memory Sync
 
-**Status:** ✅ DONE (code review + memory sync) — ⏳ PROD release push chờ Danny xác nhận (live race)
+**Status:** ✅ DONE — DEPLOYED PROD release/v1.23.3 + verified live (2026-06-27)
 **Deployed:** 2026-06-27
 **Author:** 5bib-manager
 **Linked:** `00`, `01`, `02`, `03`, `04`, `IMPLEMENTATION_NOTES.md`
@@ -83,4 +83,10 @@ Spot-check theo priority list (5 điểm critical — đây là bugfix 3 file n�
 - Post-deploy: chạy 2 cURL prod đóng loop (pageSize=500→tới 500, 501→400).
 
 ## ✅ Status
-Code review APPROVED + memory synced. **Chờ Danny chốt: cut release v1.23.3 deploy PROD ngay (live race) hay qua DEV trước?**
+🎉 **FEATURE-092 DONE — DEPLOYED PROD.** Danny chốt DEV-trước-rồi-PROD. Chain: commit `8d16c4d` → main (CI DEV ✓) → `release/v1.23.3` (Deploy Production ✓, no "Created" hang).
+
+**Live verification:**
+- DEV (race 1190 kết quả): `pageSize=500→len=500 totalPages=3`, `501→400 "max 500"`.
+- PROD (race Không Ma Tuý 3km, 3922): `pageSize=100→100`, `pageSize=500→len=500 totalPages=8` (BUG HẾT), `501→400`; browser ranking render OK (no regression).
+
+Memory synced (feature-log DEPLOYED + change-history + known-issues 2 TD + conventions F-092.1). Follow-up: vấn đề ẩn/hiện chi tiết VĐV → feature riêng sau.
