@@ -204,7 +204,9 @@ export default function CourseRankingPage() {
       })),
       logoUrl: r.logoUrl,
       imageUrl: r.bannerUrl || r.imageUrl,
-      enableHideStats: r.enableHideStats ?? false,
+      // F-093: "Ẩn biểu đồ thống kê" mặc định BẬT — đa số BTC không muốn lộ
+      // số liệu/biểu đồ. Giải chưa cấu hình (field thiếu) → coi như bật.
+      enableHideStats: r.enableHideStats ?? true,
       enablePrivateList: r.enablePrivateList ?? false,
       privateListLimit: r.privateListLimit ?? 20,
     };

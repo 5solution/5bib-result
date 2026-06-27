@@ -161,7 +161,7 @@ export function PublishingSection(props: PublishingSectionProps) {
                   </p>
                 </div>
                 <Switch
-                  checked={editForm.enableHideStats ?? false}
+                  checked={editForm.enableHideStats ?? true}
                   onCheckedChange={(checked) =>
                     update({ enableHideStats: checked })
                   }

@@ -178,7 +178,8 @@ export default function RaceDetailPage() {
       imageUrl: r.bannerUrl || r.imageUrl,
       description: r.description,
       organizer: r.organizer,
-      enableHideStats: r.enableHideStats ?? false,
+      // F-093: "Ẩn biểu đồ thống kê" mặc định BẬT (field thiếu → bật).
+      enableHideStats: r.enableHideStats ?? true,
       enablePrivateList: r.enablePrivateList ?? false,
       privateListLimit: r.privateListLimit ?? 20,
     };
@@ -455,7 +456,7 @@ export default function RaceDetailPage() {
                         )}
                         {race.status === 'upcoming' && 'SẮP DIỄN RA'}
                       </div>
-                      {!race.enablePrivateList && courseStatsMap[course.id] && (courseStatsMap[course.id]?.starters ?? 0) > 0 && (
+                      {!race.enableHideStats && !race.enablePrivateList && courseStatsMap[course.id] && (courseStatsMap[course.id]?.starters ?? 0) > 0 && (
                         <div className="flex items-center justify-center gap-6 px-4 py-2 bg-slate-800 text-white text-xs">
                           <span>STARTERS <strong className="text-base ml-1">{courseStatsMap[course.id]?.starters}</strong></span>
                           {(courseStatsMap[course.id]?.finishers ?? 0) > 0 && (

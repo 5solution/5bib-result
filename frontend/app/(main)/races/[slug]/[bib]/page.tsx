@@ -893,7 +893,7 @@ export default function AthleteDetailPage() {
               card shows the race title in full. */}
           {raceId && athlete.Bib != null && !isUpcoming && (
             <div className="flex justify-center flex-wrap gap-2 mt-2">
-              <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} hideAbsoluteCounts={raceData?.enablePrivateList ?? false} />
+              <PercentileBadge raceId={raceId} bib={String(athlete.Bib)} hideAbsoluteCounts={(raceData?.enableHideStats ?? true) || (raceData?.enablePrivateList ?? false)} />
             </div>
           )}
         </div>

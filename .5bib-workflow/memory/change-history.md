@@ -4,6 +4,26 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-27 FEATURE-093: "Ẩn biểu đồ thống kê" mặc định BẬT + nhất quán mọi trang (đang test DEV)
+
+**Trigger:** Danny review logic 2 cờ privacy → 2 ý: (1) "Ẩn biểu đồ" nên **mặc định bật** (hiếm BTC muốn show số Xuất phát/Hoàn thành); (2) số Xuất phát/Hoàn thành/DNF thuộc cờ "Ẩn biểu đồ" quản. Phát hiện 2 lỗi: `enableHideStats` **chết ở trang giải (overview)** (chỉ enablePrivateList gate số liệu cự ly) + không tác dụng ở trang VĐV.
+
+**Model chốt:** ẩn biểu đồ+số liệu = `enableHideStats || enablePrivateList` (mọi trang) · giới hạn danh sách = `enablePrivateList` · **`enableHideStats` mặc định = true**. ("Danh sách riêng tư" giữ "kín hết" như cũ — KHÔNG tách.)
+
+**Files (frontend 3 + admin 2 + backend 1 + script):**
+- ranking/overview mapping `enableHideStats ?? false → ?? true`
+- overview gate số liệu cự ly `!enablePrivateList` → `!enableHideStats && !enablePrivateList` (fix cờ chết ở overview)
+- athlete `hideAbsoluteCounts={(enableHideStats ?? true) || (enablePrivateList ?? false)}` (giờ A cũng ẩn số "234/3922")
+- admin PublishingSection toggle + settings init `?? false → ?? true`
+- backend `race.schema.ts` `@Prop({default:false}) enableHideStats` → `default:true` (giải mới)
+- `backend/scripts/f093-backfill-enable-hide-stats.js` — backfill giải cũ `enableHideStats != true → true` (Danny chốt "áp cho TẤT CẢ"). Dry-run mặc định, RUN=1 mới ghi. Idempotent, chỉ đụng 1 field.
+
+**Coverage "tất cả":** undefined races → frontend `?? true` (client); explicit-false races → cần backfill. Ranking đã đúng `A||B` từ trước → giữ nguyên.
+
+**Trạng thái:** đang deploy DEV cho Danny test (cùng F-092 v2). PROD (code + backfill) **chờ Danny duyệt** (đụng schema + migration + đổi display công khai ~195 giải). tsc clean cả 3 codebase.
+
+---
+
 ## 2026-06-27 FEATURE-092 v2 (correction): Private list = PAGINATE, không dump privateListLimit/1 request
 
 **Trigger:** Danny phản hồi sau v1.23.3 — "set max 500 nghĩa là phân trang ra ~50 trang, chứ kéo 500 thằng/page thì sập server". Hiểu nhầm intent ở v1: private mode (ẩn phân trang) gửi `pageSize = privateListLimit` → set 500 = bốc 500 dòng/1 request (payload + 500 DOM row/lượt xem, race live nhiều người = nặng).

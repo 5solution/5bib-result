@@ -139,7 +139,7 @@ export default function RaceSettingsPage() {
         enable5pix: raceData.enable5pix ?? false,
         pixEventUrl: raceData.pixEventUrl,
         cacheTtlSeconds: raceData.cacheTtlSeconds ?? 60,
-        enableHideStats: raceData.enableHideStats ?? false,
+        enableHideStats: raceData.enableHideStats ?? true,
         enablePrivateList: raceData.enablePrivateList ?? false,
         privateListLimit: raceData.privateListLimit ?? 20,
       });
