@@ -225,7 +225,11 @@ export default function CourseRankingPage() {
   // When private list mode is on and no search is active, cap the page size
   // to privateListLimit so pagination is effectively hidden (only first N show).
   const isPrivateNoSearch = (race?.enablePrivateList ?? false) && !searchQuery.trim();
-  const effectivePageSize = isPrivateNoSearch ? (race?.privateListLimit ?? 20) : pageSize;
+  // F-092: clamp to [1, 500] so we never send a pageSize the backend rejects
+  // (backend @Max(500)). `|| 20` (not `??`) so a stray 0 also falls back to 20.
+  const effectivePageSize = isPrivateNoSearch
+    ? Math.min(500, Math.max(1, race?.privateListLimit || 20))
+    : pageSize;
 
   const { data: resultsRaw, isLoading: loadingResults } = useRaceResults({
     raceId: race?.id !== undefined ? String(race.id) : undefined,

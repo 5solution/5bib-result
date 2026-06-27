@@ -4483,3 +4483,11 @@ Server (Node + MySQL) chạy UTC → `new Date().toISOString().slice(0,10)` từ
 
 ### F-083.4. Allowlist-literal public strip > spread-delete
 **Khi:** strip field nhạy cảm khỏi public response (BR-83-20). **Pattern:** build response bằng **object literal liệt kê tường minh field cho phép** (`return { id: String(doc._id), raceRef:{...}, meta, theme, sections }`), KHÔNG `{...doc}` rồi `delete`. **Lý do:** miss-field = absent (an toàn mặc định); spread-delete dễ quên field mới thêm vào schema → leak âm thầm (PII/internalName/tenantId). Đồng pattern với `stripRacePrivateFields` nhưng nghiêm hơn (literal thay vì filter). Reference: `landing.service.ts toPublicResponse`.
+
+### F-092.1. Sửa cap/limit/max — grep MỌI lớp enforce + adversarial test
+**Khi:** nâng/sửa một giới hạn (pageSize cap, max length, rate limit, quota...). **Vấn đề:** giới hạn thường được enforce ở NHIỀU lớp — sửa thiếu 1 lớp = fix nửa vời (lớp còn lại âm thầm cắt, không báo lỗi rõ). **Bug thật F-092:** `pageSize` chặn ở 2 chỗ — DTO `@Max(100)` (trả 400) VÀ service `Math.min(dto.pageSize ?? 10, 100)` (cắt câm). Form admin `privateListLimit` cho 500 nhưng cả 2 lớp backend giữ 100 → ranking công khai trống trơn khi limit>100. **Pattern bắt buộc:**
+1. `grep -rn` con số/tên giới hạn qua TẤT CẢ lớp: DTO validation (`@Max`/`@Min`) + service clamp (`Math.min`/`Math.max`) + frontend clamp + `@ApiProperty maximum` + description text.
+2. Sửa đồng bộ tất cả; nếu cap đến từ config (form admin) → giá trị 3 lớp phải khớp form.
+3. Frontend clamp dùng `Math.min(MAX, Math.max(MIN, val || DEFAULT))` — dùng `|| DEFAULT` (KHÔNG `?? DEFAULT`) khi 0 không phải giá trị hợp lệ (`?? ` không bắt 0 → gửi 0 → backend 400).
+4. **Adversarial test:** viết unit test revert 1 lớp về giá trị cũ → assert test FAIL. Nếu test vẫn pass khi 1 lớp sai = test giả, vô dụng. (QC F-092 đã làm: revert service→100 ⇒ TC-01/07 fail đúng.)
+**Lesson gốc:** "cap lệch giữa form ↔ backend = bug câm" (không có 4xx rõ cho user, list rỗng âm thầm — họ hàng với bug strip `_id` trong Pre-Deploy Checklist).

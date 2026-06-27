@@ -43,17 +43,17 @@ export class GetRaceResultsDto {
   pageNo?: number = 1;
 
   @ApiPropertyOptional({
-    description: 'Page size (max 100)',
+    description: 'Page size (max 500)',
     default: 10,
     minimum: 1,
-    maximum: 100,
+    maximum: 500,
     example: 25,
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(500)
   pageSize?: number = 10;
 
   @ApiPropertyOptional({

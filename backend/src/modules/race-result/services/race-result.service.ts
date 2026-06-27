@@ -659,8 +659,9 @@ export class RaceResultService {
     const orderField = sortFieldMap[dto.sortField] || 'overallRankNumeric';
     const orderDirection = dto.sortDirection === 'DESC' ? -1 : 1;
 
-    // Enforce pageSize cap (BR-08)
-    const pageSize = Math.min(dto.pageSize ?? 10, 100);
+    // Enforce pageSize cap (BR-08; F-092 raised 100→500 to match admin
+    // privateListLimit max — keep clamp as defense-in-depth alongside DTO @Max).
+    const pageSize = Math.min(dto.pageSize ?? 10, 500);
 
     // Build filter
     const filter: Record<string, any> = {};

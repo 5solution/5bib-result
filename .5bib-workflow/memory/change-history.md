@@ -4,6 +4,38 @@
 > **Append-only, mới nhất ở TOP.**
 >
 
+## 2026-06-27 FEATURE-092: Nâng trần pageSize race-results 100→500 (fix Danh sách riêng tư trống)
+
+**Type:** BUGFIX. **Trigger:** Danny báo trang ranking công khai trống trơn khi bật "Danh sách riêng tư" với `privateListLimit` > 100 (race "Không Ma Tuý 2026" course 3km, prod). Root cause: form admin cho `privateListLimit` max 500 nhưng endpoint `GET /api/race-results` chặn `pageSize` ở 100 tại **2 lớp** → ranking gửi pageSize>100 → 400 → list rỗng.
+
+### Files changed
+- ✏️ `backend/src/modules/race-result/dto/get-race-results.dto.ts` — `@Max(100)→@Max(500)` + `@ApiPropertyOptional` `maximum: 100→500` + description "max 100"→"max 500" (lớp validation)
+- ✏️ `backend/src/modules/race-result/services/race-result.service.ts:664` — `Math.min(dto.pageSize ?? 10, 100)→500` (lớp service clamp, defense-in-depth)
+- ✏️ `frontend/app/(main)/races/[slug]/ranking/[courseId]/page.tsx:231` — `effectivePageSize = isPrivateNoSearch ? Math.min(500, Math.max(1, race?.privateListLimit || 20)) : pageSize` (clamp [1,500], `||` bắt cả 0 — sửa lỗ `?? 20` không bắt 0)
+- ➕ `backend/src/modules/race-result/dto/get-race-results.dto.spec.ts` — 6 test boundary
+- ✏️ `backend/src/modules/race-result/services/race-result.service.spec.ts` — +5 test describe "F-092"
+
+### Architecture / Conventions impact
+- Architecture KHÔNG đổi (chỉ hằng số trần trong path có sẵn). Convention mới F-092.1 minted (xem conventions.md): sửa cap PHẢI grep cả DTO `@Max` lẫn service `Math.min` + adversarial test revert-1-lớp.
+
+### DB / Cache impact
+- KHÔNG đụng. Service vốn `.find().sort().lean()` load toàn bộ rồi `.slice()` in-memory (không `.limit()` DB) → nâng cap KHÔNG tăng tải DB. Redis key/TTL không đổi (object cache to hơn tối đa 500 dòng).
+
+### Tests
+- 11/11 F-092 PASS (6 DTO + 5 service). Adversarial: QC revert service→100 → TC-01/01b/07 FAIL đúng kỳ vọng (test gác thật). 6 fail pre-existing trong service spec (infra debt, độc lập). Backward-compat ≤100 verified.
+
+### Backward-compat
+- Nâng `@Max` chỉ nới [101..500]; mọi caller cũ (overview pageSize=3, admin, selector ≤100) KHÔNG đổi.
+
+### Status
+- QC ✅ APPROVED + Manager code review 5/5 PASS 0 red flag. Release đề xuất patch **v1.23.3**. **PROD push chờ Danny chốt** (git policy + live race). 2 TD non-blocking (VIRTUALIZE + PREEXISTING-SPEC).
+
+### Lessons learned
+- **Cap/limit lệch giữa form ↔ backend = bug câm.** Form admin cho 500 nhưng quên nâng backend → list trống không có error rõ cho user. Khi nâng/sửa giới hạn: grep TẤT CẢ lớp enforce (DTO validation + service clamp + frontend clamp) + đính adversarial test.
+- `?? N` không bắt 0; dùng `|| N` khi 0 không phải giá trị hợp lệ.
+
+---
+
 ## 2026-06-18 GOLIVE F-089 + F-090 → PROD (release/v1.22.0)
 
 **Danny "retest đi ok thì merge main r golive".** Retest GREEN (47 unit + tsc + admin/frontend `next build` + DEV live E2E). Tách sạch CHỈ F-089+F-090 khỏi working tree lẫn lộn (loại F-084 landing-ai chưa QC, `@anthropic-ai/sdk` dep, env/launch junk) → 2 commit (code 8f022e3 + docs 8bf6195) trên branch `5bib_short_link_crew_v1`.

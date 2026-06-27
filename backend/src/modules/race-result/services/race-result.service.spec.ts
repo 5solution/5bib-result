@@ -1051,4 +1051,87 @@ describe('RaceResultService', () => {
       expect(service.purgeCache).toHaveBeenCalledWith('race-A', '200m');
     });
   });
+
+  // ─── F-092 pageSize cap 100→500 (service clamp layer) ─────────
+  // Guards the bug where DTO @Max is raised but the service Math.min still
+  // silently caps at 100 → private-list mode (hides pagination) shows only
+  // 100 even when privateListLimit > 100. The assertions on pagination.pageSize
+  // + data.length > 100 fail loudly if the service clamp is left at 100.
+  describe('getRaceResults — F-092 pageSize cap 500', () => {
+    const baseDto = {
+      raceId: 'test-race',
+      course_id: 'c708',
+      pageNo: 1,
+      pageSize: 10,
+      sortField: 'OverallRank',
+      sortDirection: 'ASC',
+    } as const;
+
+    // N docs with unique overallRank so filterDuplicateRanks keeps them all.
+    const makeDocs = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        ...mockDoc,
+        _id: `res-${i}`,
+        bib: String(1000 + i),
+        overallRank: String(i + 1),
+        overallRankNumeric: i + 1,
+      }));
+
+    it('TC-01: pageSize=500 returns >100 rows (NOT capped at 100) when 200 results exist', async () => {
+      mockResultModel.exec.mockResolvedValue(makeDocs(200));
+
+      const result = await service.getRaceResults({ ...baseDto, pageSize: 500 });
+
+      expect(result.data).toHaveLength(200); // > 100 → service did NOT clamp to 100
+      expect(result.pagination.pageSize).toBe(500);
+      expect(result.pagination.total).toBe(200);
+      expect(result.pagination.totalPages).toBe(1);
+    });
+
+    it('TC-01b: pageSize=500 returns exactly 500 when 600 results exist', async () => {
+      mockResultModel.exec.mockResolvedValue(makeDocs(600));
+
+      const result = await service.getRaceResults({ ...baseDto, pageSize: 500 });
+
+      expect(result.data).toHaveLength(500);
+      expect(result.pagination.pageSize).toBe(500);
+      expect(result.pagination.total).toBe(600);
+      expect(result.pagination.totalPages).toBe(2);
+    });
+
+    it('TC-07: pageSize=1000 clamps to 500 (service Math.min defense-in-depth)', async () => {
+      mockResultModel.exec.mockResolvedValue(makeDocs(600));
+
+      const result = await service.getRaceResults({ ...baseDto, pageSize: 1000 });
+
+      expect(result.data).toHaveLength(500);
+      expect(result.pagination.pageSize).toBe(500);
+    });
+
+    it('TC-03: pageSize=100 stays backward-compatible (regression — caps at 100)', async () => {
+      mockResultModel.exec.mockResolvedValue(makeDocs(200));
+
+      const result = await service.getRaceResults({ ...baseDto, pageSize: 100 });
+
+      expect(result.data).toHaveLength(100);
+      expect(result.pagination.pageSize).toBe(100);
+      expect(result.pagination.total).toBe(200);
+    });
+
+    it('TC-06: pageSize=50 pageNo=2 slices the correct page (regression)', async () => {
+      mockResultModel.exec.mockResolvedValue(makeDocs(200));
+
+      const result = await service.getRaceResults({
+        ...baseDto,
+        pageSize: 50,
+        pageNo: 2,
+      });
+
+      expect(result.data).toHaveLength(50);
+      expect(result.pagination.pageNo).toBe(2);
+      expect(result.pagination.pageSize).toBe(50);
+      // page 2 of 50 → ranks 51..100
+      expect(result.data[0].Bib).toBe('1050');
+    });
+  });
 });
