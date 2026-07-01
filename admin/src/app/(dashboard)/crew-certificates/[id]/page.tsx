@@ -23,6 +23,7 @@ import {
   useConfirmRoster,
   useRecipients,
   useCrewPositions,
+  useCrewFonts,
 } from '@/lib/crew-cert-hooks';
 import {
   rosterPreview,
@@ -42,6 +43,7 @@ interface TextLayerDraft {
   fontSize: number;
   color: string;
   textAlign: 'left' | 'center' | 'right';
+  fontFamily: string;
 }
 
 /** Editor fields cho 1 phôi (default hoặc phụ). */
@@ -80,6 +82,7 @@ function templateToFields(t: CrewTemplate | null | undefined): TplFields {
       fontSize: l.fontSize ?? 40,
       color: l.color ?? '#111111',
       textAlign: (l.textAlign ?? 'center') as TextLayerDraft['textAlign'],
+      fontFamily: l.fontFamily ?? 'Be Vietnam Pro',
     }));
   const ph = (t.layers ?? []).find((l) => l.type === 'photo');
   return {
@@ -94,17 +97,23 @@ function templateToFields(t: CrewTemplate | null | undefined): TplFields {
 }
 
 function fieldsToTemplate(f: TplFields): CrewTemplate {
-  const built: CrewTemplateLayer[] = f.layers.map((l) => ({
-    type: 'text',
-    x: l.x,
-    y: l.y,
-    width: f.canvasW - l.x,
-    text: l.text,
-    fontSize: l.fontSize,
-    color: l.color,
-    textAlign: l.textAlign,
-    fontFamily: 'Be Vietnam Pro',
-  }));
+  const built: CrewTemplateLayer[] = f.layers.map((l) => {
+    // Căn giữa: neo full canvas (x=0, width=canvasW) → render engine center = canvasW/2,
+    // KHỚP đúng khung kéo-thả (overlay centered căn theo giữa canvas). Nếu để x=l.x thì
+    // tâm chữ = (l.x+canvasW)/2 → lệch phải l.x/2 (bug "cứ lệch lệch").
+    const centered = l.textAlign === 'center';
+    return {
+      type: 'text' as const,
+      x: centered ? 0 : l.x,
+      y: l.y,
+      width: centered ? f.canvasW : f.canvasW - l.x,
+      text: l.text,
+      fontSize: l.fontSize,
+      color: l.color,
+      textAlign: l.textAlign,
+      fontFamily: l.fontFamily || 'Be Vietnam Pro',
+    };
+  });
   if (f.photo.enabled) {
     built.push({ type: 'photo', x: f.photo.x, y: f.photo.y, width: f.photo.width, height: f.photo.height });
   }
@@ -127,6 +136,8 @@ export default function CrewBatchEditor({ params }: { params: Promise<{ id: stri
   const { data: recipients } = useRecipients(id);
   const { data: positionsData } = useCrewPositions(id);
   const distinctPositions = positionsData?.positions ?? [];
+  const { data: fonts } = useCrewFonts();
+  const fontList = fonts ?? [{ family: 'Be Vietnam Pro', label: 'Be Vietnam Pro', category: 'sans' }];
 
   // info
   const [eventName, setEventName] = useState('');
@@ -563,15 +574,27 @@ export default function CrewBatchEditor({ params }: { params: Promise<{ id: stri
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Lớp chữ</Label>
-                  <Button size="sm" variant="outline" onClick={() => setLayers([...layers, { text: '{full_name}', x: 100, y: 300, fontSize: 48, color: '#111111', textAlign: 'center' }])}>
+                  <Button size="sm" variant="outline" onClick={() => setLayers([...layers, { text: '{full_name}', x: 100, y: 300, fontSize: 48, color: '#111111', textAlign: 'center', fontFamily: 'Be Vietnam Pro' }])}>
                     + Thêm dòng
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Token khả dụng: {tokens.join(' ')}</p>
                 {layers.map((l, i) => (
                   <div key={i} className="grid grid-cols-12 items-end gap-2 rounded border p-2">
-                    <div className="col-span-12">
+                    <div className="col-span-8">
                       <Input value={l.text} onChange={(e) => updateLayer(i, { text: e.target.value })} placeholder="{full_name}" />
+                    </div>
+                    <div className="col-span-4">
+                      <Label className="text-xs">Phông</Label>
+                      <select
+                        className="h-9 w-full rounded border bg-background px-1 text-sm"
+                        value={l.fontFamily}
+                        onChange={(e) => updateLayer(i, { fontFamily: e.target.value })}
+                      >
+                        {fontList.map((f) => (
+                          <option key={f.family} value={f.family}>{f.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <NumberField label="X" value={l.x} onChange={(v) => updateLayer(i, { x: v })} span={2} />
                     <NumberField label="Y" value={l.y} onChange={(v) => updateLayer(i, { y: v })} span={2} />

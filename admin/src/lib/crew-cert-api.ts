@@ -141,6 +141,15 @@ export function updateBatch(
 export function getPositions(id: string): Promise<{ positions: string[] }> {
   return request(`/crew-certificates/${id}/positions`);
 }
+/** FEATURE-094 — danh sách phông (từ FONT_OPTIONS backend). */
+export interface FontOption {
+  family: string;
+  label: string;
+  category: string;
+}
+export function listCrewFonts(): Promise<FontOption[]> {
+  return request('/crew-certificates/fonts');
+}
 export function deleteBatch(id: string): Promise<void> {
   return request(`/crew-certificates/${id}`, { method: 'DELETE' });
 }

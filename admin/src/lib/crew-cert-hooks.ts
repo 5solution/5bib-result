@@ -8,6 +8,7 @@ import {
   getBatch,
   getPositions,
   listBatches,
+  listCrewFonts,
   listRecipients,
   rosterConfirm,
   updateBatch,
@@ -44,6 +45,11 @@ export function useCrewPositions(id: string | undefined) {
     queryFn: () => getPositions(id as string),
     enabled: !!id,
   });
+}
+
+/** FEATURE-094 — danh sách phông cho editor phôi. */
+export function useCrewFonts() {
+  return useQuery({ queryKey: ['crew-fonts'], queryFn: listCrewFonts, staleTime: Infinity });
 }
 
 export function useCreateBatch() {

@@ -27,6 +27,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser, LogtoAdminGuard, LogtoUser } from '../logto-auth';
+import { FONT_OPTIONS } from '../certificates/services/certificate-render.service';
 import { CrewCertificatesService } from './crew-certificates.service';
 import { CreateBatchDto, CrewTemplateDto, UpdateBatchDto } from './dto/crew-batch.dto';
 import {
@@ -67,6 +68,13 @@ export class CrewCertificatesController {
     @Param('recipientId') recipientId: string,
   ): Promise<StreamableFile> {
     return new StreamableFile(await this.service.renderPublic(recipientId));
+  }
+
+  @Get('fonts')
+  @ApiOperation({ summary: 'Danh sách phông chọn được (đã verify VN) — cho editor phôi' })
+  @ApiResponse({ status: 200, description: '[{ family, label, category }]' })
+  fonts(): { family: string; label: string; category: string }[] {
+    return FONT_OPTIONS.map((f) => ({ family: f.family, label: f.label, category: f.category }));
   }
 
   // ─── Admin (LogtoAdminGuard) ───────────────────────────────────
