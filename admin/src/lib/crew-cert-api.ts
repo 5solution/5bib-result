@@ -36,6 +36,13 @@ export interface CrewTemplate {
   photoBehindBackground?: boolean;
 }
 
+/** FEATURE-094 — phôi phụ gán theo vị trí. */
+export interface CrewNamedTemplate {
+  name: string;
+  positions: string[];
+  template: CrewTemplate;
+}
+
 export interface CrewBatch {
   id: string;
   slug: string;
@@ -44,6 +51,8 @@ export interface CrewBatch {
   extraFields: string[];
   recipientCount: number;
   template?: CrewTemplate | null;
+  /** FEATURE-094 — phôi phụ theo vị trí (0..N). */
+  templates: CrewNamedTemplate[];
   createdAt: string;
   updatedAt: string;
 }
@@ -117,9 +126,20 @@ export function getBatch(id: string): Promise<CrewBatch> {
 }
 export function updateBatch(
   id: string,
-  body: Partial<{ eventName: string; slug: string; active: boolean; extraFields: string[]; template: CrewTemplate }>,
+  body: Partial<{
+    eventName: string;
+    slug: string;
+    active: boolean;
+    extraFields: string[];
+    template: CrewTemplate;
+    templates: CrewNamedTemplate[];
+  }>,
 ): Promise<CrewBatch> {
   return request(`/crew-certificates/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+/** FEATURE-094 — distinct vị trí của đợt (để gán phôi). */
+export function getPositions(id: string): Promise<{ positions: string[] }> {
+  return request(`/crew-certificates/${id}/positions`);
 }
 export function deleteBatch(id: string): Promise<void> {
   return request(`/crew-certificates/${id}`, { method: 'DELETE' });

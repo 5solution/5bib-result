@@ -164,6 +164,16 @@ export class CrewCertificatesController {
     return this.service.listRecipients(id);
   }
 
+  @Get(':id/positions')
+  @UseGuards(LogtoAdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Admin — distinct vị trí (position) của đợt để gán phôi' })
+  @ApiResponse({ status: 200, description: '{ positions: string[] }' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy' })
+  async positions(@Param('id') id: string): Promise<{ positions: string[] }> {
+    return { positions: await this.service.getPositions(id) };
+  }
+
   @Get(':id/preview')
   @UseGuards(LogtoAdminGuard)
   @ApiBearerAuth()

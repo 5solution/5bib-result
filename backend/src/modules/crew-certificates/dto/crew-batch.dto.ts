@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsNotEmpty,
@@ -42,6 +44,26 @@ export class CrewTemplateDto {
   @IsOptional()
   @IsBoolean()
   photoBehindBackground?: boolean;
+}
+
+/** FEATURE-094 — phôi phụ gán theo vị trí. */
+export class CrewNamedTemplateDto {
+  @ApiProperty({ description: 'Tên phôi (nhãn admin)', maxLength: 60 })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(60)
+  name!: string;
+
+  @ApiProperty({ description: 'Các giá trị position áp dụng phôi này', type: [String] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  positions!: string[];
+
+  @ApiProperty({ type: CrewTemplateDto })
+  @ValidateNested()
+  @Type(() => CrewTemplateDto)
+  template!: CrewTemplateDto;
 }
 
 export class CreateBatchDto {
@@ -86,4 +108,12 @@ export class UpdateBatchDto {
   @ValidateNested()
   @Type(() => CrewTemplateDto)
   template?: CrewTemplateDto;
+
+  @ApiPropertyOptional({ type: [CrewNamedTemplateDto], description: 'Phôi phụ theo vị trí (tối đa 10)' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => CrewNamedTemplateDto)
+  templates?: CrewNamedTemplateDto[];
 }

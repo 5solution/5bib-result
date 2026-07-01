@@ -33,6 +33,26 @@ export class CrewTemplate {
 }
 export const CrewTemplateSchema = SchemaFactory.createForClass(CrewTemplate);
 
+/**
+ * FEATURE-094 — phôi phụ gán theo vị trí. 1 batch có 0..N phôi phụ; mỗi phôi
+ * áp cho ≥1 giá trị `position`. Render chọn phôi theo `recipient.position`,
+ * fallback về `batch.template` (phôi mặc định) khi không khớp.
+ */
+@Schema({ _id: false })
+export class CrewCertNamedTemplate {
+  @Prop({ type: String, required: true })
+  name!: string;
+
+  /** Các giá trị `position` được gán vào phôi này (mỗi position chỉ 1 phôi). */
+  @Prop({ type: [String], default: [] })
+  positions!: string[];
+
+  @Prop({ type: CrewTemplateSchema, required: true })
+  template!: CrewTemplate;
+}
+export const CrewCertNamedTemplateSchema =
+  SchemaFactory.createForClass(CrewCertNamedTemplate);
+
 /** FEATURE-090 — `crew_cert_batches`: 1 doc = 1 đợt GCN cho 1 sự kiện. */
 @Schema({ collection: 'crew_cert_batches', timestamps: true })
 export class CrewCertBatch {
@@ -44,6 +64,10 @@ export class CrewCertBatch {
 
   @Prop({ type: CrewTemplateSchema, default: null })
   template?: CrewTemplate | null;
+
+  /** FEATURE-094 — phôi phụ theo vị trí (0..N). Batch F-090 cũ = [] → render default. */
+  @Prop({ type: [CrewCertNamedTemplateSchema], default: [] })
+  templates!: CrewCertNamedTemplate[];
 
   /** Nhãn các cột thông tin thêm (extraFields) — hiển thị admin. */
   @Prop({ type: [String], default: [] })

@@ -8,7 +8,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { CrewTemplateDto } from './crew-batch.dto';
+import { CrewNamedTemplateDto, CrewTemplateDto } from './crew-batch.dto';
 
 /** 1 dòng roster (admin confirm). */
 export class RecipientRowDto {
@@ -76,6 +76,8 @@ export class BatchResponseDto {
   recipientCount!: number;
   @ApiPropertyOptional({ type: CrewTemplateDto, nullable: true })
   template?: CrewTemplateDto | null;
+  @ApiProperty({ type: [CrewNamedTemplateDto], description: 'FEATURE-094 — phôi phụ theo vị trí' })
+  templates!: CrewNamedTemplateDto[];
   @ApiProperty()
   createdAt!: string;
   @ApiProperty()

@@ -36,6 +36,7 @@ export interface CrewTemplateInput {
 import {
   CrewCertBatch,
   CrewCertBatchDocument,
+  CrewCertNamedTemplate,
   CrewTemplate,
 } from './schemas/crew-cert-batch.schema';
 import {
@@ -119,6 +120,10 @@ export class CrewCertificatesService {
     if (dto.active !== undefined) doc.active = dto.active;
     if (dto.extraFields !== undefined) doc.extraFields = dto.extraFields;
     if (dto.template !== undefined) doc.template = dto.template as CrewTemplate;
+    if (dto.templates !== undefined) {
+      this.assertPositionsUnique(dto.templates);
+      doc.templates = dto.templates as CrewCertNamedTemplate[];
+    }
     try {
       await doc.save();
     } catch (err) {
@@ -184,6 +189,20 @@ export class CrewCertificatesService {
     }));
   }
 
+  /** FEATURE-094 — distinct `position` của đợt (trim, bỏ rỗng, unique, sort) — cho admin gán phôi. */
+  async getPositions(id: string): Promise<string[]> {
+    const batch = await this.findBatchOr404(id);
+    const raw = await this.recipientModel
+      .distinct('position', { batchId: batch._id })
+      .exec();
+    const set = new Set<string>();
+    for (const p of raw) {
+      const t = (typeof p === 'string' ? p : '').trim();
+      if (t) set.add(t);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'vi'));
+  }
+
   // ─── Public search + render ────────────────────────────────────
 
   async searchPublic(slug: string, name: string): Promise<CrewSearchResultDto[]> {
@@ -215,10 +234,12 @@ export class CrewCertificatesService {
     if (!recipient) throw new NotFoundException('Không tìm thấy');
     const batch = await this.batchModel.findById(recipient.batchId).exec();
     if (!batch || !batch.active) throw new NotFoundException('Không tìm thấy');
-    if (!batch.template) throw new BadRequestException('Đợt GCN chưa cấu hình phôi');
+    // FEATURE-094 — chọn phôi theo vị trí của crew (fallback phôi mặc định).
+    const template = this.pickTemplateForPosition(recipient.position, batch);
+    if (!template) throw new BadRequestException('Đợt GCN chưa cấu hình phôi');
 
     const buf = await this.renderService.render(
-      this.toRenderable(batch.template),
+      this.toRenderable(template),
       this.buildRenderData(recipient, batch),
       { includePhoto: true },
     );
@@ -253,6 +274,42 @@ export class CrewCertificatesService {
   }
 
   // ─── Helpers ───────────────────────────────────────────────────
+
+  /**
+   * FEATURE-094 — chọn phôi cho 1 vị trí: phôi phụ đầu tiên có `positions`
+   * chứa `position` (trim + case-insensitive) → nếu không khớp / rỗng →
+   * `batch.template` (phôi mặc định). `templates ?? []` cho batch F-090 cũ.
+   */
+  private pickTemplateForPosition(
+    position: string | null | undefined,
+    batch: CrewCertBatchDocument,
+  ): CrewTemplate | null | undefined {
+    const p = (position ?? '').trim().toLowerCase();
+    if (p) {
+      const matched = (batch.templates ?? []).find((t) =>
+        (t.positions ?? []).some((x) => (x ?? '').trim().toLowerCase() === p),
+      );
+      if (matched?.template) return matched.template;
+    }
+    return batch.template;
+  }
+
+  /** FEATURE-094 — 1 giá trị position chỉ được gán vào tối đa 1 phôi phụ (BR-04). */
+  private assertPositionsUnique(
+    templates: { positions?: string[] }[],
+  ): void {
+    const seen = new Set<string>();
+    for (const t of templates) {
+      for (const raw of t.positions ?? []) {
+        const key = (raw ?? '').trim().toLowerCase();
+        if (!key) continue;
+        if (seen.has(key)) {
+          throw new BadRequestException(`Vị trí "${raw}" bị gán cho nhiều phôi`);
+        }
+        seen.add(key);
+      }
+    }
+  }
 
   private buildRenderData(
     recipient: CrewCertRecipientDocument,
@@ -298,6 +355,7 @@ export class CrewCertificatesService {
       extraFields: doc.extraFields,
       recipientCount,
       template: (doc.template as BatchResponseDto['template']) ?? null,
+      templates: (doc.templates as BatchResponseDto['templates']) ?? [],
       createdAt: doc.createdAt.toISOString(),
       updatedAt: doc.updatedAt.toISOString(),
     };

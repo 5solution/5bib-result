@@ -6,11 +6,13 @@ import {
   createBatch,
   deleteBatch,
   getBatch,
+  getPositions,
   listBatches,
   listRecipients,
   rosterConfirm,
   updateBatch,
   type CrewBatch,
+  type CrewNamedTemplate,
   type CrewRecipientRow,
   type CrewTemplate,
 } from './crew-cert-api';
@@ -35,6 +37,15 @@ export function useRecipients(id: string | undefined) {
   });
 }
 
+/** FEATURE-094 — distinct vị trí của đợt (để admin gán phôi). */
+export function useCrewPositions(id: string | undefined) {
+  return useQuery({
+    queryKey: ['crew-positions', id],
+    queryFn: () => getPositions(id as string),
+    enabled: !!id,
+  });
+}
+
 export function useCreateBatch() {
   const qc = useQueryClient();
   return useMutation({
@@ -47,7 +58,14 @@ export function useUpdateBatch(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (
-      body: Partial<{ eventName: string; slug: string; active: boolean; extraFields: string[]; template: CrewTemplate }>,
+      body: Partial<{
+        eventName: string;
+        slug: string;
+        active: boolean;
+        extraFields: string[];
+        template: CrewTemplate;
+        templates: CrewNamedTemplate[];
+      }>,
     ) => updateBatch(id, body),
     onSuccess: (data: CrewBatch) => {
       qc.setQueryData(['crew-batch', id], data);
@@ -71,6 +89,7 @@ export function useConfirmRoster(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['crew-recipients', id] });
       qc.invalidateQueries({ queryKey: ['crew-batch', id] });
+      qc.invalidateQueries({ queryKey: ['crew-positions', id] });
     },
   });
 }

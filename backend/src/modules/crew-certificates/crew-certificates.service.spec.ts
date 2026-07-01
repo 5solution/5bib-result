@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { CrewCertificatesService } from './crew-certificates.service';
 import { parseRoster } from './roster-parser';
@@ -227,6 +227,137 @@ describe('CrewCertificatesService', () => {
       const inserted = recipientModel.insertMany.mock.calls[0][0];
       expect(inserted[0].normalizedName).toBe('nguyen-van-a');
       expect(batch.extraFields).toEqual(['don_vi']);
+    });
+  });
+
+  // ─── FEATURE-094 — multi-template theo vị trí ───────────────────
+  describe('F-094 renderPublic — chọn phôi theo position', () => {
+    const rid = '665100000000000000000091';
+    const DEFAULT_W = 100; // phôi mặc định
+    const SUB_W = 555; // phôi phụ "Trọng tài"
+
+    // batch: template default (width 100) + templates[{TT → width 555}]
+    const mockBatch = (overrides: Record<string, unknown> = {}) => ({
+      _id: 'b1',
+      active: true,
+      eventName: 'Sự kiện E',
+      template: { canvas: { width: DEFAULT_W, height: 100 }, layers: [] },
+      templates: [
+        {
+          name: 'Trọng tài',
+          positions: ['Trọng tài'],
+          template: { canvas: { width: SUB_W, height: 100 }, layers: [] },
+        },
+      ],
+      ...overrides,
+    });
+    const mockRecipient = (position: string) => ({
+      _id: rid,
+      batchId: 'b1',
+      fullName: 'Lê Văn C',
+      position,
+      photoUrl: null,
+      extraFields: {},
+    });
+    const setup = (position: string, batchOverrides = {}) => {
+      recipientModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockRecipient(position)),
+      });
+      batchModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockBatch(batchOverrides)),
+      });
+    };
+    const renderedWidth = () => render.render.mock.calls[0][0].canvas.width;
+
+    it('TC-01: position khớp phôi phụ → render phôi phụ (không phải default)', async () => {
+      setup('Trọng tài');
+      await service.renderPublic(rid);
+      expect(renderedWidth()).toBe(SUB_W);
+    });
+
+    it('TC-02: position không khớp phôi nào → phôi mặc định', async () => {
+      setup('Hậu cần');
+      await service.renderPublic(rid);
+      expect(renderedWidth()).toBe(DEFAULT_W);
+    });
+
+    it('TC-03: position rỗng → phôi mặc định', async () => {
+      setup('   ');
+      await service.renderPublic(rid);
+      expect(renderedWidth()).toBe(DEFAULT_W);
+    });
+
+    it('TC-04: khớp case-insensitive + trim ("  trọng tài  ")', async () => {
+      setup('  trọng tài  ');
+      await service.renderPublic(rid);
+      expect(renderedWidth()).toBe(SUB_W);
+    });
+
+    it('TC-05: batch F-090 cũ (templates undefined) → default, KHÔNG crash', async () => {
+      setup('Trọng tài', { templates: undefined });
+      await service.renderPublic(rid);
+      expect(renderedWidth()).toBe(DEFAULT_W);
+    });
+  });
+
+  describe('F-094 updateBatch — validate position-unique + set templates', () => {
+    const bid = '665100000000000000000001';
+    const setupBatch = () => {
+      const batch = {
+        _id: bid,
+        eventName: 'E',
+        slug: 'crew-x',
+        active: true,
+        extraFields: [],
+        template: null,
+        templates: [],
+        save: jest.fn().mockResolvedValue(undefined),
+        createdAt: new Date('2026-06-27'),
+        updatedAt: new Date('2026-06-27'),
+      };
+      batchModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(batch) });
+      // invalidateBatchRenders → recipientModel.find(...).select().lean().exec()
+      // trả 1 id để redis.del được gọi (del chỉ chạy khi keys.length > 0)
+      recipientModel.find.mockReturnValue({
+        select: () => ({ lean: () => ({ exec: jest.fn().mockResolvedValue([{ _id: 'r1' }]) }) }),
+      });
+      return batch;
+    };
+    const tpl = { canvas: { width: 100, height: 100 }, layers: [] };
+
+    it('TC-06/07: position gán cho >1 phôi → BadRequestException', async () => {
+      setupBatch();
+      await expect(
+        service.updateBatch(bid, {
+          templates: [
+            { name: 'A', positions: ['Trọng tài'], template: tpl },
+            { name: 'B', positions: ['trọng tài'], template: tpl }, // trùng (case-insensitive)
+          ],
+        } as never),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('TC-11: templates hợp lệ → set doc.templates + invalidate cache', async () => {
+      const batch = setupBatch();
+      await service.updateBatch(bid, {
+        templates: [{ name: 'TT', positions: ['Trọng tài'], template: tpl }],
+      } as never);
+      expect(batch.templates).toHaveLength(1);
+      expect(batch.save).toHaveBeenCalled();
+      expect(redis.del).toHaveBeenCalled(); // invalidateBatchRenders (dù list rỗng vẫn gọi flow)
+    });
+  });
+
+  describe('F-094 getPositions — distinct trim sort', () => {
+    it('TC-10: distinct + trim + bỏ rỗng + unique + sort', async () => {
+      batchModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ _id: 'b1' }),
+      });
+      recipientModel.distinct = jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue(['Y tế', 'Trọng tài', 'Y tế', '  TNV  ', '']),
+      });
+      const res = await service.getPositions('665100000000000000000001');
+      expect(res).toEqual(['TNV', 'Trọng tài', 'Y tế']);
     });
   });
 });
